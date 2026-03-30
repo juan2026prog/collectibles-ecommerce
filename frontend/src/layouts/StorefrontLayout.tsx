@@ -8,7 +8,7 @@ import {
 import { useCartContext } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocale } from '../contexts/LocaleContext';
-import { useCategories } from '../hooks/useData';
+import { useCategories, useBrands } from '../hooks/useData';
 import LocaleSwitcher from '../components/LocaleSwitcher';
 import WhatsAppFAB from '../components/WhatsAppFAB';
 import { supabase } from '../lib/supabase';
@@ -42,7 +42,7 @@ const WhatsappIcon = () => (
 
 export default function StorefrontLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [megaMenuOpen, setMegaMenuOpen] = useState(false);
+  const [megaMenuState, setMegaMenuState] = useState<'categories' | 'brands' | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [announcementVisible, setAnnouncementVisible] = useState(true);
   const [expandedMobileGroup, setExpandedMobileGroup] = useState<string | null>(null);
@@ -55,13 +55,14 @@ export default function StorefrontLayout() {
   const { user, profile, signOut } = useAuth();
   const { language, currency, t, formatPrice } = useLocale();
   const { categories: allCategories } = useCategories();
+  const { brands: allBrands } = useBrands();
   const [settings, setSettings] = useState<Record<string, string>>({});
 
   // Dynamic nav links — re-computed when language changes
   const NAV_LINKS = [
     { name: t('nav.home'), href: '/' },
-    { name: t('nav.categories'), href: '/shop', hasMega: true },
-    { name: t('nav.brands'), href: '/shop?view=brands' },
+    { name: t('nav.categories'), href: '/shop', hasMega: true, megaType: 'categories' },
+    { name: t('nav.brands'), href: '/shop', hasMega: true, megaType: 'brands' },
     { name: t('nav.about'), href: '/about' },
     { name: t('nav.contact'), href: '/contact' },
     { name: t('nav.blog'), href: '/blog' },
@@ -94,6 +95,14 @@ export default function StorefrontLayout() {
   const MENU_COLUMNS = FLAT_COLUMNS || MEGA_MENU_COLUMNS;
   const MOBILE_CATEGORIES = allCategories.map(c => ({ name: c.name, href: `/shop?category=${c.slug}`, group: allCategories.find(p => p.id === c.parent_id)?.name || t('nav.categories') }));
 
+  const MEGA_MENU_BRANDS_COLUMNS = allBrands.length > 0
+    ? Array.from({ length: Math.ceil(allBrands.length / 5) }, (_, i) => ({
+      title: '',
+      slug: '',
+      items: allBrands.slice(i * 5, (i + 1) * 5).map(b => ({ name: b.name, href: `/shop?brand=${b.slug}` }))
+    }))
+    : [];
+
   useEffect(() => {
     supabase.from('site_settings').select('*').then(({ data }) => {
       const s: Record<string, string> = {};
@@ -120,7 +129,7 @@ export default function StorefrontLayout() {
   // Close menus on route change
   useEffect(() => {
     setMobileMenuOpen(false);
-    setMegaMenuOpen(false);
+    setMegaMenuState(null);
     setSearchOpen(false);
     setUserMenuOpen(false);
     
@@ -141,12 +150,12 @@ export default function StorefrontLayout() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  const handleMegaEnter = () => {
+  const handleMegaEnter = (type: string) => {
     if (megaMenuTimeout.current) clearTimeout(megaMenuTimeout.current);
-    setMegaMenuOpen(true);
+    setMegaMenuState(type as any);
   };
   const handleMegaLeave = () => {
-    megaMenuTimeout.current = setTimeout(() => setMegaMenuOpen(false), 200);
+    megaMenuTimeout.current = setTimeout(() => setMegaMenuState(null), 200);
   };
 
   const handleSignOut = async () => {
@@ -241,7 +250,7 @@ export default function StorefrontLayout() {
                 <div
                   key={link.name}
                   className="relative"
-                  onMouseEnter={link.hasMega ? handleMegaEnter : undefined}
+                  onMouseEnter={link.hasMega ? () => handleMegaEnter(link.megaType!) : undefined}
                   onMouseLeave={link.hasMega ? handleMegaLeave : undefined}
                 >
                   <Link
@@ -346,46 +355,69 @@ export default function StorefrontLayout() {
         </div>
 
         {/* ═══════════ MEGA MENU DROPDOWN ═══════════ */}
-        {megaMenuOpen && (
+        {megaMenuState && (
           <div
             className="absolute left-0 right-0 bg-white border-t border-gray-100 shadow-[0_10px_40px_rgba(0,0,0,0.12)] animate-slide-down z-50"
-            onMouseEnter={handleMegaEnter}
+            onMouseEnter={() => handleMegaEnter(megaMenuState)}
             onMouseLeave={handleMegaLeave}
           >
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-              <div className={`grid gap-8`} style={{ gridTemplateColumns: `repeat(${Math.min(MENU_COLUMNS.length + 1, 5)}, 1fr)` }}>
-                {MENU_COLUMNS.map((col, idx) => (
-                  <div key={col.title || idx}>
-                    <h3 className="text-sm font-bold text-dark-900 uppercase tracking-wider mb-4">
-                      {col.title}
-                    </h3>
-                    <ul className="space-y-2.5">
-                      {col.items.map((item) => (
-                        <li key={item.name}>
-                          <Link
-                            to={item.href}
-                            className="text-sm text-gray-600 hover:text-primary-600 font-medium transition-colors flex items-center gap-2 group"
-                          >
-                            <ChevronRight className="w-3 h-3 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-primary-500" />
-                            {item.name}
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-                {/* Promo Banner in Mega Menu */}
-                <div className="bg-gradient-to-br from-primary-50 to-primary-100 rounded-xl p-6 flex flex-col justify-between">
-                  <div>
-                    <span className="badge badge-new mb-3">NEW</span>
-                    <h4 className="text-lg font-bold text-dark-900 mt-2">New Arrivals</h4>
-                    <p className="text-sm text-gray-600 mt-1">Check out the latest drops this week</p>
-                  </div>
-                  <Link to="/shop?sort=newest" className="text-sm font-bold text-primary-600 hover:text-primary-700 mt-4 inline-flex items-center gap-1">
-                    Shop Now <ChevronRight className="w-4 h-4" />
-                  </Link>
+              {megaMenuState === 'brands' ? (
+                <div className={`grid gap-8`} style={{ gridTemplateColumns: `repeat(${Math.min(Math.max(MEGA_MENU_BRANDS_COLUMNS.length, 1), 5)}, 1fr)` }}>
+                  {MEGA_MENU_BRANDS_COLUMNS.length === 0 ? (
+                    <div className="text-sm text-gray-500 py-4">No hay marcas disponibles</div>
+                  ) : (
+                    MEGA_MENU_BRANDS_COLUMNS.map((col, idx) => (
+                      <div key={idx}>
+                        <ul className="space-y-2.5 mt-2">
+                          {col.items.map((item) => (
+                            <li key={item.name}>
+                              <Link to={item.href} className="text-sm text-gray-600 hover:text-primary-600 font-medium transition-colors flex items-center gap-2 group">
+                                <ChevronRight className="w-3 h-3 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-primary-500" />
+                                {item.name}
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))
+                  )}
                 </div>
-              </div>
+              ) : (
+                <div className={`grid gap-8`} style={{ gridTemplateColumns: `repeat(${Math.min(MENU_COLUMNS.length + 1, 5)}, 1fr)` }}>
+                  {MENU_COLUMNS.map((col, idx) => (
+                    <div key={col.title || idx}>
+                      <h3 className="text-sm font-bold text-dark-900 uppercase tracking-wider mb-4">
+                        {col.title}
+                      </h3>
+                      <ul className="space-y-2.5">
+                        {col.items.map((item) => (
+                          <li key={item.name}>
+                            <Link
+                              to={item.href}
+                              className="text-sm text-gray-600 hover:text-primary-600 font-medium transition-colors flex items-center gap-2 group"
+                            >
+                              <ChevronRight className="w-3 h-3 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-primary-500" />
+                              {item.name}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                  {/* Promo Banner in Mega Menu */}
+                  <div className="bg-gradient-to-br from-primary-50 to-primary-100 rounded-xl p-6 flex flex-col justify-between">
+                    <div>
+                      <span className="badge badge-new mb-3">NEW</span>
+                      <h4 className="text-lg font-bold text-dark-900 mt-2">New Arrivals</h4>
+                      <p className="text-sm text-gray-600 mt-1">Check out the latest drops this week</p>
+                    </div>
+                    <Link to="/shop?sort=newest" className="text-sm font-bold text-primary-600 hover:text-primary-700 mt-4 inline-flex items-center gap-1">
+                      Shop Now <ChevronRight className="w-4 h-4" />
+                    </Link>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -475,19 +507,22 @@ export default function StorefrontLayout() {
                       </button>
                       {expandedMobileGroup === link.name && (
                         <div className="bg-gray-50 animate-slide-down">
-                          {MEGA_MENU_COLUMNS.map(col => (
-                            <div key={col.title} className="px-6 py-3">
-                              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">{col.title}</p>
-                              {col.items.map(item => (
-                                <Link
-                                  key={item.name}
-                                  to={item.href}
-                                  onClick={() => setMobileMenuOpen(false)}
-                                  className="block py-2 pl-3 text-sm text-gray-600 hover:text-primary-600 font-medium"
-                                >
-                                  {item.name}
-                                </Link>
-                              ))}
+                          {(link.megaType === 'brands' ? MEGA_MENU_BRANDS_COLUMNS : MEGA_MENU_COLUMNS).map((col, idx) => (
+                            <div key={col.title || idx} className="px-6 py-3">
+                              {col.title && <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">{col.title}</p>}
+                              <ul className="space-y-2">
+                                {col.items.map((item) => (
+                                  <li key={item.name}>
+                                    <Link
+                                      to={item.href}
+                                      onClick={() => setMobileMenuOpen(false)}
+                                      className="block text-sm text-gray-600 hover:text-primary-600 py-1"
+                                    >
+                                      {item.name}
+                                    </Link>
+                                  </li>
+                                ))}
+                              </ul>
                             </div>
                           ))}
                         </div>
