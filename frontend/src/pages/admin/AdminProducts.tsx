@@ -17,10 +17,10 @@ interface Product {
   status: string;
   badge: string | null;
   is_featured: boolean;
-  category: { name: string } | null;
-  brand: { name: string } | null;
-  images: { url: string }[];
-  variants: { inventory_count: number; sku?: string }[];
+  category: { id?: string, name: string } | null;
+  brand: { id?: string, name: string } | null;
+  images: { id?: string, url: string }[];
+  variants: { id?: string, inventory_count: number; sku?: string }[];
   created_at: string;
 }
 
@@ -50,7 +50,7 @@ export default function AdminProducts() {
     setLoading(true);
     const { data } = await supabase
       .from('products')
-      .select('*, category:categories(name), brand:brands(name), images:product_images(url), variants:product_variants(inventory_count, sku)')
+      .select('*, category:categories(id, name), brand:brands(id, name), images:product_images(id, url), variants:product_variants(id, inventory_count, sku)')
       .order('created_at', { ascending: false });
     setProducts(data || []);
     setLoading(false);
@@ -78,7 +78,7 @@ export default function AdminProducts() {
       base_price: product.base_price.toString(), compare_at_price: product.compare_at_price?.toString() || '',
       cost: '', sku: product.variants?.[0]?.sku || `SKU-${Date.now()}`, stock: product.variants?.[0]?.inventory_count?.toString() || '10',
       status: product.status, badge: product.badge || '', is_featured: product.is_featured,
-      category_id: product.category?.name || '', brand_id: product.brand?.name || '', seo_title: '', seo_description: '',
+      category_id: product.category?.id || '', brand_id: product.brand?.id || '', seo_title: '', seo_description: '',
       image_url: product.images?.[0]?.url || '', video_url: ''
     });
     setShowForm(true);
@@ -105,35 +105,65 @@ export default function AdminProducts() {
   }
 
   async function handleSave() {
-    const payload = {
-      title: form.title,
-      slug: form.slug || form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-      description: form.description,
-      short_description: form.short_description,
-      base_price: parseFloat(form.base_price) || 0,
-      compare_at_price: form.compare_at_price ? parseFloat(form.compare_at_price) : null,
-      status: form.status,
-      badge: form.badge || null,
-      is_featured: form.is_featured,
-      category_id: form.category_id || null,
-      brand_id: form.brand_id || null,
-      seo_title: form.seo_title || null,
-      seo_description: form.seo_description || null,
-    };
+    try {
+      if (!form.title) throw new Error("El título es obligatorio");
 
-    if (editing) {
-      await supabase.from('products').update(payload).eq('id', editing.id);
-    } else {
-      const { data: newProduct } = await supabase.from('products').insert(payload).select().single();
-      if (newProduct && form.image_url) {
-        await supabase.from('product_images').insert({ product_id: newProduct.id, url: form.image_url, is_primary: true, sort_order: 0 });
+      const payload = {
+        title: form.title,
+        slug: form.slug || form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        description: form.description,
+        short_description: form.short_description,
+        base_price: parseFloat(form.base_price) || 0,
+        compare_at_price: form.compare_at_price ? parseFloat(form.compare_at_price) : null,
+        status: form.status,
+        badge: form.badge || null,
+        is_featured: form.is_featured,
+        category_id: form.category_id || null,
+        brand_id: form.brand_id || null,
+        seo_title: form.seo_title || null,
+        seo_description: form.seo_description || null,
+      };
+
+      if (editing) {
+        const { error: updateError } = await supabase.from('products').update(payload).eq('id', editing.id);
+        if (updateError) throw updateError;
+
+        // Image Update
+        if (form.image_url) {
+          const existingImage = editing.images?.[0];
+          if (existingImage && existingImage.id) {
+            await supabase.from('product_images').update({ url: form.image_url }).eq('id', existingImage.id);
+          } else {
+            await supabase.from('product_images').insert({ product_id: editing.id, url: form.image_url, is_primary: true, sort_order: 0 });
+          }
+        } else {
+          const existingImage = editing.images?.[0];
+          if (existingImage && existingImage.id) {
+            await supabase.from('product_images').delete().eq('id', existingImage.id);
+          }
+        }
+
+        // Variant Update
+        const existingVariant = editing.variants?.[0];
+        if (existingVariant && existingVariant.id) {
+          await supabase.from('product_variants').update({ sku: form.sku, inventory_count: parseInt(form.stock) || 0 }).eq('id', existingVariant.id);
+        }
+      } else {
+        const { data: newProduct, error: insertError } = await supabase.from('products').insert(payload).select().single();
+        if (insertError) throw insertError;
+        
+        if (newProduct && form.image_url) {
+          await supabase.from('product_images').insert({ product_id: newProduct.id, url: form.image_url, is_primary: true, sort_order: 0 });
+        }
+        if (newProduct) {
+          await supabase.from('product_variants').insert({ product_id: newProduct.id, sku: form.sku || `SKU-${Date.now()}`, name: 'Standard', inventory_count: parseInt(form.stock) || 0 });
+        }
       }
-      if (newProduct) {
-        await supabase.from('product_variants').insert({ product_id: newProduct.id, sku: `SKU-${Date.now()}`, name: 'Standard', inventory_count: 10 });
-      }
+      setShowForm(false);
+      fetchProducts();
+    } catch (err: any) {
+      alert(`Error al guardar: ${err.message}`);
     }
-    setShowForm(false);
-    fetchProducts();
   }
 
   async function handleDelete(id: string) {
