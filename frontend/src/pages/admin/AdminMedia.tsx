@@ -1,39 +1,59 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Upload, Trash2, Copy, FileIcon, ImageIcon, ExternalLink, RefreshCw, AlertCircle } from 'lucide-react';
+import { Upload, Trash2, Copy, FileIcon, ImageIcon, ExternalLink, RefreshCw, AlertCircle, Folder, ChevronRight, FolderPlus } from 'lucide-react';
 
 export default function AdminMedia() {
   const [files, setFiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentPath, setCurrentPath] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Consider "public-assets" as the main bucket for logos/banners
   const BUCKET_NAME = 'public-assets';
 
   useEffect(() => {
-    fetchMedia();
-  }, []);
+    fetchMedia(currentPath);
+  }, [currentPath]);
 
-  async function fetchMedia() {
+  async function fetchMedia(path: string) {
     setLoading(true);
     setError(null);
     try {
-      const { data, error } = await supabase.storage.from(BUCKET_NAME).list('', {
+      const { data, error } = await supabase.storage.from(BUCKET_NAME).list(path, {
         limit: 100,
         offset: 0,
-        sortBy: { column: 'created_at', order: 'desc' }
+        sortBy: { column: 'name', order: 'asc' }
       });
       if (error) throw error;
       
-      // Keep only actual files (filter out empty folder placeholders)
+      // Filter out root placeholder
       setFiles((data || []).filter(f => f.name !== '.emptyFolderPlaceholder'));
     } catch (err: any) {
       console.error(err);
-      setError(`Error al cargar medios: ${err.message}. Asegúrate de que el bucket "${BUCKET_NAME}" exista y sea público.`);
+      setError(`Error al cargar medios: ${err.message}.`);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleCreateFolder() {
+    const folderName = prompt('Nombre de la nueva carpeta (sin espacios ni caracteres raros):');
+    if (!folderName) return;
+    
+    const sanitized = folderName.toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+    const folderPath = currentPath ? `${currentPath}${sanitized}` : sanitized;
+    const placeholderPath = `${folderPath}/.emptyFolderPlaceholder`;
+
+    setUploading(true);
+    const emptyFile = new File([''], '.emptyFolderPlaceholder', { type: 'text/plain' });
+    const { error } = await supabase.storage.from(BUCKET_NAME).upload(placeholderPath, emptyFile);
+    setUploading(false);
+
+    if (error) {
+      setError(`Error creando carpeta: ${error.message}`);
+    } else {
+      fetchMedia(currentPath);
     }
   }
 
@@ -46,15 +66,15 @@ export default function AdminMedia() {
     
     for (const file of filesArray) {
       try {
-        // Sanitize file name to prevent issues
         const fileExt = file.name.split('.').pop();
         const rawName = file.name.replace(`.${fileExt}`, '');
         const sanitizedName = rawName.toLowerCase().replace(/[^a-z0-9]/g, '-');
         const fileName = `${Date.now()}-${sanitizedName}.${fileExt}`;
+        const fullPath = currentPath ? `${currentPath}${fileName}` : fileName;
 
         const { error: uploadError } = await supabase.storage
           .from(BUCKET_NAME)
-          .upload(fileName, file, { cacheControl: '3600', upsert: false });
+          .upload(fullPath, file, { cacheControl: '3600', upsert: false });
           
         if (uploadError) throw uploadError;
       } catch (err: any) {
@@ -65,16 +85,22 @@ export default function AdminMedia() {
     
     setUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
-    fetchMedia();
+    fetchMedia(currentPath);
   }
 
-  async function handleDelete(fileName: string) {
-    if (!confirm(`¿Eliminar permanentemente el archivo "${fileName}"?`)) return;
+  async function handleDelete(fileName: string, isFolder: boolean) {
+    const targetPath = currentPath ? `${currentPath}${fileName}` : fileName;
+    
+    const msg = isFolder ? `¿Eliminar la carpeta "${fileName}" y su contenido vacío?` : `¿Eliminar permanentemente el archivo "${fileName}"?`;
+    
+    if (!confirm(msg)) return;
     
     try {
-      const { error } = await supabase.storage.from(BUCKET_NAME).remove([fileName]);
+      const pathsToDelete = isFolder ? [`${targetPath}/.emptyFolderPlaceholder`] : [targetPath];
+      
+      const { error } = await supabase.storage.from(BUCKET_NAME).remove(pathsToDelete);
       if (error) throw error;
-      fetchMedia();
+      fetchMedia(currentPath);
     } catch (err: any) {
       console.error(err);
       setError(`Error al eliminar: ${err.message}`);
@@ -82,7 +108,8 @@ export default function AdminMedia() {
   }
 
   function getFileUrl(fileName: string) {
-    return supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName).data.publicUrl;
+    const fullPath = currentPath ? `${currentPath}${fileName}` : fileName;
+    return supabase.storage.from(BUCKET_NAME).getPublicUrl(fullPath).data.publicUrl;
   }
 
   function handleCopy(url: string) {
@@ -99,12 +126,30 @@ export default function AdminMedia() {
           <h2 className="text-2xl font-bold dark:text-white flex items-center gap-2">
             Medios y Archivos
           </h2>
-          <p className="text-sm text-gray-500 mt-1">Sube logotipos de marcas, banners y recursos estáticos.</p>
+          {/* Breadcrumbs */}
+          <div className="flex items-center text-sm font-medium text-gray-500 mt-2">
+             <button onClick={() => setCurrentPath('')} className="hover:text-primary-600 transition-colors">Inicio</button>
+             {currentPath.split('/').filter(Boolean).map((part, i, arr) => {
+                const targetPath = arr.slice(0, i + 1).join('/') + '/';
+                return (
+                  <div key={i} className="flex items-center">
+                    <ChevronRight className="w-3 h-3 mx-1" />
+                    <button onClick={() => setCurrentPath(targetPath)} className="hover:text-primary-600 transition-colors">
+                      {part}
+                    </button>
+                  </div>
+                );
+             })}
+          </div>
         </div>
         
         <div className="flex items-center gap-3">
-          <button onClick={fetchMedia} className="btn-secondary px-3" title="Recargar">
+          <button onClick={() => fetchMedia(currentPath)} className="btn-secondary px-3" title="Recargar">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          
+          <button onClick={handleCreateFolder} className="btn-secondary flex items-center gap-2">
+            <FolderPlus className="w-4 h-4" /> Nueva Carpeta
           </button>
           
           <input 
@@ -133,7 +178,7 @@ export default function AdminMedia() {
         </div>
       )}
 
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm min-h-[400px]">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm min-h-[400px] p-4">
         {loading && files.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-gray-400">
             <RefreshCw className="w-8 h-8 animate-spin mb-4" />
@@ -142,49 +187,60 @@ export default function AdminMedia() {
         ) : files.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-center p-6">
             <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-              <ImageIcon className="w-10 h-10 text-gray-300" />
+              <Folder className="w-10 h-10 text-gray-300" />
             </div>
-            <h3 className="text-lg font-bold text-gray-900">Biblioteca Vacía</h3>
-            <p className="text-gray-500 mt-1 max-w-sm">No hay archivos en el bucket "{BUCKET_NAME}". Sube tu primer archivo usando el botón superior.</p>
+            <h3 className="text-lg font-bold text-gray-900">Carpeta Vacía</h3>
+            <p className="text-gray-500 mt-1 max-w-sm">No hay archivos en esta ubicación. Sube uno o crea una carpeta nueva.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-0 border-t border-l border-gray-100">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {files.map(file => {
+              const isFolder = !file.id; // Supabase return id: null for folders
+              
+              if (isFolder) {
+                 return (
+                    <div key={file.name} className="group relative border border-gray-200 rounded-xl flex flex-col items-center justify-center p-4 hover:border-primary-400 hover:shadow-md transition-all bg-white aspect-square">
+                       <button onClick={() => setCurrentPath(currentPath + file.name + '/')} className="w-full h-full flex flex-col items-center justify-center">
+                          <Folder className="w-12 h-12 text-blue-400 mb-2 group-hover:scale-110 transition-transform" />
+                          <span className="text-xs font-bold text-gray-700 truncate w-full text-center">{file.name}</span>
+                       </button>
+                       <button onClick={(e) => { e.stopPropagation(); handleDelete(file.name, true); }} className="absolute top-2 right-2 p-1.5 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 hover:bg-red-50 bg-white/80 backdrop-blur rounded-md transition-all">
+                         <Trash2 className="w-3 h-3" />
+                       </button>
+                    </div>
+                 );
+              }
+
               const url = getFileUrl(file.name);
               const img = isImage(file.name);
               
               return (
-                <div key={file.id} className="group relative aspect-square border-r border-b border-gray-100 flex flex-col items-center justify-center p-4 hover:bg-gray-50 bg-white transition-colors">
+                <div key={file.id} className="group relative border border-gray-200 rounded-xl flex flex-col items-center justify-center p-2 hover:border-primary-400 hover:shadow-md transition-all bg-white aspect-square overflow-hidden">
                   
                   {/* Vista Previa */}
-                  <div className="w-full h-full flex items-center justify-center p-2 mb-6">
+                  <div className="w-full h-full flex items-center justify-center p-2 mb-6 bg-gray-50/50 rounded-lg">
                     {img ? (
-                       <img src={url} alt={file.name} className="w-full h-full object-contain filter group-hover:brightness-95 transition-all" />
+                       <img src={url} alt={file.name} className="w-full h-full object-contain filter group-hover:brightness-95 transition-all mix-blend-multiply" />
                     ) : (
-                       <FileIcon className="w-12 h-12 text-blue-300" />
+                       <FileIcon className="w-10 h-10 text-gray-300" />
                     )}
                   </div>
                   
                   {/* Detalles Archivo */}
-                  <div className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-gray-100 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <p className="text-[10px] font-bold text-gray-800 truncate mb-1" title={file.name}>{file.name}</p>
-                    <div className="flex items-center justify-between">
-                       <span className="text-[9px] text-gray-500 font-mono">{(file.metadata?.size / 1024).toFixed(1)} KB</span>
-                       
-                       <div className="flex gap-1">
-                         <button onClick={() => window.open(url, '_blank')} className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded" title="Abrir">
-                           <ExternalLink className="w-3.5 h-3.5" />
-                         </button>
-                         <button onClick={() => handleCopy(url)} className="p-1 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded" title="Copiar URL">
-                           <Copy className="w-3.5 h-3.5" />
-                         </button>
-                         <button onClick={() => handleDelete(file.name)} className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded" title="Eliminar">
-                           <Trash2 className="w-3.5 h-3.5" />
-                         </button>
-                       </div>
+                  <div className="absolute inset-x-0 bottom-0 bg-white/95 backdrop-blur border-t border-gray-100 px-2 py-1 flex items-center justify-between">
+                    <p className="text-[10px] font-bold text-gray-600 truncate mr-2" title={file.name}>{file.name}</p>
+                    <div className="flex gap-1 shrink-0 bg-white">
+                      <button onClick={() => window.open(url, '_blank')} className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded" title="Abrir">
+                        <ExternalLink className="w-3 h-3" />
+                      </button>
+                      <button onClick={() => handleCopy(url)} className="p-1 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded" title="Copiar URL">
+                        <Copy className="w-3 h-3" />
+                      </button>
+                      <button onClick={() => handleDelete(file.name, false)} className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded" title="Eliminar">
+                        <Trash2 className="w-3 h-3" />
+                      </button>
                     </div>
                   </div>
-
                 </div>
               );
             })}

@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Plus, Pencil, Trash2, Search, Eye, X, Upload, Save, AlertCircle } from 'lucide-react';
 import { useRef } from 'react';
+import { ImageIcon } from 'lucide-react';
+import { MediaPickerModal } from '../../components/MediaPickerModal';
 import ImportModal from '../../components/admin/ImportModal';
 import type { ParsedProduct } from '../../lib/bulkImportUtils';
 import { downloadTemplate } from '../../lib/bulkImportUtils';
@@ -30,6 +32,7 @@ export default function AdminProducts() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [categories, setCategories] = useState<any[]>([]);
   const [brands, setBrands] = useState<any[]>([]);
@@ -374,8 +377,13 @@ export default function AdminProducts() {
                 <textarea className="form-input min-h-[100px]" value={form.description} onChange={e => setForm({...form, description: e.target.value})} />
               </div>
               <div>
-                <label className="form-label">Image URL</label>
-                <input className="form-input" value={form.image_url} onChange={e => setForm({...form, image_url: e.target.value})} placeholder="https://..." />
+                <label className="form-label mb-1">Image URL</label>
+                <div className="flex gap-2">
+                  <input className="form-input flex-1" value={form.image_url} onChange={e => setForm({...form, image_url: e.target.value})} placeholder="https://..." />
+                  <button onClick={() => setShowMediaPicker(true)} type="button" className="btn-secondary px-3" title="Seleccionar de Biblioteca">
+                    <ImageIcon className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="form-label">Video URL (YouTube/MP4)</label>
@@ -398,6 +406,13 @@ export default function AdminProducts() {
       {showImport && (
         <ImportModal onClose={() => setShowImport(false)} onConfirm={handleImportConfirm} />
       )}
+
+      {/* ═══ MEDIA PICKER MODAL ═══ */}
+      <MediaPickerModal 
+        isOpen={showMediaPicker} 
+        onClose={() => setShowMediaPicker(false)} 
+        onSelect={(url) => setForm({ ...form, image_url: url })} 
+      />
     </div>
   );
 }
