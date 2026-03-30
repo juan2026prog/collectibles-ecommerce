@@ -1,0 +1,17 @@
+[functions.dlocalgo-webhook]
+enabled = true
+verify_jwt = true
+import_map = "./functions/dlocalgo-webhook/deno.json"
+entrypoint = "./functions/dlocalgo-webhook/index.ts"
+
+[functions.dlocalgo-checkout]
+enabled = true
+verify_jwt = true
+import_map = "./functions/dlocalgo-checkout/deno.json"
+entrypoint = "./functions/dlocalgo-checkout/index.ts"
+
+[functions.transactional-emails]
+enabled = true
+verify_jwt = true
+import_map = "./functions/transactional-emails/deno.json"
+entrypoint = "./functions/transactional-emails/index.ts"
