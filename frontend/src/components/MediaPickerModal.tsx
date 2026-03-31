@@ -15,10 +15,12 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = false, 
   const [loading, setLoading] = useState(true);
   const [currentPath, setCurrentPath] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [lastSelected, setLastSelected] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   
   const BUCKET_NAME = 'public-assets';
 
@@ -110,17 +112,34 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = false, 
     }
   }
 
-  function handleFileClick(file: any) {
+  function handleFileClick(file: any, e?: React.MouseEvent) {
     const url = getFileUrl(file.name);
     
     if (multiple && onMultipleSelect) {
       const newSelected = new Set(selectedFiles);
-      if (newSelected.has(url)) {
-        newSelected.delete(url);
+      
+      if (e?.shiftKey && lastSelected) {
+        const fileUrls = files.filter(f => f.id).map(f => getFileUrl(f.name));
+        const lastIdx = fileUrls.indexOf(lastSelected);
+        const currentIdx = fileUrls.indexOf(url);
+        const start = Math.min(lastIdx, currentIdx);
+        const end = Math.max(lastIdx, currentIdx);
+        for (let i = start; i <= end; i++) {
+          newSelected.add(fileUrls[i]);
+        }
+      } else if (e?.ctrlKey || e?.metaKey) {
+        if (newSelected.has(url)) {
+          newSelected.delete(url);
+        } else {
+          newSelected.add(url);
+        }
       } else {
+        newSelected.clear();
         newSelected.add(url);
       }
+      
       setSelectedFiles(newSelected);
+      setLastSelected(url);
     } else {
       onSelect(url);
       onClose();
@@ -246,7 +265,7 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = false, 
                 return (
                   <button 
                     key={file.id} 
-                    onClick={() => handleFileClick(file)}
+                    onClick={(e) => handleFileClick(file, e)}
                     className={`group bg-white border-2 rounded-xl overflow-hidden transition-all shadow-sm aspect-square relative ${
                       isSelected ? 'border-primary-500 ring-2 ring-primary-500 ring-offset-2' : 'border-gray-200 hover:border-primary-400 hover:shadow-md'
                     }`}
