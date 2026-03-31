@@ -10,7 +10,7 @@ interface MediaPickerModalProps {
   onMultipleSelect?: (urls: string[]) => void;
 }
 
-export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = false, onMultipleSelect }: MediaPickerModalProps) {
+export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, onMultipleSelect }: MediaPickerModalProps) {
   const [files, setFiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPath, setCurrentPath] = useState('');
