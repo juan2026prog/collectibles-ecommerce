@@ -50,10 +50,18 @@ export default function AdminMercadoLibre() {
   }
 
   function handleConnect() {
-    const clientId = import.meta.env.VITE_ML_CLIENT_ID || 'TU_CLIENT_ID';
+    const clientId = import.meta.env.VITE_ML_CLIENT_ID;
     const redirectUri = `${window.location.origin}/callback`;
+    
+    if (!clientId) {
+      alert('Error: ML_CLIENT_ID no está configurado en las variables de entorno.');
+      return;
+    }
+
     const authUrl = `https://auth.mercadolibre.com.ar/authorization?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
-    window.open(authUrl, '_blank', 'width=600,height=700');
+    
+    // Use current window for more reliable redirection
+    window.location.href = authUrl;
   }
 
   async function fetchProducts() {
