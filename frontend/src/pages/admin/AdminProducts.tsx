@@ -125,6 +125,7 @@ export default function AdminProducts() {
   const [editing, setEditing] = useState<Product | null>(null);
   const [categories, setCategories] = useState<any[]>([]);
   const [brands, setBrands] = useState<any[]>([]);
+  const [unsavedChanges, setUnsavedChanges] = useState<Set<string>>(new Set());
 
   const [form, setForm] = useState({
     title: '', slug: '', description: '', short_description: '',
@@ -326,25 +327,33 @@ export default function AdminProducts() {
   const totalStock = (p: Product) => p.variants?.reduce((s, v) => s + v.inventory_count, 0) || 0;
 
   const updatePrice = async (productId: string, newPrice: number) => {
+    setUnsavedChanges(prev => new Set(prev).add(productId));
     await supabase.from('products').update({ base_price: newPrice }).eq('id', productId);
+    setUnsavedChanges(prev => { const next = new Set(prev); next.delete(productId); return next; });
     fetchProducts();
   };
 
   const updateStock = async (productId: string, newStock: number) => {
+    setUnsavedChanges(prev => new Set(prev).add(productId));
     const variant = products.find(p => p.id === productId)?.variants?.[0];
     if (variant?.id) {
       await supabase.from('product_variants').update({ inventory_count: newStock }).eq('id', variant.id);
-      fetchProducts();
     }
+    setUnsavedChanges(prev => { const next = new Set(prev); next.delete(productId); return next; });
+    fetchProducts();
   };
 
   const updateStatus = async (productId: string, newStatus: string) => {
+    setUnsavedChanges(prev => new Set(prev).add(productId));
     await supabase.from('products').update({ status: newStatus }).eq('id', productId);
+    setUnsavedChanges(prev => { const next = new Set(prev); next.delete(productId); return next; });
     fetchProducts();
   };
 
   const updateCategory = async (productId: string, categoryId: string) => {
+    setUnsavedChanges(prev => new Set(prev).add(productId));
     await supabase.from('products').update({ category_id: categoryId || null }).eq('id', productId);
+    setUnsavedChanges(prev => { const next = new Set(prev); next.delete(productId); return next; });
     fetchProducts();
   };
 
@@ -379,6 +388,11 @@ export default function AdminProducts() {
         <div className="px-6 py-3 border-b border-gray-100 flex gap-2">
           <button className="text-sm font-medium text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-100">Edición Masiva</button>
           <button className="text-sm font-medium text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-100">Exportar CSV</button>
+          {unsavedChanges.size > 0 && (
+            <button className="ml-auto text-sm font-medium bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 flex items-center gap-1">
+              <Upload className="w-3 h-3" /> Publicar Cambios ({unsavedChanges.size})
+            </button>
+          )}
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">

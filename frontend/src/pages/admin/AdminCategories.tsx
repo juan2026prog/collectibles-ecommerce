@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Plus, Pencil, Trash2, Save, X, Image as ImageIcon } from 'lucide-react';
+import { Plus, Pencil, Trash2, Save, X, Image as ImageIcon, List, Grid3X3 } from 'lucide-react';
 
 export default function AdminCategories() {
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [form, setForm] = useState({ name: '', slug: '', image_url: '', sort_order: 0 });
 
   useEffect(() => { fetch(); }, []);
@@ -47,34 +48,84 @@ export default function AdminCategories() {
            <h2 className="text-2xl font-bold dark:text-white">Categorías</h2>
            <p className="text-sm text-gray-500 mt-1">Administra las agrupaciones de productos ({categories.length} totales)</p>
         </div>
-        <button onClick={openCreate} className="btn-primary gap-2"><Plus className="w-4 h-4" /> Crear Categoría</button>
+        <div className="flex gap-2">
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            <button onClick={() => setViewMode('list')} className={`p-2 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white shadow-sm text-primary-600' : 'text-gray-500 hover:text-gray-700'}`} title="Vista de lista">
+              <List className="w-4 h-4" />
+            </button>
+            <button onClick={() => setViewMode('grid')} className={`p-2 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-white shadow-sm text-primary-600' : 'text-gray-500 hover:text-gray-700'}`} title="Vista de grilla">
+              <Grid3X3 className="w-4 h-4" />
+            </button>
+          </div>
+          <button onClick={openCreate} className="btn-primary gap-2"><Plus className="w-4 h-4" /> Crear Categoría</button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {loading ? <p className="text-gray-400 col-span-4 text-center py-12">Cargando categorías...</p> :
-        categories.map(c => (
-          <div key={c.id} className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-[0_4px_20px_rgba(0,0,0,0.05)] hover:-translate-y-1 transition-all group flex flex-col">
-            <div className="w-full h-32 bg-gray-50 border border-gray-100 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
-               {c.image_url ? (
-                  <img src={c.image_url} alt={c.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-               ) : (
-                  <ImageIcon className="w-8 h-8 text-gray-300" />
-               )}
+      {viewMode === 'list' ? (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Imagen</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Nombre</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Slug</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Orden</th>
+                <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {loading ? (
+                <tr><td colSpan={5} className="px-6 py-12 text-center text-gray-400">Cargando...</td></tr>
+              ) : categories.length === 0 ? (
+                <tr><td colSpan={5} className="px-6 py-12 text-center text-gray-400">No hay categorías</td></tr>
+              ) : categories.map(c => (
+                <tr key={c.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4">
+                    <div className="w-12 h-12 rounded-lg bg-gray-50 border overflow-hidden flex items-center justify-center">
+                      {c.image_url ? <img src={c.image_url} alt={c.name} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-gray-300" />}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 font-semibold text-gray-900">{c.name}</td>
+                  <td className="px-6 py-4 font-mono text-sm text-gray-500">/{c.slug}</td>
+                  <td className="px-6 py-4 text-gray-500">{c.sort_order}</td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex justify-end gap-1">
+                      <button onClick={() => openEdit(c)} className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg"><Pencil className="w-4 h-4" /></button>
+                      <button onClick={() => handleDelete(c.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {loading ? <p className="text-gray-400 col-span-4 text-center py-12">Cargando categorías...</p> :
+          categories.map(c => (
+            <div key={c.id} className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-[0_4px_20px_rgba(0,0,0,0.05)] hover:-translate-y-1 transition-all group flex flex-col">
+              <div className="w-full h-32 bg-gray-50 border border-gray-100 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
+                 {c.image_url ? (
+                    <img src={c.image_url} alt={c.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                 ) : (
+                    <ImageIcon className="w-8 h-8 text-gray-300" />
+                 )}
+              </div>
+              
+              <h3 className="font-bold text-gray-900 border-b pb-2 mb-2">{c.name}</h3>
+              <div className="flex-1 space-y-1 mb-4">
+                 <p className="text-xs text-gray-500 flex justify-between"><span className="font-medium text-gray-400">URL / Slug:</span> <span className="font-mono text-[10px] bg-gray-100 px-1 rounded truncate ml-2">/{c.slug}</span></p>
+                 <p className="text-xs text-gray-500 flex justify-between"><span className="font-medium text-gray-400">Orden:</span> <span>{c.sort_order}</span></p>
+              </div>
+              
+              <div className="flex gap-2">
+                <button onClick={() => openEdit(c)} className="btn-secondary flex-1 py-1.5 px-3 text-xs gap-1 border-gray-200 text-gray-700 hover:bg-gray-100 shadow-none"><Pencil className="w-3 h-3" /> Editar</button>
+                <button onClick={() => handleDelete(c.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg border border-transparent hover:border-red-100 transition-colors"><Trash2 className="w-4 h-4" /></button>
+              </div>
             </div>
-            
-            <h3 className="font-bold text-gray-900 border-b pb-2 mb-2">{c.name}</h3>
-            <div className="flex-1 space-y-1 mb-4">
-               <p className="text-xs text-gray-500 flex justify-between"><span className="font-medium text-gray-400">URL / Slug:</span> <span className="font-mono text-[10px] bg-gray-100 px-1 rounded truncate ml-2">/{c.slug}</span></p>
-               <p className="text-xs text-gray-500 flex justify-between"><span className="font-medium text-gray-400">Orden:</span> <span>{c.sort_order}</span></p>
-            </div>
-            
-            <div className="flex gap-2">
-              <button onClick={() => openEdit(c)} className="btn-secondary flex-1 py-1.5 px-3 text-xs gap-1 border-gray-200 text-gray-700 hover:bg-gray-100 shadow-none"><Pencil className="w-3 h-3" /> Editar</button>
-              <button onClick={() => handleDelete(c.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg border border-transparent hover:border-red-100 transition-colors"><Trash2 className="w-4 h-4" /></button>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {showForm && (
         <>

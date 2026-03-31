@@ -334,6 +334,7 @@ export default function AdminBadges() {
 
               <div className="border-t pt-4">
                 <label className="form-label">Opcional: Imagen Personalizada (en lugar de texto)</label>
+                <p className="text-xs text-gray-500 mb-2">Tamaño recomendado: 128x128px, PNG con fondo transparente</p>
                 <div className="flex gap-2">
                   <input 
                     className="form-input flex-1" 

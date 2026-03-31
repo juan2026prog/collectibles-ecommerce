@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Plus, Pencil, Trash2, Save, X, Image as ImageIcon } from 'lucide-react';
+import { Plus, Pencil, Trash2, Save, X, Image as ImageIcon, List, Grid3X3 } from 'lucide-react';
 
 export default function AdminBrands() {
   const [brands, setBrands] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [form, setForm] = useState({ name: '', slug: '', description: '', logo_url: '' });
 
   useEffect(() => { fetch(); }, []);
@@ -47,42 +48,92 @@ export default function AdminBrands() {
            <h2 className="text-2xl font-bold dark:text-white">Marcas</h2>
            <p className="text-sm text-gray-500 mt-1">Gestión del directorio de marcas ({brands.length} totales)</p>
         </div>
-        <button onClick={openCreate} className="btn-primary gap-2"><Plus className="w-4 h-4" /> Nueva Marca</button>
+        <div className="flex gap-2">
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            <button onClick={() => setViewMode('list')} className={`p-2 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white shadow-sm text-primary-600' : 'text-gray-500 hover:text-gray-700'}`} title="Vista de lista">
+              <List className="w-4 h-4" />
+            </button>
+            <button onClick={() => setViewMode('grid')} className={`p-2 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-white shadow-sm text-primary-600' : 'text-gray-500 hover:text-gray-700'}`} title="Vista de grilla">
+              <Grid3X3 className="w-4 h-4" />
+            </button>
+          </div>
+          <button onClick={openCreate} className="btn-primary gap-2"><Plus className="w-4 h-4" /> Nueva Marca</button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {loading ? <p className="text-gray-400 col-span-4 text-center py-12">Cargando marcas...</p> :
-        brands.map(b => (
-          <div key={b.id} className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-[0_4px_20px_rgba(0,0,0,0.05)] hover:-translate-y-1 transition-all group flex flex-col">
-            <div className="w-full h-32 bg-gray-50 border border-gray-100 rounded-lg mb-3 flex items-center justify-center overflow-hidden p-4">
-               {b.logo_url ? (
-                  <img src={b.logo_url} alt={b.name} className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500" />
-               ) : (
-                  <ImageIcon className="w-10 h-10 text-gray-300" />
-               )}
+      {viewMode === 'list' ? (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Logo</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Nombre</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Slug</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Descripción</th>
+                <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {loading ? (
+                <tr><td colSpan={5} className="px-6 py-12 text-center text-gray-400">Cargando...</td></tr>
+              ) : brands.length === 0 ? (
+                <tr><td colSpan={5} className="px-6 py-12 text-center text-gray-400">No hay marcas</td></tr>
+              ) : brands.map(b => (
+                <tr key={b.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4">
+                    <div className="w-12 h-12 rounded-lg bg-gray-50 border overflow-hidden flex items-center justify-center">
+                      {b.logo_url ? <img src={b.logo_url} alt={b.name} className="w-full h-full object-contain" /> : <ImageIcon className="w-5 h-5 text-gray-300" />}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 font-semibold text-gray-900">{b.name}</td>
+                  <td className="px-6 py-4 font-mono text-sm text-gray-500">/{b.slug}</td>
+                  <td className="px-6 py-4 text-gray-500 text-sm max-w-xs truncate">{b.description || '-'}</td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex justify-end gap-1">
+                      <button onClick={() => openEdit(b)} className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg"><Pencil className="w-4 h-4" /></button>
+                      <button onClick={() => handleDelete(b.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {loading ? <p className="text-gray-400 col-span-4 text-center py-12">Cargando marcas...</p> :
+          brands.map(b => (
+            <div key={b.id} className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-[0_4px_20px_rgba(0,0,0,0.05)] hover:-translate-y-1 transition-all group flex flex-col">
+              <div className="w-full h-32 bg-gray-50 border border-gray-100 rounded-lg mb-3 flex items-center justify-center overflow-hidden p-4">
+                 {b.logo_url ? (
+                    <img src={b.logo_url} alt={b.name} className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500" />
+                 ) : (
+                    <ImageIcon className="w-10 h-10 text-gray-300" />
+                 )}
+              </div>
+              
+              <h3 className="font-bold text-gray-900 border-b pb-2 mb-2">{b.name}</h3>
+              <div className="flex-1 space-y-1 mb-4">
+                 <p className="text-xs text-gray-500 flex justify-between"><span className="font-medium text-gray-400">Slug:</span> <span className="font-mono text-[10px] bg-gray-100 px-1 rounded truncate ml-2">/{b.slug}</span></p>
+                 {b.description && <p className="text-xs text-gray-500 mt-2 line-clamp-2">{b.description}</p>}
+              </div>
+              
+              <div className="flex gap-2">
+                <button onClick={() => openEdit(b)} className="btn-secondary flex-1 py-1.5 px-3 text-xs gap-1 border-gray-200 text-gray-700 hover:bg-gray-100 shadow-none"><Pencil className="w-3 h-3" /> Editar</button>
+                <button onClick={() => handleDelete(b.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg border border-transparent hover:border-red-100 transition-colors"><Trash2 className="w-4 h-4" /></button>
+              </div>
             </div>
-            
-            <h3 className="font-bold text-gray-900 border-b pb-2 mb-2">{b.name}</h3>
-            <div className="flex-1 space-y-1 mb-4">
-               <p className="text-xs text-gray-500 flex justify-between"><span className="font-medium text-gray-400">Slug:</span> <span className="font-mono text-[10px] bg-gray-100 px-1 rounded truncate ml-2">/{b.slug}</span></p>
-               {b.description && <p className="text-xs text-gray-500 mt-2 line-clamp-2">{b.description}</p>}
-            </div>
-            
-            <div className="flex gap-2">
-              <button onClick={() => openEdit(b)} className="btn-secondary flex-1 py-1.5 px-3 text-xs gap-1 border-gray-200 text-gray-700 hover:bg-gray-100 shadow-none"><Pencil className="w-3 h-3" /> Editar</button>
-              <button onClick={() => handleDelete(b.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg border border-transparent hover:border-red-100 transition-colors"><Trash2 className="w-4 h-4" /></button>
-            </div>
-          </div>
-        ))}
-        {!loading && brands.length === 0 && (
-           <div className="col-span-4 text-center py-16 bg-white border border-dashed border-gray-300 rounded-xl">
-              <ImageIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-              <h3 className="text-lg font-bold text-gray-900">No hay marcas configuradas</h3>
-              <p className="text-gray-500 text-sm mt-1 mb-4">Empieza agregando las marcas de los productos que vendes.</p>
-              <button onClick={openCreate} className="btn-primary mx-auto">Crear la primera marca</button>
-           </div>
-        )}
-      </div>
+          ))}
+          {!loading && brands.length === 0 && (
+             <div className="col-span-4 text-center py-16 bg-white border border-dashed border-gray-300 rounded-xl">
+                <ImageIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <h3 className="text-lg font-bold text-gray-900">No hay marcas configuradas</h3>
+                <p className="text-gray-500 text-sm mt-1 mb-4">Empieza agregando las marcas de los productos que vendes.</p>
+                <button onClick={openCreate} className="btn-primary mx-auto">Crear la primera marca</button>
+             </div>
+          )}
+        </div>
+      )}
 
       {showForm && (
         <>
