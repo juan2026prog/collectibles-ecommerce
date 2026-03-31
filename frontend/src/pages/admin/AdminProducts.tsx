@@ -1,12 +1,101 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Plus, Pencil, Trash2, Search, Eye, X, Upload, Save, AlertCircle } from 'lucide-react';
-import { useRef } from 'react';
+import { Plus, Pencil, Trash2, Search, Eye, X, Upload, Save, AlertCircle, Check, Loader2 } from 'lucide-react';
 import { ImageIcon } from 'lucide-react';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
 import ImportModal from '../../components/admin/ImportModal';
 import type { ParsedProduct } from '../../lib/bulkImportUtils';
 import { downloadTemplate } from '../../lib/bulkImportUtils';
+
+interface InlineEditProps {
+  value: string | number;
+  type?: 'text' | 'number' | 'select';
+  options?: { value: string; label: string }[];
+  onSave: (value: any) => Promise<void>;
+  className?: string;
+}
+
+function InlineEdit({ value, type = 'text', options = [], onSave, className = '' }: InlineEditProps) {
+  const [editing, setEditing] = useState(false);
+  const [localValue, setLocalValue] = useState(value);
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement | HTMLSelectElement>(null);
+
+  useEffect(() => { setLocalValue(value); }, [value]);
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      if (inputRef.current instanceof HTMLInputElement) {
+        inputRef.current.select();
+      }
+    }
+  }, [editing]);
+
+  const handleSave = async () => {
+    if (localValue === value) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave(localValue);
+      setEditing(false);
+    } catch (err) {
+      setLocalValue(value);
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleSave();
+    if (e.key === 'Escape') { setLocalValue(value); setEditing(false); }
+  };
+
+  if (editing) {
+    return (
+      <div className={`flex items-center gap-1 ${className}`}>
+        {type === 'select' ? (
+          <select
+            ref={inputRef as any}
+            value={localValue}
+            onChange={(e) => setLocalValue(e.target.value)}
+            onBlur={handleSave}
+            onKeyDown={handleKeyDown}
+            className="text-sm border-2 border-primary-500 rounded px-2 py-1 bg-white focus:outline-none"
+          >
+            {options.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        ) : (
+          <input
+            ref={inputRef as any}
+            type={type}
+            value={localValue}
+            onChange={(e) => setLocalValue(type === 'number' ? Number(e.target.value) : e.target.value)}
+            onBlur={handleSave}
+            onKeyDown={handleKeyDown}
+            className="text-sm border-2 border-primary-500 rounded px-2 py-1 w-24 focus:outline-none"
+          />
+        )}
+        {saving && <Loader2 className="w-4 h-4 animate-spin text-primary-500" />}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      onDoubleClick={() => !saving && setEditing(true)}
+      className={`cursor-pointer hover:bg-primary-50 hover:text-primary-700 px-2 py-1 -mx-2 rounded transition-colors ${className}`}
+      title="Doble click para editar"
+    >
+      {type === 'select' ? options.find(o => o.value === value)?.label || value : value}
+    </div>
+  );
+}
 
 interface Product {
   id: string;
@@ -236,6 +325,35 @@ export default function AdminProducts() {
 
   const totalStock = (p: Product) => p.variants?.reduce((s, v) => s + v.inventory_count, 0) || 0;
 
+  const updatePrice = async (productId: string, newPrice: number) => {
+    await supabase.from('products').update({ base_price: newPrice }).eq('id', productId);
+    fetchProducts();
+  };
+
+  const updateStock = async (productId: string, newStock: number) => {
+    const variant = products.find(p => p.id === productId)?.variants?.[0];
+    if (variant?.id) {
+      await supabase.from('product_variants').update({ inventory_count: newStock }).eq('id', variant.id);
+      fetchProducts();
+    }
+  };
+
+  const updateStatus = async (productId: string, newStatus: string) => {
+    await supabase.from('products').update({ status: newStatus }).eq('id', productId);
+    fetchProducts();
+  };
+
+  const updateCategory = async (productId: string, categoryId: string) => {
+    await supabase.from('products').update({ category_id: categoryId || null }).eq('id', productId);
+    fetchProducts();
+  };
+
+  const statusOptions = [
+    { value: 'published', label: 'Published' },
+    { value: 'draft', label: 'Draft' },
+    { value: 'archived', label: 'Archived' },
+  ];
+
   return (
     <div>
       {/* Header */}
@@ -291,21 +409,39 @@ export default function AdminProducts() {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-sm font-bold text-gray-900">${p.base_price}</span>
+                    <InlineEdit
+                      type="number"
+                      value={p.base_price}
+                      onSave={(val) => updatePrice(p.id, Number(val))}
+                      className="font-bold text-gray-900"
+                    />
                     {p.compare_at_price && <span className="ml-1 text-xs text-gray-400 line-through">${p.compare_at_price}</span>}
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`text-sm font-bold ${totalStock(p) <= 3 ? 'text-red-600' : 'text-green-600'}`}>
-                      {totalStock(p)}
-                    </span>
+                    <InlineEdit
+                      type="number"
+                      value={totalStock(p)}
+                      onSave={(val) => updateStock(p.id, Number(val))}
+                      className={`font-bold ${totalStock(p) <= 3 ? 'text-red-600' : 'text-green-600'}`}
+                    />
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`px-2.5 py-1 text-xs font-bold rounded-full ${
-                      p.status === 'published' ? 'bg-green-100 text-green-700' :
-                      p.status === 'draft' ? 'bg-gray-100 text-gray-600' : 'bg-red-100 text-red-700'
-                    }`}>{p.status}</span>
+                    <InlineEdit
+                      type="select"
+                      value={p.status}
+                      options={statusOptions}
+                      onSave={(val) => updateStatus(p.id, val)}
+                    />
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{p.category?.name || '—'}</td>
+                  <td className="px-6 py-4">
+                    <InlineEdit
+                      type="select"
+                      value={p.category?.id || ''}
+                      options={[{ value: '', label: '—' }, ...categories.map(c => ({ value: c.id, label: c.name }))]}
+                      onSave={(val) => updateCategory(p.id, val)}
+                      className="text-gray-600"
+                    />
+                  </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-1">
                       <a href={`/p/${p.slug}`} target="_blank" title="Ver" className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Eye className="w-4 h-4" /></a>
