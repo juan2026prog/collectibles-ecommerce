@@ -7,6 +7,7 @@ export default function AdminMercadoLibre() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const [dbClientId, setDbClientId] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
   
@@ -24,10 +25,15 @@ export default function AdminMercadoLibre() {
   async function checkConnection() {
     const { data } = await supabase
       .from('site_settings')
-      .select('value')
-      .eq('key', 'mercadolibre_access_token')
-      .single();
-    setIsConnected(!!data?.value);
+      .select('key, value')
+      .in('key', ['mercadolibre_access_token', 'mercadolibre_client_id']);
+    
+    if (data) {
+      const token = data.find(d => d.key === 'mercadolibre_access_token')?.value;
+      const clientId = data.find(d => d.key === 'mercadolibre_client_id')?.value;
+      setIsConnected(!!token);
+      if (clientId) setDbClientId(clientId);
+    }
   }
 
   async function fetchSettings() {
@@ -50,11 +56,12 @@ export default function AdminMercadoLibre() {
   }
 
   function handleConnect() {
-    const clientId = import.meta.env.VITE_ML_CLIENT_ID;
+    // Priority: .env > database
+    const clientId = import.meta.env.VITE_ML_CLIENT_ID || dbClientId;
     const redirectUri = `${window.location.origin}/callback`;
     
     if (!clientId) {
-      alert('Error: ML_CLIENT_ID no está configurado en las variables de entorno.');
+      alert('Error: No se encontró ML_CLIENT_ID en el sistema. Asegúrate de que esté configurado.');
       return;
     }
 
