@@ -1,23 +1,31 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { RefreshCw, ImageIcon, FileIcon, X, Folder, ChevronRight, Upload } from 'lucide-react';
+import { RefreshCw, ImageIcon, FileIcon, X, Folder, ChevronRight, Upload, Check, Square, FolderPlus } from 'lucide-react';
 
 interface MediaPickerModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelect: (url: string) => void;
+  multiple?: boolean;
+  onMultipleSelect?: (urls: string[]) => void;
 }
 
-export function MediaPickerModal({ isOpen, onClose, onSelect }: MediaPickerModalProps) {
+export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = false, onMultipleSelect }: MediaPickerModalProps) {
   const [files, setFiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPath, setCurrentPath] = useState('');
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
   
   const BUCKET_NAME = 'public-assets';
 
   useEffect(() => {
     if (isOpen) {
       fetchMedia(currentPath);
+      setSelectedFiles(new Set());
     }
   }, [isOpen, currentPath]);
 
@@ -45,11 +53,92 @@ export function MediaPickerModal({ isOpen, onClose, onSelect }: MediaPickerModal
 
   const isImage = (name: string) => /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(name);
 
+  // Drag & Drop handlers
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDragging(true);
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDragging(false);
+  }
+
+  async function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDragging(false);
+    
+    const droppedFiles = Array.from(e.dataTransfer.files);
+    if (droppedFiles.length > 0) {
+      await uploadFiles(droppedFiles);
+    }
+  }
+
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const selectedFiles = Array.from(e.target.files || []);
+    if (selectedFiles.length > 0) {
+      await uploadFiles(selectedFiles);
+    }
+  }
+
+  async function uploadFiles(filesToUpload: File[]) {
+    setUploading(true);
+    try {
+      for (const file of filesToUpload) {
+        const filePath = currentPath + file.name;
+        const { error } = await supabase.storage.from(BUCKET_NAME).upload(filePath, file, { upsert: true });
+        if (error) throw error;
+      }
+      fetchMedia(currentPath);
+    } catch (err: any) {
+      console.error('Upload error:', err);
+      alert('Error uploading files: ' + err.message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleCreateFolder() {
+    const folderName = prompt('Nombre de la nueva carpeta:');
+    if (!folderName) return;
+    
+    try {
+      await supabase.storage.from(BUCKET_NAME).upload(currentPath + folderName + '/.emptyFolderPlaceholder', new Blob([]));
+      fetchMedia(currentPath);
+    } catch (err: any) {
+      console.error(err);
+    }
+  }
+
+  function handleFileClick(file: any) {
+    const url = getFileUrl(file.name);
+    
+    if (multiple && onMultipleSelect) {
+      const newSelected = new Set(selectedFiles);
+      if (newSelected.has(url)) {
+        newSelected.delete(url);
+      } else {
+        newSelected.add(url);
+      }
+      setSelectedFiles(newSelected);
+    } else {
+      onSelect(url);
+      onClose();
+    }
+  }
+
+  function handleConfirmSelection() {
+    if (onMultipleSelect && selectedFiles.size > 0) {
+      onMultipleSelect(Array.from(selectedFiles));
+      onClose();
+    }
+  }
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl shadow-xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-3xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
           <div>
@@ -71,13 +160,57 @@ export function MediaPickerModal({ isOpen, onClose, onSelect }: MediaPickerModal
               </div>
             </h2>
           </div>
-          <button onClick={onClose} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors">
-            <X className="w-6 h-6" />
-          </button>
+          <div className="flex items-center gap-2">
+            {multiple && selectedFiles.size > 0 && (
+              <span className="text-sm text-gray-500 bg-primary-50 px-3 py-1 rounded-lg">
+                {selectedFiles.size} seleccionado(s)
+              </span>
+            )}
+            <button onClick={handleCreateFolder} className="p-2 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="Crear carpeta">
+              <FolderPlus className="w-5 h-5" />
+            </button>
+            <button onClick={() => fileInputRef.current?.click()} className="p-2 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="Subir archivos">
+              <Upload className="w-5 h-5" />
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileSelect}
+            />
+            <button onClick={onClose} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+          {/* Drag & Drop Zone */}
+          <div 
+            ref={dropZoneRef}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`mb-4 border-2 border-dashed rounded-xl p-4 text-center transition-colors ${
+              isDragging ? 'border-primary-500 bg-primary-50' : 'border-gray-300 hover:border-gray-400'
+            }`}
+          >
+            {uploading ? (
+              <div className="flex items-center justify-center gap-2 text-primary-600">
+                <RefreshCw className="w-5 h-5 animate-spin" />
+                <span>Subiendo archivos...</span>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">
+                <span className="font-medium text-primary-600">Arrastra y suelta</span> archivos aquí, o 
+                <button onClick={() => fileInputRef.current?.click()} className="text-primary-600 hover:underline ml-1">selecciona</button>
+              </p>
+            )}
+          </div>
+
           {loading ? (
             <div className="flex flex-col items-center justify-center h-48 text-gray-400">
               <RefreshCw className="w-8 h-8 animate-spin mb-4" />
@@ -91,7 +224,7 @@ export function MediaPickerModal({ isOpen, onClose, onSelect }: MediaPickerModal
           ) : (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
               {files.map(file => {
-                const isFolder = !file.id; // Supabase returns id: null for folders
+                const isFolder = !file.id;
                 
                 if (isFolder) {
                   return (
@@ -108,13 +241,23 @@ export function MediaPickerModal({ isOpen, onClose, onSelect }: MediaPickerModal
 
                 const url = getFileUrl(file.name);
                 const img = isImage(file.name);
+                const isSelected = selectedFiles.has(url);
                 
                 return (
                   <button 
                     key={file.id} 
-                    onClick={() => { onSelect(url); onClose(); }}
-                    className="group bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-primary-400 hover:shadow-md transition-all shadow-sm aspect-square relative"
+                    onClick={() => handleFileClick(file)}
+                    className={`group bg-white border-2 rounded-xl overflow-hidden transition-all shadow-sm aspect-square relative ${
+                      isSelected ? 'border-primary-500 ring-2 ring-primary-500 ring-offset-2' : 'border-gray-200 hover:border-primary-400 hover:shadow-md'
+                    }`}
                   >
+                    {multiple && (
+                      <div className={`absolute top-2 left-2 z-10 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+                        isSelected ? 'bg-primary-500 border-primary-500' : 'bg-white border-gray-300'
+                      }`}>
+                        {isSelected && <Check className="w-4 h-4 text-white" />}
+                      </div>
+                    )}
                     <div className="w-full h-full flex items-center justify-center bg-gray-50 p-2">
                        {img ? (
                           <img src={url} alt={file.name} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform" />
@@ -131,6 +274,20 @@ export function MediaPickerModal({ isOpen, onClose, onSelect }: MediaPickerModal
             </div>
           )}
         </div>
+
+        {/* Footer with Actions */}
+        {multiple && (
+          <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+            <button onClick={onClose} className="btn-secondary">Cancelar</button>
+            <button 
+              onClick={handleConfirmSelection} 
+              disabled={selectedFiles.size === 0}
+              className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Seleccionar {selectedFiles.size > 0 && `(${selectedFiles.size})`}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

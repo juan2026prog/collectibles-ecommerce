@@ -1,23 +1,68 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { ShieldCheck, Tags, Search, Check } from 'lucide-react';
+import { ShieldCheck, Tags, Search, Check, Plus, Trash2, Upload, Image as ImageIcon } from 'lucide-react';
+import { MediaPickerModal } from '../../components/MediaPickerModal';
+
+interface CustomBadge {
+  id: string;
+  label: string;
+  color: string;
+  bg_color: string;
+  text_color: string;
+  custom_image?: string;
+}
 
 export default function AdminBadges() {
   const [products, setProducts] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [selectedBadge, setSelectedBadge] = useState('hot');
   const [loading, setLoading] = useState(true);
+  const [badges, setBadges] = useState<CustomBadge[]>([
+    { id: 'hot', label: 'HOT', color: 'bg-red-500 text-white', bg_color: '#ef4444', text_color: '#ffffff' },
+    { id: 'new', label: 'NEW', color: 'bg-green-500 text-white', bg_color: '#22c55e', text_color: '#ffffff' },
+    { id: 'sale', label: 'SALE', color: 'bg-blue-500 text-white', bg_color: '#3b82f6', text_color: '#ffffff' },
+    { id: 'preorder', label: 'PRE-ORDER', color: 'bg-orange-500 text-white', bg_color: '#f97316', text_color: '#ffffff' },
+    { id: 'soldout', label: 'SOLD OUT', color: 'bg-gray-500 text-white', bg_color: '#6b7280', text_color: '#ffffff' }
+  ]);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingBadge, setEditingBadge] = useState<CustomBadge | null>(null);
+  const [newBadgeLabel, setNewBadgeLabel] = useState('');
+  const [newBadgeBg, setNewBadgeBg] = useState('#3b82f6');
+  const [newBadgeText, setNewBadgeText] = useState('#ffffff');
+  const [newBadgeImage, setNewBadgeImage] = useState('');
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
 
-  // Predefined default badges
-  const BADGES = [
-    { id: 'hot', label: 'HOT', color: 'bg-red-500 text-white' },
-    { id: 'new', label: 'NEW', color: 'bg-green-500 text-white' },
-    { id: 'sale', label: 'SALE', color: 'bg-blue-500 text-white' },
-    { id: 'preorder', label: 'PRE-ORDER', color: 'bg-orange-500 text-white' },
-    { id: 'soldout', label: 'SOLD OUT', color: 'bg-gray-500 text-white' }
-  ];
+  const BADGES = badges;
 
-  useEffect(() => { fetchProducts(); }, []);
+  async function fetchProducts() {
+    setLoading(true);
+    const { data } = await supabase.from('products').select('id, title, badge, category:categories(name)').order('title');
+    setProducts(data || []);
+    setLoading(false);
+  }
+
+  async function loadCustomBadges() {
+    const { data } = await supabase.from('badges').select('*').order('sort_order');
+    if (data && data.length > 0) {
+      setBadges([
+        { id: 'hot', label: 'HOT', color: 'bg-red-500 text-white', bg_color: '#ef4444', text_color: '#ffffff' },
+        { id: 'new', label: 'NEW', color: 'bg-green-500 text-white', bg_color: '#22c55e', text_color: '#ffffff' },
+        { id: 'sale', label: 'SALE', color: 'bg-blue-500 text-white', bg_color: '#3b82f6', text_color: '#ffffff' },
+        { id: 'preorder', label: 'PRE-ORDER', color: 'bg-orange-500 text-white', bg_color: '#f97316', text_color: '#ffffff' },
+        { id: 'soldout', label: 'SOLD OUT', color: 'bg-gray-500 text-white', bg_color: '#6b7280', text_color: '#ffffff' },
+        ...data.map((b: any) => ({
+          id: b.id,
+          label: b.label,
+          color: '',
+          bg_color: b.bg_color || '#3b82f6',
+          text_color: b.text_color || '#ffffff',
+          custom_image: b.custom_image || null
+        }))
+      ]);
+    }
+  }
+
+  useEffect(() => { fetchProducts(); loadCustomBadges(); }, []);
 
   async function fetchProducts() {
     setLoading(true);
@@ -45,6 +90,48 @@ export default function AdminBadges() {
     fetchProducts();
   }
 
+  async function handleCreateBadge() {
+    if (!newBadgeLabel.trim()) return alert('El texto de la cocarda es requerido');
+    
+    const newBadge: CustomBadge = {
+      id: `custom_${Date.now()}`,
+      label: newBadgeLabel.toUpperCase(),
+      color: '',
+      bg_color: newBadgeBg,
+      text_color: newBadgeText,
+      custom_image: newBadgeImage || undefined
+    };
+
+    await supabase.from('badges').insert({
+      label: newBadge.label,
+      bg_color: newBadge.bg_color,
+      text_color: newBadge.text_color,
+      custom_image: newBadge.custom_image || null,
+      is_active: true,
+      sort_order: badges.length
+    });
+
+    setNewBadgeLabel('');
+    setNewBadgeBg('#3b82f6');
+    setNewBadgeText('#ffffff');
+    setNewBadgeImage('');
+    setShowCreateModal(false);
+    loadCustomBadges();
+  }
+
+  async function handleDeleteBadge(badgeId: string) {
+    if (!confirm('¿Eliminar esta cocarda?')) return;
+    await supabase.from('badges').delete().eq('id', badgeId);
+    loadCustomBadges();
+  }
+
+  function getBadgeStyle(badge: CustomBadge) {
+    if (badge.custom_image) {
+      return { backgroundImage: `url(${badge.custom_image})`, backgroundSize: 'cover', backgroundPosition: 'center' };
+    }
+    return { backgroundColor: badge.bg_color, color: badge.text_color };
+  }
+
   const filteredProducts = products.filter(p => 
     p.title.toLowerCase().includes(search.toLowerCase()) || 
     p.category?.name?.toLowerCase().includes(search.toLowerCase())
@@ -67,18 +154,33 @@ export default function AdminBadges() {
             <h3 className="font-bold text-lg mb-4">Acciones Masivas</h3>
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-semibold text-gray-700 block mb-2">Seleccionar Cocarda</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-semibold text-gray-700">Seleccionar Cocarda</label>
+                  <button onClick={() => setShowCreateModal(true)} className="text-xs text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1">
+                    <Plus className="w-3 h-3" /> Crear Nueva
+                  </button>
+                </div>
                 <div className="flex flex-wrap gap-2">
                   {BADGES.map(b => (
-                    <button 
-                      key={b.id} 
-                      onClick={() => setSelectedBadge(b.id)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition-all ${
-                        selectedBadge === b.id ? 'border-primary-500 ' + b.color : 'border-gray-200 text-gray-400 hover:border-gray-300'
-                      }`}
-                    >
-                      {b.label}
-                    </button>
+                    <div key={b.id} className="relative group">
+                      <button 
+                        onClick={() => setSelectedBadge(b.id)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition-all ${
+                          selectedBadge === b.id ? 'border-primary-500' : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                        style={getBadgeStyle(b)}
+                      >
+                        {b.custom_image ? '' : b.label}
+                      </button>
+                      {!['hot', 'new', 'sale', 'preorder', 'soldout'].includes(b.id) && (
+                        <button 
+                          onClick={() => handleDeleteBadge(b.id)}
+                          className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                        >
+                          <Trash2 className="w-2 h-2" />
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>
@@ -158,6 +260,118 @@ export default function AdminBadges() {
           </div>
         </div>
       </div>
+
+      {/* CREATE BADGE MODAL */}
+      {showCreateModal && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setShowCreateModal(false)} />
+          <div className="fixed inset-y-0 right-0 w-full max-w-md bg-white z-50 shadow-2xl flex flex-col animate-slide-in-left">
+            <div className="flex items-center justify-between p-6 border-b">
+              <h2 className="text-lg font-bold">Nueva Cocarda Personalizada</h2>
+              <button onClick={() => setShowCreateModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <Trash2 className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div>
+                <label className="form-label">Texto de la Cocarda *</label>
+                <input 
+                  className="form-input" 
+                  value={newBadgeLabel} 
+                  onChange={e => setNewBadgeLabel(e.target.value)}
+                  placeholder="Ej: OFERTA, DESTACADO, LIMONIADA"
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="form-label">Color de Fondo</label>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="color" 
+                      value={newBadgeBg}
+                      onChange={e => setNewBadgeBg(e.target.value)}
+                      className="w-10 h-10 rounded cursor-pointer"
+                    />
+                    <input 
+                      type="text"
+                      value={newBadgeBg}
+                      onChange={e => setNewBadgeBg(e.target.value)}
+                      className="form-input text-sm"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="form-label">Color de Texto</label>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="color" 
+                      value={newBadgeText}
+                      onChange={e => setNewBadgeText(e.target.value)}
+                      className="w-10 h-10 rounded cursor-pointer"
+                    />
+                    <input 
+                      type="text"
+                      value={newBadgeText}
+                      onChange={e => setNewBadgeText(e.target.value)}
+                      className="form-input text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="form-label">Vista Previa</label>
+                <div className="flex justify-center py-4">
+                  <span 
+                    className="px-4 py-2 rounded-lg text-sm font-bold"
+                    style={{ backgroundColor: newBadgeBg, color: newBadgeText }}
+                  >
+                    {newBadgeLabel || 'TEXTO'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <label className="form-label">Opcional: Imagen Personalizada (en lugar de texto)</label>
+                <div className="flex gap-2">
+                  <input 
+                    className="form-input flex-1" 
+                    value={newBadgeImage}
+                    onChange={e => setNewBadgeImage(e.target.value)}
+                    placeholder="URL de imagen o selecciona de la biblioteca"
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => setShowMediaPicker(true)}
+                    className="btn-secondary px-3"
+                  >
+                    <ImageIcon className="w-4 h-4" />
+                  </button>
+                </div>
+                {newBadgeImage && (
+                  <div className="mt-2 flex justify-center">
+                    <img src={newBadgeImage} alt="Preview" className="h-12 object-contain" />
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="p-6 border-t flex gap-3">
+              <button onClick={() => setShowCreateModal(false)} className="btn-secondary flex-1">Cancelar</button>
+              <button onClick={handleCreateBadge} className="btn-primary flex-1 gap-2">
+                <Plus className="w-4 h-4" /> Crear Cocarda
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* MEDIA PICKER */}
+      <MediaPickerModal 
+        isOpen={showMediaPicker} 
+        onClose={() => setShowMediaPicker(false)} 
+        onSelect={(url) => { setNewBadgeImage(url); setShowMediaPicker(false); }}
+      />
     </div>
   );
 }
