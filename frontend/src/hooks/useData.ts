@@ -77,7 +77,7 @@ export function useProducts(filters: ProductFilters = {}) {
       case 'price-high': query = query.order('base_price', { ascending: false }); break;
       case 'newest': query = query.order('created_at', { ascending: false }); break;
       case 'name': query = query.order('title', { ascending: true }); break;
-      default: query = query.order('is_featured', { ascending: false }).order('sort_order', { ascending: true });
+      default: query = query.order('is_featured', { ascending: false }).order('created_at', { ascending: false });
     }
 
     const limit = filters.limit || 12;
