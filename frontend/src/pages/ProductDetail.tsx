@@ -51,13 +51,20 @@ export default function ProductDetail() {
     </div>
   );
 
-  const images = product.images || [];
-  const variants = product.variants || [];
-  const reviews = product.reviews || [];
+  function getProductImage(product: any): string {
+  const img = product.images?.[0];
+  if (!img?.url) return 'https://via.placeholder.com/600';
+  if (img.url.match(/^[a-f0-9-]{36}$/)) return 'https://via.placeholder.com/600';
+  return img.url;
+}
+
+const productImage = getProductImage(product);
   const mainVariant = variants[0];
   const stock = mainVariant?.inventory_count || 0;
   const finalPrice = product.base_price + (mainVariant?.price_adjustment || 0);
   const avgRating = reviews.length > 0 ? reviews.reduce((s: number, r: any) => s + r.rating, 0) / reviews.length : 4;
+  const currentImage = images[selectedImage]?.url;
+  const displayImage = currentImage && !currentImage.match(/^[a-f0-9-]{36}$/) ? currentImage : 'https://via.placeholder.com/600';
 
   function addToCart() {
     if (!mainVariant) return;
@@ -67,7 +74,7 @@ export default function ProductDetail() {
       quantity,
       title: product.title,
       price: finalPrice,
-      image: images[0]?.url || '',
+      image: productImage,
       variant_name: mainVariant.name,
     });
 
@@ -104,16 +111,19 @@ export default function ProductDetail() {
         <div className="flex gap-4">
           {images.length > 1 && (
             <div className="hidden md:flex flex-col gap-2 w-20">
-              {images.map((img: any, i: number) => (
-                <button key={img.id} onClick={() => setSelectedImage(i)}
-                  className={`w-20 h-20 rounded-lg overflow-hidden border-2 ${i === selectedImage ? 'border-primary-500' : 'border-gray-200'}`}>
-                  <img src={img.url} alt="" className="w-full h-full object-cover" />
-                </button>
-              ))}
+              {images.map((img: any, i: number) => {
+                  const thumbnailSrc = img.url && !img.url.match(/^[a-f0-9-]{36}$/) ? img.url : 'https://via.placeholder.com/80';
+                  return (
+                    <button key={img.id} onClick={() => setSelectedImage(i)}
+                      className={`w-20 h-20 rounded-lg overflow-hidden border-2 ${i === selectedImage ? 'border-primary-500' : 'border-gray-200'}`}>
+                      <img src={thumbnailSrc} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  );
+                })}
             </div>
           )}
           <div className="flex-1 aspect-square bg-gray-50 rounded-xl overflow-hidden">
-            <img src={images[selectedImage]?.url || 'https://via.placeholder.com/600'} alt={product.title} className="w-full h-full object-cover" />
+            <img src={displayImage} alt={product.title} className="w-full h-full object-cover" />
           </div>
         </div>
 

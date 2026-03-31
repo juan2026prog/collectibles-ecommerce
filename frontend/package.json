@@ -10,8 +10,16 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage",
+    "test:integration": "vitest run --root ../tests/integration",
     "e2e": "playwright test",
-    "e2e:ui": "playwright test --ui"
+    "e2e:ui": "playwright test --ui",
+    "e2e:admin": "playwright test tests/e2e/admin.spec.ts",
+    "e2e:checkout": "playwright test tests/e2e/checkout.spec.ts",
+    "e2e:load": "playwright test tests/e2e/load.spec.ts",
+    "e2e:basic": "playwright test tests/e2e/basic.spec.ts",
+    "loadtest": "npx playwright test tests/e2e/load.spec.ts",
+    "test:all": "npm run test:integration && npm run e2e:basic"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.1",

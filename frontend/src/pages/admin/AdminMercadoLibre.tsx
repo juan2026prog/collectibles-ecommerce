@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { RefreshCw, Play, AlertCircle, CheckCircle2, Settings2, Save } from 'lucide-react';
+import { RefreshCw, Play, AlertCircle, CheckCircle2, Settings2, Save, ExternalLink, Link2 } from 'lucide-react';
 
 export default function AdminMercadoLibre() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   
   // Settings state
   const [markupType, setMarkupType] = useState('percentage');
@@ -16,7 +18,17 @@ export default function AdminMercadoLibre() {
   useEffect(() => {
     fetchProducts();
     fetchSettings();
+    checkConnection();
   }, []);
+
+  async function checkConnection() {
+    const { data } = await supabase
+      .from('site_settings')
+      .select('value')
+      .eq('key', 'mercadolibre_access_token')
+      .single();
+    setIsConnected(!!data?.value);
+  }
 
   async function fetchSettings() {
     const { data } = await supabase.from('site_settings').select('*').in('key', ['ml_price_markup_type', 'ml_price_markup_value']);
@@ -35,6 +47,13 @@ export default function AdminMercadoLibre() {
        { key: 'ml_price_markup_value', value: markupValue, updated_at: new Date().toISOString() }
     ], { onConflict: 'key' });
     setSavingSettings(false);
+  }
+
+  function handleConnect() {
+    const clientId = import.meta.env.VITE_ML_CLIENT_ID || 'TU_CLIENT_ID';
+    const redirectUri = `${window.location.origin}/callback`;
+    const authUrl = `https://auth.mercadolibre.com.ar/authorization?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    window.open(authUrl, '_blank', 'width=600,height=700');
   }
 
   async function fetchProducts() {
@@ -83,8 +102,24 @@ export default function AdminMercadoLibre() {
           </h2>
           <p className="text-gray-500 mt-1">Sincroniza stock, precios y estados mediante la Edge Function.</p>
         </div>
-        <button className="btn-primary bg-yellow-400 text-blue-900 border-yellow-400 hover:bg-yellow-500 flex items-center gap-2" disabled={syncing}>
-          Conectar Cuenta
+        <button 
+          onClick={handleConnect}
+          disabled={connecting}
+          className="btn-primary bg-yellow-400 text-blue-900 border-yellow-400 hover:bg-yellow-500 flex items-center gap-2"
+        >
+          {connecting ? (
+            <RefreshCw className="w-4 h-4 animate-spin" />
+          ) : isConnected ? (
+            <>
+              <Link2 className="w-4 h-4" />
+              Cuenta Conectada
+            </>
+          ) : (
+            <>
+              <ExternalLink className="w-4 h-4" />
+              Conectar Cuenta
+            </>
+          )}
         </button>
       </div>
 

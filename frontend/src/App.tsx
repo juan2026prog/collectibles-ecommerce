@@ -16,6 +16,8 @@ import ProductDetail from './pages/ProductDetail';
 import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
 import CheckoutSuccess from './pages/CheckoutSuccess';
+import MLCallback from './pages/MLCallback';
+import Callback from './pages/Callback';
 import DynamicPage from './pages/DynamicPage';
 import Login from './pages/Login';
 import CustomerPortal from './pages/CustomerPortal';
@@ -73,6 +75,8 @@ function App() {
                   <Route path="/cart" element={<Cart />} />
                   <Route path="/checkout" element={<Checkout />} />
                   <Route path="/checkout/success" element={<CheckoutSuccess />} />
+                  <Route path="/auth/callback" element={<MLCallback />} />
+                  <Route path="/callback" element={<Callback />} />
                   
                   {/* User Portals */}
                   <Route path="/account" element={

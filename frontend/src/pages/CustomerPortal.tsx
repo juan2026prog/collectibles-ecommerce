@@ -4,6 +4,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { Package, User, Star, Settings } from 'lucide-react';
 import { useLocale } from '../contexts/LocaleContext';
 
+function getOrderItemImage(item: any): string {
+  const img = item.products?.images?.[0];
+  if (!img?.url) return 'https://via.placeholder.com/80';
+  if (img.url.match(/^[a-f0-9-]{36}$/)) return 'https://via.placeholder.com/80';
+  return img.url;
+}
+
 export default function CustomerPortal() {
   const { user } = useAuth();
   const { language, currency, setLanguage, setCurrency, formatPrice, t } = useLocale();
@@ -121,7 +128,7 @@ export default function CustomerPortal() {
                 <div className="p-6">
                   {order.order_items.map((item: any, i: number) => (
                     <div key={i} className="flex gap-4 py-4 border-b last:border-0 last:pb-0">
-                      <img src={item.products?.images?.[0]?.url || 'https://via.placeholder.com/80'} className="w-20 h-20 object-cover rounded-lg border" />
+                      <img src={getOrderItemImage(item)} className="w-20 h-20 object-cover rounded-lg border" />
                       <div>
                         <h4 className="font-bold text-gray-900">{item.products?.title}</h4>
                         <p className="text-sm text-gray-500">Cantidad: {item.quantity}</p>

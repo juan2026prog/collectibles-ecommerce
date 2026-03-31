@@ -1,11 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Plus, Pencil, Trash2, Search, Eye, X, Upload, Save, AlertCircle, Check, Loader2 } from 'lucide-react';
-import { ImageIcon } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Eye, X, Upload, Save, AlertCircle, Check, Loader2, ImageIcon } from 'lucide-react';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
 import ImportModal from '../../components/admin/ImportModal';
 import type { ParsedProduct } from '../../lib/bulkImportUtils';
 import { downloadTemplate } from '../../lib/bulkImportUtils';
+
+function getProductImage(product: any): string {
+  const img = product.images?.[0];
+  if (!img?.url) return 'https://via.placeholder.com/40';
+  if (img.url.match(/^[a-f0-9-]{36}$/)) return 'https://via.placeholder.com/40';
+  return img.url;
+}
 
 interface InlineEditProps {
   value: string | number;
@@ -415,7 +421,7 @@ export default function AdminProducts() {
                 <tr key={p.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <img src={p.images?.[0]?.url || 'https://via.placeholder.com/40'} alt="" className="w-10 h-10 rounded-lg object-cover border" />
+                      <img src={getProductImage(p)} alt="" className="w-10 h-10 rounded-lg object-cover border" />
                       <div>
                         <p className="text-sm font-semibold text-gray-900 line-clamp-1">{p.title}</p>
                         {p.badge && <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-primary-100 text-primary-700">{p.badge}</span>}

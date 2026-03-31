@@ -41,10 +41,17 @@ export default function Shop() {
 
   const totalPages = Math.ceil(count / limit);
 
-  function handleAddToCart(p: any) {
-    const variant = p.variants?.[0];
-    if (!variant) return;
-    cart.addItem({ product_id: p.id, variant_id: variant.id, quantity: 1, title: p.title, price: p.base_price + (variant.price_adjustment || 0), image: p.images?.[0]?.url || '', variant_name: variant.name });
+  function getProductImage(product: any): string {
+  const img = product.images?.[0];
+  if (!img?.url) return 'https://via.placeholder.com/400';
+  if (img.url.match(/^[a-f0-9-]{36}$/)) return 'https://via.placeholder.com/400';
+  return img.url;
+}
+
+function handleAddToCart(p: any) {
+  const variant = p.variants?.[0];
+  if (!variant) return;
+  cart.addItem({ product_id: p.id, variant_id: variant.id, quantity: 1, title: p.title, price: p.base_price + (variant.price_adjustment || 0), image: getProductImage(p), variant_name: variant.name });
   }
 
   function setFilter(key: string, value: string) {
@@ -225,7 +232,7 @@ export default function Shop() {
                 <div key={p.id} className={`group bg-white border border-gray-100 overflow-hidden hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] transition-all duration-300 transform hover:-translate-y-1 flex ${viewMode === 'list' ? 'flex-row rounded-2xl h-48' : 'flex-col rounded-3xl h-full'}`}>
                   <div className={`relative overflow-hidden bg-gray-50/50 ${viewMode === 'list' ? 'w-48 shrink-0' : 'aspect-square'}`}>
                     <Link to={`/p/${p.slug}`}>
-                      <img src={p.images?.[0]?.url || 'https://via.placeholder.com/400'} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out" />
+                      <img src={getProductImage(p)} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out" />
                     </Link>
                     {p.badge && (
                       <span className={`absolute top-4 left-4 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-full shadow-sm backdrop-blur-md ${

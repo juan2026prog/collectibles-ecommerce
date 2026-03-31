@@ -23,25 +23,32 @@ export default function Home() {
     return () => clearInterval(timer);
   }, [banners.length]);
 
-  function handleAddToCart(p: any) {
-    const variant = p.variants?.[0];
-    if (!variant) return;
-    cart.addItem({
-      product_id: p.id,
-      variant_id: variant.id,
-      quantity: 1,
-      title: p.title,
-      price: p.base_price + (variant.price_adjustment || 0),
-      image: p.images?.[0]?.url || '',
-      variant_name: variant.name
-    });
-  }
+  function getProductImage(product: any): string {
+  const img = product.images?.[0];
+  if (!img?.url) return 'https://via.placeholder.com/400';
+  if (img.url.match(/^[a-f0-9-]{36}$/)) return 'https://via.placeholder.com/400';
+  return img.url;
+}
+
+function handleAddToCart(p: any) {
+  const variant = p.variants?.[0];
+  if (!variant) return;
+  cart.addItem({
+    product_id: p.id,
+    variant_id: variant.id,
+    quantity: 1,
+    title: p.title,
+    price: p.base_price + (variant.price_adjustment || 0),
+    image: getProductImage(p),
+    variant_name: variant.name
+  });
+}
 
   const ProductCard = ({ p }: { p: any }) => (
     <div className="group bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] transition-all duration-300 transform hover:-translate-y-1 flex flex-col h-full shrink-0 w-[240px] sm:w-[280px]">
       <div className="relative overflow-hidden aspect-square bg-gray-50/50">
         <Link to={`/p/${p.slug}`}>
-          <img src={p.images?.[0]?.url || 'https://via.placeholder.com/400'} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out" />
+          <img src={getProductImage(p)} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out" />
         </Link>
         {p.badge && (
           <span className={`absolute top-3 left-3 px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-full shadow-sm backdrop-blur-md ${
