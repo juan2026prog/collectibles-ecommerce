@@ -65,7 +65,7 @@ export default function AdminMercadoLibre() {
       return;
     }
 
-    const authUrl = `https://auth.mercadolibre.com.ar/authorization?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    const authUrl = `https://auth.mercadolibre.com.uy/authorization?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
     
     // Use current window for more reliable redirection
     window.location.href = authUrl;
