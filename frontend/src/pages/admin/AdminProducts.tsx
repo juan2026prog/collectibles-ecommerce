@@ -116,6 +116,11 @@ interface Product {
   brand: { id?: string, name: string } | null;
   images: { id?: string, url: string }[];
   variants: { id?: string, inventory_count: number; sku?: string }[];
+  ml_item_id?: string;
+  ml_category_id?: string;
+  ml_status?: string;
+  condition?: string;
+  listing_type_id?: string;
   created_at: string;
 }
 
@@ -137,7 +142,8 @@ export default function AdminProducts() {
     title: '', slug: '', description: '', short_description: '',
     base_price: '', compare_at_price: '', cost: '', sku: '', stock: '10', status: 'draft',
     badge: '', is_featured: false, category_id: '', brand_id: '',
-    seo_title: '', seo_description: '', image_url: '', video_url: ''
+    seo_title: '', seo_description: '', image_url: '', video_url: '',
+    ml_category_id: '', condition: 'new', listing_type_id: 'gold_special'
   });
 
   useEffect(() => { fetchProducts(); fetchMeta(); }, []);
@@ -163,7 +169,7 @@ export default function AdminProducts() {
 
   function openCreate() {
     setEditing(null);
-    setForm({ title: '', slug: '', description: '', short_description: '', base_price: '', compare_at_price: '', cost: '', sku: `SKU-${Date.now()}`, stock: '10', status: 'draft', badge: '', is_featured: false, category_id: '', brand_id: '', seo_title: '', seo_description: '', image_url: '', video_url: '' });
+    setForm({ title: '', slug: '', description: '', short_description: '', base_price: '', compare_at_price: '', cost: '', sku: `SKU-${Date.now()}`, stock: '10', status: 'draft', badge: '', is_featured: false, category_id: '', brand_id: '', seo_title: '', seo_description: '', image_url: '', video_url: '', ml_category_id: '', condition: 'new', listing_type_id: 'gold_special' });
     setShowForm(true);
   }
 
@@ -175,7 +181,10 @@ export default function AdminProducts() {
       cost: '', sku: product.variants?.[0]?.sku || `SKU-${Date.now()}`, stock: product.variants?.[0]?.inventory_count?.toString() || '10',
       status: product.status, badge: product.badge || '', is_featured: product.is_featured,
       category_id: product.category?.id || '', brand_id: product.brand?.id || '', seo_title: '', seo_description: '',
-      image_url: product.images?.[0]?.url || '', video_url: ''
+      image_url: product.images?.[0]?.url || '', video_url: '',
+      ml_category_id: product.ml_category_id || '',
+      condition: product.condition || 'new',
+      listing_type_id: product.listing_type_id || 'gold_special'
     });
     setShowForm(true);
   }
@@ -218,6 +227,9 @@ export default function AdminProducts() {
         brand_id: form.brand_id || null,
         seo_title: form.seo_title || null,
         seo_description: form.seo_description || null,
+        ml_category_id: form.ml_category_id || null,
+        condition: form.condition || 'new',
+        listing_type_id: form.listing_type_id || 'gold_special',
       };
 
       if (editing) {
@@ -579,6 +591,40 @@ export default function AdminProducts() {
                 <input type="checkbox" checked={form.is_featured} onChange={e => setForm({...form, is_featured: e.target.checked})} className="w-4 h-4 rounded text-primary-600" />
                 <span className="text-sm font-medium">Featured product</span>
               </label>
+
+              <div className="border-t pt-4 mt-4">
+                <h3 className="text-sm font-bold text-blue-600 mb-3 flex items-center gap-2">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                  Mercado Libre Settings
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="form-label text-xs">ML Category ID</label>
+                    <input className="form-input text-sm" value={form.ml_category_id} onChange={e => setForm({...form, ml_category_id: e.target.value})} placeholder="MLU1234..." />
+                  </div>
+                  <div>
+                    <label className="form-label text-xs">Condition</label>
+                    <select className="form-input text-sm" value={form.condition} onChange={e => setForm({...form, condition: e.target.value})}>
+                      <option value="new">Nuevo</option>
+                      <option value="used">Usado</option>
+                      <option value="not_specified">No especificado</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <label className="form-label text-xs">Listing Type</label>
+                  <select className="form-input text-sm" value={form.listing_type_id} onChange={e => setForm({...form, listing_type_id: e.target.value})}>
+                    <option value="gold_special">Clásica (Sin cuotas)</option>
+                    <option value="gold_pro">Premium (Con cuotas)</option>
+                    <option value="free">Gratuita</option>
+                  </select>
+                </div>
+                {editing?.ml_item_id && (
+                  <div className="mt-3 p-2 bg-blue-50 rounded text-[10px] text-blue-700 font-mono break-all">
+                    ID ML: {editing.ml_item_id} | Status: {editing.ml_status}
+                  </div>
+                )}
+              </div>
             </div>
             <div className="p-6 border-t flex gap-3">
               <button onClick={() => setShowForm(false)} className="btn-secondary flex-1">Cancel</button>

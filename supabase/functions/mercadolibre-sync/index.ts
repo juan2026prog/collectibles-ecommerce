@@ -36,8 +36,17 @@ Deno.serve(async (req) => {
     if (error) throw error;
     if (!products) throw new Error("Productos no encontrados");
 
-    // Mercado Libre Token
-    const mlToken = Deno.env.get("MERCADOLIBRE_ACCESS_TOKEN") || payload.auth_token;
+    // Mercado Libre Token (Prefer DB, fallback to env)
+    let mlToken = payload.auth_token;
+    if (!mlToken) {
+      const { data: tokenData } = await supabase
+        .from('site_settings')
+        .select('value')
+        .eq('key', 'mercadolibre_access_token')
+        .single();
+      mlToken = tokenData?.value || Deno.env.get("MERCADOLIBRE_ACCESS_TOKEN");
+    }
+
     if (!mlToken) throw new Error("MERCADOLIBRE_ACCESS_TOKEN no configurado.");
 
     const results = [];

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { RefreshCw, Play, AlertCircle, CheckCircle2, Settings2, Save, ExternalLink, Link2 } from 'lucide-react';
+import { RefreshCw, Play, AlertCircle, CheckCircle2, Settings2, Save, ExternalLink, Link2, X, Loader2 } from 'lucide-react';
 
 export default function AdminMercadoLibre() {
   const [products, setProducts] = useState<any[]>([]);
@@ -10,6 +10,7 @@ export default function AdminMercadoLibre() {
   const [dbClientId, setDbClientId] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   
   // Settings state
   const [markupType, setMarkupType] = useState('percentage');
@@ -173,29 +174,49 @@ export default function AdminMercadoLibre() {
          </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-         <div className="bg-white p-6 rounded-xl border shadow-sm">
-           <h3 className="font-bold text-lg mb-2">Publicación Masiva</h3>
-           <p className="text-sm text-gray-500 mb-4">Envía productos nuevos de la base de datos hacia Mercado Libre aplicando las reglas vigentes.</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+         <div className="bg-white p-6 rounded-xl border shadow-sm border-blue-100 bg-blue-50/20">
+           <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-4">
+              <RefreshCw className="w-6 h-6" />
+           </div>
+           <h3 className="font-bold text-lg mb-2">Importar Catálogo (ML → Web)</h3>
+           <p className="text-sm text-gray-500 mb-4">Selecciona qué productos de Mercado Libre quieres traer a tu tienda.</p>
            <button 
-             onClick={() => triggerSync('publish', products.map(p => p.id))}
-             disabled={syncing || products.length === 0}
-             className="btn-primary w-full flex justify-center gap-2"
+             onClick={() => setShowImportModal(true)}
+             disabled={syncing}
+             className="btn-primary w-full bg-blue-600 border-blue-600 hover:bg-blue-700 flex justify-center gap-2"
            >
-             <Play size={18} /> {syncing ? 'Sincronizando...' : 'Publicar Todo (Demo)'}
+             {syncing ? 'Procesando...' : 'Ver Productos en ML'}
            </button>
          </div>
 
          <div className="bg-white p-6 rounded-xl border shadow-sm">
-           <h3 className="font-bold text-lg mb-2">Sincronización Bidireccional</h3>
-           <p className="text-sm text-gray-500 mb-4">Actualiza cantidades y precios entre Mercad Libre y tu sistema local respetando tu Markup.</p>
+           <div className="w-10 h-10 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mb-4">
+              <Play className="w-6 h-6" />
+           </div>
+           <h3 className="font-bold text-lg mb-2">Publicación (Web → ML)</h3>
+           <p className="text-sm text-gray-500 mb-4">Envía productos nuevos de la base de datos hacia Mercado Libre aplicando las reglas vigentes.</p>
+           <button 
+             onClick={() => triggerSync('publish', products.map(p => p.id))}
+             disabled={syncing || products.length === 0}
+             className="btn-primary w-full bg-yellow-400 text-blue-900 border-yellow-400 hover:bg-yellow-500 flex justify-center gap-2"
+           >
+             {syncing ? 'Sincronizando...' : 'Publicar Catálogo Web'}
+           </button>
+         </div>
+
+         <div className="bg-white p-6 rounded-xl border shadow-sm">
+           <div className="w-10 h-10 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4">
+              <RefreshCw className="w-6 h-6" />
+           </div>
+           <h3 className="font-bold text-lg mb-2">Actualizar Stock (Sync)</h3>
+           <p className="text-sm text-gray-500 mb-4">Actualiza stock y precios bidireccionalmente respetando las reglas de Markup configuradas.</p>
            <button 
              onClick={() => triggerSync('sync_stock', products.map(p => p.id))}
              disabled={syncing || products.length === 0}
-             className="btn-secondary w-full flex justify-center gap-2 text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100"
+             className="btn-secondary w-full border-green-200 text-green-700 bg-green-50 hover:bg-green-100 flex justify-center gap-2"
            >
-             <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} /> 
-             {syncing ? 'Actualizando...' : 'Sincronizar Catálogo Completo'}
+             {syncing ? 'Actualizando...' : 'Sincronizar Stock/Precios'}
            </button>
          </div>
       </div>
@@ -240,6 +261,145 @@ export default function AdminMercadoLibre() {
              </tbody>
           </table>
         )}
+      </div>
+      {/* ═══ ML IMPORT SELECTOR MODAL ═══ */}
+      {showImportModal && (
+        <MLImportModal 
+          onClose={() => setShowImportModal(false)} 
+          onImport={(ids) => {
+            setShowImportModal(false);
+            triggerSync('import', [], ids);
+          }}
+          loading={syncing}
+        />
+      )}
+    </div>
+  );
+}
+
+function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, onImport: (ids: string[]) => void, loading: boolean }) {
+  const [items, setItems] = useState<any[]>([]);
+  const [fetching, setFetching] = useState(true);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    fetchMLItems();
+  }, []);
+
+  async function fetchMLItems() {
+    try {
+      const { data, error } = await supabase.functions.invoke('mercadolibre-sync', {
+        body: { action: 'list_items' }
+      });
+      if (error) throw error;
+      setItems(data.items || []);
+    } catch (err) {
+      alert("Error al obtener items: " + (err as any).message);
+      onClose();
+    } finally {
+      setFetching(false);
+    }
+  }
+
+  const toggleSelect = (id: string) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelected(next);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-zoom-in">
+        <div className="p-6 border-b flex items-center justify-between bg-gray-50">
+          <div>
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              <RefreshCw className="w-5 h-5 text-blue-600" />
+              Seleccionar Productos de Mercado Libre
+            </h2>
+            <p className="text-xs text-gray-500 mt-1">Se muestran los productos activos de tu cuenta.</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-2">
+          {fetching ? (
+            <div className="flex flex-col items-center justify-center py-20 text-blue-600">
+              <Loader2 className="w-10 h-10 animate-spin mb-4" />
+              <p className="font-medium">Conectando con Mercado Libre...</p>
+            </div>
+          ) : items.length === 0 ? (
+            <div className="text-center py-20 text-gray-500">No se encontraron productos activos en tu cuenta de ML.</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-white border-b text-left text-xs font-bold text-gray-400 uppercase">
+                <tr>
+                  <th className="p-4 w-12 pt-0 h-10">
+                    <input 
+                      type="checkbox" 
+                      onChange={(e) => setSelected(e.target.checked ? new Set(items.map((i:any) => i.ml_id)) : new Set())}
+                      checked={selected.size === items.length && items.length > 0}
+                      className="rounded border-gray-300"
+                    />
+                  </th>
+                  <th className="p-4 pt-0 h-10">Producto</th>
+                  <th className="p-4 pt-0 h-10">Detalles</th>
+                  <th className="p-4 pt-0 h-10 text-right pr-6">Acción</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {items.map((item:any) => (
+                  <tr key={item.ml_id} className={`hover:bg-blue-50/40 transition-colors ${selected.has(item.ml_id) ? 'bg-blue-50/60' : ''}`}>
+                    <td className="p-4">
+                      <input 
+                        type="checkbox" 
+                        checked={selected.has(item.ml_id)}
+                        onChange={() => toggleSelect(item.ml_id)}
+                        className="rounded border-gray-300 text-blue-600 w-4 h-4"
+                      />
+                    </td>
+                    <td className="p-4">
+                      <div className="flex items-center gap-4">
+                        <img src={item.thumbnail} alt="" className="w-12 h-12 rounded-lg object-cover border bg-white" />
+                        <div>
+                          <p className="font-bold text-gray-900 leading-tight">{item.title}</p>
+                          <p className="text-[10px] text-gray-400 mt-1 uppercase font-mono">{item.ml_id}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-4 text-xs">
+                      <div className="space-y-1">
+                        <p className="font-medium text-gray-600">Stock: <span className="text-gray-900">{item.available_quantity || 0}</span></p>
+                        <p className="font-medium text-blue-600">Precio: ${item.price}</p>
+                      </div>
+                    </td>
+                    <td className="p-4 text-right pr-6">
+                       <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${item.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                         {item.status}
+                       </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="p-6 border-t bg-gray-50 flex items-center justify-between">
+           <span className="text-sm font-medium text-gray-600">
+             {selected.size} productos seleccionados
+           </span>
+           <div className="flex gap-3">
+             <button onClick={onClose} className="px-6 py-2.5 rounded-xl text-gray-600 hover:bg-gray-200 font-bold transition-all">Cancelar</button>
+             <button 
+              onClick={() => onImport(Array.from(selected))}
+              disabled={selected.size === 0 || loading}
+              className="px-8 py-2.5 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 disabled:opacity-50 disabled:bg-gray-400 shadow-lg shadow-blue-200 transition-all transform hover:-translate-y-0.5"
+             >
+               {loading ? 'Importando...' : 'Importar Selección'}
+             </button>
+           </div>
+        </div>
       </div>
     </div>
   );
