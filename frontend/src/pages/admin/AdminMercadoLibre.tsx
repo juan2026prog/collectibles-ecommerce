@@ -82,12 +82,12 @@ export default function AdminMercadoLibre() {
     setLoading(false);
   }
 
-  async function triggerSync(action: string, productIds: string[] = [], mlItemIds: string[] = [], limit: number = 20) {
+  async function triggerSync(action: string, productIds: string[] = [], mlItemIds: string[] = [], limit: number = 20, status: string = 'active') {
     setSyncing(true);
     setSyncStatus(null);
     try {
       const { data, error } = await supabase.functions.invoke('mercadolibre-sync', {
-        body: { action, product_ids: productIds, ml_item_ids: mlItemIds, limit }
+        body: { action, product_ids: productIds, ml_item_ids: mlItemIds, limit, status }
       });
       if (error) throw error;
       
@@ -259,9 +259,9 @@ export default function AdminMercadoLibre() {
       {showImportModal && (
         <MLImportModal 
           onClose={() => setShowImportModal(false)} 
-          onImport={(ids, limit) => {
+          onImport={(ids, limit, status) => {
             setShowImportModal(false);
-            triggerSync('import', [], ids, limit);
+            triggerSync('import', [], ids, limit, status);
           }}
           loading={syncing}
         />
@@ -270,21 +270,22 @@ export default function AdminMercadoLibre() {
   );
 }
 
-function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, onImport: (ids: string[], limit: number) => void, loading: boolean }) {
+function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, onImport: (ids: string[], limit: number, status: string) => void, loading: boolean }) {
   const [items, setItems] = useState<any[]>([]);
   const [fetching, setFetching] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [limit, setLimit] = useState(20);
+  const [itemStatus, setItemStatus] = useState('active');
 
   useEffect(() => {
     fetchMLItems();
-  }, [limit]);
+  }, [limit, itemStatus]);
 
   async function fetchMLItems() {
     setFetching(true);
     try {
       const { data, error } = await supabase.functions.invoke('mercadolibre-sync', {
-        body: { action: 'list_items', limit }
+        body: { action: 'list_items', limit, status: itemStatus }
       });
       if (error) throw error;
       setItems(data.items || []);
@@ -322,6 +323,18 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
                  <option value={50}>50 productos</option>
                  <option value={100}>100 productos</option>
                  <option value={200}>200 productos</option>
+               </select>
+
+               <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest ml-4">Estado:</span>
+               <select 
+                 value={itemStatus} 
+                 onChange={(e) => setItemStatus(e.target.value)}
+                 className="text-xs font-bold bg-white border border-blue-200 text-blue-600 rounded px-2 py-1 outline-none ring-0 focus:border-blue-500"
+               >
+                 <option value="active">Activas</option>
+                 <option value="paused">Pausadas</option>
+                 <option value="closed">Finalizadas</option>
+                 <option value="all">Todas</option>
                </select>
             </div>
           </div>
@@ -413,7 +426,7 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
            <div className="flex gap-4">
              <button onClick={onClose} className="px-6 py-2.5 rounded-xl text-gray-500 font-bold hover:bg-gray-200 transition-all active:scale-95">Descartar</button>
              <button 
-              onClick={() => onImport(Array.from(selected), limit)}
+              onClick={() => onImport(Array.from(selected), limit, itemStatus)}
               disabled={selected.size === 0 || loading}
               className="px-10 py-3 rounded-xl bg-blue-600 text-white font-black hover:bg-blue-700 disabled:opacity-40 disabled:grayscale shadow-lg shadow-blue-200 transition-all transform hover:-translate-y-1 active:translate-y-0 active:scale-95"
              >
