@@ -60,13 +60,13 @@ function ReferralTracker() {
 function App() {
   return (
     <BrowserRouter>
-      <ReferralTracker />
-      <AuthProvider>
-        <CartProvider>
-          <FeatureToggleProvider>
-            <AnalyticsProvider>
+      <AnalyticsProvider>
+        <ReferralTracker />
+        <AuthProvider>
+          <CartProvider>
+            <FeatureToggleProvider>
               <LocaleProvider>
-              <Routes>
+                <Routes>
                 {/* Public Storefront */}
                 <Route element={<StorefrontLayout />}>
                   <Route path="/" element={<Home />} />
@@ -157,10 +157,10 @@ function App() {
               </Route>
               </Routes>
               </LocaleProvider>
-            </AnalyticsProvider>
-          </FeatureToggleProvider>
-        </CartProvider>
-      </AuthProvider>
+            </FeatureToggleProvider>
+          </CartProvider>
+        </AuthProvider>
+      </AnalyticsProvider>
     </BrowserRouter>
   );
 }
