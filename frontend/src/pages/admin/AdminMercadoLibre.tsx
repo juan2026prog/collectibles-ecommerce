@@ -90,6 +90,7 @@ export default function AdminMercadoLibre() {
         body: { action, product_ids: productIds, ml_item_ids: mlItemIds, limit, status }
       });
       if (error) throw error;
+      if (!data.success) throw new Error(data.error || 'Error al importar productos');
       
       const count = data.count || data.results?.length || 0;
       setSyncStatus(`¡Operación '${action}' completada con éxito! (${count} items procesados)`);
@@ -261,7 +262,7 @@ export default function AdminMercadoLibre() {
           onClose={() => setShowImportModal(false)} 
           onImport={(ids, limit, status) => {
             setShowImportModal(false);
-            triggerSync('import', [], ids, limit, status);
+            triggerSync('import', [], ids);
           }}
           loading={syncing}
         />
@@ -288,6 +289,7 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
         body: { action: 'list_items', limit, status: itemStatus }
       });
       if (error) throw error;
+      if (!data.success) throw new Error(data.error || 'Error desconocido en la función');
       setItems(data.items || []);
     } catch (err: any) {
       console.error("Full Sync Error Object:", err);
@@ -384,7 +386,7 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {items.map((item:any) => (
-                  <tr key={item.ml_id} className={`hover:bg-blue-50/20 transition-all ${selected.has(item.ml_id) ? 'bg-blue-50/50' : ''}`}>
+                  <tr key={item.id} className={`hover:bg-blue-50/20 transition-all ${selected.has(item.id) ? 'bg-blue-50/50' : ''}`}>
                     <td className="p-4">
                       <input 
                         type="checkbox" 

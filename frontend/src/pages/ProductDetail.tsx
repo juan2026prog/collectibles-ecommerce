@@ -59,6 +59,7 @@ export default function ProductDetail() {
 }
 
 const productImage = getProductImage(product);
+  const { images = [], variants = [], reviews = [] } = product || {};
   const mainVariant = variants[0];
   const stock = mainVariant?.inventory_count || 0;
   const finalPrice = product.base_price + (mainVariant?.price_adjustment || 0);
