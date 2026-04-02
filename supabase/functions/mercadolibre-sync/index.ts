@@ -1,15 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0";
-import { z } from "https://deno.land/x/deno@v3.22.4/mod.ts"; // Note: this was zod in previous, let me fix import
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-// Re-using manual Zod-like check if import fails or just keep it simple
-const validateBody = (body: any) => {
-    if (!body.action) throw new Error("Acción requerida");
-    return body;
 };
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
@@ -41,7 +34,7 @@ Deno.serve(async (req) => {
       const { data: tokenData } = await supabase.from('site_settings').select('value').eq('key', 'mercadolibre_access_token').single();
       mlToken = tokenData?.value;
     }
-    if (!mlToken) throw new Error("Mercado Libre no está conectado (Falta access_token)");
+    if (!mlToken) throw new Error("Mercado Libre no está conectado");
 
     const headers = { 'Authorization': `Bearer ${mlToken}`, 'Content-Type': 'application/json' };
 
@@ -50,7 +43,7 @@ Deno.serve(async (req) => {
         const userData = await userRes.json();
         if (!userRes.ok) throw new Error(`ML Auth Error: ${userData.message || 'Token inválido'}`);
 
-        const searchUrl = `https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${limit}${status !== 'all' ? '&status=' + status : ''}`;
+        const searchUrl = `https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${limit}${status && status !== 'all' ? '&status=' + status : ''}`;
         const searchRes = await fetch(searchUrl, { headers });
         const searchData = await searchRes.json();
         const ids = searchData.results || [];
@@ -67,21 +60,39 @@ Deno.serve(async (req) => {
         const results = [];
         for (const mlId of product_ids) {
             try {
+                // Fetch full product details from ML
                 const res = await fetch(`https://api.mercadolibre.com/items/${mlId}`, { headers });
                 const item = await res.json();
+                
+                // Attempting to import only the columns that WE KNOW exist in the current schema.
+                // We'll skip condition, ml_status, and listing_type_id because they aren't in the core migrations yet.
                 const { data: prod, error: ep } = await supabase.from('products').upsert({
-                    title: item.title, description: item.title, base_price: item.price,
-                    ml_item_id: item.id, ml_status: item.status, condition: item.condition,
-                    listing_type_id: item.listing_type_id, status: item.status === 'active' ? 'published' : 'draft'
+                    title: item.title,
+                    description: item.title, // Placeholder for now
+                    slug: `mercadolibre-${item.id}`, // Ensuring a unique slug
+                    base_price: item.price,
+                    ml_item_id: item.id,
+                    status: item.status === 'active' ? 'published' : 'draft'
                 }, { onConflict: 'ml_item_id' }).select().single();
-                if (ep) throw ep;
+                
+                if (ep) throw new Error(`Database Error: ${ep.message}`);
+                
+                // Clear and Sync Images
                 await supabase.from('product_images').delete().eq('product_id', prod.id);
                 const pics = item.pictures || [];
                 if (pics.length > 0) {
-                    await supabase.from('product_images').insert(pics.map((p:any, i:number) => ({ product_id: prod.id, url: (p.secure_url || p.url).replace('http://', 'https://'), sort_order: i, is_primary: i===0 })));
+                    await supabase.from('product_images').insert(pics.map((p:any, i:number) => ({
+                      product_id: prod.id,
+                      url: (p.secure_url || p.url).replace('http://', 'https://'),
+                      sort_order: i,
+                      is_primary: i===0
+                    })));
                 }
                 results.push({ ml_id: mlId, status: "success" });
-            } catch (e:any) { results.push({ ml_id: mlId, status: "error", error: e.message }); }
+            } catch (e:any) {
+                console.error(`Import failure for ${mlId}:`, e.message);
+                results.push({ ml_id: mlId, status: "error", error: e.message });
+            }
         }
         return new Response(JSON.stringify({ success: true, results }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
