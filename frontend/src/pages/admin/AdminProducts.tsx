@@ -276,8 +276,32 @@ export default function AdminProducts() {
   const toggleBrand = (id: string) => {
     setForm(prev => ({
       ...prev,
-      brands: prev.brands.includes(id) ? prev.brands.filter(bid => bid !== id) : [id] // For now brands are single in screenshot usually, but widget looks multi
+      brands: prev.brands.includes(id) ? prev.brands.filter(bid => bid !== id) : [id] 
     }));
+  };
+
+  const handleAddCategory = async () => {
+    if (!newCatInput.trim()) return;
+    try {
+      const slug = newCatInput.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
+      const { data, error } = await supabase.from('categories').insert({ name: newCatInput, slug }).select().single();
+      if (error) throw error;
+      setCategories([...categories, data]);
+      toggleCategory(data.id);
+      setNewCatInput('');
+    } catch (err: any) { alert(err.message); }
+  };
+
+  const handleAddBrand = async () => {
+    if (!newBrandInput.trim()) return;
+    try {
+      const slug = newBrandInput.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
+      const { data, error } = await supabase.from('brands').insert({ name: newBrandInput, slug }).select().single();
+      if (error) throw error;
+      setBrands([...brands, data]);
+      toggleBrand(data.id);
+      setNewBrandInput('');
+    } catch (err: any) { alert(err.message); }
   };
 
   const addToGallery = (url: string) => setForm({ ...form, gallery: [...form.gallery, { url }] });
@@ -494,13 +518,15 @@ export default function AdminProducts() {
                                    </label>
                                 ))}
                              </div>
-                             <button onClick={() => { if(newCatInput) { setCategories([...categories, {id: Date.now().toString(), name: newCatInput}]); toggleCategory(Date.now().toString()); setNewCatInput(''); } }} className="text-blue-600 hover:text-blue-800 text-xs font-bold flex items-center gap-1">
-                                + Añadir nueva categoría
-                             </button>
-                             <input 
-                               value={newCatInput} onChange={e => setNewCatInput(e.target.value)}
-                               placeholder="Nombre categoría..." className="w-full text-xs p-1.5 border rounded outline-none focus:border-blue-500" 
-                             />
+                              <div className="flex gap-2">
+                                <input 
+                                  value={newCatInput} onChange={e => setNewCatInput(e.target.value)}
+                                  placeholder="Nueva categoría..." className="flex-1 text-xs p-1.5 border rounded outline-none focus:border-blue-500" 
+                                />
+                                <button type="button" onClick={handleAddCategory} className="bg-blue-50 text-blue-600 px-3 rounded font-bold text-[10px] hover:bg-blue-100">
+                                   Añadir
+                                </button>
+                              </div>
                           </div>
                        </SidebarWidget>
 
@@ -533,9 +559,15 @@ export default function AdminProducts() {
                                    </label>
                                 ))}
                              </div>
-                             <button className="text-blue-600 hover:text-blue-800 text-xs font-bold flex items-center gap-1">
-                                + Add New Brand
-                             </button>
+                              <div className="flex gap-2">
+                                <input 
+                                  value={newBrandInput} onChange={e => setNewBrandInput(e.target.value)}
+                                  placeholder="Nueva marca..." className="flex-1 text-xs p-1.5 border rounded outline-none focus:border-blue-500" 
+                                />
+                                <button type="button" onClick={handleAddBrand} className="bg-blue-50 text-blue-600 px-3 rounded font-bold text-[10px] hover:bg-blue-100">
+                                   Añadir
+                                </button>
+                              </div>
                           </div>
                        </SidebarWidget>
 
