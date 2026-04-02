@@ -114,6 +114,7 @@ export default function AdminProducts() {
   const [showImport, setShowImport] = useState(false);
   const [showMediaPicker, setShowMediaPicker] = useState<false | 'featured' | 'gallery'>(false);
   const [editing, setEditing] = useState<Product | null>(null);
+  const [loadingAI, setLoadingAI] = useState(false);
   
   const [categories, setCategories] = useState<any[]>([]);
   const [brands, setBrands] = useState<any[]>([]);
@@ -304,6 +305,26 @@ export default function AdminProducts() {
     } catch (err: any) { alert(err.message); }
   };
 
+  const handleGenerateAI = async (action: 'improve' | 'generate') => {
+    if (action === 'generate' && !form.title) { alert("Ingresa un título primero"); return; }
+    setLoadingAI(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-content', {
+        body: { action, currentText: form.description, prompt: form.title }
+      });
+      if (error) throw error;
+      if (data.success) {
+        setForm({ ...form, description: data.text });
+      } else {
+        throw new Error(data.error || "Error de la IA");
+      }
+    } catch (err: any) {
+      alert(`Error IA: ${err.message}`);
+    } finally {
+      setLoadingAI(false);
+    }
+  };
+
   const addToGallery = (url: string) => setForm({ ...form, gallery: [...form.gallery, { url }] });
   const removeFromGallery = (idx: number) => setForm({ ...form, gallery: form.gallery.filter((_, i) => i !== idx) });
 
@@ -423,9 +444,22 @@ export default function AdminProducts() {
                        </div>
 
                        <div className="bg-white border shadow-sm">
-                          <div className="px-4 py-2 border-b bg-gray-50/50 flex items-center gap-2">
-                             <Pencil className="w-4 h-4 text-gray-400" />
-                             <span className="text-sm font-bold text-gray-600">Descripción del producto</span>
+                          <div className="px-4 py-2 border-b bg-gray-50/50 flex items-center justify-between">
+                             <div className="flex items-center gap-2">
+                                <Pencil className="w-4 h-4 text-gray-400" />
+                                <span className="text-sm font-bold text-gray-600">Descripción del producto</span>
+                             </div>
+                             <div className="flex gap-2">
+                                <button 
+                                  type="button"
+                                  onClick={() => handleGenerateAI('improve')}
+                                  disabled={loadingAI}
+                                  className="text-[10px] font-black uppercase tracking-tight bg-purple-50 text-purple-600 px-3 py-1 rounded hover:bg-purple-100 flex items-center gap-1.5 transition-all disabled:opacity-50"
+                                >
+                                   {loadingAI ? <Loader2 className="w-3 h-3 animate-spin"/> : <span className="text-purple-400">✨</span>} 
+                                   Mejorar con IA
+                                </button>
+                             </div>
                           </div>
                           <div className="p-4">
                              <textarea 
@@ -645,3 +679,4 @@ export default function AdminProducts() {
     </div>
   );
 }
+
