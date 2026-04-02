@@ -289,8 +289,17 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
       });
       if (error) throw error;
       setItems(data.items || []);
-    } catch (err) {
-      alert("Error al obtener items: " + (err as any).message);
+    } catch (err: any) {
+      console.error("Full Sync Error Object:", err);
+      let errorDetail = err.message;
+      if (err.context && typeof err.context === 'object') {
+        try {
+           // Supabase-js error context might contain the body
+           const contextStr = JSON.stringify(err.context);
+           errorDetail += ` (Context: ${contextStr})`;
+        } catch(e) {}
+      }
+      alert("Error al obtener items: " + errorDetail);
     } finally {
       setFetching(false);
     }
@@ -363,7 +372,7 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
                   <th className="p-4 w-12 pb-2">
                     <input 
                       type="checkbox" 
-                      onChange={(e) => setSelected(e.target.checked ? new Set(items.map((i:any) => i.ml_id)) : new Set())}
+                      onChange={(e) => setSelected(e.target.checked ? new Set(items.map((i:any) => i.id)) : new Set())}
                       checked={selected.size === items.length && items.length > 0}
                       className="rounded border-gray-300 w-4 h-4 text-blue-600 cursor-pointer"
                     />
@@ -379,19 +388,19 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
                     <td className="p-4">
                       <input 
                         type="checkbox" 
-                        checked={selected.has(item.ml_id)}
-                        onChange={() => toggleSelect(item.ml_id)}
+                        checked={selected.has(item.id)}
+                        onChange={() => toggleSelect(item.id)}
                         className="rounded border-gray-300 text-blue-600 w-4 h-4 cursor-pointer"
                       />
                     </td>
                     <td className="p-4">
                       <div className="flex items-center gap-4">
                         <div className="w-14 h-14 rounded-xl object-cover border-2 border-gray-50 overflow-hidden shadow-sm flex-shrink-0">
-                           <img src={item.thumbnail} alt="" className="w-full h-full object-cover" />
+                           <img src={item.thumbnail?.replace('http://', 'https://')} alt="" className="w-full h-full object-cover" />
                         </div>
                         <div>
                           <p className="font-bold text-gray-800 leading-tight line-clamp-2">{item.title}</p>
-                          <p className="text-[9px] text-gray-400 mt-1 font-mono">{item.ml_id}</p>
+                          <p className="text-[9px] text-gray-400 mt-1 font-mono">{item.id}</p>
                         </div>
                       </div>
                     </td>

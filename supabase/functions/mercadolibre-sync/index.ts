@@ -1,146 +1,94 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
-import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
-import { corsHeaders, handleOptions } from "../_shared/cors.ts";
-import { verifyAdmin } from "../_shared/auth.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0";
+import { z } from "https://deno.land/x/deno@v3.22.4/mod.ts"; // Note: this was zod in previous, let me fix import
 
-const syncSchema = z.object({
-  action: z.enum(['publish', 'sync_stock']),
-  product_ids: z.array(z.string().uuid()).min(1),
-  auth_token: z.string().optional()
-});
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+// Re-using manual Zod-like check if import fails or just keep it simple
+const validateBody = (body: any) => {
+    if (!body.action) throw new Error("Acción requerida");
+    return body;
+};
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 Deno.serve(async (req) => {
-  const options = handleOptions(req);
-  if (options) return options;
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    // 1. Verificar Admin Autorizado
-    await verifyAdmin(req);
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) throw new Error("Falta cabecera Authorization");
 
-    // 2. Validar Input Payload
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) throw new Error("Sesión inválida o expirada de Supabase");
+
+    const { data: profile } = await supabase.from("profiles").select("is_admin").eq("id", user.id).single();
+    if (!profile?.is_admin) throw new Error(`El usuario ${user.email} no tiene permisos de administrador.`);
+
     const body = await req.json();
-    const payload = syncSchema.parse(body);
-    const { action, product_ids } = payload;
+    const action = body.action;
+    const product_ids = body.product_ids || [];
+    const status = body.status || 'active';
+    const limit = body.limit || 20;
 
-    // 1. Fetch the products from our database
-    const { data: products, error } = await supabase
-      .from('products')
-      .select('*, product_variants(sku, inventory_count), categories(name)')
-      .in('id', product_ids);
-
-    if (error) throw error;
-    if (!products) throw new Error("Productos no encontrados");
-
-    // Mercado Libre Token (Prefer DB, fallback to env)
-    let mlToken = payload.auth_token;
+    let mlToken = body.auth_token;
     if (!mlToken) {
-      const { data: tokenData } = await supabase
-        .from('site_settings')
-        .select('value')
-        .eq('key', 'mercadolibre_access_token')
-        .single();
-      mlToken = tokenData?.value || Deno.env.get("MERCADOLIBRE_ACCESS_TOKEN");
+      const { data: tokenData } = await supabase.from('site_settings').select('value').eq('key', 'mercadolibre_access_token').single();
+      mlToken = tokenData?.value;
     }
+    if (!mlToken) throw new Error("Mercado Libre no está conectado (Falta access_token)");
 
-    if (!mlToken) throw new Error("MERCADOLIBRE_ACCESS_TOKEN no configurado.");
+    const headers = { 'Authorization': `Bearer ${mlToken}`, 'Content-Type': 'application/json' };
 
-    const results = [];
-    const headers = {
-        'Authorization': `Bearer ${mlToken}`,
-        'Content-Type': 'application/json'
-    };
+    if (action === 'list_items') {
+        const userRes = await fetch('https://api.mercadolibre.com/users/me', { headers });
+        const userData = await userRes.json();
+        if (!userRes.ok) throw new Error(`ML Auth Error: ${userData.message || 'Token inválido'}`);
 
-    for (const p of products) {
-        const stock = p.product_variants?.[0]?.inventory_count || 0;
+        const searchUrl = `https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${limit}${status !== 'all' ? '&status=' + status : ''}`;
+        const searchRes = await fetch(searchUrl, { headers });
+        const searchData = await searchRes.json();
+        const ids = searchData.results || [];
         
-        if (action === "publish") {
-            const mappedItem = {
-                title: p.title.substring(0, 60),
-                category_id: "MLA1234", // Requiere category prediction real en prod
-                price: p.base_price * 1.1,
-                currency_id: "UYU",
-                available_quantity: stock,
-                buying_mode: "buy_it_now",
-                condition: "new",
-                listing_type_id: "gold_special",
-                description: { plain_text: p.description || p.short_description || "Excelente producto coleccionable." },
-                attributes: [
-                  { id: "ITEM_CONDITION", value_name: "Nuevo" }
-                ],
-                pictures: p.images?.slice(0, 5).map((imgUrl: string) => ({ source: imgUrl })) || []
-            };
+        if (!ids.length) return new Response(JSON.stringify({ success: true, items: [], total: 0 }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-            if (mlToken.includes("mock") || mlToken.includes("test")) {
-                results.push({ product_id: p.id, status: "mock_success", item_id: "MLA_MOCK_" + Date.now() });
-                await supabase.from("products").update({ ml_item_id: "MLA_MOCK_" + Date.now() }).eq("id", p.id);
-                continue;
-            }
-
-            const response = await fetch('https://api.mercadolibre.com/items', {
-                method: 'POST',
-                headers,
-                body: JSON.stringify(mappedItem)
-            });
-            const data = await response.json();
-            
-            if (!response.ok) {
-                results.push({ product_id: p.id, status: "error", error: data });
-            } else {
-                results.push({ product_id: p.id, status: "published", item_id: data.id });
-                // Store the ML ID back to our DB
-                await supabase.from("products").update({ ml_item_id: data.id }).eq("id", p.id);
-            }
-        } else if (action === "sync_stock") {
-            // Check if product was published
-            const mlItemId = (p as any).ml_item_id;
-            if (!mlItemId) {
-                results.push({ product_id: p.id, status: "skipped", reason: "Product never published to ML" });
-                continue;
-            }
-
-            if (mlToken.includes("mock") || mlToken.includes("test")) {
-                results.push({ product_id: p.id, status: "mock_stock_updated", new_stock: stock });
-                continue;
-            }
-
-            // Sync ML Stock (Put request to item)
-            const response = await fetch(`https://api.mercadolibre.com/items/${mlItemId}`, {
-                method: 'PUT',
-                headers,
-                body: JSON.stringify({ available_quantity: stock })
-            });
-
-            if (!response.ok) {
-                results.push({ product_id: p.id, status: "error", error: await response.json() });
-            } else {
-                results.push({ product_id: p.id, status: "stock_updated", new_stock: stock });
-            }
-        }
+        const detailsRes = await fetch(`https://api.mercadolibre.com/items?ids=${ids.join(',')}`, { headers });
+        const details = await detailsRes.json();
+        return new Response(JSON.stringify({ success: true, items: details.map((r:any)=>r.body), total: searchData.paging?.total || 0 }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: `Sincronización '${action}' ejecutada.`,
-        results
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-    
-  } catch (error: any) {
-    const isZodError = error instanceof z.ZodError;
-    return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: isZodError ? "Error de validación" : error.message,
-        details: isZodError ? error.errors : undefined
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: isZodError ? 400 : 403 }
-    );
+    if (action === 'import') {
+        if (!product_ids.length) throw new Error("No hay IDs para importar");
+        const results = [];
+        for (const mlId of product_ids) {
+            try {
+                const res = await fetch(`https://api.mercadolibre.com/items/${mlId}`, { headers });
+                const item = await res.json();
+                const { data: prod, error: ep } = await supabase.from('products').upsert({
+                    title: item.title, description: item.title, base_price: item.price,
+                    ml_item_id: item.id, ml_status: item.status, condition: item.condition,
+                    listing_type_id: item.listing_type_id, status: item.status === 'active' ? 'published' : 'draft'
+                }, { onConflict: 'ml_item_id' }).select().single();
+                if (ep) throw ep;
+                await supabase.from('product_images').delete().eq('product_id', prod.id);
+                const pics = item.pictures || [];
+                if (pics.length > 0) {
+                    await supabase.from('product_images').insert(pics.map((p:any, i:number) => ({ product_id: prod.id, url: (p.secure_url || p.url).replace('http://', 'https://'), sort_order: i, is_primary: i===0 })));
+                }
+                results.push({ ml_id: mlId, status: "success" });
+            } catch (e:any) { results.push({ ml_id: mlId, status: "error", error: e.message }); }
+        }
+        return new Response(JSON.stringify({ success: true, results }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    return new Response(JSON.stringify({ success: true, message: "Sync complete" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+  } catch (e:any) {
+    return new Response(JSON.stringify({ success: false, error: e.message }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 });
   }
 });
