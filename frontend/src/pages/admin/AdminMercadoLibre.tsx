@@ -277,16 +277,18 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [limit, setLimit] = useState(20);
   const [itemStatus, setItemStatus] = useState('active');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [orderBy, setOrderBy] = useState('relevance');
 
   useEffect(() => {
     fetchMLItems();
-  }, [limit, itemStatus]);
+  }, [limit, itemStatus, orderBy]);
 
   async function fetchMLItems() {
     setFetching(true);
     try {
       const { data, error } = await supabase.functions.invoke('mercadolibre-sync', {
-        body: { action: 'list_items', limit, status: itemStatus }
+        body: { action: 'list_items', limit: limit === -1 ? 500 : limit, status: itemStatus, sort: orderBy }
       });
       if (error) throw error;
       if (!data.success) throw new Error(data.error || 'Error desconocido en la función');
@@ -296,7 +298,6 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
       let errorDetail = err.message;
       if (err.context && typeof err.context === 'object') {
         try {
-           // Supabase-js error context might contain the body
            const contextStr = JSON.stringify(err.context);
            errorDetail += ` (Context: ${contextStr})`;
         } catch(e) {}
@@ -306,6 +307,11 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
       setFetching(false);
     }
   }
+
+  const filteredItems = items.filter(item => 
+    item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.id.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const toggleSelect = (id: string) => {
     const next = new Set(selected);
@@ -323,29 +329,52 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
               <RefreshCw className="w-5 h-5 text-blue-600" />
               Mercado Libre: Selección de Productos
             </h2>
-            <div className="flex items-center gap-3 mt-2">
-               <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Mostrar:</span>
+            <div className="flex items-center flex-wrap gap-3 mt-3">
+               <div className="flex items-center gap-2 mr-4 bg-white border border-blue-100 rounded-lg px-2 py-1 shadow-inner focus-within:ring-2 focus-within:ring-blue-500/20">
+                 <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                 <input 
+                   type="text" 
+                   placeholder="Buscar en el listado..." 
+                   className="text-xs bg-transparent outline-none w-32 border-none ring-0 focus:ring-0" 
+                   value={searchQuery}
+                   onChange={e => setSearchQuery(e.target.value)}
+                 />
+               </div>
+
+               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Ver:</span>
                <select 
                  value={limit} 
                  onChange={(e) => setLimit(Number(e.target.value))}
-                 className="text-xs font-bold bg-white border border-blue-200 text-blue-600 rounded px-2 py-1 outline-none ring-0 focus:border-blue-500"
+                 className="text-xs font-bold bg-white border border-blue-200 text-blue-600 rounded-md px-2 py-1.5 outline-none transition-all focus:border-blue-500 shadow-sm"
                >
-                 <option value={20}>20 productos</option>
-                 <option value={50}>50 productos</option>
-                 <option value={100}>100 productos</option>
-                 <option value={200}>200 productos</option>
+                 <option value={20}>20 prod.</option>
+                 <option value={50}>50 prod.</option>
+                 <option value={100}>100 prod.</option>
+                 <option value={200}>200 prod.</option>
+                 <option value={-1}>Todos (máx 500)</option>
                </select>
 
-               <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest ml-4">Estado:</span>
+               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Estado:</span>
                <select 
                  value={itemStatus} 
                  onChange={(e) => setItemStatus(e.target.value)}
-                 className="text-xs font-bold bg-white border border-blue-200 text-blue-600 rounded px-2 py-1 outline-none ring-0 focus:border-blue-500"
+                 className="text-xs font-bold bg-white border border-blue-200 text-blue-600 rounded-md px-2 py-1.5 outline-none transition-all focus:border-blue-500 shadow-sm"
                >
                  <option value="active">Activas</option>
                  <option value="paused">Pausadas</option>
                  <option value="closed">Finalizadas</option>
                  <option value="all">Todas</option>
+               </select>
+
+               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Orden:</span>
+               <select 
+                 value={orderBy} 
+                 onChange={(e) => setOrderBy(e.target.value)}
+                 className="text-xs font-bold bg-white border border-blue-200 text-blue-600 rounded-md px-2 py-1.5 outline-none transition-all focus:border-blue-500 shadow-sm"
+               >
+                 <option value="relevance">Recientes / Rellevancia</option>
+                 <option value="price_asc">Menor Precio</option>
+                 <option value="price_desc">Mayor Precio</option>
                </select>
             </div>
           </div>
@@ -374,8 +403,8 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
                   <th className="p-4 w-12 pb-2">
                     <input 
                       type="checkbox" 
-                      onChange={(e) => setSelected(e.target.checked ? new Set(items.map((i:any) => i.id)) : new Set())}
-                      checked={selected.size === items.length && items.length > 0}
+                      onChange={(e) => setSelected(e.target.checked ? new Set(filteredItems.map((i:any) => i.id)) : new Set())}
+                      checked={selected.size === filteredItems.length && filteredItems.length > 0}
                       className="rounded border-gray-300 w-4 h-4 text-blue-600 cursor-pointer"
                     />
                   </th>
@@ -385,7 +414,7 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {items.map((item:any) => (
+                {filteredItems.map((item:any) => (
                   <tr key={item.id} className={`hover:bg-blue-50/20 transition-all ${selected.has(item.id) ? 'bg-blue-50/50' : ''}`}>
                     <td className="p-4">
                       <input 
@@ -432,7 +461,7 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
               <span className="text-sm font-black text-blue-900">
                 {selected.size} productos seleccionados para importar
               </span>
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">De un total de {items.length} mostrados</p>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">De un total de {filteredItems.length} filtrados ({items.length} cargados)</p>
            </div>
            <div className="flex gap-4">
              <button onClick={onClose} className="px-6 py-2.5 rounded-xl text-gray-500 font-bold hover:bg-gray-200 transition-all active:scale-95">Descartar</button>

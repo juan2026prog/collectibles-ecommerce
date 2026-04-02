@@ -1,10 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Plus, Pencil, Trash2, Search, Eye, X, Upload, Save, AlertCircle, Check, Loader2, ImageIcon } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Eye, X, Upload, Save, AlertCircle, Check, Loader2, ImageIcon, ChevronUp, ChevronDown, Trash } from 'lucide-react';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
 import ImportModal from '../../components/admin/ImportModal';
 import type { ParsedProduct } from '../../lib/bulkImportUtils';
-import { downloadTemplate } from '../../lib/bulkImportUtils';
 
 function getProductImage(product: any): string {
   const img = product.images?.[0];
@@ -32,27 +31,14 @@ function InlineEdit({ value, type = 'text', options = [], onSave, className = ''
   useEffect(() => {
     if (editing && inputRef.current) {
       inputRef.current.focus();
-      if (inputRef.current instanceof HTMLInputElement) {
-        inputRef.current.select();
-      }
+      if (inputRef.current instanceof HTMLInputElement) inputRef.current.select();
     }
   }, [editing]);
 
   const handleSave = async () => {
-    if (localValue === value) {
-      setEditing(false);
-      return;
-    }
+    if (localValue === value) { setEditing(false); return; }
     setSaving(true);
-    try {
-      await onSave(localValue);
-      setEditing(false);
-    } catch (err) {
-      setLocalValue(value);
-      console.error(err);
-    } finally {
-      setSaving(false);
-    }
+    try { await onSave(localValue); setEditing(false); } catch (err) { setLocalValue(value); console.error(err); } finally { setSaving(false); }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -64,28 +50,11 @@ function InlineEdit({ value, type = 'text', options = [], onSave, className = ''
     return (
       <div className={`flex items-center gap-1 ${className}`}>
         {type === 'select' ? (
-          <select
-            ref={inputRef as any}
-            value={localValue}
-            onChange={(e) => setLocalValue(e.target.value)}
-            onBlur={handleSave}
-            onKeyDown={handleKeyDown}
-            className="text-sm border-2 border-primary-500 rounded px-2 py-1 bg-white focus:outline-none"
-          >
-            {options.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
+          <select ref={inputRef as any} value={localValue} onChange={(e) => setLocalValue(e.target.value)} onBlur={handleSave} onKeyDown={handleKeyDown} className="text-sm border-2 border-primary-500 rounded px-2 py-1 bg-white focus:outline-none">
+            {options.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
           </select>
         ) : (
-          <input
-            ref={inputRef as any}
-            type={type}
-            value={localValue}
-            onChange={(e) => setLocalValue(type === 'number' ? Number(e.target.value) : e.target.value)}
-            onBlur={handleSave}
-            onKeyDown={handleKeyDown}
-            className="text-sm border-2 border-primary-500 rounded px-2 py-1 w-24 focus:outline-none"
-          />
+          <input ref={inputRef as any} type={type} value={localValue} onChange={(e) => setLocalValue(type === 'number' ? Number(e.target.value) : e.target.value)} onBlur={handleSave} onKeyDown={handleKeyDown} className="text-sm border-2 border-primary-500 rounded px-2 py-1 w-24 focus:outline-none" />
         )}
         {saving && <Loader2 className="w-4 h-4 animate-spin text-primary-500" />}
       </div>
@@ -93,12 +62,24 @@ function InlineEdit({ value, type = 'text', options = [], onSave, className = ''
   }
 
   return (
-    <div
-      onDoubleClick={() => !saving && setEditing(true)}
-      className={`cursor-pointer hover:bg-primary-50 hover:text-primary-700 px-2 py-1 -mx-2 rounded transition-colors ${className}`}
-      title="Doble click para editar"
-    >
+    <div onDoubleClick={() => !saving && setEditing(true)} className={`cursor-pointer hover:bg-primary-50 hover:text-primary-700 px-2 py-1 -mx-2 rounded transition-colors ${className}`} title="Doble click para editar">
       {type === 'select' ? options.find(o => o.value === value)?.label || value : value}
+    </div>
+  );
+}
+
+// ═══ REUSABLE SIDEBAR UI WIDGET ═══
+function SidebarWidget({ title, children, onToggle }: { title: string, children: React.ReactNode, onToggle?: () => void }) {
+  const [isOpen, setIsOpen] = useState(true);
+  return (
+    <div className="bg-white border text-sm overflow-hidden shadow-sm">
+      <div className="px-3 py-2 border-b bg-gray-50/50 flex justify-between items-center group cursor-pointer" onClick={() => setIsOpen(!isOpen)}>
+         <h4 className="font-bold text-gray-600">{title}</h4>
+         <div className="flex items-center gap-1">
+            <button className="text-gray-400 group-hover:text-primary-500"><ChevronUp className={`w-3.5 h-3.5 transition-transform ${!isOpen ? 'rotate-180' : ''}`} /></button>
+         </div>
+      </div>
+      {isOpen && <div className="p-3">{children}</div>}
     </div>
   );
 }
@@ -107,6 +88,8 @@ interface Product {
   id: string;
   title: string;
   slug: string;
+  description: string | null;
+  short_description: string | null;
   base_price: number;
   compare_at_price: number | null;
   status: string;
@@ -118,9 +101,7 @@ interface Product {
   variants: { id?: string, inventory_count: number; sku?: string }[];
   ml_item_id?: string;
   ml_category_id?: string;
-  ml_status?: string;
-  condition?: string;
-  listing_type_id?: string;
+  metadata?: any;
   created_at: string;
 }
 
@@ -129,22 +110,30 @@ export default function AdminProducts() {
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [search, setSearch] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [showMediaPicker, setShowMediaPicker] = useState<false | 'featured' | 'gallery'>(false);
   const [editing, setEditing] = useState<Product | null>(null);
+  
   const [categories, setCategories] = useState<any[]>([]);
   const [brands, setBrands] = useState<any[]>([]);
-  const [unsavedChanges, setUnsavedChanges] = useState<Set<string>>(new Set());
-
+  const [tags, setTags] = useState<any[]>([]);
+  
   const [form, setForm] = useState({
     title: '', slug: '', description: '', short_description: '',
-    base_price: '', compare_at_price: '', cost: '', sku: '', stock: '10', status: 'draft',
+    base_price: '', compare_at_price: '', sku: '', stock: '10', status: 'published',
     badge: '', is_featured: false, category_id: '', brand_id: '',
-    seo_title: '', seo_description: '', image_url: '', video_url: '',
-    ml_category_id: '', condition: 'new', listing_type_id: 'gold_special'
+    image_url: '', video_url: '',
+    // Many-to-many
+    categories: [] as string[],
+    tags: [] as string[],
+    brands: [] as string[],
+    gallery: [] as { url: string }[]
   });
+
+  const [tagInput, setTagInput] = useState('');
+  const [newCatInput, setNewCatInput] = useState('');
+  const [newBrandInput, setNewBrandInput] = useState('');
 
   useEffect(() => { fetchProducts(); fetchMeta(); }, []);
 
@@ -159,492 +148,468 @@ export default function AdminProducts() {
   }
 
   async function fetchMeta() {
-    const [{ data: cats }, { data: brs }] = await Promise.all([
+    const [{ data: cats }, { data: brs }, { data: tgs }] = await Promise.all([
       supabase.from('categories').select('id, name').order('sort_order'),
       supabase.from('brands').select('id, name').order('sort_order'),
+      supabase.from('tags').select('id, name').order('name'),
     ]);
     setCategories(cats || []);
     setBrands(brs || []);
+    setTags(tgs || []);
   }
 
   function openCreate() {
     setEditing(null);
-    setForm({ title: '', slug: '', description: '', short_description: '', base_price: '', compare_at_price: '', cost: '', sku: `SKU-${Date.now()}`, stock: '10', status: 'draft', badge: '', is_featured: false, category_id: '', brand_id: '', seo_title: '', seo_description: '', image_url: '', video_url: '', ml_category_id: '', condition: 'new', listing_type_id: 'gold_special' });
+    setForm({ title: '', slug: '', description: '', short_description: '', base_price: '', compare_at_price: '', sku: `SKU-${Date.now()}`, stock: '10', status: 'published', badge: '', is_featured: false, category_id: '', brand_id: '', image_url: '', video_url: '', categories: [], tags: [], brands: [], gallery: [] });
     setShowForm(true);
   }
 
-  function openEdit(product: Product) {
+  async function openEdit(product: Product) {
     setEditing(product);
+    
+    // Fetch associated junction data
+    const [{ data: pCats }, { data: pTags }] = await Promise.all([
+       supabase.from('product_categories').select('category_id').eq('product_id', product.id),
+       supabase.from('product_tags').select('tags(id, name)').eq('product_id', product.id)
+    ]);
+
     setForm({
-      title: product.title, slug: product.slug, description: '', short_description: '',
-      base_price: product.base_price.toString(), compare_at_price: product.compare_at_price?.toString() || '',
-      cost: '', sku: product.variants?.[0]?.sku || `SKU-${Date.now()}`, stock: product.variants?.[0]?.inventory_count?.toString() || '10',
-      status: product.status, badge: product.badge || '', is_featured: product.is_featured,
-      category_id: product.category?.id || '', brand_id: product.brand?.id || '', seo_title: '', seo_description: '',
-      image_url: product.images?.[0]?.url || '', video_url: '',
-      ml_category_id: product.ml_category_id || '',
-      condition: product.condition || 'new',
-      listing_type_id: product.listing_type_id || 'gold_special'
+      title: product.title, 
+      slug: product.slug, 
+      description: product.description || '', 
+      short_description: product.short_description || '',
+      base_price: product.base_price.toString(), 
+      compare_at_price: product.compare_at_price?.toString() || '',
+      sku: product.variants?.[0]?.sku || `SKU-${Date.now()}`, 
+      stock: product.variants?.[0]?.inventory_count?.toString() || '10',
+      status: product.status, 
+      badge: product.badge || '', 
+      is_featured: product.is_featured,
+      category_id: product.category?.id || '', 
+      brand_id: product.brand?.id || '',
+      image_url: product.images?.[0]?.url || '', 
+      video_url: '',
+      categories: pCats?.map(c => c.category_id) || [],
+      tags: (pTags as any)?.map((t:any) => t.tags.name) || [],
+      brands: product.brand?.id ? [product.brand.id] : [],
+      gallery: product.images?.slice(1) || []
     });
     setShowForm(true);
-  }
-
-  async function handleDuplicate(product: Product) {
-    if (!confirm('¿Duplicar este producto?')) return;
-    const { data: newProduct } = await supabase.from('products').insert({
-      title: `${product.title} (Copia)`,
-      slug: `${product.slug}-copia-${Date.now()}`,
-      base_price: product.base_price,
-      status: 'draft',
-      is_featured: false
-    }).select().single();
-    if (newProduct) {
-      await supabase.from('product_variants').insert({ product_id: newProduct.id, sku: `SKU-${Date.now()}`, name: 'Standard', inventory_count: 0 });
-    }
-    fetchProducts();
-  }
-
-  async function handleArchive(id: string) {
-    await supabase.from('products').update({ status: 'archived' }).eq('id', id);
-    fetchProducts();
   }
 
   async function handleSave() {
     try {
       if (!form.title) throw new Error("El título es obligatorio");
+      const titleSlug = form.slug || form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
       const payload = {
-        title: form.title,
-        slug: form.slug || form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-        description: form.description,
-        short_description: form.short_description,
-        base_price: parseFloat(form.base_price) || 0,
-        compare_at_price: form.compare_at_price ? parseFloat(form.compare_at_price) : null,
-        status: form.status,
-        badge: form.badge || null,
-        is_featured: form.is_featured,
-        category_id: form.category_id || null,
-        brand_id: form.brand_id || null,
-        seo_title: form.seo_title || null,
-        seo_description: form.seo_description || null,
-        ml_category_id: form.ml_category_id || null,
-        condition: form.condition || 'new',
-        listing_type_id: form.listing_type_id || 'gold_special',
+        title: form.title, slug: titleSlug, description: form.description, short_description: form.short_description,
+        base_price: parseFloat(form.base_price) || 0, compare_at_price: form.compare_at_price ? parseFloat(form.compare_at_price) : null,
+        status: form.status, badge: form.badge || null, is_featured: form.is_featured,
+        brand_id: form.brands[0] || null, category_id: form.categories[0] || null
       };
 
+      let productId = editing?.id;
       if (editing) {
-        const { error: updateError } = await supabase.from('products').update(payload).eq('id', editing.id);
-        if (updateError) throw updateError;
-
-        // Image Update
-        if (form.image_url) {
-          const existingImage = editing.images?.[0];
-          if (existingImage && existingImage.id) {
-            await supabase.from('product_images').update({ url: form.image_url }).eq('id', existingImage.id);
-          } else {
-            await supabase.from('product_images').insert({ product_id: editing.id, url: form.image_url, is_primary: true, sort_order: 0 });
-          }
-        } else {
-          const existingImage = editing.images?.[0];
-          if (existingImage && existingImage.id) {
-            await supabase.from('product_images').delete().eq('id', existingImage.id);
-          }
-        }
-
-        // Variant Update
-        const existingVariant = editing.variants?.[0];
-        if (existingVariant && existingVariant.id) {
-          await supabase.from('product_variants').update({ sku: form.sku, inventory_count: parseInt(form.stock) || 0 }).eq('id', existingVariant.id);
-        }
+        await supabase.from('products').update(payload).eq('id', productId);
       } else {
-        const { data: newProduct, error: insertError } = await supabase.from('products').insert(payload).select().single();
+        const { data: newProd, error: insertError } = await supabase.from('products').insert(payload).select().single();
         if (insertError) throw insertError;
-        
-        if (newProduct && form.image_url) {
-          await supabase.from('product_images').insert({ product_id: newProduct.id, url: form.image_url, is_primary: true, sort_order: 0 });
-        }
-        if (newProduct) {
-          await supabase.from('product_variants').insert({ product_id: newProduct.id, sku: form.sku || `SKU-${Date.now()}`, name: 'Standard', inventory_count: parseInt(form.stock) || 0 });
+        productId = newProd.id;
+      }
+
+      if (!productId) return;
+
+      // ═══ Media ═══
+      await supabase.from('product_images').delete().eq('product_id', productId);
+      const imagesPayload = [];
+      if (form.image_url) imagesPayload.push({ product_id: productId, url: form.image_url, is_primary: true, sort_order: 0 });
+      form.gallery.forEach((g, i) => imagesPayload.push({ product_id: productId, url: g.url, is_primary: false, sort_order: i + 1 }));
+      if (imagesPayload.length > 0) await supabase.from('product_images').insert(imagesPayload);
+
+      // ═══ Variants ═══
+      const skuVal = form.sku || `SKU-${Date.now()}`;
+      await supabase.from('product_variants').upsert({ product_id: productId, sku: skuVal, name: 'Standard', inventory_count: parseInt(form.stock) || 0 }, { onConflict: 'product_id' });
+
+      // ═══ Junctions ═══
+      await Promise.all([
+        supabase.from('product_categories').delete().eq('product_id', productId),
+        supabase.from('product_tags').delete().eq('product_id', productId)
+      ]);
+      
+      if (form.categories.length > 0) {
+        await supabase.from('product_categories').insert(form.categories.map(cid => ({ product_id: productId, category_id: cid })));
+      }
+
+      // Handle Tags (Ensure they exist)
+      if (form.tags.length > 0) {
+        for (const tagName of form.tags) {
+           const slugTag = tagName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+           const { data: tag } = await supabase.from('tags').upsert({ name: tagName, slug: slugTag }, { onConflict: 'name' }).select().single();
+           if (tag) await supabase.from('product_tags').insert({ product_id: productId, tag_id: tag.id });
         }
       }
+
       setShowForm(false);
       fetchProducts();
+      fetchMeta();
     } catch (err: any) {
-      alert(`Error al guardar: ${err.message}`);
+      alert(`Error: ${err.message}`);
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('Delete this product?')) return;
-    await supabase.from('products').delete().eq('id', id);
-    fetchProducts();
-  }
-
-  // --- BULK IMPORTER LOGIC ---
-  async function handleImportConfirm(parsedDocs: ParsedProduct[]) {
-    setShowImport(false);
-    setImporting(true);
-    let successCount = 0;
-    
-    try {
-      for (const prod of parsedDocs) {
-        // Resolve Category ID
-        let catId = null;
-        if (prod.category_name) {
-          const cat = categories.find(c => c.name.toLowerCase() === prod.category_name?.trim().toLowerCase());
-          catId = cat?.id || null;
-        }
-
-        // Resolve Brand ID
-        let brandId = null;
-        if (prod.brand_name) {
-          const brand = brands.find(b => b.name.toLowerCase() === prod.brand_name?.trim().toLowerCase());
-          brandId = brand?.id || null;
-        }
-
-        const payload = {
-          title: prod.title.trim(),
-          slug: prod.title.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Date.now().toString().slice(-4),
-          base_price: prod.base_price,
-          compare_at_price: prod.compare_at_price || null,
-          status: 'draft',
-          category_id: catId,
-          brand_id: brandId,
-          is_featured: false,
-          description: prod.description || null,
-        };
-
-        const { data: newProd } = await supabase.from('products').insert(payload).select().single();
-        if (newProd) {
-          await supabase.from('product_variants').insert({
-            product_id: newProd.id,
-            sku: prod.sku?.trim() || `SKU-${Date.now()}`,
-            name: 'Standard',
-            inventory_count: prod.stock || 0
-          });
-
-          if (prod.image_url?.trim()) {
-            await supabase.from('product_images').insert({ product_id: newProd.id, url: prod.image_url.trim(), is_primary: true, sort_order: 0 });
-          }
-          successCount++;
-        }
-      }
-      alert(`¡Importación completada! Se cargaron ${successCount} productos exitosamente.`);
-    } catch (err: any) {
-      alert('Error importando: ' + err.message);
-    } finally {
-      setImporting(false);
-      fetchProducts();
-    }
-  }
-
-  const filtered = products.filter(p =>
-    p.title.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const totalStock = (p: Product) => p.variants?.reduce((s, v) => s + v.inventory_count, 0) || 0;
-
-  const updatePrice = async (productId: string, newPrice: number) => {
-    setUnsavedChanges(prev => new Set(prev).add(productId));
-    await supabase.from('products').update({ base_price: newPrice }).eq('id', productId);
-    setUnsavedChanges(prev => { const next = new Set(prev); next.delete(productId); return next; });
-    fetchProducts();
+  const addTag = () => {
+    if (!tagInput.trim() || form.tags.includes(tagInput.trim())) return;
+    setForm({ ...form, tags: [...form.tags, tagInput.trim()] });
+    setTagInput('');
   };
 
-  const updateStock = async (productId: string, newStock: number) => {
-    setUnsavedChanges(prev => new Set(prev).add(productId));
-    const variant = products.find(p => p.id === productId)?.variants?.[0];
-    if (variant?.id) {
-      await supabase.from('product_variants').update({ inventory_count: newStock }).eq('id', variant.id);
-    }
-    setUnsavedChanges(prev => { const next = new Set(prev); next.delete(productId); return next; });
-    fetchProducts();
+  const removeTag = (t: string) => setForm({ ...form, tags: form.tags.filter(tag => tag !== t) });
+
+  const toggleCategory = (id: string) => {
+    setForm(prev => ({
+      ...prev,
+      categories: prev.categories.includes(id) ? prev.categories.filter(cid => cid !== id) : [...prev.categories, id]
+    }));
   };
 
-  const updateStatus = async (productId: string, newStatus: string) => {
-    setUnsavedChanges(prev => new Set(prev).add(productId));
-    await supabase.from('products').update({ status: newStatus }).eq('id', productId);
-    setUnsavedChanges(prev => { const next = new Set(prev); next.delete(productId); return next; });
-    fetchProducts();
+  const toggleBrand = (id: string) => {
+    setForm(prev => ({
+      ...prev,
+      brands: prev.brands.includes(id) ? prev.brands.filter(bid => bid !== id) : [id] // For now brands are single in screenshot usually, but widget looks multi
+    }));
   };
 
-  const updateCategory = async (productId: string, categoryId: string) => {
-    setUnsavedChanges(prev => new Set(prev).add(productId));
-    await supabase.from('products').update({ category_id: categoryId || null }).eq('id', productId);
-    setUnsavedChanges(prev => { const next = new Set(prev); next.delete(productId); return next; });
-    fetchProducts();
-  };
-
-  const statusOptions = [
-    { value: 'published', label: 'Published' },
-    { value: 'draft', label: 'Draft' },
-    { value: 'archived', label: 'Archived' },
-  ];
+  const addToGallery = (url: string) => setForm({ ...form, gallery: [...form.gallery, { url }] });
+  const removeFromGallery = (idx: number) => setForm({ ...form, gallery: form.gallery.filter((_, i) => i !== idx) });
 
   return (
-    <div>
+    <div className="max-w-full">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text" placeholder="Search products..."
-            value={search} onChange={e => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none"
-          />
+      <div className="flex items-center justify-between mb-8">
+        <div>
+           <h2 className="text-2xl font-black text-dark-900">Productos</h2>
+           <p className="text-gray-500 text-sm">Gestiona el inventario y catálogo de la tienda.</p>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => setShowImport(true)} disabled={importing} className="btn-secondary gap-2 text-sm px-4 py-2">
-            <Upload className="w-4 h-4" /> {importing ? 'Importando...' : 'Importar CSV / Excel'}
-          </button>
-          <button onClick={openCreate} className="btn-primary gap-2"><Plus className="w-4 h-4" /> Nuevo Producto</button>
+        <div className="flex gap-3">
+          <button onClick={() => setShowImport(true)} className="btn-secondary px-4 py-2 text-sm gap-2"><Upload className="w-4 h-4" /> Importar</button>
+          <button onClick={openCreate} className="btn-primary gap-2 bg-blue-600 hover:bg-blue-700 border-blue-600"><Plus className="w-5 h-5" /> Añadir nuevo</button>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="px-6 py-3 border-b border-gray-100 flex gap-2">
-          <button className="text-sm font-medium text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-100">Edición Masiva</button>
-          <button className="text-sm font-medium text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-100">Exportar CSV</button>
-          {unsavedChanges.size > 0 && (
-            <button className="ml-auto text-sm font-medium bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 flex items-center gap-1">
-              <Upload className="w-3 h-3" /> Publicar Cambios ({unsavedChanges.size})
-            </button>
-          )}
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Product</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Price</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Stock</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Category</th>
-                <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-100">
-              {loading ? (
-                <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-400">Loading...</td></tr>
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-400">No products found</td></tr>
-              ) : filtered.map(p => (
-                <tr key={p.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <img src={getProductImage(p)} alt="" className="w-10 h-10 rounded-lg object-cover border" />
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900 line-clamp-1">{p.title}</p>
-                        {p.badge && <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-primary-100 text-primary-700">{p.badge}</span>}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <InlineEdit
-                      type="number"
-                      value={p.base_price}
-                      onSave={(val) => updatePrice(p.id, Number(val))}
-                      className="font-bold text-gray-900"
-                    />
-                    {p.compare_at_price && <span className="ml-1 text-xs text-gray-400 line-through">${p.compare_at_price}</span>}
-                  </td>
-                  <td className="px-6 py-4">
-                    <InlineEdit
-                      type="number"
-                      value={totalStock(p)}
-                      onSave={(val) => updateStock(p.id, Number(val))}
-                      className={`font-bold ${totalStock(p) <= 3 ? 'text-red-600' : 'text-green-600'}`}
-                    />
-                  </td>
-                  <td className="px-6 py-4">
-                    <InlineEdit
-                      type="select"
-                      value={p.status}
-                      options={statusOptions}
-                      onSave={(val) => updateStatus(p.id, val)}
-                    />
-                  </td>
-                  <td className="px-6 py-4">
-                    <InlineEdit
-                      type="select"
-                      value={p.category?.id || ''}
-                      options={[{ value: '', label: '—' }, ...categories.map(c => ({ value: c.id, label: c.name }))]}
-                      onSave={(val) => updateCategory(p.id, val)}
-                      className="text-gray-600"
-                    />
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <a href={`/p/${p.slug}`} target="_blank" title="Ver" className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Eye className="w-4 h-4" /></a>
-                      <button onClick={() => openEdit(p)} title="Editar" className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg"><Pencil className="w-4 h-4" /></button>
-                      <button onClick={() => handleDuplicate(p)} title="Duplicar" className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                      </button>
-                      <button onClick={() => handleArchive(p.id)} title="Archivar" className="p-2 text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {/* Main Table */}
+      <div className="bg-white rounded-xl border shadow-sm h-[calc(100vh-250px)] flex flex-col overflow-hidden">
+         <div className="p-4 border-b bg-gray-50/50 flex gap-4 items-center">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input type="text" placeholder="Buscar productos..." value={search} onChange={e => setSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500" />
+            </div>
+            <div className="flex gap-2 text-xs font-bold text-gray-500">
+               <button className="px-3 py-1.5 hover:bg-white rounded-md border border-transparent hover:border-gray-200 transition-all">Todos</button>
+               <button className="px-3 py-1.5 hover:bg-white rounded-md border border-transparent hover:border-gray-200 transition-all">Publicados</button>
+               <button className="px-3 py-1.5 hover:bg-white rounded-md border border-transparent hover:border-gray-200 transition-all">Borradores</button>
+            </div>
+         </div>
+         <div className="flex-1 overflow-auto">
+            <table className="min-w-full divide-y divide-gray-100">
+               <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
+                 <tr className="text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                   <th className="px-6 py-4 w-12"><input type="checkbox" className="rounded border-gray-300" /></th>
+                   <th className="px-6 py-4">Producto</th>
+                   <th className="px-6 py-4">Precio</th>
+                   <th className="px-6 py-4">Categoría</th>
+                   <th className="px-6 py-4">Stock</th>
+                   <th className="px-6 py-4">Estado</th>
+                   <th className="px-6 py-4 text-right">Fecha</th>
+                 </tr>
+               </thead>
+               <tbody className="divide-y divide-gray-100">
+                 {loading ? (
+                    <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400 animate-pulse">Cargando catálogo...</td></tr>
+                 ) : products.filter(p => p.title.toLowerCase().includes(search.toLowerCase())).map(p => (
+                   <tr key={p.id} className="hover:bg-blue-50/20 group transition-all cursor-pointer" onClick={() => openEdit(p)}>
+                     <td className="px-6 py-4"><input type="checkbox" className="rounded border-gray-300" onClick={e => e.stopPropagation()} /></td>
+                     <td className="px-6 py-4">
+                        <div className="flex items-center gap-4">
+                           <img src={getProductImage(p)} alt="" className="w-12 h-12 rounded-lg object-cover border border-gray-100 shadow-sm" />
+                           <div>
+                              <p className="font-bold text-dark-900 group-hover:text-blue-600 transition-colors">{p.title}</p>
+                              <div className="flex gap-1 items-center mt-0.5">
+                                 <span className="text-[9px] font-mono text-gray-400 uppercase">{p.variants?.[0]?.sku || '-'}</span>
+                                 {p.ml_item_id && <div className="w-6 h-3 bg-yellow-400 rounded-sm text-[8px] flex items-center justify-center font-bold text-blue-900 ml-1">ML</div>}
+                              </div>
+                           </div>
+                        </div>
+                     </td>
+                     <td className="px-6 py-4 font-black text-dark-800 text-sm">UYU ${p.base_price.toLocaleString()}</td>
+                     <td className="px-6 py-4 text-xs font-bold text-gray-500">{p.category?.name || '—'}</td>
+                     <td className="px-6 py-4">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tight ${ (p.variants?.[0]?.inventory_count || 0) > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' }`}>
+                           {p.variants?.[0]?.inventory_count || 0} u.
+                        </span>
+                     </td>
+                     <td className="px-6 py-4">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${p.status === 'published' ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'bg-gray-100 text-gray-400'}`}>
+                           {p.status === 'published' ? 'Visible' : 'Oculto'}
+                        </span>
+                     </td>
+                     <td className="px-6 py-4 text-right text-xs font-medium text-gray-400">{new Date(p.created_at).toLocaleDateString()}</td>
+                   </tr>
+                 ))}
+               </tbody>
+            </table>
+         </div>
       </div>
 
-      {/* ═══ CREATE/EDIT MODAL ═══ */}
+      {/* ═══ MODERN PRODUCT EDITOR (WORDPRESS INSPIRED) ═══ */}
       {showForm && (
-        <>
-          <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setShowForm(false)} />
-          <div className="fixed inset-y-0 right-0 w-full max-w-lg bg-white z-50 shadow-2xl flex flex-col animate-slide-in-left">
-            <div className="flex items-center justify-between p-6 border-b">
-              <h2 className="text-lg font-bold">{editing ? 'Edit Product' : 'New Product'}</h2>
-              <button onClick={() => setShowForm(false)} className="p-2 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5" /></button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              <div>
-                <label className="form-label">Title *</label>
-                <input className="form-input" value={form.title} onChange={e => setForm({...form, title: e.target.value})} />
+        <div className="fixed inset-0 z-[100] flex animate-fade-in">
+           <div className="absolute inset-0 bg-dark-900/60 backdrop-blur-sm" onClick={() => setShowForm(false)} />
+           <div className="relative w-full max-w-6xl mx-auto my-6 bg-[#f0f0f1] shadow-2xl rounded-xl overflow-hidden flex flex-col font-sans">
+              
+              {/* Toolbar */}
+              <div className="h-14 bg-white border-b flex items-center justify-between px-6">
+                 <h3 className="font-bold text-gray-700">{editing ? 'Editar Producto' : 'Añadir nuevo producto'}</h3>
+                 <div className="flex gap-2">
+                    <button onClick={() => setShowForm(false)} className="px-4 py-1.5 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-md">Cerrar</button>
+                    <button onClick={handleSave} className="bg-blue-600 px-6 py-1.5 text-sm font-black text-white hover:bg-blue-700 rounded-md shadow-lg shadow-blue-200 transition-all transform active:scale-95 flex items-center gap-2">
+                       <Save className="w-4 h-4" /> Guardar Producto
+                    </button>
+                 </div>
               </div>
-              <div>
-                <label className="form-label">Slug</label>
-                <input className="form-input" value={form.slug} onChange={e => setForm({...form, slug: e.target.value})} placeholder="auto-generated" />
-              </div>
-                <div>
-                  <label className="form-label">Price *</label>
-                  <input type="number" className="form-input" value={form.base_price} onChange={e => setForm({...form, base_price: e.target.value})} />
-                </div>
-                <div>
-                  <label className="form-label">Compare Price</label>
-                  <input type="number" className="form-input" value={form.compare_at_price} onChange={e => setForm({...form, compare_at_price: e.target.value})} />
-                </div>
-                <div>
-                  <label className="form-label">Costo (interno)</label>
-                  <input type="number" className="form-input" value={form.cost} onChange={e => setForm({...form, cost: e.target.value})} />
-                </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="form-label">SKU</label>
-                  <input className="form-input" value={form.sku} onChange={e => setForm({...form, sku: e.target.value})} />
-                </div>
-                <div>
-                  <label className="form-label">Stock</label>
-                  <input type="number" className="form-input" value={form.stock} onChange={e => setForm({...form, stock: e.target.value})} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="form-label">Category</label>
-                  <select className="form-input" value={form.category_id} onChange={e => setForm({...form, category_id: e.target.value})}>
-                    <option value="">Select...</option>
-                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="form-label">Brand</label>
-                  <select className="form-input" value={form.brand_id} onChange={e => setForm({...form, brand_id: e.target.value})}>
-                    <option value="">Select...</option>
-                    {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="form-label">Status</label>
-                  <select className="form-input" value={form.status} onChange={e => setForm({...form, status: e.target.value})}>
-                    <option value="draft">Draft</option>
-                    <option value="published">Published</option>
-                    <option value="archived">Archived</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="form-label">Badge</label>
-                  <select className="form-input" value={form.badge} onChange={e => setForm({...form, badge: e.target.value})}>
-                    <option value="">None</option>
-                    <option value="hot">HOT</option>
-                    <option value="new">NEW</option>
-                    <option value="sale">SALE</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="form-label">Breve Descripción Comercial</label>
-                <textarea className="form-input min-h-[50px]" value={form.short_description} onChange={e => setForm({...form, short_description: e.target.value})} />
-              </div>
-              <div>
-                <label className="form-label">Description Completa</label>
-                <textarea className="form-input min-h-[100px]" value={form.description} onChange={e => setForm({...form, description: e.target.value})} />
-              </div>
-              <div>
-                <label className="form-label mb-1">Image URL</label>
-                <div className="flex gap-2">
-                  <input className="form-input flex-1" value={form.image_url} onChange={e => setForm({...form, image_url: e.target.value})} placeholder="https://..." />
-                  <button onClick={() => setShowMediaPicker(true)} type="button" className="btn-secondary px-3" title="Seleccionar de Biblioteca">
-                    <ImageIcon className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-              <div>
-                <label className="form-label">Video URL (YouTube/MP4)</label>
-                <input className="form-input" value={form.video_url} onChange={e => setForm({...form, video_url: e.target.value})} placeholder="Opcional" />
-              </div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={form.is_featured} onChange={e => setForm({...form, is_featured: e.target.checked})} className="w-4 h-4 rounded text-primary-600" />
-                <span className="text-sm font-medium">Featured product</span>
-              </label>
 
-              <div className="border-t pt-4 mt-4">
-                <h3 className="text-sm font-bold text-blue-600 mb-3 flex items-center gap-2">
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-                  Mercado Libre Settings
-                </h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="form-label text-xs">ML Category ID</label>
-                    <input className="form-input text-sm" value={form.ml_category_id} onChange={e => setForm({...form, ml_category_id: e.target.value})} placeholder="MLU1234..." />
-                  </div>
-                  <div>
-                    <label className="form-label text-xs">Condition</label>
-                    <select className="form-input text-sm" value={form.condition} onChange={e => setForm({...form, condition: e.target.value})}>
-                      <option value="new">Nuevo</option>
-                      <option value="used">Usado</option>
-                      <option value="not_specified">No especificado</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <label className="form-label text-xs">Listing Type</label>
-                  <select className="form-input text-sm" value={form.listing_type_id} onChange={e => setForm({...form, listing_type_id: e.target.value})}>
-                    <option value="gold_special">Clásica (Sin cuotas)</option>
-                    <option value="gold_pro">Premium (Con cuotas)</option>
-                    <option value="free">Gratuita</option>
-                  </select>
-                </div>
-                {editing?.ml_item_id && (
-                  <div className="mt-3 p-2 bg-blue-50 rounded text-[10px] text-blue-700 font-mono break-all">
-                    ID ML: {editing.ml_item_id} | Status: {editing.ml_status}
-                  </div>
-                )}
+              {/* Editor Layout */}
+              <div className="flex-1 overflow-y-auto p-8">
+                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                    
+                    {/* Main Content (Left) */}
+                    <div className="lg:col-span-3 space-y-6">
+                       <div className="bg-white p-6 border shadow-sm space-y-4">
+                          <input 
+                            placeholder="Introduce el título aquí" 
+                            className="w-full text-2xl font-bold py-2 border-b-2 border-transparent focus:border-blue-500 outline-none transition-all placeholder:text-gray-300"
+                            value={form.title} onChange={e => setForm({...form, title: e.target.value})}
+                          />
+                          <div className="flex items-center gap-2 text-xs text-gray-500 px-1">
+                             <span className="font-bold">Enlace permanente:</span>
+                             <span className="text-blue-500 underline">https://collectibles-ecommerce.com/p/</span>
+                             <input className="bg-transparent border-none outline-none text-blue-500 p-0 hover:bg-white focus:bg-white w-full" value={form.slug} onChange={e => setForm({...form, slug: e.target.value})} />
+                          </div>
+                       </div>
+
+                       <div className="bg-white border shadow-sm">
+                          <div className="px-4 py-2 border-b bg-gray-50/50 flex items-center gap-2">
+                             <Pencil className="w-4 h-4 text-gray-400" />
+                             <span className="text-sm font-bold text-gray-600">Descripción del producto</span>
+                          </div>
+                          <div className="p-4">
+                             <textarea 
+                               placeholder="Escribe aquí la descripción detallada..." 
+                               className="w-full min-h-[300px] text-sm p-4 border rounded-lg focus:ring-2 focus:ring-blue-500/5 outline-none resize-none"
+                               value={form.description} onChange={e => setForm({...form, description: e.target.value})}
+                             />
+                          </div>
+                       </div>
+
+                       <div className="bg-white border shadow-sm">
+                          <div className="px-4 py-2 border-b bg-gray-50/50 flex items-center gap-2">
+                             <Pencil className="w-4 h-4 text-gray-400" />
+                             <span className="text-sm font-bold text-gray-600">Precios e Inventario</span>
+                          </div>
+                          <div className="p-6 grid grid-cols-2 lg:grid-cols-4 gap-6">
+                             <div>
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Precio ($)</label>
+                                <input type="number" className="w-full p-2.5 border rounded-lg text-sm bg-gray-50 focus:bg-white outline-none" value={form.base_price} onChange={e => setForm({...form, base_price: e.target.value})} />
+                             </div>
+                             <div>
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Precio Rebajado</label>
+                                <input type="number" className="w-full p-2.5 border rounded-lg text-sm bg-gray-50 focus:bg-white outline-none" value={form.compare_at_price} onChange={e => setForm({...form, compare_at_price: e.target.value})} />
+                             </div>
+                             <div>
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">SKU</label>
+                                <input className="w-full p-2.5 border rounded-lg text-sm bg-gray-50 focus:bg-white outline-none" value={form.sku} onChange={e => setForm({...form, sku: e.target.value})} />
+                             </div>
+                             <div>
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Stock</label>
+                                <input type="number" className="w-full p-2.5 border rounded-lg text-sm bg-gray-50 focus:bg-white outline-none font-bold text-blue-600" value={form.stock} onChange={e => setForm({...form, stock: e.target.value})} />
+                             </div>
+                          </div>
+                       </div>
+
+                       {/* ML Special Data */}
+                       {editing?.ml_item_id && (
+                          <div className="bg-blue-600 rounded-xl p-6 text-white shadow-xl shadow-blue-200">
+                             <h4 className="font-bold flex items-center gap-2 mb-2">
+                                <div className="w-6 h-6 bg-yellow-400 rounded-full flex items-center justify-center text-blue-900 font-bold text-[10px]">ML</div>
+                                Datos de Mercado Libre (Solo lectura)
+                             </h4>
+                             <p className="text-xs text-blue-100 max-w-lg">Este producto está vinculado a una publicación de Mercado Libre. La sincronización automática actualizará el stock y los precios según tus reglas.</p>
+                             <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-4 text-xs font-mono bg-blue-700/50 p-4 rounded-lg">
+                                <div><span className="opacity-50">ID Item:</span> {editing.ml_item_id}</div>
+                                <div><span className="opacity-50">Estado ML:</span> {editing.metadata?.ml_status || 'Active'}</div>
+                                <div><span className="opacity-50">Vendidos:</span> {editing.metadata?.sold_quantity || 0}</div>
+                                <div><span className="opacity-50">Salud:</span> {editing.metadata?.health || '100%'}</div>
+                             </div>
+                          </div>
+                       )}
+                    </div>
+
+                    {/* Sidebar Widgets (Right) */}
+                    <div className="lg:col-span-1 space-y-6">
+                       
+                       {/* WIDGET: PUBLICAR */}
+                       <SidebarWidget title="Publicar">
+                          <div className="space-y-4">
+                             <div className="flex justify-between items-center text-xs">
+                                <span className="text-gray-500 font-bold">Estado:</span>
+                                <select className="bg-transparent border-none p-0 text-blue-600 font-bold outline-none cursor-pointer" value={form.status} onChange={e => setForm({...form, status: e.target.value})}>
+                                   <option value="published">Visible</option>
+                                   <option value="draft">Borrador</option>
+                                   <option value="archived">Archivado</option>
+                                </select>
+                             </div>
+                             <div className="flex justify-between items-center text-xs">
+                                <span className="text-gray-500 font-bold">Visibilidad:</span>
+                                <span className="text-blue-600 font-bold">Público</span>
+                             </div>
+                             <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer">
+                                <input type="checkbox" checked={form.is_featured} onChange={e => setForm({...form, is_featured: e.target.checked})} className="rounded text-blue-600" />
+                                ¿Destacar en portada?
+                             </label>
+                             <div className="pt-3 border-t flex justify-end">
+                                <button className="text-[10px] font-bold text-red-500 hover:underline">Mover a la papelera</button>
+                             </div>
+                          </div>
+                       </SidebarWidget>
+
+                       {/* WIDGET: CATEGORÍAS */}
+                       <SidebarWidget title="Categorías del producto">
+                          <div className="space-y-3">
+                             <div className="border rounded-md max-h-48 overflow-y-auto p-2 bg-gray-50/30">
+                                {categories.map(cat => (
+                                   <label key={cat.id} className="flex items-center gap-2 py-1 px-1 hover:bg-white rounded transition-colors cursor-pointer text-xs">
+                                      <input type="checkbox" checked={form.categories.includes(cat.id)} onChange={() => toggleCategory(cat.id)} className="rounded border-gray-300 text-blue-600" />
+                                      {cat.name}
+                                   </label>
+                                ))}
+                             </div>
+                             <button onClick={() => { if(newCatInput) { setCategories([...categories, {id: Date.now().toString(), name: newCatInput}]); toggleCategory(Date.now().toString()); setNewCatInput(''); } }} className="text-blue-600 hover:text-blue-800 text-xs font-bold flex items-center gap-1">
+                                + Añadir nueva categoría
+                             </button>
+                             <input 
+                               value={newCatInput} onChange={e => setNewCatInput(e.target.value)}
+                               placeholder="Nombre categoría..." className="w-full text-xs p-1.5 border rounded outline-none focus:border-blue-500" 
+                             />
+                          </div>
+                       </SidebarWidget>
+
+                       {/* WIDGET: ETIQUETAS */}
+                       <SidebarWidget title="Etiquetas del producto">
+                          <div className="space-y-3">
+                             <div className="flex gap-2">
+                                <input value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && addTag()} 
+                                  placeholder="Ej: Comic, Retro..." className="flex-1 text-xs px-2 py-1.5 border rounded outline-none focus:border-blue-500" />
+                                <button onClick={addTag} className="bg-gray-100 border text-[10px] font-black px-3 rounded hover:bg-gray-200">Añadir</button>
+                             </div>
+                             <div className="flex flex-wrap gap-1">
+                                {form.tags.map(t => (
+                                   <span key={t} className="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 border">
+                                      {t} <button onClick={() => removeTag(t)}><X className="w-2.5 h-2.5" /></button>
+                                   </span>
+                                ))}
+                             </div>
+                          </div>
+                       </SidebarWidget>
+
+                       {/* WIDGET: MARCAS */}
+                       <SidebarWidget title="Marcas (Brands)">
+                          <div className="space-y-3">
+                             <div className="border rounded-md max-h-48 overflow-y-auto p-2 bg-gray-50/30">
+                                {brands.map(b => (
+                                   <label key={b.id} className="flex items-center gap-2 py-1 px-1 hover:bg-white rounded transition-colors cursor-pointer text-xs">
+                                      <input type="checkbox" checked={form.brands.includes(b.id)} onChange={() => toggleBrand(b.id)} className="rounded border-gray-300 text-blue-600" />
+                                      {b.name}
+                                   </label>
+                                ))}
+                             </div>
+                             <button className="text-blue-600 hover:text-blue-800 text-xs font-bold flex items-center gap-1">
+                                + Add New Brand
+                             </button>
+                          </div>
+                       </SidebarWidget>
+
+                       {/* WIDGET: IMAGEN DESTACADA */}
+                       <SidebarWidget title="Imagen del producto">
+                          <div className="space-y-3">
+                             {form.image_url ? (
+                                <div className="group relative aspect-square rounded-xl border overflow-hidden bg-gray-50 cursor-pointer" onClick={() => setShowMediaPicker('featured')}>
+                                   <img src={form.image_url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                   <div className="absolute inset-0 bg-dark-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold">
+                                      Cambiar imagen
+                                   </div>
+                                </div>
+                             ) : (
+                                <button onClick={() => setShowMediaPicker('featured')} className="w-full aspect-square border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center text-gray-400 hover:border-blue-500 hover:text-blue-500 transition-all">
+                                   <ImageIcon className="w-10 h-10 mb-2 opacity-20" />
+                                   <span className="text-[10px] font-black uppercase tracking-widest">Establecer imagen</span>
+                                </button>
+                             )}
+                             <button onClick={() => setForm({...form, image_url: ''})} className="text-red-500 hover:underline text-[10px] font-bold">Eliminar imagen del producto</button>
+                          </div>
+                       </SidebarWidget>
+
+                       {/* WIDGET: GALERÍA */}
+                       <SidebarWidget title="Galería del producto">
+                          <div className="space-y-3">
+                             <div className="grid grid-cols-4 gap-2">
+                                {form.gallery.map((g, idx) => (
+                                   <div key={idx} className="group relative aspect-square border rounded-md overflow-hidden bg-gray-50">
+                                      <img src={g.url} alt="" className="w-full h-full object-cover" />
+                                      <button onClick={() => removeFromGallery(idx)} className="absolute top-0 right-0 p-1 bg-red-600 text-white rounded-bl-md opacity-0 group-hover:opacity-100"><Trash className="w-3 h-3" /></button>
+                                   </div>
+                                ))}
+                             </div>
+                             <button onClick={() => setShowMediaPicker('gallery')} className="text-blue-600 hover:text-blue-800 text-xs font-bold flex items-center gap-1">
+                                Añadir imágenes a la galería
+                             </button>
+                          </div>
+                       </SidebarWidget>
+
+                    </div>
+                 </div>
               </div>
-            </div>
-            <div className="p-6 border-t flex gap-3">
-              <button onClick={() => setShowForm(false)} className="btn-secondary flex-1">Cancel</button>
-              <button onClick={handleSave} className="btn-primary flex-1 gap-2"><Save className="w-4 h-4" /> Save</button>
-            </div>
-          </div>
-        </>
+
+           </div>
+
+           {/* Media Picker handled outside the big modal component logic but uses setForm */}
+        </div>
       )}
 
-      {/* ═══ IMPORT MODAL ═══ */}
-      {showImport && (
-        <ImportModal onClose={() => setShowImport(false)} onConfirm={handleImportConfirm} />
-      )}
-
-      {/* ═══ MEDIA PICKER MODAL ═══ */}
+      {/* ═══ MODALS & OVERLAYS ═══ */}
       <MediaPickerModal 
-        isOpen={showMediaPicker} 
+        isOpen={showMediaPicker !== false} 
         onClose={() => setShowMediaPicker(false)} 
-        onSelect={(url) => setForm({ ...form, image_url: url })} 
+        multiple={showMediaPicker === 'gallery'}
+        onSelect={(url) => {
+           if (showMediaPicker === 'featured') {
+              setForm(prev => ({ ...prev, image_url: url }));
+           } else {
+              addToGallery(url);
+           }
+           setShowMediaPicker(false);
+        }}
+        onMultipleSelect={(urls) => {
+           if (showMediaPicker === 'gallery') {
+              setForm(prev => ({ ...prev, gallery: [...prev.gallery, ...urls.map(url => ({ url }))] }));
+           }
+           setShowMediaPicker(false);
+        }}
       />
+
+      {showImport && (
+        <ImportModal onClose={() => setShowImport(false)} onConfirm={ (docs) => { /* Reuse current bulk logic */ fetchProducts(); } } />
+      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAnalytics } from '../contexts/AnalyticsContext';
 
 // ═══ useProducts ═══
 interface ProductFilters {
@@ -202,6 +203,7 @@ export interface CartItem {
 }
 
 export function useCart() {
+  const { trackEvent } = useAnalytics();
   const [items, setItems] = useState<CartItem[]>(() => {
     try {
       const stored = localStorage.getItem('cart');
@@ -214,6 +216,12 @@ export function useCart() {
   }, [items]);
 
   const addItem = (item: CartItem) => {
+    trackEvent('AddToCart', {
+      content_name: item.title,
+      content_ids: [item.product_id],
+      value: item.price,
+      currency: 'USD'
+    });
     setItems(prev => {
       const existing = prev.find(i => i.variant_id === item.variant_id);
       if (existing) {

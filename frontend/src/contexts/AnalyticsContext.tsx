@@ -1,8 +1,19 @@
-import { useEffect } from 'react';
+import React, { createContext, useContext, useEffect, useCallback } from 'react';
 
-/**
- * Injects Meta Pixel script into the head if VITE_META_PIXEL_ID is present.
- */
+interface AnalyticsContextType {
+  trackEvent: (eventName: string, params?: Record<string, any>) => void;
+}
+
+const AnalyticsContext = createContext<AnalyticsContextType | undefined>(undefined);
+
+export function useAnalytics() {
+  const context = useContext(AnalyticsContext);
+  if (context === undefined) {
+    throw new Error('useAnalytics must be used within an AnalyticsProvider');
+  }
+  return context;
+}
+
 export default function AnalyticsProvider({ children }: { children: React.ReactNode }) {
   const pixelId = import.meta.env.VITE_META_PIXEL_ID;
 
@@ -10,28 +21,41 @@ export default function AnalyticsProvider({ children }: { children: React.ReactN
     if (!pixelId || (window as any).fbq) return;
 
     // 1. Initial Meta Pixel Code
-    !(function (f, b, e, v, n, t, s) {
-      if (f.fbq) return;
-      n = f.fbq = function () {
-        n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments);
+    (function (f, b, e, v, n, t, s) {
+      if ((f as any).fbq) return;
+      n = (f as any).fbq = function () {
+        (n as any).callMethod ? (n as any).callMethod.apply(n, arguments) : (n as any).queue.push(arguments);
       };
-      if (!f._fbq) f._fbq = n;
-      n.push = n;
-      n.loaded = !0;
-      n.version = '2.0';
-      n.queue = [];
+      if (!(f as any)._fbq) (f as any)._fbq = n;
+      (n as any).push = n;
+      (n as any).loaded = !0;
+      (n as any).version = '2.0';
+      (n as any).queue = [];
       t = b.createElement(e);
-      t.async = !0;
-      t.src = v;
+      (t as any).async = !0;
+      (t as any).src = v;
       s = b.getElementsByTagName(e)[0];
-      s.parentNode.insertBefore(t, s);
+      (s as any).parentNode.insertBefore(t, s);
     })(window, document, 'script', 'https://connect.facebook.net/en_US/fbevents.js');
 
     (window as any).fbq('init', pixelId);
     (window as any).fbq('track', 'PageView');
 
-    console.log(`[Analytics] Pixel Initialized: ${pixelId}`);
+    console.log(`[Analytics] Meta Pixel Initialized: ${pixelId}`);
   }, [pixelId]);
 
-  return <>{children}</>;
+  const trackEvent = useCallback((eventName: string, params?: Record<string, any>) => {
+    if ((window as any).fbq) {
+      (window as any).fbq('track', eventName, params);
+      console.log(`[Analytics] Tracked Event: ${eventName}`, params);
+    }
+    
+    // Fallback or additional trackers (e.g., GA4, Mixpanel) could be added here
+  }, []);
+
+  return (
+    <AnalyticsContext.Provider value={{ trackEvent }}>
+      {children}
+    </AnalyticsContext.Provider>
+  );
 }

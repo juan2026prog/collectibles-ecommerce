@@ -18,6 +18,7 @@ export default function AdminLayout() {
     { name: 'Home / Banners', path: '/admin/banners', icon: Image },
     { name: 'Productos', path: '/admin/products', icon: Package },
     { name: 'Categorías', path: '/admin/categories', icon: FolderTree },
+    { name: 'Etiquetas', path: '/admin/tags', icon: Tag },
     { name: 'Páginas Estáticas', path: '/admin/pages', icon: FileText },
     { name: 'Marcas', path: '/admin/brands', icon: Star },
     { name: 'Grupos', path: '/admin/groups', icon: LayoutTemplate },

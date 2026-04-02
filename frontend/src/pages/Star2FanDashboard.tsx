@@ -153,8 +153,47 @@ export default function Star2FanDashboard() {
   };
 
   const handleUploadVideo = async (requestId: string, file: File) => {
-    console.log('Upload video for', requestId, file.name);
-    // In production: upload to Supabase storage, create star2fan_request_videos record
+    console.log('Uploading video for', requestId, file.name);
+    try {
+       const fileExt = file.name.split('.').pop();
+       const fileName = `${requestId}_${Date.now()}.${fileExt}`;
+       const filePath = `requests/${user?.id}/${fileName}`;
+
+       const { error: uploadError } = await supabase.storage
+         .from('private-videos')
+         .upload(filePath, file);
+
+       if (uploadError) throw uploadError;
+
+       const { data: videoData, error: dbError } = await supabase
+         .from('star2fan_request_videos')
+         .insert({
+           request_id: requestId,
+           creator_id: user?.id,
+           video_url: filePath,
+           file_name: file.name,
+           file_size: file.size,
+           is_final: true
+         })
+         .select()
+         .single();
+
+       if (dbError) throw dbError;
+
+       // Update request status to delivered and link final video
+       await supabase.from('star2fan_deliveries').insert({
+         request_id: requestId,
+         creator_id: user?.id,
+         final_video_url: filePath,
+         delivery_status: 'delivered'
+       });
+
+       alert('¡Video subido y entregado con éxito!');
+       fetchDashboardData();
+    } catch (err: any) {
+       console.error('Error uploading video:', err);
+       alert(`Error al subir video: ${err.message}`);
+    }
   };
 
   const handleSaveProfile = async (data: any) => {

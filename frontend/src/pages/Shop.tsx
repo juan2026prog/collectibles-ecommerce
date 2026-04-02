@@ -13,7 +13,7 @@ export default function Shop() {
   const badge = searchParams.get('badge') || '';
   const searchQ = searchParams.get('q') || '';
   const [sortBy, setSortBy] = useState('default');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid-2' | 'grid-3' | 'grid-4' | 'grid-5' | 'list'>('grid-4');
   const [mobileFilters, setMobileFilters] = useState(false);
   const [page, setPage] = useState(0);
   const [priceMin, setPriceMin] = useState('');
@@ -190,10 +190,32 @@ function handleAddToCart(p: any) {
               <button onClick={() => setMobileFilters(true)} className="lg:hidden flex-1 sm:flex-none p-3 border border-gray-200 rounded-xl hover:bg-gray-50 flex justify-center items-center gap-2 font-bold text-sm text-gray-700">
                 <SlidersHorizontal className="w-4 h-4" /> {t('shop.filters')}
               </button>
-              <div className="hidden sm:flex border border-gray-200 rounded-xl overflow-hidden bg-gray-50 p-1">
-                <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-white shadow-sm text-primary-600' : 'text-gray-400 hover:text-gray-600'}`}><LayoutGrid className="w-4 h-4" /></button>
-                <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-white shadow-sm text-primary-600' : 'text-gray-400 hover:text-gray-600'}`}><List className="w-4 h-4" /></button>
+              
+              {/* Grid Switcher Icons */}
+              <div className="hidden sm:flex items-center gap-1 border border-gray-100 rounded-xl bg-gray-50/50 p-1">
+                <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white shadow-sm text-primary-600' : 'text-gray-400 hover:text-gray-600'}`} title="Lista">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+                </button>
+                <button onClick={() => setViewMode('grid-2')} className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid-2' ? 'bg-white shadow-sm text-primary-600' : 'text-gray-400 hover:text-gray-600'}`} title="2 Columnas">
+                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="18" rx="1"/></svg>
+                </button>
+                <button onClick={() => setViewMode('grid-3')} className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid-3' ? 'bg-white shadow-sm text-primary-600' : 'text-gray-400 hover:text-gray-600'}`} title="3 Columnas">
+                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="2" y="3" width="5" height="18" rx="1"/><rect x="9.5" y="3" width="5" height="18" rx="1"/><rect x="17" y="3" width="5" height="18" rx="1"/></svg>
+                </button>
+                <button onClick={() => setViewMode('grid-4')} className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid-4' ? 'bg-white shadow-sm text-primary-600' : 'text-gray-400 hover:text-gray-600'}`} title="4 Columnas">
+                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><circle cx="4" cy="12" r="2.5"/><circle cx="12" cy="12" r="2.5"/><circle cx="20" cy="12" r="2.5"/><path d="M4 12c-0.5 0-1 0.5-1 1s0.5 1 1 1 1-0.5 1-1-0.5-1-1-1z" opacity="0"/></svg>
+                   <div className="flex gap-0.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-current" /><div className="w-1.5 h-1.5 rounded-full bg-current" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-current" /><div className="w-1.5 h-1.5 rounded-full bg-current" />
+                   </div>
+                </button>
+                <button onClick={() => setViewMode('grid-5')} className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid-5' ? 'bg-white shadow-sm text-primary-600' : 'text-gray-400 hover:text-gray-600'}`} title="5 Columnas">
+                   <div className="flex gap-0.5 flex-wrap w-4 justify-center">
+                      {[...Array(6)].map((_, i) => <div key={i} className="w-1 h-1 rounded-full bg-current" />)}
+                   </div>
+                </button>
               </div>
+
               <select value={sortBy} onChange={e => { setSortBy(e.target.value); setPage(0); }}
                 className="flex-1 sm:flex-none border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-700 bg-white focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none cursor-pointer">
                 <option value="default">{t('shop.sort.recommended') || 'Recomendados'}</option>
@@ -207,7 +229,7 @@ function handleAddToCart(p: any) {
 
           {/* Grid */}
           {loading ? (
-            <div className={`grid gap-6 ${viewMode === 'grid' ? 'grid-cols-2 md:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1'}`}>
+            <div className={`grid gap-6 ${viewMode === 'list' ? 'grid-cols-1' : 'grid-cols-2 md:grid-cols-3 xl:grid-cols-4'}`}>
               {[...Array(8)].map((_, i) => (
                 <ProductSkeleton key={i} viewMode={viewMode} />
               ))}
@@ -227,7 +249,13 @@ function handleAddToCart(p: any) {
               </button>
             </div>
           ) : (
-            <div className={`grid gap-6 ${viewMode === 'grid' ? 'grid-cols-2 md:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1'}`}>
+            <div className={`grid gap-6 ${
+               viewMode === 'list' ? 'grid-cols-1' :
+               viewMode === 'grid-2' ? 'grid-cols-2' :
+               viewMode === 'grid-3' ? 'grid-cols-2 md:grid-cols-3' :
+               viewMode === 'grid-4' ? 'grid-cols-2 md:grid-cols-3 xl:grid-cols-4' :
+               'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
+            }`}>
               {products.map(p => (
                 <div key={p.id} className={`group bg-white border border-gray-100 overflow-hidden hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] transition-all duration-300 transform hover:-translate-y-1 flex ${viewMode === 'list' ? 'flex-row rounded-2xl h-48' : 'flex-col rounded-3xl h-full'}`}>
                   <div className={`relative overflow-hidden bg-gray-50/50 ${viewMode === 'list' ? 'w-48 shrink-0' : 'aspect-square'}`}>
@@ -243,20 +271,20 @@ function handleAddToCart(p: any) {
                         {p.badge === 'sale' && p.compare_at_price ? `${Math.round((1 - p.base_price / p.compare_at_price) * 100)}% OFF` : p.badge}
                       </span>
                     )}
-                    <div className={`absolute top-4 right-4 flex gap-2 transition-all duration-300 ${viewMode === 'grid' ? 'flex-col translate-x-12 opacity-0 group-hover:translate-x-0 group-hover:opacity-100' : 'flex-row'}`}>
+                    <div className={`absolute top-4 right-4 flex gap-2 transition-all duration-300 ${viewMode.startsWith('grid') ? 'flex-col translate-x-12 opacity-0 group-hover:translate-x-0 group-hover:opacity-100' : 'flex-row'}`}>
                       <button className="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center hover:bg-rose-50 hover:text-rose-500 transition-colors text-gray-600"><Heart className="w-4 h-4" /></button>
                       <button onClick={() => handleAddToCart(p)} className="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center hover:bg-primary-50 hover:text-primary-600 transition-colors text-gray-600"><ShoppingCart className="w-4 h-4" /></button>
                     </div>
                   </div>
-                  <div className="p-5 flex flex-col flex-1 justify-between">
+                  <div className={`${viewMode === 'grid-5' ? 'p-3' : 'p-5'} flex flex-col flex-1 justify-between`}>
                     <div>
                       <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-1.5">{p.category?.name || p.brand?.name || ''}</p>
-                      <Link to={`/p/${p.slug}`} className="text-sm font-bold text-gray-900 hover:text-primary-600 line-clamp-2 leading-snug">{p.title}</Link>
+                      <Link to={`/p/${p.slug}`} className={`${viewMode === 'grid-5' ? 'text-xs' : 'text-sm'} font-bold text-gray-900 hover:text-primary-600 line-clamp-2 leading-snug`}>{p.title}</Link>
                       {viewMode === 'list' && <p className="mt-2 text-sm text-gray-500 line-clamp-2">{p.description}</p>}
                     </div>
-                    <div className="flex items-center gap-3 mt-4">
-                      <span className="text-lg font-black text-gray-900">{formatPrice(p.base_price)}</span>
-                      {p.compare_at_price && <span className="text-sm font-bold text-gray-300 line-through">{formatPrice(p.compare_at_price)}</span>}
+                    <div className={`flex items-center gap-3 ${viewMode === 'grid-5' ? 'mt-2' : 'mt-4'}`}>
+                      <span className={`${viewMode === 'grid-5' ? 'text-sm' : 'text-lg'} font-black text-gray-900`}>{formatPrice(p.base_price)}</span>
+                      {p.compare_at_price && <span className="text-[10px] font-bold text-gray-300 line-through">{formatPrice(p.compare_at_price)}</span>}
                     </div>
                   </div>
                 </div>

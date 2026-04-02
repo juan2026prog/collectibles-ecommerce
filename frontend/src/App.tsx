@@ -48,6 +48,7 @@ import AdminUsers from './pages/admin/AdminUsers';
 import AdminFinances from './pages/admin/AdminFinances';
 import AdminLogistics from './pages/admin/AdminLogistics';
 import AdminArtists from './pages/admin/AdminArtists';
+import AdminTags from './pages/admin/AdminTags';
 import GodMode from './pages/GodMode';
 import { useReferralTracking } from './hooks/useReferralTracking';
 
@@ -152,6 +153,7 @@ function App() {
                 <Route path="finances" element={<AdminFinances />} />
                 <Route path="logistics" element={<AdminLogistics />} />
                 <Route path="artists" element={<AdminArtists />} />
+                <Route path="tags" element={<AdminTags />} />
               </Route>
               </Routes>
               </LocaleProvider>
