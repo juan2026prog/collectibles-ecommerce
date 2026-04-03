@@ -104,7 +104,6 @@ Deno.serve(async (req) => {
       .from('orders')
       .insert({
         customer_id: user.id,
-        user_id: user.id,
         total_amount: totalAmount,
         currency: payload.currency,
         status: 'pending',

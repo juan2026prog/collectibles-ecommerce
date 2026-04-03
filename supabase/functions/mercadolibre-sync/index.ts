@@ -129,15 +129,52 @@ Deno.serve(async (req) => {
                 
                 if (ep) throw new Error(ep.message);
                 
+                // ═══ Media (Download from ML and Upload to Supabase Storage) ═══
                 await supabase.from('product_images').delete().eq('product_id', prod.id);
                 const pics = item.pictures || [];
-                if (pics.length > 0) {
-                    await supabase.from('product_images').insert(pics.map((p:any, i:number) => ({
+                const localImages = [];
+                
+                for (let i = 0; i < Math.min(pics.length, 10); i++) { // Limit to 10 images per product to avoid timeouts
+                  const p = pics[i];
+                  const imageUrl = (p.secure_url || p.url).replace('http://', 'https://');
+                  
+                  try {
+                    const imgRes = await fetch(imageUrl);
+                    if (!imgRes.ok) throw new Error("Could not fetch ML image");
+                    const blob = await imgRes.blob();
+                    const fileName = `ml-sync/${prod.id}-${i}-${Date.now()}.jpg`;
+                    
+                    const { data: uploadData, error: uploadError } = await supabase.storage
+                      .from('public-assets')
+                      .upload(fileName, blob, { contentType: 'image/jpeg', upsert: true });
+
+                    if (uploadError) throw uploadError;
+
+                    const { data: { publicUrl } } = supabase.storage
+                      .from('public-assets')
+                      .getPublicUrl(fileName);
+
+                    localImages.push({
                       product_id: prod.id,
-                      url: (p.secure_url || p.url).replace('http://', 'https://'),
+                      url: publicUrl,
+                      alt_text: item.title,
                       sort_order: i,
-                      is_primary: i===0
-                    })));
+                      is_primary: i === 0
+                    });
+                  } catch (imgErr) {
+                    console.error(`Error syncing image ${i} for ${mlId}:`, imgErr);
+                    // Fallback to original URL if upload fails
+                    localImages.push({
+                      product_id: prod.id,
+                      url: imageUrl,
+                      sort_order: i,
+                      is_primary: i === 0
+                    });
+                  }
+                }
+
+                if (localImages.length > 0) {
+                    await supabase.from('product_images').insert(localImages);
                 }
 
                 await supabase.from('product_variants').upsert({

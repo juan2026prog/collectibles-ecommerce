@@ -170,8 +170,16 @@ function HomeLayoutEditor({ title, description, initialJson, onSave }: any) {
   );
 }
 
+import { useSearchParams } from 'react-router-dom';
+
 export default function AdminSettings() {
-  const [tab, setTab] = useState<'general' | 'modules' | 'shipping' | 'appearance' | 'social' | 'payments'>('general');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentTab = (searchParams.get('tab') as any) || 'general';
+  
+  const setTab = (tab: string) => {
+    setSearchParams({ tab });
+  };
+  
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [toggles, setToggles] = useState<any[]>([]);
   const [shipping, setShipping] = useState<any[]>([]);
@@ -230,7 +238,7 @@ export default function AdminSettings() {
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key as any)}
             className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-bold transition-colors whitespace-nowrap ${
-              tab === t.key ? 'bg-white shadow-sm text-gray-900 border border-gray-200/50' : 'text-gray-500 hover:text-gray-900'
+              currentTab === t.key ? 'bg-white shadow-sm text-gray-900 border border-gray-200/50' : 'text-gray-500 hover:text-gray-900'
             }`}>
             <t.icon className="w-4 h-4" /> {t.label}
           </button>
@@ -238,7 +246,7 @@ export default function AdminSettings() {
       </div>
 
       {/* General Settings */}
-      {tab === 'general' && (
+      {currentTab === 'general' && (
         <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6 max-w-2xl shadow-sm">
           <h3 className="font-bold text-lg border-b pb-2">Datos de la Tienda</h3>
           {[
@@ -263,7 +271,7 @@ export default function AdminSettings() {
       )}
 
       {/* Appearance Settings */}
-      {tab === 'appearance' && (
+      {currentTab === 'appearance' && (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
           <div className="space-y-8">
             <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6 shadow-sm">
@@ -427,7 +435,7 @@ export default function AdminSettings() {
       )}
 
       {/* Payment Gateways Settings */}
-      {tab === 'payments' && (
+      {currentTab === 'payments' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
            <div className="space-y-6">
               <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
@@ -536,6 +544,9 @@ export default function AdminSettings() {
            </div>
         </div>
       )}
+      
+      {/* Modules Settings */}
+      {currentTab === 'modules' && (
         <div className="space-y-3 max-w-2xl">
           <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl mb-4">
              <h4 className="font-bold text-blue-900">Controladores de Arquitectura Modular</h4>
@@ -559,7 +570,7 @@ export default function AdminSettings() {
       )}
 
       {/* Shipping Rules */}
-      {tab === 'shipping' && (
+      {currentTab === 'shipping' && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden max-w-3xl shadow-sm">
           <div className="p-4 border-b bg-gray-50">
              <h3 className="font-bold text-gray-900">Zonas de EnvÃ­o LogÃ­stico</h3>
@@ -588,7 +599,7 @@ export default function AdminSettings() {
       )}
 
       {/* Social Media Links */}
-      {tab === 'social' && (
+      {currentTab === 'social' && (
         <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-3xl shadow-sm">
            <h3 className="font-bold text-lg border-b pb-4 mb-6 flex items-center gap-2">
              <Share2 className="w-5 h-5 text-indigo-600" /> Presencia en Redes Sociales

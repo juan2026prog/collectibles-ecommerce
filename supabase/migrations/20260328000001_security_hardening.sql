@@ -247,7 +247,14 @@ INSERT INTO site_settings (key, value) VALUES
   ('social_youtube_enabled', 'false'),
   ('social_youtube_url', ''),
   ('social_x_enabled', 'false'),
-  ('social_x_url', '')
+  ('social_x_url', ''),
+  ('payments_dlocal_go_enabled', 'false'),
+  ('payments_dlocal_go_api_key', ''),
+  ('payments_dlocal_go_sandbox', 'false'),
+  ('payments_paypal_enabled', 'false'),
+  ('payments_paypal_client_id', ''),
+  ('payments_paypal_secret_key', ''),
+  ('payments_paypal_sandbox', 'false')
 ON CONFLICT (key) DO NOTHING;
 
 
