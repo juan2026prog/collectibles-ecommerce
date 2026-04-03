@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Plus, Pencil, Trash2, Search, Eye, X, Upload, Save, AlertCircle, Check, Loader2, ImageIcon, ChevronUp, ChevronDown, Trash } from 'lucide-react';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
@@ -203,7 +203,7 @@ export default function AdminProducts() {
   async function handleSave() {
     try {
       if (!form.title) throw new Error("El tÃ­tulo es obligatorio");
-      let titleSlug = form.slug || form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'); if (!editing && !form.slug) { titleSlug = ${titleSlug.replace(/-+$/, '')}-; }
+      let titleSlug = form.slug || form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'); if (!editing && !form.slug) { titleSlug = `${titleSlug.replace(/-+$/, '')}-`; }
 
       const payload = {
         title: form.title, slug: titleSlug, description: form.description, short_description: form.short_description,
@@ -446,7 +446,7 @@ export default function AdminProducts() {
                         )}
                       </td>
                       <td className="px-6 py-4">
-                         <span className={px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tight }>
+                         <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tight">
                             {p.variants?.[0]?.inventory_count || 0} u.
                          </span>
                       </td>
@@ -465,7 +465,7 @@ export default function AdminProducts() {
                              <option value="archived">Archivado</option>
                            </select>
                         ) : (
-                          <span className={px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest }>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest">
                              {p.status === 'published' ? 'Visible' : 'Oculto'}
                           </span>
                         )}
