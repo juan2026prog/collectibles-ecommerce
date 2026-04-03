@@ -42,51 +42,11 @@ export default function Checkout() {
     setLoading(true);
 
     try {
-      // 1. Resolve Affiliate ID if exists
-      let affiliateId = null;
-      const refCode = localStorage.getItem('affiliate_code');
-      if (refCode) {
-        const { data: affData } = await supabase.from('affiliates').select('id').eq('code', refCode).single();
-        if (affData) affiliateId = affData.id;
-      }
-
-      // 2. Create order in Supabase
-      const { data: order, error } = await supabase.from('orders').insert({
-        user_id: user?.id || null,
-        affiliate_id: affiliateId,
-        total_amount: grandTotal,
-        currency: 'UYU',
-        status: 'pending',
-        payment_method: paymentMethod,
-        customer_email: form.email,
-        customer_phone: form.phone,
-        shipping_address: {
-          first_name: form.first_name, last_name: form.last_name,
-          street: form.street, apartment: form.apartment,
-          city: form.city, department: form.department,
-          postal_code: form.postal_code, country: form.country,
-        },
-      }).select().single();
-
-      if (error) throw error;
-
-      // Create order items matching new schema
-      if (order) {
-        const orderItems = items.map(item => ({
-          order_id: order.id,
-          product_id: item.product_id,
-          quantity: item.quantity,
-          unit_price: item.price,
-          total_price: item.price * item.quantity
-        }));
-        await supabase.from('order_items').insert(orderItems);
-      }
-
       // Branch out by Payment Method
       if (paymentMethod === 'dlocalgo' || paymentMethod === 'paypal') {
         const provider = paymentMethod === 'dlocalgo' ? 'dlocal' : 'paypal';
         
-        // Track the purchase initiation in analytics before redirection
+        // Track the purchase initiation
         analytics.track({
           eventName: 'InitiateCheckout',
           eventData: { content_ids: items.map(i => i.product_id), value: grandTotal, currency: 'UYU' },
@@ -94,53 +54,21 @@ export default function Checkout() {
 
         await createCheckoutSession({
           provider,
-          order_id: order.id,
           amount: grandTotal,
           currency: 'UYU',
-          customer: { name: `${form.first_name} ${form.last_name}`, email: form.email }
+          customer: { 
+             name: `${form.first_name} ${form.last_name}`, 
+             email: form.email,
+             address: `${form.street}, ${form.apartment} - ${form.city}, ${form.department}`,
+             phone: form.phone
+          },
+          items: items.map(i => ({ id: i.product_id, quantity: i.quantity, price: i.price, title: i.title }))
         });
-        return; 
-      }
-
-      if (paymentMethod === 'mercadopago') {
-        const { data, error: fnError } = await supabase.functions.invoke('mercadopago-checkout', {
-          body: { orderId: order.id }
-        });
-        
-        if (fnError || !data?.redirect_url) {
-           console.error("Function Error MP", fnError || data);
-           if (fnError?.message.includes('fetch') || data?.is_mock) {
-               console.warn("Dev Mode MercadoPago Fallback Triggered");
-           } else {
-               throw new Error('Error de Mercado Pago: No se pudo generar la preferencia de pago');
-           }
-        }
-        
-        // Track the purchase initiation in analytics before redirection
-        analytics.track({
-          eventName: 'InitiateCheckout',
-          eventData: { content_ids: items.map(i => i.product_id), value: grandTotal, currency: 'UYU' },
-        });
-
-        window.location.href = data.redirect_url;
         return; 
       }
 
       // If Transfer...
-      clearCart();
-      analytics.track({
-        eventName: 'Purchase',
-        eventData: {
-          content_ids: items.map(i => i.product_id),
-          content_type: 'product',
-          value: grandTotal,
-          currency: 'UYU',
-          num_items: items.reduce((s, i) => s + i.quantity, 0)
-        },
-        user: { email: form.email, phone: form.phone }
-      });
-      alert(`Orden creada (Transferencia). Número de cuenta para transferir: ITAU 123456. Orden #${order?.id.slice(0, 8).toUpperCase()}`);
-      navigate('/checkout/success?order_id=' + order?.id);
+      alert('Las transferencias estan temporalmente deshabilitadas. Por favor usa dLocal Go.');
     } catch (err: any) {
       alert('Error procesando el pedido: ' + err.message);
     }

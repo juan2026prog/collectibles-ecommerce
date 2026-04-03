@@ -4,11 +4,14 @@ interface CreatePaymentParams {
   provider: 'dlocal' | 'paypal';
   amount: number;
   currency: string;
-  order_id: string;
-  customer?: {
+  order_id?: string;
+  customer: {
     name: string;
     email: string;
-  }
+    address?: string;
+    phone?: string;
+  };
+  items: any[];
 }
 
 export async function createCheckoutSession(params: CreatePaymentParams) {
