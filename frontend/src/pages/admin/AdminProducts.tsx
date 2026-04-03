@@ -425,7 +425,7 @@ export default function AdminProducts() {
                             onClick={e => e.stopPropagation()}
                           />
                         ) : (
-                          UYU {p.base_price.toLocaleString()}
+                          <span>UYU {p.base_price.toLocaleString()}</span>
                         )}
                       </td>
                       <td className="px-6 py-4 text-xs font-bold text-gray-500" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'category_id'}); setInlineValue(p.category_id); }}>
