@@ -222,7 +222,7 @@ export default function AdminSettings() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold dark:text-white">ConfiguraciÃ³n Global</h2>
+        <h2 className="text-2xl font-bold dark:text-white">Configuracion Global</h2>
         {saved && <span className="text-sm font-bold text-green-600 bg-green-50 px-3 py-1.5 rounded-lg border border-green-200 flex items-center gap-1 shadow-sm"><Save className="w-4 h-4"/> Guardado</span>}
       </div>
 
@@ -232,8 +232,8 @@ export default function AdminSettings() {
           { key: 'general', label: 'General', icon: Store },
           { key: 'appearance', label: 'Theme Builder', icon: LayoutTemplate },
           { key: 'payments', label: 'Pagos', icon: CreditCard },
-          { key: 'modules', label: 'MÃ³dulos Activos', icon: Settings },
-          { key: 'shipping', label: 'EnvÃ­os', icon: Truck },
+          { key: 'modules', label: 'Modulos Activos', icon: Settings },
+          { key: 'shipping', label: 'Envios', icon: Truck },
           { key: 'social', label: 'Redes Sociales', icon: Share2 },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key as any)}
@@ -252,10 +252,10 @@ export default function AdminSettings() {
           {[
             { key: 'store_name', label: 'Nombre de la Tienda' },
             { key: 'store_tagline', label: 'Slogan / Tagline' },
-            { key: 'currency', label: 'Moneda (CÃ³digo)' },
+            { key: 'currency', label: 'Moneda (Codigo)' },
             { key: 'currency_symbol', label: 'SÃ­mbolo Moneda' },
-            { key: 'free_shipping_threshold', label: 'Monto EnvÃ­o Gratis ($)' },
-            { key: 'default_shipping_rate', label: 'Tarifa EnvÃ­o Base ($)' },
+            { key: 'free_shipping_threshold', label: 'Monto Envio Gratis ($)' },
+            { key: 'default_shipping_rate', label: 'Tarifa Envio Base ($)' },
           ].map(field => (
             <div key={field.key} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
               <label className="sm:w-60 text-sm font-bold text-gray-700 flex-shrink-0">{field.label}</label>

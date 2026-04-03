@@ -51,9 +51,9 @@ Deno.serve(async (req: Request) => {
       // Use secret key for backend calls if available, otherwise fallback to api key
       const apiKey = config.payments_dlocal_go_secret_key || config.payments_dlocal_go_api_key;
       
-      console.log(`Initiating dLocal Go payment for order ${order_id}...`);
+      console.log(`Initiating dLocal Go checkout for order ${order_id}...`);
 
-      const response = await fetch(`${baseUrl}/payments`, {
+      const response = await fetch(`${baseUrl}/checkouts`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -64,7 +64,6 @@ Deno.serve(async (req: Request) => {
           currency: currency,
           country: "UY", 
           order_id: order_id,
-          payment_method_flow: "REDIRECT",
           success_url: `${req.headers.get("origin") || 'http://localhost:5173'}/checkout/success?order_id=${order_id}&provider=dlocal`,
           back_url: `${req.headers.get("origin") || 'http://localhost:5173'}/checkout`,
           notification_url: `${supabaseUrl}/functions/v1/payment-webhook?provider=dlocal`,
@@ -78,7 +77,7 @@ Deno.serve(async (req: Request) => {
       const result = await response.json();
       if (!response.ok) {
         console.error("dLocal Error Response:", result);
-        throw new Error(result.message || result.error_description || "Error de dLocal Go: No se pudo generar el checkout");
+        throw new Error(result.message || result.error_description || "No se pudo generar el checkout de dLocal");
       }
       
       // Handle both possible field names for the redirect URL

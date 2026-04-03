@@ -28,16 +28,16 @@ export default function AdminLayout() {
     { name: 'Afiliados', path: '/admin/affiliates', icon: Megaphone },
     { name: 'Pedidos', path: '/admin/orders', icon: ShoppingBag },
     { name: 'Pasarelas de Pago', path: '/admin/settings?tab=payments', icon: CreditCard },
-    { name: 'Configuración', path: '/admin/settings', icon: Settings },
+    { name: 'Configuracion', path: '/admin/settings', icon: Settings },
     { name: 'Clientes & CRM', path: '/admin/customers', icon: Users },
     { name: 'Mailing', path: '/admin/mailing', icon: Mail },
     { name: 'Mercado Libre', path: '/admin/mercadolibre', icon: ShoppingCart },
     { name: 'Finanzas & Facturas', path: '/admin/finances', icon: CreditCard },
-    { name: 'Logística & Envíos', path: '/admin/logistics', icon: Package },
+    { name: 'Logistica & Envios', path: '/admin/logistics', icon: Package },
     { name: 'Artistas & Cameo', path: '/admin/artists', icon: Star },
     { name: 'Reportes', path: '/admin/reports', icon: BarChart3 },
     { name: 'SEO', path: '/admin/seo', icon: Search },
-    { name: 'Usuarios & Auditoría', path: '/admin/users', icon: ShieldCheck },
+    { name: 'Usuarios & Auditoria', path: '/admin/users', icon: ShieldCheck },
   ];
 
   const handleSignOut = async () => {
