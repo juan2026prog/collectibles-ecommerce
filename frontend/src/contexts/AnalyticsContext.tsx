@@ -9,7 +9,8 @@ const AnalyticsContext = createContext<AnalyticsContextType | undefined>(undefin
 export function useAnalytics() {
   const context = useContext(AnalyticsContext);
   if (context === undefined) {
-    throw new Error('useAnalytics must be used within an AnalyticsProvider');
+    console.warn('Analytics Context not found. Event tracking will be disabled.');
+    return { trackEvent: () => {} };
   }
   return context;
 }

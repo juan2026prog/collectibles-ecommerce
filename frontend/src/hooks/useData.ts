@@ -216,12 +216,20 @@ export function useCart() {
   }, [items]);
 
   const addItem = (item: CartItem) => {
-    trackEvent('AddToCart', {
-      content_name: item.title,
-      content_ids: [item.product_id],
-      value: item.price,
-      currency: 'USD'
-    });
+    // 📊 Track Analytics (Non-blocking)
+    try {
+      if (typeof trackEvent === 'function') {
+        trackEvent('AddToCart', {
+          content_name: item.title,
+          content_ids: [item.product_id],
+          value: item.price * item.quantity,
+          currency: 'USD'
+        });
+      }
+    } catch (err) {
+      console.warn('[Cart] Analytics failed, but item will be added:', err);
+    }
+
     setItems(prev => {
       const existing = prev.find(i => i.variant_id === item.variant_id);
       if (existing) {

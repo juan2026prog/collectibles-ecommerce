@@ -12,6 +12,7 @@ export default function CheckoutSuccess() {
   const { clearCart, items, total } = useCartContext();
   const [order, setOrder] = useState<any>(null);
   const [copied, setCopied] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
     // Clear cart on successful arrival
@@ -30,17 +31,37 @@ export default function CheckoutSuccess() {
     }
 
     // Fetch order details
-    if (orderId) {
-      supabase
-        .from('orders')
-        .select('*')
-        .eq('id', orderId)
-        .single()
-        .then(({ data }) => {
-          if (data) setOrder(data);
-        });
+    async function fetchOrder() {
+       if (!orderId) return;
+       const { data } = await supabase.from('orders').select('*').eq('id', orderId).single();
+       if (data) setOrder(data);
     }
-  }, [orderId]);
+
+    // Verify payment status if returned from provider
+    async function verifyPayment() {
+       const provider = searchParams.get('provider');
+       if (!orderId || !provider) { fetchOrder(); return; }
+       
+       setVerifying(true);
+       try {
+         const externalId = searchParams.get('token') || searchParams.get('payment_id');
+         const { data, error } = await supabase.functions.invoke('confirm-payment', {
+            body: { provider, order_id: orderId, external_id: externalId }
+         });
+         
+         if (error) throw error;
+         console.log("Confirm Result:", data);
+         await fetchOrder();
+       } catch (err) {
+         console.error("Verification error:", err);
+         await fetchOrder();
+       } finally {
+         setVerifying(false);
+       }
+    }
+
+    verifyPayment();
+  }, [orderId, searchParams]);
 
   const orderNumber = orderId ? orderId.slice(0, 8).toUpperCase() : '---';
   const isPending = status === 'pending' || order?.status === 'pending';
@@ -64,12 +85,12 @@ export default function CheckoutSuccess() {
         </div>
 
         <h1 className="text-3xl font-black text-gray-900 mb-2">
-          {isPending ? '¡Tu orden está pendiente!' : '¡Gracias por tu compra!'}
+          {verifying ? 'Verificando pago...' : isPending ? '¡Tu orden está pendiente!' : '¡Gracias por tu compra!'}
         </h1>
         <p className="text-gray-500 mb-8">
-          {isPending
-            ? 'Tu pago está siendo procesado. Te notificaremos cuando se confirme.'
-            : 'Hemos recibido tu orden y ya estamos preparándola.'}
+          {verifying ? 'Por favor espera un momento mientras confirmamos la transacción.' : 
+           isPending ? 'Tu pago está siendo procesado o es una transferencia. Te notificaremos cuando se confirme.'
+            : 'Hemos recibido tu orden y ya está confirmada como pagada.'}
         </p>
 
         {/* Order card */}

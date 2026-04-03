@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { analytics } from '../lib/analytics';
 import AddressAutocomplete from '../components/AddressAutocomplete';
+import { createCheckoutSession } from '../lib/payments';
 
 export default function Checkout() {
   const { items, total, clearCart } = useCartContext();
@@ -51,7 +52,7 @@ export default function Checkout() {
 
       // 2. Create order in Supabase
       const { data: order, error } = await supabase.from('orders').insert({
-        customer_id: user?.id || null,
+        user_id: user?.id || null,
         affiliate_id: affiliateId,
         total_amount: grandTotal,
         currency: 'UYU',
@@ -82,21 +83,22 @@ export default function Checkout() {
       }
 
       // Branch out by Payment Method
-      if (paymentMethod === 'dlocalgo') {
-        // Call the Edge Function to generate the checkout session
-        const { data, error: fnError } = await supabase.functions.invoke('dlocalgo-checkout', {
-          body: { orderId: order.id }
-        });
+      if (paymentMethod === 'dlocalgo' || paymentMethod === 'paypal') {
+        const provider = paymentMethod === 'dlocalgo' ? 'dlocal' : 'paypal';
         
-        if (fnError || !data?.redirect_url) {
-           console.error("Function Error dLocal", fnError || data);
-           if (fnError?.message.includes('fetch')) {
-               alert(`Fallback Dev Mode: Simulando dLocal Link... Order ${order.id}`);
-               clearCart(); navigate('/'); return;
-           }
-           throw new Error('Error de dLocal Go: No se pudo generar el checkout');
-        }
-        window.location.href = data.redirect_url;
+        // Track the purchase initiation in analytics before redirection
+        analytics.track({
+          eventName: 'InitiateCheckout',
+          eventData: { content_ids: items.map(i => i.product_id), value: grandTotal, currency: 'UYU' },
+        });
+
+        await createCheckoutSession({
+          provider,
+          order_id: order.id,
+          amount: grandTotal,
+          currency: 'UYU',
+          customer: { name: `${form.first_name} ${form.last_name}`, email: form.email }
+        });
         return; 
       }
 
@@ -220,6 +222,7 @@ export default function Checkout() {
               <div className="space-y-3">
                 {[
                   { id: 'dlocalgo', icon: CreditCard, label: 'Tarjeta de Crédito / Débito (dLocal Go)' },
+                  { id: 'paypal', icon: CreditCard, label: 'PayPal (Global / USD)' },
                   { id: 'mercadopago', icon: QrCode, label: 'MercadoPago (Billetera)' },
                   { id: 'transfer', icon: Building, label: 'Transferencia Bancaria' },
                 ].map(m => (
