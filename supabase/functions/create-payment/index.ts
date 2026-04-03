@@ -43,13 +43,13 @@ serve(async (req: Request) => {
       const { data: order, error: orderError } = await supabaseAdmin
         .from('orders')
         .insert({
-          customer_name: customer.name,
           customer_email: customer.email,
+          customer_phone: customer.phone,
           total_amount: amount,
+          currency: currency,
           status: 'pending',
-          payment_provider: provider,
-          shipping_address: customer.address,
-          metadata: { ...customer, items_count: items.length }
+          payment_method: provider,
+          shipping_address: { full_address: customer.address, name: customer.name }
         })
         .select()
         .single()
