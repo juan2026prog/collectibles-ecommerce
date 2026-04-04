@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { ChevronRight, CreditCard, Building, QrCode } from 'lucide-react';
+import { ChevronRight, CreditCard, Building, QrCode, Truck, Store } from 'lucide-react';
 import { useCartContext } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -14,12 +14,13 @@ export default function Checkout() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('dlocalgo');
+  const [shippingMethod, setShippingMethod] = useState<'delivery' | 'pickup'>('delivery');
   const [form, setForm] = useState({
     email: user?.email || '', first_name: '', last_name: '', phone: '',
     street: '', apartment: '', city: '', department: '', postal_code: '', country: 'Uruguay',
   });
 
-  const shipping = total >= 4000 ? 0 : 350;
+  const shipping = shippingMethod === 'pickup' ? 0 : (total >= 4000 ? 0 : 350);
   const grandTotal = total + shipping;
 
   useEffect(() => {
@@ -59,7 +60,7 @@ export default function Checkout() {
           customer: { 
              name: `${form.first_name} ${form.last_name}`, 
              email: form.email,
-             address: `${form.street}, ${form.apartment} - ${form.city}, ${form.department}`,
+             address: shippingMethod === 'pickup' ? 'Retiro en local' : `${form.street}, ${form.apartment} - ${form.city}, ${form.department}`,
              phone: form.phone
           },
           items: items.map(i => ({ id: i.product_id, quantity: i.quantity, price: i.price, title: i.title }))
@@ -105,8 +106,39 @@ export default function Checkout() {
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Billing Form */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Shipping Method */}
             <div className="bg-white rounded-xl border border-gray-100 p-6">
-              <h2 className="font-bold text-lg mb-4">DATOS DE FACTURACIÓN</h2>
+              <h2 className="font-bold text-lg mb-4">MÉTODO DE ENVÍO</h2>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <label className={`flex items-start gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                  shippingMethod === 'delivery' ? 'border-primary-500 bg-primary-50/50' : 'border-gray-100 hover:border-gray-200 bg-gray-50/50'
+                }`}>
+                  <input type="radio" checked={shippingMethod === 'delivery'} onChange={() => setShippingMethod('delivery')} className="sr-only" />
+                  <div className={`p-2 rounded-lg ${shippingMethod === 'delivery' ? 'bg-primary-500 text-white' : 'bg-white text-gray-500 shadow-sm'}`}>
+                    <Truck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-gray-900">Envío a Domicilio</div>
+                    <div className="text-sm text-gray-500 mt-1">Recibilo en tu puerta</div>
+                  </div>
+                </label>
+                <label className={`flex items-start gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                  shippingMethod === 'pickup' ? 'border-primary-500 bg-primary-50/50' : 'border-gray-100 hover:border-gray-200 bg-gray-50/50'
+                }`}>
+                  <input type="radio" checked={shippingMethod === 'pickup'} onChange={() => setShippingMethod('pickup')} className="sr-only" />
+                  <div className={`p-2 rounded-lg ${shippingMethod === 'pickup' ? 'bg-primary-500 text-white' : 'bg-white text-gray-500 shadow-sm'}`}>
+                    <Store className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-gray-900">Retiro en Local</div>
+                    <div className="text-sm text-green-600 font-medium mt-1">GRATIS</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-100 p-6">
+              <h2 className="font-bold text-lg mb-4">DATOS DE FACTURACIÓN {shippingMethod === 'delivery' && '& ENVÍO'}</h2>
               <div className="space-y-4">
                 <div>
                   <label className="form-label">Correo Electrónico *</label>
@@ -117,30 +149,36 @@ export default function Checkout() {
                   <div><label className="form-label">Apellido *</label><input required className="form-input" value={form.last_name} onChange={e => setForm({...form, last_name: e.target.value})} /></div>
                 </div>
                 <div><label className="form-label">Teléfono</label><input className="form-input" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} /></div>
-                <div>
-                  <label className="form-label">Dirección (Calle, Número) *</label>
-                  <AddressAutocomplete 
-                    value={form.street} 
-                    onChange={val => setForm({...form, street: val})}
-                    onSelect={(details) => setForm(f => ({
-                       ...f,
-                       street: details.street || f.street,
-                       city: details.city || f.city,
-                       department: details.department || f.department,
-                       postal_code: details.postal_code || f.postal_code,
-                       country: details.country || f.country
-                    }))}
-                  />
-                </div>
-                <div><label className="form-label">Apartamento / Timbre (opcional)</label><input className="form-input" value={form.apartment} onChange={e => setForm({...form, apartment: e.target.value})} /></div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div><label className="form-label">Ciudad *</label><input required className="form-input" value={form.city} onChange={e => setForm({...form, city: e.target.value})} /></div>
-                  <div><label className="form-label">Departamento / Estado</label><input className="form-input" value={form.department} onChange={e => setForm({...form, department: e.target.value})} /></div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div><label className="form-label">Código Postal</label><input className="form-input" value={form.postal_code} onChange={e => setForm({...form, postal_code: e.target.value})} /></div>
-                  <div><label className="form-label">País</label><input className="form-input" value={form.country} onChange={e => setForm({...form, country: e.target.value})} /></div>
-                </div>
+                
+                {shippingMethod === 'delivery' && (
+                  <div className="pt-4 mt-4 border-t border-gray-100 space-y-4">
+                    <h3 className="font-semibold text-sm text-gray-600 mb-2">Dirección de Entrega</h3>
+                    <div>
+                      <label className="form-label">Dirección (Calle, Número) *</label>
+                      <AddressAutocomplete 
+                        value={form.street} 
+                        onChange={val => setForm({...form, street: val})}
+                        onSelect={(details) => setForm(f => ({
+                           ...f,
+                           street: details.street || f.street,
+                           city: details.city || f.city,
+                           department: details.department || f.department,
+                           postal_code: details.postal_code || f.postal_code,
+                           country: details.country || f.country
+                        }))}
+                      />
+                    </div>
+                    <div><label className="form-label">Apartamento / Timbre (opcional)</label><input className="form-input" value={form.apartment} onChange={e => setForm({...form, apartment: e.target.value})} /></div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div><label className="form-label">Ciudad *</label><input required={shippingMethod === 'delivery'} className="form-input" value={form.city} onChange={e => setForm({...form, city: e.target.value})} /></div>
+                      <div><label className="form-label">Departamento / Estado</label><input className="form-input" value={form.department} onChange={e => setForm({...form, department: e.target.value})} /></div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div><label className="form-label">Código Postal</label><input className="form-input" value={form.postal_code} onChange={e => setForm({...form, postal_code: e.target.value})} /></div>
+                      <div><label className="form-label">País</label><input className="form-input" value={form.country} onChange={e => setForm({...form, country: e.target.value})} /></div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -150,9 +188,7 @@ export default function Checkout() {
               <div className="space-y-3">
                 {[
                   { id: 'dlocalgo', icon: CreditCard, label: 'Tarjeta de Crédito / Débito (dLocal Go)' },
-                  { id: 'paypal', icon: CreditCard, label: 'PayPal (Global / USD)' },
-                  { id: 'mercadopago', icon: QrCode, label: 'MercadoPago (Billetera)' },
-                  { id: 'transfer', icon: Building, label: 'Transferencia Bancaria' },
+                  { id: 'paypal', icon: QrCode, label: 'PayPal (Global / USD)' },
                 ].map(m => (
                   <label key={m.id} className={`flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-colors ${
                     paymentMethod === m.id ? 'border-primary-500 bg-primary-50' : 'border-gray-200 hover:border-gray-300'
