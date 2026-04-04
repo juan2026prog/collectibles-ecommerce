@@ -75,37 +75,169 @@ serve(async (req: Request) => {
 
     // 3. GATEWAY LOGIC (dLocal Go / PayPal)
     if (provider === 'dlocal') {
-      const apiKey = (config.payments_dlocal_go_secret_key || config.payments_dlocal_go_api_key || '').trim()
-      if (!apiKey) throw new Error('dLocal Go API key not configured. Set it in Admin > Settings > Payments.')
+      const apiKey = (config.payments_dlocal_go_api_key || '').trim()
+      
+      if (!apiKey) {
+        throw new Error('dLocal Go API key not configured. Set it in Admin > Settings > Payments.')
+      }
       
       const origin = req.headers.get("origin") || 'https://collectibles-ecommerce.vercel.app'
+      const isSandbox = config.payments_dlocal_go_sandbox === 'true'
+      const apiBaseUrl = isSandbox ? 'https://api-sbx.dlocalgo.com' : 'https://api.dlocalgo.com'
       
-      const response = await fetch("https://api.dlocalgo.com/v1/payments", {
+      const requestBody = JSON.stringify({
+        amount: parseFloat(amount.toString()).toFixed(2),
+        currency: currency,
+        country: "UY",
+        order_id: String(orderId),
+        description: `Order ${orderId}`,
+        success_url: `${origin}/checkout/success?order_id=${orderId}&provider=dlocal`,
+        back_url: `${origin}/checkout`,
+        notification_url: `${supabaseUrl}/functions/v1/dlocalgo-webhook`,
+        payer: {
+          name: customer.name,
+          email: customer.email,
+          phone: customer.phone || undefined
+        }
+      })
+      
+      console.log(`[dLocal Go] Calling ${apiBaseUrl}/v1/checkout, sandbox=${isSandbox}`)
+      
+      const response = await fetch(`${apiBaseUrl}/v1/checkout`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-        body: JSON.stringify({
-          amount: parseFloat(amount.toString()).toFixed(2),
-          currency: currency,
-          country: "UY", 
-          order_id: orderId,
-          success_url: `${origin}/checkout/success?order_id=${orderId}&provider=dlocal`,
-          back_url: `${origin}/checkout`,
-          notification_url: `${supabaseUrl}/functions/v1/payment-webhook?provider=dlocal`,
-          payer: { name: customer.name, email: customer.email }
-        })
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: requestBody
       })
 
       const result = await response.json()
-      if (!response.ok) throw new Error(`dLocal Error: ${JSON.stringify(result)}`)
+      console.log("[dLocal Go] Response:", response.status, JSON.stringify(result))
       
-      return new Response(JSON.stringify({ checkout_url: result.redirect_url || result.checkout_url }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      })
+      if (!response.ok || result.errorCode) {
+        const errorMsg = result.errorMessage || result.message || JSON.stringify(result)
+        throw new Error(`dLocal Go Error (${result.errorCode || response.status}): ${errorMsg}`)
+      }
+      
+      // dLocal Go returns a redirect URL for the hosted checkout page
+      const checkoutUrl = result.redirect_url || result.checkout_url || result.link
+      if (checkoutUrl) {
+        return new Response(JSON.stringify({ checkout_url: checkoutUrl }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        })
+      }
+      
+      // If we get an ID but no redirect, construct the dLocal Go checkout URL
+      if (result.id) {
+        return new Response(JSON.stringify({ 
+          checkout_url: `https://checkout.dlocalgo.com/collect/${result.id}`,
+          payment_id: result.id
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        })
+      }
+      
+      throw new Error('dLocal Go no devolvió URL de checkout. Response: ' + JSON.stringify(result))
     }
 
     if (provider === 'paypal') {
-      // (Similar logic for PayPal order creation...)
-      // But for now, let's focus on dLocal Go's success.
+      const clientId = (config.payments_paypal_client_id || '').trim()
+      const clientSecret = (config.payments_paypal_client_secret || '').trim()
+      
+      if (!clientId || !clientSecret) {
+        throw new Error('PayPal credentials not configured. Set Client ID and Client Secret in Admin > Settings > Payments.')
+      }
+      
+      const origin = req.headers.get("origin") || 'https://collectibles-ecommerce.vercel.app'
+      const isSandbox = config.payments_paypal_sandbox === 'true'
+      const apiBase = isSandbox ? 'https://api-m.sandbox.paypal.com' : 'https://api-m.paypal.com'
+      
+      // Step 1: Get OAuth2 access token
+      console.log(`[PayPal] Getting access token from ${apiBase}, sandbox=${isSandbox}`)
+      const authString = btoa(`${clientId}:${clientSecret}`)
+      
+      const tokenRes = await fetch(`${apiBase}/v1/oauth2/token`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${authString}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: 'grant_type=client_credentials'
+      })
+      
+      const tokenData = await tokenRes.json()
+      if (!tokenRes.ok) {
+        throw new Error(`PayPal Auth Error: ${JSON.stringify(tokenData)}`)
+      }
+      
+      const accessToken = tokenData.access_token
+      console.log('[PayPal] Got access token successfully')
+      
+      // Step 2: Create PayPal order
+      const paypalCurrency = currency === 'UYU' ? 'USD' : currency // PayPal doesn't support UYU well
+      const paypalAmount = paypalCurrency === 'USD' && currency === 'UYU' 
+        ? (amount / 42).toFixed(2)  // Approximate UYU to USD conversion
+        : parseFloat(amount.toString()).toFixed(2)
+      
+      const orderPayload = {
+        intent: 'CAPTURE',
+        purchase_units: [{
+          reference_id: String(orderId),
+          description: `Collectibles Order #${orderId}`,
+          amount: {
+            currency_code: paypalCurrency,
+            value: paypalAmount
+          }
+        }],
+        payment_source: {
+          paypal: {
+            experience_context: {
+              brand_name: 'Collectibles Store',
+              locale: 'es-UY',
+              shipping_preference: 'NO_SHIPPING',
+              user_action: 'PAY_NOW',
+              return_url: `${origin}/checkout/success?order_id=${orderId}&provider=paypal`,
+              cancel_url: `${origin}/checkout`
+            }
+          }
+        }
+      }
+      
+      console.log('[PayPal] Creating order...')
+      const orderRes = await fetch(`${apiBase}/v2/checkout/orders`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(orderPayload)
+      })
+      
+      const orderResult = await orderRes.json()
+      console.log('[PayPal] Order response:', orderRes.status, JSON.stringify(orderResult))
+      
+      if (!orderRes.ok) {
+        throw new Error(`PayPal Order Error (${orderRes.status}): ${JSON.stringify(orderResult)}`)
+      }
+      
+      // Find the approval URL
+      const approvalLink = orderResult.links?.find((l: any) => l.rel === 'payer-action' || l.rel === 'approve')
+      
+      if (approvalLink?.href) {
+        // Update order with PayPal order ID
+        await supabaseAdmin.from('orders').update({
+          payment_provider_id: orderResult.id,
+          payment_method: 'paypal'
+        }).eq('id', orderId)
+        
+        return new Response(JSON.stringify({ checkout_url: approvalLink.href }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        })
+      }
+      
+      throw new Error('PayPal no devolvió URL de aprobación. Response: ' + JSON.stringify(orderResult))
     }
 
     throw new Error("Proveedor no configurado")
