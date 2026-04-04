@@ -4,6 +4,7 @@ import { ChevronRight, Heart, ShoppingCart, Minus, Plus, Truck, ShieldCheck, Rot
 import { useProduct } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
+import { ProductBadge } from '../components/ProductBadge';
 import { analytics } from '../lib/analytics';
 
 export default function ProductDetail() {
@@ -183,11 +184,12 @@ export default function ProductDetail() {
             )}
 
             {/* Badge Overlay */}
-            {product.badge && (
-              <span className="absolute top-8 left-8 bg-rose-500 text-white text-[10px] font-black uppercase px-4 py-2 rounded-full shadow-lg shadow-rose-200 tracking-widest z-30">
-                {product.badge}
-              </span>
-            )}
+            <ProductBadge 
+              badgeId={product.badge} 
+              compareAtPrice={product.compare_at_price} 
+              basePrice={product.base_price} 
+              className="absolute top-8 left-8 text-[10px] uppercase tracking-widest z-30" 
+            />
           </div>
         </div>
 

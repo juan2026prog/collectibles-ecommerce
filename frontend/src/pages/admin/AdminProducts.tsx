@@ -68,7 +68,7 @@ function InlineEdit({ value, type = 'text', options = [], onSave, className = ''
   );
 }
 
-// â•â•â• REUSABLE SIDEBAR UI WIDGET â•â•â•
+// �"��"��"� REUSABLE SIDEBAR UI WIDGET �"��"��"�
 function SidebarWidget({ title, children, onToggle }: { title: string, children: React.ReactNode, onToggle?: () => void }) {
   const [isOpen, setIsOpen] = useState(true);
   return (
@@ -202,7 +202,7 @@ export default function AdminProducts() {
 
   async function handleSave() {
     try {
-      if (!form.title) throw new Error("El tÃ­tulo es obligatorio");
+      if (!form.title) throw new Error("El título es obligatorio");
       let titleSlug = form.slug || form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'); if (!editing && !form.slug) { titleSlug = `${titleSlug.replace(/-+$/, '')}-`; }
 
       const payload = {
@@ -223,18 +223,18 @@ export default function AdminProducts() {
 
       if (!productId) return;
 
-      // â•â•â• Media â•â•â•
+      // �"��"��"� Media �"��"��"�
       await supabase.from('product_images').delete().eq('product_id', productId);
       const imagesPayload = [];
       if (form.image_url) imagesPayload.push({ product_id: productId, url: form.image_url, is_primary: true, sort_order: 0 });
       form.gallery.forEach((g, i) => imagesPayload.push({ product_id: productId, url: g.url, is_primary: false, sort_order: i + 1 }));
       if (imagesPayload.length > 0) await supabase.from('product_images').insert(imagesPayload);
 
-      // â•â•â• Variants â•â•â•
+      // �"��"��"� Variants �"��"��"�
       const skuVal = form.sku || `SKU-${Date.now()}`;
       await supabase.from('product_variants').upsert({ product_id: productId, sku: skuVal, name: 'Standard', inventory_count: parseInt(form.stock) || 0 }, { onConflict: 'product_id' });
 
-      // â•â•â• Junctions â•â•â•
+      // �"��"��"� Junctions �"��"��"�
       await Promise.all([
         supabase.from('product_categories').delete().eq('product_id', productId),
         supabase.from('product_tags').delete().eq('product_id', productId)
@@ -332,7 +332,7 @@ export default function AdminProducts() {
   };
 
   const handleGenerateAI = async (action: 'improve' | 'generate') => {
-    if (action === 'generate' && !form.title) { alert("Ingresa un tÃ­tulo primero"); return; }
+    if (action === 'generate' && !form.title) { alert("Ingresa un título primero"); return; }
     setLoadingAI(true);
     try {
       const { data, error } = await supabase.functions.invoke('generate-content', {
@@ -360,11 +360,11 @@ export default function AdminProducts() {
       <div className="flex items-center justify-between mb-8">
         <div>
            <h2 className="text-2xl font-black text-dark-900">Productos</h2>
-           <p className="text-gray-500 text-sm">Gestiona el inventario y catÃ¡logo de la tienda.</p>
+           <p className="text-gray-500 text-sm">Gestiona el inventario y catálogo de la tienda.</p>
         </div>
         <div className="flex gap-3">
           <button onClick={() => setShowImport(true)} className="btn-secondary px-4 py-2 text-sm gap-2"><Upload className="w-4 h-4" /> Importar</button>
-          <button onClick={openCreate} className="btn-primary gap-2 bg-blue-600 hover:bg-blue-700 border-blue-600"><Plus className="w-5 h-5" /> AÃ±adir nuevo</button>
+          <button onClick={openCreate} className="btn-primary gap-2 bg-blue-600 hover:bg-blue-700 border-blue-600"><Plus className="w-5 h-5" /> Añadir nuevo</button>
         </div>
       </div>
 
@@ -389,7 +389,7 @@ export default function AdminProducts() {
                    <th className="px-6 py-4 w-12"><input type="checkbox" className="rounded border-gray-300" /></th>
                    <th className="px-6 py-4">Producto</th>
                    <th className="px-6 py-4">Precio</th>
-                   <th className="px-6 py-4">CategorÃ­a</th>
+                   <th className="px-6 py-4">Categoría</th>
                    <th className="px-6 py-4">Stock</th>
                    <th className="px-6 py-4">Estado</th>
                    <th className="px-6 py-4 text-right">Fecha</th>
@@ -397,7 +397,7 @@ export default function AdminProducts() {
                </thead>
                <tbody className="divide-y divide-gray-100">
                  {loading ? (
-                    <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400 animate-pulse">Cargando catÃ¡logo...</td></tr>
+                    <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400 animate-pulse">Cargando catálogo...</td></tr>
                  ) : products.filter(p => p.title.toLowerCase().includes(search.toLowerCase())).map(p => (
                     <tr key={p.id} className="hover:bg-blue-50/20 group transition-all cursor-pointer" onClick={() => !inlineEdit && openEdit(p)}>
                       <td className="px-6 py-4"><input type="checkbox" className="rounded border-gray-300" onClick={e => e.stopPropagation()} /></td>
@@ -438,11 +438,11 @@ export default function AdminProducts() {
                             onBlur={() => setInlineEdit(null)}
                             onClick={e => e.stopPropagation()}
                           >
-                            <option value="">â€” Sin CategorÃ­a â€”</option>
+                            <option value="">� Sin Categoría �</option>
                             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                           </select>
                         ) : (
-                          p.category?.name || 'â€”'
+                          p.category?.name || '�'
                         )}
                       </td>
                       <td className="px-6 py-4">
@@ -478,7 +478,7 @@ export default function AdminProducts() {
          </div>
       </div>
 
-      {/* â•â•â• MODERN PRODUCT EDITOR (WORDPRESS INSPIRED) â•â•â• */}
+      {/* �"��"��"� MODERN PRODUCT EDITOR (WORDPRESS INSPIRED) �"��"��"� */}
       {showForm && (
         <div className="fixed inset-0 z-[100] flex animate-fade-in">
            <div className="absolute inset-0 bg-dark-900/60 backdrop-blur-sm" onClick={() => setShowForm(false)} />
@@ -486,7 +486,7 @@ export default function AdminProducts() {
               
               {/* Toolbar */}
               <div className="h-14 bg-white border-b flex items-center justify-between px-6">
-                 <h3 className="font-bold text-gray-700">{editing ? 'Editar Producto' : 'AÃ±adir nuevo producto'}</h3>
+                 <h3 className="font-bold text-gray-700">{editing ? 'Editar Producto' : 'Añadir nuevo producto'}</h3>
                  <div className="flex gap-2">
                     <button onClick={() => setShowForm(false)} className="px-4 py-1.5 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-md">Cerrar</button>
                     <button onClick={handleSave} className="bg-blue-600 px-6 py-1.5 text-sm font-black text-white hover:bg-blue-700 rounded-md shadow-lg shadow-blue-200 transition-all transform active:scale-95 flex items-center gap-2">
@@ -503,7 +503,7 @@ export default function AdminProducts() {
                     <div className="lg:col-span-3 space-y-6">
                        <div className="bg-white p-6 border shadow-sm space-y-4">
                           <input 
-                            placeholder="Introduce el tÃ­tulo aquÃ­" 
+                            placeholder="Introduce el título aquí" 
                             className="w-full text-2xl font-bold py-2 border-b-2 border-transparent focus:border-blue-500 outline-none transition-all placeholder:text-gray-300"
                             value={form.title} onChange={e => setForm({...form, title: e.target.value})}
                           />
@@ -518,7 +518,7 @@ export default function AdminProducts() {
                           <div className="px-4 py-2 border-b bg-gray-50/50 flex items-center justify-between">
                              <div className="flex items-center gap-2">
                                 <Pencil className="w-4 h-4 text-gray-400" />
-                                <span className="text-sm font-bold text-gray-600">DescripciÃ³n del producto</span>
+                                <span className="text-sm font-bold text-gray-600">Descripción del producto</span>
                              </div>
                              <div className="flex gap-2">
                                 <button 
@@ -527,14 +527,14 @@ export default function AdminProducts() {
                                   disabled={loadingAI}
                                   className="text-[10px] font-black uppercase tracking-tight bg-purple-50 text-purple-600 px-3 py-1 rounded hover:bg-purple-100 flex items-center gap-1.5 transition-all disabled:opacity-50"
                                 >
-                                   {loadingAI ? <Loader2 className="w-3 h-3 animate-spin"/> : <span className="text-purple-400">âœ¨</span>} 
+                                   {loadingAI ? <Loader2 className="w-3 h-3 animate-spin"/> : <span className="text-purple-400">�S�</span>} 
                                    Mejorar con IA
                                 </button>
                              </div>
                           </div>
                           <div className="p-4">
                              <textarea 
-                               placeholder="Escribe aquÃ­ la descripciÃ³n detallada..." 
+                               placeholder="Escribe aquí la descripción detallada..." 
                                className="w-full min-h-[300px] text-sm p-4 border rounded-lg focus:ring-2 focus:ring-blue-500/5 outline-none resize-none"
                                value={form.description} onChange={e => setForm({...form, description: e.target.value})}
                              />
@@ -573,7 +573,7 @@ export default function AdminProducts() {
                                 <div className="w-6 h-6 bg-yellow-400 rounded-full flex items-center justify-center text-blue-900 font-bold text-[10px]">ML</div>
                                 Datos de Mercado Libre (Solo lectura)
                              </h4>
-                             <p className="text-xs text-blue-100 max-w-lg">Este producto estÃ¡ vinculado a una publicaciÃ³n de Mercado Libre. La sincronizaciÃ³n automÃ¡tica actualizarÃ¡ el stock y los precios segÃºn tus reglas.</p>
+                             <p className="text-xs text-blue-100 max-w-lg">Este producto está vinculado a una publicación de Mercado Libre. La sincronización automática actualizará el stock y los precios según tus reglas.</p>
                              <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-4 text-xs font-mono bg-blue-700/50 p-4 rounded-lg">
                                 <div><span className="opacity-50">ID Item:</span> {editing.ml_item_id}</div>
                                 <div><span className="opacity-50">Estado ML:</span> {editing.metadata?.ml_status || 'Active'}</div>
@@ -600,11 +600,11 @@ export default function AdminProducts() {
                              </div>
                              <div className="flex justify-between items-center text-xs">
                                 <span className="text-gray-500 font-bold">Visibilidad:</span>
-                                <span className="text-blue-600 font-bold">PÃºblico</span>
+                                <span className="text-blue-600 font-bold">Público</span>
                              </div>
                              <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer">
                                 <input type="checkbox" checked={form.is_featured} onChange={e => setForm({...form, is_featured: e.target.checked})} className="rounded text-blue-600" />
-                                Â¿Destacar en portada?
+                                ¿Destacar en portada?
                              </label>
                              <div className="pt-3 border-t flex justify-end">
                                 <button className="text-[10px] font-bold text-red-500 hover:underline">Mover a la papelera</button>
@@ -612,8 +612,8 @@ export default function AdminProducts() {
                           </div>
                        </SidebarWidget>
 
-                       {/* WIDGET: CATEGORÃAS */}
-                       <SidebarWidget title="CategorÃ­as del producto">
+                       {/* WIDGET: CATEGORÍAS */}
+                       <SidebarWidget title="Categorías del producto">
                           <div className="space-y-3">
                              <div className="border rounded-md max-h-48 overflow-y-auto p-2 bg-gray-50/30">
                                 {categories.map(cat => (
@@ -626,10 +626,10 @@ export default function AdminProducts() {
                               <div className="flex gap-2">
                                 <input 
                                   value={newCatInput} onChange={e => setNewCatInput(e.target.value)}
-                                  placeholder="Nueva categorÃ­a..." className="flex-1 text-xs p-1.5 border rounded outline-none focus:border-blue-500" 
+                                  placeholder="Nueva categoría..." className="flex-1 text-xs p-1.5 border rounded outline-none focus:border-blue-500" 
                                 />
                                 <button type="button" onClick={handleAddCategory} className="bg-blue-50 text-blue-600 px-3 rounded font-bold text-[10px] hover:bg-blue-100">
-                                   AÃ±adir
+                                   Añadir
                                 </button>
                               </div>
                           </div>
@@ -641,7 +641,7 @@ export default function AdminProducts() {
                              <div className="flex gap-2">
                                 <input value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && addTag()} 
                                   placeholder="Ej: Comic, Retro..." className="flex-1 text-xs px-2 py-1.5 border rounded outline-none focus:border-blue-500" />
-                                <button onClick={addTag} className="bg-gray-100 border text-[10px] font-black px-3 rounded hover:bg-gray-200">AÃ±adir</button>
+                                <button onClick={addTag} className="bg-gray-100 border text-[10px] font-black px-3 rounded hover:bg-gray-200">Añadir</button>
                              </div>
                              <div className="flex flex-wrap gap-1">
                                 {form.tags.map(t => (
@@ -670,7 +670,7 @@ export default function AdminProducts() {
                                   placeholder="Nueva marca..." className="flex-1 text-xs p-1.5 border rounded outline-none focus:border-blue-500" 
                                 />
                                 <button type="button" onClick={handleAddBrand} className="bg-blue-50 text-blue-600 px-3 rounded font-bold text-[10px] hover:bg-blue-100">
-                                   AÃ±adir
+                                   Añadir
                                 </button>
                               </div>
                           </div>
@@ -696,8 +696,8 @@ export default function AdminProducts() {
                           </div>
                        </SidebarWidget>
 
-                       {/* WIDGET: GALERÃA */}
-                       <SidebarWidget title="GalerÃ­a del producto">
+                       {/* WIDGET: GALERÍA */}
+                       <SidebarWidget title="Galería del producto">
                           <div className="space-y-3">
                              <div className="grid grid-cols-4 gap-2">
                                 {form.gallery.map((g, idx) => (
@@ -708,7 +708,7 @@ export default function AdminProducts() {
                                 ))}
                              </div>
                              <button onClick={() => setShowMediaPicker('gallery')} className="text-blue-600 hover:text-blue-800 text-xs font-bold flex items-center gap-1">
-                                AÃ±adir imÃ¡genes a la galerÃ­a
+                                Añadir imágenes a la galería
                              </button>
                           </div>
                        </SidebarWidget>
@@ -723,7 +723,7 @@ export default function AdminProducts() {
         </div>
       )}
 
-      {/* â•â•â• MODALS & OVERLAYS â•â•â• */}
+      {/* �"��"��"� MODALS & OVERLAYS �"��"��"� */}
       <MediaPickerModal 
         isOpen={showMediaPicker !== false} 
         onClose={() => setShowMediaPicker(false)} 

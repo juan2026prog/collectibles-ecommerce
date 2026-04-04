@@ -5,6 +5,7 @@ import { useProducts, useCategories, useBrands } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
 import { useLocale } from '../contexts/LocaleContext';
 import { ProductSkeleton } from '../components/Skeletons';
+import { ProductBadge } from '../components/ProductBadge';
 
 export default function Shop() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -262,15 +263,12 @@ function handleAddToCart(p: any) {
                     <Link to={`/p/${p.slug}`}>
                       <img src={getProductImage(p)} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out" />
                     </Link>
-                    {p.badge && (
-                      <span className={`absolute top-4 left-4 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-full shadow-sm backdrop-blur-md ${
-                        p.badge === 'hot' ? 'bg-rose-500/90 text-white' : 
-                        p.badge === 'new' ? 'bg-emerald-500/90 text-white' : 
-                        'bg-amber-400/90 text-amber-950'
-                      }`}>
-                        {p.badge === 'sale' && p.compare_at_price ? `${Math.round((1 - p.base_price / p.compare_at_price) * 100)}% OFF` : p.badge}
-                      </span>
-                    )}
+                    <ProductBadge 
+                      badgeId={p.badge} 
+                      compareAtPrice={p.compare_at_price} 
+                      basePrice={p.base_price} 
+                      className="absolute top-4 left-4 text-[10px] uppercase tracking-wider" 
+                    />
                     <div className={`absolute top-4 right-4 flex gap-2 transition-all duration-300 ${viewMode.startsWith('grid') ? 'flex-col translate-x-12 opacity-0 group-hover:translate-x-0 group-hover:opacity-100' : 'flex-row'}`}>
                       <button className="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center hover:bg-rose-50 hover:text-rose-500 transition-colors text-gray-600"><Heart className="w-4 h-4" /></button>
                       <button onClick={() => handleAddToCart(p)} className="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center hover:bg-primary-50 hover:text-primary-600 transition-colors text-gray-600"><ShoppingCart className="w-4 h-4" /></button>

@@ -69,7 +69,7 @@ function MenuEditor({ title, description, initialJson, onSave }: any) {
                 </div>
                 
                 <div className="flex items-center gap-1 border-l border-gray-200 pl-2 ml-1">
-                   <button onClick={() => addSub(i)} className="p-1.5 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded" title="AÃ±adir Sub-menÃº Desplegable"><Plus className="w-4 h-4" /></button>
+                   <button onClick={() => addSub(i)} className="p-1.5 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded" title="Añadir Sub-menú Desplegable"><Plus className="w-4 h-4" /></button>
                    <button onClick={() => remove(i)} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded" title="Eliminar"><Trash2 className="w-4 h-4" /></button>
                 </div>
              </div>
@@ -98,14 +98,14 @@ function MenuEditor({ title, description, initialJson, onSave }: any) {
         ))}
         {items.length === 0 && (
            <div className="text-center py-8 bg-gray-50 border border-dashed border-gray-300 rounded-xl">
-              <p className="text-sm text-gray-500">Este menÃº estÃ¡ vacÃ­o actualmente.</p>
-              <button onClick={addItem} className="text-primary-600 font-bold text-sm mt-2 hover:underline">AÃ±adir el primer elemento</button>
+              <p className="text-sm text-gray-500">Este menú está vacío actualmente.</p>
+              <button onClick={addItem} className="text-primary-600 font-bold text-sm mt-2 hover:underline">Añadir el primer elemento</button>
            </div>
         )}
       </div>
       
       <button onClick={() => onSave(JSON.stringify(items))} className="w-full btn-primary py-2 shadow-[0_4px_14px_rgba(37,99,235,0.2)] flex justify-center gap-2 hover:translate-y-px mt-4">
-        <Save className="w-4 h-4" /> Guardar MenÃº
+        <Save className="w-4 h-4" /> Guardar Menú
       </button>
     </div>
   );
@@ -114,9 +114,9 @@ function MenuEditor({ title, description, initialJson, onSave }: any) {
 function HomeLayoutEditor({ title, description, initialJson, onSave }: any) {
   const defaultBlocks = [
     { id: 'hero', label: 'Hero Banner Principal', visible: true },
-    { id: 'bento', label: 'CategorÃ­as Destacadas (Bento)', visible: true },
+    { id: 'bento', label: 'Categorías Destacadas (Bento)', visible: true },
     { id: 'collections', label: 'Grupos/Colecciones', visible: true },
-    { id: 'trending', label: 'Novedades y MÃ¡s Vendidos', visible: true },
+    { id: 'trending', label: 'Novedades y Más Vendidos', visible: true },
     { id: 'brands', label: 'Carrusel de Marcas', visible: true }
   ];
   const [blocks, setBlocks] = useState<any[]>([]);
@@ -217,7 +217,7 @@ export default function AdminSettings() {
     setToggles(prev => prev.map(t => t.id === id ? { ...t, is_enabled: !current } : t));
   }
 
-  if (loading) return <div className="text-center py-12 text-gray-400 animate-pulse">Cargando configuraciÃ³n...</div>;
+  if (loading) return <div className="text-center py-12 text-gray-400 animate-pulse">Cargando configuración...</div>;
 
   return (
     <div>
@@ -253,7 +253,7 @@ export default function AdminSettings() {
             { key: 'store_name', label: 'Nombre de la Tienda' },
             { key: 'store_tagline', label: 'Slogan / Tagline' },
             { key: 'currency', label: 'Moneda (Codigo)' },
-            { key: 'currency_symbol', label: 'SÃ­mbolo Moneda' },
+            { key: 'currency_symbol', label: 'Símbolo Moneda' },
             { key: 'free_shipping_threshold', label: 'Monto Envio Gratis ($)' },
             { key: 'default_shipping_rate', label: 'Tarifa Envio Base ($)' },
           ].map(field => (
@@ -297,12 +297,12 @@ export default function AdminSettings() {
                       </div>
                       <div className="flex-1 space-y-3">
                          <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-                            <h4 className="text-xs font-bold text-blue-900 flex items-center gap-1.5 mb-1">ðŸ’¡ Recomendaciones de DiseÃ±o</h4>
+                            <h4 className="text-xs font-bold text-blue-900 flex items-center gap-1.5 mb-1">�x� Recomendaciones de Diseño</h4>
                             <ul className="text-[11px] text-blue-800 space-y-1 opacity-80">
-                               <li>â€¢ <b>TamaÃ±o Ã³ptimo:</b> 512 x 128 px (RelaciÃ³n 4:1)</li>
-                               <li>â€¢ <b>Formato ideal:</b> PNG transparente o SVG</li>
-                               <li>â€¢ <b>ResoluciÃ³n:</b> 72 DPI (Web) o 144 DPI (Retina)</li>
-                               <li>â€¢ <b>Contraste:</b> AsegÃºrate que sea legible sobre fondos claros.</li>
+                               <li>⬢ <b>Tamaño óptimo:</b> 512 x 128 px (Relación 4:1)</li>
+                               <li>⬢ <b>Formato ideal:</b> PNG transparente o SVG</li>
+                               <li>⬢ <b>Resolución:</b> 72 DPI (Web) o 144 DPI (Retina)</li>
+                               <li>⬢ <b>Contraste:</b> Asegúrate que sea legible sobre fondos claros.</li>
                             </ul>
                          </div>
                          <input 
@@ -323,7 +323,7 @@ export default function AdminSettings() {
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                  <div>
                    <label className="block text-sm font-bold text-gray-700 mb-1">Color Principal Global</label>
-                   <p className="text-xs text-gray-500 mb-2">Se generarÃ¡n 10 sombras automÃ¡ticamente para botones, estilos, fondos activos, etc.</p>
+                   <p className="text-xs text-gray-500 mb-2">Se generarán 10 sombras automáticamente para botones, estilos, fondos activos, etc.</p>
                    <input type="color" className="p-1 h-12 w-full block bg-white border border-gray-200 cursor-pointer rounded-lg" value={settings['theme_color_primary'] || '#e74268'} onChange={e => setSettings({ ...settings, theme_color_primary: e.target.value })} onBlur={() => saveSetting('theme_color_primary', settings['theme_color_primary'] || '#e74268')} />
                  </div>
                </div>
@@ -334,7 +334,7 @@ export default function AdminSettings() {
                <div className="space-y-4">
                  <div>
                    <label className="block text-sm font-bold text-gray-700 mb-1">Texto de la Franja</label>
-                   <input className="form-input w-full" value={settings['appearance_announcement_text'] || ''} onChange={e => setSettings({ ...settings, appearance_announcement_text: e.target.value })} onBlur={() => saveSetting('appearance_announcement_text', settings['appearance_announcement_text'] || '')} placeholder="EnvÃ­os gratis sobre $4000..." />
+                   <input className="form-input w-full" value={settings['appearance_announcement_text'] || ''} onChange={e => setSettings({ ...settings, appearance_announcement_text: e.target.value })} onBlur={() => saveSetting('appearance_announcement_text', settings['appearance_announcement_text'] || '')} placeholder="Envíos gratis sobre $4000..." />
                  </div>
                  <div className="grid grid-cols-2 gap-4">
                    <div>
@@ -348,10 +348,10 @@ export default function AdminSettings() {
                  </div>
                  <div className="grid grid-cols-2 gap-4">
                    <div>
-                     <label className="block text-sm font-bold text-gray-700 mb-1">Â¿AnimaciÃ³n Marquee?</label>
+                     <label className="block text-sm font-bold text-gray-700 mb-1">¿Animación Marquee?</label>
                      <select className="form-input w-full" value={settings['appearance_announcement_marquee'] || 'true'} onChange={e => { setSettings({ ...settings, appearance_announcement_marquee: e.target.value }); saveSetting('appearance_announcement_marquee', e.target.value); }}>
-                        <option value="true">Desplazamiento DinÃ¡mico</option>
-                        <option value="false">Texto EstÃ¡tico</option>
+                        <option value="true">Desplazamiento Dinámico</option>
+                        <option value="false">Texto Estático</option>
                      </select>
                    </div>
                    <div>
@@ -375,7 +375,7 @@ export default function AdminSettings() {
                    </div>
                  </div>
                  <div>
-                   <label className="block text-sm font-bold text-gray-700 mb-1">Inyecciones en &lt;head&gt; (Scripts, PÃ­xeles)</label>
+                   <label className="block text-sm font-bold text-gray-700 mb-1">Inyecciones en &lt;head&gt; (Scripts, Píxeles)</label>
                    <textarea rows={3} className="form-input font-mono text-xs w-full" placeholder="<!-- Meta tags o scripts -->" value={settings['appearance_head_code'] || ''} onChange={e => setSettings({ ...settings, appearance_head_code: e.target.value })} onBlur={() => saveSetting('appearance_head_code', settings['appearance_head_code'] || '')} />
                  </div>
                </div>
@@ -391,7 +391,7 @@ export default function AdminSettings() {
                  </div>
                  <div>
                    <label className="block text-sm font-bold text-gray-700 mb-1">Texto de Copyright Inferior</label>
-                   <input className="form-input w-full" value={settings['appearance_footer_text'] || ''} onChange={e => setSettings({ ...settings, appearance_footer_text: e.target.value })} onBlur={() => saveSetting('appearance_footer_text', settings['appearance_footer_text'] || '')} placeholder="Â© 2026 Collectibles..." />
+                   <input className="form-input w-full" value={settings['appearance_footer_text'] || ''} onChange={e => setSettings({ ...settings, appearance_footer_text: e.target.value })} onBlur={() => saveSetting('appearance_footer_text', settings['appearance_footer_text'] || '')} placeholder="© 2026 Collectibles..." />
                  </div>
                </div>
             </div>
@@ -399,22 +399,22 @@ export default function AdminSettings() {
 
           <div className="space-y-8">
               <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm h-fit">
-                <h3 className="font-bold text-lg border-b pb-4 mb-4 flex items-center gap-2"><LayoutTemplate className="w-5 h-5 text-blue-600" /> Constructor de Layout de PÃ¡gina (Home)</h3>
-                <p className="text-sm text-gray-500 mb-6">Arrastra y suelta para reorganizar el orden en el que se muestran los bloques de la pÃ¡gina de inicio. Oculta los que no necesites visualizar actualmente.</p>
+                <h3 className="font-bold text-lg border-b pb-4 mb-4 flex items-center gap-2"><LayoutTemplate className="w-5 h-5 text-blue-600" /> Constructor de Layout de Página (Home)</h3>
+                <p className="text-sm text-gray-500 mb-6">Arrastra y suelta para reorganizar el orden en el que se muestran los bloques de la página de inicio. Oculta los que no necesites visualizar actualmente.</p>
                 <HomeLayoutEditor 
                   title="Bloques Estructurales"
-                  description="Pre-visualizaciÃ³n de mÃ³dulos"
+                  description="Pre-visualización de módulos"
                   initialJson={settings['appearance_home_layout_json']}
                   onSave={(val: string) => saveSetting('appearance_home_layout_json', val)}
                 />
               </div>
 
               <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm h-fit">
-                <h3 className="font-bold text-lg border-b pb-4 mb-6 flex items-center gap-2"><LayoutTemplate className="w-5 h-5 text-indigo-600" /> Editor Visual de MenÃºs</h3>
+                <h3 className="font-bold text-lg border-b pb-4 mb-6 flex items-center gap-2"><LayoutTemplate className="w-5 h-5 text-indigo-600" /> Editor Visual de Menús</h3>
                 
                 <div className="space-y-8">
                    <MenuEditor 
-                     title="MenÃº de NavegaciÃ³n (Header)"
+                     title="Menú de Navegación (Header)"
                      description="Enlaces principales. Soporta sub-elementos (desplegables)."
                      initialJson={settings['appearance_menu_json']}
                      onSave={(val: string) => saveSetting('appearance_menu_json', val)}
@@ -422,8 +422,8 @@ export default function AdminSettings() {
 
                    <div className="border-t border-gray-100 pt-8">
                      <MenuEditor 
-                       title="MenÃº Secundario (Footer)"
-                       description="Enlaces de pie de pÃ¡gina para polÃ­ticas, documentaciÃ³n, o categorÃ­as."
+                       title="Menú Secundario (Footer)"
+                       description="Enlaces de pie de página para políticas, documentación, o categorías."
                        initialJson={settings['appearance_footer_menu_json']}
                        onSave={(val: string) => saveSetting('appearance_footer_menu_json', val)}
                      />
@@ -492,7 +492,7 @@ export default function AdminSettings() {
                     <ShieldCheck className="w-5 h-5" />
                     Transacciones Seguras
                  </h4>
-                 <p className="text-xs text-blue-100 leading-relaxed font-medium">Todas las conexiones con las pasarelas se realizan mediante HTTPS y cifrado de extremo a extremo. Asegúrate de nunca compartir tus llaves secretas.</p>
+                 <p className="text-xs text-blue-100 leading-relaxed font-medium">Todas las conexiones con las pasarelas se realizan mediante HTTPS y cifrado de extremo a extremo. Aseg�rate de nunca compartir tus llaves secretas.</p>
               </div>
            </div>
 
@@ -573,7 +573,7 @@ export default function AdminSettings() {
       {currentTab === 'shipping' && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden max-w-3xl shadow-sm">
           <div className="p-4 border-b bg-gray-50">
-             <h3 className="font-bold text-gray-900">Zonas de EnvÃ­o LogÃ­stico</h3>
+             <h3 className="font-bold text-gray-900">Zonas de Envío Logístico</h3>
           </div>
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -589,7 +589,7 @@ export default function AdminSettings() {
                 <tr key={s.id} className="hover:bg-gray-50/50">
                   <td className="px-6 py-4 text-sm font-bold text-gray-900 capitalize">{s.name}</td>
                   <td className="px-6 py-4 text-sm font-black text-blue-600">${s.rate}</td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{s.free_above ? `$${s.free_above}` : 'â€”'}</td>
+                  <td className="px-6 py-4 text-sm text-gray-600">{s.free_above ? `$${s.free_above}` : '�'}</td>
                   <td className="px-6 py-4"><span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-md ${s.is_active ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}>{s.is_active ? 'Activa' : 'Inactiva'}</span></td>
                 </tr>
               ))}
@@ -604,7 +604,7 @@ export default function AdminSettings() {
            <h3 className="font-bold text-lg border-b pb-4 mb-6 flex items-center gap-2">
              <Share2 className="w-5 h-5 text-indigo-600" /> Presencia en Redes Sociales
            </h3>
-           <p className="text-sm text-gray-500 mb-6">Activa y vincula las plataformas donde los clientes puedan encontrarte. Si una red estÃ¡ desactivada, no se mostrarÃ¡ en los banners ni en el pie de pÃ¡gina de la tienda.</p>
+           <p className="text-sm text-gray-500 mb-6">Activa y vincula las plataformas donde los clientes puedan encontrarte. Si una red está desactivada, no se mostrará en los banners ni en el pie de página de la tienda.</p>
            
            <div className="space-y-4">
              {[

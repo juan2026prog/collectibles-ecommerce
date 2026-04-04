@@ -5,6 +5,7 @@ import { useProducts, useCategories, useBrands, useBanners, useProductGroups } f
 import { useCartContext } from '../contexts/CartContext';
 import { useLocale } from '../contexts/LocaleContext';
 import { ProductSkeleton, CategoryGridSkeleton, BannerSkeleton, BrandCarouselSkeleton, CollectionCarouselSkeleton } from '../components/Skeletons';
+import { ProductBadge } from '../components/ProductBadge';
 
 export default function Home() {
   const { banners, loading: bannersLoading } = useBanners();
@@ -50,15 +51,11 @@ function handleAddToCart(p: any) {
         <Link to={`/p/${p.slug}`}>
           <img src={getProductImage(p)} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out" />
         </Link>
-        {p.badge && (
-          <span className={`absolute top-3 left-3 px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-full shadow-sm backdrop-blur-md ${
-            p.badge === 'hot' ? 'bg-rose-500/90 text-white' : 
-            p.badge === 'new' ? 'bg-emerald-500/90 text-white' : 
-            'bg-amber-400/90 text-amber-950'
-          }`}>
-            {p.badge === 'sale' && p.compare_at_price ? `${Math.round((1 - p.base_price / p.compare_at_price) * 100)}% OFF` : p.badge}
-          </span>
-        )}
+        <ProductBadge 
+          badgeId={p.badge} 
+          compareAtPrice={p.compare_at_price} 
+          basePrice={p.base_price} 
+        />
         <div className="absolute top-3 right-3 flex flex-col gap-2 translate-x-12 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all duration-300">
           <button className="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center hover:bg-rose-50 transition-colors"><Heart className="w-4 h-4 text-gray-600 hover:text-rose-500" /></button>
           <button onClick={() => handleAddToCart(p)} className="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center hover:bg-primary-50 transition-colors"><ShoppingCart className="w-4 h-4 text-gray-600 hover:text-primary-600" /></button>

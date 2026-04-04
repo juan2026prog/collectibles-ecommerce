@@ -91,7 +91,7 @@ export default function AdminBadges() {
   }
 
   async function handleCreateBadge() {
-    if (!newBadgeLabel.trim()) return alert('El texto de la cocarda es requerido');
+    if (!newBadgeLabel.trim() && !newBadgeImage) return alert('Debes incluir texto o una imagen personalizada.');
     
     const newBadge: CustomBadge = {
       id: `custom_${Date.now()}`,
@@ -127,7 +127,14 @@ export default function AdminBadges() {
 
   function getBadgeStyle(badge: CustomBadge) {
     if (badge.custom_image) {
-      return { backgroundImage: `url(${badge.custom_image})`, backgroundSize: 'cover', backgroundPosition: 'center' };
+      return { 
+        backgroundImage: `url(${badge.custom_image})`, 
+        backgroundSize: 'contain', 
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        backgroundColor: badge.bg_color || 'transparent', 
+        color: badge.text_color 
+      };
     }
     return { backgroundColor: badge.bg_color, color: badge.text_color };
   }
@@ -170,7 +177,8 @@ export default function AdminBadges() {
                         }`}
                         style={getBadgeStyle(b)}
                       >
-                        {b.custom_image ? '' : b.label}
+                        {/* We always render label unless it's strictly empty. If image exists, text goes on top. */}
+                        {b.label}
                       </button>
                       {!['hot', 'new', 'sale', 'preorder', 'soldout'].includes(b.id) && (
                         <button 
@@ -232,8 +240,11 @@ export default function AdminBadges() {
                         <td className="p-4 text-sm text-gray-500">{p.category?.name || '-'}</td>
                         <td className="p-4">
                           {p.badge ? (
-                            <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider ${badgeObj?.color || 'bg-gray-200 text-black'}`}>
-                              {p.badge}
+                            <span 
+                              className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider ${badgeObj?.color || ''}`}
+                              style={badgeObj ? getBadgeStyle(badgeObj as any) : {}}
+                            >
+                              {badgeObj?.label || p.badge}
                             </span>
                           ) : <span className="text-gray-300 text-xs">- Ninguna -</span>}
                         </td>
@@ -322,12 +333,14 @@ export default function AdminBadges() {
 
               <div>
                 <label className="form-label">Vista Previa</label>
-                <div className="flex justify-center py-4">
+                <div className="flex justify-center py-4 bg-gray-100 rounded-lg">
                   <span 
-                    className="px-4 py-2 rounded-lg text-sm font-bold"
-                    style={{ backgroundColor: newBadgeBg, color: newBadgeText }}
+                    className="px-4 py-2 rounded-lg text-sm font-bold shadow-sm"
+                    style={{ 
+                      ...getBadgeStyle({ custom_image: newBadgeImage, bg_color: newBadgeBg, text_color: newBadgeText } as any)
+                    }}
                   >
-                    {newBadgeLabel || 'TEXTO'}
+                    {newBadgeLabel || (newBadgeImage ? '' : 'TEXTO')}
                   </span>
                 </div>
               </div>
