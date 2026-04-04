@@ -75,8 +75,12 @@ serve(async (req: Request) => {
 
     // 3. GATEWAY LOGIC (dLocal Go / PayPal)
     if (provider === 'dlocal') {
-      const apiKey = config.payments_dlocal_go_secret_key || config.payments_dlocal_go_api_key
-      const response = await fetch("https://api.dlocalgo.com/v1/checkouts", {
+      const apiKey = (config.payments_dlocal_go_secret_key || config.payments_dlocal_go_api_key || '').trim()
+      if (!apiKey) throw new Error('dLocal Go API key not configured. Set it in Admin > Settings > Payments.')
+      
+      const origin = req.headers.get("origin") || 'https://collectibles-ecommerce.vercel.app'
+      
+      const response = await fetch("https://api.dlocalgo.com/v1/payments", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
         body: JSON.stringify({
@@ -84,8 +88,8 @@ serve(async (req: Request) => {
           currency: currency,
           country: "UY", 
           order_id: orderId,
-          success_url: `${req.headers.get("origin")}/checkout/success?order_id=${orderId}&provider=dlocal`,
-          back_url: `${req.headers.get("origin")}/checkout`,
+          success_url: `${origin}/checkout/success?order_id=${orderId}&provider=dlocal`,
+          back_url: `${origin}/checkout`,
           notification_url: `${supabaseUrl}/functions/v1/payment-webhook?provider=dlocal`,
           payer: { name: customer.name, email: customer.email }
         })
@@ -94,7 +98,7 @@ serve(async (req: Request) => {
       const result = await response.json()
       if (!response.ok) throw new Error(`dLocal Error: ${JSON.stringify(result)}`)
       
-      return new Response(JSON.stringify({ checkout_url: result.checkout_url || result.redirect_url }), {
+      return new Response(JSON.stringify({ checkout_url: result.redirect_url || result.checkout_url }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       })
     }
