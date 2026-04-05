@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase';
 import { analytics } from '../lib/analytics';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import { createCheckoutSession } from '../lib/payments';
+import { URUGUAY_LOCATIONS, DEPARTAMENTOS } from '../utils/uruguayLocations';
 
 export default function Checkout() {
   const { items, total, clearCart } = useCartContext();
@@ -161,8 +162,6 @@ export default function Checkout() {
                         onSelect={(details) => setForm(f => ({
                            ...f,
                            street: details.street || f.street,
-                           city: details.city || f.city,
-                           department: details.department || f.department,
                            postal_code: details.postal_code || f.postal_code,
                            country: details.country || f.country
                         }))}
@@ -170,12 +169,44 @@ export default function Checkout() {
                     </div>
                     <div><label className="form-label">Apartamento / Timbre (opcional)</label><input className="form-input" value={form.apartment} onChange={e => setForm({...form, apartment: e.target.value})} /></div>
                     <div className="grid grid-cols-2 gap-4">
-                      <div><label className="form-label">Ciudad *</label><input required={shippingMethod === 'delivery'} className="form-input" value={form.city} onChange={e => setForm({...form, city: e.target.value})} /></div>
-                      <div><label className="form-label">Departamento / Estado</label><input className="form-input" value={form.department} onChange={e => setForm({...form, department: e.target.value})} /></div>
+                      <div>
+                        <label className="form-label">Departamento *</label>
+                        <select 
+                          required={shippingMethod === 'delivery'} 
+                          className="form-input" 
+                          value={form.department} 
+                          onChange={e => setForm({...form, department: e.target.value, city: ''})}
+                        >
+                          <option value="">Selecciona un departamento...</option>
+                          {DEPARTAMENTOS.map(dep => (
+                            <option key={dep} value={dep}>{dep}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="form-label">Localidad / Barrio *</label>
+                        <select 
+                          required={shippingMethod === 'delivery'} 
+                          className="form-input" 
+                          value={form.city} 
+                          onChange={e => setForm({...form, city: e.target.value})}
+                          disabled={!form.department}
+                        >
+                          <option value="">Selecciona una localidad...</option>
+                          {form.department && URUGUAY_LOCATIONS[form.department]?.map(loc => (
+                            <option key={loc} value={loc}>{loc}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div><label className="form-label">Código Postal</label><input className="form-input" value={form.postal_code} onChange={e => setForm({...form, postal_code: e.target.value})} /></div>
-                      <div><label className="form-label">País</label><input className="form-input" value={form.country} onChange={e => setForm({...form, country: e.target.value})} /></div>
+                      <div>
+                        <label className="form-label">País</label>
+                        <select className="form-input" value={form.country} onChange={e => setForm({...form, country: e.target.value})}>
+                          <option value="Uruguay">Uruguay</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
                 )}
