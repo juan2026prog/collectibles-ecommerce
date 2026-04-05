@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabase';
 import { analytics } from '../lib/analytics';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import { createCheckoutSession } from '../lib/payments';
-import { URUGUAY_LOCATIONS, DEPARTAMENTOS } from '../utils/uruguayLocations';
+import { URUGUAY_LOCATIONS, DEPARTAMENTOS, calculateShipping } from '../utils/uruguayLocations';
 
 export default function Checkout() {
   const { items, total, clearCart } = useCartContext();
@@ -21,7 +21,7 @@ export default function Checkout() {
     street: '', apartment: '', city: '', department: '', postal_code: '', country: 'Uruguay',
   });
 
-  const shipping = shippingMethod === 'pickup' ? 0 : (total >= 4000 ? 0 : 350);
+  const shipping = shippingMethod === 'pickup' ? 0 : calculateShipping(form.city, form.department, total);
   const grandTotal = total + shipping;
 
   useEffect(() => {
