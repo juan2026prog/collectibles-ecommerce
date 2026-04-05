@@ -375,8 +375,13 @@ export default function AdminSettings() {
                    </div>
                  </div>
                  <div>
-                   <label className="block text-sm font-bold text-gray-700 mb-1">Inyecciones en &lt;head&gt; (Scripts, Píxeles)</label>
+                   <label className="block text-sm font-bold text-gray-700 mb-1">Inyecciones en &lt;head&gt; (Scripts Personalizados)</label>
                    <textarea rows={3} className="form-input font-mono text-xs w-full" placeholder="<!-- Meta tags o scripts -->" value={settings['appearance_head_code'] || ''} onChange={e => setSettings({ ...settings, appearance_head_code: e.target.value })} onBlur={() => saveSetting('appearance_head_code', settings['appearance_head_code'] || '')} />
+                 </div>
+                 <div>
+                   <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-2">Meta Ads Pixel ID <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-[10px] uppercase font-black">Marketing</span></label>
+                   <input className="form-input font-mono text-sm w-full" placeholder="1234567890123456" value={settings['meta_pixel_id'] || ''} onChange={e => setSettings({ ...settings, meta_pixel_id: e.target.value })} onBlur={() => saveSetting('meta_pixel_id', settings['meta_pixel_id'] || '')} />
+                   <p className="text-xs text-gray-500 mt-1">Ingresa únicamente los números del Pixel. Nosotros inyectaremos todo el código oficial de seguimiento (PageViews, View Content, y AddToCart).</p>
                  </div>
                </div>
             </div>
@@ -608,12 +613,12 @@ export default function AdminSettings() {
            
            <div className="space-y-4">
              {[
-                { key: 'instagram', label: 'Instagram', placeholder: 'https://instagram.com/tutienda' },
-                { key: 'facebook', label: 'Facebook', placeholder: 'https://facebook.com/tutienda' },
-                { key: 'tiktok', label: 'TikTok', placeholder: 'https://tiktok.com/@tutienda' },
-                { key: 'whatsapp', label: 'WhatsApp', placeholder: 'https://wa.me/59800000000' },
-                { key: 'youtube', label: 'YouTube', placeholder: 'https://youtube.com/c/tutienda' },
-                { key: 'x', label: 'X (Twitter)', placeholder: 'https://x.com/tutienda' }
+                { key: 'instagram', label: 'Instagram', prefix: 'instagram.com/', placeholder: 'usuario' },
+                { key: 'facebook', label: 'Facebook', prefix: 'facebook.com/', placeholder: 'usuario' },
+                { key: 'tiktok', label: 'TikTok', prefix: 'tiktok.com/@', placeholder: 'usuario' },
+                { key: 'whatsapp', label: 'WhatsApp', prefix: 'wa.me/', placeholder: '59800000000' },
+                { key: 'youtube', label: 'YouTube', prefix: 'youtube.com/c/', placeholder: 'usuario' },
+                { key: 'x', label: 'X (Twitter)', prefix: 'x.com/', placeholder: 'usuario' }
              ].map(social => {
                 const isActive = settings[`social_${social.key}_enabled`] === 'true';
                 const url = settings[`social_${social.key}_url`] || '';
@@ -632,19 +637,19 @@ export default function AdminSettings() {
                       <div className="w-32 flex-shrink-0">
                          <span className={`font-bold ${isActive ? 'text-indigo-900' : 'text-gray-500'}`}>{social.label}</span>
                       </div>
-                      <div className="flex-1 flex items-center gap-2 relative">
-                         <div className="absolute left-3 text-gray-400">
-                           <LinkIcon className="w-4 h-4" />
-                         </div>
-                         <input 
-                           disabled={!isActive}
-                           className={`form-input w-full pl-9 ${!isActive ? 'opacity-50 bg-gray-100 cursor-not-allowed text-gray-400' : 'bg-white'}`}
-                           placeholder={social.placeholder}
-                           value={url}
-                           onChange={e => setSettings({ ...settings, [`social_${social.key}_url`]: e.target.value })}
-                           onBlur={() => saveSetting(`social_${social.key}_url`, url)}
-                         />
-                      </div>
+                       <div className={`flex items-center w-full bg-white border border-gray-200 rounded-lg overflow-hidden ${!isActive ? 'opacity-50 cursor-not-allowed bg-gray-100' : ''}`}>
+                           <div className="bg-gray-50 px-3 py-2 border-r border-gray-200 text-xs font-mono text-gray-500 flex-shrink-0">
+                               https://{social.prefix}
+                           </div>
+                           <input 
+                               disabled={!isActive}
+                               className={`flex-1 min-w-0 border-none outline-none focus:ring-0 text-sm px-3 py-2 bg-transparent`}
+                               placeholder={social.placeholder}
+                               value={url}
+                               onChange={e => setSettings({ ...settings, [`social_${social.key}_url`]: e.target.value })}
+                               onBlur={() => saveSetting(`social_${social.key}_url`, url)}
+                           />
+                       </div>
                     </div>
                   </div>
                 );

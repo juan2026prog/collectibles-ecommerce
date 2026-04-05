@@ -123,6 +123,27 @@ export default function StorefrontLayout() {
           document.head.appendChild(newScript);
         });
       }
+
+      // Meta Pixel Base
+      if (s['meta_pixel_id'] && localStorage.getItem('cookieSettings') === 'accepted') {
+        if (!document.getElementById('meta-pixel-script')) {
+          const newScript = document.createElement('script');
+          newScript.id = 'meta-pixel-script';
+          newScript.text = `
+            !function(f,b,e,v,n,t,s)
+            {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+            n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+            if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+            n.queue=[];t=b.createElement(e);t.async=!0;
+            t.src=v;s=b.getElementsByTagName(e)[0];
+            s.parentNode.insertBefore(t,s)}(window, document,'script',
+            'https://connect.facebook.net/en_US/fbevents.js');
+            fbq('init', '${s['meta_pixel_id']}');
+            fbq('track', 'PageView');
+          `;
+          document.head.appendChild(newScript);
+        }
+      }
     });
   }, []);
 
@@ -280,8 +301,7 @@ export default function StorefrontLayout() {
               >
                 <Search className="h-5 w-5" />
               </button>
-              {/* Locale Switcher — desktop */}
-              <LocaleSwitcher compact className="hidden lg:flex" />
+
 
               {user ? (
                 <div className="relative" ref={userMenuRef}>
@@ -622,12 +642,12 @@ export default function StorefrontLayout() {
                 {settings['store_tagline'] || 'Your destination for the best collectibles, figures, toys, and more.'}
               </p>
               <div className="flex gap-3">
-                {settings['social_instagram_enabled'] === 'true' && <a href={settings['social_instagram_url']} target="_blank" rel="noreferrer" className="p-2 bg-gray-800 hover:bg-primary-600 rounded-full transition-colors"><InstagramIcon /></a>}
-                {settings['social_facebook_enabled'] === 'true' && <a href={settings['social_facebook_url']} target="_blank" rel="noreferrer" className="p-2 bg-gray-800 hover:bg-primary-600 rounded-full transition-colors"><FacebookIcon /></a>}
-                {settings['social_x_enabled'] === 'true' && <a href={settings['social_x_url']} target="_blank" rel="noreferrer" className="p-2 bg-gray-800 hover:bg-primary-600 rounded-full transition-colors"><TwitterIcon /></a>}
-                {settings['social_tiktok_enabled'] === 'true' && <a href={settings['social_tiktok_url']} target="_blank" rel="noreferrer" className="p-2 bg-gray-800 hover:bg-primary-600 rounded-full transition-colors"><TiktokIcon /></a>}
-                {settings['social_whatsapp_enabled'] === 'true' && <a href={settings['social_whatsapp_url']} target="_blank" rel="noreferrer" className="p-2 bg-gray-800 hover:bg-green-600 rounded-full transition-colors"><WhatsappIcon /></a>}
-                {settings['social_youtube_enabled'] === 'true' && <a href={settings['social_youtube_url']} target="_blank" rel="noreferrer" className="p-2 bg-gray-800 hover:bg-red-600 rounded-full transition-colors"><YoutubeIcon /></a>}
+                {settings['social_instagram_enabled'] === 'true' && <a href={`https://instagram.com/${settings['social_instagram_url']}`} target="_blank" rel="noreferrer" className="p-2 bg-gray-800 hover:bg-primary-600 rounded-full transition-colors"><InstagramIcon /></a>}
+                {settings['social_facebook_enabled'] === 'true' && <a href={`https://facebook.com/${settings['social_facebook_url']}`} target="_blank" rel="noreferrer" className="p-2 bg-gray-800 hover:bg-primary-600 rounded-full transition-colors"><FacebookIcon /></a>}
+                {settings['social_x_enabled'] === 'true' && <a href={`https://x.com/${settings['social_x_url']}`} target="_blank" rel="noreferrer" className="p-2 bg-gray-800 hover:bg-primary-600 rounded-full transition-colors"><TwitterIcon /></a>}
+                {settings['social_tiktok_enabled'] === 'true' && <a href={`https://tiktok.com/@${settings['social_tiktok_url']}`} target="_blank" rel="noreferrer" className="p-2 bg-gray-800 hover:bg-primary-600 rounded-full transition-colors"><TiktokIcon /></a>}
+                {settings['social_whatsapp_enabled'] === 'true' && <a href={`https://wa.me/${settings['social_whatsapp_url']}`} target="_blank" rel="noreferrer" className="p-2 bg-gray-800 hover:bg-green-600 rounded-full transition-colors"><WhatsappIcon /></a>}
+                {settings['social_youtube_enabled'] === 'true' && <a href={`https://youtube.com/c/${settings['social_youtube_url']}`} target="_blank" rel="noreferrer" className="p-2 bg-gray-800 hover:bg-red-600 rounded-full transition-colors"><YoutubeIcon /></a>}
               </div>
             </div>
 
