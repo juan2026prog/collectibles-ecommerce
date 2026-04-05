@@ -144,7 +144,7 @@ export default function AdminProducts() {
     setLoading(true);
     const { data } = await supabase
       .from('products')
-      .select('*, category:categories(id, name), brand:brands(id, name), images:product_images(id, url), variants:product_variants(id, inventory_count, sku)')
+      .select('*, product_categories(categories(id, name)), brand:brands(id, name), images:product_images(id, url), variants:product_variants(id, inventory_count, sku)')
       .order('created_at', { ascending: false });
     setProducts(data || []);
     setLoading(false);
@@ -317,6 +317,17 @@ export default function AdminProducts() {
         if (error) throw error;
         if (value) {
           await supabase.from('product_categories').insert({ product_id: id, category_id: value });
+          await supabase.from('products').update({ category_id: value }).eq('id', id);
+        } else {
+          await supabase.from('products').update({ category_id: null }).eq('id', id);
+        }
+      } else if (field === 'stock') {
+        const { data: vars } = await supabase.from('product_variants').select('id').eq('product_id', id).limit(1);
+        if (vars && vars.length > 0) {
+          const { error } = await supabase.from('product_variants').update({ inventory_count: parseInt(value) || 0 }).eq('id', vars[0].id);
+          if (error) throw error;
+        } else {
+          await supabase.from('product_variants').insert({ product_id: id, sku: `SKU-${Date.now()}`, name: 'Standard', inventory_count: parseInt(value) || 0 });
         }
       } else {
         updates[field] = value;
@@ -398,14 +409,24 @@ export default function AdminProducts() {
                <tbody className="divide-y divide-gray-100">
                  {loading ? (
                     <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400 animate-pulse">Cargando catálogo...</td></tr>
-                 ) : products.filter(p => p.title.toLowerCase().includes(search.toLowerCase())).map(p => (
-                    <tr key={p.id} className="hover:bg-blue-50/20 group transition-all cursor-pointer" onClick={() => !inlineEdit && openEdit(p)}>
+                 ) : products.filter(p => p.title.toLowerCase().includes(search.toLowerCase())).map((p: any) => {
+                    const primaryCat = p.product_categories?.[0]?.categories;
+                    return (
+                    <tr key={p.id} className="hover:bg-blue-50/20 group transition-all" title="Haz clic en cualquier campo para editarlo en línea">
                       <td className="px-6 py-4"><input type="checkbox" className="rounded border-gray-300" onClick={e => e.stopPropagation()} /></td>
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-4 cursor-pointer hover:bg-white transition-colors rounded" onClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'title'}); setInlineValue(p.title); }}>
                          <div className="flex items-center gap-4">
                             <img src={getProductImage(p)} alt="" className="w-12 h-12 rounded-lg object-cover border border-gray-100 shadow-sm" />
                             <div>
-                               <p className="font-bold text-dark-900 group-hover:text-blue-600 transition-colors">{p.title}</p>
+                               {inlineEdit?.id === p.id && inlineEdit.field === 'title' ? (
+                                  <input autoFocus type="text" className="w-48 p-1 border rounded text-xs font-bold text-dark-900" 
+                                    value={inlineValue} onChange={e => setInlineValue(e.target.value)}
+                                    onBlur={() => handleInlineUpdate(p.id, 'title', inlineValue)}
+                                    onKeyDown={e => e.key === 'Enter' && handleInlineUpdate(p.id, 'title', inlineValue)}
+                                    onClick={e => e.stopPropagation()} />
+                               ) : (
+                                  <p className="font-bold text-dark-900 group-hover:text-blue-600 transition-colors">{p.title}</p>
+                               )}
                                <div className="flex gap-1 items-center mt-0.5">
                                   <span className="text-[9px] font-mono text-gray-400 uppercase">{p.variants?.[0]?.sku || '-'}</span>
                                   {p.ml_item_id && <div className="w-6 h-3 bg-yellow-400 rounded-sm text-[8px] flex items-center justify-center font-bold text-blue-900 ml-1">ML</div>}
@@ -413,22 +434,14 @@ export default function AdminProducts() {
                             </div>
                          </div>
                       </td>
-                      <td className="px-6 py-4 font-black text-dark-800 text-sm whitespace-nowrap" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'base_price'}); setInlineValue(p.base_price); }}>
+                      <td className="px-6 py-4 font-black text-dark-800 text-sm whitespace-nowrap cursor-pointer hover:bg-white transition-colors rounded" onClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'base_price'}); setInlineValue(p.base_price); }}>
                         {inlineEdit?.id === p.id && inlineEdit.field === 'base_price' ? (
-                          <input 
-                            autoFocus type="number" 
-                            className="w-24 p-1 border rounded text-xs font-bold" 
-                            value={inlineValue} 
-                            onChange={e => setInlineValue(e.target.value)}
-                            onBlur={() => handleInlineUpdate(p.id, 'base_price', inlineValue)}
-                            onKeyDown={e => e.key === 'Enter' && handleInlineUpdate(p.id, 'base_price', inlineValue)}
-                            onClick={e => e.stopPropagation()}
-                          />
+                          <input autoFocus type="number" className="w-24 p-1 border rounded text-xs font-bold" value={inlineValue} onChange={e => setInlineValue(e.target.value)} onBlur={() => handleInlineUpdate(p.id, 'base_price', inlineValue)} onKeyDown={e => e.key === 'Enter' && handleInlineUpdate(p.id, 'base_price', inlineValue)} onClick={e => e.stopPropagation()} />
                         ) : (
                           <span>UYU {p.base_price.toLocaleString()}</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-xs font-bold text-gray-500" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'category_id'}); setInlineValue(p.category_id); }}>
+                      <td className="px-6 py-4 text-xs font-bold text-gray-500 cursor-pointer hover:bg-white transition-colors rounded" onClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'category_id'}); setInlineValue(primaryCat?.id || ''); }}>
                         {inlineEdit?.id === p.id && inlineEdit.field === 'category_id' ? (
                           <select 
                             autoFocus
@@ -438,41 +451,41 @@ export default function AdminProducts() {
                             onBlur={() => setInlineEdit(null)}
                             onClick={e => e.stopPropagation()}
                           >
-                            <option value="">� Sin Categoría �</option>
+                            <option value="">— Sin Categoría —</option>
                             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                           </select>
                         ) : (
-                          p.category?.name || '�'
+                          primaryCat?.name || '—'
                         )}
                       </td>
-                      <td className="px-6 py-4">
-                         <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tight">
-                            {p.variants?.[0]?.inventory_count || 0} u.
-                         </span>
+                      <td className="px-6 py-4 cursor-pointer hover:bg-white transition-colors rounded" onClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'stock'}); setInlineValue(p.variants?.[0]?.inventory_count || 0); }}>
+                         {inlineEdit?.id === p.id && inlineEdit.field === 'stock' ? (
+                            <input autoFocus type="number" className="w-16 p-1 border rounded text-xs font-bold text-center" value={inlineValue} onChange={e => setInlineValue(e.target.value)} onBlur={() => handleInlineUpdate(p.id, 'stock', inlineValue)} onKeyDown={e => e.key === 'Enter' && handleInlineUpdate(p.id, 'stock', inlineValue)} onClick={e => e.stopPropagation()} />
+                         ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tight text-blue-700 bg-blue-50 border border-blue-100">
+                               {p.variants?.[0]?.inventory_count || 0} u.
+                            </span>
+                         )}
                       </td>
-                      <td className="px-6 py-4" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'status'}); setInlineValue(p.status); }}>
+                      <td className="px-6 py-4 cursor-pointer hover:bg-white transition-colors rounded" onClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'status'}); setInlineValue(p.status); }}>
                         {inlineEdit?.id === p.id && inlineEdit.field === 'status' ? (
-                           <select 
-                             autoFocus
-                             className="bg-white border rounded text-[10px] p-1 font-bold outline-none"
-                             value={inlineValue}
-                             onChange={e => { setInlineValue(e.target.value); handleInlineUpdate(p.id, 'status', e.target.value); }}
-                             onBlur={() => setInlineEdit(null)}
-                             onClick={e => e.stopPropagation()}
-                           >
+                           <select autoFocus className="bg-white border rounded text-[10px] p-1 font-bold outline-none" value={inlineValue} onChange={e => { setInlineValue(e.target.value); handleInlineUpdate(p.id, 'status', e.target.value); }} onBlur={() => setInlineEdit(null)} onClick={e => e.stopPropagation()}>
                              <option value="published">Visible</option>
                              <option value="draft">Borrador</option>
                              <option value="archived">Archivado</option>
                            </select>
                         ) : (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${p.status === 'published' ? 'text-green-700 bg-green-50' : 'text-gray-500 bg-gray-100'}`}>
                              {p.status === 'published' ? 'Visible' : 'Oculto'}
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-right text-xs font-medium text-gray-400">{new Date(p.created_at).toLocaleDateString()}</td>
+                      <td className="px-6 py-4 text-right text-xs font-medium text-gray-400">
+                        <button onClick={(e) => { e.stopPropagation(); openEdit(p); }} className="text-blue-500 hover:underline mr-3 text-xs font-bold">Detalles</button>
+                        {new Date(p.created_at).toLocaleDateString()}
+                      </td>
                     </tr>
-                 ))}
+                 )})}
                </tbody>
             </table>
          </div>

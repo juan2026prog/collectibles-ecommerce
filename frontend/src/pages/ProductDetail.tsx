@@ -6,6 +6,7 @@ import { useCartContext } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { ProductBadge } from '../components/ProductBadge';
 import { analytics } from '../lib/analytics';
+import SEO from '../components/SEO';
 
 export default function ProductDetail() {
   const { slug } = useParams();
@@ -103,8 +104,41 @@ export default function ProductDetail() {
     });
   }
 
+  const seoTitle = product.seo_title || `${product.title} - Comprar Online`;
+  const seoDescription = product.seo_description || product.short_description || product.title;
+  const productSchema = {
+    "@context": "https://schema.org/",
+    "@type": "Product",
+    "name": seoTitle,
+    "image": [
+      displayImage
+     ],
+    "description": seoDescription,
+    "sku": mainVariant?.sku,
+    "brand": {
+      "@type": "Brand",
+      "name": product.brand?.name || "Generic"
+    },
+    "offers": {
+      "@type": "Offer",
+      "url": window.location.href,
+      "priceCurrency": "UYU",
+      "price": finalPrice,
+      "availability": stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+      "itemCondition": "https://schema.org/NewCondition"
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-6 py-6">
+      <SEO 
+        title={seoTitle}
+        description={seoDescription}
+        image={displayImage}
+        type="product"
+        schema={productSchema}
+      />
+
       {/* Breadcrumbs */}
       <nav className="flex items-center text-sm text-gray-500 mb-6 flex-wrap">
         <Link to="/" className="hover:text-primary-600">Home</Link>

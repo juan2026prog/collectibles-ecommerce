@@ -109,6 +109,7 @@ export default function AdminSeo() {
         <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5 max-w-2xl shadow-sm">
           <h3 className="font-bold text-lg border-b pb-3 flex items-center gap-2"><Globe className="w-5 h-5 text-blue-600" /> Metadatos Globales</h3>
           {[
+            { key: 'ai_seo_enabled', label: 'Habilitar Auto-Generación AI (Gemini) en Productos Nuevos', placeholder: 'true o false (por defecto: false)', type: 'boolean' },
             { key: 'seo_site_title', label: 'Título del Sitio (Title Tag)', placeholder: 'Collectibles - Premium Collectibles Store' },
             { key: 'seo_site_description', label: 'Descripción del Sitio (Meta Description)', placeholder: 'Tienda de coleccionables premium. Funko Pop, figuras, manga y más.', textarea: true },
             { key: 'seo_site_url', label: 'URL Canónica del Sitio', placeholder: 'https://collectibles.uy' },
@@ -118,7 +119,15 @@ export default function AdminSeo() {
           ].map(field => (
             <div key={field.key}>
               <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1">{field.label}</label>
-              {field.textarea ? (
+              {field.type === 'boolean' ? (
+                 <select className="form-input w-full text-sm font-bold"
+                   value={settings[field.key] || 'false'}
+                   onChange={e => setSettings({ ...settings, [field.key]: e.target.value })}
+                   onBlur={e => saveSetting(field.key, e.target.value)}>
+                   <option value="true">Activado (Consume API)</option>
+                   <option value="false">Desactivado (Manual)</option>
+                 </select>
+              ) : field.textarea ? (
                 <textarea rows={3} className="form-input w-full font-mono text-xs"
                   value={settings[field.key] || ''} onChange={e => setSettings({ ...settings, [field.key]: e.target.value })}
                   onBlur={() => saveSetting(field.key, settings[field.key] || '')} placeholder={field.placeholder} />
