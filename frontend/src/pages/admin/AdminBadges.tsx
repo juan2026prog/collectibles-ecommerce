@@ -17,13 +17,7 @@ export default function AdminBadges() {
   const [search, setSearch] = useState('');
   const [selectedBadge, setSelectedBadge] = useState('hot');
   const [loading, setLoading] = useState(true);
-  const [badges, setBadges] = useState<CustomBadge[]>([
-    { id: 'hot', label: 'HOT', color: 'bg-red-500 text-white', bg_color: '#ef4444', text_color: '#ffffff' },
-    { id: 'new', label: 'NEW', color: 'bg-green-500 text-white', bg_color: '#22c55e', text_color: '#ffffff' },
-    { id: 'sale', label: 'SALE', color: 'bg-blue-500 text-white', bg_color: '#3b82f6', text_color: '#ffffff' },
-    { id: 'preorder', label: 'PRE-ORDER', color: 'bg-orange-500 text-white', bg_color: '#f97316', text_color: '#ffffff' },
-    { id: 'soldout', label: 'SOLD OUT', color: 'bg-gray-500 text-white', bg_color: '#6b7280', text_color: '#ffffff' }
-  ]);
+  const [badges, setBadges] = useState<CustomBadge[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingBadge, setEditingBadge] = useState<CustomBadge | null>(null);
   const [newBadgeLabel, setNewBadgeLabel] = useState('');
@@ -43,22 +37,15 @@ export default function AdminBadges() {
 
   async function loadCustomBadges() {
     const { data } = await supabase.from('badges').select('*').order('sort_order');
-    if (data && data.length > 0) {
-      setBadges([
-        { id: 'hot', label: 'HOT', color: 'bg-red-500 text-white', bg_color: '#ef4444', text_color: '#ffffff' },
-        { id: 'new', label: 'NEW', color: 'bg-green-500 text-white', bg_color: '#22c55e', text_color: '#ffffff' },
-        { id: 'sale', label: 'SALE', color: 'bg-blue-500 text-white', bg_color: '#3b82f6', text_color: '#ffffff' },
-        { id: 'preorder', label: 'PRE-ORDER', color: 'bg-orange-500 text-white', bg_color: '#f97316', text_color: '#ffffff' },
-        { id: 'soldout', label: 'SOLD OUT', color: 'bg-gray-500 text-white', bg_color: '#6b7280', text_color: '#ffffff' },
-        ...data.map((b: any) => ({
-          id: b.id,
-          label: b.label,
-          color: '',
-          bg_color: b.bg_color || '#3b82f6',
-          text_color: b.text_color || '#ffffff',
-          custom_image: b.custom_image || null
-        }))
-      ]);
+    if (data) {
+      setBadges(data.map((b: any) => ({
+        id: b.slug || b.id,
+        label: b.label || '',
+        color: '',
+        bg_color: b.bg_color || '#3b82f6',
+        text_color: b.text_color || '#ffffff',
+        custom_image: b.custom_image || null
+      })));
     }
   }
 
