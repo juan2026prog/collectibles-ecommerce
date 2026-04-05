@@ -1,57 +1,73 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
-interface BadgeData {
+export interface BadgeData {
   id: string;
   label: string;
   bg_color: string;
   text_color: string;
   custom_image?: string;
-  color?: string; // Fallback classes for defaults
+  color?: string;
+  config?: any;
 }
 
 const DEFAULT_BADGES: Record<string, BadgeData> = {
-  hot: { id: 'hot', label: 'HOT', color: 'bg-rose-500/90 text-white', bg_color: '#ef4444', text_color: '#ffffff' },
-  new: { id: 'new', label: 'NEW', color: 'bg-emerald-500/90 text-white', bg_color: '#22c55e', text_color: '#ffffff' },
-  sale: { id: 'sale', label: 'SALE', color: 'bg-blue-500/90 text-white', bg_color: '#3b82f6', text_color: '#ffffff' },
-  preorder: { id: 'preorder', label: 'PRE-ORDER', color: 'bg-orange-500/90 text-white', bg_color: '#f97316', text_color: '#ffffff' },
-  soldout: { id: 'soldout', label: 'SOLD OUT', color: 'bg-gray-500/90 text-white', bg_color: '#6b7280', text_color: '#ffffff' }
+  hot: { id: 'hot', label: 'HOT', color: 'bg-rose-500/90 text-white', bg_color: '#ef4444', text_color: '#ffffff', config: { position: 'top-left', size: 'medium' } },
+  new: { id: 'new', label: 'NEW', color: 'bg-emerald-500/90 text-white', bg_color: '#22c55e', text_color: '#ffffff', config: { position: 'top-left', size: 'medium' } },
+  sale: { id: 'sale', label: 'SALE', color: 'bg-blue-500/90 text-white', bg_color: '#3b82f6', text_color: '#ffffff', config: { position: 'top-left', size: 'medium' } },
+  preorder: { id: 'preorder', label: 'PRE-ORDER', color: 'bg-orange-500/90 text-white', bg_color: '#f97316', text_color: '#ffffff', config: { position: 'top-left', size: 'medium' } },
+  soldout: { id: 'soldout', label: 'SOLD OUT', color: 'bg-gray-500/90 text-white', bg_color: '#6b7280', text_color: '#ffffff', config: { position: 'top-left', size: 'medium' } }
 };
 
 let cachedBadges: Record<string, BadgeData> | null = null;
 let badgesPromise: Promise<Record<string, BadgeData>> | null = null;
 
+export function parseBadgeConfig(custom_image: string | undefined | null) {
+  if (!custom_image) return null;
+  if (custom_image.startsWith('{')) {
+    try {
+      return JSON.parse(custom_image);
+    } catch {
+      return { url: custom_image, position: 'top-left', size: 'medium' };
+    }
+  }
+  return { url: custom_image, position: 'top-left', size: 'medium' };
+}
+
 export function ProductBadge({ 
-  badgeId, 
+  badgeId, // can be a comma separated string now!
   compareAtPrice, 
   basePrice,
-  className = "absolute top-2 right-2 px-2 py-1 text-xs font-bold rounded-lg uppercase tracking-wider backdrop-blur-sm shadow-lg"
+  className = "" // No longer needed for absolute positioning if we use inset-0, but kept for compatibility
 }: { 
   badgeId?: string | null; 
   compareAtPrice?: number | null; 
   basePrice?: number;
-  className?: string;
+  className?: string; // We'll ignore the position classes passed from outside if doing inset-0
 }) {
-  const [badgeData, setBadgeData] = useState<BadgeData | null>(() => {
-    if (!badgeId) return null;
-    return cachedBadges?.[badgeId] || DEFAULT_BADGES[badgeId] || null;
-  });
+  const [allBadges, setAllBadges] = useState<Record<string, BadgeData>>({});
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!badgeId || DEFAULT_BADGES[badgeId]) return;
+    if (!badgeId) {
+      setLoading(false);
+      return;
+    }
 
     if (!cachedBadges) {
       if (!badgesPromise) {
         badgesPromise = supabase.from('badges').select('*').then(({ data }) => {
-          const map: Record<string, BadgeData> = {};
+          const map: Record<string, BadgeData> = { ...DEFAULT_BADGES };
           if (data) {
             data.forEach((b: any) => {
-              map[b.id] = {
-                id: b.id,
+              const id = b.slug || b.id;
+              map[id] = {
+                id,
                 label: b.label,
                 bg_color: b.bg_color,
                 text_color: b.text_color,
                 custom_image: b.custom_image,
+                config: parseBadgeConfig(b.custom_image)
               };
             });
           }
@@ -60,46 +76,82 @@ export function ProductBadge({
         });
       }
       badgesPromise.then(map => {
-        if (map[badgeId]) setBadgeData(map[badgeId]);
+        setAllBadges(map);
+        setLoading(false);
       });
     } else {
-      if (cachedBadges[badgeId]) setBadgeData(cachedBadges[badgeId]);
+      setAllBadges(cachedBadges);
+      setLoading(false);
     }
   }, [badgeId]);
 
-  if (!badgeId || !badgeData) return null;
+  if (!badgeId || loading) return null;
 
-  let label = badgeData.label;
-  if (badgeId === 'sale' && compareAtPrice && basePrice) {
-    label = `${Math.round((1 - basePrice / compareAtPrice) * 100)}% OFF`;
-  }
+  const badgeIds = badgeId.split(',').map(s => s.trim()).filter(Boolean);
+  const activeBadges = badgeIds.map(id => allBadges[id] || DEFAULT_BADGES[id]).filter(Boolean);
 
-  const hasImage = !!badgeData.custom_image;
+  if (activeBadges.length === 0) return null;
 
-  let style: React.CSSProperties = {
-    backgroundColor: badgeData.bg_color,
-    color: badgeData.text_color
+  // Filter out expired tracking
+  const now = new Date();
+  const validBadges = activeBadges.filter(b => {
+    if (!b.config) return true;
+    if (b.config.start_date && new Date(b.config.start_date) > now) return false;
+    if (b.config.end_date && new Date(b.config.end_date) < now) return false;
+    // active flag could also be respected here if available
+    return true;
+  });
+
+  if (validBadges.length === 0) return null;
+
+  const topLeft = validBadges.filter(b => (b.config?.position || 'top-left') === 'top-left');
+  const topRight = validBadges.filter(b => b.config?.position === 'top-right');
+
+  const renderBadge = (b: BadgeData, index: number) => {
+    let label = b.label || '';
+    if (b.id === 'sale' && compareAtPrice && basePrice) {
+      label = `${Math.round((1 - basePrice / compareAtPrice) * 100)}% OFF`;
+    }
+
+    const conf = b.config || {};
+    const sizeMap = {
+      small: 'w-[60px] md:w-[80px] h-auto',
+      medium: 'w-[70px] md:w-[100px] h-auto',
+      large: 'w-[80px] md:w-[120px] h-auto'
+    };
+    const sizeClass = sizeMap[(conf.size as keyof typeof sizeMap) || 'medium'];
+
+    if (conf.url) {
+      return (
+        <img 
+          key={`${b.id}-${index}`}
+          src={conf.url} 
+          alt={label || 'Badge'} 
+          className={`${sizeClass} object-contain drop-shadow-md pointer-events-none`}
+        />
+      );
+    }
+
+    // Fallback for legacy text labels without image
+    return (
+      <span 
+        key={`${b.id}-${index}`}
+        className={`px-2 py-1 text-[10px] md:text-xs font-black uppercase tracking-wider rounded-lg shadow-sm backdrop-blur-md pointer-events-none ${b.color || ''}`}
+        style={!b.color ? { backgroundColor: b.bg_color, color: b.text_color } : undefined}
+      >
+        {label}
+      </span>
+    );
   };
 
-  if (hasImage) {
-    style = {
-      backgroundImage: `url(${badgeData.custom_image})`,
-      backgroundSize: 'contain',
-      backgroundPosition: 'center',
-      backgroundRepeat: 'no-repeat',
-      backgroundColor: badgeData.bg_color || 'transparent',
-      color: badgeData.text_color,
-      minHeight: label ? 'auto' : '24px',
-      minWidth: label ? 'auto' : '24px'
-    };
-  }
-
   return (
-    <span 
-      className={`${className} ${badgeData.color || ''}`}
-      style={!badgeData.color ? style : undefined}
-    >
-      {label}
-    </span>
+    <div className="absolute inset-0 p-3 pointer-events-none flex justify-between items-start z-10 overflow-hidden rounded-inherit">
+      <div className="flex flex-col gap-1.5 pointer-events-auto">
+        {topLeft.map(renderBadge)}
+      </div>
+      <div className="flex flex-col gap-1.5 pointer-events-auto items-end">
+        {topRight.map(renderBadge)}
+      </div>
+    </div>
   );
 }

@@ -1,32 +1,40 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { ShieldCheck, Tags, Search, Check, Plus, Trash2, Upload, Image as ImageIcon } from 'lucide-react';
+import { ShieldCheck, Search, Plus, Trash2, Upload, Image as ImageIcon } from 'lucide-react';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
+
+interface BadgeConfig {
+  url: string;
+  position: 'top-left' | 'top-right';
+  size: 'small' | 'medium' | 'large';
+  start_date?: string;
+  end_date?: string;
+}
 
 interface CustomBadge {
   id: string;
   label: string;
-  color: string;
-  bg_color: string;
-  text_color: string;
-  custom_image?: string;
+  custom_image: string | null;
+  config?: BadgeConfig;
 }
 
 export default function AdminBadges() {
   const [products, setProducts] = useState<any[]>([]);
   const [search, setSearch] = useState('');
-  const [selectedBadge, setSelectedBadge] = useState('hot');
+  const [selectedBadge, setSelectedBadge] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [badges, setBadges] = useState<CustomBadge[]>([]);
+  
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editingBadge, setEditingBadge] = useState<CustomBadge | null>(null);
+  
   const [newBadgeLabel, setNewBadgeLabel] = useState('');
-  const [newBadgeBg, setNewBadgeBg] = useState('#3b82f6');
-  const [newBadgeText, setNewBadgeText] = useState('#ffffff');
   const [newBadgeImage, setNewBadgeImage] = useState('');
-  const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [newBadgePosition, setNewBadgePosition] = useState<'top-left' | 'top-right'>('top-left');
+  const [newBadgeSize, setNewBadgeSize] = useState<'small' | 'medium' | 'large'>('medium');
+  const [newBadgeStartDate, setNewBadgeStartDate] = useState('');
+  const [newBadgeEndDate, setNewBadgeEndDate] = useState('');
 
-  const BADGES = badges;
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
 
   async function fetchProducts() {
     setLoading(true);
@@ -38,92 +46,101 @@ export default function AdminBadges() {
   async function loadCustomBadges() {
     const { data } = await supabase.from('badges').select('*').order('sort_order');
     if (data) {
-      setBadges(data.map((b: any) => ({
-        id: b.slug || b.id,
-        label: b.label || '',
-        color: '',
-        bg_color: b.bg_color || '#3b82f6',
-        text_color: b.text_color || '#ffffff',
-        custom_image: b.custom_image || null
-      })));
+      setBadges(data.map((b: any) => {
+        let config;
+        try { config = JSON.parse(b.custom_image || '{}'); } catch { config = { url: b.custom_image }; }
+        return {
+          id: b.slug || b.id,
+          label: b.label || 'Cocarda Visual',
+          custom_image: b.custom_image,
+          config
+        };
+      }));
     }
   }
 
   useEffect(() => { fetchProducts(); loadCustomBadges(); }, []);
 
-  async function fetchProducts() {
-    setLoading(true);
-    const { data } = await supabase.from('products').select('id, title, badge, category:categories(name)').order('title');
-    setProducts(data || []);
-    setLoading(false);
+  function getProductBadges(badgeString: string | null): string[] {
+    if (!badgeString) return [];
+    return badgeString.split(',').map(s => s.trim()).filter(Boolean);
   }
 
-  async function handleAssignBadge(productId: string, badgeValue: string | null) {
-    await supabase.from('products').update({ badge: badgeValue }).eq('id', productId);
+  async function handleToggleBadge(productId: string, currentBadges: string | null, badgeToToggle: string) {
+    let list = getProductBadges(currentBadges);
+    if (list.includes(badgeToToggle)) {
+      list = list.filter(b => b !== badgeToToggle);
+    } else {
+      if (list.length >= 3) return alert('Un producto puede tener un máximo de 3 cocardas.');
+      list.push(badgeToToggle);
+    }
+    await supabase.from('products').update({ badge: list.join(',') || null }).eq('id', productId);
     fetchProducts();
   }
 
   async function handleMassAssign() {
-    if (!confirm(`¿Asignar la cocarda [${selectedBadge.toUpperCase()}] a todos los productos filtrados?`)) return;
-    const filterIds = filteredProducts.map(p => p.id);
-    await supabase.from('products').update({ badge: selectedBadge }).in('id', filterIds);
+    if (!selectedBadge) return alert('Selecciona una cocarda primero');
+    if (!confirm(`¿Asignar esta cocarda a todos los productos filtrados? Los productos que ya tengan 3 cocardas se ignorarán si no la tienen.`)) return;
+    
+    for (const p of filteredProducts) {
+      let list = getProductBadges(p.badge);
+      if (!list.includes(selectedBadge) && list.length < 3) {
+        list.push(selectedBadge);
+        await supabase.from('products').update({ badge: list.join(',') }).eq('id', p.id);
+      }
+    }
     fetchProducts();
   }
 
   async function handleMassClear() {
-    if (!confirm(`¿Quitar cocardas a todos los productos filtrados?`)) return;
-    const filterIds = filteredProducts.map(p => p.id);
-    await supabase.from('products').update({ badge: null }).in('id', filterIds);
+    if (!selectedBadge) return alert('Selecciona una cocarda primero para quitarla');
+    if (!confirm(`¿Quitar la cocarda seleccionada de todos los productos filtrados?`)) return;
+    
+    for (const p of filteredProducts) {
+      let list = getProductBadges(p.badge);
+      if (list.includes(selectedBadge)) {
+        list = list.filter(b => b !== selectedBadge);
+        await supabase.from('products').update({ badge: list.join(',') || null }).eq('id', p.id);
+      }
+    }
     fetchProducts();
   }
 
   async function handleCreateBadge() {
-    if (!newBadgeLabel.trim() && !newBadgeImage) return alert('Debes incluir texto o una imagen personalizada.');
+    if (!newBadgeImage) return alert('Debes seleccionar una imagen PNG para la cocarda.');
+    if (!newBadgeLabel.trim()) return alert('Debes dar un nombre interno a esta cocarda.');
     
-    const newBadge: CustomBadge = {
-      id: `custom_${Date.now()}`,
-      label: newBadgeLabel.toUpperCase(),
-      color: '',
-      bg_color: newBadgeBg,
-      text_color: newBadgeText,
-      custom_image: newBadgeImage || undefined
+    const config: BadgeConfig = {
+      url: newBadgeImage,
+      position: newBadgePosition,
+      size: newBadgeSize,
+      start_date: newBadgeStartDate || undefined,
+      end_date: newBadgeEndDate || undefined
     };
 
     await supabase.from('badges').insert({
-      label: newBadge.label,
-      bg_color: newBadge.bg_color,
-      text_color: newBadge.text_color,
-      custom_image: newBadge.custom_image || null,
+      label: newBadgeLabel.toUpperCase(),
+      bg_color: 'transparent',
+      text_color: '#ffffff',
+      custom_image: JSON.stringify(config),
       is_active: true,
       sort_order: badges.length
     });
 
     setNewBadgeLabel('');
-    setNewBadgeBg('#3b82f6');
-    setNewBadgeText('#ffffff');
     setNewBadgeImage('');
+    setNewBadgePosition('top-left');
+    setNewBadgeSize('medium');
+    setNewBadgeStartDate('');
+    setNewBadgeEndDate('');
     setShowCreateModal(false);
     loadCustomBadges();
   }
 
   async function handleDeleteBadge(badgeId: string) {
-    if (!confirm('¿Eliminar esta cocarda?')) return;
-    await supabase.from('badges').delete().eq('id', badgeId);
+    if (!confirm('¿Eliminar esta cocarda de la base de datos?')) return;
+    await supabase.from('badges').delete().eq('id', badgeId).or(`slug.eq.${badgeId}`);
     loadCustomBadges();
-  }
-
-  function getBadgeStyle(badge: CustomBadge) {
-    if (badge.custom_image) {
-      return { 
-        backgroundImage: `url(${badge.custom_image})`, 
-        backgroundSize: 'contain', 
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        backgroundColor: badge.bg_color || 'transparent', 
-        color: badge.text_color 
-      };
-    }
-    return { backgroundColor: badge.bg_color, color: badge.text_color };
   }
 
   const filteredProducts = products.filter(p => 
@@ -136,9 +153,9 @@ export default function AdminBadges() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold dark:text-white flex items-center gap-2">
-            <ShieldCheck className="w-6 h-6 text-primary-600" /> Gestor de Cocardas
+            <ShieldCheck className="w-6 h-6 text-primary-600" /> Gestor de Cocardas PNG
           </h2>
-          <p className="text-sm text-gray-500 mt-1">Asigna etiquetas gráficas visuales a tus productos.</p>
+          <p className="text-sm text-gray-500 mt-1">Sube tus imágenes PNG y asígnalas. Hasta 3 por producto.</p>
         </div>
       </div>
 
@@ -154,39 +171,40 @@ export default function AdminBadges() {
                     <Plus className="w-3 h-3" /> Crear Nueva
                   </button>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {BADGES.map(b => (
+                <div className="grid grid-cols-2 gap-2">
+                  {badges.map(b => (
                     <div key={b.id} className="relative group">
                       <button 
                         onClick={() => setSelectedBadge(b.id)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition-all ${
-                          selectedBadge === b.id ? 'border-primary-500' : 'border-gray-200 hover:border-gray-300'
+                        className={`w-full p-2 rounded-lg text-xs font-bold border-2 transition-all flex flex-col items-center justify-center gap-2 h-20 ${
+                          selectedBadge === b.id ? 'border-primary-500 bg-primary-50' : 'border-gray-200 hover:border-gray-300'
                         }`}
-                        style={getBadgeStyle(b)}
                       >
-                        {/* We always render label unless it's strictly empty. If image exists, text goes on top. */}
-                        {b.label}
+                        {b.config?.url ? (
+                          <img src={b.config.url} alt={b.label} className="h-8 object-contain" />
+                        ) : (
+                          <span className="text-gray-400">{b.label}</span>
+                        )}
+                        <span className="truncate w-full text-center">{b.label}</span>
                       </button>
-                      {!['hot', 'new', 'sale', 'preorder', 'soldout'].includes(b.id) && (
-                        <button 
-                          onClick={() => handleDeleteBadge(b.id)}
-                          className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                        >
-                          <Trash2 className="w-2 h-2" />
-                        </button>
-                      )}
+                      <button 
+                        onClick={() => handleDeleteBadge(b.id)}
+                        className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer shadow-md"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
                     </div>
                   ))}
+                  {badges.length === 0 && <p className="text-xs text-gray-400 col-span-2">No hay cocardas creadas.</p>}
                 </div>
               </div>
-              <p className="text-xs text-gray-500">Aplica la cocarda a los {filteredProducts.length} productos que coinciden con tu búsqueda actual.</p>
               
-              <div className="flex flex-col gap-2 pt-2 border-t border-gray-100">
-                <button onClick={handleMassAssign} className="w-full bg-dark-900 border border-dark-900 text-white font-medium py-2 rounded-lg text-sm hover:bg-gray-800 transition-colors">
-                  Aplicar Masivamente
+              <div className="flex flex-col gap-2 pt-4 border-t border-gray-100">
+                <button onClick={handleMassAssign} disabled={!selectedBadge} className="w-full bg-dark-900 disabled:opacity-50 border border-dark-900 text-white font-medium py-2 rounded-lg text-sm hover:bg-gray-800 transition-colors">
+                  Añadir a Filtrados
                 </button>
-                <button onClick={handleMassClear} className="w-full bg-white border border-gray-300 text-gray-700 font-medium py-2 rounded-lg text-sm hover:bg-gray-50 transition-colors">
-                  Quitar Cocardas
+                <button onClick={handleMassClear} disabled={!selectedBadge} className="w-full bg-white disabled:opacity-50 border border-gray-300 text-red-600 font-medium py-2 rounded-lg text-sm hover:bg-red-50 transition-colors">
+                  Quitar de Filtrados
                 </button>
               </div>
             </div>
@@ -198,7 +216,7 @@ export default function AdminBadges() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input 
               type="text" 
-              placeholder="Buscar productos o categorías para asignar cocardas..." 
+              placeholder="Buscar productos o categorías..." 
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none shadow-sm"
@@ -211,43 +229,41 @@ export default function AdminBadges() {
                 <thead className="bg-gray-50 sticky top-0 z-10">
                   <tr className="border-b border-gray-200">
                     <th className="p-4 text-xs font-bold text-gray-500 uppercase">Producto</th>
-                    <th className="p-4 text-xs font-bold text-gray-500 uppercase">Categoría</th>
-                    <th className="p-4 text-xs font-bold text-gray-500 uppercase">Cocarda Actual</th>
-                    <th className="p-4 text-right text-xs font-bold text-gray-500 uppercase">Cambio Rápido</th>
+                    <th className="p-4 text-xs font-bold text-gray-500 uppercase">Cocardas (Max 3)</th>
+                    <th className="p-4 text-right text-xs font-bold text-gray-500 uppercase">Añadir/Quitar Seleccionada</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {loading ? (
-                    <tr><td colSpan={4} className="p-6 text-center text-gray-400">Cargando...</td></tr>
+                    <tr><td colSpan={3} className="p-6 text-center text-gray-400">Cargando...</td></tr>
                   ) : filteredProducts.map(p => {
-                    const badgeObj = BADGES.find(b => b.id === p.badge);
+                    const badgeList = getProductBadges(p.badge);
+                    const hasSelected = selectedBadge ? badgeList.includes(selectedBadge) : false;
                     return (
                       <tr key={p.id} className="hover:bg-gray-50">
                         <td className="p-4 text-sm font-semibold text-gray-900">{p.title}</td>
-                        <td className="p-4 text-sm text-gray-500">{p.category?.name || '-'}</td>
                         <td className="p-4">
-                          {p.badge ? (
-                            <span 
-                              className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider ${badgeObj?.color || ''}`}
-                              style={badgeObj ? getBadgeStyle(badgeObj as any) : {}}
-                            >
-                              {badgeObj?.label || p.badge}
-                            </span>
-                          ) : <span className="text-gray-300 text-xs">- Ninguna -</span>}
+                          <div className="flex flex-wrap gap-2">
+                            {badgeList.map(bid => {
+                              const bObj = badges.find(b => b.id === bid);
+                              if (bObj?.config?.url) return <img key={bid} src={bObj.config.url} className="h-6 object-contain" title={bObj.label} alt={bObj.label} />;
+                              return <span key={bid} className="px-2 py-0.5 bg-gray-200 text-[10px] rounded font-bold uppercase">{bObj?.label || bid}</span>;
+                            })}
+                            {badgeList.length === 0 && <span className="text-gray-300 text-xs">- Ninguna -</span>}
+                          </div>
                         </td>
                         <td className="p-4 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            {p.badge !== selectedBadge && (
-                              <button onClick={() => handleAssignBadge(p.id, selectedBadge)} title="Asignar seleccionada" className="p-1.5 bg-primary-50 text-primary-600 rounded hover:bg-primary-100">
-                                <Check className="w-4 h-4" />
-                              </button>
-                            )}
-                            {p.badge && (
-                              <button onClick={() => handleAssignBadge(p.id, null)} title="Quitar cocarda" className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded">
-                                <Tags className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
+                          <button 
+                            disabled={!selectedBadge}
+                            onClick={() => selectedBadge && handleToggleBadge(p.id, p.badge, selectedBadge)}
+                            className={`px-3 py-1.5 rounded text-xs font-bold transition-colors ${
+                              !selectedBadge ? 'bg-gray-100 text-gray-400 cursor-not-allowed' :
+                              hasSelected ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200' : 
+                              'bg-primary-50 text-primary-600 hover:bg-primary-100 border border-primary-200'
+                            }`}
+                          >
+                            {hasSelected ? 'Quitar' : 'Asignar'}
+                          </button>
                         </td>
                       </tr>
                     );
@@ -259,115 +275,98 @@ export default function AdminBadges() {
         </div>
       </div>
 
-      {/* CREATE BADGE MODAL */}
       {showCreateModal && (
         <>
           <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setShowCreateModal(false)} />
           <div className="fixed inset-y-0 right-0 w-full max-w-md bg-white z-50 shadow-2xl flex flex-col animate-slide-in-left">
             <div className="flex items-center justify-between p-6 border-b">
-              <h2 className="text-lg font-bold">Nueva Cocarda Personalizada</h2>
+              <h2 className="text-lg font-bold">Nueva Cocarda PNG</h2>
               <button onClick={() => setShowCreateModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
                 <Trash2 className="w-5 h-5" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              
+              <div className="bg-primary-50 p-4 rounded-xl border border-primary-100">
+                <h4 className="font-bold text-primary-800 text-sm mb-2">RECOMENDACIONES DE IMAGEN</h4>
+                <ul className="text-xs text-primary-700 space-y-1 list-disc list-inside">
+                  <li>Formato PNG transparente</li>
+                  <li>Tamaño recomendado: 500x500 px</li>
+                  <li>Peso máximo: 200kb</li>
+                </ul>
+              </div>
+
               <div>
-                <label className="form-label">Texto de la Cocarda *</label>
+                <label className="form-label">Nombre interno (solo para ti)</label>
                 <input 
                   className="form-input" 
                   value={newBadgeLabel} 
                   onChange={e => setNewBadgeLabel(e.target.value)}
-                  placeholder="Ej: OFERTA, DESTACADO, LIMONIADA"
+                  placeholder="Ej: OFERTA_50, VERANO_25"
                 />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="form-label">Color de Fondo</label>
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="color" 
-                      value={newBadgeBg}
-                      onChange={e => setNewBadgeBg(e.target.value)}
-                      className="w-10 h-10 rounded cursor-pointer"
-                    />
-                    <input 
-                      type="text"
-                      value={newBadgeBg}
-                      onChange={e => setNewBadgeBg(e.target.value)}
-                      className="form-input text-sm"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="form-label">Color de Texto</label>
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="color" 
-                      value={newBadgeText}
-                      onChange={e => setNewBadgeText(e.target.value)}
-                      className="w-10 h-10 rounded cursor-pointer"
-                    />
-                    <input 
-                      type="text"
-                      value={newBadgeText}
-                      onChange={e => setNewBadgeText(e.target.value)}
-                      className="form-input text-sm"
-                    />
-                  </div>
-                </div>
               </div>
 
               <div>
-                <label className="form-label">Vista Previa</label>
-                <div className="flex justify-center py-4 bg-gray-100 rounded-lg">
-                  <span 
-                    className="px-4 py-2 rounded-lg text-sm font-bold shadow-sm"
-                    style={{ 
-                      ...getBadgeStyle({ custom_image: newBadgeImage, bg_color: newBadgeBg, text_color: newBadgeText } as any)
-                    }}
-                  >
-                    {newBadgeLabel || (newBadgeImage ? '' : 'TEXTO')}
-                  </span>
-                </div>
-              </div>
-
-              <div className="border-t pt-4">
-                <label className="form-label">Opcional: Imagen Personalizada (en lugar de texto)</label>
-                <p className="text-xs text-gray-500 mb-2">Tamaño recomendado: 128x128px, PNG con fondo transparente</p>
+                <label className="form-label">Archivo de imagen PNG (Obligatorio)</label>
                 <div className="flex gap-2">
                   <input 
                     className="form-input flex-1" 
                     value={newBadgeImage}
                     onChange={e => setNewBadgeImage(e.target.value)}
-                    placeholder="URL de imagen o selecciona de la biblioteca"
+                    placeholder="Escribe URL o selecciona..."
                   />
-                  <button 
-                    type="button"
-                    onClick={() => setShowMediaPicker(true)}
-                    className="btn-secondary px-3"
-                  >
+                  <button type="button" onClick={() => setShowMediaPicker(true)} className="btn-secondary px-3">
                     <ImageIcon className="w-4 h-4" />
                   </button>
                 </div>
                 {newBadgeImage && (
-                  <div className="mt-2 flex justify-center">
-                    <img src={newBadgeImage} alt="Preview" className="h-12 object-contain" />
+                  <div className="mt-4 p-4 border rounded-xl flex justify-center bg-gray-50 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]">
+                    <img src={newBadgeImage} alt="Preview" className="h-20 object-contain drop-shadow-md" />
                   </div>
                 )}
               </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                 <div>
+                   <label className="form-label">Posición</label>
+                   <select className="form-input" value={newBadgePosition} onChange={e => setNewBadgePosition(e.target.value as any)}>
+                     <option value="top-left">Top Left (Izquierda)</option>
+                     <option value="top-right">Top Right (Derecha)</option>
+                   </select>
+                 </div>
+                 <div>
+                   <label className="form-label">Tamaño (Desktop)</label>
+                   <select className="form-input" value={newBadgeSize} onChange={e => setNewBadgeSize(e.target.value as any)}>
+                     <option value="small">Pequeño (~80px)</option>
+                     <option value="medium">Mediano (~100px)</option>
+                     <option value="large">Grande (~120px)</option>
+                   </select>
+                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                 <div>
+                   <label className="form-label">Vigencia Inicio (Opcional)</label>
+                   <input type="datetime-local" className="form-input text-xs" value={newBadgeStartDate} onChange={e => setNewBadgeStartDate(e.target.value)} />
+                 </div>
+                 <div>
+                   <label className="form-label">Vigencia Fin (Opcional)</label>
+                   <input type="datetime-local" className="form-input text-xs" value={newBadgeEndDate} onChange={e => setNewBadgeEndDate(e.target.value)} />
+                 </div>
+              </div>
+
             </div>
             <div className="p-6 border-t flex gap-3">
               <button onClick={() => setShowCreateModal(false)} className="btn-secondary flex-1">Cancelar</button>
               <button onClick={handleCreateBadge} className="btn-primary flex-1 gap-2">
-                <Plus className="w-4 h-4" /> Crear Cocarda
+                <Plus className="w-4 h-4" /> Crear
               </button>
             </div>
           </div>
         </>
       )}
 
-      {/* MEDIA PICKER */}
       <MediaPickerModal 
         isOpen={showMediaPicker} 
         onClose={() => setShowMediaPicker(false)} 
