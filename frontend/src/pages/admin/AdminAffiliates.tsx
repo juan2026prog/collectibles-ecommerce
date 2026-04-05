@@ -1,7 +1,7 @@
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { useEffect, useState } from 'react';
-import { Search, MoreVertical, CreditCard, Instagram, Twitch, DollarSign } from 'lucide-react';
+import { Search, MoreVertical, CreditCard, DollarSign, Share2 } from 'lucide-react';
 
 export default function AdminAffiliates() {
   const [affiliates, setAffiliates] = useState<any[]>([]);
@@ -75,7 +75,7 @@ export default function AdminAffiliates() {
                       </td>
                       <td className="p-4">
                         <div className="flex items-center gap-1 text-sm text-gray-600">
-                          <Instagram className="w-3.5 h-3.5 text-pink-600" />
+                          <Share2 className="w-3.5 h-3.5 text-pink-600" />
                           <span>{redes}</span>
                         </div>
                       </td>

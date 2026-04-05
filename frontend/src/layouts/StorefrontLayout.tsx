@@ -236,12 +236,18 @@ export default function StorefrontLayout() {
 
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2 flex-shrink-0">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary-500 rounded-full flex items-center justify-center">
-                <span className="text-white text-lg sm:text-xl">✦</span>
-              </div>
-              <span className="text-xl sm:text-2xl font-extrabold text-dark-900 tracking-tight hidden sm:block">
-                COLLECTIBLES
-              </span>
+              {settings['appearance_logo'] ? (
+                <img src={settings['appearance_logo']} alt={settings['store_name'] || 'Store Logo'} className="h-8 sm:h-10 object-contain" />
+              ) : (
+                <>
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary-500 rounded-full flex items-center justify-center">
+                    <span className="text-white text-lg sm:text-xl">✦</span>
+                  </div>
+                  <span className="text-xl sm:text-2xl font-extrabold text-dark-900 tracking-tight hidden sm:block">
+                    {settings['store_name'] || 'COLLECTIBLES'}
+                  </span>
+                </>
+              )}
             </Link>
 
             {/* Desktop Navigation */}
@@ -467,10 +473,16 @@ export default function StorefrontLayout() {
             {/* Mobile menu header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-100">
               <Link to="/" className="flex items-center gap-2" onClick={() => setMobileMenuOpen(false)}>
-                <div className="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center">
-                  <span className="text-white text-lg">✦</span>
-                </div>
-                <span className="text-lg font-extrabold text-dark-900">COLLECTIBLES</span>
+                {settings['appearance_logo'] ? (
+                  <img src={settings['appearance_logo']} alt={settings['store_name'] || 'Store Logo'} className="h-8 object-contain" />
+                ) : (
+                  <>
+                    <div className="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center">
+                      <span className="text-white text-lg">✦</span>
+                    </div>
+                    <span className="text-lg font-extrabold text-dark-900">{settings['store_name'] || 'COLLECTIBLES'}</span>
+                  </>
+                )}
               </Link>
               <button
                 onClick={() => setMobileMenuOpen(false)}
@@ -595,10 +607,16 @@ export default function StorefrontLayout() {
             {/* Brand */}
             <div>
               <Link to="/" className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center">
-                  <span className="text-white text-lg">✦</span>
-                </div>
-                <span className="text-xl font-extrabold tracking-tight">{settings['store_name'] || 'COLLECTIBLES'}</span>
+                {settings['appearance_logo'] ? (
+                  <img src={settings['appearance_logo']} alt={settings['store_name'] || 'Store Logo'} className="h-8 sm:h-10 object-contain" />
+                ) : (
+                  <>
+                    <div className="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center">
+                      <span className="text-white text-lg">✦</span>
+                    </div>
+                    <span className="text-xl font-extrabold tracking-tight">{settings['store_name'] || 'COLLECTIBLES'}</span>
+                  </>
+                )}
               </Link>
               <p className="text-sm text-gray-400 leading-relaxed mb-4">
                 {settings['store_tagline'] || 'Your destination for the best collectibles, figures, toys, and more.'}
