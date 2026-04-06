@@ -38,11 +38,11 @@
 
   /* ═══ PRODUCT CARD DARK ═══ */
   .product-card {
-    @apply relative bg-surface-card rounded-2xl overflow-hidden border border-white/5 hover:border-primary-500/30 hover:shadow-glow-card hover:-translate-y-1 transition-all duration-400;
+    @apply relative bg-[#151c2e] rounded-2xl overflow-hidden border border-white/5 hover:shadow-[0_8px_32px_rgba(0,0,0,0.4)] hover:-translate-y-1 transition-all duration-300;
   }
 
   .product-card-image {
-    @apply relative bg-dark-600 aspect-square overflow-hidden;
+    @apply relative bg-[#0d1320] aspect-square overflow-hidden;
   }
 
   .product-card-body {
@@ -66,7 +66,7 @@
 
   /* ═══ FORM INPUTS (DARK) ═══ */
   .form-input {
-    @apply w-full border border-white/10 rounded-xl px-4 py-3 text-sm font-medium bg-surface-card text-white focus:bg-surface-light focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all placeholder:text-gray-500;
+    @apply w-full border border-white/10 rounded-xl px-4 py-3 text-sm font-medium bg-[#151c2e] text-white focus:bg-[#1a2236] focus:border-primary-500 focus:ring-2 focus:ring-primary-500 outline-none transition-all placeholder:text-gray-500;
   }
 
   .form-label {
