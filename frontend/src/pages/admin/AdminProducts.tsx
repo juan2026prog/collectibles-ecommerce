@@ -214,7 +214,8 @@ export default function AdminProducts() {
 
       let productId = editing?.id;
       if (editing) {
-        await supabase.from('products').update(payload).eq('id', productId);
+        const { error: updProdErr } = await supabase.from('products').update(payload).eq('id', productId).select().single();
+        if (updProdErr) throw updProdErr;
       } else {
         const { data: newProd, error: insertError } = await supabase.from('products').insert(payload).select().single();
         if (insertError) throw insertError;
@@ -228,20 +229,27 @@ export default function AdminProducts() {
       const imagesPayload = [];
       if (form.image_url) imagesPayload.push({ product_id: productId, url: form.image_url, is_primary: true, sort_order: 0 });
       form.gallery.forEach((g, i) => imagesPayload.push({ product_id: productId, url: g.url, is_primary: false, sort_order: i + 1 }));
-      if (imagesPayload.length > 0) await supabase.from('product_images').insert(imagesPayload);
+      if (imagesPayload.length > 0) {
+        const { error: insImgErr } = await supabase.from('product_images').insert(imagesPayload);
+        if (insImgErr) throw insImgErr;
+      }
 
-      // �"��"��"� Variants �"��"��"�
+      // 📦 Variants 📦
       const skuVal = form.sku || `SKU-${Date.now()}`;
-      await supabase.from('product_variants').upsert({ product_id: productId, sku: skuVal, name: 'Standard', inventory_count: parseInt(form.stock) || 0 }, { onConflict: 'product_id' });
+      const { error: varErr } = await supabase.from('product_variants').upsert({ product_id: productId, sku: skuVal, name: 'Standard', inventory_count: parseInt(form.stock) || 0 }, { onConflict: 'product_id' });
+      if (varErr) throw varErr;
 
-      // �"��"��"� Junctions �"��"��"�
-      await Promise.all([
+      // 📦 Junctions 📦
+      const [delCats, delTags] = await Promise.all([
         supabase.from('product_categories').delete().eq('product_id', productId),
         supabase.from('product_tags').delete().eq('product_id', productId)
       ]);
+      if (delCats.error) throw delCats.error;
+      if (delTags.error) throw delTags.error;
       
       if (form.categories.length > 0) {
-        await supabase.from('product_categories').insert(form.categories.map(cid => ({ product_id: productId, category_id: cid })));
+        const { error: insCatErr } = await supabase.from('product_categories').insert(form.categories.map(cid => ({ product_id: productId, category_id: cid })));
+        if (insCatErr) throw insCatErr;
       }
 
       // Handle Tags (Ensure they exist)
@@ -316,22 +324,25 @@ export default function AdminProducts() {
         const { error } = await supabase.from('product_categories').delete().eq('product_id', id);
         if (error) throw error;
         if (value) {
-          await supabase.from('product_categories').insert({ product_id: id, category_id: value });
-          await supabase.from('products').update({ category_id: value }).eq('id', id);
+          const { error: insErr } = await supabase.from('product_categories').insert({ product_id: id, category_id: value });
+          if (insErr) throw insErr;
+          const { error: updErr } = await supabase.from('products').update({ category_id: value }).eq('id', id).select().single();
+          if (updErr) throw updErr;
         } else {
-          await supabase.from('products').update({ category_id: null }).eq('id', id);
+          const { error: updErr2 } = await supabase.from('products').update({ category_id: null }).eq('id', id).select().single();
+          if (updErr2) throw updErr2;
         }
       } else if (field === 'stock') {
         const { data: vars } = await supabase.from('product_variants').select('id').eq('product_id', id).limit(1);
         if (vars && vars.length > 0) {
-          const { error } = await supabase.from('product_variants').update({ inventory_count: parseInt(value) || 0 }).eq('id', vars[0].id);
+          const { error } = await supabase.from('product_variants').update({ inventory_count: parseInt(value) || 0 }).eq('id', vars[0].id).select().single();
           if (error) throw error;
         } else {
           await supabase.from('product_variants').insert({ product_id: id, sku: `SKU-${Date.now()}`, name: 'Standard', inventory_count: parseInt(value) || 0 });
         }
       } else {
         updates[field] = value;
-        const { error } = await supabase.from('products').update(updates).eq('id', id);
+        const { error } = await supabase.from('products').update(updates).eq('id', id).select().single();
         if (error) throw error;
       }
       

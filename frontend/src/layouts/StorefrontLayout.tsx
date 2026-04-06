@@ -197,7 +197,7 @@ export default function StorefrontLayout() {
   roleMenuItems.push({ name: 'Mis Pedidos', href: '/account', icon: Package, color: 'text-gray-600' });
 
   return (
-    <div className="min-h-screen flex flex-col bg-white">
+    <div className="min-h-screen flex flex-col bg-dark-700 gamger-grid">
       {settings['theme_color_primary'] && (
         <style dangerouslySetInnerHTML={{
           __html: `:root {
@@ -229,12 +229,12 @@ export default function StorefrontLayout() {
       )}
 
       {/* ═══════════ TOP INFO BAR (LOCALE/CURRENCY) ═══════════ */}
-      <div className="bg-gray-50 border-b border-gray-100 hidden sm:block">
+      <div className="bg-dark-800/80 border-b border-white/5 hidden sm:block">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-8 flex items-center justify-between text-xs font-semibold text-gray-500">
           <div className="flex gap-4">
             <span>Envío gratis desde $4000 (UYU)</span>
             <span className="opacity-40">|</span>
-            <Link to="/contact" className="hover:text-primary-600 transition-colors">Soporte 24/7</Link>
+            <Link to="/contact" className="hover:text-neon-cyan transition-colors">Soporte 24/7</Link>
           </div>
           <div className="flex items-center gap-4">
             <LocaleSwitcher compact />
@@ -243,12 +243,12 @@ export default function StorefrontLayout() {
       </div>
 
       {/* ═══════════ MAIN HEADER ═══════════ */}
-      <header className="bg-white border-b border-gray-100 sticky top-0 z-40 shadow-sm">
+      <header className="bg-dark-700/90 backdrop-blur-xl border-b border-white/5 sticky top-0 z-40 shadow-dark-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-[72px]">
             {/* Mobile hamburger */}
             <button
-              className="lg:hidden p-2 text-gray-700 hover:text-dark-900 rounded-lg hover:bg-gray-100 transition-colors"
+              className="lg:hidden p-2 text-gray-300 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
               onClick={() => setMobileMenuOpen(true)}
               aria-label="Open menu"
             >
@@ -264,7 +264,7 @@ export default function StorefrontLayout() {
                   <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary-500 rounded-full flex items-center justify-center">
                     <span className="text-white text-lg sm:text-xl">✦</span>
                   </div>
-                  <span className="text-xl sm:text-2xl font-extrabold text-dark-900 tracking-tight hidden sm:block">
+                  <span className="text-xl sm:text-2xl font-extrabold text-white tracking-tight hidden sm:block">
                     {settings['store_name'] || 'COLLECTIBLES'}
                   </span>
                 </>
@@ -282,7 +282,7 @@ export default function StorefrontLayout() {
                 >
                   <Link
                     to={link.href}
-                    className={`flex items-center gap-1 px-4 py-2 text-sm font-semibold tracking-wide transition-colors rounded-lg hover:text-primary-600 hover:bg-primary-50/50 ${location.pathname === link.href ? 'text-primary-600' : 'text-gray-700'
+                    className={`flex items-center gap-1 px-4 py-2 text-sm font-bold tracking-wide transition-all rounded-lg hover:text-neon-cyan hover:bg-white/5 ${location.pathname === link.href ? 'text-neon-cyan' : 'text-gray-300'
                       }`}
                   >
                     {link.name}
@@ -296,7 +296,7 @@ export default function StorefrontLayout() {
             <div className="flex items-center gap-1 sm:gap-2">
               <button
                 onClick={() => setSearchOpen(true)}
-                className="p-2.5 text-gray-500 hover:text-dark-900 rounded-full hover:bg-gray-100 transition-colors"
+                className="p-2.5 text-gray-400 hover:text-neon-cyan rounded-full hover:bg-white/10 transition-colors"
                 aria-label="Search"
               >
                 <Search className="h-5 w-5" />
@@ -307,7 +307,7 @@ export default function StorefrontLayout() {
                 <div className="relative" ref={userMenuRef}>
                   <button
                     onClick={() => setUserMenuOpen(!userMenuOpen)}
-                    className="hidden sm:flex items-center gap-1.5 p-2 text-gray-500 hover:text-dark-900 rounded-full hover:bg-gray-100 transition-colors"
+                    className="hidden sm:flex items-center gap-1.5 p-2 text-gray-400 hover:text-white rounded-full hover:bg-white/10 transition-colors"
                     aria-label="Account menu"
                   >
                     <div className="w-7 h-7 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-xs font-bold">
@@ -318,9 +318,9 @@ export default function StorefrontLayout() {
 
                   {/* User Dropdown */}
                   {userMenuOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl shadow-2xl border border-gray-100 py-2 z-50 animate-slide-down">
-                      <div className="px-4 py-3 border-b border-gray-100">
-                        <p className="text-sm font-bold text-gray-800 truncate">{profile?.email}</p>
+                    <div className="absolute right-0 top-full mt-2 w-64 bg-surface-card rounded-xl shadow-dark-lg border border-white/10 py-2 z-50 animate-slide-down">
+                      <div className="px-4 py-3 border-b border-white/10">
+                        <p className="text-sm font-bold text-white truncate">{profile?.email}</p>
                         <div className="flex flex-wrap gap-1 mt-1.5">
                           {profile?.is_admin && <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">Admin</span>}
                           {profile?.is_vendor && <span className="text-[10px] font-bold bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">Vendor</span>}
@@ -335,7 +335,7 @@ export default function StorefrontLayout() {
                             <Link
                               key={item.href}
                               to={item.href}
-                              className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                              className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
                             >
                               <Icon className={`w-4 h-4 ${item.color}`} />
                               {item.name}
@@ -343,7 +343,7 @@ export default function StorefrontLayout() {
                           );
                         })}
                       </div>
-                      <div className="border-t border-gray-100 pt-1">
+                      <div className="border-t border-white/10 pt-1">
                         <button
                           onClick={handleSignOut}
                           className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 w-full transition-colors"
@@ -358,7 +358,7 @@ export default function StorefrontLayout() {
               ) : (
                 <Link
                   to="/login"
-                  className="hidden sm:flex p-2.5 text-gray-500 hover:text-dark-900 rounded-full hover:bg-gray-100 transition-colors"
+                  className="hidden sm:flex p-2.5 text-gray-400 hover:text-neon-cyan rounded-full hover:bg-white/10 transition-colors"
                   aria-label="Log in"
                 >
                   <LogIn className="h-5 w-5" />
@@ -366,7 +366,7 @@ export default function StorefrontLayout() {
               )}
               <Link
                 to="/cart"
-                className="p-2.5 text-gray-500 hover:text-dark-900 rounded-full hover:bg-gray-100 transition-colors relative"
+                className="p-2.5 text-gray-400 hover:text-neon-cyan rounded-full hover:bg-white/10 transition-colors relative"
                 aria-label="Cart"
               >
                 <ShoppingCart className="h-5 w-5" />
@@ -383,7 +383,7 @@ export default function StorefrontLayout() {
         {/* ═══════════ MEGA MENU DROPDOWN ═══════════ */}
         {megaMenuState && (
           <div
-            className="absolute left-0 right-0 bg-white border-t border-gray-100 shadow-[0_10px_40px_rgba(0,0,0,0.12)] animate-slide-down z-50"
+            className="absolute left-0 right-0 bg-dark-700/95 backdrop-blur-xl border-t border-white/5 shadow-dark-lg animate-slide-down z-50"
             onMouseEnter={() => handleMegaEnter(megaMenuState)}
             onMouseLeave={handleMegaLeave}
           >
@@ -398,8 +398,8 @@ export default function StorefrontLayout() {
                         <ul className="space-y-2.5 mt-2">
                           {col.items.map((item) => (
                             <li key={item.name}>
-                              <Link to={item.href} className="text-sm text-gray-600 hover:text-primary-600 font-medium transition-colors flex items-center gap-2 group">
-                                <ChevronRight className="w-3 h-3 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-primary-500" />
+                              <Link to={item.href} className="text-sm text-gray-400 hover:text-neon-cyan font-medium transition-colors flex items-center gap-2 group">
+                                <ChevronRight className="w-3 h-3 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-neon-cyan" />
                                 {item.name}
                               </Link>
                             </li>
@@ -413,7 +413,7 @@ export default function StorefrontLayout() {
                 <div className={`grid gap-8`} style={{ gridTemplateColumns: `repeat(${Math.min(MENU_COLUMNS.length + 1, 5)}, 1fr)` }}>
                   {MENU_COLUMNS.map((col, idx) => (
                     <div key={col.title || idx}>
-                      <h3 className="text-sm font-bold text-dark-900 uppercase tracking-wider mb-4">
+                      <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4">
                         {col.title}
                       </h3>
                       <ul className="space-y-2.5">
@@ -421,7 +421,7 @@ export default function StorefrontLayout() {
                           <li key={item.name}>
                             <Link
                               to={item.href}
-                              className="text-sm text-gray-600 hover:text-primary-600 font-medium transition-colors flex items-center gap-2 group"
+                              className="text-sm text-gray-400 hover:text-neon-cyan font-medium transition-colors flex items-center gap-2 group"
                             >
                               <ChevronRight className="w-3 h-3 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-primary-500" />
                               {item.name}
@@ -432,11 +432,11 @@ export default function StorefrontLayout() {
                     </div>
                   ))}
                   {/* Promo Banner in Mega Menu */}
-                  <div className="bg-gradient-to-br from-primary-50 to-primary-100 rounded-xl p-6 flex flex-col justify-between">
+                  <div className="bg-gradient-to-br from-primary-900/40 to-primary-600/20 rounded-xl p-6 flex flex-col justify-between border border-primary-500/20">
                     <div>
                       <span className="badge badge-new mb-3">NEW</span>
-                      <h4 className="text-lg font-bold text-dark-900 mt-2">New Arrivals</h4>
-                      <p className="text-sm text-gray-600 mt-1">Check out the latest drops this week</p>
+                      <h4 className="text-lg font-bold text-white mt-2">New Arrivals</h4>
+                      <p className="text-sm text-gray-400 mt-1">Check out the latest drops this week</p>
                     </div>
                     <Link to="/shop?sort=newest" className="text-sm font-bold text-primary-600 hover:text-primary-700 mt-4 inline-flex items-center gap-1">
                       Shop Now <ChevronRight className="w-4 h-4" />
@@ -453,19 +453,19 @@ export default function StorefrontLayout() {
       {searchOpen && (
         <>
           <div className="overlay-backdrop" onClick={() => setSearchOpen(false)} />
-          <div className="fixed top-0 left-0 right-0 bg-white z-50 shadow-xl animate-slide-down p-4 sm:p-6">
+          <div className="fixed top-0 left-0 right-0 bg-dark-700/95 backdrop-blur-xl z-50 shadow-dark-lg animate-slide-down p-4 sm:p-6 border-b border-white/5">
             <div className="max-w-7xl mx-auto">
               <div className="flex items-center gap-4">
                 <Search className="w-6 h-6 text-gray-400 flex-shrink-0" />
                 <input
                   type="text"
                   placeholder="Search products, categories, brands..."
-                  className="flex-1 text-lg sm:text-xl font-medium outline-none placeholder:text-gray-400"
+                  className="flex-1 text-lg sm:text-xl font-medium outline-none placeholder:text-gray-500 bg-transparent text-white"
                   autoFocus
                 />
                 <button
                   onClick={() => setSearchOpen(false)}
-                  className="p-2 text-gray-400 hover:text-dark-900 rounded-full hover:bg-gray-100 transition-colors"
+                  className="p-2 text-gray-400 hover:text-white rounded-full hover:bg-white/10 transition-colors"
                 >
                   <X className="w-6 h-6" />
                 </button>
@@ -474,7 +474,7 @@ export default function StorefrontLayout() {
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Popular Searches</p>
                 <div className="flex flex-wrap gap-2">
                   {['Funko POP', 'Figuras de acción', 'Peluches', 'TCG', 'Beyblades'].map(term => (
-                    <Link key={term} to={`/shop?q=${term}`} onClick={() => setSearchOpen(false)} className="px-4 py-2 bg-gray-100 hover:bg-primary-50 hover:text-primary-600 rounded-full text-sm font-medium transition-colors">
+                    <Link key={term} to={`/shop?q=${term}`} onClick={() => setSearchOpen(false)} className="px-4 py-2 bg-white/5 hover:bg-primary-600/20 hover:text-primary-400 border border-white/10 rounded-full text-sm font-medium text-gray-300 transition-colors">
                       {term}
                     </Link>
                   ))}
@@ -489,9 +489,9 @@ export default function StorefrontLayout() {
       {mobileMenuOpen && (
         <>
           <div className="overlay-backdrop" onClick={() => setMobileMenuOpen(false)} />
-          <div className="fixed inset-y-0 left-0 w-[85%] max-w-sm bg-white z-50 animate-slide-in-left shadow-2xl flex flex-col">
+          <div className="fixed inset-y-0 left-0 w-[85%] max-w-sm bg-dark-700 z-50 animate-slide-in-left shadow-dark-lg flex flex-col border-r border-white/5">
             {/* Mobile menu header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-100">
+            <div className="flex items-center justify-between p-4 border-b border-white/10">
               <Link to="/" className="flex items-center gap-2" onClick={() => setMobileMenuOpen(false)}>
                 {settings['appearance_logo'] ? (
                   <img src={settings['appearance_logo']} alt={settings['store_name'] || 'Store Logo'} className="h-8 object-contain" />
@@ -500,26 +500,26 @@ export default function StorefrontLayout() {
                     <div className="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center">
                       <span className="text-white text-lg">✦</span>
                     </div>
-                    <span className="text-lg font-extrabold text-dark-900">{settings['store_name'] || 'COLLECTIBLES'}</span>
+                    <span className="text-lg font-extrabold text-white">{settings['store_name'] || 'COLLECTIBLES'}</span>
                   </>
                 )}
               </Link>
               <button
                 onClick={() => setMobileMenuOpen(false)}
-                className="p-2 text-gray-400 hover:text-dark-900 rounded-full hover:bg-gray-100"
+                className="p-2 text-gray-400 hover:text-white rounded-full hover:bg-white/10"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Mobile search */}
-            <div className="p-4 border-b border-gray-100">
-              <div className="flex items-center gap-3 bg-gray-50 rounded-lg px-4 py-2.5">
+            <div className="p-4 border-b border-white/10">
+              <div className="flex items-center gap-3 bg-white/5 rounded-lg px-4 py-2.5">
                 <Search className="w-4 h-4 text-gray-400" />
                 <input
                   type="text"
                   placeholder="Search..."
-                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-gray-400"
+                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-gray-500 text-white"
                 />
               </div>
             </div>
@@ -532,13 +532,13 @@ export default function StorefrontLayout() {
                     <>
                       <button
                         onClick={() => setExpandedMobileGroup(expandedMobileGroup === link.name ? null : link.name)}
-                        className="flex items-center justify-between w-full px-6 py-3.5 text-base font-semibold text-gray-800 hover:bg-gray-50 transition-colors"
+                        className="flex items-center justify-between w-full px-6 py-3.5 text-base font-semibold text-gray-200 hover:bg-white/5 transition-colors"
                       >
                         {link.name}
                         <ChevronDown className={`w-4 h-4 transition-transform ${expandedMobileGroup === link.name ? 'rotate-180' : ''}`} />
                       </button>
                       {expandedMobileGroup === link.name && (
-                        <div className="bg-gray-50 animate-slide-down">
+                        <div className="bg-white/5 animate-slide-down">
                           {(link.megaType === 'brands' ? MEGA_MENU_BRANDS_COLUMNS : MEGA_MENU_COLUMNS).map((col, idx) => (
                             <div key={col.title || idx} className="px-6 py-3">
                               {col.title && <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">{col.title}</p>}
@@ -548,7 +548,7 @@ export default function StorefrontLayout() {
                                     <Link
                                       to={item.href}
                                       onClick={() => setMobileMenuOpen(false)}
-                                      className="block text-sm text-gray-600 hover:text-primary-600 py-1"
+                                      className="block text-sm text-gray-400 hover:text-neon-cyan py-1"
                                     >
                                       {item.name}
                                     </Link>
@@ -564,7 +564,7 @@ export default function StorefrontLayout() {
                     <Link
                       to={link.href}
                       onClick={() => setMobileMenuOpen(false)}
-                      className="block px-6 py-3.5 text-base font-semibold text-gray-800 hover:bg-gray-50 transition-colors"
+                      className="block px-6 py-3.5 text-base font-semibold text-gray-200 hover:bg-white/5 transition-colors"
                     >
                       {link.name}
                     </Link>
@@ -574,17 +574,17 @@ export default function StorefrontLayout() {
             </nav>
 
             {/* Mobile menu footer */}
-            <div className="border-t border-gray-100 p-4 space-y-3">
+            <div className="border-t border-white/10 p-4 space-y-3">
               {/* Locale / Currency switcher */}
-              <div className="px-2 pb-2 border-b border-gray-100">
+              <div className="px-2 pb-2 border-b border-white/10">
                 <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Idioma y Moneda</p>
                 <LocaleSwitcher mode="language" className="mb-2" />
                 <LocaleSwitcher mode="currency" />
               </div>
-              <Link to="/admin" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-primary-600 rounded-lg hover:bg-gray-50">
+              <Link to="/admin" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-gray-400 hover:text-neon-cyan rounded-lg hover:bg-white/5">
                 <User className="w-5 h-5" /> Login / Register
               </Link>
-              <Link to="/wishlist" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-primary-600 rounded-lg hover:bg-gray-50">
+              <Link to="/wishlist" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-gray-400 hover:text-neon-cyan rounded-lg hover:bg-white/5">
                 <Heart className="w-5 h-5" /> Wishlist
               </Link>
             </div>

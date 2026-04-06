@@ -24,9 +24,32 @@ export default {
           600: 'var(--color-primary-700, #C41E3A)',
         },
         announcement: '#8B1A1A',
+        // ═══ GAMGER DARK THEME ═══
         dark: {
-          800: '#1f2937',
-          900: '#1A1A1A',
+          50:  '#f8fafc',
+          100: '#e2e8f0',
+          200: '#1e293b',
+          300: '#1a2236',
+          400: '#151c2e',
+          500: '#111827',
+          600: '#0d1320',
+          700: '#0a0f1a',
+          800: '#070b14',
+          900: '#04060d',
+        },
+        surface: {
+          DEFAULT: '#111827',
+          light: '#1a2236',
+          lighter: '#1e293b',
+          card: '#151c2e',
+          hover: '#1e293b',
+        },
+        neon: {
+          cyan: '#00f5ff',
+          blue: '#3b82f6',
+          purple: '#a855f7',
+          pink: '#ec4899',
+          red:  '#ef4444',
         },
         badge: {
           hot: '#EF4444',
@@ -42,6 +65,13 @@ export default {
       maxWidth: {
         container: '1280px',
       },
+      boxShadow: {
+        'glow-sm': '0 0 15px rgba(0, 245, 255, 0.1)',
+        'glow-md': '0 0 30px rgba(0, 245, 255, 0.15)',
+        'glow-red': '0 0 30px rgba(226, 45, 79, 0.2)',
+        'glow-card': '0 8px 32px rgba(0,0,0,0.4)',
+        'dark-lg': '0 10px 40px rgba(0,0,0,0.5)',
+      },
       animation: {
         'fade-in': 'fadeIn 0.3s ease-in-out',
         'slide-up': 'slideUp 0.4s ease-out',
@@ -50,6 +80,7 @@ export default {
         'slide-in-left': 'slideInLeft 0.3s ease-out',
         'marquee': 'marquee 20s linear infinite',
         'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
+        'glow-pulse': 'glowPulse 3s ease-in-out infinite',
       },
       keyframes: {
         fadeIn: {
@@ -79,6 +110,10 @@ export default {
         pulseSoft: {
           '0%, 100%': { opacity: '1' },
           '50%': { opacity: '0.7' },
+        },
+        glowPulse: {
+          '0%, 100%': { boxShadow: '0 0 15px rgba(0, 245, 255, 0.1)' },
+          '50%': { boxShadow: '0 0 30px rgba(0, 245, 255, 0.25)' },
         },
       },
     },

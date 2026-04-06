@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,7 +6,7 @@
 
 @layer base {
   body {
-    @apply bg-white text-gray-900 antialiased selection:bg-primary-500 selection:text-white font-sans;
+    @apply bg-dark-700 text-gray-100 antialiased selection:bg-primary-500 selection:text-white font-sans;
   }
   * {
     @apply scroll-smooth;
@@ -14,42 +14,44 @@
 }
 
 @layer components {
-  /* Primary CTA — black background */
+  /* ═══ GAMGER DARK THEME BUTTONS ═══ */
+
+  /* Primary CTA — red/primary */
   .btn-primary {
-    @apply inline-flex items-center justify-center px-6 py-3 bg-dark-900 text-white font-semibold rounded-lg shadow-sm hover:bg-gray-800 transition-all duration-200 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none;
+    @apply inline-flex items-center justify-center px-6 py-3 bg-primary-600 text-white font-bold rounded-xl shadow-lg hover:bg-primary-500 hover:shadow-glow-red transition-all duration-300 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none uppercase tracking-wider text-sm;
   }
 
-  /* Secondary — outlined */
+  /* Secondary — outlined light */
   .btn-secondary {
-    @apply inline-flex items-center justify-center px-6 py-3 bg-white text-dark-900 font-semibold rounded-lg border-2 border-dark-900 shadow-sm hover:bg-gray-50 transition-all duration-200 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none;
+    @apply inline-flex items-center justify-center px-6 py-3 bg-transparent text-white font-bold rounded-xl border-2 border-white/20 shadow-sm hover:bg-white/10 hover:border-white/40 transition-all duration-300 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none;
   }
 
-  /* Accent CTA — brand-color background (checkout, proceed) */
+  /* Accent CTA */
   .btn-accent {
-    @apply inline-flex items-center justify-center px-6 py-3 bg-primary-600 text-white font-semibold rounded-lg shadow-sm hover:bg-primary-700 transition-all duration-200 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none;
+    @apply inline-flex items-center justify-center px-6 py-3 bg-neon-cyan text-dark-900 font-bold rounded-xl shadow-lg hover:shadow-glow-sm transition-all duration-300 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none;
   }
 
-  /* Ghost — text-only button */
+  /* Ghost — text-only */
   .btn-ghost {
-    @apply inline-flex items-center text-gray-600 font-medium hover:text-primary-600 transition-colors underline-offset-4 hover:underline;
+    @apply inline-flex items-center text-gray-400 font-medium hover:text-neon-cyan transition-colors underline-offset-4 hover:underline;
   }
 
-  /* Product Card */
+  /* ═══ PRODUCT CARD DARK ═══ */
   .product-card {
-    @apply relative bg-white rounded-xl overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.06)] hover:shadow-[0_8px_25px_rgba(0,0,0,0.1)] hover:-translate-y-0.5 transition-all duration-300;
+    @apply relative bg-surface-card rounded-2xl overflow-hidden border border-white/5 hover:border-primary-500/30 hover:shadow-glow-card hover:-translate-y-1 transition-all duration-400;
   }
 
   .product-card-image {
-    @apply relative bg-gray-50 aspect-square overflow-hidden;
+    @apply relative bg-dark-600 aspect-square overflow-hidden;
   }
 
   .product-card-body {
     @apply p-3 sm:p-4;
   }
 
-  /* Badge */
+  /* ═══ BADGES ═══ */
   .badge {
-    @apply inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wide text-white;
+    @apply inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-black uppercase tracking-wider text-white;
   }
   .badge-hot { @apply bg-badge-hot; }
   .badge-sale { @apply bg-badge-sale; }
@@ -57,23 +59,23 @@
   .badge-new { @apply bg-badge-new; }
   .badge-soldout { @apply bg-badge-soldout; }
 
-  /* Section title */
+  /* ═══ SECTION TITLE ═══ */
   .section-title {
-    @apply text-2xl sm:text-3xl font-bold text-dark-900 uppercase tracking-tight;
+    @apply text-2xl sm:text-3xl font-black text-white uppercase tracking-tight;
   }
 
-  /* Form inputs */
+  /* ═══ FORM INPUTS (DARK) ═══ */
   .form-input {
-    @apply w-full border border-gray-200 rounded-lg px-4 py-3 text-sm font-medium bg-gray-50 focus:bg-white focus:border-primary-500 focus:ring-2 focus:ring-primary-100 outline-none transition-all placeholder:text-gray-400;
+    @apply w-full border border-white/10 rounded-xl px-4 py-3 text-sm font-medium bg-surface-card text-white focus:bg-surface-light focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all placeholder:text-gray-500;
   }
 
   .form-label {
-    @apply block text-sm font-semibold text-gray-700 mb-1.5;
+    @apply block text-sm font-bold text-gray-300 mb-1.5;
   }
 
-  /* Overlay backdrop */
+  /* ═══ OVERLAY BACKDROP ═══ */
   .overlay-backdrop {
-    @apply fixed inset-0 bg-black/50 z-40 animate-fade-in;
+    @apply fixed inset-0 bg-black/70 backdrop-blur-sm z-40 animate-fade-in;
   }
 
   /* Star rating */
@@ -81,11 +83,11 @@
     @apply text-yellow-400 fill-current;
   }
   .star-empty {
-    @apply text-gray-300;
+    @apply text-gray-600;
   }
 }
 
-/* Marquee animation - repeats seamlessly */
+/* ═══ MARQUEE / SCROLL UTILITIES ═══ */
 .marquee-track {
   display: flex;
   width: max-content;
@@ -95,13 +97,26 @@
   animation-play-state: paused;
 }
 
-/* Hide scrollbar for horizontal scroll areas */
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/* ═══ GAMGER GRID PATTERN ═══ */
+.gamger-grid {
+  background-image: 
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Glow lines accent */
+.glow-line {
+  background: linear-gradient(90deg, transparent, rgba(0,245,255,0.3), transparent);
+  height: 1px;
 }
 
 /* Image zoom on hover */

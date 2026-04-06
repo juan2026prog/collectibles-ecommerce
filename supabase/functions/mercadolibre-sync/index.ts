@@ -177,12 +177,32 @@ Deno.serve(async (req) => {
                     await supabase.from('product_images').insert(localImages);
                 }
 
-                await supabase.from('product_variants').upsert({
+                // ═══ Extract real SKU: SELLER_SKU > GTIN/UPC/EAN > seller_custom_field > ML-ID ═══
+                const attrs = item.attributes || [];
+                const sellerSku = attrs.find((a: any) => a.id === 'SELLER_SKU')?.value_name;
+                const gtin = attrs.find((a: any) => a.id === 'GTIN')?.value_name;
+                const upc = attrs.find((a: any) => a.id === 'UPC')?.value_name;
+                const ean = attrs.find((a: any) => a.id === 'EAN')?.value_name;
+                const mpn = attrs.find((a: any) => a.id === 'MPN')?.value_name;
+                const realSku = sellerSku || gtin || upc || ean || mpn || item.seller_custom_field || `ML-${item.id}`;
+
+                // ═══ Calculate real stock: ML returns 999 for "buy it now" listings ═══
+                const mlAvailable = item.available_quantity || 0;
+                const mlInitial = item.initial_quantity || 0;
+                const mlSold = item.sold_quantity || 0;
+                // If available_quantity is inflated (>=999), use initial - sold as real stock
+                const realStock = mlAvailable >= 999 
+                  ? Math.max(mlInitial - mlSold, 0) 
+                  : mlAvailable;
+
+                // Delete existing variant for this product, then insert with real SKU
+                await supabase.from('product_variants').delete().eq('product_id', prod.id);
+                await supabase.from('product_variants').insert({
                     product_id: prod.id,
-                    sku: item.seller_custom_field || `ML-${item.id}`,
+                    sku: realSku,
                     name: 'Estándar',
-                    inventory_count: item.available_quantity || 0
-                }, { onConflict: 'product_id' });
+                    inventory_count: realStock
+                });
 
                 results.push({ ml_id: mlId, status: "success" });
             } catch (e:any) { results.push({ ml_id: mlId, status: "error", error: e.message }); }
