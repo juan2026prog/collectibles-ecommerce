@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { BarChart3, TrendingUp, DollarSign, ShoppingCart, Users, Package, Download, RefreshCw, Calendar } from 'lucide-react';
+import { BarChart3, TrendingUp, DollarSign, ShoppingCart, Users, Package, Download, RefreshCw, Calendar, AlertTriangle, Bell, Mail } from 'lucide-react';
 
 export default function AdminReports() {
   const [stats, setStats] = useState({
     totalRevenue: 0, orderCount: 0, avgTicket: 0,
     productCount: 0, customerCount: 0, paidOrders: 0,
     pendingOrders: 0, cancelledOrders: 0,
+    abandonedTotal: 0, abandonedCount: 0
   });
   const [monthlyData, setMonthlyData] = useState<{ month: string; revenue: number; orders: number }[]>([]);
   const [topProducts, setTopProducts] = useState<any[]>([]);
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [abandonedCarts, setAbandonedCarts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { fetchReports(); }, []);
@@ -21,11 +24,15 @@ export default function AdminReports() {
       { count: productCount },
       { count: customerCount },
       { data: orderItems },
+      { data: alertData },
+      { data: cartsData },
     ] = await Promise.all([
       supabase.from('orders').select('id, total, status, created_at'),
       supabase.from('products').select('*', { count: 'exact', head: true }),
       supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_admin', false),
       supabase.from('order_items').select('quantity, unit_price, products(title)').limit(100),
+      supabase.from('admin_alerts').select('*').order('created_at', { ascending: false }).limit(5),
+      supabase.from('abandoned_checkouts').select('*').order('created_at', { ascending: false }).limit(10),
     ]);
 
     const allOrders = orders || [];
@@ -34,6 +41,12 @@ export default function AdminReports() {
     const revenue = paid.reduce((s, o) => s + (Number(o.total) || 0), 0);
     const pending = allOrders.filter(o => o.status === 'pending').length;
     const cancelled = allOrders.filter(o => o.status === 'cancelled').length;
+
+    const allCarts = cartsData || [];
+    const abanRev = allCarts.reduce((s, c) => s + (Number(c.total_amount) || 0), 0);
+
+    setAlerts(alertData || []);
+    setAbandonedCarts(allCarts);
 
     setStats({
       totalRevenue: revenue,
@@ -44,6 +57,8 @@ export default function AdminReports() {
       paidOrders: paid.length,
       pendingOrders: pending,
       cancelledOrders: cancelled,
+      abandonedTotal: abanRev,
+      abandonedCount: allCarts.length
     });
 
     // Group by month
@@ -180,6 +195,76 @@ export default function AdminReports() {
                 </div>
               ))}
             </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {/* Abandoned Carts */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b bg-gray-50/50 flex justify-between items-center">
+            <h3 className="font-bold text-gray-900 flex items-center gap-2"><ShoppingCart className="w-4 h-4 text-orange-500" /> Carritos Abandonados ({stats.abandonedCount})</h3>
+            <span className="text-xs font-black text-orange-600 bg-orange-100 px-2 py-1 rounded">Riesgo: ${stats.abandonedTotal.toLocaleString()}</span>
+          </div>
+          {abandonedCarts.length === 0 ? (
+            <div className="p-8 text-center text-gray-400 text-sm">No hay carritos abandonados recientes</div>
+          ) : (
+            <div className="divide-y divide-gray-50 max-h-[300px] overflow-y-auto">
+              {abandonedCarts.map((c, i) => (
+                <div key={i} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-gray-800 truncate">{c.email || 'Usuario Anónimo'}</p>
+                    <p className="text-[11px] text-gray-400">{new Date(c.created_at).toLocaleString()}</p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className="text-sm font-black text-gray-900 whitespace-nowrap">${c.total_amount.toLocaleString()}</span>
+                    {c.recovery_email_sent ? (
+                       <span className="text-[10px] font-black text-green-600 bg-green-50 px-2 py-1 rounded">ENVIADO</span>
+                    ) : (
+                       <button 
+                          onClick={async () => {
+                             try {
+                               await supabase.functions.invoke('transactional-emails', { body: { type: 'abandoned_cart', cart_id: c.id }});
+                               setAbandonedCarts(prev => prev.map(cart => cart.id === c.id ? { ...cart, recovery_email_sent: true } : cart));
+                             } catch (e) {
+                               console.error(e);
+                               alert("Error al enviar email de recuperación");
+                             }
+                          }}
+                          className="text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded text-[10px] font-black tracking-widest uppercase items-center gap-1 flex transition-colors"
+                       >
+                         <Mail className="w-3 h-3" /> Recuperar
+                       </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Alerts & Notifications */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b bg-gray-50/50">
+             <h3 className="font-bold text-gray-900 flex items-center gap-2"><Bell className="w-4 h-4 text-gray-400" /> Alertas del Sistema & BI</h3>
+          </div>
+          {alerts.length === 0 ? (
+             <div className="p-8 text-center text-gray-400 text-sm">Todo funciona correctamente. No hay alertas.</div>
+          ) : (
+             <div className="divide-y divide-gray-50">
+               {alerts.map((a, i) => (
+                  <div key={i} className="px-6 py-4 flex items-start gap-4 hover:bg-gray-50 transition-colors">
+                     <div className={`mt-0.5 p-2 rounded-full flex-shrink-0 ${a.type === 'critical' ? 'bg-red-100 text-red-600' : a.type === 'warning' ? 'bg-yellow-100 text-yellow-600' : a.type === 'success' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'}`}>
+                        {a.type === 'critical' || a.type === 'warning' ? <AlertTriangle className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
+                     </div>
+                     <div>
+                        <h4 className="text-sm font-bold text-gray-900">{a.title}</h4>
+                        <p className="text-xs text-gray-500 mt-1 leading-relaxed">{a.description}</p>
+                        <p className="text-[10px] text-gray-400 mt-2 font-mono">{new Date(a.created_at).toLocaleString()}</p>
+                     </div>
+                  </div>
+               ))}
+             </div>
           )}
         </div>
       </div>

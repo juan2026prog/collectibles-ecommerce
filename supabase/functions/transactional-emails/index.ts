@@ -160,6 +160,40 @@ serve(async (req) => {
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
     }
 
+    // 3. ABANDONED CART RECOVERY (Triggered via Admin UI or Cron)
+    if (payload.type === 'abandoned_cart') {
+      const { cart_id } = payload;
+      const { data: cart, error } = await supabaseClient.from('abandoned_checkouts').select('*').eq('id', cart_id).single();
+      
+      if (error || !cart) return new Response("Cart not found", { status: 404, headers: corsHeaders });
+      if (cart.recovery_email_sent) return new Response("Recovery already sent", { status: 400, headers: corsHeaders });
+
+      const email = cart.email;
+      if (!email) return new Response("No email attached to cart", { status: 400, headers: corsHeaders });
+
+      const total = cart.total_amount;
+      const subject = "¡Dejaste algo en tu carrito! 🛒";
+      const html = `
+        <div style="font-family: Arial, sans-serif; padding: 20px; background: #fafafa; border-radius: 8px;">
+          <h2 style="color: #111;">¡Hey! Notamos que no terminaste tu compra.</h2>
+          <p>Tus productos por un total de <strong>$${total}</strong> siguen esperándote en tu carrito.</p>
+          <p>Termina tu compra en 1 clic antes de que alguien más se los lleve usando este enlace:</p>
+          <p style="margin-top:20px; margin-bottom:20px;">
+             <a href="https://collectibles.com/checkout?recover=${cart.id}" style="padding: 12px 24px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Recuperar mi carrito</a>
+          </p>
+          <p style="color: #666; font-size: 12px;">Si necesitas ayuda o tienes problemas técnicos con el pago, responde a este correo.</p>
+          <p>Saludos,<br />El Equipo de Collectibles.</p>
+        </div>
+      `;
+      
+      await sendEmailAndLog(email, subject, html, 'abandoned_cart', cart.customer_id);
+      
+      // Marcar como enviado
+      await supabaseClient.from('abandoned_checkouts').update({ recovery_email_sent: true }).eq('id', cart.id);
+
+      return new Response(JSON.stringify({ success: true, email }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
+    }
+
     return new Response(JSON.stringify({ ignored: true }), { headers: corsHeaders });
 
   } catch (error: any) {
