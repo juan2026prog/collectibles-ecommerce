@@ -143,7 +143,6 @@ export default function AdminBanners() {
           </div>
         </>
       )}
-    </div>
       <MediaPickerModal 
         isOpen={showMediaPicker} 
         onClose={() => setShowMediaPicker(false)} 
