@@ -261,7 +261,7 @@ function handleAddToCart(p: any) {
                 <div key={p.id} className={`group bg-white border border-gray-100 overflow-hidden hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] transition-all duration-300 transform hover:-translate-y-1 flex ${viewMode === 'list' ? 'flex-row rounded-2xl h-48' : 'flex-col rounded-3xl h-full'}`}>
                   <div className={`relative overflow-hidden bg-gray-50/50 ${viewMode === 'list' ? 'w-48 shrink-0' : 'aspect-square'}`}>
                     <Link to={`/p/${p.slug}`}>
-                      <img src={getProductImage(p)} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out" />
+                      <img src={getProductImage(p)} alt={p.title} className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-700 ease-out" />
                     </Link>
                     <ProductBadge 
                       badgeId={p.badge} 

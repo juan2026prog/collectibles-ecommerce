@@ -49,7 +49,7 @@ function handleAddToCart(p: any) {
     <div className="group bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] transition-all duration-300 transform hover:-translate-y-1 flex flex-col h-full shrink-0 w-[240px] sm:w-[280px]">
       <div className="relative overflow-hidden aspect-square bg-gray-50/50">
         <Link to={`/p/${p.slug}`}>
-          <img src={getProductImage(p)} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out" />
+          <img src={getProductImage(p)} alt={p.title} className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-700 ease-out" />
         </Link>
         <ProductBadge 
           badgeId={p.badge} 
