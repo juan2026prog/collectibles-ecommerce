@@ -6,7 +6,7 @@
 
 @layer base {
   body {
-    @apply bg-dark-700 text-gray-100 antialiased selection:bg-primary-500 selection:text-white font-sans;
+    @apply bg-white text-gray-900 antialiased selection:bg-primary-500 selection:text-white font-sans;
   }
   * {
     @apply scroll-smooth;

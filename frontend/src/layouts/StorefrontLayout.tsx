@@ -196,8 +196,10 @@ export default function StorefrontLayout() {
 
   roleMenuItems.push({ name: 'Mis Pedidos', href: '/account', icon: Package, color: 'text-gray-600' });
 
+  const isHome = location.pathname === '/';
+
   return (
-    <div className="min-h-screen flex flex-col bg-dark-700 gamger-grid">
+    <div className={`min-h-screen flex flex-col ${isHome ? 'bg-dark-700 gamger-grid' : 'bg-white'}`}>
       {settings['theme_color_primary'] && (
         <style dangerouslySetInnerHTML={{
           __html: `:root {

@@ -71,31 +71,31 @@ function handleAddToCart(p: any) {
     <div className="space-y-6">
       {/* Search */}
       <form onSubmit={handleSearch}>
-        <label className="font-bold text-white uppercase text-xs tracking-widest mb-2 block">{t('shop.search')}</label>
+        <label className="font-bold text-gray-900 uppercase text-xs tracking-widest mb-2 block">{t('shop.search')}</label>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             value={searchInput}
             onChange={e => setSearchInput(e.target.value)}
             placeholder={t('shop.search')}
-            className="w-full pl-9 pr-3 py-2 text-sm border border-white/10 rounded-xl bg-surface-card text-white focus:outline-none focus:ring-2 focus:ring-primary-400 placeholder:text-gray-500"
+            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-400 placeholder:text-gray-400"
           />
         </div>
       </form>
 
       {/* Categories */}
       <div>
-        <h3 className="font-bold text-white uppercase text-xs tracking-widest mb-3">{t('shop.filters')} — {t('nav.categories')}</h3>
+        <h3 className="font-bold text-gray-900 uppercase text-xs tracking-widest mb-3">{t('shop.filters')} — {t('nav.categories')}</h3>
         <ul className="space-y-1">
           <li>
-            <button onClick={() => setFilter('category', '')} className={`text-sm w-full text-left py-1.5 px-2 rounded-lg transition-colors ${!categorySlug ? 'font-bold text-primary-400 bg-primary-600/20' : 'text-gray-400 hover:text-primary-400 hover:bg-white/5'}`}>
+            <button onClick={() => setFilter('category', '')} className={`text-sm w-full text-left py-1.5 px-2 rounded-lg transition-colors ${!categorySlug ? 'font-bold text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50'}`}>
               {t('shop.allProducts') || 'Todos los productos'}
             </button>
           </li>
           {catsLoading ? [...Array(5)].map((_, i) => <li key={i} className="h-7 bg-white/5 rounded animate-pulse mb-1" />) :
             categories.map(c => (
               <li key={c.id}>
-                <button onClick={() => setFilter('category', c.slug)} className={`text-sm w-full text-left py-1.5 px-2 rounded-lg transition-colors ${categorySlug === c.slug ? 'font-bold text-primary-400 bg-primary-600/20' : 'text-gray-400 hover:text-primary-400 hover:bg-white/5'}`}>
+                <button onClick={() => setFilter('category', c.slug)} className={`text-sm w-full text-left py-1.5 px-2 rounded-lg transition-colors ${categorySlug === c.slug ? 'font-bold text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50'}`}>
                   {c.name}
                 </button>
               </li>
@@ -105,17 +105,17 @@ function handleAddToCart(p: any) {
 
       {/* Brands */}
       <div>
-        <h3 className="font-bold text-white uppercase text-xs tracking-widest mb-3">{t('nav.brands')}</h3>
+        <h3 className="font-bold text-gray-900 uppercase text-xs tracking-widest mb-3">{t('nav.brands')}</h3>
         <ul className="space-y-1">
           <li>
-            <button onClick={() => setFilter('brand', '')} className={`text-sm w-full text-left py-1.5 px-2 rounded-lg transition-colors ${!brandSlug ? 'font-bold text-primary-400 bg-primary-600/20' : 'text-gray-400 hover:text-primary-400 hover:bg-white/5'}`}>
+            <button onClick={() => setFilter('brand', '')} className={`text-sm w-full text-left py-1.5 px-2 rounded-lg transition-colors ${!brandSlug ? 'font-bold text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50'}`}>
               {t('shop.allBrands') || 'Todas las marcas'}
             </button>
           </li>
           {brandsLoading ? [...Array(4)].map((_, i) => <li key={i} className="h-7 bg-white/5 rounded animate-pulse mb-1" />) :
             brands.map(b => (
               <li key={b.id}>
-                <button onClick={() => setFilter('brand', b.slug)} className={`text-sm w-full text-left py-1.5 px-2 rounded-lg transition-colors ${brandSlug === b.slug ? 'font-bold text-primary-400 bg-primary-600/20' : 'text-gray-400 hover:text-primary-400 hover:bg-white/5'}`}>
+                <button onClick={() => setFilter('brand', b.slug)} className={`text-sm w-full text-left py-1.5 px-2 rounded-lg transition-colors ${brandSlug === b.slug ? 'font-bold text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50'}`}>
                   {b.name}
                 </button>
               </li>
@@ -125,12 +125,12 @@ function handleAddToCart(p: any) {
 
       {/* Price Range */}
       <div>
-        <h3 className="font-bold text-white uppercase text-xs tracking-widest mb-3">{t('shop.priceRange') || 'Precio'}</h3>
+        <h3 className="font-bold text-gray-900 uppercase text-xs tracking-widest mb-3">{t('shop.priceRange') || 'Precio'}</h3>
         <div className="flex gap-2">
           <input type="number" placeholder="Min" value={priceMin} onChange={e => setPriceMin(e.target.value)}
-            className="w-1/2 border border-white/10 rounded-xl px-3 py-2 text-sm bg-surface-card text-white focus:outline-none focus:ring-2 focus:ring-primary-400 placeholder:text-gray-500" />
+            className="w-1/2 border border-gray-200 rounded-xl px-3 py-2 text-sm bg-gray-50 text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-400 placeholder:text-gray-400" />
           <input type="number" placeholder="Max" value={priceMax} onChange={e => setPriceMax(e.target.value)}
-            className="w-1/2 border border-white/10 rounded-xl px-3 py-2 text-sm bg-surface-card text-white focus:outline-none focus:ring-2 focus:ring-primary-400 placeholder:text-gray-500" />
+            className="w-1/2 border border-gray-200 rounded-xl px-3 py-2 text-sm bg-gray-50 text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-400 placeholder:text-gray-400" />
         </div>
         <button onClick={() => setPage(0)} className="mt-2 w-full py-2 text-xs font-bold bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-colors">
           {t('shop.applyFilters') || 'Aplicar'}
@@ -140,7 +140,7 @@ function handleAddToCart(p: any) {
       {/* Clear filters */}
       {(categorySlug || brandSlug || searchQ || priceMin || priceMax) && (
         <button onClick={() => { setSearchParams({}); setPriceMin(''); setPriceMax(''); setSearchInput(''); setPage(0); }}
-          className="w-full py-2 text-xs font-bold text-red-400 border border-red-500/20 rounded-xl hover:bg-red-500/10 transition-colors">
+          className="w-full py-2 text-xs font-bold text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition-colors">
           {t('shop.clearFilters') || 'Limpiar filtros'}
         </button>
       )}
@@ -152,20 +152,19 @@ function handleAddToCart(p: any) {
   const pageTitle = currentCategory?.name || currentBrand?.name || (searchQ ? `"${searchQ}"` : t('shop.title'));
 
   return (
-    <div className="bg-dark-700 min-h-screen pb-20">
-      {/* ═══ PREMIUM HERO BANNER ═══ */}
-      <div className="bg-dark-900 relative overflow-hidden py-16 mb-10">
-        <div className="absolute inset-0 bg-gradient-to-r from-primary-900/40 via-purple-900/20 to-transparent" />
-        <div className="absolute top-0 right-0 w-96 h-96 bg-primary-600/20 rounded-full blur-[100px] -mt-20 -mr-20" />
+    <div className="bg-white min-h-screen pb-20">
+      {/* ═══ SHOP HERO BANNER ═══ */}
+      <div className="bg-gradient-to-br from-gray-50 to-gray-100 relative overflow-hidden py-16 mb-10 border-b border-gray-100">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-primary-100/40 rounded-full blur-[100px] -mt-20 -mr-20" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
           <div>
             <nav className="flex items-center text-xs font-bold tracking-widest uppercase text-gray-400 mb-4">
-              <Link to="/" className="hover:text-white transition-colors">{t('nav.home')}</Link>
+              <Link to="/" className="hover:text-gray-900 transition-colors">{t('nav.home')}</Link>
               <ChevronRight className="w-4 h-4 mx-2" />
-              <span className="text-primary-400">{pageTitle}</span>
+              <span className="text-primary-600">{pageTitle}</span>
             </nav>
-            <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight drop-shadow-lg">{pageTitle}</h1>
-            <p className="text-gray-400 font-medium mt-3 max-w-xl">
+            <h1 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tight">{pageTitle}</h1>
+            <p className="text-gray-500 font-medium mt-3 max-w-xl">
               {t('shop.subtitle') || 'Descubre piezas exclusivas, figuras de edición limitada y los mejores artículos para tu colección.'}
             </p>
           </div>
@@ -175,7 +174,7 @@ function handleAddToCart(p: any) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 flex gap-8">
         {/* Desktop Sidebar */}
         <aside className="hidden lg:block w-64 flex-shrink-0">
-          <div className="bg-surface-card rounded-3xl border border-white/5 p-6 sticky top-24">
+          <div className="bg-white rounded-3xl border border-gray-200 p-6 sticky top-24 shadow-sm">
             <Sidebar />
           </div>
         </aside>
@@ -183,34 +182,34 @@ function handleAddToCart(p: any) {
         {/* Main */}
         <div className="flex-1 min-w-0">
           {/* Toolbar */}
-          <div className="bg-surface-card rounded-2xl border border-white/5 p-4 mb-8 flex flex-wrap items-center justify-between gap-4">
+          <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-8 flex flex-wrap items-center justify-between gap-4 shadow-sm">
             <p className="text-sm text-gray-500 font-medium hidden sm:block">
-              <span className="font-black text-white">{count}</span> {t('shop.results')}
+              <span className="font-black text-gray-900">{count}</span> {t('shop.results')}
             </p>
             <div className="flex items-center gap-3 w-full sm:w-auto">
-              <button onClick={() => setMobileFilters(true)} className="lg:hidden flex-1 sm:flex-none p-3 border border-white/10 rounded-xl hover:bg-white/5 flex justify-center items-center gap-2 font-bold text-sm text-gray-300">
+              <button onClick={() => setMobileFilters(true)} className="lg:hidden flex-1 sm:flex-none p-3 border border-gray-200 rounded-xl hover:bg-gray-50 flex justify-center items-center gap-2 font-bold text-sm text-gray-600">
                 <SlidersHorizontal className="w-4 h-4" /> {t('shop.filters')}
               </button>
               
               {/* Grid Switcher Icons */}
-              <div className="hidden sm:flex items-center gap-1 border border-white/10 rounded-xl bg-white/5 p-1">
-                <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-lg transition-all ${viewMode === 'list' ? 'bg-primary-600 shadow-sm text-white' : 'text-gray-500 hover:text-gray-300'}`} title="Lista">
+              <div className="hidden sm:flex items-center gap-1 border border-gray-200 rounded-xl bg-gray-50 p-1">
+                <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-lg transition-all ${viewMode === 'list' ? 'bg-primary-600 shadow-sm text-white' : 'text-gray-400 hover:text-gray-700'}`} title="Lista">
                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
                 </button>
-                <button onClick={() => setViewMode('grid-2')} className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid-2' ? 'bg-primary-600 shadow-sm text-white' : 'text-gray-500 hover:text-gray-300'}`} title="2 Columnas">
+                <button onClick={() => setViewMode('grid-2')} className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid-2' ? 'bg-primary-600 shadow-sm text-white' : 'text-gray-400 hover:text-gray-700'}`} title="2 Columnas">
                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="18" rx="1"/></svg>
                 </button>
-                <button onClick={() => setViewMode('grid-3')} className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid-3' ? 'bg-primary-600 shadow-sm text-white' : 'text-gray-500 hover:text-gray-300'}`} title="3 Columnas">
+                <button onClick={() => setViewMode('grid-3')} className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid-3' ? 'bg-primary-600 shadow-sm text-white' : 'text-gray-400 hover:text-gray-700'}`} title="3 Columnas">
                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="2" y="3" width="5" height="18" rx="1"/><rect x="9.5" y="3" width="5" height="18" rx="1"/><rect x="17" y="3" width="5" height="18" rx="1"/></svg>
                 </button>
-                <button onClick={() => setViewMode('grid-4')} className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid-4' ? 'bg-primary-600 shadow-sm text-white' : 'text-gray-500 hover:text-gray-300'}`} title="4 Columnas">
+                <button onClick={() => setViewMode('grid-4')} className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid-4' ? 'bg-primary-600 shadow-sm text-white' : 'text-gray-400 hover:text-gray-700'}`} title="4 Columnas">
                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><circle cx="4" cy="12" r="2.5"/><circle cx="12" cy="12" r="2.5"/><circle cx="20" cy="12" r="2.5"/><path d="M4 12c-0.5 0-1 0.5-1 1s0.5 1 1 1 1-0.5 1-1-0.5-1-1-1z" opacity="0"/></svg>
                    <div className="flex gap-0.5">
                       <div className="w-1.5 h-1.5 rounded-full bg-current" /><div className="w-1.5 h-1.5 rounded-full bg-current" />
                       <div className="w-1.5 h-1.5 rounded-full bg-current" /><div className="w-1.5 h-1.5 rounded-full bg-current" />
                    </div>
                 </button>
-                <button onClick={() => setViewMode('grid-5')} className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid-5' ? 'bg-primary-600 shadow-sm text-white' : 'text-gray-500 hover:text-gray-300'}`} title="5 Columnas">
+                <button onClick={() => setViewMode('grid-5')} className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid-5' ? 'bg-primary-600 shadow-sm text-white' : 'text-gray-400 hover:text-gray-700'}`} title="5 Columnas">
                    <div className="flex gap-0.5 flex-wrap w-4 justify-center">
                       {[...Array(6)].map((_, i) => <div key={i} className="w-1 h-1 rounded-full bg-current" />)}
                    </div>
@@ -218,7 +217,7 @@ function handleAddToCart(p: any) {
               </div>
 
               <select value={sortBy} onChange={e => { setSortBy(e.target.value); setPage(0); }}
-                className="flex-1 sm:flex-none border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-gray-300 bg-surface-card focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none cursor-pointer">
+                className="flex-1 sm:flex-none border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-700 bg-white focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none cursor-pointer">
                 <option value="default">{t('shop.sort.recommended') || 'Recomendados'}</option>
                 <option value="newest">{t('shop.sort.newest') || 'Más Nuevos'}</option>
                 <option value="price-low">{t('shop.sort.priceLow') || 'Menor Precio'}</option>
@@ -236,11 +235,11 @@ function handleAddToCart(p: any) {
               ))}
             </div>
           ) : products.length === 0 ? (
-            <div className="bg-surface-card rounded-3xl border border-white/5 p-20 text-center">
-              <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
-                <LayoutGrid className="w-10 h-10 text-gray-600" />
+            <div className="bg-gray-50 rounded-3xl border border-gray-200 p-20 text-center">
+              <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <LayoutGrid className="w-10 h-10 text-gray-400" />
               </div>
-              <h3 className="text-2xl font-black text-white mb-2">{t('shop.empty')}</h3>
+              <h3 className="text-2xl font-black text-gray-900 mb-2">{t('shop.empty')}</h3>
               <p className="text-gray-500 font-medium max-w-md mx-auto mb-8">
                 {t('shop.emptyHint') || 'Intenta ajustar los filtros de búsqueda o cambiar de categoría.'}
               </p>
@@ -258,8 +257,8 @@ function handleAddToCart(p: any) {
                'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
             }`}>
               {products.map(p => (
-                <div key={p.id} className={`group bg-surface-card border border-white/5 overflow-hidden hover:border-primary-500/30 hover:shadow-glow-card transition-all duration-300 transform hover:-translate-y-1 flex ${viewMode === 'list' ? 'flex-row rounded-2xl h-48' : 'flex-col rounded-3xl h-full'}`}>
-                  <div className={`relative overflow-hidden bg-dark-600 ${viewMode === 'list' ? 'w-48 shrink-0' : 'aspect-square'}`}>
+                <div key={p.id} className={`group bg-white border border-gray-200 overflow-hidden hover:border-primary-300 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex ${viewMode === 'list' ? 'flex-row rounded-2xl h-48' : 'flex-col rounded-3xl h-full'}`}>
+                  <div className={`relative overflow-hidden bg-gray-50 ${viewMode === 'list' ? 'w-48 shrink-0' : 'aspect-square'}`}>
                     <Link to={`/p/${p.slug}`}>
                       <img src={getProductImage(p)} alt={p.title} className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-700 ease-out" />
                     </Link>
@@ -270,19 +269,19 @@ function handleAddToCart(p: any) {
                       className="absolute top-4 left-4 text-[10px] uppercase tracking-wider" 
                     />
                     <div className={`absolute top-4 right-4 flex gap-2 transition-all duration-300 ${viewMode.startsWith('grid') ? 'flex-col translate-x-12 opacity-0 group-hover:translate-x-0 group-hover:opacity-100' : 'flex-row'}`}>
-                      <button className="w-10 h-10 bg-dark-700/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center hover:bg-primary-600 transition-colors border border-white/10 text-gray-300"><Heart className="w-4 h-4" /></button>
-                      <button onClick={() => handleAddToCart(p)} className="w-10 h-10 bg-dark-700/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center hover:bg-primary-600 transition-colors border border-white/10 text-gray-300"><ShoppingCart className="w-4 h-4" /></button>
+                      <button className="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center hover:bg-primary-600 hover:text-white transition-colors border border-gray-200 text-gray-500"><Heart className="w-4 h-4" /></button>
+                      <button onClick={() => handleAddToCart(p)} className="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center hover:bg-primary-600 hover:text-white transition-colors border border-gray-200 text-gray-500"><ShoppingCart className="w-4 h-4" /></button>
                     </div>
                   </div>
                   <div className={`${viewMode === 'grid-5' ? 'p-3' : 'p-5'} flex flex-col flex-1 justify-between`}>
                     <div>
                       <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-1.5">{p.category?.name || p.brand?.name || ''}</p>
-                      <Link to={`/p/${p.slug}`} className={`${viewMode === 'grid-5' ? 'text-xs' : 'text-sm'} font-bold text-gray-200 hover:text-neon-cyan line-clamp-2 leading-snug transition-colors`}>{p.title}</Link>
+                      <Link to={`/p/${p.slug}`} className={`${viewMode === 'grid-5' ? 'text-xs' : 'text-sm'} font-bold text-gray-900 hover:text-primary-600 line-clamp-2 leading-snug transition-colors`}>{p.title}</Link>
                       {viewMode === 'list' && <p className="mt-2 text-sm text-gray-500 line-clamp-2">{p.description}</p>}
                     </div>
                     <div className={`flex items-center gap-3 ${viewMode === 'grid-5' ? 'mt-2' : 'mt-4'}`}>
-                      <span className={`${viewMode === 'grid-5' ? 'text-sm' : 'text-lg'} font-black text-white`}>{formatPrice(p.base_price)}</span>
-                      {p.compare_at_price && <span className="text-[10px] font-bold text-gray-300 line-through">{formatPrice(p.compare_at_price)}</span>}
+                      <span className={`${viewMode === 'grid-5' ? 'text-sm' : 'text-lg'} font-black text-gray-900`}>{formatPrice(p.base_price)}</span>
+                      {p.compare_at_price && <span className="text-[10px] font-bold text-gray-400 line-through">{formatPrice(p.compare_at_price)}</span>}
                     </div>
                   </div>
                 </div>
@@ -292,10 +291,10 @@ function handleAddToCart(p: any) {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex justify-center gap-2 mt-12 bg-surface-card p-4 rounded-2xl border border-white/5 max-w-fit mx-auto">
+            <div className="flex justify-center gap-2 mt-12 bg-white p-4 rounded-2xl border border-gray-200 max-w-fit mx-auto shadow-sm">
               {[...Array(totalPages)].map((_, i) => (
                 <button key={i} onClick={() => { setPage(i); window.scrollTo({top: 0, behavior: 'smooth'}); }}
-                  className={`w-12 h-12 rounded-xl text-sm font-black transition-all ${i === page ? 'bg-primary-600 text-white shadow-lg shadow-primary-500/30 hover:bg-primary-500' : 'bg-transparent text-gray-500 hover:bg-white/10'}`}>
+                  className={`w-12 h-12 rounded-xl text-sm font-black transition-all ${i === page ? 'bg-primary-600 text-white shadow-lg shadow-primary-500/30 hover:bg-primary-500' : 'bg-transparent text-gray-500 hover:bg-gray-100'}`}>
                   {i + 1}
                 </button>
               ))}
@@ -307,10 +306,10 @@ function handleAddToCart(p: any) {
       {/* Mobile Filter Drawer */}
       {mobileFilters && (
         <>
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 lg:hidden" onClick={() => setMobileFilters(false)} />
-          <div className="fixed inset-y-0 left-0 w-72 bg-dark-700 z-50 p-6 overflow-y-auto lg:hidden animate-slide-in-left border-r border-white/5">
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 lg:hidden" onClick={() => setMobileFilters(false)} />
+          <div className="fixed inset-y-0 left-0 w-72 bg-white z-50 p-6 overflow-y-auto lg:hidden animate-slide-in-left border-r border-gray-200 shadow-xl">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="font-bold text-lg text-white">{t('shop.filters')}</h2>
+              <h2 className="font-bold text-lg text-gray-900">{t('shop.filters')}</h2>
               <button onClick={() => setMobileFilters(false)}><X className="w-5 h-5" /></button>
             </div>
             <Sidebar />
