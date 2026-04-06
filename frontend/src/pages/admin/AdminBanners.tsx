@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Plus, Pencil, Trash2, Save, X, Image as ImageIcon, GripVertical } from 'lucide-react';
+import { Plus, Pencil, Trash2, Save, X, Image as ImageIcon, GripVertical, Upload } from 'lucide-react';
 
 export default function AdminBanners() {
   const [banners, setBanners] = useState<any[]>([]);
@@ -8,6 +8,7 @@ export default function AdminBanners() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState({ title: '', subtitle: '', image_url: '', link_url: '', button_text: 'SHOP NOW', is_active: true, sort_order: 0 });
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   useEffect(() => { fetch(); }, []);
 
@@ -20,6 +21,32 @@ export default function AdminBanners() {
 
   function openCreate() { setEditing(null); setForm({ title: '', subtitle: '', image_url: '', link_url: '', button_text: 'SHOP NOW', is_active: true, sort_order: 0 }); setShowForm(true); }
   function openEdit(b: any) { setEditing(b); setForm({ title: b.title || '', subtitle: b.subtitle || '', image_url: b.image_url, link_url: b.link_url || '', button_text: b.button_text || 'SHOP NOW', is_active: b.is_active, sort_order: b.sort_order }); setShowForm(true); }
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    
+    setUploadingImage(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const rawName = file.name.replace(`.${fileExt}`, '');
+      const sanitizedName = rawName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+      const fileName = `banners/${Date.now()}-${sanitizedName}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('public-assets')
+        .upload(fileName, file, { cacheControl: '3600', upsert: false });
+        
+      if (uploadError) throw uploadError;
+      
+      const { data } = supabase.storage.from('public-assets').getPublicUrl(fileName);
+      setForm({...form, image_url: data.publicUrl});
+    } catch (err: any) {
+      console.error(err);
+      alert('Error al subir imagen a la biblioteca de medios.');
+    }
+    setUploadingImage(false);
+  }
 
   async function handleSave() {
     const payload = { ...form };
@@ -83,7 +110,17 @@ export default function AdminBanners() {
             <div className="space-y-3">
               <div><label className="form-label">Title</label><input className="form-input" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
               <div><label className="form-label">Subtitle</label><input className="form-input" value={form.subtitle} onChange={e => setForm({...form, subtitle: e.target.value})} /></div>
-              <div><label className="form-label">Image URL *</label><input className="form-input" value={form.image_url} onChange={e => setForm({...form, image_url: e.target.value})} /></div>
+              <div>
+                <label className="form-label">Image URL *</label>
+                <div className="flex gap-2">
+                  <input className="form-input flex-1" value={form.image_url} onChange={e => setForm({...form, image_url: e.target.value})} placeholder="https://... o sube un archivo" />
+                  <label className={`btn-secondary flex-shrink-0 cursor-pointer flex items-center justify-center px-4 ${uploadingImage ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <Upload className="w-4 h-4" />
+                    <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                  </label>
+                </div>
+                {form.image_url && <img src={form.image_url} alt="Preview" className="h-16 mt-2 rounded object-cover" />}
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="form-label">Link URL</label><input className="form-input" value={form.link_url} onChange={e => setForm({...form, link_url: e.target.value})} /></div>
                 <div><label className="form-label">Button Text</label><input className="form-input" value={form.button_text} onChange={e => setForm({...form, button_text: e.target.value})} /></div>
