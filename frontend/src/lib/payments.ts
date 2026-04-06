@@ -10,6 +10,12 @@ interface CreatePaymentParams {
     phone?: string;
   };
   items: any[];
+  bank_promo?: {
+    promo_id: string;
+    bank_name: string;
+    discount_value: number;
+    discount_amount: number;
+  };
 }
 
 const EDGE_FUNCTION_URL = 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/create-payment';

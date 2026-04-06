@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { ChevronRight, CreditCard, Building, QrCode, Truck, Store } from 'lucide-react';
+import { ChevronRight, CreditCard, QrCode, Truck, Store, Tag, Sparkles, X } from 'lucide-react';
 import { useCartContext } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -9,6 +9,40 @@ import AddressAutocomplete from '../components/AddressAutocomplete';
 import { createCheckoutSession } from '../lib/payments';
 import { URUGUAY_LOCATIONS, DEPARTAMENTOS, calculateShipping } from '../utils/uruguayLocations';
 
+// ═══ Card metadata for visual display ═══
+const CARD_COLORS: Record<string, { bg: string; text: string }> = {
+  'OCA': { bg: '#E31937', text: '#fff' },
+  'OCA Blue': { bg: '#1A73E8', text: '#fff' },
+  'Mi Dinero': { bg: '#00B140', text: '#fff' },
+  'Visa': { bg: '#1A1F71', text: '#fff' },
+  'Mastercard': { bg: '#EB001B', text: '#fff' },
+  'American Express': { bg: '#006FCF', text: '#fff' },
+  'Santander': { bg: '#EC0000', text: '#fff' },
+  'BBVA': { bg: '#004481', text: '#fff' },
+  'Itaú': { bg: '#FF6600', text: '#fff' },
+  'BROU': { bg: '#003366', text: '#fff' },
+  'Scotiabank': { bg: '#D92231', text: '#fff' },
+  'Prex': { bg: '#6C2DC7', text: '#fff' },
+  'Anda': { bg: '#FF8C00', text: '#fff' },
+  'Cabal': { bg: '#004D40', text: '#fff' },
+  'Creditel': { bg: '#8B0000', text: '#fff' },
+  'PassCard': { bg: '#2E7D32', text: '#fff' },
+  'Líder': { bg: '#F4511E', text: '#fff' },
+};
+
+interface BankPromo {
+  id: string;
+  name: string;
+  discount_type: string;
+  discount_value: number;
+  bank_name: string;
+  min_purchase: number;
+  max_discount: number;
+  promo_label: string;
+  starts_at: string | null;
+  ends_at: string | null;
+}
+
 export default function Checkout() {
   const { items, total, clearCart } = useCartContext();
   const { user } = useAuth();
@@ -16,13 +50,43 @@ export default function Checkout() {
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('dlocalgo');
   const [shippingMethod, setShippingMethod] = useState<'delivery' | 'pickup'>('delivery');
+  const [bankPromos, setBankPromos] = useState<BankPromo[]>([]);
+  const [selectedPromo, setSelectedPromo] = useState<BankPromo | null>(null);
   const [form, setForm] = useState({
     email: user?.email || '', first_name: '', last_name: '', phone: '',
     street: '', apartment: '', city: '', department: '', postal_code: '', country: 'Uruguay',
   });
 
   const shipping = shippingMethod === 'pickup' ? 0 : calculateShipping(form.city, form.department, total);
-  const grandTotal = total + shipping;
+  const subtotalWithShipping = total + shipping;
+
+  // ═══ Calculate bank discount ═══
+  let bankDiscount = 0;
+  if (selectedPromo && subtotalWithShipping >= (selectedPromo.min_purchase || 0)) {
+    if (selectedPromo.discount_type === 'bank_discount' || selectedPromo.discount_type === 'percentage') {
+      bankDiscount = Math.round(subtotalWithShipping * selectedPromo.discount_value / 100);
+      if (selectedPromo.max_discount > 0) {
+        bankDiscount = Math.min(bankDiscount, selectedPromo.max_discount);
+      }
+    }
+  }
+  const grandTotal = subtotalWithShipping - bankDiscount;
+
+  // ═══ Fetch active bank promotions ═══
+  useEffect(() => {
+    async function fetchBankPromos() {
+      const now = new Date().toISOString();
+      const { data } = await supabase
+        .from('promotions')
+        .select('*')
+        .eq('discount_type', 'bank_discount')
+        .eq('is_active', true)
+        .or(`starts_at.is.null,starts_at.lte.${now}`)
+        .or(`ends_at.is.null,ends_at.gte.${now}`);
+      setBankPromos(data || []);
+    }
+    fetchBankPromos();
+  }, []);
 
   useEffect(() => {
     if (items.length > 0) {
@@ -44,11 +108,9 @@ export default function Checkout() {
     setLoading(true);
 
     try {
-      // Branch out by Payment Method
       if (paymentMethod === 'dlocalgo' || paymentMethod === 'paypal') {
         const provider = paymentMethod === 'dlocalgo' ? 'dlocal' : 'paypal';
         
-        // Track the purchase initiation
         analytics.track({
           eventName: 'InitiateCheckout',
           eventData: { content_ids: items.map(i => i.product_id), value: grandTotal, currency: 'UYU' },
@@ -64,12 +126,17 @@ export default function Checkout() {
              address: shippingMethod === 'pickup' ? 'Retiro en local' : `${form.street}, ${form.apartment} - ${form.city}, ${form.department}`,
              phone: form.phone
           },
-          items: items.map(i => ({ id: i.product_id, quantity: i.quantity, price: i.price, title: i.title }))
+          items: items.map(i => ({ id: i.product_id, quantity: i.quantity, price: i.price, title: i.title })),
+          bank_promo: selectedPromo ? {
+            promo_id: selectedPromo.id,
+            bank_name: selectedPromo.bank_name,
+            discount_value: selectedPromo.discount_value,
+            discount_amount: bankDiscount,
+          } : undefined,
         });
         return; 
       }
 
-      // If Transfer...
       alert('Las transferencias estan temporalmente deshabilitadas. Por favor usa dLocal Go.');
     } catch (err: any) {
       alert('Error procesando el pedido: ' + err.message);
@@ -231,6 +298,101 @@ export default function Checkout() {
                 ))}
               </div>
             </div>
+
+            {/* ═══ BANK PROMOTIONS ═══ */}
+            {paymentMethod === 'dlocalgo' && bankPromos.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-100 p-6">
+                <h2 className="font-bold text-lg mb-1 flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-amber-500" />
+                  PROMOCIONES BANCARIAS
+                </h2>
+                <p className="text-xs text-gray-500 mb-4">Seleccioná tu tarjeta para aplicar el descuento automáticamente</p>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {bankPromos.map(promo => {
+                    const colors = CARD_COLORS[promo.bank_name] || { bg: '#6B7280', text: '#fff' };
+                    const isSelected = selectedPromo?.id === promo.id;
+                    const meetsMinimum = subtotalWithShipping >= (promo.min_purchase || 0);
+                    let promoDiscount = 0;
+                    if (meetsMinimum) {
+                      promoDiscount = Math.round(subtotalWithShipping * promo.discount_value / 100);
+                      if (promo.max_discount > 0) promoDiscount = Math.min(promoDiscount, promo.max_discount);
+                    }
+
+                    return (
+                      <button
+                        key={promo.id}
+                        type="button"
+                        onClick={() => setSelectedPromo(isSelected ? null : promo)}
+                        disabled={!meetsMinimum}
+                        className={`relative text-left p-4 rounded-xl border-2 transition-all duration-200 ${
+                          isSelected
+                            ? 'border-green-500 bg-green-50/50 shadow-lg shadow-green-100 ring-2 ring-green-200'
+                            : !meetsMinimum
+                              ? 'border-gray-100 bg-gray-50/30 opacity-50 cursor-not-allowed'
+                              : 'border-gray-100 hover:border-gray-200 hover:shadow-sm cursor-pointer'
+                        }`}
+                      >
+                        {/* Selected checkmark */}
+                        {isSelected && (
+                          <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center shadow-md z-10">
+                            <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                          </div>
+                        )}
+
+                        <div className="flex items-start gap-3">
+                          {/* Card badge */}
+                          <div
+                            className="w-11 h-11 rounded-xl flex items-center justify-center text-[10px] font-black shrink-0 shadow-sm"
+                            style={{ backgroundColor: colors.bg, color: colors.text }}
+                          >
+                            {promo.bank_name.substring(0, 3).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <span className="font-bold text-gray-900 text-sm">{promo.bank_name}</span>
+                              <span 
+                                className="text-[10px] font-black px-1.5 py-0.5 rounded-md"
+                                style={{ backgroundColor: `${colors.bg}15`, color: colors.bg }}
+                              >
+                                {promo.discount_value}% OFF
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-500 leading-snug">
+                              {promo.promo_label || `${promo.discount_value}% OFF pagando con ${promo.bank_name}`}
+                            </p>
+                            {meetsMinimum ? (
+                              <p className="text-xs font-bold text-green-600 mt-1.5">
+                                Ahorrás ${promoDiscount.toLocaleString()}
+                              </p>
+                            ) : (
+                              <p className="text-[10px] text-gray-400 mt-1.5">
+                                Mínimo ${promo.min_purchase.toLocaleString()} para aplicar
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {selectedPromo && (
+                  <div className="mt-4 flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <Tag className="w-4 h-4 text-green-600" />
+                      <span className="text-sm font-bold text-green-700">
+                        Promo {selectedPromo.bank_name} aplicada: -{selectedPromo.discount_value}%
+                        {bankDiscount > 0 && <span className="ml-1 text-green-600">(−${bankDiscount.toLocaleString()})</span>}
+                      </span>
+                    </div>
+                    <button type="button" onClick={() => setSelectedPromo(null)} className="p-1 hover:bg-green-100 rounded-full transition-colors">
+                      <X className="w-4 h-4 text-green-500" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Order Summary */}
@@ -241,7 +403,7 @@ export default function Checkout() {
                 {items.map(item => (
                   <div key={item.variant_id} className="flex items-center gap-3">
                     <div className="relative">
-                      <img src={item.image || 'https://via.placeholder.com/48'} alt="" className="w-12 h-12 rounded-lg object-cover" />
+                      <img src={item.image || 'https://via.placeholder.com/48'} alt="" className="w-12 h-12 rounded-lg object-contain bg-gray-50 p-0.5" />
                       <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-primary-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">{item.quantity}</span>
                     </div>
                     <div className="flex-1 min-w-0">
@@ -254,9 +416,26 @@ export default function Checkout() {
               <div className="border-t pt-4 space-y-2">
                 <div className="flex justify-between text-sm"><span className="text-gray-500">Subtotal</span><span className="font-bold">${total.toLocaleString()}</span></div>
                 <div className="flex justify-between text-sm"><span className="text-gray-500">Envío</span><span className="font-bold">{shipping === 0 ? 'GRATIS' : `$${shipping}`}</span></div>
+                
+                {/* Bank discount line */}
+                {bankDiscount > 0 && selectedPromo && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-green-600 flex items-center gap-1">
+                      <Tag className="w-3 h-3" />
+                      Promo {selectedPromo.bank_name} ({selectedPromo.discount_value}%)
+                    </span>
+                    <span className="font-bold text-green-600">−${bankDiscount.toLocaleString()}</span>
+                  </div>
+                )}
+
                 <div className="border-t pt-2 mt-2 flex justify-between">
                   <span className="font-bold text-lg">Total</span>
-                  <span className="text-2xl font-black text-primary-600">${grandTotal.toLocaleString()}</span>
+                  <div className="text-right">
+                    {bankDiscount > 0 && (
+                      <span className="text-sm text-gray-400 line-through mr-2">${subtotalWithShipping.toLocaleString()}</span>
+                    )}
+                    <span className="text-2xl font-black text-primary-600">${grandTotal.toLocaleString()}</span>
+                  </div>
                 </div>
               </div>
               <button type="submit" disabled={loading} className="btn-primary w-full mt-6 py-3.5 text-base">
