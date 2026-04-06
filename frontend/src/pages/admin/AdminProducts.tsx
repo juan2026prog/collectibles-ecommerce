@@ -118,6 +118,10 @@ export default function AdminProducts() {
   const [inlineEdit, setInlineEdit] = useState<{ id: string, field: string } | null>(null);
   const [inlineValue, setInlineValue] = useState<any>(null);
   
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  const [itemsPerPage, setItemsPerPage] = useState<number | 'Todos'>(50);
+  const [currentPage, setCurrentPage] = useState(1);
+  
   const [categories, setCategories] = useState<any[]>([]);
   const [brands, setBrands] = useState<any[]>([]);
   const [tags, setTags] = useState<any[]>([]);
@@ -373,6 +377,24 @@ export default function AdminProducts() {
     }
   };
 
+  const handleBulkPublish = async () => {
+    if (!confirm(`¿Publicar ${selectedProducts.length} productos seleccionados?`)) return;
+    try {
+       await supabase.from('products').update({ status: 'published' }).in('id', selectedProducts);
+       setSelectedProducts([]);
+       fetchProducts();
+    } catch (err: any) { alert(err.message); }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!confirm(`¿Eliminar permanente ${selectedProducts.length} productos seleccionados? Esta acción no se puede deshacer.`)) return;
+    try {
+       await supabase.from('products').delete().in('id', selectedProducts);
+       setSelectedProducts([]);
+       fetchProducts();
+    } catch (err: any) { alert(err.message); }
+  };
+
   const addToGallery = (url: string) => setForm({ ...form, gallery: [...form.gallery, { url }] });
   const removeFromGallery = (idx: number) => setForm({ ...form, gallery: form.gallery.filter((_, i) => i !== idx) });
 
@@ -395,20 +417,55 @@ export default function AdminProducts() {
          <div className="p-4 border-b bg-gray-50/50 flex gap-4 items-center">
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input type="text" placeholder="Buscar productos..." value={search} onChange={e => setSearch(e.target.value)}
+              <input type="text" placeholder="Buscar productos..." value={search} onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
                 className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500" />
             </div>
-            <div className="flex gap-2 text-xs font-bold text-gray-500">
-               <button className="px-3 py-1.5 hover:bg-white rounded-md border border-transparent hover:border-gray-200 transition-all">Todos</button>
-               <button className="px-3 py-1.5 hover:bg-white rounded-md border border-transparent hover:border-gray-200 transition-all">Publicados</button>
-               <button className="px-3 py-1.5 hover:bg-white rounded-md border border-transparent hover:border-gray-200 transition-all">Borradores</button>
+            <div className="flex gap-4 items-center">
+               <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 font-bold">Mostrar:</span>
+                  <select className="border-gray-200 border rounded text-xs p-1" value={itemsPerPage} onChange={(e) => { setItemsPerPage(e.target.value === 'Todos' ? 'Todos' : Number(e.target.value)); setCurrentPage(1); }}>
+                     <option value="50">50</option>
+                     <option value="200">200</option>
+                     <option value="Todos">Todos</option>
+                  </select>
+               </div>
+               <div className="flex gap-2 text-xs font-bold text-gray-500">
+                  <button className="px-3 py-1.5 hover:bg-white rounded-md border border-transparent hover:border-gray-200 transition-all">Todos</button>
+                  <button className="px-3 py-1.5 hover:bg-white rounded-md border border-transparent hover:border-gray-200 transition-all">Publicados</button>
+                  <button className="px-3 py-1.5 hover:bg-white rounded-md border border-transparent hover:border-gray-200 transition-all">Borradores</button>
+               </div>
             </div>
          </div>
+         {selectedProducts.length > 0 && (
+            <div className="bg-blue-50 border-b border-blue-100 px-6 py-2.5 flex gap-4 items-center animate-fade-in">
+               <span className="text-sm font-bold text-blue-800 tracking-tight">{selectedProducts.length} seleccionados</span>
+               <div className="flex gap-2">
+                 <button onClick={handleBulkPublish} className="btn-secondary py-1 text-xs px-4 text-green-700 bg-white border-green-200 hover:bg-green-50 shadow-sm">Publicar Todos</button>
+                 <button onClick={handleBulkDelete} className="btn-secondary py-1 text-xs px-4 text-red-600 bg-white border-red-200 hover:bg-red-50 shadow-sm">Eliminar Todos</button>
+               </div>
+            </div>
+         )}
          <div className="flex-1 overflow-auto">
             <table className="min-w-full divide-y divide-gray-100">
                <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
                  <tr className="text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                   <th className="px-6 py-4 w-12"><input type="checkbox" className="rounded border-gray-300" /></th>
+                   <th className="px-6 py-4 w-12">
+                     {(() => {
+                        const filtered = products.filter(p => p.title.toLowerCase().includes(search.toLowerCase()));
+                        const currentSubset = itemsPerPage === 'Todos' ? filtered : filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+                        return (
+                          <input 
+                            type="checkbox" 
+                            className="rounded border-gray-300" 
+                            checked={selectedProducts.length > 0 && currentSubset.every(p => selectedProducts.includes(p.id))}
+                            onChange={(e) => {
+                              if (e.target.checked) setSelectedProducts(currentSubset.map((p: any) => p.id));
+                              else setSelectedProducts([]);
+                            }}
+                          />
+                        );
+                     })()}
+                   </th>
                    <th className="px-6 py-4">Producto</th>
                    <th className="px-6 py-4">Precio</th>
                    <th className="px-6 py-4">Categoría</th>
@@ -420,11 +477,25 @@ export default function AdminProducts() {
                <tbody className="divide-y divide-gray-100">
                  {loading ? (
                     <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400 animate-pulse">Cargando catálogo...</td></tr>
-                 ) : products.filter(p => p.title.toLowerCase().includes(search.toLowerCase())).map((p: any) => {
+                 ) : (() => {
+                    const filtered = products.filter(p => p.title.toLowerCase().includes(search.toLowerCase()));
+                    const currentSubset = itemsPerPage === 'Todos' ? filtered : filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+                    return currentSubset.map((p: any) => {
                     const primaryCat = p.product_categories?.[0]?.categories;
                     return (
                     <tr key={p.id} className="hover:bg-blue-50/20 group transition-all" title="Haz clic en cualquier campo para editarlo en línea">
-                      <td className="px-6 py-4"><input type="checkbox" className="rounded border-gray-300" onClick={e => e.stopPropagation()} /></td>
+                      <td className="px-6 py-4">
+                        <input 
+                          type="checkbox" 
+                          className="rounded border-gray-300" 
+                          checked={selectedProducts.includes(p.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedProducts([...selectedProducts, p.id]);
+                            else setSelectedProducts(selectedProducts.filter(id => id !== p.id));
+                          }}
+                          onClick={e => e.stopPropagation()} 
+                        />
+                      </td>
                       <td className="px-6 py-4 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'title'}); setInlineValue(p.title); }}>
                          <div className="flex items-center gap-4">
                             <img src={getProductImage(p)} alt="" className="w-12 h-12 rounded-lg object-cover border border-gray-100 shadow-sm" />
@@ -496,10 +567,21 @@ export default function AdminProducts() {
                         {new Date(p.created_at).toLocaleDateString()}
                       </td>
                     </tr>
-                 )})}
+                 );
+                 });
+                 })()}
                </tbody>
             </table>
          </div>
+         {itemsPerPage !== 'Todos' && (
+            <div className="bg-white border-t px-6 py-3 flex items-center justify-between text-xs text-gray-500">
+               <span>Página {currentPage}</span>
+               <div className="flex items-center gap-2">
+                 <button disabled={currentPage <= 1} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50">Anterior</button>
+                 <button disabled={products.filter(p => p.title.toLowerCase().includes(search.toLowerCase())).length <= currentPage * itemsPerPage} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50">Siguiente</button>
+               </div>
+            </div>
+         )}
       </div>
 
       {/* �"��"��"� MODERN PRODUCT EDITOR (WORDPRESS INSPIRED) �"��"��"� */}

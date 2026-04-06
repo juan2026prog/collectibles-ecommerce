@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Plus, Pencil, Trash2, Save, X, Image as ImageIcon, GripVertical, Upload } from 'lucide-react';
+import { MediaPickerModal } from '../../components/MediaPickerModal';
 
 export default function AdminBanners() {
   const [banners, setBanners] = useState<any[]>([]);
@@ -9,6 +10,7 @@ export default function AdminBanners() {
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState({ title: '', subtitle: '', image_url: '', link_url: '', button_text: 'SHOP NOW', is_active: true, sort_order: 0 });
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
 
   useEffect(() => { fetch(); }, []);
 
@@ -113,8 +115,14 @@ export default function AdminBanners() {
               <div>
                 <label className="form-label">Image URL *</label>
                 <div className="flex gap-2">
-                  <input className="form-input flex-1" value={form.image_url} onChange={e => setForm({...form, image_url: e.target.value})} placeholder="https://... o sube un archivo" />
-                  <label className={`btn-secondary flex-shrink-0 cursor-pointer flex items-center justify-center px-4 ${uploadingImage ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <input className="form-input flex-1 border-gray-300 shadow-sm" value={form.image_url} onChange={e => setForm({...form, image_url: e.target.value})} placeholder="https://..." />
+                  
+                  {/* Select from media library */}
+                  <button type="button" onClick={() => setShowMediaPicker(true)} className="btn-secondary flex-shrink-0 px-3 cursor-pointer flex items-center justify-center bg-gray-50 border border-gray-300 hover:bg-gray-100" title="Seleccionar de galería">
+                     <ImageIcon className="w-4 h-4" />
+                  </button>
+
+                  <label className={`btn-secondary flex-shrink-0 cursor-pointer flex items-center justify-center px-4 bg-gray-50 border border-gray-300 hover:bg-gray-100 ${uploadingImage ? 'opacity-50 pointer-events-none' : ''}`} title="Subir desde PC">
                     <Upload className="w-4 h-4" />
                     <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
                   </label>
@@ -135,6 +143,16 @@ export default function AdminBanners() {
           </div>
         </>
       )}
+    </div>
+      <MediaPickerModal 
+        isOpen={showMediaPicker} 
+        onClose={() => setShowMediaPicker(false)} 
+        multiple={false}
+        onSelect={(url) => {
+           setForm(prev => ({ ...prev, image_url: url }));
+           setShowMediaPicker(false);
+        }}
+      />
     </div>
   );
 }
