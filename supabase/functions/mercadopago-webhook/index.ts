@@ -1,83 +1,109 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
-import { corsHeaders, handleOptions } from "../_shared/cors.ts";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 serve(async (req) => {
-  const options = handleOptions(req);
-  if (options) return options;
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const url = new URL(req.url);
-    const bodyText = await req.text();
-    let body;
-    
-    try {
-      body = JSON.parse(bodyText);
-    } catch {
-      return new Response("Invalid JSON", { status: 400 });
-    }
+    const body = await req.json();
+    console.log("📥 MercadoPago Webhook:", body.action, body.type, body.data?.id);
 
-    // MercadoPago webhooks can be "payment" or "merchant_order"
-    // We only care about payments that are created or updated
-    console.log("📥 MercadoPago Webhook:", body.action, body.type);
-
-    if (body.type === "payment" && body.action === "payment.created") {
+    // Only handle payment notifications
+    if (body.type === "payment" && (body.action === "payment.created" || body.action === "payment.updated")) {
       const paymentId = body.data.id;
-      const MP_ACCESS_TOKEN = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
-
-      if (!MP_ACCESS_TOKEN) throw new Error("No MP token set");
-
-      // Verify payment with MP directly to prevent spoofing
-      const mpResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-        headers: { "Authorization": `Bearer ${MP_ACCESS_TOKEN}` }
-      });
-      const paymentData = await mpResponse.json();
       
-      if (!mpResponse.ok) throw new Error("Payment fetch failed from MP");
-      
-      const orderId = paymentData.external_reference;
-      if (!orderId) throw new Error("No external_reference (order ID) found in payment");
-
-      const supabaseClient = createClient(
+      const supabaseAdmin = createClient(
         Deno.env.get("SUPABASE_URL") ?? "",
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
       );
 
-      // Si el pago está aprobado, actualizamos la base de datos
+      // Fetch the token from site_settings (modern way)
+      const { data: settings } = await supabaseAdmin.from('site_settings').select('key, value');
+      const config = Object.fromEntries((settings || []).map(s => [s.key, s.value]));
+      
+      let mpAccessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || config.payments_mercadopago_access_token;
+      
+      if (!mpAccessToken) throw new Error("Mercado Pago Access Token no configurado.");
+
+      // Verify payment status with MP
+      const mpResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+        headers: { "Authorization": `Bearer ${mpAccessToken}` }
+      });
+      const paymentData = await mpResponse.json();
+      
+      if (!mpResponse.ok) throw new Error(`Fetch failed from MP: ${JSON.stringify(paymentData)}`);
+      
+      const orderId = paymentData.external_reference;
+      console.log(`[MP Webhook] Processed ${paymentId}, Status: ${paymentData.status}, Order: ${orderId}`);
+
+      if (!orderId) {
+        console.warn("[MP Webhook] No external_reference (Order ID) in MP payment");
+        return new Response(JSON.stringify({ received: true, info: "No order id" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // Check order current status
+      const { data: order } = await supabaseAdmin.from('orders').select('status').eq('id', orderId).single();
+      
+      // APPROVED STATUS
       if (paymentData.status === "approved" || paymentData.status === "authorized") {
-        await supabaseClient
-          .from("orders")
-          .update({ 
-            status: "paid", 
-            payment_id: paymentId.toString(),
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", orderId);
+        if (order?.status !== 'paid') {
+          console.log(`[MP Webhook] Marking Order ${orderId} as PAID`);
+          
+          // Update Order
+          await supabaseAdmin
+            .from("orders")
+            .update({ 
+              status: "paid", 
+              payment_id: paymentId.toString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", orderId);
 
-        // Descontar inventario (Llamar función interna o hacer query directa)
-        const { data: orderItems } = await supabaseClient.from("order_items").select("*").eq("order_id", orderId);
-        
-        if (orderItems) {
-           for (const item of orderItems) {
-              if (item.variant_id) {
-                 await supabaseClient.rpc("decrement_inventory", { 
-                    p_variant_id: item.variant_id, 
-                    p_quantity: item.quantity 
-                 });
+          // Inventory Management
+          const { data: orderItems } = await supabaseAdmin.from("order_items").select("*").eq("order_id", orderId);
+          if (orderItems) {
+            for (const item of orderItems) {
+              const targetId = item.variant_id || item.product_id; // Try variant, then product
+              if (targetId) {
+                // Determine if targetId is product or variant
+                if (item.variant_id) {
+                    await supabaseAdmin.rpc("decrement_inventory", { 
+                        p_variant_id: item.variant_id, 
+                        p_quantity: item.quantity 
+                    }).catch(err => console.error("Inventory error:", err));
+                } else {
+                    // If no variant, maybe update base product stock? (Usually stock is in variants)
+                    console.log("No variant_id for item, skipped inventory decrement");
+                }
               }
-           }
-        }
+            }
+          }
 
-        // Llamar a la función de cálculo de comisiones para Affiliates/Vendedores
-        await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/calculate-commissions`, {
-           method: "POST",
-           headers: {
+          // Trigger Commissions Calculation
+          await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/calculate-commissions`, {
+            method: "POST",
+            headers: {
               "Content-Type": "application/json",
-              "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` // Invoking internally as service role
-           },
-           body: JSON.stringify({ order_id: orderId })
-        }).catch(err => console.error("Error triggering commissions:", err));
+              "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`
+            },
+            body: JSON.stringify({ order_id: orderId })
+          }).catch(err => console.error("Error triggering commissions:", err));
+        }
+      } 
+      // CANCELLED or REJECTED STATUS
+      else if (paymentData.status === "cancelled" || paymentData.status === "rejected") {
+        await supabaseAdmin
+          .from("orders")
+          .update({ status: "cancelled", updated_at: new Date().toISOString() })
+          .eq("id", orderId);
       }
     }
 

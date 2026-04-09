@@ -5,8 +5,28 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --bg-surface: #ffffff;
+    --text-main: #111827;
+    --text-muted: #6b7280;
+    --border-color: #e5e7eb;
+    --input-bg: #f9fafb;
+    --card-bg: #ffffff;
+  }
+
+  .gamger-grid {
+    --bg-surface: #04060d;
+    --text-main: #ffffff;
+    --text-muted: #9ca3af;
+    --border-color: rgba(255, 255, 255, 0.1);
+    --input-bg: #151c2e;
+    --card-bg: #151c2e;
+  }
+
   body {
-    @apply bg-white text-gray-900 antialiased selection:bg-primary-500 selection:text-white font-sans;
+    @apply antialiased selection:bg-primary-500 selection:text-white font-sans;
+    background-color: var(--bg-surface);
+    color: var(--text-main);
   }
   * {
     @apply scroll-smooth;
@@ -14,35 +34,51 @@
 }
 
 @layer components {
-  /* ═══ GAMGER DARK THEME BUTTONS ═══ */
-
-  /* Primary CTA — red/primary */
+  /* ═══ BUTTONS ═══ */
   .btn-primary {
     @apply inline-flex items-center justify-center px-6 py-3 bg-primary-600 text-white font-bold rounded-xl shadow-lg hover:bg-primary-500 hover:shadow-glow-red transition-all duration-300 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none uppercase tracking-wider text-sm;
   }
 
-  /* Secondary — outlined light */
   .btn-secondary {
-    @apply inline-flex items-center justify-center px-6 py-3 bg-transparent text-white font-bold rounded-xl border-2 border-white/20 shadow-sm hover:bg-white/10 hover:border-white/40 transition-all duration-300 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none;
+    @apply inline-flex items-center justify-center px-6 py-3 bg-transparent font-bold rounded-xl border-2 transition-all duration-300 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none;
+    color: var(--text-main);
+    border-color: var(--border-color);
+  }
+  .btn-secondary:hover {
+    background-color: rgba(0,0,0,0.05);
+  }
+  .gamger-grid .btn-secondary:hover {
+    background-color: rgba(255,255,255,0.1);
   }
 
-  /* Accent CTA */
   .btn-accent {
     @apply inline-flex items-center justify-center px-6 py-3 bg-neon-cyan text-dark-900 font-bold rounded-xl shadow-lg hover:shadow-glow-sm transition-all duration-300 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none;
   }
 
-  /* Ghost — text-only */
   .btn-ghost {
-    @apply inline-flex items-center text-gray-400 font-medium hover:text-neon-cyan transition-colors underline-offset-4 hover:underline;
+    @apply inline-flex items-center font-medium transition-colors underline-offset-4 hover:underline;
+    color: var(--text-muted);
+  }
+  .btn-ghost:hover {
+    color: var(--color-primary-500);
   }
 
-  /* ═══ PRODUCT CARD DARK ═══ */
+  /* ═══ PRODUCT CARD ═══ */
   .product-card {
-    @apply relative bg-[#151c2e] rounded-2xl overflow-hidden border border-white/5 hover:shadow-[0_8px_32px_rgba(0,0,0,0.4)] hover:-translate-y-1 transition-all duration-300;
+    @apply relative rounded-2xl overflow-hidden border hover:-translate-y-1 transition-all duration-300;
+    background-color: var(--card-bg);
+    border-color: var(--border-color);
+  }
+  .product-card:hover {
+    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+  }
+  .gamger-grid .product-card:hover {
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
   }
 
   .product-card-image {
-    @apply relative bg-[#0d1320] aspect-square overflow-hidden;
+    @apply relative aspect-square overflow-hidden;
+    background-color: var(--input-bg);
   }
 
   .product-card-body {
@@ -61,33 +97,38 @@
 
   /* ═══ SECTION TITLE ═══ */
   .section-title {
-    @apply text-2xl sm:text-3xl font-black text-white uppercase tracking-tight;
+    @apply text-2xl sm:text-3xl font-black uppercase tracking-tight;
+    color: var(--text-main);
   }
 
-  /* ═══ FORM INPUTS (DARK) ═══ */
+  /* ═══ FORM INPUTS ═══ */
   .form-input {
-    @apply w-full border border-white/10 rounded-xl px-4 py-3 text-sm font-medium bg-[#151c2e] text-white focus:bg-[#1a2236] focus:border-primary-500 focus:ring-2 focus:ring-primary-500 outline-none transition-all placeholder:text-gray-500;
+    @apply w-full border rounded-xl px-4 py-3 text-sm font-medium outline-none transition-all;
+    background-color: var(--input-bg);
+    color: var(--text-main);
+    border-color: var(--border-color);
+  }
+  .form-input:focus {
+    @apply ring-2 ring-primary-200 border-primary-500;
   }
 
   .form-label {
-    @apply block text-sm font-bold text-gray-300 mb-1.5;
+    @apply block text-sm font-bold mb-1.5;
+    color: var(--text-muted);
   }
 
-  /* ═══ OVERLAY BACKDROP ═══ */
   .overlay-backdrop {
     @apply fixed inset-0 bg-black/70 backdrop-blur-sm z-40 animate-fade-in;
   }
 
-  /* Star rating */
   .star-filled {
     @apply text-yellow-400 fill-current;
   }
   .star-empty {
-    @apply text-gray-600;
+    @apply text-gray-400 opacity-50;
   }
 }
 
-/* ═══ MARQUEE / SCROLL UTILITIES ═══ */
 .marquee-track {
   display: flex;
   width: max-content;
@@ -105,7 +146,6 @@
   display: none;
 }
 
-/* ═══ GAMGER GRID PATTERN ═══ */
 .gamger-grid {
   background-image: 
     linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
@@ -113,13 +153,11 @@
   background-size: 40px 40px;
 }
 
-/* Glow lines accent */
 .glow-line {
   background: linear-gradient(90deg, transparent, rgba(0,245,255,0.3), transparent);
   height: 1px;
 }
 
-/* Image zoom on hover */
 .img-zoom:hover img {
   transform: scale(1.05);
 }

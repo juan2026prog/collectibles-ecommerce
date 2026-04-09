@@ -1,5 +1,5 @@
 interface CreatePaymentParams {
-  provider: 'dlocal' | 'paypal';
+  provider: 'dlocal' | 'paypal' | 'mercadopago';
   amount: number;
   currency: string;
   order_id?: string;

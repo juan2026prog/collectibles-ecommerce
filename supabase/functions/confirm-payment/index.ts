@@ -29,8 +29,10 @@ Deno.serve(async (req: Request) => {
     if (provider === 'paypal') {
       const isSandbox = config.payments_paypal_sandbox === 'true';
       const clientId = config.payments_paypal_client_id;
-      const secret = config.payments_paypal_secret_key;
+      const secret = config.payments_paypal_client_secret || config.payments_paypal_secret_key;
       const baseUrl = isSandbox ? "https://api-m.sandbox.paypal.com" : "https://api-m.paypal.com";
+
+      if (!clientId || !secret) throw new Error("Missing PayPal credentials");
 
       // 1. Get Token
       const auth = btoa(`${clientId}:${secret}`);
@@ -40,7 +42,7 @@ Deno.serve(async (req: Request) => {
         body: "grant_type=client_credentials"
       });
       const tokenData = await tokenRes.json();
-      if (!tokenRes.ok) throw new Error("PayPal Token Auth Failed");
+      if (!tokenRes.ok) throw new Error("PayPal Token Auth Failed: " + JSON.stringify(tokenData));
 
       // 2. Capture Order
       // external_id is the PayPal order_id from the success URL params
@@ -53,9 +55,9 @@ Deno.serve(async (req: Request) => {
       });
       const captureData = await captureRes.json();
       
-      if (!captureRes.ok || captureData.status !== 'COMPLETED') {
-        console.error("PayPal Capture Error:", captureData);
-        throw new Error("PayPal Capture Failed");
+      if (!captureRes.ok || (captureData.status !== 'COMPLETED' && captureData.status !== 'APPROVED')) {
+          console.error("PayPal Capture Error:", captureData);
+          throw new Error("PayPal Capture Failed: " + (captureData.message || captureData.status));
       }
 
       // 3. Mark as Paid
@@ -69,19 +71,20 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    if (provider === 'dlocal') {
-      // Typically dLocal is asynchronous (webhook), but we can confirm the internal state here
+    if (provider === 'mercadopago' || provider === 'dlocal') {
+      // Typically asynchronous via webhooks, but we check if it already reached paid state
       const { data: order } = await supabaseClient.from('orders').select('status').eq('id', order_id).single();
-      return new Response(JSON.stringify({ success: true, status: order?.status }), {
+      return new Response(JSON.stringify({ success: true, status: order?.status || 'pending' }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    throw new Error("Proveedor desconocido");
+    throw new Error("Proveedor desconocido: " + provider);
 
   } catch (err: any) {
+    console.error("Confirm Payment error:", err);
     return new Response(JSON.stringify({ error: err.message }), {
-      status: 400,
+      status: 200, // Returning 200 with error property for frontend handle
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
   }

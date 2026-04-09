@@ -222,7 +222,7 @@ export default function AdminSettings() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold dark:text-white">Configuracion Global</h2>
+        <h2 className="text-2xl font-bold dark:text-white">Configuración Global</h2>
         {saved && <span className="text-sm font-bold text-green-600 bg-green-50 px-3 py-1.5 rounded-lg border border-green-200 flex items-center gap-1 shadow-sm"><Save className="w-4 h-4"/> Guardado</span>}
       </div>
 
@@ -297,7 +297,7 @@ export default function AdminSettings() {
                       </div>
                       <div className="flex-1 space-y-3">
                          <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-                            <h4 className="text-xs font-bold text-blue-900 flex items-center gap-1.5 mb-1">�x� Recomendaciones de Diseño</h4>
+                            <h4 className="text-xs font-bold text-blue-900 flex items-center gap-1.5 mb-1">💡 Recomendaciones de Diseño</h4>
                             <ul className="text-[11px] text-blue-800 space-y-1 opacity-80">
                                <li>⬢ <b>Tamaño óptimo:</b> 512 x 128 px (Relación 4:1)</li>
                                <li>⬢ <b>Formato ideal:</b> PNG transparente o SVG</li>
@@ -492,12 +492,52 @@ export default function AdminSettings() {
                  </div>
               </div>
 
+              {/* CARD MERCADO PAGO */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                 <div className="flex items-center justify-between border-b pb-4 mb-6">
+                    <div className="flex items-center gap-3">
+                       <div className="p-2 bg-sky-50 rounded-lg">
+                          <CreditCard className="w-5 h-5 text-sky-600" />
+                       </div>
+                       <div>
+                          <h3 className="font-black text-dark-900 flex items-center gap-2">Mercado Pago <span className="bg-sky-500 text-white text-[8px] px-1.5 py-0.5 rounded uppercase font-black">v2</span></h3>
+                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">Checkout API — Uruguay</p>
+                       </div>
+                    </div>
+                    <button onClick={() => {
+                        const next = settings['payments_mercadopago_enabled'] !== 'true';
+                        saveSetting('payments_mercadopago_enabled', String(next));
+                    }}>
+                       {settings['payments_mercadopago_enabled'] === 'true' 
+                        ? <ToggleRight className="w-10 h-10 text-sky-600" /> 
+                        : <ToggleLeft className="w-10 h-10 text-gray-300" />}
+                    </button>
+                 </div>
+
+                 <div className="space-y-4">
+                    <div>
+                       <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Access Token</label>
+                       <input type="password" sx={{WebkitTextSecurity: 'disc'}} className="form-input w-full font-mono text-xs" value={settings['payments_mercadopago_access_token'] || ''} onChange={e => setSettings({ ...settings, payments_mercadopago_access_token: e.target.value })} onBlur={() => saveSetting('payments_mercadopago_access_token', settings['payments_mercadopago_access_token'] || '')} placeholder="APP_USR-..." />
+                       <p className="text-[10px] text-gray-400 mt-1">Obtenlo en <a href="https://www.mercadopago.com.uy/developers/panel/app" target="_blank" className="text-sky-600 underline">Mercado Pago Developers</a>. Usá un token TEST- para sandbox.</p>
+                    </div>
+                    <div className="p-3 bg-gray-50 rounded-lg border flex items-center justify-between">
+                       <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${(settings['payments_mercadopago_access_token'] || '').startsWith('TEST-') ? 'bg-orange-500 animate-pulse' : 'bg-green-500'}`} />
+                          <span className="text-xs font-bold text-gray-700">
+                            {(settings['payments_mercadopago_access_token'] || '').startsWith('TEST-') ? 'Modo Sandbox (Test)' : 'Modo Producción'}
+                          </span>
+                       </div>
+                       <span className="text-[10px] text-gray-400 font-bold">Detectado automáticamente por el token</span>
+                    </div>
+                 </div>
+              </div>
+
               <div className="bg-blue-600 rounded-xl p-6 text-white shadow-xl shadow-blue-200">
                  <h4 className="font-black text-lg flex items-center gap-2 mb-2">
                     <ShieldCheck className="w-5 h-5" />
                     Transacciones Seguras
                  </h4>
-                 <p className="text-xs text-blue-100 leading-relaxed font-medium">Todas las conexiones con las pasarelas se realizan mediante HTTPS y cifrado de extremo a extremo. Aseg�rate de nunca compartir tus llaves secretas.</p>
+                 <p className="text-xs text-blue-100 leading-relaxed font-medium">Todas las conexiones con las pasarelas se realizan mediante HTTPS y cifrado de extremo a extremo. Asegúrate de nunca compartir tus llaves secretas.</p>
               </div>
            </div>
 
@@ -594,7 +634,7 @@ export default function AdminSettings() {
                 <tr key={s.id} className="hover:bg-gray-50/50">
                   <td className="px-6 py-4 text-sm font-bold text-gray-900 capitalize">{s.name}</td>
                   <td className="px-6 py-4 text-sm font-black text-blue-600">${s.rate}</td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{s.free_above ? `$${s.free_above}` : '�'}</td>
+                  <td className="px-6 py-4 text-sm text-gray-600">{s.free_above ? `$${s.free_above}` : '—'}</td>
                   <td className="px-6 py-4"><span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-md ${s.is_active ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}>{s.is_active ? 'Activa' : 'Inactiva'}</span></td>
                 </tr>
               ))}

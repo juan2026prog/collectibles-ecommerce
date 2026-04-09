@@ -164,7 +164,7 @@ export default function ProductDetail() {
                   key={img.id || i} 
                   onMouseEnter={() => setSelectedImage(i)}
                   onClick={() => setSelectedImage(i)}
-                  className={`relative flex-shrink-0 w-20 md:w-full aspect-square rounded-xl overflow-hidden border-2 transition-all duration-300 ${i === selectedImage ? 'border-primary-500 ring-2 ring-primary-500/20' : 'border-gray-100 hover:border-gray-200 shadow-sm'}`}
+                  className={`relative flex-shrink-0 w-20 md:w-full aspect-square rounded-xl overflow-hidden border-2 transition-all duration-300 ${i === selectedImage ? 'border-primary-500 ring-2 ring-primary-100' : 'border-gray-100 hover:border-gray-200 shadow-sm'}`}
                 >
                   <img src={thumbnailSrc} alt="" className="w-full h-full object-cover" />
                   {i === selectedImage && <div className="absolute inset-0 bg-primary-500/5" />}

@@ -7,7 +7,7 @@ const corsHeaders = {
 }
 
 interface PaymentRequest {
-  provider: "dlocal" | "paypal";
+  provider: "dlocal" | "paypal" | "mercadopago";
   amount: number;
   currency: string;
   order_id?: string; // Optional because we might create it here
@@ -59,9 +59,19 @@ serve(async (req: Request) => {
 
       // Create order items
       if (items && items.length > 0) {
+        // Fetch product information (vendor_id) for each item
+        const { data: productsData } = await supabaseAdmin
+          .from('products')
+          .select('id, vendor_id')
+          .in('id', items.map(i => i.id))
+
+        const productVendorMap = Object.fromEntries((productsData || []).map(p => [p.id, p.vendor_id]))
+
         const orderItems = items.map(item => ({
           order_id: orderId,
           product_id: item.id,
+          variant_id: item.variant_id || null,
+          vendor_id: productVendorMap[item.id] || null,
           quantity: item.quantity,
           unit_price: item.price
         }))
@@ -228,7 +238,7 @@ serve(async (req: Request) => {
       if (approvalLink?.href) {
         // Update order with PayPal order ID
         await supabaseAdmin.from('orders').update({
-          payment_provider_id: orderResult.id,
+          payment_id: orderResult.id,
           payment_method: 'paypal'
         }).eq('id', orderId)
         
@@ -238,6 +248,106 @@ serve(async (req: Request) => {
       }
       
       throw new Error('PayPal no devolvió URL de aprobación. Response: ' + JSON.stringify(orderResult))
+    }
+
+    // ═══════════════════════════════════════════════
+    // 🟦 MERCADO PAGO — Checkout Preferences API
+    // ═══════════════════════════════════════════════
+    if (provider === 'mercadopago') {
+      const mpAccessToken = (config.payments_mercadopago_access_token || '').trim()
+      
+      if (!mpAccessToken) {
+        throw new Error('Mercado Pago Access Token no configurado. Configúralo en Admin > Settings > Payments.')
+      }
+
+      const origin = req.headers.get('origin') || 'https://collectibles-ecommerce.vercel.app'
+      const isSandbox = mpAccessToken.startsWith('TEST-')
+      const webhookUrl = `${supabaseUrl}/functions/v1/mercadopago-webhook`
+
+      // Build items array for MP
+      const mpItems: any[] = items.map((item: any) => ({
+        id: String(item.id),
+        title: item.title || 'Producto',
+        quantity: Number(item.quantity),
+        unit_price: Number(item.price),
+        currency_id: currency || 'UYU',
+      }))
+
+      const itemsTotal = items.reduce((acc, curr) => acc + (Number(curr.price) * Number(curr.quantity)), 0);
+      const diff = amount - itemsTotal;
+      
+      if (Math.abs(diff) > 0.01) {
+        if (diff > 0) {
+          mpItems.push({
+            id: 'shipping',
+            title: 'Envío',
+            quantity: 1,
+            unit_price: diff,
+            currency_id: currency || 'UYU'
+          });
+        } else {
+          mpItems.push({
+            id: 'discount',
+            title: 'Descuento Bancario',
+            quantity: 1,
+            unit_price: diff,
+            currency_id: currency || 'UYU'
+          });
+        }
+      }
+
+      const preferencePayload = {
+        items: mpItems,
+        payer: {
+          email: customer.email || 'guest@collectibles.uy',
+          name: customer.name?.split(' ')[0] || 'Cliente',
+          surname: customer.name?.split(' ').slice(1).join(' ') || 'Guest',
+        },
+        back_urls: {
+          success: `${origin}/checkout/success?order_id=${orderId}&provider=mercadopago`,
+          failure: `${origin}/checkout?error=pagorechazado`,
+          pending: `${origin}/checkout/success?order_id=${orderId}&provider=mercadopago&status=pending`,
+        },
+        auto_return: 'approved',
+        external_reference: String(orderId),
+        notification_url: webhookUrl,
+        statement_descriptor: 'COLLECTIBLES STORE',
+      }
+
+      console.log(`[MercadoPago] Creating preference, sandbox=${isSandbox}`)
+
+      const mpResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${mpAccessToken}`,
+        },
+        body: JSON.stringify(preferencePayload),
+      })
+
+      const mpResult = await mpResponse.json()
+      console.log('[MercadoPago] Response:', mpResponse.status, JSON.stringify(mpResult))
+
+      if (!mpResponse.ok) {
+        throw new Error(`Mercado Pago Error (${mpResponse.status}): ${JSON.stringify(mpResult)}`)
+      }
+
+      // Use sandbox_init_point for TEST tokens, init_point for production
+      const checkoutUrl = isSandbox ? mpResult.sandbox_init_point : mpResult.init_point
+
+      if (!checkoutUrl) {
+        throw new Error('Mercado Pago no devolvió URL de checkout. Response: ' + JSON.stringify(mpResult))
+      }
+
+      // Save MP preference ID on the order
+      await supabaseAdmin.from('orders').update({
+        payment_id: mpResult.id,
+        payment_method: 'mercadopago',
+      }).eq('id', orderId)
+
+      return new Response(JSON.stringify({ checkout_url: checkoutUrl }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
     }
 
     throw new Error("Proveedor no configurado")

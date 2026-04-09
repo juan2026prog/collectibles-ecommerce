@@ -402,9 +402,25 @@ export default function AdminProducts() {
     <div className="max-w-full">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
-        <div>
-           <h2 className="text-2xl font-black text-dark-900">Productos</h2>
-           <p className="text-gray-500 text-sm">Gestiona el inventario y catálogo de la tienda.</p>
+        <div className="flex items-center gap-6">
+          <div>
+            <h2 className="text-2xl font-black text-dark-900">Productos <span className="bg-blue-600 text-white text-[8px] px-1 py-0.5 rounded ml-2">v2</span></h2>
+            <p className="text-gray-500 text-sm italic">Gestión de catálogo y stock</p>
+          </div>
+          
+          <div className="flex items-center gap-2 bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm hover:border-blue-400 transition-colors">
+            <input 
+              type="checkbox" 
+              className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer" 
+              checked={products.length > 0 && products.slice(0, itemsPerPage === 'Todos' ? products.length : itemsPerPage).every(p => selectedProducts.includes(p.id))}
+              onChange={(e) => {
+                const currentList = products.slice(0, itemsPerPage === 'Todos' ? products.length : (itemsPerPage as number));
+                if (e.target.checked) setSelectedProducts(currentList.map(p => p.id));
+                else setSelectedProducts([]);
+              }}
+            />
+            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Seleccionar Página</span>
+          </div>
         </div>
         <div className="flex gap-3">
           <button onClick={() => setShowImport(true)} className="btn-secondary px-4 py-2 text-sm gap-2"><Upload className="w-4 h-4" /> Importar</button>

@@ -199,7 +199,7 @@ export default function StorefrontLayout() {
   const isHome = location.pathname === '/';
 
   return (
-    <div className={`min-h-screen flex flex-col ${isHome ? 'bg-dark-700 gamger-grid' : 'bg-white'}`}>
+    <div className={`min-h-screen flex flex-col ${isHome ? 'bg-dark-700 gamger-grid' : 'bg-white text-gray-900'}`}>
       {settings['theme_color_primary'] && (
         <style dangerouslySetInnerHTML={{
           __html: `:root {
@@ -245,7 +245,7 @@ export default function StorefrontLayout() {
       </div>
 
       {/* ═══════════ MAIN HEADER ═══════════ */}
-      <header className="bg-dark-700/90 backdrop-blur-xl border-b border-white/5 sticky top-0 z-40 shadow-dark-lg">
+      <header className={`${isHome ? 'bg-dark-700/90 border-white/5 shadow-dark-lg' : 'bg-white/90 border-gray-100 shadow-sm'} backdrop-blur-xl border-b sticky top-0 z-40 transition-colors duration-500`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-[72px]">
             {/* Mobile hamburger */}
@@ -266,7 +266,7 @@ export default function StorefrontLayout() {
                   <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary-500 rounded-full flex items-center justify-center">
                     <span className="text-white text-lg sm:text-xl">✦</span>
                   </div>
-                  <span className="text-xl sm:text-2xl font-extrabold text-white tracking-tight hidden sm:block">
+                  <span className={`text-xl sm:text-2xl font-extrabold tracking-tight hidden sm:block ${isHome ? 'text-white' : 'text-gray-900'}`}>
                     {settings['store_name'] || 'COLLECTIBLES'}
                   </span>
                 </>
@@ -284,8 +284,11 @@ export default function StorefrontLayout() {
                 >
                   <Link
                     to={link.href}
-                    className={`flex items-center gap-1 px-4 py-2 text-sm font-bold tracking-wide transition-all rounded-lg hover:text-neon-cyan hover:bg-white/5 ${location.pathname === link.href ? 'text-neon-cyan' : 'text-gray-300'
-                      }`}
+                    className={`flex items-center gap-1 px-4 py-2 text-sm font-bold tracking-wide transition-all rounded-lg ${
+                      isHome 
+                        ? (location.pathname === link.href ? 'text-neon-cyan hover:bg-white/5' : 'text-gray-300 hover:text-white hover:bg-white/5')
+                        : (location.pathname === link.href ? 'text-primary-600 hover:bg-gray-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50')
+                    }`}
                   >
                     {link.name}
                     {link.hasMega && <ChevronDown className="w-3.5 h-3.5" />}
@@ -602,7 +605,7 @@ export default function StorefrontLayout() {
       </main>
 
       {/* ═══════════ FOOTER ═══════════ */}
-      <footer className="bg-dark-900 text-white">
+      <footer className={`${isHome ? 'bg-dark-900 text-white' : 'bg-gray-50 text-gray-900'} border-t border-gray-100 transition-colors duration-500`}>
         {/* Trust value props */}
         <div className="border-b border-gray-800">
           <div className="max-w-container mx-auto px-4 sm:px-6 lg:px-8 py-8">

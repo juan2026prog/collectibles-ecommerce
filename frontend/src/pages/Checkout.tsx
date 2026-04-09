@@ -48,7 +48,7 @@ export default function Checkout() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState('dlocalgo');
+  const [paymentMethod, setPaymentMethod] = useState('mercadopago');
   const [shippingMethod, setShippingMethod] = useState<'delivery' | 'pickup'>('delivery');
   const [bankPromos, setBankPromos] = useState<BankPromo[]>([]);
   const [selectedPromo, setSelectedPromo] = useState<BankPromo | null>(null);
@@ -108,8 +108,9 @@ export default function Checkout() {
     setLoading(true);
 
     try {
-      if (paymentMethod === 'dlocalgo' || paymentMethod === 'paypal') {
-        const provider = paymentMethod === 'dlocalgo' ? 'dlocal' : 'paypal';
+      if (paymentMethod === 'dlocalgo' || paymentMethod === 'paypal' || paymentMethod === 'mercadopago') {
+        const providerMap: Record<string, string> = { dlocalgo: 'dlocal', paypal: 'paypal', mercadopago: 'mercadopago' };
+        const provider = providerMap[paymentMethod] as any;
         
         analytics.track({
           eventName: 'InitiateCheckout',
@@ -126,7 +127,7 @@ export default function Checkout() {
              address: shippingMethod === 'pickup' ? 'Retiro en local' : `${form.street}, ${form.apartment} - ${form.city}, ${form.department}`,
              phone: form.phone
           },
-          items: items.map(i => ({ id: i.product_id, quantity: i.quantity, price: i.price, title: i.title })),
+          items: items.map(i => ({ id: i.product_id, variant_id: i.variant_id, quantity: i.quantity, price: i.price, title: i.title })),
           bank_promo: selectedPromo ? {
             promo_id: selectedPromo.id,
             bank_name: selectedPromo.bank_name,
@@ -285,7 +286,8 @@ export default function Checkout() {
               <h2 className="font-bold text-lg mb-4">MÉTODO DE PAGO</h2>
               <div className="space-y-3">
                 {[
-                  { id: 'dlocalgo', icon: CreditCard, label: 'Tarjeta de Crédito / Débito (dLocal Go)' },
+                  { id: 'mercadopago', icon: CreditCard, label: 'Mercado Pago (v2) — Tarjetas, Transferencia, QR' },
+                  { id: 'dlocalgo', icon: CreditCard, label: 'dLocal Go (Tarjeta Internacional)' },
                   { id: 'paypal', icon: QrCode, label: 'PayPal (Global / USD)' },
                 ].map(m => (
                   <label key={m.id} className={`flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-colors ${
@@ -297,10 +299,15 @@ export default function Checkout() {
                   </label>
                 ))}
               </div>
+              {paymentMethod === 'mercadopago' && (
+                <div className="mt-3 p-4 bg-blue-50 border border-blue-100 rounded-xl">
+                  <p className="text-xs text-blue-700 font-medium">Serás redirigido a Mercado Pago para completar tu pago de forma segura. Aceptamos tarjetas de crédito/débito, transferencia bancaria, y QR.</p>
+                </div>
+              )}
             </div>
 
             {/* ═══ BANK PROMOTIONS ═══ */}
-            {paymentMethod === 'dlocalgo' && bankPromos.length > 0 && (
+            {(paymentMethod === 'dlocalgo' || paymentMethod === 'mercadopago') && bankPromos.length > 0 && (
               <div className="bg-white rounded-xl border border-gray-100 p-6">
                 <h2 className="font-bold text-lg mb-1 flex items-center gap-2">
                   <Sparkles className="w-5 h-5 text-amber-500" />
