@@ -71,17 +71,13 @@ export default function AdminOrders() {
 
     setIsCancelling(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error("No hay sesión activa. Por favor recarga la página e inicia sesión de nuevo.");
-      
       const url = `${SUPABASE_URL}/functions/v1/refund-order`;
-      console.log('Calling refund-order:', url, 'orderId:', selectedOrder.id);
       
       const res = await fetch(url, {
          method: 'POST',
          headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
+            'Authorization': `Bearer ${ANON_KEY}`,
             'apikey': ANON_KEY
          },
          body: JSON.stringify({ orderId: selectedOrder.id, reason: reason || "Cancelada por el administrador" })
@@ -125,13 +121,11 @@ export default function AdminOrders() {
 
     setIsBlocking(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
       const res = await fetch(`${SUPABASE_URL}/functions/v1/block-user`, {
          method: 'POST',
          headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token}`,
+            'Authorization': `Bearer ${ANON_KEY}`,
             'apikey': ANON_KEY
          },
          body: JSON.stringify({ userId: selectedOrder.customer.id })
@@ -158,14 +152,11 @@ export default function AdminOrders() {
     
     setIsSendingDiscount(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error("No hay sesión activa. Recarga la página.");
-      
       const res = await fetch(`${SUPABASE_URL}/functions/v1/transactional-emails`, {
          method: 'POST',
          headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
+            'Authorization': `Bearer ${ANON_KEY}`,
             'apikey': ANON_KEY
          },
          body: JSON.stringify({ 
