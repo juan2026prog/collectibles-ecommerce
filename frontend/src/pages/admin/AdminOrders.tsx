@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Eye, ChevronDown, Package, Truck, PhoneCall, X, Save, Ban, AlertTriangle, UserX, Gift } from 'lucide-react';
 
+const SUPABASE_URL = 'https://cobtsgkwcftvexaarwmo.supabase.co';
+const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNvYnRzZ2t3Y2Z0dmV4YWFyd21vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NzIwNTMsImV4cCI6MjA5MDE0ODA1M30.vXyiMl093ojZ8OyEpRuGnX5O5lHsLXxljynrYtMmf50';
+
 const ORDER_STATUSES = [
   { value: 'pending', label: 'Pendiente de Pago', color: 'bg-yellow-100 text-yellow-700' },
   { value: 'paid', label: 'Pagado', color: 'bg-emerald-100 text-emerald-700' },
@@ -71,14 +74,15 @@ export default function AdminOrders() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error("No hay sesión activa. Por favor recarga la página e inicia sesión de nuevo.");
       
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/refund-order`;
+      const url = `${SUPABASE_URL}/functions/v1/refund-order`;
       console.log('Calling refund-order:', url, 'orderId:', selectedOrder.id);
       
       const res = await fetch(url, {
          method: 'POST',
          headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': ANON_KEY
          },
          body: JSON.stringify({ orderId: selectedOrder.id, reason: reason || "Cancelada por el administrador" })
       });
@@ -123,11 +127,12 @@ export default function AdminOrders() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/block-user`, {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/block-user`, {
          method: 'POST',
          headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token}`
+            'Authorization': `Bearer ${session?.access_token}`,
+            'apikey': ANON_KEY
          },
          body: JSON.stringify({ userId: selectedOrder.customer.id })
       });
@@ -156,11 +161,12 @@ export default function AdminOrders() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error("No hay sesión activa. Recarga la página.");
       
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transactional-emails`, {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/transactional-emails`, {
          method: 'POST',
          headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': ANON_KEY
          },
          body: JSON.stringify({ 
            type: 'abandoned_order_discount', 
