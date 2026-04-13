@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Eye, ChevronDown, Package, Truck, PhoneCall, X, Save, Ban, AlertTriangle, UserX } from 'lucide-react';
+import { Eye, ChevronDown, Package, Truck, PhoneCall, X, Save, Ban, AlertTriangle, UserX, Gift } from 'lucide-react';
 
 const ORDER_STATUSES = [
   { value: 'pending', label: 'Pendiente de Pago', color: 'bg-yellow-100 text-yellow-700' },
@@ -10,6 +10,7 @@ const ORDER_STATUSES = [
   { value: 'en_transito', label: 'En Tránsito', color: 'bg-purple-100 text-purple-700' },
   { value: 'para_retirar', label: 'Listo para Retirar', color: 'bg-orange-100 text-orange-800' },
   { value: 'entregado', label: 'Entregado', color: 'bg-green-100 text-green-800' },
+  { value: 'abandonada', label: 'Abandonada', color: 'bg-gray-100 text-gray-700' },
   { value: 'cancelada', label: 'Cancelada', color: 'bg-red-100 text-red-700' }
 ];
 
@@ -20,6 +21,7 @@ export default function AdminOrders() {
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [isBlocking, setIsBlocking] = useState(false);
+  const [isSendingDiscount, setIsSendingDiscount] = useState(false);
 
   useEffect(() => { fetchOrders(); }, [statusFilter]);
 
@@ -54,10 +56,15 @@ export default function AdminOrders() {
 
   async function handleCancelOrder() {
     if (!selectedOrder) return;
+    const isPending = selectedOrder.status === 'pending';
     const reason = prompt("Por favor ingresa la razón de la cancelación. Esta será enviada al cliente:");
     if (reason === null) return;
     
-    if (!confirm(`¿Estás SEGURO de que deseas cancelar esta orden y devolver el dinero? Esta acción no se puede deshacer.`)) return;
+    const confirmMessage = isPending 
+      ? `¿Estás SEGURO de que deseas cancelar esta orden? Al estar pendiente, no se procesará reembolso de dinero.` 
+      : `¿Estás SEGURO de que deseas cancelar esta orden y devolver el dinero? Esta acción no se puede deshacer.`;
+
+    if (!confirm(confirmMessage)) return;
 
     setIsCancelling(true);
     try {
@@ -75,9 +82,13 @@ export default function AdminOrders() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Error al cancelar la orden");
       
-      alert(data.refundSuccess 
-        ? "La orden fue cancelada y el reembolso procesado con éxito." 
-        : "La orden fue cancelada, pero el pago era de prueba o no se pudo reembolsar automáticamente.");
+      if (isPending) {
+         alert("La orden pendiente fue cancelada exitosamente.");
+      } else {
+         alert(data.refundSuccess 
+           ? "La orden fue cancelada y el reembolso procesado con éxito." 
+           : "La orden fue cancelada, pero el pago era de prueba o no se pudo reembolsar automáticamente.");
+      }
         
       setSelectedOrder(null);
       fetchOrders();
@@ -120,6 +131,47 @@ export default function AdminOrders() {
       alert(`Error al bloquear: ${e.message}`);
     } finally {
       setIsBlocking(false);
+    }
+  }
+
+  async function handleSendDiscount() {
+    if (!selectedOrder) return;
+    const discountCode = prompt("Ingresa el cupón de descuento que deseas enviarle al cliente (Ej: VUELVE10):", "VUELVE10");
+    if (discountCode === null) return;
+    
+    setIsSendingDiscount(true);
+    try {
+      // 1. Send the email/Whatsapp via our transactional emails edge function
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transactional-emails`, {
+         method: 'POST',
+         headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`
+         },
+         body: JSON.stringify({ 
+           type: 'abandoned_order_discount', 
+           order: selectedOrder, 
+           discountCode: discountCode 
+         })
+      });
+      
+      if (!res.ok) throw new Error("Error interno al enviar el descuento.");
+      
+      // 2. Change status to abandonada
+      if (selectedOrder.status !== 'abandonada') {
+         await supabase.from('orders').update({ status: 'abandonada' }).eq('id', selectedOrder.id);
+         alert("Descuento enviado exitosamente y orden marcada como Abandonada.");
+      } else {
+         alert("Descuento enviado exitosamente.");
+      }
+      
+      fetchOrders();
+      setSelectedOrder(null);
+    } catch (e: any) {
+      alert(`Error al enviar descuento: ${e.message}`);
+    } finally {
+      setIsSendingDiscount(false);
     }
   }
 
@@ -253,6 +305,72 @@ export default function AdminOrders() {
                 </label>
               </div>
 
+              {/* RECOVERY ZONE - only for pending / abandonada */}
+              {(selectedOrder.status === 'pending' || selectedOrder.status === 'abandonada') && (
+                <div className="space-y-4 bg-purple-50 p-4 rounded-xl border border-purple-200">
+                  <h4 className="text-xs font-bold text-purple-600 uppercase tracking-wider mb-2 flex items-center gap-2">
+                    <Gift className="w-4 h-4" /> Recuperación de Orden
+                  </h4>
+                  <p className="text-xs text-purple-700 mb-4">
+                    Comunícate con el cliente enviando un descuento especial por Email o WhatsApp para incentivarlo a completar su compra.
+                  </p>
+                  <button 
+                    onClick={handleSendDiscount}
+                    disabled={isSendingDiscount}
+                    className="w-full py-3 bg-purple-600 text-white border justify-center border-purple-700 hover:bg-purple-700 rounded-lg flex items-center gap-2 font-bold transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Gift className="w-5 h-5" /> {isSendingDiscount ? 'Enviando...' : 'Ofrecer Descuento y Marcar Abandonada'}
+                  </button>
+                </div>
+              )}
+
+              {/* ACTIONS ZONE */}
+              <div className="space-y-4 bg-red-50 p-4 rounded-xl border border-red-200">
+                <h4 className="text-xs font-bold text-red-600 uppercase tracking-wider mb-2 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" /> Zona Peligrosa
+                </h4>
+
+                {/* CANCELAR ORDEN - always visible except if already cancelada */}
+                {selectedOrder.status !== 'cancelada' && (
+                  <>
+                    <p className="text-xs text-red-700">
+                      {selectedOrder.status === 'pending' 
+                        ? 'Cancelar la orden sin reembolso (pendiente de pago). Se revertirá el stock y se notificará al cliente.'
+                        : selectedOrder.status === 'paid'
+                          ? 'Cancelar la orden y procesar reembolso automático vía Mercado Pago. Se revertirá el stock.'
+                          : 'Cancelar la orden y revertir el stock de los productos. Se notificará al cliente.'}
+                    </p>
+                    <button 
+                      onClick={handleCancelOrder}
+                      disabled={isCancelling || isBlocking}
+                      className="w-full py-3 bg-white text-red-600 border justify-center border-red-200 hover:bg-red-600 hover:text-white rounded-lg flex items-center gap-2 font-bold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Ban className="w-5 h-5" /> 
+                      {isCancelling 
+                        ? 'Procesando...' 
+                        : selectedOrder.status === 'paid' 
+                          ? 'Cancelar Orden y Reembolsar' 
+                          : 'Cancelar Orden'}
+                    </button>
+                  </>
+                )}
+
+                {selectedOrder.status === 'cancelada' && (
+                  <p className="text-xs text-red-700 italic">Esta orden ya fue cancelada.</p>
+                )}
+
+                {/* BLOQUEAR USUARIO */}
+                {selectedOrder.customer?.id && (
+                  <button 
+                    onClick={handleBlockUser}
+                    disabled={isBlocking || isCancelling}
+                    className="w-full py-3 bg-red-600 text-white border justify-center border-red-700 hover:bg-red-700 rounded-lg flex items-center gap-2 font-bold transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <UserX className="w-5 h-5" /> {isBlocking ? 'Bloqueando Usuario...' : 'Bloquear a este Usuario (Ban)'}
+                  </button>
+                )}
+              </div>
+
               {/* LOGISTICS CARD */}
               <div className="space-y-4 bg-white p-4 rounded-xl border border-gray-100">
                 <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
@@ -291,36 +409,6 @@ export default function AdminOrders() {
                   />
                 </div>
               </div>
-
-              {/* DANGER ZONE - CANCELLATION */}
-              {selectedOrder.status !== 'cancelada' && (
-                <div className="space-y-4 bg-red-50 p-4 rounded-xl border border-red-200 mt-8">
-                  <h4 className="text-xs font-bold text-red-600 uppercase tracking-wider mb-2 flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4" /> Zona Peligrosa
-                  </h4>
-                  <p className="text-xs text-red-700 mb-4">
-                    Cancelar la orden revertirá el stock de los productos, cambiará el estado de la venta, emitirá un reembolso en la pasarela de pagos (si aplica) y enviará un email al comprador.
-                  </p>
-                  
-                  <button 
-                    onClick={handleCancelOrder}
-                    disabled={isCancelling || isBlocking}
-                    className="w-full py-3 bg-white text-red-600 border justify-center border-red-200 hover:bg-red-600 hover:text-white rounded-lg flex items-center gap-2 font-bold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Ban className="w-5 h-5" /> {isCancelling ? 'Procesando Reembolso...' : 'Cancelar Orden y Reembolsar'}
-                  </button>
-                  
-                  {selectedOrder.customer?.id && (
-                    <button 
-                      onClick={handleBlockUser}
-                      disabled={isBlocking || isCancelling}
-                      className="w-full py-3 bg-red-600 text-white border justify-center border-red-700 hover:bg-red-700 rounded-lg flex items-center gap-2 font-bold transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <UserX className="w-5 h-5" /> {isBlocking ? 'Bloqueando Usuario...' : 'Bloquear a este Usuario (Ban)'}
-                    </button>
-                  )}
-                </div>
-              )}
 
             </div>
             

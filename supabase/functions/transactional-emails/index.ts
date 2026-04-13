@@ -191,6 +191,28 @@ serve(async (req: Request) => {
          return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
+    if (payload.type === 'abandoned_order_discount') {
+         const { order, discountCode } = payload;
+         const customerEmail = order.customer_email || order.customer?.email;
+         if (!customerEmail) return new Response("No email", { status: 200, headers: corsHeaders });
+         
+         const subject = `¡Dejaste algo en nuestro sitio! Aquí tienes un regalo 🎁`;
+         const html = `
+           <div style="font-family: Arial, sans-serif; padding: 20px; background: #fafafa; border-radius: 8px;">
+             <h2 style="color: #111;">¡Hey! Notamos que no finalizaste tu compra.</h2>
+             <p>Tu orden <strong>#${order.id.slice(0, 8).toUpperCase()}</strong> quedó pendiente.</p>
+             <p>Queremos darte un pequeño empujón: usa el cupón <strong>${discountCode || 'VUELVE10'}</strong> para obtener un descuento especial si finalizas tu compra hoy.</p>
+             <p>Saludos,<br />El Equipo.</p>
+           </div>
+         `;
+         await sendEmailAndLog(customerEmail, subject, html, 'abandoned_order_recovery', order.customer_id);
+
+         if (order.customer_phone) {
+            await sendWhatsAppMessage(order.customer_phone, `🎁 *¡Hola!*\n\nVimos que no finalizaste tu orden #${order.id.slice(0,8).toUpperCase()}.\nSi aún la quieres, usa el cupón *${discountCode || 'VUELVE10'}* antes de pagar para obtener un descuento exclusivo.\n¡Te esperamos!`);
+         }
+         return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
     // 3. ABANDONED CART RECOVERY (Triggered via Admin UI or Cron)
     if (payload.type === 'abandoned_cart') {
       const { cart_id } = payload;
