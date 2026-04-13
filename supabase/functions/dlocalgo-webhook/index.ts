@@ -85,6 +85,17 @@ serve(async (req) => {
             old_record: { ...order, status: 'pending' }
           })
         }).catch(err => console.error('Error triggering email:', err));
+        
+        // 4. Trigger SoyDelivery Sync
+        const sdUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/soydelivery-sync`;
+        await fetch(sdUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+          },
+          body: JSON.stringify({ order_id })
+        }).catch(err => console.error('Error triggering SoyDelivery:', err));
       }
     }
 

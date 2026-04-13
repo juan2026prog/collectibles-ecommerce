@@ -231,7 +231,7 @@ function handleAddToCart(p: any) {
           {loading ? (
             <div className={`grid gap-6 ${viewMode === 'list' ? 'grid-cols-1' : 'grid-cols-2 md:grid-cols-3 xl:grid-cols-4'}`}>
               {[...Array(8)].map((_, i) => (
-                <ProductSkeleton key={i} viewMode={viewMode} />
+                <ProductSkeleton key={i} viewMode={viewMode === 'list' ? 'list' : 'grid'} />
               ))}
             </div>
           ) : products.length === 0 ? (

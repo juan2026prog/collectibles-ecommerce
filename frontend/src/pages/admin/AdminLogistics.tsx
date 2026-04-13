@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Truck, MapPin, Save, QrCode, FileText, CheckCircle2, ChevronRight, X, Edit2, Check } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Truck, MapPin, Save, QrCode, FileText, CheckCircle2, ChevronRight, X, Edit2, Check, ToggleLeft, ToggleRight } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 const INITIAL_ZONES = {
   near: { price: 169, label: 'Zonas cercanas', id: 'near', subzones: ['Zona 5', 'Zona 6', 'Zona 7'], barrios: [
@@ -41,6 +42,27 @@ export default function AdminLogistics() {
   const [interiorPrice, setInteriorPrice] = useState('280');
   const [labelFormat, setLabelFormat] = useState('zebra');
 
+  // SoyDelivery API Keys
+  const [settings, setSettings] = useState<Record<string, string>>({});
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    async function loadSettings() {
+      const { data } = await supabase.from('site_settings').select('*');
+      if (data) {
+        const map: Record<string, string> = {};
+        data.forEach(item => { map[item.key] = item.value || ''; });
+        setSettings(map);
+        if (map['shipping_soydelivery_enabled'] === 'false') setFlexActive(false);
+      }
+    }
+    loadSettings();
+  }, []);
+
+  function updateSetting(key: string, value: string) {
+    setSettings(prev => ({ ...prev, [key]: value }));
+  }
+
   function toggleZone(zoneId: string) {
     if (selectedZones.includes(zoneId)) {
       setSelectedZones(selectedZones.filter(z => z !== zoneId));
@@ -64,7 +86,31 @@ export default function AdminLogistics() {
     setEditPriceValue(currentPrice.toString());
   }
 
-  function handleSave() {
+  async function handleSave() {
+    setIsSaving(true);
+    
+    // Save to settings
+    const keysToSave = [
+      'shipping_soydelivery_enabled',
+      'shipping_soydelivery_api_id',
+      'shipping_soydelivery_api_key',
+      'shipping_soydelivery_negocio_id',
+      'shipping_soydelivery_negocio_clave',
+      'shipping_soydelivery_sandbox'
+    ];
+    
+    // override the enabled state
+    settings['shipping_soydelivery_enabled'] = flexActive ? 'true' : 'false';
+
+    for (const key of keysToSave) {
+      await supabase.from('site_settings').upsert({ 
+        key, 
+        value: settings[key] || '', 
+        updated_at: new Date().toISOString() 
+      }, { onConflict: 'key' });
+    }
+    
+    setIsSaving(false);
     alert("Configuración de envíos y SoyDelivery guardada exitosamente.");
   }
 
@@ -75,8 +121,8 @@ export default function AdminLogistics() {
           <h2 className="text-2xl font-black text-gray-900">Logística y Envíos</h2>
           <p className="text-sm text-gray-500 mt-1">Integra tus envíos con SoyDelivery y configura envíos al interior.</p>
         </div>
-        <button onClick={handleSave} className="btn-primary gap-2">
-          <Save className="w-4 h-4" /> Guardar Cambios
+        <button onClick={handleSave} disabled={isSaving} className="btn-primary gap-2">
+          <Save className="w-4 h-4" /> {isSaving ? 'Guardando...' : 'Guardar Cambios'}
         </button>
       </div>
 
@@ -100,6 +146,41 @@ export default function AdminLogistics() {
 
         {flexActive && (
           <div className="p-6 space-y-8">
+            {/* API CREDENTIALS */}
+            <div className="bg-blue-50/50 p-6 rounded-xl border border-blue-100">
+               <h4 className="font-bold text-blue-900 mb-4">Credenciales de Integración (API)</h4>
+               <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                     <label className="block text-[11px] font-black text-blue-800 uppercase tracking-widest mb-1.5">API Id</label>
+                     <input className="form-input w-full font-mono text-xs border-blue-200" value={settings['shipping_soydelivery_api_id'] || ''} onChange={e => updateSetting('shipping_soydelivery_api_id', e.target.value)} placeholder="2659..." />
+                  </div>
+                  <div>
+                     <label className="block text-[11px] font-black text-blue-800 uppercase tracking-widest mb-1.5">API Key</label>
+                     <input type="password" sx={{WebkitTextSecurity: 'disc'}} className="form-input w-full font-mono text-xs border-blue-200" value={settings['shipping_soydelivery_api_key'] || ''} onChange={e => updateSetting('shipping_soydelivery_api_key', e.target.value)} placeholder="8IZpb..." />
+                  </div>
+                  <div>
+                     <label className="block text-[11px] font-black text-blue-800 uppercase tracking-widest mb-1.5">Negocio ID</label>
+                     <input className="form-input w-full font-mono text-xs border-blue-200" value={settings['shipping_soydelivery_negocio_id'] || ''} onChange={e => updateSetting('shipping_soydelivery_negocio_id', e.target.value)} placeholder="1950..." />
+                  </div>
+                  <div>
+                     <label className="block text-[11px] font-black text-blue-800 uppercase tracking-widest mb-1.5">Negocio Clave</label>
+                     <input type="password" sx={{WebkitTextSecurity: 'disc'}} className="form-input w-full font-mono text-xs border-blue-200" value={settings['shipping_soydelivery_negocio_clave'] || ''} onChange={e => updateSetting('shipping_soydelivery_negocio_clave', e.target.value)} placeholder="1234..." />
+                  </div>
+               </div>
+               <div className="p-3 bg-white rounded-lg border border-blue-100 flex items-center justify-between mt-4">
+                  <div className="flex items-center gap-2">
+                     <div className={`w-2 h-2 rounded-full ${settings['shipping_soydelivery_sandbox'] === 'true' ? 'bg-orange-500 animate-pulse' : 'bg-green-500'}`} />
+                     <span className="text-xs font-bold text-gray-700">Entorno de Pruebas (Testing)</span>
+                  </div>
+                  <button onClick={() => {
+                     const next = settings['shipping_soydelivery_sandbox'] !== 'true';
+                     updateSetting('shipping_soydelivery_sandbox', String(next));
+                  }}>
+                     {settings['shipping_soydelivery_sandbox'] === 'true' ? <ToggleRight className="w-8 h-8 text-orange-500" /> : <ToggleLeft className="w-8 h-8 text-gray-300" />}
+                  </button>
+               </div>
+            </div>
+
             {/* ZONAS DE COBERTURA */}
             <div>
               <h4 className="font-bold text-gray-900 mb-2">Zonas de cobertura</h4>

@@ -1,5 +1,9 @@
+// @ts-ignore
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+// @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
+
+declare const Deno: any;
 
 interface ConfirmRequest {
   provider: "dlocal" | "paypal" | "mercadopago";
@@ -24,7 +28,7 @@ Deno.serve(async (req: Request) => {
 
     // Fetch site settings
     const { data: settings } = await supabaseClient.from('site_settings').select('key, value');
-    const config = Object.fromEntries((settings || []).map(s => [s.key, s.value]));
+    const config = Object.fromEntries((settings || []).map((s: any) => [s.key, s.value]));
 
     if (provider === 'paypal') {
       const isSandbox = config.payments_paypal_sandbox === 'true';

@@ -1,13 +1,18 @@
+// @ts-ignore
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+// @ts-ignore
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
+
+declare const Deno: any;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
@@ -25,7 +30,7 @@ serve(async (req) => {
 
       // Fetch the token from site_settings (modern way)
       const { data: settings } = await supabaseAdmin.from('site_settings').select('key, value');
-      const config = Object.fromEntries((settings || []).map(s => [s.key, s.value]));
+      const config = Object.fromEntries((settings || []).map((s: any) => [s.key, s.value]));
       
       let mpAccessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || config.payments_mercadopago_access_token;
       
@@ -78,7 +83,7 @@ serve(async (req) => {
                     await supabaseAdmin.rpc("decrement_inventory", { 
                         p_variant_id: item.variant_id, 
                         p_quantity: item.quantity 
-                    }).catch(err => console.error("Inventory error:", err));
+                    }).catch((err: any) => console.error("Inventory error:", err));
                 } else {
                     // If no variant, maybe update base product stock? (Usually stock is in variants)
                     console.log("No variant_id for item, skipped inventory decrement");
@@ -95,7 +100,17 @@ serve(async (req) => {
               "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`
             },
             body: JSON.stringify({ order_id: orderId })
-          }).catch(err => console.error("Error triggering commissions:", err));
+          }).catch((err: any) => console.error("Error triggering commissions:", err));
+
+          // Trigger SoyDelivery Sync
+          await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/soydelivery-sync`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`
+            },
+            body: JSON.stringify({ order_id: orderId })
+          }).catch((err: any) => console.error("Error triggering soydelivery:", err));
         }
       } 
       // CANCELLED or REJECTED STATUS

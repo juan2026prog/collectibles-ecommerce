@@ -616,30 +616,90 @@ export default function AdminSettings() {
 
       {/* Shipping Rules */}
       {currentTab === 'shipping' && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden max-w-3xl shadow-sm">
-          <div className="p-4 border-b bg-gray-50">
-             <h3 className="font-bold text-gray-900">Zonas de Envío Logístico</h3>
+        <div className="space-y-6 max-w-3xl">
+          {/* SoyDelivery Integration */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+             <div className="flex items-center justify-between border-b pb-4 mb-6">
+                <div className="flex items-center gap-3">
+                   <div className="p-2 bg-purple-50 rounded-lg">
+                      <Truck className="w-5 h-5 text-purple-600" />
+                   </div>
+                   <div>
+                      <h3 className="font-black text-dark-900 flex items-center gap-2">SoyDelivery <span className="bg-purple-500 text-white text-[8px] px-1.5 py-0.5 rounded uppercase font-black">API v2</span></h3>
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">Logística Urbana</p>
+                   </div>
+                </div>
+                <button onClick={() => {
+                    const next = settings['shipping_soydelivery_enabled'] !== 'true';
+                    saveSetting('shipping_soydelivery_enabled', String(next));
+                }}>
+                   {settings['shipping_soydelivery_enabled'] === 'true' 
+                    ? <ToggleRight className="w-10 h-10 text-purple-600" /> 
+                    : <ToggleLeft className="w-10 h-10 text-gray-300" />}
+                </button>
+             </div>
+
+             <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                     <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">API Id</label>
+                     <input className="form-input w-full font-mono text-xs" value={settings['shipping_soydelivery_api_id'] || ''} onChange={e => setSettings({ ...settings, shipping_soydelivery_api_id: e.target.value })} onBlur={() => saveSetting('shipping_soydelivery_api_id', settings['shipping_soydelivery_api_id'] || '')} placeholder="2659..." />
+                  </div>
+                  <div>
+                     <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">API Key</label>
+                     <input type="password" sx={{WebkitTextSecurity: 'disc'}} className="form-input w-full font-mono text-xs" value={settings['shipping_soydelivery_api_key'] || ''} onChange={e => setSettings({ ...settings, shipping_soydelivery_api_key: e.target.value })} onBlur={() => saveSetting('shipping_soydelivery_api_key', settings['shipping_soydelivery_api_key'] || '')} placeholder="8IZpb..." />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                     <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Negocio ID</label>
+                     <input className="form-input w-full font-mono text-xs" value={settings['shipping_soydelivery_negocio_id'] || ''} onChange={e => setSettings({ ...settings, shipping_soydelivery_negocio_id: e.target.value })} onBlur={() => saveSetting('shipping_soydelivery_negocio_id', settings['shipping_soydelivery_negocio_id'] || '')} placeholder="1950..." />
+                  </div>
+                  <div>
+                     <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Negocio Clave</label>
+                     <input type="password" sx={{WebkitTextSecurity: 'disc'}} className="form-input w-full font-mono text-xs" value={settings['shipping_soydelivery_negocio_clave'] || ''} onChange={e => setSettings({ ...settings, shipping_soydelivery_negocio_clave: e.target.value })} onBlur={() => saveSetting('shipping_soydelivery_negocio_clave', settings['shipping_soydelivery_negocio_clave'] || '')} placeholder="1234..." />
+                  </div>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-lg border flex items-center justify-between mt-4">
+                   <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${settings['shipping_soydelivery_sandbox'] === 'true' ? 'bg-orange-500 animate-pulse' : 'bg-green-500'}`} />
+                      <span className="text-xs font-bold text-gray-700">Entorno de Pruebas (Testing)</span>
+                   </div>
+                   <button onClick={() => {
+                      const next = settings['shipping_soydelivery_sandbox'] !== 'true';
+                      saveSetting('shipping_soydelivery_sandbox', String(next));
+                   }}>
+                      {settings['shipping_soydelivery_sandbox'] === 'true' ? <ToggleRight className="w-8 h-8 text-orange-500" /> : <ToggleLeft className="w-8 h-8 text-gray-300" />}
+                   </button>
+                </div>
+             </div>
           </div>
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Zona</th>
-                <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Tarifa</th>
-                <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Gratis superando</th>
-                <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Estado</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {shipping.map(s => (
-                <tr key={s.id} className="hover:bg-gray-50/50">
-                  <td className="px-6 py-4 text-sm font-bold text-gray-900 capitalize">{s.name}</td>
-                  <td className="px-6 py-4 text-sm font-black text-blue-600">${s.rate}</td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{s.free_above ? `$${s.free_above}` : '—'}</td>
-                  <td className="px-6 py-4"><span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-md ${s.is_active ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}>{s.is_active ? 'Activa' : 'Inactiva'}</span></td>
+
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+            <div className="p-4 border-b bg-gray-50">
+               <h3 className="font-bold text-gray-900">Zonas de Envío Logístico Estáticas</h3>
+            </div>
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Zona</th>
+                  <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Tarifa</th>
+                  <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Gratis superando</th>
+                  <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Estado</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {shipping.map(s => (
+                  <tr key={s.id} className="hover:bg-gray-50/50">
+                    <td className="px-6 py-4 text-sm font-bold text-gray-900 capitalize">{s.name}</td>
+                    <td className="px-6 py-4 text-sm font-black text-blue-600">${s.rate}</td>
+                    <td className="px-6 py-4 text-sm text-gray-600">{s.free_above ? `$${s.free_above}` : '—'}</td>
+                    <td className="px-6 py-4"><span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-md ${s.is_active ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}>{s.is_active ? 'Activa' : 'Inactiva'}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
