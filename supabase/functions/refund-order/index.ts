@@ -22,15 +22,36 @@ serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Obtener la orden
+    // Obtener la orden (sin join a profiles para evitar errores si customer_id es null)
     const { data: order, error } = await supabaseAdmin
       .from("orders")
-      .select("*, customer:profiles(email), order_items(*)")
+      .select("*")
       .eq("id", orderId)
       .single();
 
-    if (error || !order) throw new Error("Orden no encontrada");
+    if (error || !order) {
+      console.error("Error fetching order:", error);
+      throw new Error("Orden no encontrada");
+    }
     if (order.status === "cancelada") throw new Error("La orden ya está cancelada");
+
+    // Fetch order items separately
+    const { data: orderItems } = await supabaseAdmin
+      .from("order_items")
+      .select("*")
+      .eq("order_id", orderId);
+
+    // Fetch customer email if customer_id exists
+    let customerEmail = order.customer_email;
+    let customerPhone = order.customer_phone;
+    if (order.customer_id && !customerEmail) {
+      const { data: profile } = await supabaseAdmin
+        .from("profiles")
+        .select("email")
+        .eq("id", order.customer_id)
+        .single();
+      if (profile) customerEmail = profile.email;
+    }
 
     // Fetch site settings to get MP token
     const { data: settings } = await supabaseAdmin.from('site_settings').select('key, value');
@@ -40,8 +61,8 @@ serve(async (req: Request) => {
 
     let refundSuccess = false;
 
-    // Refund logic for Mercado Pago
-    if (order.payment_id && !order.payment_id.startsWith('MP-MOCK') && mpAccessToken && !mpAccessToken.includes("mock") && order.status === "paid") {
+    // Refund logic for Mercado Pago - ONLY if order is paid
+    if (order.status === "paid" && order.payment_id && !order.payment_id.startsWith('MP-MOCK') && mpAccessToken && !mpAccessToken.includes("mock")) {
        try {
           const resp = await fetch(`https://api.mercadopago.com/v1/payments/${order.payment_id}/refunds`, {
               method: 'POST',
@@ -53,36 +74,50 @@ serve(async (req: Request) => {
           const mpData = await resp.json();
           if (!resp.ok) {
               console.error("Error Mercado Pago Refund:", mpData);
-              throw new Error("No se pudo reembolsar en Mercado Pago. Puede que el pago resulte irrecuperable o ya esté devuelto.");
+              // Don't throw - still cancel the order even if refund fails
+              console.log("Refund failed but continuing with cancellation");
+          } else {
+              refundSuccess = true;
           }
-          refundSuccess = true;
        } catch (e: any) {
-           throw new Error(e.message);
+          console.error("MP refund error:", e.message);
+          // Don't throw - still cancel the order
        }
+    } else if (order.status === "pending") {
+       // Pending orders don't need refund
+       console.log("Order is pending, no refund needed. Cancelling directly.");
+       refundSuccess = true; // Mark as success since no refund is needed
     } else {
-       // If no real payment ID or it's a mock payment
-       console.log("Mock payment or no payment ID, skipping real refund. Marking as cancelled.");
+       // Mock payment or other status
+       console.log("Mock payment or non-paid status, skipping refund. Marking as cancelled.");
        refundSuccess = true;
     }
 
-    // Restore Inventory
-    if (order.order_items && order.order_items.length > 0) {
-        for (const item of order.order_items) {
-           const variantId = item.variant_id;
-           if (variantId) {
-                // Return stock back. Requires a custom RPC. If we don't have it, we could just do an update query if it wasn't RLS protected. We will use a safe update here.
-               const { data: variant } = await supabaseAdmin.from('product_variants').select('stock').eq('id', variantId).single();
-               if (variant) {
-                   await supabaseAdmin.from('product_variants').update({ stock: (variant.stock || 0) + item.quantity }).eq('id', variantId);
-               }
-           } else if (item.product_id) {
-               // Base product stock
-               const { data: product } = await supabaseAdmin.from('products').select('stock').eq('id', item.product_id).single();
-               if(product) {
-                    await supabaseAdmin.from('products').update({ stock: (product.stock || 0) + item.quantity }).eq('id', item.product_id);
-               }
-           }
+    // Restore Inventory (wrapped in try/catch so it doesn't crash the cancellation)
+    try {
+      if (orderItems && orderItems.length > 0) {
+        for (const item of orderItems) {
+          if (item.variant_id) {
+            // product_variants uses inventory_count column
+            const { data: variant } = await supabaseAdmin
+              .from('product_variants')
+              .select('inventory_count')
+              .eq('id', item.variant_id)
+              .single();
+            if (variant) {
+              await supabaseAdmin
+                .from('product_variants')
+                .update({ inventory_count: (variant.inventory_count || 0) + item.quantity })
+                .eq('id', item.variant_id);
+            }
+          }
+          // If product_id exists on the item, we could restore product-level stock too
+          // but products table doesn't have a stock column in the schema
         }
+      }
+    } catch (stockErr: any) {
+      console.error("Error restoring inventory (non-fatal):", stockErr.message);
+      // Don't block the cancellation if stock restore fails
     }
 
     // Update Order Status to Cancelled
@@ -92,26 +127,28 @@ serve(async (req: Request) => {
     }).eq("id", orderId);
 
     // Send the cancellation email/whatsapp through the transactional emails endpoint
-    const internalUrl = Deno.env.get("SUPABASE_URL") + "/functions/v1/transactional-emails";
-    await fetch(internalUrl, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
-        },
-        body: JSON.stringify({
-            type: 'custom_order_cancelled',
-            order: order,
-            reason: reason || "Cancelada por el administrador"
-        })
-    }).catch(e => console.error("Error enviando email de cancelacion:", e));
-
+    if (customerEmail) {
+      const internalUrl = Deno.env.get("SUPABASE_URL") + "/functions/v1/transactional-emails";
+      await fetch(internalUrl, {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+          },
+          body: JSON.stringify({
+              type: 'custom_order_cancelled',
+              order: { ...order, customer_email: customerEmail, customer_phone: customerPhone },
+              reason: reason || "Cancelada por el administrador"
+          })
+      }).catch(e => console.error("Error enviando email de cancelacion:", e));
+    }
 
     return new Response(JSON.stringify({ success: true, refundSuccess }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
 
   } catch (error: any) {
+    console.error("refund-order error:", error.message);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
