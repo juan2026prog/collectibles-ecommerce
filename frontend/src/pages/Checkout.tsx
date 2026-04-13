@@ -230,6 +230,8 @@ export default function Checkout() {
                         onSelect={(details) => setForm(f => ({
                            ...f,
                            street: details.street || f.street,
+                           city: details.city || f.city,
+                           department: details.department ? (DEPARTAMENTOS.find(d => d.toLowerCase() === details.department.toLowerCase()) || details.department) : f.department,
                            postal_code: details.postal_code || f.postal_code,
                            country: details.country || f.country
                         }))}

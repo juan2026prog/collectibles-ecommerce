@@ -12,11 +12,15 @@ export default function AddressAutocomplete({ value, onChange, onSelect }: Addre
   const [results, setResults] = useState<any[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [skipSearch, setSkipSearch] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   // Sync internal query with external value if it changes independently
   useEffect(() => {
-    setQuery(value);
+    if (value !== query) {
+      setQuery(value);
+      setSkipSearch(true);
+    }
   }, [value]);
 
   useEffect(() => {
@@ -30,7 +34,12 @@ export default function AddressAutocomplete({ value, onChange, onSelect }: Addre
   }, []);
 
   useEffect(() => {
-    if (!query || query.length < 3 || query === value) {
+    if (skipSearch) {
+      setSkipSearch(false);
+      return;
+    }
+
+    if (!query || query.length < 3) {
       setResults([]);
       return;
     }
@@ -38,8 +47,8 @@ export default function AddressAutocomplete({ value, onChange, onSelect }: Addre
     const timeoutId = setTimeout(async () => {
       setLoading(true);
       try {
-        // Using OpenStreetMap Nominatim for free global autocomplete
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=5`);
+        // Using OpenStreetMap Nominatim for free autocomplete, restricted to Uruguay
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=5&countrycodes=uy`);
         const data = await res.json();
         setResults(data);
         setIsOpen(true);
@@ -54,15 +63,20 @@ export default function AddressAutocomplete({ value, onChange, onSelect }: Addre
 
   const handleSelect = (result: any) => {
     const addressDetails = result.address || {};
+    
+    let rawDept = addressDetails.state || addressDetails.county || '';
+    rawDept = rawDept.replace(/ department/i, '').replace(/departamento de /i, '').trim();
+    
     // Map OSM fields to our form fields
     const mapped = {
       street: `${addressDetails.road || ''} ${addressDetails.house_number || ''}`.trim() || result.display_name.split(',')[0],
-      city: addressDetails.city || addressDetails.town || addressDetails.village || '',
-      department: addressDetails.state || addressDetails.county || '',
+      city: addressDetails.city || addressDetails.town || addressDetails.village || addressDetails.suburb || '',
+      department: rawDept,
       postal_code: addressDetails.postcode || '',
       country: addressDetails.country || 'Uruguay',
     };
     
+    setSkipSearch(true);
     setQuery(mapped.street);
     onChange(mapped.street);
     onSelect(mapped);
