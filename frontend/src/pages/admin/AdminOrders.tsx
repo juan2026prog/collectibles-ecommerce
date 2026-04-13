@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Eye, ChevronDown, Package, Truck, PhoneCall, X, Save } from 'lucide-react';
+import { Eye, ChevronDown, Package, Truck, PhoneCall, X, Save, Ban, AlertTriangle, UserX } from 'lucide-react';
 
 const ORDER_STATUSES = [
   { value: 'pending', label: 'Pendiente de Pago', color: 'bg-yellow-100 text-yellow-700' },
@@ -18,6 +18,8 @@ export default function AdminOrders() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [isBlocking, setIsBlocking] = useState(false);
 
   useEffect(() => { fetchOrders(); }, [statusFilter]);
 
@@ -48,6 +50,77 @@ export default function AdminOrders() {
     
     setSelectedOrder(null);
     fetchOrders();
+  }
+
+  async function handleCancelOrder() {
+    if (!selectedOrder) return;
+    const reason = prompt("Por favor ingresa la razón de la cancelación. Esta será enviada al cliente:");
+    if (reason === null) return;
+    
+    if (!confirm(`¿Estás SEGURO de que deseas cancelar esta orden y devolver el dinero? Esta acción no se puede deshacer.`)) return;
+
+    setIsCancelling(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/refund-order`, {
+         method: 'POST',
+         headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`
+         },
+         body: JSON.stringify({ orderId: selectedOrder.id, reason: reason || "Cancelada por el administrador" })
+      });
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error al cancelar la orden");
+      
+      alert(data.refundSuccess 
+        ? "La orden fue cancelada y el reembolso procesado con éxito." 
+        : "La orden fue cancelada, pero el pago era de prueba o no se pudo reembolsar automáticamente.");
+        
+      setSelectedOrder(null);
+      fetchOrders();
+    } catch (e: any) {
+      alert(`Error al cancelar: ${e.message}`);
+    } finally {
+      setIsCancelling(false);
+    }
+  }
+
+  async function handleBlockUser() {
+    if (!selectedOrder || !selectedOrder.customer?.id) {
+       alert("Esta orden no parece tener un usuario registrado para bloquear (compra como invitado o sin cuenta).");
+       return;
+    }
+    
+    if (!confirm(`¿Estás SEGURO de que deseas bloquear irrevocablemente al usuario? No podrá volver a comprar ni iniciar sesión en su cuenta.`)) return;
+
+    setIsBlocking(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/block-user`, {
+         method: 'POST',
+         headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`
+         },
+         body: JSON.stringify({ userId: selectedOrder.customer.id })
+      });
+      
+      const data = await res.json();
+      // Also mark as blocked locally in DB if column exists (optional fallback handled here too)
+      await supabase.from('profiles').update({ is_blocked: true }).eq('id', selectedOrder.customer.id).catch(() => {});
+
+      if (!res.ok) throw new Error(data.error || "Error al bloquear usuario");
+      
+      alert("Usuario bloqueado y baneado de la plataforma exitosamente.");
+    } catch (e: any) {
+      alert(`Error al bloquear: ${e.message}`);
+    } finally {
+      setIsBlocking(false);
+    }
   }
 
   return (
@@ -218,6 +291,36 @@ export default function AdminOrders() {
                   />
                 </div>
               </div>
+
+              {/* DANGER ZONE - CANCELLATION */}
+              {selectedOrder.status !== 'cancelada' && (
+                <div className="space-y-4 bg-red-50 p-4 rounded-xl border border-red-200 mt-8">
+                  <h4 className="text-xs font-bold text-red-600 uppercase tracking-wider mb-2 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4" /> Zona Peligrosa
+                  </h4>
+                  <p className="text-xs text-red-700 mb-4">
+                    Cancelar la orden revertirá el stock de los productos, cambiará el estado de la venta, emitirá un reembolso en la pasarela de pagos (si aplica) y enviará un email al comprador.
+                  </p>
+                  
+                  <button 
+                    onClick={handleCancelOrder}
+                    disabled={isCancelling || isBlocking}
+                    className="w-full py-3 bg-white text-red-600 border justify-center border-red-200 hover:bg-red-600 hover:text-white rounded-lg flex items-center gap-2 font-bold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Ban className="w-5 h-5" /> {isCancelling ? 'Procesando Reembolso...' : 'Cancelar Orden y Reembolsar'}
+                  </button>
+                  
+                  {selectedOrder.customer?.id && (
+                    <button 
+                      onClick={handleBlockUser}
+                      disabled={isBlocking || isCancelling}
+                      className="w-full py-3 bg-red-600 text-white border justify-center border-red-700 hover:bg-red-700 rounded-lg flex items-center gap-2 font-bold transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <UserX className="w-5 h-5" /> {isBlocking ? 'Bloqueando Usuario...' : 'Bloquear a este Usuario (Ban)'}
+                    </button>
+                  )}
+                </div>
+              )}
 
             </div>
             

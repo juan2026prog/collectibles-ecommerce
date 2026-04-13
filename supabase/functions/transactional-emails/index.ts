@@ -1,7 +1,13 @@
+// @ts-ignore
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+// @ts-ignore
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
+// @ts-ignore
 import { corsHeaders } from "../_shared/cors.ts";
+
+declare const Deno: any;
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || 'mock-resend-key';
 const WHATSAPP_TOKEN = Deno.env.get('WHATSAPP_TOKEN') || 'mock-whatsapp-key';
@@ -82,7 +88,7 @@ async function sendWhatsAppMessage(toPhone: string, message: string) {
   if (!response.ok) console.error("WhatsApp API Error:", data);
 }
 
-serve(async (req) => {
+serve(async (req: Request) => {
   // Manejo de CORS
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -158,6 +164,31 @@ serve(async (req) => {
       }
 
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
+    }
+
+    // 2.5 CUSTOM NOTIFICATIONS (Refunds/Cancellations triggered explicitly)
+    if (payload.type === 'custom_order_cancelled') {
+         const { order, reason } = payload;
+         const customerEmail = order.customer_email || order.customer?.email;
+         if (!customerEmail) return new Response("No email", { status: 200, headers: corsHeaders });
+         
+         const reasonText = reason || "Decisión del administrador";
+         const subject = `Tu orden #${order.id.slice(0, 8).toUpperCase()} ha sido cancelada`;
+         const html = `
+           <div style="font-family: Arial, sans-serif; padding: 20px; background: #fafafa; border-radius: 8px;">
+             <h2 style="color: #111;">Orden Cancelada</h2>
+             <p>Te informamos que tu orden <strong>#${order.id.slice(0, 8).toUpperCase()}</strong> ha sido cancelada y el dinero ha sido reembolsado automáticamente a tu método de pago original (Tarjeta o saldo de Mercado Pago).</p>
+             <p><strong>Motivo de cancelación:</strong> ${reasonText}</p>
+             <p>Si tienes dudas, por favor contáctanos.</p>
+             <p>Saludos,<br />El Equipo.</p>
+           </div>
+         `;
+         await sendEmailAndLog(customerEmail, subject, html, 'order_cancellation', order.customer_id);
+
+         if (order.customer_phone) {
+            await sendWhatsAppMessage(order.customer_phone, `⛔ *Orden Cancelada*\n\nTu orden #${order.id.slice(0,8).toUpperCase()} fue cancelada y el pago está en proceso de reembolso.\n\nMotivo: ${reasonText}`);
+         }
+         return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
     // 3. ABANDONED CART RECOVERY (Triggered via Admin UI or Cron)
