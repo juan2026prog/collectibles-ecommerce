@@ -69,18 +69,29 @@ export default function AdminOrders() {
     setIsCancelling(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("No hay sesión activa. Por favor recarga la página e inicia sesión de nuevo.");
       
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/refund-order`, {
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/refund-order`;
+      console.log('Calling refund-order:', url, 'orderId:', selectedOrder.id);
+      
+      const res = await fetch(url, {
          method: 'POST',
          headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token}`
+            'Authorization': `Bearer ${session.access_token}`
          },
          body: JSON.stringify({ orderId: selectedOrder.id, reason: reason || "Cancelada por el administrador" })
       });
       
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al cancelar la orden");
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        const text = await res.text();
+        throw new Error(`Error ${res.status}: ${text || res.statusText}`);
+      }
+      
+      if (!res.ok) throw new Error(data.error || `Error ${res.status} al cancelar la orden`);
       
       if (isPending) {
          alert("La orden pendiente fue cancelada exitosamente.");
@@ -93,6 +104,7 @@ export default function AdminOrders() {
       setSelectedOrder(null);
       fetchOrders();
     } catch (e: any) {
+      console.error('Cancel order error:', e);
       alert(`Error al cancelar: ${e.message}`);
     } finally {
       setIsCancelling(false);
@@ -141,13 +153,14 @@ export default function AdminOrders() {
     
     setIsSendingDiscount(true);
     try {
-      // 1. Send the email/Whatsapp via our transactional emails edge function
       const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("No hay sesión activa. Recarga la página.");
+      
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transactional-emails`, {
          method: 'POST',
          headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token}`
+            'Authorization': `Bearer ${session.access_token}`
          },
          body: JSON.stringify({ 
            type: 'abandoned_order_discount', 
@@ -156,7 +169,11 @@ export default function AdminOrders() {
          })
       });
       
-      if (!res.ok) throw new Error("Error interno al enviar el descuento.");
+      if (!res.ok) {
+        let errMsg = `Error ${res.status}`;
+        try { const d = await res.json(); errMsg = d.error || errMsg; } catch { /* ignore */ }
+        throw new Error(errMsg);
+      }
       
       // 2. Change status to abandonada
       if (selectedOrder.status !== 'abandonada') {
@@ -169,6 +186,7 @@ export default function AdminOrders() {
       fetchOrders();
       setSelectedOrder(null);
     } catch (e: any) {
+      console.error('Send discount error:', e);
       alert(`Error al enviar descuento: ${e.message}`);
     } finally {
       setIsSendingDiscount(false);
