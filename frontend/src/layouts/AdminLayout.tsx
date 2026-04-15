@@ -55,16 +55,12 @@ export default function AdminLayout() {
           <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
             {!settingsLoaded ? (
               <div className="h-8 w-28 bg-white/10 rounded-lg animate-pulse" />
-            ) : settings['appearance_logo'] ? (
-              <img src={settings['appearance_logo']} alt={settings['store_name'] || 'Store Logo'} className="h-8 object-contain" />
-            ) : (
               <>
                 <img src={STORE_ISOLOGO_URL} alt="Logo" className="w-8 h-8 rounded-full object-cover" />
                 <span className="text-lg font-bold text-white tracking-widest uppercase truncate">
                   {settings['store_name'] || 'Admin Pro'}
                 </span>
               </>
-            )}
           </Link>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">

@@ -6,6 +6,10 @@ import { supabase } from '../lib/supabase';
  * without re-fetching from Supabase on every mount.
  */
 let _cache: Record<string, string> | null = null;
+try {
+  const local = localStorage.getItem('site_settings_cache');
+  if (local) _cache = JSON.parse(local);
+} catch (e) {}
 let _promise: Promise<Record<string, string>> | null = null;
 const _listeners = new Set<(s: Record<string, string>) => void>();
 
@@ -18,6 +22,7 @@ function fetchSettings(): Promise<Record<string, string>> {
       const s: Record<string, string> = {};
       data?.forEach((d: any) => (s[d.key] = d.value));
       _cache = s;
+      try { localStorage.setItem('site_settings_cache', JSON.stringify(s)); } catch (e) {}
       _listeners.forEach(fn => fn(s));
       return s;
     });

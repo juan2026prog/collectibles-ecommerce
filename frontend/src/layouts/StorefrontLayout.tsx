@@ -259,16 +259,12 @@ export default function StorefrontLayout() {
             <Link to="/" className="flex items-center gap-2 flex-shrink-0">
               {!settingsLoaded ? (
                 <div className="h-8 sm:h-10 w-28 sm:w-36 bg-white/10 rounded-lg animate-pulse" />
-              ) : settings['appearance_logo'] ? (
-                <img src={settings['appearance_logo']} alt={settings['store_name'] || 'Store Logo'} className="h-8 sm:h-10 object-contain" />
-              ) : (
                 <>
                   <img src={STORE_ISOLOGO_URL} alt={settings['store_name'] || 'Store'} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover" />
                   <span className={`text-xl sm:text-2xl font-extrabold tracking-tight hidden sm:block ${isHome ? 'text-white' : 'text-gray-900'}`}>
                     {settings['store_name'] || 'COLLECTIBLES'}
                   </span>
                 </>
-              )}
             </Link>
 
             {/* Desktop Navigation */}
@@ -498,14 +494,10 @@ export default function StorefrontLayout() {
               <Link to="/" className="flex items-center gap-2" onClick={() => setMobileMenuOpen(false)}>
                 {!settingsLoaded ? (
                   <div className="h-8 w-28 bg-white/10 rounded-lg animate-pulse" />
-                ) : settings['appearance_logo'] ? (
-                  <img src={settings['appearance_logo']} alt={settings['store_name'] || 'Store Logo'} className="h-8 object-contain" />
-                ) : (
                   <>
                     <img src={STORE_ISOLOGO_URL} alt={settings['store_name'] || 'Store'} className="w-8 h-8 rounded-full object-cover" />
                     <span className="text-lg font-extrabold text-white">{settings['store_name'] || 'COLLECTIBLES'}</span>
                   </>
-                )}
               </Link>
               <button
                 onClick={() => setMobileMenuOpen(false)}
@@ -632,14 +624,10 @@ export default function StorefrontLayout() {
               <Link to="/" className="flex items-center gap-2 mb-4">
                 {!settingsLoaded ? (
                   <div className="h-8 sm:h-10 w-32 bg-white/10 rounded-lg animate-pulse" />
-                ) : settings['appearance_logo'] ? (
-                  <img src={settings['appearance_logo']} alt={settings['store_name'] || 'Store Logo'} className="h-8 sm:h-10 object-contain" />
-                ) : (
                   <>
                     <img src={STORE_ISOLOGO_URL} alt={settings['store_name'] || 'Store'} className="w-8 h-8 rounded-full object-cover" />
                     <span className="text-xl font-extrabold tracking-tight">{settings['store_name'] || 'COLLECTIBLES'}</span>
                   </>
-                )}
               </Link>
               <p className="text-sm text-gray-400 leading-relaxed mb-4">
                 {settings['store_tagline'] || 'Your destination for the best collectibles, figures, toys, and more.'}
