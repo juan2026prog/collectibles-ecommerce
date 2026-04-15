@@ -6,6 +6,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import LocaleSwitcher from '../components/LocaleSwitcher';
 import { useSiteSettings } from '../hooks/useSiteSettings';
+import { STORE_ISOLOGO_URL } from '../lib/brand';
 
 export default function PortalLayout({ type }: { type: 'vendor' | 'artist' | 'affiliate' | 'star2fan' }) {
   const location = useLocation();
@@ -85,12 +86,9 @@ export default function PortalLayout({ type }: { type: 'vendor' | 'artist' | 'af
           <Link to={`/${type}`} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
             {!settingsLoaded ? (
               <div className="h-8 w-28 bg-white/10 rounded-lg animate-pulse" />
-            ) : settings['appearance_logo'] ? (
-              <img src={settings['appearance_logo']} alt={settings['store_name'] || 'Store Logo'} className="h-8 object-contain" />
-            ) : (
               <>
-                <div className="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center">
-                  <Icon className="w-4 h-4 text-white" />
+                <div className="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center overflow-hidden">
+                  <img src={STORE_ISOLOGO_URL} className="w-full h-full object-cover" alt="Logo" />
                 </div>
                 <span className="text-lg font-bold text-white tracking-widest uppercase truncate">
                   {title}
