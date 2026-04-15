@@ -2,10 +2,13 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { useSiteSettings } from '../hooks/useSiteSettings';
+import { STORE_ISOLOGO_URL } from '../lib/brand';
 
 export default function Login() {
   const { signIn, signUp, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
+  const { settings, loaded: settingsLoaded } = useSiteSettings();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -37,10 +40,16 @@ export default function Login() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2">
-            <div className="w-10 h-10 bg-primary-500 rounded-full flex items-center justify-center">
-              <span className="text-white text-xl">✦</span>
-            </div>
-            <span className="text-2xl font-extrabold tracking-tight text-dark-900">COLLECTIBLES</span>
+            {!settingsLoaded ? (
+              <div className="h-10 w-36 bg-gray-200 rounded-lg animate-pulse" />
+            ) : settings['appearance_logo'] ? (
+              <img src={settings['appearance_logo']} alt={settings['store_name'] || 'Store Logo'} className="h-10 object-contain" />
+            ) : (
+              <>
+                <img src={STORE_ISOLOGO_URL} alt={settings['store_name'] || 'Store'} className="w-10 h-10 rounded-full object-cover" />
+                <span className="text-2xl font-extrabold tracking-tight text-dark-900">{settings['store_name'] || 'COLLECTIBLES'}</span>
+              </>
+            )}
           </Link>
         </div>
 

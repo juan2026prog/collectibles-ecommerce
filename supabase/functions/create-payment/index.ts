@@ -35,6 +35,22 @@ serve(async (req: Request) => {
     const body = await req.json()
     const { provider, amount, currency, customer, items } = body as PaymentRequest
 
+    // Try to extract the authenticated user from the JWT
+    let customerId: string | null = null;
+    const authHeader = req.headers.get('Authorization');
+    if (authHeader) {
+      const token = authHeader.replace('Bearer ', '');
+      // Only try to get user if token is NOT the anon key
+      if (token.length > 200) { // User JWTs are longer than anon keys
+        const anonClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY') ?? '');
+        const { data: { user } } = await anonClient.auth.getUser(token);
+        if (user) {
+          customerId = user.id;
+          console.log(`[create-payment] Authenticated user: ${user.email} (${user.id})`);
+        }
+      }
+    }
+
     let orderId = body.order_id
 
     // 1. CREATE ORDER IF NOT EXISTS (Using Service Role)
@@ -43,6 +59,7 @@ serve(async (req: Request) => {
       const { data: order, error: orderError } = await supabaseAdmin
         .from('orders')
         .insert({
+          customer_id: customerId,
           customer_email: customer.email,
           customer_phone: customer.phone,
           total_amount: amount,

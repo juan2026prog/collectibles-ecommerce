@@ -1,3 +1,5 @@
+import { supabase } from './supabase';
+
 interface CreatePaymentParams {
   provider: 'dlocal' | 'paypal' | 'mercadopago';
   amount: number;
@@ -24,11 +26,15 @@ const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 export async function createCheckoutSession(params: CreatePaymentParams) {
   console.log('[Payments] Calling Edge Function directly via fetch...');
   
+  // Get the user's JWT token if logged in — this allows the backend to set customer_id
+  const { data: { session } } = await supabase.auth.getSession();
+  const authToken = session?.access_token || ANON_KEY;
+  
   const response = await fetch(EDGE_FUNCTION_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${ANON_KEY}`,
+      'Authorization': `Bearer ${authToken}`,
       'apikey': ANON_KEY,
     },
     body: JSON.stringify(params),
@@ -51,4 +57,3 @@ export async function createCheckoutSession(params: CreatePaymentParams) {
     throw new Error('URL de checkout no recibida del servidor');
   }
 }
-

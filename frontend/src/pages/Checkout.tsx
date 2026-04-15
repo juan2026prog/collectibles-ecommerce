@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { ChevronRight, CreditCard, QrCode, Truck, Store, Tag, Sparkles, X } from 'lucide-react';
+import { ChevronRight, Truck, Store, Tag, Sparkles, X, MapPin, Home } from 'lucide-react';
 import { useCartContext } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -71,6 +71,45 @@ export default function Checkout() {
     }
   }
   const grandTotal = subtotalWithShipping - bankDiscount;
+
+  // ═══ Saved addresses from profile ═══
+  const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
+  const [selectedAddress, setSelectedAddress] = useState<number>(-1); // -1 = auto/first, -2 = new
+
+  // ═══ Auto-fill from saved profile data ═══
+  useEffect(() => {
+    if (!user) return;
+    async function loadProfile() {
+      const { data } = await supabase
+        .from('profiles')
+        .select('first_name, last_name, phone, saved_addresses, shipping_address')
+        .eq('id', user!.id)
+        .single();
+      if (data) {
+        const addrs = data.saved_addresses || [];
+        setSavedAddresses(addrs);
+        
+        // Use first saved address, or fall back to shipping_address
+        const addr = addrs.length > 0 ? addrs[0] : (data.shipping_address || {});
+        if (addrs.length > 0) setSelectedAddress(0);
+        
+        setForm(f => ({
+          ...f,
+          email: user!.email || f.email,
+          first_name: data.first_name || f.first_name,
+          last_name: data.last_name || f.last_name,
+          phone: data.phone || f.phone,
+          street: addr.street || f.street,
+          apartment: addr.apartment || f.apartment,
+          city: addr.city || f.city,
+          department: addr.department || f.department,
+          postal_code: addr.postal_code || f.postal_code,
+          country: addr.country || f.country,
+        }));
+      }
+    }
+    loadProfile();
+  }, [user]);
 
   // ═══ Fetch active bank promotions ═══
   useEffect(() => {
@@ -222,6 +261,73 @@ export default function Checkout() {
                 {shippingMethod === 'delivery' && (
                   <div className="pt-4 mt-4 border-t border-gray-100 space-y-4">
                     <h3 className="font-semibold text-sm text-gray-600 mb-2">Dirección de Entrega</h3>
+                    
+                    {/* Saved address picker */}
+                    {savedAddresses.length > 0 && (
+                      <div className="space-y-2 mb-4">
+                        <label className="form-label text-xs">Elegir dirección guardada</label>
+                        <div className="grid gap-2">
+                          {savedAddresses.map((addr: any, idx: number) => (
+                            <label
+                              key={idx}
+                              className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                                selectedAddress === idx ? 'border-primary-500 bg-primary-50/50' : 'border-gray-100 hover:border-gray-200'
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name="savedAddr"
+                                className="sr-only"
+                                checked={selectedAddress === idx}
+                                onChange={() => {
+                                  setSelectedAddress(idx);
+                                  setForm(f => ({
+                                    ...f,
+                                    street: addr.street || '',
+                                    apartment: addr.apartment || '',
+                                    city: addr.city || '',
+                                    department: addr.department || '',
+                                    postal_code: addr.postal_code || '',
+                                    country: addr.country || 'Uruguay',
+                                  }));
+                                }}
+                              />
+                              <div className={`p-1.5 rounded-lg ${selectedAddress === idx ? 'bg-primary-500 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                                <Home className="w-4 h-4" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <span className="font-bold text-sm block">{addr.label || `Dirección ${idx + 1}`}</span>
+                                <span className="text-xs text-gray-500 block truncate">{addr.street}{addr.apartment ? `, ${addr.apartment}` : ''} — {addr.city}, {addr.department}</span>
+                              </div>
+                            </label>
+                          ))}
+                          <label
+                            className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                              selectedAddress === -2 ? 'border-primary-500 bg-primary-50/50' : 'border-gray-100 border-dashed hover:border-gray-200'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="savedAddr"
+                              className="sr-only"
+                              checked={selectedAddress === -2}
+                              onChange={() => {
+                                setSelectedAddress(-2);
+                                setForm(f => ({ ...f, street: '', apartment: '', city: '', department: '', postal_code: '' }));
+                              }}
+                            />
+                            <div className={`p-1.5 rounded-lg ${selectedAddress === -2 ? 'bg-primary-500 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                              <MapPin className="w-4 h-4" />
+                            </div>
+                            <span className="font-bold text-sm text-gray-600">Usar otra dirección</span>
+                          </label>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Only show full address form if no saved address selected, or "new" is chosen */}
+                    {(savedAddresses.length === 0 || selectedAddress === -2) && (
+                      <>
                     <div>
                       <label className="form-label">Dirección (Calle, Número) *</label>
                       <AddressAutocomplete 
@@ -278,6 +384,8 @@ export default function Checkout() {
                         </select>
                       </div>
                     </div>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -287,19 +395,36 @@ export default function Checkout() {
             <div className="bg-white rounded-xl border border-gray-100 p-6">
               <h2 className="font-bold text-lg mb-4">MÉTODO DE PAGO</h2>
               <div className="space-y-3">
-                {[
-                  { id: 'mercadopago', icon: CreditCard, label: 'Mercado Pago (v2) — Tarjetas, Transferencia, QR' },
-                  { id: 'dlocalgo', icon: CreditCard, label: 'dLocal Go (Tarjeta Internacional)' },
-                  { id: 'paypal', icon: QrCode, label: 'PayPal (Global / USD)' },
-                ].map(m => (
-                  <label key={m.id} className={`flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-colors ${
-                    paymentMethod === m.id ? 'border-primary-500 bg-primary-50' : 'border-gray-200 hover:border-gray-300'
-                  }`}>
-                    <input type="radio" name="payment" value={m.id} checked={paymentMethod === m.id} onChange={() => setPaymentMethod(m.id)} className="text-primary-600" />
-                    <m.icon className="w-5 h-5 text-gray-600" />
-                    <span className="text-sm font-semibold">{m.label}</span>
-                  </label>
-                ))}
+                {/* ═══ Mercado Pago ═══ */}
+                <label className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                  paymentMethod === 'mercadopago' ? 'border-blue-500 bg-blue-50/50 shadow-sm' : 'border-gray-200 hover:border-gray-300'
+                }`}>
+                  <input type="radio" name="payment" value="mercadopago" checked={paymentMethod === 'mercadopago'} onChange={() => setPaymentMethod('mercadopago')} className="text-primary-600 shrink-0" />
+                  <img src="/logos/Mercado_Pago.png" alt="Mercado Pago" className="h-6 object-contain" />
+                </label>
+
+                {/* ═══ dLocal Go — tarjetas + redpagos ═══ */}
+                <label className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                  paymentMethod === 'dlocalgo' ? 'border-blue-500 bg-blue-50/50 shadow-sm' : 'border-gray-200 hover:border-gray-300'
+                }`}>
+                  <input type="radio" name="payment" value="dlocalgo" checked={paymentMethod === 'dlocalgo'} onChange={() => setPaymentMethod('dlocalgo')} className="text-primary-600 shrink-0" />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <img src="/logos/visa-mastercard.jpg" alt="Visa / Mastercard" className="h-6 object-contain rounded" />
+                    <img src="/logos/OCA_LOGO.png" alt="OCA" className="h-6 object-contain" />
+                    <img src="/logos/DINERS.png" alt="Diners Club" className="h-6 object-contain" />
+                    <img src="/logos/lider.png" alt="Líder" className="h-6 object-contain" />
+                    <div className="w-px h-6 bg-gray-200 mx-1" />
+                    <img src="/logos/Red_Pagos_Logos.png" alt="RedPagos" className="h-6 object-contain" />
+                  </div>
+                </label>
+
+                {/* ═══ PayPal ═══ */}
+                <label className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                  paymentMethod === 'paypal' ? 'border-blue-500 bg-blue-50/50 shadow-sm' : 'border-gray-200 hover:border-gray-300'
+                }`}>
+                  <input type="radio" name="payment" value="paypal" checked={paymentMethod === 'paypal'} onChange={() => setPaymentMethod('paypal')} className="text-primary-600 shrink-0" />
+                  <img src="/logos/paypal.png" alt="PayPal" className="h-6 object-contain" />
+                </label>
               </div>
               {paymentMethod === 'mercadopago' && (
                 <div className="mt-3 p-4 bg-blue-50 border border-blue-100 rounded-xl">

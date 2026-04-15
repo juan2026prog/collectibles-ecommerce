@@ -96,9 +96,14 @@ export default function AdminOrders() {
       if (isPending) {
          alert("La orden pendiente fue cancelada exitosamente.");
       } else {
-         alert(data.refundSuccess 
-           ? "La orden fue cancelada y el reembolso procesado con éxito." 
-           : "La orden fue cancelada, pero el pago era de prueba o no se pudo reembolsar automáticamente.");
+         if (data.refundSuccess) {
+           const details = data.refundDetails || {};
+           const testWarning = details.isTestMode ? '\n\n⚠️ ATENCIÓN: Estás usando un token de PRUEBA (TEST). Este reembolso solo se procesó en el sandbox de MercadoPago y NO se reflejará en la tarjeta de crédito real del cliente. Para reembolsos reales, necesitás configurar un token de PRODUCCIÓN.' : '';
+           alert(`✅ Orden cancelada y reembolso procesado.\n\nRefund ID: ${details.refund_id || 'N/A'}\nMonto: ${details.amount || 'Total'}\nEstado: ${details.status || 'approved'}${testWarning}\n\nNota: El reembolso puede demorar entre 5 y 30 días hábiles en reflejarse en la tarjeta.`);
+         } else {
+           const details = data.refundDetails || {};
+           alert(`⚠️ La orden fue cancelada, pero el reembolso NO se pudo procesar.\n\nError: ${details.error || 'Desconocido'}\nMP Status: ${details.mp_status || 'N/A'}\n\nPosibles causas:\n- El token de MP es de prueba (TEST) y no puede procesar reembolsos reales\n- El pago ya fue reembolsado previamente\n- El payment_id almacenado es incorrecto\n\nPor favor, procesar el reembolso manualmente desde el panel de MercadoPago.`);
+         }
       }
         
       setSelectedOrder(null);

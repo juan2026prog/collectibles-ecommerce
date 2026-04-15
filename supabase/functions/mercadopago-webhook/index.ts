@@ -1,18 +1,12 @@
-// @ts-ignore
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-// @ts-ignore
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-// @ts-ignore
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
-
-declare const Deno: any;
+import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
@@ -23,12 +17,11 @@ serve(async (req: Request) => {
     if (body.type === "payment" && (body.action === "payment.created" || body.action === "payment.updated")) {
       const paymentId = body.data.id;
       
-      const supabaseAdmin = createClient(
-        Deno.env.get("SUPABASE_URL") ?? "",
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-      );
+      const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+      const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+      const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-      // Fetch the token from site_settings (modern way)
+      // Fetch the token from site_settings
       const { data: settings } = await supabaseAdmin.from('site_settings').select('key, value');
       const config = Object.fromEntries((settings || []).map((s: any) => [s.key, s.value]));
       
@@ -76,41 +69,57 @@ serve(async (req: Request) => {
           const { data: orderItems } = await supabaseAdmin.from("order_items").select("*").eq("order_id", orderId);
           if (orderItems) {
             for (const item of orderItems) {
-              const targetId = item.variant_id || item.product_id; // Try variant, then product
-              if (targetId) {
-                // Determine if targetId is product or variant
-                if (item.variant_id) {
-                    await supabaseAdmin.rpc("decrement_inventory", { 
-                        p_variant_id: item.variant_id, 
-                        p_quantity: item.quantity 
-                    }).catch((err: any) => console.error("Inventory error:", err));
-                } else {
-                    // If no variant, maybe update base product stock? (Usually stock is in variants)
-                    console.log("No variant_id for item, skipped inventory decrement");
-                }
+              if (item.variant_id) {
+                await supabaseAdmin.rpc("decrement_inventory", { 
+                  p_variant_id: item.variant_id, 
+                  p_quantity: item.quantity 
+                }).catch((err: any) => console.error("Inventory error:", err));
               }
             }
           }
 
           // Trigger Commissions Calculation
-          await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/calculate-commissions`, {
+          await fetch(`${supabaseUrl}/functions/v1/calculate-commissions`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`
+              "Authorization": `Bearer ${supabaseServiceKey}`
             },
             body: JSON.stringify({ order_id: orderId })
           }).catch((err: any) => console.error("Error triggering commissions:", err));
 
           // Trigger SoyDelivery Sync
-          await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/soydelivery-sync`, {
+          await fetch(`${supabaseUrl}/functions/v1/soydelivery-sync`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`
+              "Authorization": `Bearer ${supabaseServiceKey}`
             },
             body: JSON.stringify({ order_id: orderId })
           }).catch((err: any) => console.error("Error triggering soydelivery:", err));
+
+          // Trigger transactional email
+          const { data: fullOrder } = await supabaseAdmin
+            .from('orders')
+            .select('*')
+            .eq('id', orderId)
+            .single();
+
+          if (fullOrder) {
+            await fetch(`${supabaseUrl}/functions/v1/transactional-emails`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseServiceKey}`
+              },
+              body: JSON.stringify({
+                type: 'UPDATE',
+                table: 'orders',
+                record: fullOrder,
+                old_record: { ...fullOrder, status: 'pending' }
+              })
+            }).catch((err: any) => console.error('MP email error:', err));
+          }
         }
       } 
       // CANCELLED or REJECTED STATUS
@@ -128,7 +137,7 @@ serve(async (req: Request) => {
   } catch (error: any) {
     console.error("Webhook Error:", error);
     return new Response(JSON.stringify({ error: error.message }), {
-      status: 400,
+      status: 200, // Return 200 so MP doesn't keep retrying on permanent errors
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
   }

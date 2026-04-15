@@ -5,11 +5,13 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LocaleSwitcher from '../components/LocaleSwitcher';
+import { useSiteSettings } from '../hooks/useSiteSettings';
 
 export default function PortalLayout({ type }: { type: 'vendor' | 'artist' | 'affiliate' | 'star2fan' }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut, profile } = useAuth();
+  const { settings, loaded: settingsLoaded } = useSiteSettings();
   
   let navItems: any[] = [];
   let title = "";
@@ -81,12 +83,20 @@ export default function PortalLayout({ type }: { type: 'vendor' | 'artist' | 'af
       <aside className="w-64 bg-dark-900 text-gray-300 flex flex-col relative z-20 shadow-xl overflow-y-auto scrollbar-hide">
         <div className="p-6 sticky top-0 bg-dark-900 border-b border-dark-800 z-10">
           <Link to={`/${type}`} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-            <div className="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center">
-              <Icon className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-lg font-bold text-white tracking-widest uppercase truncate">
-              {title}
-            </span>
+            {!settingsLoaded ? (
+              <div className="h-8 w-28 bg-white/10 rounded-lg animate-pulse" />
+            ) : settings['appearance_logo'] ? (
+              <img src={settings['appearance_logo']} alt={settings['store_name'] || 'Store Logo'} className="h-8 object-contain" />
+            ) : (
+              <>
+                <div className="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center">
+                  <Icon className="w-4 h-4 text-white" />
+                </div>
+                <span className="text-lg font-bold text-white tracking-widest uppercase truncate">
+                  {title}
+                </span>
+              </>
+            )}
           </Link>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">

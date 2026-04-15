@@ -76,8 +76,9 @@ export default function AdminMercadoLibre() {
     setLoading(true);
     const { data } = await supabase
       .from('products')
-      .select('id, title, status, base_price, product_variants(sku, inventory_count)')
-      .limit(10);
+      .select('id, title, status, base_price, ml_item_id, ml_status, category_id, categories(name), product_variants(sku, inventory_count)')
+      .order('updated_at', { ascending: false })
+      .limit(50);
     setProducts(data || []);
     setLoading(false);
   }
@@ -233,6 +234,7 @@ export default function AdminMercadoLibre() {
              <thead className="bg-gray-50">
                <tr>
                  <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Producto (Local)</th>
+                 <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Categoría</th>
                  <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">SKU Base</th>
                  <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Stock Local</th>
                  <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">ML Status</th>
@@ -241,15 +243,32 @@ export default function AdminMercadoLibre() {
              <tbody className="divide-y divide-gray-100">
                {products.map(p => (
                  <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
-                   <td className="px-6 py-4 font-medium text-sm text-gray-900">{p.title} <span className="text-gray-400 block text-xs">Ajuste Sugerido: ${Math.round(p.base_price * (1 + Number(markupValue) / 100))}</span></td>
+                   <td className="px-6 py-4 font-medium text-sm text-gray-900">
+                     {p.title}
+                     {p.ml_item_id && <span className="text-blue-400 block text-[10px] font-mono mt-0.5">{p.ml_item_id}</span>}
+                     <span className="text-gray-400 block text-xs">Ajuste Sugerido: ${Math.round(p.base_price * (1 + Number(markupValue) / 100))}</span>
+                   </td>
+                   <td className="px-6 py-4 text-sm text-gray-600">
+                     {(p as any).categories?.name ? (
+                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-600 border border-purple-100">{(p as any).categories.name}</span>
+                     ) : (
+                       <span className="text-gray-300 text-xs">—</span>
+                     )}
+                   </td>
                    <td className="px-6 py-4 text-sm font-mono text-gray-500">{p.product_variants?.[0]?.sku || '-'}</td>
                    <td className="px-6 py-4 font-bold text-blue-600">{p.product_variants?.[0]?.inventory_count || 0} u.</td>
-                   <td className="px-6 py-4"><span className="px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest border border-gray-200 bg-gray-100 text-gray-500">Sin vincular</span></td>
+                   <td className="px-6 py-4">
+                     {p.ml_item_id ? (
+                       <span className="px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest border border-green-200 bg-green-50 text-green-600">Vinculado</span>
+                     ) : (
+                       <span className="px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest border border-gray-200 bg-gray-100 text-gray-500">Sin vincular</span>
+                     )}
+                   </td>
                  </tr>
                ))}
                {products.length === 0 && (
                   <tr>
-                     <td colSpan={4} className="px-6 py-12 text-center text-gray-500">No hay productos en la base de datos para sincronizar.</td>
+                     <td colSpan={5} className="px-6 py-12 text-center text-gray-500">No hay productos en la base de datos para sincronizar.</td>
                   </tr>
                )}
              </tbody>
@@ -409,6 +428,7 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
                     />
                   </th>
                   <th className="p-4 pb-2">Producto</th>
+                  <th className="p-4 pb-2">Categoría ML</th>
                   <th className="p-4 pb-2">Inventario / Precio</th>
                   <th className="p-4 pb-2 text-right pr-6">Estado ML</th>
                 </tr>
@@ -434,6 +454,20 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
                           <p className="text-[9px] text-gray-400 mt-1 font-mono">{item.id}</p>
                         </div>
                       </div>
+                    </td>
+                    <td className="p-4">
+                      {item.category_name ? (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-100 rounded-full px-2 py-0.5 inline-block max-w-[180px] truncate" title={item.category_name}>
+                            {item.category_name.split(' > ').pop()}
+                          </span>
+                          <span className="text-[8px] text-gray-400 truncate max-w-[180px]" title={item.category_name}>
+                            {item.category_name}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-300 text-xs">—</span>
+                      )}
                     </td>
                     <td className="p-4 text-xs">
                       <div className="space-y-1">

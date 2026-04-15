@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, ChevronLeft, ChevronRight, Heart, ShoppingCart, Truck, Shield, RotateCcw, Headphones, Sparkles, TrendingUp, Zap } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, Heart, ShoppingCart, Truck, Shield, RotateCcw, Headphones, Sparkles, TrendingUp } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useProducts, useCategories, useBrands, useBanners, useProductGroups } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
@@ -119,10 +119,6 @@ export default function Home() {
                       
                       <div className="relative z-20 max-w-7xl mx-auto px-6 h-full flex flex-col justify-center items-start">
                         <div className="max-w-2xl transform transition-all duration-1000 delay-300 translate-y-0 opacity-100">
-                          <span className="inline-block px-4 py-1.5 rounded-full bg-primary-600/20 backdrop-blur-md text-xs font-black uppercase tracking-widest text-primary-400 mb-6 border border-primary-500/30">
-                            <Zap className="w-3.5 h-3.5 inline mr-2" />
-                            {t('hero.badge') || 'Exclusive Collection'}
-                          </span>
                           <h1 className="text-5xl md:text-7xl lg:text-8xl font-black text-white leading-[1.05] tracking-tight mb-6 drop-shadow-2xl">
                             {b.title}
                           </h1>

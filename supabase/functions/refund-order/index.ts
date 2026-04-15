@@ -1,15 +1,8 @@
-// @ts-ignore
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-// @ts-ignore
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-// @ts-ignore
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
-// @ts-ignore
+import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, handleOptions } from "../_shared/cors.ts";
 
-declare const Deno: any;
-
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   const options = handleOptions(req);
   if (options) return options;
 
@@ -17,12 +10,11 @@ serve(async (req: Request) => {
     const { orderId, reason } = await req.json();
     if (!orderId) throw new Error("Falta el ID de la orden");
 
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Obtener la orden (sin join a profiles para evitar errores si customer_id es null)
+    // Obtener la orden
     const { data: order, error } = await supabaseAdmin
       .from("orders")
       .select("*")
@@ -53,52 +45,151 @@ serve(async (req: Request) => {
       if (profile) customerEmail = profile.email;
     }
 
-    // Fetch site settings to get MP token
+    // Fetch site settings to get payment tokens
     const { data: settings } = await supabaseAdmin.from('site_settings').select('key, value');
     const config = Object.fromEntries((settings || []).map((s: any) => [s.key, s.value]));
       
     let mpAccessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || config.payments_mercadopago_access_token;
 
     let refundSuccess = false;
+    let refundDetails: any = null;
+    const isTestMode = mpAccessToken?.startsWith('TEST-') || mpAccessToken?.includes('test');
 
-    // Refund logic for Mercado Pago - ONLY if order is paid
-    if (order.status === "paid" && order.payment_id && !order.payment_id.startsWith('MP-MOCK') && mpAccessToken && !mpAccessToken.includes("mock")) {
-       try {
-          const resp = await fetch(`https://api.mercadopago.com/v1/payments/${order.payment_id}/refunds`, {
-              method: 'POST',
-              headers: {
-                  'Authorization': `Bearer ${mpAccessToken}`,
-                  'Content-Type': 'application/json'
-              }
+    // ═══ REFUND LOGIC ═══
+    // Attempt refund for paid MercadoPago orders
+    if (order.payment_method === 'mercadopago' && mpAccessToken && !mpAccessToken.includes("mock")) {
+      
+      if (isTestMode) {
+        console.warn("[Refund] ⚠️ Using TEST access token. Sandbox refunds will succeed via API but WON'T affect real credit cards.");
+      }
+      
+      // Step 1: Find the actual MP payment ID
+      let actualPaymentId = order.payment_id;
+      
+      // If payment_id is not a numeric MP payment ID, search for it
+      if (!actualPaymentId || isNaN(Number(actualPaymentId)) || String(actualPaymentId).startsWith('MP-MOCK')) {
+        console.log(`[Refund] payment_id "${actualPaymentId}" is not a valid MP payment ID. Searching by external_reference...`);
+        
+        try {
+          const searchUrl = `https://api.mercadopago.com/v1/payments/search?external_reference=${orderId}&sort=date_created&criteria=desc`;
+          const searchRes = await fetch(searchUrl, {
+            headers: { "Authorization": `Bearer ${mpAccessToken}` }
+          });
+          const searchData = await searchRes.json();
+          
+          if (searchRes.ok && searchData.results?.length > 0) {
+            // Find the approved payment
+            const approvedPayment = searchData.results.find((p: any) => p.status === 'approved') || searchData.results[0];
+            actualPaymentId = approvedPayment.id.toString();
+            console.log(`[Refund] Found MP payment: ${actualPaymentId} (status: ${approvedPayment.status})`);
+            
+            // Also update the order with the correct payment_id for future reference
+            await supabaseAdmin.from('orders').update({ payment_id: actualPaymentId }).eq('id', orderId);
+            
+            // If payment was approved, also ensure order status reflects it before cancelling
+            if (approvedPayment.status === 'approved' && order.status === 'pending') {
+              order.status = 'paid'; // Update local reference so refund logic proceeds
+            }
+          } else {
+            console.log(`[Refund] No MP payments found for order ${orderId}`);
+          }
+        } catch (searchErr: any) {
+          console.error("[Refund] Error searching MP payments:", searchErr.message);
+        }
+      }
+
+      // Step 2: Process the refund if we have a valid payment ID and order was paid
+      if (actualPaymentId && !isNaN(Number(actualPaymentId)) && (order.status === 'paid' || order.status === 'pending')) {
+        try {
+          console.log(`[Refund] Attempting refund for MP payment ${actualPaymentId}`);
+          
+          const resp = await fetch(`https://api.mercadopago.com/v1/payments/${actualPaymentId}/refunds`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${mpAccessToken}`,
+              'Content-Type': 'application/json'
+            }
           });
           const mpData = await resp.json();
+          
           if (!resp.ok) {
-              console.error("Error Mercado Pago Refund:", mpData);
-              // Don't throw - still cancel the order even if refund fails
-              console.log("Refund failed but continuing with cancellation");
+            console.error("Error Mercado Pago Refund:", mpData);
+            refundDetails = { error: mpData.message || 'Refund failed', mp_status: mpData.status, isTestMode };
+            // Don't throw - still cancel the order even if refund fails
           } else {
-              refundSuccess = true;
+            refundSuccess = true;
+            refundDetails = { refund_id: mpData.id, amount: mpData.amount, status: mpData.status, isTestMode };
+            console.log(`[Refund] MP refund ${isTestMode ? '(SANDBOX)' : '(PRODUCTION)'} successful: ${JSON.stringify(refundDetails)}`);
           }
-       } catch (e: any) {
+        } catch (e: any) {
           console.error("MP refund error:", e.message);
-          // Don't throw - still cancel the order
-       }
-    } else if (order.status === "pending") {
-       // Pending orders don't need refund
-       console.log("Order is pending, no refund needed. Cancelling directly.");
-       refundSuccess = true; // Mark as success since no refund is needed
+          refundDetails = { error: e.message };
+        }
+      } else if (order.status === 'pending') {
+        // Payment might exist at MP but order never got updated — try anyway
+        console.log("[Refund] Order is pending, no payment found. Cancelling without refund.");
+        refundSuccess = true;
+      }
+    } else if (order.payment_method === 'paypal') {
+      // PayPal refund logic
+      const isSandbox = config.payments_paypal_sandbox === 'true';
+      const clientId = config.payments_paypal_client_id;
+      const secret = config.payments_paypal_client_secret || config.payments_paypal_secret_key;
+      const baseUrl = isSandbox ? "https://api-m.sandbox.paypal.com" : "https://api-m.paypal.com";
+
+      if (clientId && secret && order.payment_id && order.status === 'paid') {
+        try {
+          // Get PayPal token
+          const auth = btoa(`${clientId}:${secret}`);
+          const tokenRes = await fetch(`${baseUrl}/v1/oauth2/token`, {
+            method: "POST",
+            headers: { "Authorization": `Basic ${auth}`, "Content-Type": "application/x-www-form-urlencoded" },
+            body: "grant_type=client_credentials"
+          });
+          const tokenData = await tokenRes.json();
+
+          if (tokenRes.ok) {
+            // Find the capture ID from the payment
+            const captureRes = await fetch(`${baseUrl}/v2/checkout/orders/${order.payment_id}`, {
+              headers: { "Authorization": `Bearer ${tokenData.access_token}` }
+            });
+            const captureData = await captureRes.json();
+            const captureId = captureData?.purchase_units?.[0]?.payments?.captures?.[0]?.id;
+            
+            if (captureId) {
+              const refundRes = await fetch(`${baseUrl}/v2/payments/captures/${captureId}/refund`, {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${tokenData.access_token}`,
+                  "Content-Type": "application/json"
+                }
+              });
+              const refundData = await refundRes.json();
+              
+              if (refundRes.ok) {
+                refundSuccess = true;
+                refundDetails = { refund_id: refundData.id, status: refundData.status };
+              } else {
+                refundDetails = { error: refundData.message || 'PayPal refund failed' };
+              }
+            }
+          }
+        } catch (e: any) {
+          console.error("PayPal refund error:", e.message);
+          refundDetails = { error: e.message };
+        }
+      }
     } else {
-       // Mock payment or other status
-       console.log("Mock payment or non-paid status, skipping refund. Marking as cancelled.");
-       refundSuccess = true;
+      // Non-payment or mock — no refund needed
+      console.log("No refund needed (mock/transfer/other). Cancelling directly.");
+      refundSuccess = true;
     }
 
-    // Restore Inventory (wrapped in try/catch so it doesn't crash the cancellation)
+    // ═══ RESTORE INVENTORY ═══
     try {
       if (orderItems && orderItems.length > 0) {
         for (const item of orderItems) {
           if (item.variant_id) {
-            // product_variants uses inventory_count column
             const { data: variant } = await supabaseAdmin
               .from('product_variants')
               .select('inventory_count')
@@ -111,39 +202,39 @@ serve(async (req: Request) => {
                 .eq('id', item.variant_id);
             }
           }
-          // If product_id exists on the item, we could restore product-level stock too
-          // but products table doesn't have a stock column in the schema
         }
       }
     } catch (stockErr: any) {
       console.error("Error restoring inventory (non-fatal):", stockErr.message);
-      // Don't block the cancellation if stock restore fails
     }
 
-    // Update Order Status to Cancelled
+    // ═══ UPDATE ORDER STATUS ═══
+    const refundNote = refundSuccess ? 'Reembolso procesado' : (refundDetails?.error ? `Reembolso fallido: ${refundDetails.error}` : 'Sin reembolso');
+    const cancelNote = `Cancelada: ${reason || 'Sin razón'}. ${refundNote}`;
+    
     await supabaseAdmin.from("orders").update({ 
-        status: "cancelada",
-        delivery_notes: order.delivery_notes ? `${order.delivery_notes}\nCancelada: ${reason}` : `Cancelada: ${reason}` 
+      status: "cancelada",
+      delivery_notes: order.delivery_notes ? `${order.delivery_notes}\n${cancelNote}` : cancelNote
     }).eq("id", orderId);
 
-    // Send the cancellation email/whatsapp through the transactional emails endpoint
+    // ═══ SEND CANCELLATION EMAIL ═══
     if (customerEmail) {
-      const internalUrl = Deno.env.get("SUPABASE_URL") + "/functions/v1/transactional-emails";
+      const internalUrl = supabaseUrl + "/functions/v1/transactional-emails";
       await fetch(internalUrl, {
-          method: 'POST',
-          headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
-          },
-          body: JSON.stringify({
-              type: 'custom_order_cancelled',
-              order: { ...order, customer_email: customerEmail, customer_phone: customerPhone },
-              reason: reason || "Cancelada por el administrador"
-          })
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseServiceKey}`
+        },
+        body: JSON.stringify({
+          type: 'custom_order_cancelled',
+          order: { ...order, customer_email: customerEmail, customer_phone: customerPhone },
+          reason: reason || "Cancelada por el administrador"
+        })
       }).catch(e => console.error("Error enviando email de cancelacion:", e));
     }
 
-    return new Response(JSON.stringify({ success: true, refundSuccess }), {
+    return new Response(JSON.stringify({ success: true, refundSuccess, refundDetails }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
 

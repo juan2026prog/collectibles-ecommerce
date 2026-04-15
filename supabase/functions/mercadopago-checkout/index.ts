@@ -54,9 +54,9 @@ serve(async (req: Request) => {
         surname: order.shipping_address?.last_name || "Guest"
       },
       back_urls: {
-        success: `${base_url}/checkout/success?order_id=${order.id}`,
+        success: `${base_url}/checkout/success?order_id=${order.id}&provider=mercadopago`,
         failure: `${base_url}/checkout?error=pagorechazado`,
-        pending: `${base_url}/checkout/success?order_id=${order.id}&status=pending`
+        pending: `${base_url}/checkout/success?order_id=${order.id}&provider=mercadopago&status=pending`
       },
       auto_return: "approved",
       external_reference: order.id,

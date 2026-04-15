@@ -6,11 +6,14 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LocaleSwitcher from '../components/LocaleSwitcher';
+import { useSiteSettings } from '../hooks/useSiteSettings';
+import { STORE_ISOLOGO_URL } from '../lib/brand';
 
 export default function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut, profile } = useAuth();
+  const { settings, loaded: settingsLoaded } = useSiteSettings();
   
   const navItems = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
@@ -50,12 +53,18 @@ export default function AdminLayout() {
       <aside className="w-64 bg-dark-900 text-gray-300 flex flex-col relative z-20 shadow-xl overflow-y-auto scrollbar-hide">
         <div className="p-6 sticky top-0 bg-dark-900 border-b border-dark-800 z-10">
           <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-            <div className="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center">
-              <span className="text-white text-sm font-bold">✦</span>
-            </div>
-            <span className="text-lg font-bold text-white tracking-widest uppercase truncate">
-              Admin Pro
-            </span>
+            {!settingsLoaded ? (
+              <div className="h-8 w-28 bg-white/10 rounded-lg animate-pulse" />
+            ) : settings['appearance_logo'] ? (
+              <img src={settings['appearance_logo']} alt={settings['store_name'] || 'Store Logo'} className="h-8 object-contain" />
+            ) : (
+              <>
+                <img src={STORE_ISOLOGO_URL} alt="Logo" className="w-8 h-8 rounded-full object-cover" />
+                <span className="text-lg font-bold text-white tracking-widest uppercase truncate">
+                  {settings['store_name'] || 'Admin Pro'}
+                </span>
+              </>
+            )}
           </Link>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">

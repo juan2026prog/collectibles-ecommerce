@@ -14,6 +14,8 @@ import WhatsAppFAB from '../components/WhatsAppFAB';
 import { supabase } from '../lib/supabase';
 import CookieConsent from '../components/CookieConsent';
 import { generateTailwindPalette } from '../lib/colorUtils';
+import { useSiteSettings } from '../hooks/useSiteSettings';
+import { STORE_ISOLOGO_URL } from '../lib/brand';
 
 /* Inline social SVG icons (lucide-react doesn't export brand icons) */
 const FacebookIcon = () => (
@@ -56,7 +58,7 @@ export default function StorefrontLayout() {
   const { language, currency, t, formatPrice } = useLocale();
   const { categories: allCategories } = useCategories();
   const { brands: allBrands } = useBrands();
-  const [settings, setSettings] = useState<Record<string, string>>({});
+  const { settings, loaded: settingsLoaded } = useSiteSettings();
 
   // Dynamic nav links — re-computed when language changes
   const NAV_LINKS = [
@@ -103,49 +105,45 @@ export default function StorefrontLayout() {
     }))
     : [];
 
+  // Inyector de Pixels/Head Code respetando privacidad
   useEffect(() => {
-    supabase.from('site_settings').select('*').then(({ data }) => {
-      const s: Record<string, string> = {};
-      data?.forEach(d => s[d.key] = d.value);
-      setSettings(s);
+    if (!settingsLoaded) return;
 
-      // Inyector de Pixels/Head Code respetando privacidad
-      if (s['appearance_head_code'] && localStorage.getItem('cookieSettings') === 'accepted') {
-        const domNode = document.createElement('div');
-        domNode.innerHTML = s['appearance_head_code'];
-        const scripts = Array.from(domNode.querySelectorAll('script'));
-        scripts.forEach(oldScript => {
-          // Prevent duplicate injections on re-renders natively
-          if (document.head.querySelector(`script[src="${oldScript.src}"]`)) return;
-          const newScript = document.createElement('script');
-          Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
-          newScript.text = oldScript.text;
-          document.head.appendChild(newScript);
-        });
-      }
+    if (settings['appearance_head_code'] && localStorage.getItem('cookieSettings') === 'accepted') {
+      const domNode = document.createElement('div');
+      domNode.innerHTML = settings['appearance_head_code'];
+      const scripts = Array.from(domNode.querySelectorAll('script'));
+      scripts.forEach(oldScript => {
+        // Prevent duplicate injections on re-renders natively
+        if (document.head.querySelector(`script[src="${oldScript.src}"]`)) return;
+        const newScript = document.createElement('script');
+        Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+        newScript.text = oldScript.text;
+        document.head.appendChild(newScript);
+      });
+    }
 
-      // Meta Pixel Base
-      if (s['meta_pixel_id'] && localStorage.getItem('cookieSettings') === 'accepted') {
-        if (!document.getElementById('meta-pixel-script')) {
-          const newScript = document.createElement('script');
-          newScript.id = 'meta-pixel-script';
-          newScript.text = `
-            !function(f,b,e,v,n,t,s)
-            {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-            n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-            if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-            n.queue=[];t=b.createElement(e);t.async=!0;
-            t.src=v;s=b.getElementsByTagName(e)[0];
-            s.parentNode.insertBefore(t,s)}(window, document,'script',
-            'https://connect.facebook.net/en_US/fbevents.js');
-            fbq('init', '${s['meta_pixel_id']}');
-            fbq('track', 'PageView');
-          `;
-          document.head.appendChild(newScript);
-        }
+    // Meta Pixel Base
+    if (settings['meta_pixel_id'] && localStorage.getItem('cookieSettings') === 'accepted') {
+      if (!document.getElementById('meta-pixel-script')) {
+        const newScript = document.createElement('script');
+        newScript.id = 'meta-pixel-script';
+        newScript.text = `
+          !function(f,b,e,v,n,t,s)
+          {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+          n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+          if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+          n.queue=[];t=b.createElement(e);t.async=!0;
+          t.src=v;s=b.getElementsByTagName(e)[0];
+          s.parentNode.insertBefore(t,s)}(window, document,'script',
+          'https://connect.facebook.net/en_US/fbevents.js');
+          fbq('init', '${settings['meta_pixel_id']}');
+          fbq('track', 'PageView');
+        `;
+        document.head.appendChild(newScript);
       }
-    });
-  }, []);
+    }
+  }, [settingsLoaded]);
 
   // Close menus on route change
   useEffect(() => {
@@ -215,7 +213,7 @@ export default function StorefrontLayout() {
           <div className={settings['appearance_announcement_marquee'] !== 'false' ? 'marquee-track' : 'w-full text-center'} style={settings['appearance_announcement_marquee'] !== 'false' ? { animationDuration: `${settings['appearance_announcement_speed'] || 20}s` } : {}}>
             {[...Array(settings['appearance_announcement_marquee'] !== 'false' ? 8 : 1)].map((_, i) => (
               <span key={i} className={`flex items-center justify-center whitespace-nowrap px-8 text-xs sm:text-sm font-bold uppercase tracking-wider ${settings['appearance_announcement_marquee'] === 'false' ? 'w-full' : ''}`}>
-                <span className="mx-3 opacity-70">✦</span>
+                <img src={STORE_ISOLOGO_URL} alt="Logo" className="mx-3 opacity-70 w-4 h-4 rounded-full object-cover" />
                 {settings['appearance_announcement_text']}
               </span>
             ))}
@@ -259,13 +257,13 @@ export default function StorefrontLayout() {
 
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2 flex-shrink-0">
-              {settings['appearance_logo'] ? (
+              {!settingsLoaded ? (
+                <div className="h-8 sm:h-10 w-28 sm:w-36 bg-white/10 rounded-lg animate-pulse" />
+              ) : settings['appearance_logo'] ? (
                 <img src={settings['appearance_logo']} alt={settings['store_name'] || 'Store Logo'} className="h-8 sm:h-10 object-contain" />
               ) : (
                 <>
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-lg sm:text-xl">✦</span>
-                  </div>
+                  <img src={STORE_ISOLOGO_URL} alt={settings['store_name'] || 'Store'} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover" />
                   <span className={`text-xl sm:text-2xl font-extrabold tracking-tight hidden sm:block ${isHome ? 'text-white' : 'text-gray-900'}`}>
                     {settings['store_name'] || 'COLLECTIBLES'}
                   </span>
@@ -498,13 +496,13 @@ export default function StorefrontLayout() {
             {/* Mobile menu header */}
             <div className="flex items-center justify-between p-4 border-b border-white/10">
               <Link to="/" className="flex items-center gap-2" onClick={() => setMobileMenuOpen(false)}>
-                {settings['appearance_logo'] ? (
+                {!settingsLoaded ? (
+                  <div className="h-8 w-28 bg-white/10 rounded-lg animate-pulse" />
+                ) : settings['appearance_logo'] ? (
                   <img src={settings['appearance_logo']} alt={settings['store_name'] || 'Store Logo'} className="h-8 object-contain" />
                 ) : (
                   <>
-                    <div className="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center">
-                      <span className="text-white text-lg">✦</span>
-                    </div>
+                    <img src={STORE_ISOLOGO_URL} alt={settings['store_name'] || 'Store'} className="w-8 h-8 rounded-full object-cover" />
                     <span className="text-lg font-extrabold text-white">{settings['store_name'] || 'COLLECTIBLES'}</span>
                   </>
                 )}
@@ -632,13 +630,13 @@ export default function StorefrontLayout() {
             {/* Brand */}
             <div>
               <Link to="/" className="flex items-center gap-2 mb-4">
-                {settings['appearance_logo'] ? (
+                {!settingsLoaded ? (
+                  <div className="h-8 sm:h-10 w-32 bg-white/10 rounded-lg animate-pulse" />
+                ) : settings['appearance_logo'] ? (
                   <img src={settings['appearance_logo']} alt={settings['store_name'] || 'Store Logo'} className="h-8 sm:h-10 object-contain" />
                 ) : (
                   <>
-                    <div className="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center">
-                      <span className="text-white text-lg">✦</span>
-                    </div>
+                    <img src={STORE_ISOLOGO_URL} alt={settings['store_name'] || 'Store'} className="w-8 h-8 rounded-full object-cover" />
                     <span className="text-xl font-extrabold tracking-tight">{settings['store_name'] || 'COLLECTIBLES'}</span>
                   </>
                 )}

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Zap, Shield, Store, Star, Share2, LayoutDashboard, Video, Terminal, CheckCircle2, AlertCircle } from 'lucide-react';
+import { STORE_ISOLOGO_URL } from '../lib/brand';
 
 export default function GodMode() {
   const { signIn } = useAuth();
@@ -116,8 +117,9 @@ export default function GodMode() {
             <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Datos semilla que se insertarán:</h2>
             <div className="bg-gray-950 rounded-lg p-4 border border-gray-800 grid grid-cols-2 gap-1.5">
               {seedData.map((item, i) => (
-                <div key={i} className="text-xs text-green-300/80 flex items-start gap-1.5">
-                  <span>{item}</span>
+                <div key={i} className="text-xs text-green-300/80 flex items-center gap-1.5">
+                  <img src={STORE_ISOLOGO_URL} alt="Logo" className="w-3 h-3 rounded-full object-cover flex-shrink-0" />
+                  <span>{item.replace('✦ ', '')}</span>
                 </div>
               ))}
             </div>

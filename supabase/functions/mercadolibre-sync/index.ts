@@ -1,27 +1,21 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2";
+import { corsHeaders, handleOptions } from "../_shared/cors.ts";
+import { verifyAdmin } from "../_shared/auth.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  const options = handleOptions(req);
+  if (options) return options;
+
+  // Create supabase client inside the handler to avoid cold-start issues
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("Falta cabecera Authorization");
-
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) throw new Error("Sesión de Supabase no válida.");
-
-    const { data: profile } = await supabase.from("profiles").select("is_admin").eq("id", user.id).single();
-    if (!profile?.is_admin) throw new Error(`El usuario no tiene permisos de administrador.`);
+    // Verify admin using shared auth module
+    await verifyAdmin(req);
 
     const body = await req.json();
     const action = body.action;
@@ -36,24 +30,44 @@ Deno.serve(async (req) => {
       const { data: tokenData } = await supabase.from('site_settings').select('value').eq('key', 'mercadolibre_access_token').single();
       mlToken = tokenData?.value;
     }
-    if (!mlToken) throw new Error("Mercado Libre no está conectado.");
+    if (!mlToken) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Mercado Libre no está conectado. Ve a la sección de configuración para conectar tu cuenta." }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
+    }
 
     const headers = { 'Authorization': `Bearer ${mlToken}`, 'Content-Type': 'application/json' };
 
+    // ═══ ACTION: LIST ITEMS ═══
     if (action === 'list_items') {
         const userRes = await fetch('https://api.mercadolibre.com/users/me', { headers });
         const userData = await userRes.json();
-        if (!userRes.ok) throw new Error(`ML Error: ${userData.message}`);
+        if (!userRes.ok) {
+          // Token expired or invalid — provide clear error
+          const mlError = userData.message || userData.error || 'Error de autenticación con Mercado Libre';
+          return new Response(
+            JSON.stringify({ success: false, error: `ML API Error: ${mlError}. Es posible que el token haya expirado. Reconecta tu cuenta.` }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+          );
+        }
 
         let allIds: string[] = [];
         let offset = 0;
-        const maxLimit = Math.min(limit, 500); // Increased max limit for "Show All"
+        const maxLimit = Math.min(limit, 500);
         
         while (allIds.length < maxLimit) {
             const batchSize = Math.min(50, maxLimit - allIds.length);
-            const searchUrl = `https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${batchSize}&offset=${offset}&status=${status === 'all' ? '' : status}&sort=${sort}`;
+            const statusParam = status === 'all' ? '' : status;
+            const searchUrl = `https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${batchSize}&offset=${offset}&status=${statusParam}&sort=${sort}`;
             const searchRes = await fetch(searchUrl, { headers });
             const searchData = await searchRes.json();
+            
+            if (!searchRes.ok) {
+              console.error("ML Search Error:", JSON.stringify(searchData));
+              break;
+            }
+            
             const batchIds = searchData.results || [];
             if (!batchIds.length) break;
             allIds = [...allIds, ...batchIds];
@@ -61,21 +75,65 @@ Deno.serve(async (req) => {
             if (batchIds.length < batchSize) break;
         }
 
-        if (!allIds.length) return new Response(JSON.stringify({ success: true, items: [], total: 0 }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        if (!allIds.length) {
+          return new Response(
+            JSON.stringify({ success: true, items: [], total: 0 }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
 
         const allItems = [];
         for (let i = 0; i < allIds.length; i += 20) {
             const chunk = allIds.slice(i, i + 20);
             const detailsRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(',')}`, { headers });
-            const details = await detailsRes.json();
-            allItems.push(...details.map((r: any) => r.body));
+            if (detailsRes.ok) {
+              const details = await detailsRes.json();
+              allItems.push(...details.map((r: any) => r.body).filter(Boolean));
+            } else {
+              console.error("ML Items Details Error for chunk", chunk);
+            }
         }
 
-        return new Response(JSON.stringify({ success: true, items: allItems, total: allIds.length }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        // ═══ Resolve category names from ML API (batch unique category_ids) ═══
+        const uniqueCatIds = [...new Set(allItems.map((it: any) => it.category_id).filter(Boolean))];
+        const catNameMap: Record<string, string> = {};
+        for (let i = 0; i < uniqueCatIds.length; i += 20) {
+            const catChunk = uniqueCatIds.slice(i, i + 20);
+            await Promise.all(catChunk.map(async (catId: string) => {
+              try {
+                const catRes = await fetch(`https://api.mercadolibre.com/categories/${catId}`);
+                if (catRes.ok) {
+                  const catData = await catRes.json();
+                  // Build readable path: e.g. "Juguetes > Figuras de Acción > Funko"
+                  const pathFromRoot = catData.path_from_root || [];
+                  catNameMap[catId] = pathFromRoot.length > 0
+                    ? pathFromRoot.map((p: any) => p.name).join(' > ')
+                    : catData.name || catId;
+                }
+              } catch(_e) { /* category name resolution is best-effort */ }
+            }));
+        }
+
+        // Enrich items with resolved category name
+        const enrichedItems = allItems.map((it: any) => ({
+          ...it,
+          category_name: catNameMap[it.category_id] || null
+        }));
+
+        return new Response(
+          JSON.stringify({ success: true, items: enrichedItems, total: allIds.length }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
     }
 
+    // ═══ ACTION: IMPORT ═══
     if (action === 'import') {
-        if (!product_ids.length) throw new Error("No hay productos seleccionados");
+        if (!product_ids.length) {
+          return new Response(
+            JSON.stringify({ success: false, error: "No hay productos seleccionados para importar" }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+          );
+        }
         
         const results = [];
         for (const mlId of product_ids) {
@@ -83,12 +141,19 @@ Deno.serve(async (req) => {
                 const res = await fetch(`https://api.mercadolibre.com/items/${mlId}`, { headers });
                 const item = await res.json();
                 
+                if (!res.ok) {
+                  results.push({ ml_id: mlId, status: "error", error: item.message || "No se pudo obtener el item" });
+                  continue;
+                }
+                
                 let description = item.title;
                 try {
                   const descRes = await fetch(`https://api.mercadolibre.com/items/${mlId}/description`, { headers });
-                  const descData = await descRes.json();
-                  description = descData.plain_text || item.title;
-                } catch(e) {}
+                  if (descRes.ok) {
+                    const descData = await descRes.json();
+                    description = descData.plain_text || item.title;
+                  }
+                } catch(_e) { /* description fallback to title */ }
 
                 let brandId = null;
                 try {
@@ -101,7 +166,74 @@ Deno.serve(async (req) => {
                      }, { onConflict: 'name' }).select().single();
                      if (br) brandId = br.id;
                   }
-                } catch(e) {}
+                } catch(_e) { /* brand extraction optional */ }
+
+                // ═══ Extract category from ML API ═══
+                let categoryId = null;
+                try {
+                  if (item.category_id) {
+                    const catRes = await fetch(`https://api.mercadolibre.com/categories/${item.category_id}`);
+                    if (catRes.ok) {
+                      const catData = await catRes.json();
+                      // Use the full category path to get the leaf (most specific) category
+                      const pathFromRoot = catData.path_from_root || [];
+                      // Use the leaf category (last in path), fallback to the direct category
+                      const leafCat = pathFromRoot.length > 0 ? pathFromRoot[pathFromRoot.length - 1] : { id: item.category_id, name: catData.name };
+                      const catName = leafCat.name;
+                      const catSlug = catName.toLowerCase().replace(/[^a-z0-9áéíóúñü]+/g, '-').replace(/^-|-$/g, '');
+
+                      // Upsert category: don't duplicate if slug already exists
+                      const { data: existingCat } = await supabase
+                        .from('categories')
+                        .select('id')
+                        .eq('slug', catSlug)
+                        .maybeSingle();
+
+                      if (existingCat) {
+                        categoryId = existingCat.id;
+                      } else {
+                        // Check if parent category should be created (one level up)
+                        let parentCategoryId = null;
+                        if (pathFromRoot.length > 1) {
+                          const parentCat = pathFromRoot[pathFromRoot.length - 2];
+                          const parentSlug = parentCat.name.toLowerCase().replace(/[^a-z0-9áéíóúñü]+/g, '-').replace(/^-|-$/g, '');
+                          const { data: existingParent } = await supabase
+                            .from('categories')
+                            .select('id')
+                            .eq('slug', parentSlug)
+                            .maybeSingle();
+
+                          if (existingParent) {
+                            parentCategoryId = existingParent.id;
+                          } else {
+                            const { data: newParent } = await supabase
+                              .from('categories')
+                              .insert({ name: parentCat.name, slug: parentSlug, is_active: true, metadata: { ml_category_id: parentCat.id } })
+                              .select()
+                              .single();
+                            if (newParent) parentCategoryId = newParent.id;
+                          }
+                        }
+
+                        const { data: newCat } = await supabase
+                          .from('categories')
+                          .insert({ 
+                            name: catName, 
+                            slug: catSlug, 
+                            parent_id: parentCategoryId,
+                            is_active: true, 
+                            metadata: { ml_category_id: leafCat.id } 
+                          })
+                          .select()
+                          .single();
+                        if (newCat) categoryId = newCat.id;
+                      }
+                    }
+                  }
+                } catch(_e) { 
+                  console.error("Category extraction error:", _e);
+                  /* category extraction is optional, don't fail the import */ 
+                }
 
                 const meta = {
                     attributes: item.attributes || [],
@@ -110,7 +242,8 @@ Deno.serve(async (req) => {
                     sold_quantity: item.sold_quantity,
                     accepts_mercadopago: item.accepts_mercadopago,
                     health: item.health,
-                    video_id: item.video_id
+                    video_id: item.video_id,
+                    ml_category_id: item.category_id
                 };
 
                 const { data: prod, error: ep } = await supabase.from('products').upsert({
@@ -123,8 +256,10 @@ Deno.serve(async (req) => {
                     condition: item.condition,
                     listing_type_id: item.listing_type_id,
                     brand_id: brandId,
+                    category_id: categoryId,
                     metadata: meta,
-                    status: item.status === 'active' ? 'published' : 'draft'
+                    status: item.status === 'active' ? 'published' : 'draft',
+                    updated_at: new Date().toISOString()
                 }, { onConflict: 'ml_item_id' }).select().single();
                 
                 if (ep) throw new Error(ep.message);
@@ -134,7 +269,7 @@ Deno.serve(async (req) => {
                 const pics = item.pictures || [];
                 const localImages = [];
                 
-                for (let i = 0; i < Math.min(pics.length, 10); i++) { // Limit to 10 images per product to avoid timeouts
+                for (let i = 0; i < Math.min(pics.length, 10); i++) {
                   const p = pics[i];
                   const imageUrl = (p.secure_url || p.url).replace('http://', 'https://');
                   
@@ -144,7 +279,7 @@ Deno.serve(async (req) => {
                     const blob = await imgRes.blob();
                     const fileName = `ml-sync/${prod.id}-${i}-${Date.now()}.jpg`;
                     
-                    const { data: uploadData, error: uploadError } = await supabase.storage
+                    const { error: uploadError } = await supabase.storage
                       .from('public-assets')
                       .upload(fileName, blob, { contentType: 'image/jpeg', upsert: true });
 
@@ -190,7 +325,6 @@ Deno.serve(async (req) => {
                 const mlAvailable = item.available_quantity || 0;
                 const mlInitial = item.initial_quantity || 0;
                 const mlSold = item.sold_quantity || 0;
-                // If available_quantity is inflated (>=999), use initial - sold as real stock
                 const realStock = mlAvailable >= 999 
                   ? Math.max(mlInitial - mlSold, 0) 
                   : mlAvailable;
@@ -204,15 +338,47 @@ Deno.serve(async (req) => {
                     inventory_count: realStock
                 });
 
+                // ═══ Link product to category in junction table (many-to-many) ═══
+                if (categoryId) {
+                  try {
+                    // Check if link already exists to avoid duplicate
+                    const { data: existingLink } = await supabase
+                      .from('product_categories')
+                      .select('id')
+                      .eq('product_id', prod.id)
+                      .eq('category_id', categoryId)
+                      .maybeSingle();
+
+                    if (!existingLink) {
+                      await supabase.from('product_categories').insert({
+                        product_id: prod.id,
+                        category_id: categoryId
+                      });
+                    }
+                  } catch(_e) { /* junction table link optional */ }
+                }
+
                 results.push({ ml_id: mlId, status: "success" });
-            } catch (e:any) { results.push({ ml_id: mlId, status: "error", error: e.message }); }
+            } catch (e: any) {
+              results.push({ ml_id: mlId, status: "error", error: e.message });
+            }
         }
-        return new Response(JSON.stringify({ success: true, results }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(
+          JSON.stringify({ success: true, results }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
     }
 
-    return new Response(JSON.stringify({ success: true, message: "Sync complete" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(
+      JSON.stringify({ success: true, message: "Sync complete" }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
 
-  } catch (e:any) {
-    return new Response(JSON.stringify({ success: false, error: e.message }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 });
+  } catch (e: any) {
+    console.error("mercadolibre-sync error:", e);
+    return new Response(
+      JSON.stringify({ success: false, error: e.message }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+    );
   }
 });
