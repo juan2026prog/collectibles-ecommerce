@@ -69,19 +69,19 @@ Deno.serve(async (req) => {
         const totalItems = searchData.paging?.total || 0;
         const finalMaxLimit = Math.min(totalItems, maxLimit);
         
-        // 2. Fetch remaining pages concurrently
+        // 2. Fetch remaining pages concurrently but lazily
         if (allIds.length < finalMaxLimit) {
-            const searchPromises = [];
+            const searchUrls = [];
             for (let offset = allIds.length; offset < finalMaxLimit; offset += 50) {
                 const bSize = Math.min(50, finalMaxLimit - offset);
                 const url = `https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${bSize}&offset=${offset}&status=${statusParam}&sort=${sort}`;
-                searchPromises.push(fetch(url, { headers }).then(r => r.json()).catch(() => ({})));
+                searchUrls.push(url);
             }
             
             // Execute in batches of 5 concurrent to avoid rate limits
-            for (let i = 0; i < searchPromises.length; i += 5) {
-                const batch = searchPromises.slice(i, i + 5);
-                const results = await Promise.all(batch);
+            for (let i = 0; i < searchUrls.length; i += 5) {
+                const batch = searchUrls.slice(i, i + 5);
+                const results = await Promise.all(batch.map(u => fetch(u, { headers }).then(r => r.json()).catch(() => ({}))));
                 for (const res of results) {
                     if (res.results) allIds = [...allIds, ...res.results];
                 }
