@@ -192,15 +192,15 @@ Deno.serve(async (req) => {
           );
         }
         
-        const results = [];
-        for (const mlId of product_ids) {
+        const results: any[] = [];
+        await Promise.all(product_ids.map(async (mlId) => {
             try {
                 const res = await fetch(`https://api.mercadolibre.com/items/${mlId}`, { headers });
                 const item = await res.json();
                 
                 if (!res.ok) {
                   results.push({ ml_id: mlId, status: "error", error: item.message || "No se pudo obtener el item" });
-                  continue;
+                  return;
                 }
                 
                 let description = item.title;
@@ -326,8 +326,8 @@ Deno.serve(async (req) => {
                 const pics = item.pictures || [];
                 const localImages = [];
                 
-                for (let i = 0; i < Math.min(pics.length, 10); i++) {
-                  const p = pics[i];
+                // Parallel download and upload for images to avoid timeouts
+                await Promise.all(pics.slice(0, 10).map(async (p: any, i: number) => {
                   const imageUrl = (p.secure_url || p.url).replace('http://', 'https://');
                   
                   try {
@@ -363,7 +363,8 @@ Deno.serve(async (req) => {
                       is_primary: i === 0
                     });
                   }
-                }
+                }));
+
 
                 if (localImages.length > 0) {
                     await supabase.from('product_images').insert(localImages);
@@ -419,7 +420,7 @@ Deno.serve(async (req) => {
             } catch (e: any) {
               results.push({ ml_id: mlId, status: "error", error: e.message });
             }
-        }
+        }));
         return new Response(
           JSON.stringify({ success: true, results }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
