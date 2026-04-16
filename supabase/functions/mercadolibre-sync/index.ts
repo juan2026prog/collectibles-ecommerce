@@ -52,27 +52,40 @@ Deno.serve(async (req) => {
           );
         }
 
-        let allIds: string[] = [];
-        let offset = 0;
         const maxLimit = limit === -1 ? 1000 : limit;
+        const statusParam = status === 'all' ? '' : status;
         
-        while (allIds.length < maxLimit) {
-            const batchSize = Math.min(50, maxLimit - allIds.length);
-            const statusParam = status === 'all' ? '' : status;
-            const searchUrl = `https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${batchSize}&offset=${offset}&status=${statusParam}&sort=${sort}`;
-            const searchRes = await fetch(searchUrl, { headers });
-            const searchData = await searchRes.json();
-            
-            if (!searchRes.ok) {
-              console.error("ML Search Error:", JSON.stringify(searchData));
-              break;
+        // 1. Fetch first page to get total items
+        const firstBatch = Math.min(50, maxLimit);
+        const searchUrl = `https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${firstBatch}&offset=0&status=${statusParam}&sort=${sort}`;
+        const searchRes = await fetch(searchUrl, { headers });
+        const searchData = await searchRes.json();
+        
+        if (!searchRes.ok) {
+           return new Response(JSON.stringify({ success: false, error: searchData.message || 'Error en búsqueda inicial' }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 });
+        }
+
+        let allIds: string[] = searchData.results || [];
+        const totalItems = searchData.paging?.total || 0;
+        const finalMaxLimit = Math.min(totalItems, maxLimit);
+        
+        // 2. Fetch remaining pages concurrently
+        if (allIds.length < finalMaxLimit) {
+            const searchPromises = [];
+            for (let offset = allIds.length; offset < finalMaxLimit; offset += 50) {
+                const bSize = Math.min(50, finalMaxLimit - offset);
+                const url = `https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${bSize}&offset=${offset}&status=${statusParam}&sort=${sort}`;
+                searchPromises.push(fetch(url, { headers }).then(r => r.json()).catch(() => ({})));
             }
             
-            const batchIds = searchData.results || [];
-            if (!batchIds.length) break;
-            allIds = [...allIds, ...batchIds];
-            offset += batchIds.length;
-            if (batchIds.length < batchSize) break;
+            // Execute in batches of 5 concurrent to avoid rate limits
+            for (let i = 0; i < searchPromises.length; i += 5) {
+                const batch = searchPromises.slice(i, i + 5);
+                const results = await Promise.all(batch);
+                for (const res of results) {
+                    if (res.results) allIds = [...allIds, ...res.results];
+                }
+            }
         }
 
         if (!allIds.length) {
@@ -82,36 +95,35 @@ Deno.serve(async (req) => {
           );
         }
 
-        const allItems = [];
+        const allItems: any[] = [];
         const itemIdsChunks = [];
         for (let i = 0; i < allIds.length; i += 20) {
             itemIdsChunks.push(allIds.slice(i, i + 20));
         }
 
-        // Fetch details in parallel strictly to avoid Deno Deploy timeouts
-        await Promise.all(itemIdsChunks.map(async (chunk) => {
-            try {
-              const detailsRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(',')}`, { headers });
-              if (detailsRes.ok) {
-                const details = await detailsRes.json();
-                allItems.push(...details.map((r: any) => r.body).filter(Boolean));
-              }
-            } catch (err) {
-              console.error("ML Items Details Error for chunk", chunk, err);
-            }
-        }));
+        // Limit concurrency to 10 concurrent requests to avoid CPU spikes and rate limits
+        for (let i = 0; i < itemIdsChunks.length; i += 10) {
+            const batch = itemIdsChunks.slice(i, i + 10);
+            await Promise.all(batch.map(async (chunk) => {
+                try {
+                  const detailsRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(',')}`, { headers });
+                  if (detailsRes.ok) {
+                    const details = await detailsRes.json();
+                    allItems.push(...details.map((r: any) => r.body).filter(Boolean));
+                  }
+                } catch (err) {
+                  console.error("ML Items Details Error for chunk", err);
+                }
+            }));
+        }
 
         // ═══ Resolve category names from ML API (batch unique category_ids) ═══
         const uniqueCatIds = [...new Set(allItems.map((it: any) => it.category_id).filter(Boolean))];
         const catNameMap: Record<string, string> = {};
         
-        const catChunks = [];
-        for (let i = 0; i < uniqueCatIds.length; i += 20) {
-            catChunks.push(uniqueCatIds.slice(i, i + 20));
-        }
-
-        await Promise.all(catChunks.map(async (catChunk) => {
-            await Promise.all(catChunk.map(async (catId: string) => {
+        for (let i = 0; i < uniqueCatIds.length; i += 10) {
+            const batchIdList = uniqueCatIds.slice(i, i + 10);
+            await Promise.all(batchIdList.map(async (catId: string) => {
               try {
                 const catRes = await fetch(`https://api.mercadolibre.com/categories/${catId}`);
                 if (catRes.ok) {
@@ -123,7 +135,7 @@ Deno.serve(async (req) => {
                 }
               } catch(_e) { /* best-effort */ }
             }));
-        }));
+        }
 
         // Enrich items with resolved category name
         const enrichedItems = allItems.map((it: any) => ({
