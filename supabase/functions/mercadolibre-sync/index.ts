@@ -40,7 +40,8 @@ Deno.serve(async (req) => {
     const headers = { 'Authorization': `Bearer ${mlToken}`, 'Content-Type': 'application/json' };
 
     // ═══ ACTION: LIST ITEM IDS (Phase 1 — fast, just returns IDs) ═══
-    if (action === 'list_item_ids') {
+    // Also accepts 'list_items' for backward compatibility
+    if (action === 'list_item_ids' || action === 'list_items') {
         const userRes = await fetch('https://api.mercadolibre.com/users/me', { headers });
         const userData = await userRes.json();
         if (!userRes.ok) {
