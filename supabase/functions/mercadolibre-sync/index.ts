@@ -39,17 +39,13 @@ Deno.serve(async (req) => {
 
     const headers = { 'Authorization': `Bearer ${mlToken}`, 'Content-Type': 'application/json' };
 
-    // ═══ ACTION: LIST ITEM IDS (Phase 1 — fast, just returns IDs) ═══
-    // Also accepts 'list_items' for backward compatibility
-    if (action === 'list_item_ids' || action === 'list_items') {
+    // ═══ Shared: search ML item IDs ═══
+    async function searchMLItemIds() {
         const userRes = await fetch('https://api.mercadolibre.com/users/me', { headers });
         const userData = await userRes.json();
         if (!userRes.ok) {
           const mlError = userData.message || userData.error || 'Error de autenticación con Mercado Libre';
-          return new Response(
-            JSON.stringify({ success: false, error: `ML API Error: ${mlError}. Es posible que el token haya expirado. Reconecta tu cuenta.` }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
-          );
+          throw new Error(`ML API Error: ${mlError}. Es posible que el token haya expirado. Reconecta tu cuenta.`);
         }
 
         const maxLimit = limit === -1 ? 1000 : limit;
@@ -60,9 +56,7 @@ Deno.serve(async (req) => {
         const searchRes = await fetch(searchUrl, { headers });
         const searchData = await searchRes.json();
         
-        if (!searchRes.ok) {
-           return new Response(JSON.stringify({ success: false, error: searchData.message || 'Error en búsqueda inicial' }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 });
-        }
+        if (!searchRes.ok) throw new Error(searchData.message || 'Error en búsqueda inicial');
 
         let allIds: string[] = searchData.results || [];
         const totalItems = searchData.paging?.total || 0;
@@ -83,45 +77,31 @@ Deno.serve(async (req) => {
                 }
             }
         }
-
-        return new Response(
-          JSON.stringify({ success: true, item_ids: allIds, total: totalItems }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return { allIds, totalItems };
     }
 
-    // ═══ ACTION: GET ITEM DETAILS (Phase 2 — takes specific IDs, returns enriched details) ═══
-    if (action === 'get_item_details') {
-        const mlIds: string[] = body.ml_ids || [];
-        if (!mlIds.length) {
-          return new Response(
-            JSON.stringify({ success: true, items: [] }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-
+    // ═══ Shared: fetch item details + categories for a list of ML IDs ═══
+    async function fetchItemDetails(mlIds: string[]) {
         const allItems: any[] = [];
-        const itemIdsChunks = [];
+        const chunks = [];
         for (let i = 0; i < mlIds.length; i += 20) {
-            itemIdsChunks.push(mlIds.slice(i, i + 20));
+            chunks.push(mlIds.slice(i, i + 20));
+        }
+        for (let i = 0; i < chunks.length; i += 5) {
+            const batch = chunks.slice(i, i + 5);
+            await Promise.all(batch.map(async (chunk) => {
+                try {
+                  const detailsRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(',')}`, { headers });
+                  if (detailsRes.ok) {
+                    const details = await detailsRes.json();
+                    allItems.push(...details.map((r: any) => r.body).filter(Boolean));
+                  }
+                } catch (_e) { /* skip failed chunks */ }
+            }));
         }
 
-        await Promise.all(itemIdsChunks.map(async (chunk) => {
-            try {
-              const detailsRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(',')}`, { headers });
-              if (detailsRes.ok) {
-                const details = await detailsRes.json();
-                allItems.push(...details.map((r: any) => r.body).filter(Boolean));
-              }
-            } catch (err) {
-              console.error("ML Items Details Error", err);
-            }
-        }));
-
-        // Resolve category names
         const uniqueCatIds = [...new Set(allItems.map((it: any) => it.category_id).filter(Boolean))];
         const catNameMap: Record<string, string> = {};
-        
         await Promise.all(uniqueCatIds.map(async (catId: string) => {
           try {
             const catRes = await fetch(`https://api.mercadolibre.com/categories/${catId}`);
@@ -135,11 +115,44 @@ Deno.serve(async (req) => {
           } catch(_e) { /* best-effort */ }
         }));
 
-        const enrichedItems = allItems.map((it: any) => ({
-          ...it,
-          category_name: catNameMap[it.category_id] || null
-        }));
+        return allItems.map((it: any) => ({ ...it, category_name: catNameMap[it.category_id] || null }));
+    }
 
+    // ═══ ACTION: LIST ITEM IDS (Phase 1 — new frontend, just returns IDs) ═══
+    if (action === 'list_item_ids') {
+        const { allIds, totalItems } = await searchMLItemIds();
+        return new Response(
+          JSON.stringify({ success: true, item_ids: allIds, total: totalItems }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+    }
+
+    // ═══ ACTION: LIST ITEMS (full pipeline — backward compat for old frontend) ═══
+    if (action === 'list_items') {
+        const { allIds, totalItems } = await searchMLItemIds();
+        if (!allIds.length) {
+          return new Response(
+            JSON.stringify({ success: true, items: [], total: 0 }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        const enrichedItems = await fetchItemDetails(allIds);
+        return new Response(
+          JSON.stringify({ success: true, items: enrichedItems, total: totalItems }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+    }
+
+    // ═══ ACTION: GET ITEM DETAILS (Phase 2 — takes specific IDs, returns enriched details) ═══
+    if (action === 'get_item_details') {
+        const mlIds: string[] = body.ml_ids || [];
+        if (!mlIds.length) {
+          return new Response(
+            JSON.stringify({ success: true, items: [] }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        const enrichedItems = await fetchItemDetails(mlIds);
         return new Response(
           JSON.stringify({ success: true, items: enrichedItems }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
