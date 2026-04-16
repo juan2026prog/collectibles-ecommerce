@@ -42,10 +42,12 @@ export default function Login() {
           <Link to="/" className="inline-flex items-center gap-2">
             {!settingsLoaded ? (
               <div className="h-10 w-36 bg-gray-200 rounded-lg animate-pulse" />
+            ) : (
               <>
                 <img src={STORE_ISOLOGO_URL} alt={settings['store_name'] || 'Store'} className="w-10 h-10 rounded-full object-cover" />
                 <span className="text-2xl font-extrabold tracking-tight text-dark-800">{settings['store_name'] || 'COLLECTIBLES'}</span>
               </>
+            )}
           </Link>
         </div>
 

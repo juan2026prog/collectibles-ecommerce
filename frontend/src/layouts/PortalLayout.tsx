@@ -86,6 +86,7 @@ export default function PortalLayout({ type }: { type: 'vendor' | 'artist' | 'af
           <Link to={`/${type}`} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
             {!settingsLoaded ? (
               <div className="h-8 w-28 bg-white/10 rounded-lg animate-pulse" />
+            ) : (
               <>
                 <div className="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center overflow-hidden">
                   <img src={STORE_ISOLOGO_URL} className="w-full h-full object-cover" alt="Logo" />
