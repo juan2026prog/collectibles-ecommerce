@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
 
         let allIds: string[] = [];
         let offset = 0;
-        const maxLimit = Math.min(limit, 500);
+        const maxLimit = limit === -1 ? 1000 : limit;
         
         while (allIds.length < maxLimit) {
             const batchSize = Math.min(50, maxLimit - allIds.length);

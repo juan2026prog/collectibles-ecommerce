@@ -11,6 +11,7 @@ export default function AdminMercadoLibre() {
   const [isConnected, setIsConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [syncProgress, setSyncProgress] = useState(0);
   
   // Settings state
   const [markupType, setMarkupType] = useState('percentage');
@@ -90,20 +91,53 @@ export default function AdminMercadoLibre() {
   async function triggerSync(action: string, productIds: string[] = [], mlItemIds: string[] = [], limit: number = 20, status: string = 'active') {
     setSyncing(true);
     setSyncStatus(null);
+    setSyncProgress(0);
     try {
-      const { data, error } = await supabase.functions.invoke('mercadolibre-sync', {
-        body: { action, product_ids: productIds, ml_item_ids: mlItemIds, limit, status }
-      });
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error || 'Error al importar productos');
-      
-      const count = data.count || data.results?.length || 0;
-      setSyncStatus(`¡Operación '${action}' completada con éxito! (${count} items procesados)`);
+      const targetIds = action === 'import' ? mlItemIds : productIds;
+      const useBatching = targetIds.length > 20;
+
+      if (useBatching) {
+        // Batch processing for large sets to avoid Edge Function timeouts
+        const chunkSize = 20;
+        let processed = 0;
+        let totalProcessed = 0;
+
+        for (let i = 0; i < targetIds.length; i += chunkSize) {
+            const chunk = targetIds.slice(i, i + chunkSize);
+            
+            const reqBody = { 
+               action, 
+               product_ids: action === 'import' ? [] : chunk, 
+               ml_item_ids: action === 'import' ? chunk : [], 
+               limit, 
+               status 
+            };
+
+            const { data, error } = await supabase.functions.invoke('mercadolibre-sync', { body: reqBody });
+            if (error) throw error;
+            if (!data.success) throw new Error(data.error || 'Error al procesar lote');
+            
+            totalProcessed += (data.count || data.results?.length || 0);
+            processed += chunk.length;
+            setSyncProgress(Math.round((processed / targetIds.length) * 100));
+        }
+        setSyncStatus(`¡Operación '${action}' completada con éxito! (${totalProcessed} items procesados)`);
+      } else {
+        const { data, error } = await supabase.functions.invoke('mercadolibre-sync', {
+          body: { action, product_ids: productIds, ml_item_ids: mlItemIds, limit, status }
+        });
+        if (error) throw error;
+        if (!data.success) throw new Error(data.error || 'Error al procesar la operación');
+        
+        const count = data.count || data.results?.length || 0;
+        setSyncStatus(`¡Operación '${action}' completada con éxito! (${count} items procesados)`);
+      }
       fetchProducts();
     } catch (err: any) {
       setSyncStatus(`Error: ${err.message}`);
     } finally {
       setSyncing(false);
+      setTimeout(() => setSyncProgress(0), 3000);
     }
   }
 
@@ -230,6 +264,18 @@ export default function AdminMercadoLibre() {
            </button>
          </div>
       </div>
+
+      {syncing && syncProgress > 0 && (
+         <div className="bg-white p-4 rounded-xl border shadow-sm flex flex-col gap-2">
+             <div className="flex justify-between items-center text-sm font-bold text-blue-900">
+                <span>Progreso de Sincronización / Importación</span>
+                <span>{syncProgress}%</span>
+             </div>
+             <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
+                <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style={{ width: `${syncProgress}%` }}></div>
+             </div>
+         </div>
+      )}
 
       {syncStatus && (
         <div className={`p-4 rounded-lg flex items-center gap-3 ${syncStatus.startsWith('Error') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700 border border-green-200'}`}>
@@ -392,7 +438,8 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
                  <option value={50}>50 prod.</option>
                  <option value={100}>100 prod.</option>
                  <option value={200}>200 prod.</option>
-                 <option value={-1}>Todos (máx 500)</option>
+                 <option value={500}>500 prod.</option>
+                 <option value={-1}>Todos (Sin límite)</option>
                </select>
 
                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Estado:</span>
