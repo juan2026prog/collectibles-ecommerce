@@ -374,22 +374,31 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
   async function fetchMLItems() {
     setFetching(true);
     try {
-      const { data, error } = await supabase.functions.invoke('mercadolibre-sync', {
-        body: { action: 'list_items', limit: limit, status: itemStatus, sort: orderBy }
+      // Use direct fetch instead of supabase.functions.invoke to get real error details
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const session = (await supabase.auth.getSession()).data.session;
+      const token = session?.access_token || '';
+      
+      const res = await fetch(`${supabaseUrl}/functions/v1/mercadolibre-sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+        },
+        body: JSON.stringify({ action: 'list_items', limit: limit, status: itemStatus, sort: orderBy })
       });
-      if (error) throw error;
+      
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${data?.error || data?.message || JSON.stringify(data)}`);
+      }
       if (!data.success) throw new Error(data.error || 'Error desconocido en la función');
       setItems(data.items || []);
     } catch (err: any) {
       console.error("Full Sync Error Object:", err);
-      let errorDetail = err.message;
-      if (err.context && typeof err.context === 'object') {
-        try {
-           const contextStr = JSON.stringify(err.context);
-           errorDetail += ` (Context: ${contextStr})`;
-        } catch(e) {}
-      }
-      alert("Error al obtener items: " + errorDetail);
+      alert("Error al obtener items: " + err.message);
     } finally {
       setFetching(false);
     }
