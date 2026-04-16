@@ -361,6 +361,8 @@ export default function AdminMercadoLibre() {
 function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, onImport: (ids: string[], limit: number, status: string) => void, loading: boolean }) {
   const [items, setItems] = useState<any[]>([]);
   const [fetching, setFetching] = useState(true);
+  const [fetchProgress, setFetchProgress] = useState(0);
+  const [fetchPhase, setFetchPhase] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [limit, setLimit] = useState(20);
   const [itemStatus, setItemStatus] = useState('active');
@@ -371,36 +373,61 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
     fetchMLItems();
   }, [limit, itemStatus, orderBy]);
 
+  async function callEdgeFunction(body: any) {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const session = (await supabase.auth.getSession()).data.session;
+    const token = session?.access_token || '';
+    const res = await fetch(`${supabaseUrl}/functions/v1/mercadolibre-sync`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+      },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${data?.error || data?.message || JSON.stringify(data)}`);
+    if (!data.success) throw new Error(data.error || 'Error desconocido');
+    return data;
+  }
+
   async function fetchMLItems() {
     setFetching(true);
+    setFetchProgress(0);
+    setFetchPhase('Buscando IDs en Mercado Libre...');
+    setItems([]);
     try {
-      // Use direct fetch instead of supabase.functions.invoke to get real error details
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const session = (await supabase.auth.getSession()).data.session;
-      const token = session?.access_token || '';
+      // Phase 1: Get all item IDs (fast)
+      const idsData = await callEdgeFunction({ action: 'list_item_ids', limit, status: itemStatus, sort: orderBy });
+      const allIds: string[] = idsData.item_ids || [];
       
-      const res = await fetch(`${supabaseUrl}/functions/v1/mercadolibre-sync`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-        },
-        body: JSON.stringify({ action: 'list_items', limit: limit, status: itemStatus, sort: orderBy })
-      });
-      
-      const data = await res.json();
-      
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: ${data?.error || data?.message || JSON.stringify(data)}`);
+      if (!allIds.length) {
+        setItems([]);
+        setFetching(false);
+        return;
       }
-      if (!data.success) throw new Error(data.error || 'Error desconocido en la función');
-      setItems(data.items || []);
+
+      // Phase 2: Fetch details in batches of 50
+      setFetchPhase(`Cargando detalles de ${allIds.length} productos...`);
+      const BATCH_SIZE = 50;
+      const accumulated: any[] = [];
+      
+      for (let i = 0; i < allIds.length; i += BATCH_SIZE) {
+        const chunk = allIds.slice(i, i + BATCH_SIZE);
+        const detailData = await callEdgeFunction({ action: 'get_item_details', ml_ids: chunk });
+        accumulated.push(...(detailData.items || []));
+        setItems([...accumulated]);
+        setFetchProgress(Math.round(((i + chunk.length) / allIds.length) * 100));
+      }
+      
+      setFetchProgress(100);
     } catch (err: any) {
-      console.error("Full Sync Error Object:", err);
+      console.error("Fetch ML Items Error:", err);
       alert("Error al obtener items: " + err.message);
     } finally {
       setFetching(false);
+      setFetchPhase('');
     }
   }
 
@@ -479,13 +506,24 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 bg-white">
-          {fetching ? (
+          {fetching && items.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-blue-600">
               <Loader2 className="w-12 h-12 animate-spin mb-4 opacity-70" />
-              <p className="font-bold tracking-tight">Sincronizando con Mercado Libre...</p>
-              <p className="text-xs text-gray-400 mt-1">Esto puede demorar unos segundos para listas largas.</p>
+              <p className="font-bold tracking-tight">{fetchPhase || 'Sincronizando con Mercado Libre...'}</p>
+              {fetchProgress > 0 && (
+                <div className="w-64 mt-4">
+                  <div className="flex justify-between text-xs font-bold text-gray-500 mb-1">
+                    <span>Progreso</span>
+                    <span>{fetchProgress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+                    <div className="bg-blue-600 h-3 rounded-full transition-all duration-300 ease-out" style={{ width: `${fetchProgress}%` }}></div>
+                  </div>
+                </div>
+              )}
+              <p className="text-xs text-gray-400 mt-2">{items.length > 0 ? `${items.length} productos cargados...` : 'Esto puede demorar unos segundos para listas largas.'}</p>
             </div>
-          ) : items.length === 0 ? (
+          ) : !fetching && items.length === 0 ? (
             <div className="text-center py-24">
                <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-100">
                   <AlertCircle className="w-8 h-8 text-gray-300" />
@@ -494,6 +532,18 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
                <p className="text-xs text-gray-400 mt-1">Verifica que tu cuenta de ML Uruguay tenga publicaciones vigentes.</p>
             </div>
           ) : (
+            <>
+            {fetching && fetchProgress > 0 && (
+              <div className="mb-3 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                <div className="flex justify-between items-center text-xs font-bold text-blue-800 mb-1.5">
+                  <span className="flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {fetchPhase}</span>
+                  <span>{fetchProgress}%</span>
+                </div>
+                <div className="w-full bg-blue-100 rounded-full h-2 overflow-hidden">
+                  <div className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out" style={{ width: `${fetchProgress}%` }}></div>
+                </div>
+              </div>
+            )}
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-white border-b-2 border-gray-100 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">
                 <tr>
@@ -565,6 +615,7 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
                 ))}
               </tbody>
             </table>
+            </>
           )}
         </div>
 

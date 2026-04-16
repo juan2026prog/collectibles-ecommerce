@@ -39,12 +39,11 @@ Deno.serve(async (req) => {
 
     const headers = { 'Authorization': `Bearer ${mlToken}`, 'Content-Type': 'application/json' };
 
-    // ═══ ACTION: LIST ITEMS ═══
-    if (action === 'list_items') {
+    // ═══ ACTION: LIST ITEM IDS (Phase 1 — fast, just returns IDs) ═══
+    if (action === 'list_item_ids') {
         const userRes = await fetch('https://api.mercadolibre.com/users/me', { headers });
         const userData = await userRes.json();
         if (!userRes.ok) {
-          // Token expired or invalid — provide clear error
           const mlError = userData.message || userData.error || 'Error de autenticación con Mercado Libre';
           return new Response(
             JSON.stringify({ success: false, error: `ML API Error: ${mlError}. Es posible que el token haya expirado. Reconecta tu cuenta.` }),
@@ -55,7 +54,6 @@ Deno.serve(async (req) => {
         const maxLimit = limit === -1 ? 1000 : limit;
         const statusParam = status === 'all' ? '' : status;
         
-        // 1. Fetch first page to get total items
         const firstBatch = Math.min(50, maxLimit);
         const searchUrl = `https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${firstBatch}&offset=0&status=${statusParam}&sort=${sort}`;
         const searchRes = await fetch(searchUrl, { headers });
@@ -69,7 +67,6 @@ Deno.serve(async (req) => {
         const totalItems = searchData.paging?.total || 0;
         const finalMaxLimit = Math.min(totalItems, maxLimit);
         
-        // 2. Fetch remaining pages concurrently but lazily
         if (allIds.length < finalMaxLimit) {
             const searchUrls = [];
             for (let offset = allIds.length; offset < finalMaxLimit; offset += 50) {
@@ -77,8 +74,6 @@ Deno.serve(async (req) => {
                 const url = `https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${bSize}&offset=${offset}&status=${statusParam}&sort=${sort}`;
                 searchUrls.push(url);
             }
-            
-            // Execute in batches of 5 concurrent to avoid rate limits
             for (let i = 0; i < searchUrls.length; i += 5) {
                 const batch = searchUrls.slice(i, i + 5);
                 const results = await Promise.all(batch.map(u => fetch(u, { headers }).then(r => r.json()).catch(() => ({}))));
@@ -88,63 +83,64 @@ Deno.serve(async (req) => {
             }
         }
 
-        if (!allIds.length) {
+        return new Response(
+          JSON.stringify({ success: true, item_ids: allIds, total: totalItems }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+    }
+
+    // ═══ ACTION: GET ITEM DETAILS (Phase 2 — takes specific IDs, returns enriched details) ═══
+    if (action === 'get_item_details') {
+        const mlIds: string[] = body.ml_ids || [];
+        if (!mlIds.length) {
           return new Response(
-            JSON.stringify({ success: true, items: [], total: 0 }),
+            JSON.stringify({ success: true, items: [] }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
 
         const allItems: any[] = [];
         const itemIdsChunks = [];
-        for (let i = 0; i < allIds.length; i += 20) {
-            itemIdsChunks.push(allIds.slice(i, i + 20));
+        for (let i = 0; i < mlIds.length; i += 20) {
+            itemIdsChunks.push(mlIds.slice(i, i + 20));
         }
 
-        // Limit concurrency to 10 concurrent requests to avoid CPU spikes and rate limits
-        for (let i = 0; i < itemIdsChunks.length; i += 10) {
-            const batch = itemIdsChunks.slice(i, i + 10);
-            await Promise.all(batch.map(async (chunk) => {
-                try {
-                  const detailsRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(',')}`, { headers });
-                  if (detailsRes.ok) {
-                    const details = await detailsRes.json();
-                    allItems.push(...details.map((r: any) => r.body).filter(Boolean));
-                  }
-                } catch (err) {
-                  console.error("ML Items Details Error for chunk", err);
-                }
-            }));
-        }
+        await Promise.all(itemIdsChunks.map(async (chunk) => {
+            try {
+              const detailsRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(',')}`, { headers });
+              if (detailsRes.ok) {
+                const details = await detailsRes.json();
+                allItems.push(...details.map((r: any) => r.body).filter(Boolean));
+              }
+            } catch (err) {
+              console.error("ML Items Details Error", err);
+            }
+        }));
 
-        // ═══ Resolve category names from ML API (batch unique category_ids) ═══
+        // Resolve category names
         const uniqueCatIds = [...new Set(allItems.map((it: any) => it.category_id).filter(Boolean))];
         const catNameMap: Record<string, string> = {};
         
-        for (let i = 0; i < uniqueCatIds.length; i += 10) {
-            const batchIdList = uniqueCatIds.slice(i, i + 10);
-            await Promise.all(batchIdList.map(async (catId: string) => {
-              try {
-                const catRes = await fetch(`https://api.mercadolibre.com/categories/${catId}`);
-                if (catRes.ok) {
-                  const catData = await catRes.json();
-                  const pathFromRoot = catData.path_from_root || [];
-                  catNameMap[catId] = pathFromRoot.length > 0
-                    ? pathFromRoot.map((p: any) => p.name).join(' > ')
-                    : catData.name || catId;
-                }
-              } catch(_e) { /* best-effort */ }
-            }));
-        }
+        await Promise.all(uniqueCatIds.map(async (catId: string) => {
+          try {
+            const catRes = await fetch(`https://api.mercadolibre.com/categories/${catId}`);
+            if (catRes.ok) {
+              const catData = await catRes.json();
+              const pathFromRoot = catData.path_from_root || [];
+              catNameMap[catId] = pathFromRoot.length > 0
+                ? pathFromRoot.map((p: any) => p.name).join(' > ')
+                : catData.name || catId;
+            }
+          } catch(_e) { /* best-effort */ }
+        }));
 
-        // Enrich items with resolved category name
         const enrichedItems = allItems.map((it: any) => ({
           ...it,
           category_name: catNameMap[it.category_id] || null
         }));
 
         return new Response(
-          JSON.stringify({ success: true, items: enrichedItems, total: allIds.length }),
+          JSON.stringify({ success: true, items: enrichedItems }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
     }
