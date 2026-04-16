@@ -15,6 +15,7 @@ export default function AdminMercadoLibre() {
   // Settings state
   const [markupType, setMarkupType] = useState('percentage');
   const [markupValue, setMarkupValue] = useState('10');
+  const [rulesEnabled, setRulesEnabled] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
 
   useEffect(() => {
@@ -38,12 +39,14 @@ export default function AdminMercadoLibre() {
   }
 
   async function fetchSettings() {
-    const { data } = await supabase.from('site_settings').select('*').in('key', ['ml_price_markup_type', 'ml_price_markup_value']);
+    const { data } = await supabase.from('site_settings').select('*').in('key', ['ml_price_markup_type', 'ml_price_markup_value', 'ml_price_rules_enabled']);
     if (data) {
        const type = data.find(d => d.key === 'ml_price_markup_type')?.value;
        const val = data.find(d => d.key === 'ml_price_markup_value')?.value;
+       const enabled = data.find(d => d.key === 'ml_price_rules_enabled')?.value;
        if (type) setMarkupType(type);
        if (val) setMarkupValue(val);
+       if (enabled !== undefined) setRulesEnabled(enabled === 'true');
     }
   }
 
@@ -51,7 +54,8 @@ export default function AdminMercadoLibre() {
     setSavingSettings(true);
     await supabase.from('site_settings').upsert([
        { key: 'ml_price_markup_type', value: markupType, updated_at: new Date().toISOString() },
-       { key: 'ml_price_markup_value', value: markupValue, updated_at: new Date().toISOString() }
+       { key: 'ml_price_markup_value', value: markupValue, updated_at: new Date().toISOString() },
+       { key: 'ml_price_rules_enabled', value: rulesEnabled ? 'true' : 'false', updated_at: new Date().toISOString() }
     ], { onConflict: 'key' });
     setSavingSettings(false);
   }
@@ -76,7 +80,7 @@ export default function AdminMercadoLibre() {
     setLoading(true);
     const { data } = await supabase
       .from('products')
-      .select('id, title, status, base_price, ml_item_id, ml_status, category_id, categories(name), product_variants(sku, inventory_count)')
+      .select('id, title, status, base_price, ml_item_id, ml_status, category_id, categories(name), brands(name), product_variants(sku, inventory_count)')
       .order('updated_at', { ascending: false })
       .limit(50);
     setProducts(data || []);
@@ -137,9 +141,20 @@ export default function AdminMercadoLibre() {
       {/* Pricing Rules Configuration */}
       <div className="bg-white p-6 rounded-xl border shadow-sm">
          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-lg flex items-center gap-2"><Settings2 className="w-5 h-5 text-gray-500" /> Reglas de Precios (Locales vs ML)</h3>
+            <div className="flex items-center gap-4">
+              <h3 className="font-bold text-lg flex items-center gap-2"><Settings2 className="w-5 h-5 text-gray-500" /> Reglas de Precios (Locales vs ML)</h3>
+              <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer bg-gray-50 px-3 py-1.5 rounded-full border border-gray-200">
+                 <input 
+                   type="checkbox" 
+                   checked={rulesEnabled} 
+                   onChange={e => setRulesEnabled(e.target.checked)} 
+                   className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                 />
+                 <span className="font-medium select-none">Activar reglas (sincronización y publicación)</span>
+              </label>
+            </div>
             <button onClick={saveSettings} disabled={savingSettings} className="btn-secondary text-sm py-1.5 px-3 flex items-center gap-2">
-               {savingSettings ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" /> } Guardar Regla
+               {savingSettings ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" /> } Guardar Ajustes
             </button>
          </div>
          <p className="text-sm text-gray-500 mb-4 border-b pb-4">Define cómo se deben comportar los precios en tu e-commerce respecto al precio original que tienes en Mercado Libre, o viceversa, cuando ocurre la sincronización.</p>
@@ -244,9 +259,16 @@ export default function AdminMercadoLibre() {
                {products.map(p => (
                  <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
                    <td className="px-6 py-4 font-medium text-sm text-gray-900">
-                     {p.title}
+                     <div className="flex items-center gap-2">
+                        {p.title}
+                        {(p as any).brands?.name && (
+                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                             {(p as any).brands.name}
+                           </span>
+                        )}
+                     </div>
                      {p.ml_item_id && <span className="text-blue-400 block text-[10px] font-mono mt-0.5">{p.ml_item_id}</span>}
-                     <span className="text-gray-400 block text-xs">Ajuste Sugerido: ${Math.round(p.base_price * (1 + Number(markupValue) / 100))}</span>
+                     {rulesEnabled && <span className="text-gray-400 block text-xs mt-1">Ajuste Sugerido: ${Math.round(p.base_price * (1 + Number(markupValue) / 100))}</span>}
                    </td>
                    <td className="px-6 py-4 text-sm text-gray-600">
                      {(p as any).categories?.name ? (

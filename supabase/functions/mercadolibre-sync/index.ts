@@ -369,8 +369,120 @@ Deno.serve(async (req) => {
         );
     }
 
+    // ═══ ACTION: PUBLISH (Web → ML) ═══
+    if (action === 'publish') {
+        const { data: settingsData } = await supabase.from('site_settings').select('*').in('key', ['ml_price_rules_enabled', 'ml_price_markup_type', 'ml_price_markup_value']);
+        const rulesEnabled = settingsData?.find(d => d.key === 'ml_price_rules_enabled')?.value !== 'false'; // default true
+        const markupType = settingsData?.find(d => d.key === 'ml_price_markup_type')?.value || 'percentage';
+        const markupValue = Number(settingsData?.find(d => d.key === 'ml_price_markup_value')?.value || '10');
+
+        const { data: prods } = await supabase.from('products').select('*, categories(metadata), brands(name), product_variants(sku, inventory_count), product_images(url)').in('id', product_ids);
+        
+        const results = [];
+        for (const p of (prods || [])) {
+            if (p.ml_item_id) {
+               results.push({ id: p.id, status: 'skipped', error: 'El producto ya está vinculado a Mercado Libre' });
+               continue;
+            }
+            
+            // Calc price based on rules if enabled
+            let price = p.base_price;
+            if (rulesEnabled) {
+                if (markupType === 'percentage') price = price * (1 + markupValue / 100);
+                else if (markupType === 'discount_percentage') price = price * (1 - markupValue / 100);
+                else if (markupType === 'fixed') price += markupValue;
+            }
+
+            const mlCategory = p.categories?.metadata?.ml_category_id || 'MLU1051'; // Base fallback
+            
+            const attributes = [];
+            if (p.brands?.name) attributes.push({ id: "BRAND", value_name: p.brands.name });
+            if (p.product_variants?.[0]?.sku) attributes.push({ id: "SELLER_SKU", value_name: p.product_variants[0].sku });
+            
+            const pictures = (p.product_images || []).map((img: any) => ({ source: img.url })).slice(0, 10);
+            if (pictures.length === 0) pictures.push({ source: "https://http2.mlstatic.com/frontend-assets/ui-navigation/5.19.1/mercadolibre/logo__large_plus.png" }); // placeholder
+            
+            const payload = {
+                title: p.title.substring(0, 60),
+                category_id: mlCategory,
+                price: Math.max(1, Math.round(price)),
+                currency_id: "UYU",
+                available_quantity: Math.max(1, p.product_variants?.[0]?.inventory_count || 1), // ML requires >0 to publish
+                buying_mode: "buy_it_now",
+                condition: p.condition || "new",
+                listing_type_id: "gold_special",
+                pictures: pictures,
+                attributes: attributes
+            };
+
+            try {
+                const mlRes = await fetch('https://api.mercadolibre.com/items', {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(payload)
+                });
+                const mlData = await mlRes.json();
+                
+                if (!mlRes.ok) {
+                    results.push({ id: p.id, status: 'error', error: mlData.message });
+                } else {
+                    await supabase.from('products').update({ ml_item_id: mlData.id, ml_status: 'active' }).eq('id', p.id);
+                    results.push({ id: p.id, status: 'success', ml_id: mlData.id });
+                }
+            } catch (err: any) {
+                results.push({ id: p.id, status: 'error', error: err.message });
+            }
+        }
+        return new Response(JSON.stringify({ success: true, results, count: results.filter(r => r.status === 'success').length }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // ═══ ACTION: SYNC STOCK (Web → ML Bidirectional Partial Implementation) ═══
+    if (action === 'sync_stock') {
+        const { data: settingsData } = await supabase.from('site_settings').select('*').in('key', ['ml_price_rules_enabled', 'ml_price_markup_type', 'ml_price_markup_value']);
+        const rulesEnabled = settingsData?.find(d => d.key === 'ml_price_rules_enabled')?.value !== 'false';
+        const markupType = settingsData?.find(d => d.key === 'ml_price_markup_type')?.value || 'percentage';
+        const markupValue = Number(settingsData?.find(d => d.key === 'ml_price_markup_value')?.value || '10');
+
+        const { data: prods } = await supabase.from('products').select('id, base_price, ml_item_id, product_variants(inventory_count)').in('id', product_ids).not('ml_item_id', 'is', null);
+        
+        const results = [];
+        for (const p of (prods || [])) {
+            try {
+                 let price = p.base_price;
+                 if (rulesEnabled) {
+                     if (markupType === 'percentage') price = price * (1 + markupValue / 100);
+                     else if (markupType === 'discount_percentage') price = price * (1 - markupValue / 100);
+                     else if (markupType === 'fixed') price += markupValue;
+                 }
+                 const stock = p.product_variants?.[0]?.inventory_count || 0;
+                 
+                 const payload: any = {
+                     price: Math.max(1, Math.round(price)),
+                     available_quantity: stock
+                 };
+                 // Handle pausing if out of stock, activating if in stock
+                 if (stock <= 0) payload.status = 'paused';
+                 else payload.status = 'active';
+
+                 const mlRes = await fetch(`https://api.mercadolibre.com/items/${p.ml_item_id}`, { method: 'PUT', headers, body: JSON.stringify(payload) });
+                 const mlData = await mlRes.json();
+                 
+                 if (mlRes.ok) {
+                    results.push({ id: p.id, status: 'success' });
+                    // Update database status based on ML
+                    await supabase.from('products').update({ ml_status: stock <= 0 ? 'paused' : 'active' }).eq('id', p.id);
+                 } else {
+                    results.push({ id: p.id, status: 'error', error: mlData.message });
+                 }
+            } catch (err: any) {
+                results.push({ id: p.id, status: 'error', error: err.message });
+            }
+        }
+        return new Response(JSON.stringify({ success: true, results, count: results.filter(r => r.status === 'success').length }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     return new Response(
-      JSON.stringify({ success: true, message: "Sync complete" }),
+      JSON.stringify({ success: false, error: "Action not recognized or not implemented" }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
