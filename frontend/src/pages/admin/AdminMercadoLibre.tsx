@@ -88,6 +88,25 @@ export default function AdminMercadoLibre() {
     setLoading(false);
   }
 
+  async function callEdgeFunction(body: any) {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const session = (await supabase.auth.getSession()).data.session;
+    const token = session?.access_token || '';
+    const res = await fetch(`${supabaseUrl}/functions/v1/mercadolibre-sync`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+      },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${data?.error || data?.message || JSON.stringify(data)}`);
+    if (!data.success) throw new Error(data.error || 'Error desconocido');
+    return data;
+  }
+
   async function triggerSync(action: string, productIds: string[] = [], mlItemIds: string[] = [], limit: number = 20, status: string = 'active') {
     setSyncing(true);
     setSyncStatus(null);
@@ -113,9 +132,7 @@ export default function AdminMercadoLibre() {
                status 
             };
 
-            const { data, error } = await supabase.functions.invoke('mercadolibre-sync', { body: reqBody });
-            if (error) throw error;
-            if (!data.success) throw new Error(data.error || 'Error al procesar lote');
+            const data = await callEdgeFunction(reqBody);
             
             totalProcessed += (data.count || data.results?.length || 0);
             processed += chunk.length;
@@ -123,11 +140,7 @@ export default function AdminMercadoLibre() {
         }
         setSyncStatus(`¡Operación '${action}' completada con éxito! (${totalProcessed} items procesados)`);
       } else {
-        const { data, error } = await supabase.functions.invoke('mercadolibre-sync', {
-          body: { action, product_ids: productIds, ml_item_ids: mlItemIds, limit, status }
-        });
-        if (error) throw error;
-        if (!data.success) throw new Error(data.error || 'Error al procesar la operación');
+        const data = await callEdgeFunction({ action, product_ids: productIds, ml_item_ids: mlItemIds, limit, status });
         
         const count = data.count || data.results?.length || 0;
         setSyncStatus(`¡Operación '${action}' completada con éxito! (${count} items procesados)`);
@@ -373,24 +386,6 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
     fetchMLItems();
   }, [limit, itemStatus, orderBy]);
 
-  async function callEdgeFunction(body: any) {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const session = (await supabase.auth.getSession()).data.session;
-    const token = session?.access_token || '';
-    const res = await fetch(`${supabaseUrl}/functions/v1/mercadolibre-sync`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-      },
-      body: JSON.stringify(body)
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${data?.error || data?.message || JSON.stringify(data)}`);
-    if (!data.success) throw new Error(data.error || 'Error desconocido');
-    return data;
-  }
 
   async function fetchMLItems() {
     setFetching(true);

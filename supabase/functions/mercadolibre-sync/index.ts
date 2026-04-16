@@ -48,32 +48,56 @@ Deno.serve(async (req) => {
           throw new Error(`ML API Error: ${mlError}. Es posible que el token haya expirado. Reconecta tu cuenta.`);
         }
 
-        const maxLimit = limit === -1 ? 1000 : limit;
         const statusParam = status === 'all' ? '' : status;
-        
-        const firstBatch = Math.min(50, maxLimit);
-        const searchUrl = `https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${firstBatch}&offset=0&status=${statusParam}&sort=${sort}`;
-        const searchRes = await fetch(searchUrl, { headers });
-        const searchData = await searchRes.json();
-        
-        if (!searchRes.ok) throw new Error(searchData.message || 'Error en búsqueda inicial');
+        let allIds: string[] = [];
+        let totalItems = 0;
 
-        let allIds: string[] = searchData.results || [];
-        const totalItems = searchData.paging?.total || 0;
-        const finalMaxLimit = Math.min(totalItems, maxLimit);
-        
-        if (allIds.length < finalMaxLimit) {
-            const searchUrls = [];
-            for (let offset = allIds.length; offset < finalMaxLimit; offset += 50) {
-                const bSize = Math.min(50, finalMaxLimit - offset);
-                const url = `https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${bSize}&offset=${offset}&status=${statusParam}&sort=${sort}`;
-                searchUrls.push(url);
+        if (limit === -1) {
+            // Use scroll API (search_type=scan) to bypass 1000 item limit for "Todos"
+            let scrollId = '';
+            let hasMore = true;
+            while (hasMore) {
+                const url = `https://api.mercadolibre.com/users/${userData.id}/items/search?search_type=scan&limit=100${scrollId ? `&scroll_id=${scrollId}` : ''}&status=${statusParam}`;
+                const searchRes = await fetch(url, { headers });
+                const searchData = await searchRes.json();
+                
+                if (!searchRes.ok) throw new Error(searchData.message || 'Error en búsqueda por scan');
+                
+                totalItems = searchData.paging?.total || 0;
+                if (searchData.results && searchData.results.length > 0) {
+                    allIds.push(...searchData.results);
+                    scrollId = searchData.scroll_id;
+                } else {
+                    hasMore = false;
+                }
             }
-            for (let i = 0; i < searchUrls.length; i += 5) {
-                const batch = searchUrls.slice(i, i + 5);
-                const results = await Promise.all(batch.map(u => fetch(u, { headers }).then(r => r.json()).catch(() => ({}))));
-                for (const res of results) {
-                    if (res.results) allIds = [...allIds, ...res.results];
+        } else {
+            // Standard offset pagination for limited fetches
+            const maxLimit = limit;
+            const firstBatch = Math.min(50, maxLimit);
+            const searchUrl = `https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${firstBatch}&offset=0&status=${statusParam}&sort=${sort}`;
+            const searchRes = await fetch(searchUrl, { headers });
+            const searchData = await searchRes.json();
+            
+            if (!searchRes.ok) throw new Error(searchData.message || 'Error en búsqueda inicial');
+
+            allIds = searchData.results || [];
+            totalItems = searchData.paging?.total || 0;
+            const finalMaxLimit = Math.min(totalItems, maxLimit);
+            
+            if (allIds.length < finalMaxLimit) {
+                const searchUrls = [];
+                for (let offset = allIds.length; offset < finalMaxLimit; offset += 50) {
+                    const bSize = Math.min(50, finalMaxLimit - offset);
+                    const url = `https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${bSize}&offset=${offset}&status=${statusParam}&sort=${sort}`;
+                    searchUrls.push(url);
+                }
+                for (let i = 0; i < searchUrls.length; i += 5) {
+                    const batch = searchUrls.slice(i, i + 5);
+                    const results = await Promise.all(batch.map(u => fetch(u, { headers }).then(r => r.json()).catch(() => ({}))));
+                    for (const res of results) {
+                        if (res.results) allIds.push(...res.results);
+                    }
                 }
             }
         }
