@@ -2,6 +2,25 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { RefreshCw, Play, AlertCircle, CheckCircle2, Settings2, Save, ExternalLink, Link2, X, Loader2 } from 'lucide-react';
 
+async function callEdgeFunction(body: any) {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const session = (await supabase.auth.getSession()).data.session;
+  const token = session?.access_token || '';
+  const res = await fetch(`${supabaseUrl}/functions/v1/mercadolibre-sync`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+    },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${data?.error || data?.message || JSON.stringify(data)}`);
+  if (!data.success) throw new Error(data.error || 'Error desconocido');
+  return data;
+}
+
 export default function AdminMercadoLibre() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,24 +107,6 @@ export default function AdminMercadoLibre() {
     setLoading(false);
   }
 
-  async function callEdgeFunction(body: any) {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const session = (await supabase.auth.getSession()).data.session;
-    const token = session?.access_token || '';
-    const res = await fetch(`${supabaseUrl}/functions/v1/mercadolibre-sync`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-      },
-      body: JSON.stringify(body)
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${data?.error || data?.message || JSON.stringify(data)}`);
-    if (!data.success) throw new Error(data.error || 'Error desconocido');
-    return data;
-  }
 
   async function triggerSync(action: string, productIds: string[] = [], mlItemIds: string[] = [], limit: number = 20, status: string = 'active') {
     setSyncing(true);
