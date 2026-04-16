@@ -83,36 +83,47 @@ Deno.serve(async (req) => {
         }
 
         const allItems = [];
+        const itemIdsChunks = [];
         for (let i = 0; i < allIds.length; i += 20) {
-            const chunk = allIds.slice(i, i + 20);
-            const detailsRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(',')}`, { headers });
-            if (detailsRes.ok) {
-              const details = await detailsRes.json();
-              allItems.push(...details.map((r: any) => r.body).filter(Boolean));
-            } else {
-              console.error("ML Items Details Error for chunk", chunk);
-            }
+            itemIdsChunks.push(allIds.slice(i, i + 20));
         }
+
+        // Fetch details in parallel strictly to avoid Deno Deploy timeouts
+        await Promise.all(itemIdsChunks.map(async (chunk) => {
+            try {
+              const detailsRes = await fetch(`https://api.mercadolibre.com/items?ids=${chunk.join(',')}`, { headers });
+              if (detailsRes.ok) {
+                const details = await detailsRes.json();
+                allItems.push(...details.map((r: any) => r.body).filter(Boolean));
+              }
+            } catch (err) {
+              console.error("ML Items Details Error for chunk", chunk, err);
+            }
+        }));
 
         // ═══ Resolve category names from ML API (batch unique category_ids) ═══
         const uniqueCatIds = [...new Set(allItems.map((it: any) => it.category_id).filter(Boolean))];
         const catNameMap: Record<string, string> = {};
+        
+        const catChunks = [];
         for (let i = 0; i < uniqueCatIds.length; i += 20) {
-            const catChunk = uniqueCatIds.slice(i, i + 20);
+            catChunks.push(uniqueCatIds.slice(i, i + 20));
+        }
+
+        await Promise.all(catChunks.map(async (catChunk) => {
             await Promise.all(catChunk.map(async (catId: string) => {
               try {
                 const catRes = await fetch(`https://api.mercadolibre.com/categories/${catId}`);
                 if (catRes.ok) {
                   const catData = await catRes.json();
-                  // Build readable path: e.g. "Juguetes > Figuras de Acción > Funko"
                   const pathFromRoot = catData.path_from_root || [];
                   catNameMap[catId] = pathFromRoot.length > 0
                     ? pathFromRoot.map((p: any) => p.name).join(' > ')
                     : catData.name || catId;
                 }
-              } catch(_e) { /* category name resolution is best-effort */ }
+              } catch(_e) { /* best-effort */ }
             }));
-        }
+        }));
 
         // Enrich items with resolved category name
         const enrichedItems = allItems.map((it: any) => ({

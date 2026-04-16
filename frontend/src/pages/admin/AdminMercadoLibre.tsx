@@ -375,7 +375,7 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
     setFetching(true);
     try {
       const { data, error } = await supabase.functions.invoke('mercadolibre-sync', {
-        body: { action: 'list_items', limit: limit === -1 ? 500 : limit, status: itemStatus, sort: orderBy }
+        body: { action: 'list_items', limit: limit, status: itemStatus, sort: orderBy }
       });
       if (error) throw error;
       if (!data.success) throw new Error(data.error || 'Error desconocido en la función');
