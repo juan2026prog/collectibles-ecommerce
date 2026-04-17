@@ -283,6 +283,16 @@ No agregues explicación, solo el id o NONE.`;
                             const geminiData = await geminiRes.json();
                             const aiResponse = (geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
 
+                            // Log token usage
+                            const usageMeta = geminiData.usageMetadata;
+                            const tokensUsed = (usageMeta?.promptTokenCount || 0) + (usageMeta?.candidatesTokenCount || 0);
+                            const estimatedCost = ((usageMeta?.promptTokenCount || 0) * 0.0000001) + ((usageMeta?.candidatesTokenCount || 0) * 0.0000004);
+                            await supabase.from('ai_usage_log').insert({
+                              tool_key: 'ai_category_matching',
+                              tokens_used: tokensUsed,
+                              estimated_cost: estimatedCost
+                            }).then(() => {});
+
                             // Validate: check if response is a valid UUID that exists in our categories
                             if (aiResponse !== 'NONE' && aiResponse.length > 10) {
                               const matchedInternal = internalCats.find(c => c.id === aiResponse);

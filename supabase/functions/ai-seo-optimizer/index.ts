@@ -57,7 +57,7 @@ serve(async (req) => {
         1. "seo_title": Un meta title altamente optimizado para CTR (máximo 60 caracteres). Que genere deseo de compra.
         2. "seo_description": Una meta descripción persuasiva que incluya palabras clave relevantes de intención de compra (máximo 155 caracteres).`;
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${geminiKey}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -68,6 +68,15 @@ serve(async (req) => {
         if (response.ok) {
             const result = await response.json();
             const textResponse = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+            // Log token usage
+            try {
+              const usageMeta = result.usageMetadata;
+              const tokensUsed = (usageMeta?.promptTokenCount || 0) + (usageMeta?.candidatesTokenCount || 0);
+              const estimatedCost = ((usageMeta?.promptTokenCount || 0) * 0.0000001) + ((usageMeta?.candidatesTokenCount || 0) * 0.0000004);
+              await supabaseClient.from('ai_usage_log').insert({ tool_key: 'ai_seo', tokens_used: tokensUsed, estimated_cost: estimatedCost });
+            } catch (_e) { /* logging is non-fatal */ }
+
             if (textResponse) {
                 try {
                     // Limpiar markdown json format por si acaso

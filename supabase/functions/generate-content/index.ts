@@ -20,14 +20,10 @@ Deno.serve(async (req) => {
       instruction += "\nTu tarea es generar una descripción premium para un producto basado en el siguiente nombre o detalles. Debe ser estructurada, emocionante y profesional.";
     }
 
-    // Using Google Gemini via the system's provided URL/Key if applicable, 
-    // but here we use a generic fetch to a completion API or a mock if not configured.
-    // NOTE: In a real scenario, we'd use Deno.env.get("GEMINI_API_KEY")
-    
     const apiKey = Deno.env.get("GEMINI_API_KEY");
     if (!apiKey) throw new Error("AI API Key not configured.");
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -39,6 +35,16 @@ Deno.serve(async (req) => {
 
     const data = await response.json();
     const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || "No se pudo generar el contenido.";
+
+    // Log token usage
+    try {
+      const supabase = createClient(Deno.env.get("SUPABASE_URL") || "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "");
+      const usageMeta = data.usageMetadata;
+      const tokensUsed = (usageMeta?.promptTokenCount || 0) + (usageMeta?.candidatesTokenCount || 0);
+      const estimatedCost = ((usageMeta?.promptTokenCount || 0) * 0.0000001) + ((usageMeta?.candidatesTokenCount || 0) * 0.0000004);
+      const toolKey = action === 'improve' ? 'ai_description_improver' : 'ai_catalog_generator';
+      await supabase.from('ai_usage_log').insert({ tool_key: toolKey, tokens_used: tokensUsed, estimated_cost: estimatedCost });
+    } catch (_e) { /* logging is non-fatal */ }
 
     return new Response(JSON.stringify({ success: true, text: generatedText }), { 
       headers: { ...corsHeaders, "Content-Type": "application/json" } 
