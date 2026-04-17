@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Save, ToggleLeft, ToggleRight, Settings, Store, Truck, Palette, LayoutTemplate, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, FileText, Share2, Link as LinkIcon, ImageIcon, CreditCard, ShieldCheck } from 'lucide-react';
+import { Save, ToggleLeft, ToggleRight, Settings, Store, Truck, Palette, LayoutTemplate, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, FileText, Share2, Link as LinkIcon, ImageIcon, CreditCard, ShieldCheck, Sparkles, Brain, Zap, Search as SearchIcon, Tag } from 'lucide-react';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
 
 function MenuEditor({ title, description, initialJson, onSave }: any) {
@@ -235,6 +235,7 @@ export default function AdminSettings() {
           { key: 'modules', label: 'Modulos Activos', icon: Settings },
           { key: 'shipping', label: 'Envios', icon: Truck },
           { key: 'social', label: 'Redes Sociales', icon: Share2 },
+          { key: 'ai', label: 'Asistencia IA', icon: Sparkles },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key as any)}
             className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-bold transition-colors whitespace-nowrap ${
@@ -755,6 +756,71 @@ export default function AdminSettings() {
                 );
              })}
            </div>
+        </div>
+      )}
+
+      {/* AI Assistance Panel */}
+      {currentTab === 'ai' && (
+        <div className="space-y-8 max-w-4xl">
+          <div className="bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-700 rounded-2xl p-8 text-white shadow-2xl shadow-purple-200 relative overflow-hidden">
+             <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+             <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
+             <div className="relative z-10">
+               <div className="flex items-center gap-3 mb-3">
+                 <div className="p-2.5 bg-white/15 rounded-xl backdrop-blur-sm"><Brain className="w-7 h-7" /></div>
+                 <div>
+                   <h3 className="font-black text-2xl tracking-tight">Centro de Asistencia IA</h3>
+                   <p className="text-purple-200 text-sm font-medium">Gestiona todas las herramientas inteligentes de la plataforma</p>
+                 </div>
+               </div>
+               <p className="text-sm text-purple-100 leading-relaxed max-w-2xl mt-4">Activa o desactiva las funcionalidades de IA que consumen tokens de API (Google Gemini). Cada herramienta puede controlarse independientemente.</p>
+             </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {[
+              { key: 'ai_category_matching_enabled', title: 'Category Matching Engine', badge: 'Import', color: 'amber', icon: Tag, desc: 'Al importar desde Mercado Libre, la IA clasifica el producto en la categoría interna más adecuada.', hint: 'Enviamos título + categorías a Gemini para clasificación automática.', cost: '~1 token/producto' },
+              { key: 'ai_catalog_generator_enabled', title: 'AI Catalog Generator', badge: 'Contenido', color: 'purple', icon: Sparkles, desc: 'Genera títulos y descripciones optimizadas para ventas y SEO en lote.', hint: 'Acceso: Productos → AI Catalog Generator o botón "Mejorar con IA".', cost: '~2-5 tokens/producto' },
+              { key: 'ai_seo_enabled', title: 'Auto-SEO con IA', badge: 'SEO', color: 'green', icon: SearchIcon, desc: 'Genera meta títulos y descripciones para Google al crear o editar productos.', hint: 'Sincronizado con SEO → Metadatos Globales.', cost: '~1 token/producto' },
+              { key: 'ai_description_improver_enabled', title: 'Mejorar Descripción con IA', badge: 'Editor', color: 'blue', icon: FileText, desc: 'Botón "Mejorar con IA" en el editor de producto. Reescribe con tono profesional.', hint: 'Productos → Editar → Botón ✦ Mejorar con IA.', cost: '~3-5 tokens/mejora' },
+            ].map(tool => (
+              <div key={tool.key} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-lg transition-shadow">
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2.5 bg-${tool.color}-50 rounded-xl`}><tool.icon className={`w-5 h-5 text-${tool.color}-600`} /></div>
+                      <div>
+                        <h4 className="font-black text-gray-900">{tool.title}</h4>
+                        <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-${tool.color}-100 text-${tool.color}-700`}>{tool.badge}</span>
+                      </div>
+                    </div>
+                    <button onClick={() => { const next = settings[tool.key] !== 'true'; saveSetting(tool.key, String(next)); }}>
+                      {settings[tool.key] === 'true' ? <ToggleRight className={`w-10 h-10 text-${tool.color}-500`} /> : <ToggleLeft className="w-10 h-10 text-gray-300" />}
+                    </button>
+                  </div>
+                  <p className="text-sm text-gray-500 leading-relaxed">{tool.desc}</p>
+                  <div className={`mt-4 p-3 bg-${tool.color}-50 rounded-lg border border-${tool.color}-100`}>
+                    <p className={`text-[11px] text-${tool.color}-800 font-medium`}>{tool.hint}</p>
+                  </div>
+                </div>
+                <div className="px-6 py-3 bg-gray-50 border-t text-xs text-gray-400 flex items-center gap-1.5"><Zap className="w-3 h-3" /> Consumo: {tool.cost}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+            <h3 className="font-bold text-lg border-b pb-3 mb-4 flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-indigo-600" /> API Key</h3>
+            <p className="text-sm text-gray-500 mb-4">Todas las herramientas usan <strong>Google Gemini</strong>. La clave se configura como variable de entorno en las Edge Functions de Supabase.</p>
+            <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
+              <div className="flex items-start gap-3">
+                <Brain className="w-5 h-5 text-indigo-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm text-indigo-900 font-bold">Estado de la API</p>
+                  <p className="text-xs text-indigo-700 mt-1">Configurado en Supabase Dashboard → Edge Functions → Secrets (GEMINI_API_KEY).</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
       <MediaPickerModal 

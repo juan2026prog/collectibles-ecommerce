@@ -225,12 +225,11 @@ Deno.serve(async (req) => {
                   }
                 } catch(_e) { /* brand extraction optional */ }
 
-                // ═══ Extract category from ML API ═══
+                // ═══ Extract category from ML API (with optional AI Matching) ═══
                 let categoryId = null;
                 try {
                   if (item.category_id) {
-                    // CATEGORY MATCHING ENGINE: 
-                    // First, search if we have a category mapped directly to this ML category ID
+                    // Step 1: Check direct ML category ID mapping
                     const { data: matchedCat } = await supabase
                       .from('categories')
                       .select('id')
@@ -240,67 +239,124 @@ Deno.serve(async (req) => {
                     if (matchedCat) {
                       categoryId = matchedCat.id;
                     } else {
-                      const catRes = await fetch(`https://api.mercadolibre.com/categories/${item.category_id}`);
-                      if (catRes.ok) {
-                        const catData = await catRes.json();
-                        // Use the full category path to get the leaf (most specific) category
-                        const pathFromRoot = catData.path_from_root || [];
-                        // Use the leaf category (last in path), fallback to the direct category
-                        const leafCat = pathFromRoot.length > 0 ? pathFromRoot[pathFromRoot.length - 1] : { id: item.category_id, name: catData.name };
-                        const catName = leafCat.name;
-                        const catSlug = catName.toLowerCase().replace(/[^a-z0-9áéíóúñü]+/g, '-').replace(/^-|-$/g, '');
+                      // Step 2: Check if AI category matching is enabled
+                      const { data: aiToggle } = await supabase
+                        .from('site_settings')
+                        .select('value')
+                        .eq('key', 'ai_category_matching_enabled')
+                        .maybeSingle();
+                      const aiEnabled = aiToggle?.value === 'true';
+                      const geminiKey = Deno.env.get('GEMINI_API_KEY');
 
-                        // Upsert category: don't duplicate if slug already exists
-                        const { data: existingCat } = await supabase
-                          .from('categories')
-                          .select('id')
-                          .eq('slug', catSlug)
-                          .maybeSingle();
+                      // Fetch all internal categories for matching
+                      const { data: internalCats } = await supabase
+                        .from('categories')
+                        .select('id, name, slug')
+                        .eq('is_active', true)
+                        .order('name');
 
-                      if (existingCat) {
-                        categoryId = existingCat.id;
-                      } else {
-                        // Check if parent category should be created (one level up)
-                        let parentCategoryId = null;
-                        if (pathFromRoot.length > 1) {
-                          const parentCat = pathFromRoot[pathFromRoot.length - 2];
-                          const parentSlug = parentCat.name.toLowerCase().replace(/[^a-z0-9áéíóúñü]+/g, '-').replace(/^-|-$/g, '');
-                          const { data: existingParent } = await supabase
+                      // Step 2a: Try LLM matching if enabled
+                      if (aiEnabled && geminiKey && internalCats && internalCats.length > 0) {
+                        try {
+                          const categoryList = internalCats.map(c => `- "${c.name}" (id: ${c.id})`).join('\n');
+                          const prompt = `Eres un sistema de clasificación de productos para una tienda de coleccionables.
+
+Producto: "${item.title}"
+
+Categorías disponibles en la tienda:
+${categoryList}
+
+Responde SOLO con el id (UUID) de la categoría más adecuada para este producto.
+Si ninguna categoría es apropiada, responde exactamente: NONE
+No agregues explicación, solo el id o NONE.`;
+
+                          const geminiRes = await fetch(
+                            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+                            {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                            }
+                          );
+
+                          if (geminiRes.ok) {
+                            const geminiData = await geminiRes.json();
+                            const aiResponse = (geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+                            // Validate: check if response is a valid UUID that exists in our categories
+                            if (aiResponse !== 'NONE' && aiResponse.length > 10) {
+                              const matchedInternal = internalCats.find(c => c.id === aiResponse);
+                              if (matchedInternal) {
+                                categoryId = matchedInternal.id;
+                                console.log(`AI matched "${item.title}" → "${matchedInternal.name}"`);
+                              }
+                            }
+                          }
+                        } catch (aiErr) {
+                          console.error('AI category matching error (non-fatal):', aiErr);
+                        }
+                      }
+
+                      // Step 3: Fallback to ML taxonomy-based matching if AI didn't match
+                      if (!categoryId) {
+                        const catRes = await fetch(`https://api.mercadolibre.com/categories/${item.category_id}`);
+                        if (catRes.ok) {
+                          const catData = await catRes.json();
+                          const pathFromRoot = catData.path_from_root || [];
+                          const leafCat = pathFromRoot.length > 0 ? pathFromRoot[pathFromRoot.length - 1] : { id: item.category_id, name: catData.name };
+                          const catName = leafCat.name;
+                          const catSlug = catName.toLowerCase().replace(/[^a-z0-9áéíóúñü]+/g, '-').replace(/^-|-$/g, '');
+
+                          const { data: existingCat } = await supabase
                             .from('categories')
                             .select('id')
-                            .eq('slug', parentSlug)
+                            .eq('slug', catSlug)
                             .maybeSingle();
 
-                          if (existingParent) {
-                            parentCategoryId = existingParent.id;
+                          if (existingCat) {
+                            categoryId = existingCat.id;
                           } else {
-                            const { data: newParent } = await supabase
+                            let parentCategoryId = null;
+                            if (pathFromRoot.length > 1) {
+                              const parentCat = pathFromRoot[pathFromRoot.length - 2];
+                              const parentSlug = parentCat.name.toLowerCase().replace(/[^a-z0-9áéíóúñü]+/g, '-').replace(/^-|-$/g, '');
+                              const { data: existingParent } = await supabase
+                                .from('categories')
+                                .select('id')
+                                .eq('slug', parentSlug)
+                                .maybeSingle();
+
+                              if (existingParent) {
+                                parentCategoryId = existingParent.id;
+                              } else {
+                                const { data: newParent } = await supabase
+                                  .from('categories')
+                                  .insert({ name: parentCat.name, slug: parentSlug, is_active: true, metadata: { ml_category_id: parentCat.id } })
+                                  .select()
+                                  .single();
+                                if (newParent) parentCategoryId = newParent.id;
+                              }
+                            }
+
+                            const { data: newCat } = await supabase
                               .from('categories')
-                              .insert({ name: parentCat.name, slug: parentSlug, is_active: true, metadata: { ml_category_id: parentCat.id } })
+                              .insert({ 
+                                name: catName, 
+                                slug: catSlug, 
+                                parent_id: parentCategoryId,
+                                is_active: true, 
+                                metadata: { ml_category_id: leafCat.id } 
+                              })
                               .select()
                               .single();
-                            if (newParent) parentCategoryId = newParent.id;
+                            if (newCat) categoryId = newCat.id;
                           }
                         }
-
-                        const { data: newCat } = await supabase
-                          .from('categories')
-                          .insert({ 
-                            name: catName, 
-                            slug: catSlug, 
-                            parent_id: parentCategoryId,
-                            is_active: true, 
-                            metadata: { ml_category_id: leafCat.id } 
-                          })
-                          .select()
-                          .single();
-                        if (newCat) categoryId = newCat.id;
                       }
                     }
                   }
-                }
-              } catch(_e) { 
-                console.error("Category extraction error:", _e);
+                } catch(_e) { 
+                  console.error("Category extraction error:", _e);
                   /* category extraction is optional, don't fail the import */ 
                 }
 
