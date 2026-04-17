@@ -172,6 +172,127 @@ function HomeLayoutEditor({ title, description, initialJson, onSave }: any) {
 
 import { useSearchParams } from 'react-router-dom';
 
+// ═══ AI Usage Stats Component ═══
+function AiUsageStats({ period }: { period: string }) {
+  const [stats, setStats] = useState<{ tool_key: string; total_tokens: number; total_cost: number; count: number }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchStats();
+  }, [period]);
+
+  async function fetchStats() {
+    setLoading(true);
+    let query = supabase
+      .from('ai_usage_log')
+      .select('tool_key, tokens_used, estimated_cost, created_at');
+
+    if (period !== 'all') {
+      const daysAgo = new Date();
+      daysAgo.setDate(daysAgo.getDate() - parseInt(period));
+      query = query.gte('created_at', daysAgo.toISOString());
+    }
+
+    const { data } = await query;
+    
+    // Aggregate by tool_key
+    const grouped: Record<string, { total_tokens: number; total_cost: number; count: number }> = {};
+    (data || []).forEach(row => {
+      if (!grouped[row.tool_key]) grouped[row.tool_key] = { total_tokens: 0, total_cost: 0, count: 0 };
+      grouped[row.tool_key].total_tokens += row.tokens_used || 0;
+      grouped[row.tool_key].total_cost += parseFloat(String(row.estimated_cost)) || 0;
+      grouped[row.tool_key].count += 1;
+    });
+
+    setStats(Object.entries(grouped).map(([tool_key, v]) => ({ tool_key, ...v })));
+    setLoading(false);
+  }
+
+  const totalTokens = stats.reduce((s, r) => s + r.total_tokens, 0);
+  const totalCost = stats.reduce((s, r) => s + r.total_cost, 0);
+  const totalCalls = stats.reduce((s, r) => s + r.count, 0);
+
+  const toolLabels: Record<string, { label: string; color: string }> = {
+    'ai_category_matching': { label: 'Category Matching', color: 'bg-amber-500' },
+    'ai_catalog_generator': { label: 'Catalog Generator', color: 'bg-purple-500' },
+    'ai_seo': { label: 'Auto-SEO', color: 'bg-green-500' },
+    'ai_description_improver': { label: 'Descripción IA', color: 'bg-blue-500' },
+    'generate_content': { label: 'Generador Contenido', color: 'bg-pink-500' },
+  };
+
+  const maxTokens = Math.max(...stats.map(s => s.total_tokens), 1);
+
+  if (loading) {
+    return <div className="p-8 text-center text-gray-400 animate-pulse text-sm">Cargando estadísticas...</div>;
+  }
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-5 border border-amber-100">
+          <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Tokens Usados</p>
+          <p className="text-3xl font-black text-amber-900 tracking-tight">{totalTokens.toLocaleString()}</p>
+          <p className="text-xs text-amber-600 mt-1">{totalCalls} llamadas a la API</p>
+        </div>
+        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-5 border border-green-100">
+          <p className="text-[10px] font-black text-green-600 uppercase tracking-widest mb-1">Costo Estimado</p>
+          <p className="text-3xl font-black text-green-900 tracking-tight">${totalCost.toFixed(4)}</p>
+          <p className="text-xs text-green-600 mt-1">USD (Gemini Flash pricing)</p>
+        </div>
+        <div className="bg-gradient-to-br from-indigo-50 to-violet-50 rounded-xl p-5 border border-indigo-100">
+          <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Promedio/Llamada</p>
+          <p className="text-3xl font-black text-indigo-900 tracking-tight">{totalCalls > 0 ? Math.round(totalTokens / totalCalls) : 0}</p>
+          <p className="text-xs text-indigo-600 mt-1">tokens promedio</p>
+        </div>
+      </div>
+
+      {/* Per-tool breakdown */}
+      {stats.length > 0 ? (
+        <div className="space-y-3">
+          <h4 className="text-xs font-black text-gray-500 uppercase tracking-widest">Desglose por Herramienta</h4>
+          {stats.sort((a, b) => b.total_tokens - a.total_tokens).map(s => {
+            const info = toolLabels[s.tool_key] || { label: s.tool_key, color: 'bg-gray-500' };
+            const pct = (s.total_tokens / maxTokens) * 100;
+            return (
+              <div key={s.tool_key} className="group">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2.5 h-2.5 rounded-full ${info.color}`} />
+                    <span className="text-sm font-bold text-gray-800">{info.label}</span>
+                    <span className="text-[10px] text-gray-400 font-mono">{s.count} calls</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs">
+                    <span className="font-bold text-gray-700">{s.total_tokens.toLocaleString()} tokens</span>
+                    <span className="text-gray-400">${s.total_cost.toFixed(4)}</span>
+                  </div>
+                </div>
+                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div className={`h-full ${info.color} rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+          <Zap className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+          <p className="text-sm text-gray-500 font-medium">Sin datos de uso en este período</p>
+          <p className="text-xs text-gray-400 mt-1">Las estadísticas aparecerán cuando las herramientas de IA se utilicen.</p>
+        </div>
+      )}
+
+      {/* Pricing Info */}
+      <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+        <p className="text-[11px] text-gray-500">
+          <strong>Referencia de precios:</strong> Gemini 2.0 Flash — Input: $0.10/1M tokens · Output: $0.40/1M tokens. 
+          Los costos mostrados son estimaciones basadas en un promedio de tokens por llamada.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminSettings() {
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTab = (searchParams.get('tab') as any) || 'general';
@@ -807,19 +928,88 @@ export default function AdminSettings() {
               </div>
             ))}
           </div>
+          {/* API Key Configuration */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="p-6 border-b">
+              <h3 className="font-bold text-lg flex items-center gap-2 mb-1"><ShieldCheck className="w-5 h-5 text-indigo-600" /> Configuración de API</h3>
+              <p className="text-sm text-gray-500">Configura tu clave de Google Gemini para habilitar todas las herramientas de IA.</p>
+            </div>
+            <div className="p-6 space-y-5">
+              <div>
+                <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1.5">Google Gemini API Key</label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type={settings['_show_api_key'] === 'true' ? 'text' : 'password'}
+                      className="form-input w-full font-mono text-sm pr-20"
+                      placeholder="AIza..."
+                      value={settings['gemini_api_key_display'] || ''}
+                      onChange={e => setSettings({ ...settings, gemini_api_key_display: e.target.value })}
+                      onBlur={e => { if (e.target.value) saveSetting('gemini_api_key_display', e.target.value); }}
+                    />
+                    <button
+                      onClick={() => setSettings(prev => ({ ...prev, _show_api_key: prev._show_api_key === 'true' ? 'false' : 'true' }))}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400 hover:text-gray-600 px-2 py-1 rounded"
+                    >
+                      {settings['_show_api_key'] === 'true' ? 'Ocultar' : 'Mostrar'}
+                    </button>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      const key = settings['gemini_api_key_display'];
+                      if (!key) { alert('Ingresa una API Key'); return; }
+                      try {
+                        const testRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
+                        if (testRes.ok) {
+                          saveSetting('gemini_api_key_display', key);
+                          saveSetting('gemini_api_key_status', 'active');
+                          alert('✅ API Key válida y guardada');
+                        } else {
+                          saveSetting('gemini_api_key_status', 'invalid');
+                          alert('❌ API Key inválida. Verifica la clave.');
+                        }
+                      } catch { alert('Error al verificar la clave'); }
+                    }}
+                    className="btn-primary bg-indigo-600 border-indigo-600 hover:bg-indigo-700 text-sm px-4 whitespace-nowrap"
+                  >
+                    Verificar y Guardar
+                  </button>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1.5">Esta clave se usa localmente para verificar. La clave de producción se configura en Supabase → Edge Functions → Secrets como <code className="bg-gray-100 px-1 rounded">GEMINI_API_KEY</code>.</p>
+              </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-            <h3 className="font-bold text-lg border-b pb-3 mb-4 flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-indigo-600" /> API Key</h3>
-            <p className="text-sm text-gray-500 mb-4">Todas las herramientas usan <strong>Google Gemini</strong>. La clave se configura como variable de entorno en las Edge Functions de Supabase.</p>
-            <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
-              <div className="flex items-start gap-3">
-                <Brain className="w-5 h-5 text-indigo-600 mt-0.5 flex-shrink-0" />
+              {/* Status */}
+              <div className={`flex items-center gap-3 p-4 rounded-xl border ${settings['gemini_api_key_status'] === 'active' ? 'bg-green-50 border-green-200' : settings['gemini_api_key_status'] === 'invalid' ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
+                <div className={`w-3 h-3 rounded-full ${settings['gemini_api_key_status'] === 'active' ? 'bg-green-500 animate-pulse' : settings['gemini_api_key_status'] === 'invalid' ? 'bg-red-500' : 'bg-gray-300'}`} />
                 <div>
-                  <p className="text-sm text-indigo-900 font-bold">Estado de la API</p>
-                  <p className="text-xs text-indigo-700 mt-1">Configurado en Supabase Dashboard → Edge Functions → Secrets (GEMINI_API_KEY).</p>
+                  <p className={`text-sm font-bold ${settings['gemini_api_key_status'] === 'active' ? 'text-green-800' : settings['gemini_api_key_status'] === 'invalid' ? 'text-red-800' : 'text-gray-600'}`}>
+                    {settings['gemini_api_key_status'] === 'active' ? 'API Activa ✓' : settings['gemini_api_key_status'] === 'invalid' ? 'API Key Inválida' : 'No configurada'}
+                  </p>
+                  <p className="text-xs text-gray-500">Modelo: Gemini 2.0 Flash · Proveedor: Google AI</p>
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Token Usage & Cost Tracker */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="p-6 border-b flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-lg flex items-center gap-2"><Zap className="w-5 h-5 text-amber-500" /> Uso de Tokens y Costos</h3>
+                <p className="text-sm text-gray-500 mt-0.5">Seguimiento del consumo de IA en la plataforma</p>
+              </div>
+              <select
+                className="form-input text-sm font-bold w-auto"
+                value={settings['_ai_usage_period'] || '30'}
+                onChange={e => setSettings(prev => ({ ...prev, _ai_usage_period: e.target.value }))}
+              >
+                <option value="1">Hoy</option>
+                <option value="7">Últimos 7 días</option>
+                <option value="30">Últimos 30 días</option>
+                <option value="all">Todo el historial</option>
+              </select>
+            </div>
+            <AiUsageStats period={settings['_ai_usage_period'] || '30'} />
           </div>
         </div>
       )}
