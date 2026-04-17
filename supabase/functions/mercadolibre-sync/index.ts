@@ -229,22 +229,33 @@ Deno.serve(async (req) => {
                 let categoryId = null;
                 try {
                   if (item.category_id) {
-                    const catRes = await fetch(`https://api.mercadolibre.com/categories/${item.category_id}`);
-                    if (catRes.ok) {
-                      const catData = await catRes.json();
-                      // Use the full category path to get the leaf (most specific) category
-                      const pathFromRoot = catData.path_from_root || [];
-                      // Use the leaf category (last in path), fallback to the direct category
-                      const leafCat = pathFromRoot.length > 0 ? pathFromRoot[pathFromRoot.length - 1] : { id: item.category_id, name: catData.name };
-                      const catName = leafCat.name;
-                      const catSlug = catName.toLowerCase().replace(/[^a-z0-9áéíóúñü]+/g, '-').replace(/^-|-$/g, '');
+                    // CATEGORY MATCHING ENGINE: 
+                    // First, search if we have a category mapped directly to this ML category ID
+                    const { data: matchedCat } = await supabase
+                      .from('categories')
+                      .select('id')
+                      .contains('metadata', { ml_category_id: item.category_id })
+                      .maybeSingle();
 
-                      // Upsert category: don't duplicate if slug already exists
-                      const { data: existingCat } = await supabase
-                        .from('categories')
-                        .select('id')
-                        .eq('slug', catSlug)
-                        .maybeSingle();
+                    if (matchedCat) {
+                      categoryId = matchedCat.id;
+                    } else {
+                      const catRes = await fetch(`https://api.mercadolibre.com/categories/${item.category_id}`);
+                      if (catRes.ok) {
+                        const catData = await catRes.json();
+                        // Use the full category path to get the leaf (most specific) category
+                        const pathFromRoot = catData.path_from_root || [];
+                        // Use the leaf category (last in path), fallback to the direct category
+                        const leafCat = pathFromRoot.length > 0 ? pathFromRoot[pathFromRoot.length - 1] : { id: item.category_id, name: catData.name };
+                        const catName = leafCat.name;
+                        const catSlug = catName.toLowerCase().replace(/[^a-z0-9áéíóúñü]+/g, '-').replace(/^-|-$/g, '');
+
+                        // Upsert category: don't duplicate if slug already exists
+                        const { data: existingCat } = await supabase
+                          .from('categories')
+                          .select('id')
+                          .eq('slug', catSlug)
+                          .maybeSingle();
 
                       if (existingCat) {
                         categoryId = existingCat.id;
@@ -287,8 +298,9 @@ Deno.serve(async (req) => {
                       }
                     }
                   }
-                } catch(_e) { 
-                  console.error("Category extraction error:", _e);
+                }
+              } catch(_e) { 
+                console.error("Category extraction error:", _e);
                   /* category extraction is optional, don't fail the import */ 
                 }
 

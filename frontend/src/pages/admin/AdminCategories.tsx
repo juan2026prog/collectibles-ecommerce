@@ -8,26 +8,27 @@ export default function AdminCategories() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
-  const [form, setForm] = useState({ name: '', slug: '', image_url: '', sort_order: 0 });
+  const [form, setForm] = useState({ name: '', slug: '', image_url: '', sort_order: 0, ml_category_id: '' });
 
   useEffect(() => { fetch(); }, []);
 
   async function fetch() {
     setLoading(true);
-    const { data } = await supabase.from('categories').select('*').order('sort_order', { ascending: true });
+    const { data } = await supabase.from('categories').select('*, product_categories(count)').order('sort_order', { ascending: true });
     setCategories(data || []);
     setLoading(false);
   }
 
-  function openCreate() { setEditing(null); setForm({ name: '', slug: '', image_url: '', sort_order: 0 }); setShowForm(true); }
-  function openEdit(c: any) { setEditing(c); setForm({ name: c.name, slug: c.slug, image_url: c.image_url || '', sort_order: c.sort_order }); setShowForm(true); }
+  function openCreate() { setEditing(null); setForm({ name: '', slug: '', image_url: '', sort_order: 0, ml_category_id: '' }); setShowForm(true); }
+  function openEdit(c: any) { setEditing(c); setForm({ name: c.name, slug: c.slug, image_url: c.image_url || '', sort_order: c.sort_order, ml_category_id: c.metadata?.ml_category_id || '' }); setShowForm(true); }
 
   async function handleSave() {
     const payload = { 
       name: form.name, 
       slug: form.slug || form.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''), 
       image_url: form.image_url || null, 
-      sort_order: form.sort_order 
+      sort_order: form.sort_order,
+      metadata: { ml_category_id: form.ml_category_id || null }
     };
     if (editing) await supabase.from('categories').update(payload).eq('id', editing.id);
     else await supabase.from('categories').insert(payload);
@@ -68,16 +69,18 @@ export default function AdminCategories() {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Imagen</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Nombre</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Productos</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Slug</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Mercado Libre</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Orden</th>
                 <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr><td colSpan={5} className="px-6 py-12 text-center text-gray-400">Cargando...</td></tr>
+                <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400">Cargando...</td></tr>
               ) : categories.length === 0 ? (
-                <tr><td colSpan={5} className="px-6 py-12 text-center text-gray-400">No hay categorías</td></tr>
+                <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400">No hay categorías</td></tr>
               ) : categories.map(c => (
                 <tr key={c.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4">
@@ -86,7 +89,17 @@ export default function AdminCategories() {
                     </div>
                   </td>
                   <td className="px-6 py-4 font-semibold text-gray-900">{c.name}</td>
+                  <td className="px-6 py-4 text-gray-500"><span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">{c.product_categories?.[0]?.count || 0}</span></td>
                   <td className="px-6 py-4 font-mono text-sm text-gray-500">/{c.slug}</td>
+                  <td className="px-6 py-4">
+                    {c.metadata?.ml_category_id ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                        {c.metadata.ml_category_id}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-400">Sin mapear</span>
+                    )}
+                  </td>
                   <td className="px-6 py-4 text-gray-500">{c.sort_order}</td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end gap-1">
@@ -104,7 +117,10 @@ export default function AdminCategories() {
           {loading ? <p className="text-gray-400 col-span-4 text-center py-12">Cargando categorías...</p> :
           categories.map(c => (
             <div key={c.id} className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-[0_4px_20px_rgba(0,0,0,0.05)] hover:-translate-y-1 transition-all group flex flex-col">
-              <div className="w-full h-32 bg-gray-50 border border-gray-100 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
+              <div className="w-full h-32 bg-gray-50 border border-gray-100 rounded-lg mb-3 flex items-center justify-center overflow-hidden relative">
+                 <div className="absolute top-2 right-2 bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded shadow-sm z-10">
+                   {c.product_categories?.[0]?.count || 0}
+                 </div>
                  {c.image_url ? (
                     <img src={c.image_url} alt={c.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                  ) : (
@@ -115,6 +131,14 @@ export default function AdminCategories() {
               <h3 className="font-bold text-gray-900 border-b pb-2 mb-2">{c.name}</h3>
               <div className="flex-1 space-y-1 mb-4">
                  <p className="text-xs text-gray-500 flex justify-between"><span className="font-medium text-gray-400">URL / Slug:</span> <span className="font-mono text-[10px] bg-gray-100 px-1 rounded truncate ml-2">/{c.slug}</span></p>
+                 <p className="text-xs text-gray-500 flex justify-between items-center">
+                    <span className="font-medium text-gray-400">ML ID:</span> 
+                    {c.metadata?.ml_category_id ? (
+                      <span className="font-mono text-[10px] bg-yellow-100 text-yellow-800 px-1 rounded truncate ml-2">{c.metadata.ml_category_id}</span>
+                    ) : (
+                      <span className="text-[10px] text-gray-400">N/A</span>
+                    )}
+                 </p>
                  <p className="text-xs text-gray-500 flex justify-between"><span className="font-medium text-gray-400">Orden:</span> <span>{c.sort_order}</span></p>
               </div>
               
@@ -158,6 +182,14 @@ export default function AdminCategories() {
                  <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1.5">Orden de Visualización</label>
                  <input type="number" className="form-input w-full" value={form.sort_order} onChange={e => setForm({...form, sort_order: parseInt(e.target.value) || 0})} />
                  <p className="text-[10px] text-gray-400 mt-1">Números menores se muestran primero en el listado visual.</p>
+              </div>
+              <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
+                 <label className="block text-xs font-black text-yellow-800 uppercase tracking-widest mb-1.5">ID Categoría Mercado Libre (Opcional)</label>
+                 <input className="form-input w-full border-yellow-300 focus:ring-yellow-500 focus:border-yellow-500" value={form.ml_category_id} onChange={e => setForm({...form, ml_category_id: e.target.value})} placeholder="Ej: MLU1051" />
+                 <p className="text-[10px] text-yellow-700 mt-1">
+                   Los productos importados con esta categoría de Mercado Libre se asignarán a esta categoría automáticamente. 
+                   El exportador también sugerirá publicar en esta categoría.
+                 </p>
               </div>
             </div>
             <div className="flex gap-3 mt-8 pt-4 border-t">
