@@ -404,8 +404,15 @@ export default function AdminProducts() {
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-6">
           <div>
-            <h2 className="text-2xl font-black text-dark-900">Productos <span className="bg-blue-600 text-white text-[8px] px-1 py-0.5 rounded ml-2">v2</span></h2>
-            <p className="text-gray-500 text-sm italic">Gestión de catálogo y stock</p>
+            <div className="flex items-center gap-3">
+               <h2 className="text-2xl font-black text-dark-900">Productos <span className="bg-blue-600 text-white text-[8px] px-1 py-0.5 rounded ml-2 relative -top-1">v2</span></h2>
+               {!loading && (
+                 <span className="bg-gray-100/80 border border-gray-200 text-gray-500 text-[10px] font-black uppercase px-2 py-1 rounded-md tracking-widest hidden md:inline-flex items-center gap-1">
+                   {products.length} {products.length === 1 ? 'Producto' : 'Productos'}
+                 </span>
+               )}
+            </div>
+            <p className="text-gray-500 text-sm italic mt-1">Gestión de catálogo y stock</p>
           </div>
           
           <div className="flex items-center gap-2 bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm hover:border-blue-400 transition-colors">
