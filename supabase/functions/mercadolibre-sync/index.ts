@@ -225,20 +225,34 @@ Deno.serve(async (req) => {
                   }
                 } catch(_e) { /* brand extraction optional */ }
 
-                // ═══ Extract category from ML API (with optional AI Matching) ═══
+                // ═══ Extract category from ML API, Manual Rules, or AI ═══
                 let categoryId = null;
                 try {
                   if (item.category_id) {
-                    // Step 1: Check direct ML category ID mapping
-                    const { data: matchedCat } = await supabase
-                      .from('categories')
-                      .select('id')
-                      .contains('metadata', { ml_category_id: item.category_id })
-                      .maybeSingle();
+                    
+                    // Step 0: Manual Keyword Business Rules
+                    const titleTitle = (item.title || '').toLowerCase();
+                    if (titleTitle.includes('funko')) {
+                        const { data: funkoCat } = await supabase
+                          .from('categories')
+                          .select('id')
+                          .ilike('name', '%funko%')
+                          .maybeSingle();
+                        if (funkoCat) categoryId = funkoCat.id;
+                    }
 
-                    if (matchedCat) {
-                      categoryId = matchedCat.id;
-                    } else {
+                    // Step 1: Check direct ML category ID mapping
+                    if (!categoryId) {
+                      const { data: matchedCat } = await supabase
+                        .from('categories')
+                        .select('id')
+                        .contains('metadata', { ml_category_id: item.category_id })
+                        .maybeSingle();
+
+                      if (matchedCat) categoryId = matchedCat.id;
+                    }
+
+                    if (!categoryId) {
                       // Step 2: Check if AI category matching is enabled
                       const { data: aiToggle } = await supabase
                         .from('site_settings')
