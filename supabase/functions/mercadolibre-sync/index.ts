@@ -307,61 +307,9 @@ No agregues explicación, solo el id o NONE.`;
                         }
                       }
 
-                      // Step 3: Fallback to ML taxonomy-based matching if AI didn't match
+                      // Step 3: If no category was assigned (AI failed or missing), we leave it as null
                       if (!categoryId) {
-                        const catRes = await fetch(`https://api.mercadolibre.com/categories/${item.category_id}`);
-                        if (catRes.ok) {
-                          const catData = await catRes.json();
-                          const pathFromRoot = catData.path_from_root || [];
-                          const leafCat = pathFromRoot.length > 0 ? pathFromRoot[pathFromRoot.length - 1] : { id: item.category_id, name: catData.name };
-                          const catName = leafCat.name;
-                          const catSlug = catName.toLowerCase().replace(/[^a-z0-9áéíóúñü]+/g, '-').replace(/^-|-$/g, '');
-
-                          const { data: existingCat } = await supabase
-                            .from('categories')
-                            .select('id')
-                            .eq('slug', catSlug)
-                            .maybeSingle();
-
-                          if (existingCat) {
-                            categoryId = existingCat.id;
-                          } else {
-                            let parentCategoryId = null;
-                            if (pathFromRoot.length > 1) {
-                              const parentCat = pathFromRoot[pathFromRoot.length - 2];
-                              const parentSlug = parentCat.name.toLowerCase().replace(/[^a-z0-9áéíóúñü]+/g, '-').replace(/^-|-$/g, '');
-                              const { data: existingParent } = await supabase
-                                .from('categories')
-                                .select('id')
-                                .eq('slug', parentSlug)
-                                .maybeSingle();
-
-                              if (existingParent) {
-                                parentCategoryId = existingParent.id;
-                              } else {
-                                const { data: newParent } = await supabase
-                                  .from('categories')
-                                  .insert({ name: parentCat.name, slug: parentSlug, is_active: true, metadata: { ml_category_id: parentCat.id } })
-                                  .select()
-                                  .single();
-                                if (newParent) parentCategoryId = newParent.id;
-                              }
-                            }
-
-                            const { data: newCat } = await supabase
-                              .from('categories')
-                              .insert({ 
-                                name: catName, 
-                                slug: catSlug, 
-                                parent_id: parentCategoryId,
-                                is_active: true, 
-                                metadata: { ml_category_id: leafCat.id } 
-                              })
-                              .select()
-                              .single();
-                            if (newCat) categoryId = newCat.id;
-                          }
-                        }
+                         console.log(`No category mapped for ${item.title}. Leaving as unassigned to protect taxonomy.`);
                       }
                     }
                   }
