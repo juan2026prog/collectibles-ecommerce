@@ -213,8 +213,9 @@ Deno.serve(async (req) => {
                 } catch(_e) { /* description fallback to title */ }
 
                 let brandId = null;
+                let brandAttr = '';
                 try {
-                  const brandAttr = item.attributes?.find((a: any) => a.id === 'BRAND')?.value_name;
+                  brandAttr = item.attributes?.find((a: any) => a.id === 'BRAND')?.value_name || '';
                   if (brandAttr) {
                      const slugBrand = brandAttr.toLowerCase().replace(/[^a-z0-9]+/g, '-');
                      const { data: br } = await supabase.from('brands').upsert({
@@ -232,13 +233,30 @@ Deno.serve(async (req) => {
                     
                     // Step 0: Manual Keyword Business Rules
                     const titleTitle = (item.title || '').toLowerCase();
+                    const brandStr = brandAttr.toLowerCase();
+                    
                     if (titleTitle.includes('funko')) {
                         const { data: funkoCat } = await supabase
                           .from('categories')
                           .select('id')
-                          .ilike('name', '%funko%')
+                          .eq('slug', 'funko-pop')
                           .maybeSingle();
                         if (funkoCat) categoryId = funkoCat.id;
+                    } 
+                    else if (
+                        titleTitle.includes('estatua') || 
+                        titleTitle.includes('statue') || 
+                        titleTitle.includes('iron studios') || 
+                        titleTitle.includes('minco') ||
+                        brandStr.includes('iron studios') || 
+                        brandStr.includes('minco')
+                    ) {
+                        const { data: estCat } = await supabase
+                          .from('categories')
+                          .select('id')
+                          .eq('slug', 'esculturas')
+                          .maybeSingle();
+                        if (estCat) categoryId = estCat.id;
                     }
 
                     // Step 1: Check direct ML category ID mapping
