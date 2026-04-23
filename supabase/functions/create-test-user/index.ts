@@ -13,6 +13,24 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    // ══════════════════════════════════════════════════════════
+    // SECURITY: This function creates a GOD-MODE super admin.
+    // It MUST be disabled in production environments.
+    // ══════════════════════════════════════════════════════════
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const isProduction = !supabaseUrl.includes('localhost') && !supabaseUrl.includes('127.0.0.1');
+    
+    // Check for an explicit opt-in env var to allow this in deployed environments
+    const allowTestUser = Deno.env.get("ALLOW_TEST_USER_CREATION") === "true";
+    
+    if (isProduction && !allowTestUser) {
+      console.error("🚨 BLOCKED: create-test-user called in production without ALLOW_TEST_USER_CREATION=true");
+      return new Response(
+        JSON.stringify({ error: "This function is disabled in production. Set ALLOW_TEST_USER_CREATION=true in Edge Function secrets to enable." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { email, password } = await req.json();
 
     if (!email || !password) {

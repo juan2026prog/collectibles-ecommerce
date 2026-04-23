@@ -1,12 +1,16 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, handleOptions } from "../_shared/cors.ts";
+import { verifyAdmin } from "../_shared/auth.ts";
 
 Deno.serve(async (req: Request) => {
   const options = handleOptions(req);
   if (options) return options;
 
   try {
+    // SECURITY: Only admins can process refunds
+    await verifyAdmin(req);
+
     const { orderId, reason } = await req.json();
     if (!orderId) throw new Error("Falta el ID de la orden");
 

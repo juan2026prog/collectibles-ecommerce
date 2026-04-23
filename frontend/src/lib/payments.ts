@@ -20,8 +20,10 @@ interface CreatePaymentParams {
   };
 }
 
-const EDGE_FUNCTION_URL = 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/create-payment';
-const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNvYnRzZ2t3Y2Z0dmV4YWFyd21vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NzIwNTMsImV4cCI6MjA5MDE0ODA1M30.vXyiMl093ojZ8OyEpRuGnX5O5lHsLXxljynrYtMmf50';
+// Derive from environment variables instead of hardcoding
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
+const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/create-payment`;
+const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 export async function createCheckoutSession(params: CreatePaymentParams) {
   console.log('[Payments] Calling Edge Function directly via fetch...');

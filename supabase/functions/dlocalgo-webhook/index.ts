@@ -5,6 +5,8 @@ import { corsHeaders } from "../_shared/cors.ts";
 
 serve(async (req) => {
   try {
+    // TODO: Validate webhook signature from dLocal Go when they provide it.
+    // For now, we rely on idempotency to prevent replay attacks.
     const dlocalData = await req.json();
     console.log("📥 dLocal Go Webhook:", dlocalData);
     
@@ -21,14 +23,33 @@ serve(async (req) => {
     if (status === 'REJECTED' || status === 'CANCELLED') dbStatus = 'cancelled';
     if (status === 'PENDING') dbStatus = 'pending';
 
+    // IDEMPOTENCY CHECK: Prevent double-processing of the same webhook
+    const { data: existingOrder } = await supabase
+      .from('orders')
+      .select('status, payment_processed_at')
+      .eq('id', order_id)
+      .single();
+
+    if (existingOrder?.payment_processed_at && dbStatus === 'paid') {
+      console.log(`⚠️ Order ${order_id} already processed. Skipping.`);
+      return new Response(JSON.stringify({ received: true, skipped: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Update order status
+    const updateData: Record<string, any> = { 
+      status: dbStatus, 
+      payment_id: paymentId?.toString() || null,
+      updated_at: new Date().toISOString()
+    };
+    if (dbStatus === 'paid') {
+      updateData.payment_processed_at = new Date().toISOString();
+    }
+
     const { error } = await supabase
       .from('orders')
-      .update({ 
-        status: dbStatus, 
-        payment_id: paymentId?.toString() || null,
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('id', order_id);
 
     if (error) throw error;

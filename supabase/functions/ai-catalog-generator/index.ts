@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, handleOptions } from "../_shared/cors.ts";
-import { verifyAuth } from "../_shared/auth.ts";
+import { verifyAdmin } from "../_shared/auth.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -13,7 +13,8 @@ serve(async (req) => {
   if (options) return options;
 
   try {
-    await verifyAuth(req); // Only authenticated users can generate AI text
+    // SECURITY: Only admins/vendors can generate AI catalog content
+    await verifyAdmin(req);
 
     const { productId, rawText, vendorTone } = await req.json();
     

@@ -46,20 +46,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const payload = checkoutSchema.parse(body);
 
-    // 3. Verify stock availability for each item
-    for (const item of payload.items) {
-      if (item.variant_id) {
-        const available = await supabase.rpc('check_stock', {
-          p_variant_id: item.variant_id,
-          p_quantity: item.quantity
-        });
-        if (!available.data) {
-          throw new Error(`Stock insuficiente para el producto: ${item.title || item.product_id}`);
-        }
-      }
-    }
-
-    // 4. Resolve coupon if provided
+    // 3. Resolve coupon if provided
     let discountAmount = 0;
     let couponId: string | null = null;
     if (payload.coupon_code) {
@@ -82,7 +69,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 5. Resolve affiliate if code provided
+    // 4. Resolve affiliate if code provided
     let affiliateId: string | null = null;
     if (payload.affiliate_code) {
       const { data: affiliate } = await supabase
@@ -94,55 +81,48 @@ Deno.serve(async (req) => {
       if (affiliate) affiliateId = affiliate.id;
     }
 
-    // 6. Calculate totals
+    // 5. Calculate totals
     const subtotal = payload.items.reduce((s, i) => s + i.price * i.quantity, 0);
     const shippingRate = subtotal >= 4000 ? 0 : 350;
     const totalAmount = Math.max(subtotal - discountAmount + shippingRate, 0);
 
-    // 7. Create order in a single transaction-like flow
-    const { data: order, error: orderErr } = await supabase
-      .from('orders')
-      .insert({
-        customer_id: user.id,
-        total_amount: totalAmount,
-        currency: payload.currency,
-        status: 'pending',
-        payment_method: payload.payment_method,
-        customer_email: payload.customer_email,
-        customer_phone: payload.customer_phone || null,
-        shipping_address: payload.shipping_address,
-        affiliate_id: affiliateId,
-        coupon_id: couponId,
-      })
-      .select()
-      .single();
-
-    if (orderErr || !order) throw new Error(orderErr?.message || 'Error creating order');
-
-    // 8. Insert order items
+    // 6. Create order ATOMICALLY via RPC (prevents ghost orders)
     const orderItems = payload.items.map(item => ({
-      order_id: order.id,
       product_id: item.product_id,
-      variant_id: item.variant_id || null,
+      variant_id: item.variant_id || '',
       quantity: item.quantity,
       unit_price: item.price,
-      total_price: item.price * item.quantity,
     }));
 
-    const { error: itemsErr } = await supabase.from('order_items').insert(orderItems);
-    if (itemsErr) throw new Error('Error al insertar los items de la orden: ' + itemsErr.message);
+    const { data: orderResult, error: rpcError } = await supabase.rpc('create_order_atomic', {
+      p_customer_id: user.id,
+      p_total_amount: totalAmount,
+      p_currency: payload.currency,
+      p_payment_method: payload.payment_method,
+      p_customer_email: payload.customer_email,
+      p_customer_phone: payload.customer_phone || null,
+      p_shipping_address: payload.shipping_address,
+      p_affiliate_id: affiliateId,
+      p_coupon_id: couponId,
+      p_items: orderItems,
+    });
 
-    // 9. Return the created order for frontend to continue with payment
+    if (rpcError) {
+      console.error('Atomic order creation failed:', rpcError);
+      throw new Error(rpcError.message || 'Error creating order');
+    }
+
+    // 7. Return the created order for frontend to continue with payment
     return new Response(JSON.stringify({
       success: true,
       order: {
-        id: order.id,
+        id: orderResult.order_id,
         total_amount: totalAmount,
         subtotal,
         discount: discountAmount,
         shipping: shippingRate,
-        status: order.status,
-        items_count: payload.items.length,
+        status: orderResult.status,
+        items_count: orderResult.items_count,
       }
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

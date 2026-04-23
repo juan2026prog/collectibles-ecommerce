@@ -1,10 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 
-// IMPORTANT: Hardcoded values because Vercel's Supabase integration injects an
-// sb_publishable key format that is incompatible with Edge Function invocations.
-// The sb_publishable key causes 401 "Invalid Token or Protected Header formatting".
-// These MUST be hardcoded to bypass Vercel's env var injection at build time.
-const supabaseUrl = 'https://cobtsgkwcftvexaarwmo.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNvYnRzZ2t3Y2Z0dmV4YWFyd21vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NzIwNTMsImV4cCI6MjA5MDE0ODA1M30.vXyiMl093ojZ8OyEpRuGnX5O5lHsLXxljynrYtMmf50';
+// Use environment variables for Supabase configuration.
+// These are PUBLIC keys (anon key) — safe for client-side use.
+// The anon key only grants access allowed by RLS policies.
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error(
+    '⚠️ Missing Supabase environment variables. ' +
+    'Ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in .env'
+  );
+}
+
+export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '');

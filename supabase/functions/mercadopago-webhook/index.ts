@@ -47,11 +47,18 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      // Check order current status
-      const { data: order } = await supabaseAdmin.from('orders').select('status').eq('id', orderId).single();
+      // Check order current status + idempotency
+      const { data: order } = await supabaseAdmin.from('orders').select('status, payment_processed_at').eq('id', orderId).single();
       
       // APPROVED STATUS
       if (paymentData.status === "approved" || paymentData.status === "authorized") {
+        // IDEMPOTENCY: Skip if already processed
+        if (order?.payment_processed_at) {
+          console.log(`⚠️ Order ${orderId} already processed. Skipping duplicate MP webhook.`);
+          return new Response(JSON.stringify({ received: true, skipped: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
         if (order?.status !== 'paid') {
           console.log(`[MP Webhook] Marking Order ${orderId} as PAID`);
           
@@ -61,6 +68,7 @@ Deno.serve(async (req: Request) => {
             .update({ 
               status: "paid", 
               payment_id: paymentId.toString(),
+              payment_processed_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             })
             .eq("id", orderId);
