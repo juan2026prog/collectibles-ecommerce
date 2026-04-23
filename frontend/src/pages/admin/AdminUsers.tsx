@@ -11,6 +11,13 @@ export default function AdminUsers() {
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [showAudit, setShowAudit] = useState(false);
 
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [newUser, setNewUser] = useState({
+    email: '', password: '', firstName: '', lastName: '',
+    roles: [] as string[]
+  });
+
   useEffect(() => { fetchUsers(); fetchAuditLogs(); }, []);
 
   async function fetchUsers() {
@@ -39,6 +46,40 @@ export default function AdminUsers() {
     setSaving(null);
   }
 
+  async function handleCreateUser(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newUser.email || !newUser.password) return alert("Correo y contraseña son obligatorios");
+    
+    setCreating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('create-user', {
+         body: newUser
+      });
+
+      if (error || data?.error) {
+         throw new Error(data?.error || error?.message || "Error desconocido creando usuario");
+      }
+
+      alert("¡Usuario creado con éxito!");
+      setShowCreateModal(false);
+      setNewUser({ email: '', password: '', firstName: '', lastName: '', roles: [] });
+      fetchUsers();
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  const toggleNewUserRole = (role: string) => {
+     setNewUser(prev => ({
+        ...prev,
+        roles: prev.roles.includes(role) 
+          ? prev.roles.filter(r => r !== role) 
+          : [...prev.roles, role]
+     }));
+  };
+
   const filtered = users.filter(u => {
     const matchSearch = !search || 
       (u.email || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -66,6 +107,9 @@ export default function AdminUsers() {
           <p className="text-sm text-gray-500 mt-1">{users.length} usuarios registrados · Gestión de roles y trazabilidad</p>
         </div>
         <div className="flex gap-2">
+          <button onClick={() => setShowCreateModal(true)} className="btn-primary text-sm flex items-center gap-2 bg-green-600 hover:bg-green-700 border-green-700 text-white shadow-sm font-bold">
+            <UserCog className="w-4 h-4" /> Crear Usuario
+          </button>
           <button onClick={() => setShowAudit(!showAudit)} className={`btn-secondary text-sm flex items-center gap-2 ${showAudit ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : ''}`}>
             <Clock className="w-4 h-4" /> {showAudit ? 'Ver Usuarios' : 'Ver Logs'}
           </button>
@@ -213,6 +257,75 @@ export default function AdminUsers() {
             </div>
           )}
         </div>
+      )}
+
+      {/* CREATE USER MODAL */}
+      {showCreateModal && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+            <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+               <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                  <h3 className="font-bold text-xl text-gray-900 flex items-center gap-2">
+                     <UserCog className="w-5 h-5 text-green-600" /> Nuevo Usuario
+                  </h3>
+                  <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors">&times;</button>
+               </div>
+               
+               <form onSubmit={handleCreateUser} className="p-6 space-y-5">
+                  <div className="grid grid-cols-2 gap-4">
+                     <div>
+                        <label className="block text-xs font-bold text-gray-700 mb-1">Nombre</label>
+                        <input required type="text" className="form-input w-full bg-gray-50" placeholder="Ej: Carlos" 
+                           value={newUser.firstName} onChange={e => setNewUser({...newUser, firstName: e.target.value})} />
+                     </div>
+                     <div>
+                        <label className="block text-xs font-bold text-gray-700 mb-1">Apellido</label>
+                        <input required type="text" className="form-input w-full bg-gray-50" placeholder="Ej: López" 
+                           value={newUser.lastName} onChange={e => setNewUser({...newUser, lastName: e.target.value})} />
+                     </div>
+                  </div>
+                  <div>
+                     <label className="block text-xs font-bold text-gray-700 mb-1">Correo Electrónico *</label>
+                     <input required type="email" className="form-input w-full bg-gray-50" placeholder="usuario@correo.com" 
+                        value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} />
+                  </div>
+                  <div>
+                     <label className="block text-xs font-bold text-gray-700 mb-1">Contraseña Temporal *</label>
+                     <input required type="text" className="form-input w-full bg-gray-50" placeholder="Al menos 6 caracteres" minLength={6}
+                        value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} />
+                     <p className="text-[10px] text-gray-400 mt-1">El usuario podrá cambiarla o entrar con Google luego si el correo coincide.</p>
+                  </div>
+
+                  <div>
+                     <label className="block text-xs font-bold text-gray-700 mb-2">Asignar Roles Especiales (Opcional)</label>
+                     <div className="grid grid-cols-2 gap-3">
+                        {[
+                           { id: 'admin', label: 'Administrador', desc: 'Acceso total al panel', color: 'blue' },
+                           { id: 'vendor', label: 'Vendedor', desc: 'Gestión de sus ventas', color: 'purple' },
+                           { id: 'artist', label: 'Artista', desc: 'Acceso a portal de arte', color: 'yellow' },
+                           { id: 'affiliate', label: 'Afiliado', desc: 'Links de referidos', color: 'pink' }
+                        ].map(role => (
+                           <button type="button" key={role.id} onClick={() => toggleNewUserRole(role.id)}
+                              className={`text-left p-3 rounded-xl border-2 transition-all ${
+                                 newUser.roles.includes(role.id) 
+                                   ? `border-${role.color}-500 bg-${role.color}-50` 
+                                   : 'border-gray-100 bg-white hover:border-gray-200'
+                              }`}>
+                              <p className={`text-sm font-bold ${newUser.roles.includes(role.id) ? `text-${role.color}-700` : 'text-gray-700'}`}>{role.label}</p>
+                              <p className="text-[10px] text-gray-500 mt-0.5">{role.desc}</p>
+                           </button>
+                        ))}
+                     </div>
+                  </div>
+
+                  <div className="pt-4 border-t flex justify-end gap-3">
+                     <button type="button" onClick={() => setShowCreateModal(false)} className="px-5 py-2 text-sm font-bold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancelar</button>
+                     <button type="submit" disabled={creating} className="px-5 py-2 text-sm font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg transition-all shadow-lg shadow-green-200">
+                        {creating ? 'Creando...' : 'Crear Usuario'}
+                     </button>
+                  </div>
+               </form>
+            </div>
+         </div>
       )}
     </div>
   );

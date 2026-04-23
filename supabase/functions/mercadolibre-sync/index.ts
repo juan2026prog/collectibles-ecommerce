@@ -213,8 +213,9 @@ Deno.serve(async (req) => {
                 } catch(_e) { /* description fallback to title */ }
 
                 let brandId = null;
+                let brandAttr = '';
                 try {
-                  const brandAttr = item.attributes?.find((a: any) => a.id === 'BRAND')?.value_name;
+                  brandAttr = item.attributes?.find((a: any) => a.id === 'BRAND')?.value_name || '';
                   if (brandAttr) {
                      const slugBrand = brandAttr.toLowerCase().replace(/[^a-z0-9]+/g, '-');
                      const { data: br } = await supabase.from('brands').upsert({
@@ -225,20 +226,51 @@ Deno.serve(async (req) => {
                   }
                 } catch(_e) { /* brand extraction optional */ }
 
-                // ═══ Extract category from ML API (with optional AI Matching) ═══
+                // ═══ Extract category from ML API, Manual Rules, or AI ═══
                 let categoryId = null;
                 try {
                   if (item.category_id) {
-                    // Step 1: Check direct ML category ID mapping
-                    const { data: matchedCat } = await supabase
-                      .from('categories')
-                      .select('id')
-                      .contains('metadata', { ml_category_id: item.category_id })
-                      .maybeSingle();
+                    
+                    // Step 0: Manual Keyword Business Rules
+                    const titleTitle = (item.title || '').toLowerCase();
+                    const brandStr = brandAttr.toLowerCase();
+                    
+                    if (titleTitle.includes('funko')) {
+                        const { data: funkoCat } = await supabase
+                          .from('categories')
+                          .select('id')
+                          .eq('slug', 'funko-pop')
+                          .maybeSingle();
+                        if (funkoCat) categoryId = funkoCat.id;
+                    } 
+                    else if (
+                        titleTitle.includes('estatua') || 
+                        titleTitle.includes('statue') || 
+                        titleTitle.includes('iron studios') || 
+                        titleTitle.includes('minco') ||
+                        brandStr.includes('iron studios') || 
+                        brandStr.includes('minco')
+                    ) {
+                        const { data: estCat } = await supabase
+                          .from('categories')
+                          .select('id')
+                          .eq('slug', 'esculturas')
+                          .maybeSingle();
+                        if (estCat) categoryId = estCat.id;
+                    }
 
-                    if (matchedCat) {
-                      categoryId = matchedCat.id;
-                    } else {
+                    // Step 1: Check direct ML category ID mapping
+                    if (!categoryId) {
+                      const { data: matchedCat } = await supabase
+                        .from('categories')
+                        .select('id')
+                        .contains('metadata', { ml_category_id: item.category_id })
+                        .maybeSingle();
+
+                      if (matchedCat) categoryId = matchedCat.id;
+                    }
+
+                    if (!categoryId) {
                       // Step 2: Check if AI category matching is enabled
                       const { data: aiToggle } = await supabase
                         .from('site_settings')
@@ -307,61 +339,9 @@ No agregues explicación, solo el id o NONE.`;
                         }
                       }
 
-                      // Step 3: Fallback to ML taxonomy-based matching if AI didn't match
+                      // Step 3: If no category was assigned (AI failed or missing), we leave it as null
                       if (!categoryId) {
-                        const catRes = await fetch(`https://api.mercadolibre.com/categories/${item.category_id}`);
-                        if (catRes.ok) {
-                          const catData = await catRes.json();
-                          const pathFromRoot = catData.path_from_root || [];
-                          const leafCat = pathFromRoot.length > 0 ? pathFromRoot[pathFromRoot.length - 1] : { id: item.category_id, name: catData.name };
-                          const catName = leafCat.name;
-                          const catSlug = catName.toLowerCase().replace(/[^a-z0-9áéíóúñü]+/g, '-').replace(/^-|-$/g, '');
-
-                          const { data: existingCat } = await supabase
-                            .from('categories')
-                            .select('id')
-                            .eq('slug', catSlug)
-                            .maybeSingle();
-
-                          if (existingCat) {
-                            categoryId = existingCat.id;
-                          } else {
-                            let parentCategoryId = null;
-                            if (pathFromRoot.length > 1) {
-                              const parentCat = pathFromRoot[pathFromRoot.length - 2];
-                              const parentSlug = parentCat.name.toLowerCase().replace(/[^a-z0-9áéíóúñü]+/g, '-').replace(/^-|-$/g, '');
-                              const { data: existingParent } = await supabase
-                                .from('categories')
-                                .select('id')
-                                .eq('slug', parentSlug)
-                                .maybeSingle();
-
-                              if (existingParent) {
-                                parentCategoryId = existingParent.id;
-                              } else {
-                                const { data: newParent } = await supabase
-                                  .from('categories')
-                                  .insert({ name: parentCat.name, slug: parentSlug, is_active: true, metadata: { ml_category_id: parentCat.id } })
-                                  .select()
-                                  .single();
-                                if (newParent) parentCategoryId = newParent.id;
-                              }
-                            }
-
-                            const { data: newCat } = await supabase
-                              .from('categories')
-                              .insert({ 
-                                name: catName, 
-                                slug: catSlug, 
-                                parent_id: parentCategoryId,
-                                is_active: true, 
-                                metadata: { ml_category_id: leafCat.id } 
-                              })
-                              .select()
-                              .single();
-                            if (newCat) categoryId = newCat.id;
-                          }
-                        }
+                         console.log(`No category mapped for ${item.title}. Leaving as unassigned to protect taxonomy.`);
                       }
                     }
                   }
