@@ -426,7 +426,7 @@ No agregues explicación, solo el id o NONE.`;
                 const upc = attrs.find((a: any) => a.id === 'UPC')?.value_name;
                 const ean = attrs.find((a: any) => a.id === 'EAN')?.value_name;
                 const mpn = attrs.find((a: any) => a.id === 'MPN')?.value_name;
-                const realSku = sellerSku || gtin || upc || ean || mpn || item.seller_custom_field || `ML-${item.id}`;
+                const realSku = sellerSku || gtin || upc || ean || mpn || item.seller_custom_field || (item.id ? item.id.replace(/\D/g, '') : `${Date.now()}`);
 
                 // ═══ Calculate real stock: ML returns 999 for "buy it now" listings ═══
                 const mlAvailable = item.available_quantity || 0;
