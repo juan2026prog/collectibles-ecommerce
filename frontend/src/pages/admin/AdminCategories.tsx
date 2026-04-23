@@ -8,19 +8,49 @@ export default function AdminCategories() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
-  const [form, setForm] = useState({ name: '', slug: '', image_url: '', sort_order: 0, ml_category_id: '' });
+  const [form, setForm] = useState({ name: '', slug: '', image_url: '', sort_order: 0, ml_category_id: '', parent_id: '' });
 
   useEffect(() => { fetch(); }, []);
 
   async function fetch() {
     setLoading(true);
-    const { data } = await supabase.from('categories').select('*, product_categories(count)').order('sort_order', { ascending: true });
-    setCategories(data || []);
+    const { data } = await supabase
+      .from('categories')
+      .select('*, product_categories(count)')
+      .order('sort_order', { ascending: true })
+      .order('name', { ascending: true });
+    
+    // Sort categories into a hierarchy
+    const sorted = sortHierarchically(data || []);
+    setCategories(sorted);
     setLoading(false);
   }
 
-  function openCreate() { setEditing(null); setForm({ name: '', slug: '', image_url: '', sort_order: 0, ml_category_id: '' }); setShowForm(true); }
-  function openEdit(c: any) { setEditing(c); setForm({ name: c.name, slug: c.slug, image_url: c.image_url || '', sort_order: c.sort_order, ml_category_id: c.metadata?.ml_category_id || '' }); setShowForm(true); }
+  function sortHierarchically(list: any[]) {
+    const map = new Map(list.map(c => [c.id, { ...c, children: [] }]));
+    const roots: any[] = [];
+    
+    list.forEach(c => {
+      const node = map.get(c.id);
+      if (c.parent_id && map.has(c.parent_id)) {
+        map.get(c.parent_id).children.push(node);
+      } else {
+        roots.push(node);
+      }
+    });
+
+    const flattened: any[] = [];
+    const traverse = (node: any, level: number) => {
+      flattened.push({ ...node, level });
+      node.children.forEach((child: any) => traverse(child, level + 1));
+    };
+    
+    roots.forEach(root => traverse(root, 0));
+    return flattened;
+  }
+
+  function openCreate() { setEditing(null); setForm({ name: '', slug: '', image_url: '', sort_order: 0, ml_category_id: '', parent_id: '' }); setShowForm(true); }
+  function openEdit(c: any) { setEditing(c); setForm({ name: c.name, slug: c.slug, image_url: c.image_url || '', sort_order: c.sort_order, ml_category_id: c.metadata?.ml_category_id || '', parent_id: c.parent_id || '' }); setShowForm(true); }
 
   async function handleSave() {
     const payload = { 
@@ -28,6 +58,7 @@ export default function AdminCategories() {
       slug: form.slug || form.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''), 
       image_url: form.image_url || null, 
       sort_order: form.sort_order,
+      parent_id: form.parent_id || null,
       metadata: { ml_category_id: form.ml_category_id || null }
     };
     if (editing) await supabase.from('categories').update(payload).eq('id', editing.id);
@@ -88,7 +119,12 @@ export default function AdminCategories() {
                       {c.image_url ? <img src={c.image_url} alt={c.name} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-gray-300" />}
                     </div>
                   </td>
-                  <td className="px-6 py-4 font-semibold text-gray-900">{c.name}</td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      {c.level > 0 && <span className="text-gray-300 ml-2">└─</span>}
+                      <span className={`font-semibold ${c.level > 0 ? 'text-gray-600' : 'text-gray-900'}`}>{c.name}</span>
+                    </div>
+                  </td>
                   <td className="px-6 py-4 text-gray-500"><span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">{c.product_categories?.[0]?.count || 0}</span></td>
                   <td className="px-6 py-4 font-mono text-sm text-gray-500">/{c.slug}</td>
                   <td className="px-6 py-4">
@@ -182,6 +218,15 @@ export default function AdminCategories() {
                  <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1.5">Orden de Visualización</label>
                  <input type="number" className="form-input w-full" value={form.sort_order} onChange={e => setForm({...form, sort_order: parseInt(e.target.value) || 0})} />
                  <p className="text-[10px] text-gray-400 mt-1">Números menores se muestran primero en el listado visual.</p>
+              </div>
+              <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
+                 <label className="block text-xs font-black text-yellow-800 uppercase tracking-widest mb-1.5">Categoría Padre</label>
+                 <select className="form-input w-full border-yellow-300 focus:ring-yellow-500 focus:border-yellow-500" value={form.parent_id} onChange={e => setForm({...form, parent_id: e.target.value})}>
+                    <option value="">(Ninguna - Es categoría raíz)</option>
+                    {categories.filter(c => c.id !== editing?.id && c.level === 0).map(c => (
+                       <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                 </select>
               </div>
               <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
                  <label className="block text-xs font-black text-yellow-800 uppercase tracking-widest mb-1.5">ID Categoría Mercado Libre (Opcional)</label>

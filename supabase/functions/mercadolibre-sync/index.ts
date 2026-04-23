@@ -213,9 +213,8 @@ Deno.serve(async (req) => {
                 } catch(_e) { /* description fallback to title */ }
 
                 let brandId = null;
-                let brandAttr = '';
                 try {
-                  brandAttr = item.attributes?.find((a: any) => a.id === 'BRAND')?.value_name || '';
+                  const brandAttr = item.attributes?.find((a: any) => a.id === 'BRAND')?.value_name;
                   if (brandAttr) {
                      const slugBrand = brandAttr.toLowerCase().replace(/[^a-z0-9]+/g, '-');
                      const { data: br } = await supabase.from('brands').upsert({
@@ -226,51 +225,20 @@ Deno.serve(async (req) => {
                   }
                 } catch(_e) { /* brand extraction optional */ }
 
-                // ═══ Extract category from ML API, Manual Rules, or AI ═══
+                // ═══ Extract category from ML API (with optional AI Matching) ═══
                 let categoryId = null;
                 try {
                   if (item.category_id) {
-                    
-                    // Step 0: Manual Keyword Business Rules
-                    const titleTitle = (item.title || '').toLowerCase();
-                    const brandStr = brandAttr.toLowerCase();
-                    
-                    if (titleTitle.includes('funko')) {
-                        const { data: funkoCat } = await supabase
-                          .from('categories')
-                          .select('id')
-                          .eq('slug', 'funko-pop')
-                          .maybeSingle();
-                        if (funkoCat) categoryId = funkoCat.id;
-                    } 
-                    else if (
-                        titleTitle.includes('estatua') || 
-                        titleTitle.includes('statue') || 
-                        titleTitle.includes('iron studios') || 
-                        titleTitle.includes('minco') ||
-                        brandStr.includes('iron studios') || 
-                        brandStr.includes('minco')
-                    ) {
-                        const { data: estCat } = await supabase
-                          .from('categories')
-                          .select('id')
-                          .eq('slug', 'esculturas')
-                          .maybeSingle();
-                        if (estCat) categoryId = estCat.id;
-                    }
-
                     // Step 1: Check direct ML category ID mapping
-                    if (!categoryId) {
-                      const { data: matchedCat } = await supabase
-                        .from('categories')
-                        .select('id')
-                        .contains('metadata', { ml_category_id: item.category_id })
-                        .maybeSingle();
+                    const { data: matchedCat } = await supabase
+                      .from('categories')
+                      .select('id')
+                      .contains('metadata', { ml_category_id: item.category_id })
+                      .maybeSingle();
 
-                      if (matchedCat) categoryId = matchedCat.id;
-                    }
-
-                    if (!categoryId) {
+                    if (matchedCat) {
+                      categoryId = matchedCat.id;
+                    } else {
                       // Step 2: Check if AI category matching is enabled
                       const { data: aiToggle } = await supabase
                         .from('site_settings')
@@ -298,8 +266,15 @@ Producto: "${item.title}"
 Categorías disponibles en la tienda:
 ${categoryList}
 
-Responde SOLO con el id (UUID) de la categoría más adecuada para este producto.
-Si ninguna categoría es apropiada, responde exactamente: NONE
+REGLAS ESTRICTAS DE CATEGORIZACIÓN:
+1. Si el producto contiene "funko" o "funko pop", DEBE ir a la categoría "Funko POP".
+2. Si el producto contiene "iron studios", "esculturas", "estatuas" o "minico", DEBE ir a "Esculturas y Estatuas".
+3. Todo lo que tenga que ver con ropa, indumentaria, accesorios, tiaras, guantes, remeras, etc., DEBE ir a "Ropa & Accesorios".
+4. Todo lo que tenga que ver con escolar y oficina, DEBE ir a "Papelería".
+5. Todo lo que sea vehículos a escala (autos, motos, naves), DEBE ir a "Vehículos a Escala".
+
+Responde SOLO con el id (UUID) de la categoría más adecuada para este producto siguiendo estrictamente las reglas anteriores.
+Si ninguna categoría es apropiada y no aplica ninguna regla, responde exactamente: NONE
 No agregues explicación, solo el id o NONE.`;
 
                           const geminiRes = await fetch(
@@ -339,9 +314,22 @@ No agregues explicación, solo el id o NONE.`;
                         }
                       }
 
-                      // Step 3: If no category was assigned (AI failed or missing), we leave it as null
+                      // Step 3: Fallback to ML taxonomy-based matching if AI didn't match
                       if (!categoryId) {
-                         console.log(`No category mapped for ${item.title}. Leaving as unassigned to protect taxonomy.`);
+                        const { data: existingCat } = await supabase
+                          .from('categories')
+                          .select('id')
+                          .contains('metadata', { ml_category_id: item.category_id })
+                          .maybeSingle();
+
+                        if (existingCat) {
+                          categoryId = existingCat.id;
+                        } else {
+                          // Note: We deliberately do NOT create new categories here
+                          // to prevent polluting the store's custom taxonomy.
+                          // Products without a matched category will remain uncategorized (categoryId = null).
+                          console.log(`No category match found for ML item ${item.id} (Category ${item.category_id}). Leaving uncategorized.`);
+                        }
                       }
                     }
                   }
@@ -384,19 +372,22 @@ No agregues explicación, solo el id o NONE.`;
                 const pics = item.pictures || [];
                 const localImages = [];
                 
-                // Parallel download and upload for images to avoid timeouts
-                await Promise.all(pics.slice(0, 10).map(async (p: any, i: number) => {
+                // Sequential download and upload for images to avoid memory limits (HTTP 546 OOM)
+                const topPics = pics.slice(0, 10);
+                for (let i = 0; i < topPics.length; i++) {
+                  const p = topPics[i];
                   const imageUrl = (p.secure_url || p.url).replace('http://', 'https://');
                   
                   try {
                     const imgRes = await fetch(imageUrl);
                     if (!imgRes.ok) throw new Error("Could not fetch ML image");
-                    const blob = await imgRes.blob();
+                    
+                    const arrayBuffer = await imgRes.arrayBuffer(); // use arrayBuffer for lower memory overhead
                     const fileName = `ml-sync/${prod.id}-${i}-${Date.now()}.jpg`;
                     
                     const { error: uploadError } = await supabase.storage
                       .from('public-assets')
-                      .upload(fileName, blob, { contentType: 'image/jpeg', upsert: true });
+                      .upload(fileName, arrayBuffer, { contentType: 'image/jpeg', upsert: true });
 
                     if (uploadError) throw uploadError;
 
@@ -421,7 +412,7 @@ No agregues explicación, solo el id o NONE.`;
                       is_primary: i === 0
                     });
                   }
-                }));
+                }
 
 
                 if (localImages.length > 0) {

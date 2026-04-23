@@ -114,11 +114,11 @@ export default function AdminMercadoLibre() {
     setSyncProgress(0);
     try {
       const targetIds = action === 'import' ? mlItemIds : productIds;
-      const useBatching = targetIds.length > 5;
+      const useBatching = targetIds.length > 1;
 
       if (useBatching) {
         // Batch processing for large sets to avoid Edge Function timeouts
-        const chunkSize = 5;
+        const chunkSize = 1;
         let processed = 0;
         let totalProcessed = 0;
 

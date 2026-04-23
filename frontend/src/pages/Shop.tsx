@@ -86,20 +86,54 @@ function handleAddToCart(p: any) {
       {/* Categories */}
       <div>
         <h3 className="font-bold text-gray-900 uppercase text-xs tracking-widest mb-3">{t('shop.filters')} — {t('nav.categories')}</h3>
-        <ul className="space-y-1">
+        <ul className="space-y-0.5">
           <li>
             <button onClick={() => setFilter('category', '')} className={`text-sm w-full text-left py-1.5 px-2 rounded-lg transition-colors ${!categorySlug ? 'font-bold text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50'}`}>
               {t('shop.allProducts') || 'Todos los productos'}
             </button>
           </li>
           {catsLoading ? [...Array(5)].map((_, i) => <li key={i} className="h-7 bg-white/5 rounded animate-pulse mb-1" />) :
-            categories.map(c => (
-              <li key={c.id}>
-                <button onClick={() => setFilter('category', c.slug)} className={`text-sm w-full text-left py-1.5 px-2 rounded-lg transition-colors ${categorySlug === c.slug ? 'font-bold text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50'}`}>
-                  {c.name}
-                </button>
-              </li>
-            ))}
+            (() => {
+              const buildTree = (list: any[]) => {
+                const map = new Map(list.map(c => [c.id, { ...c, children: [] }]));
+                const roots: any[] = [];
+                list.forEach(c => {
+                  if (c.parent_id && map.has(c.parent_id)) map.get(c.parent_id).children.push(map.get(c.id));
+                  else roots.push(map.get(c.id));
+                });
+                return roots;
+              };
+              
+              const tree = buildTree(categories);
+              
+              const renderNode = (node: any, level = 0) => (
+                <div key={node.id}>
+                  <li>
+                    <button 
+                      onClick={() => setFilter('category', node.slug)} 
+                      className={`text-sm w-full text-left py-2 px-3 rounded-xl transition-all duration-200 group flex items-center gap-2 ${
+                        categorySlug === node.slug 
+                          ? 'font-bold text-primary-600 bg-primary-50 shadow-sm' 
+                          : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50'
+                      }`}
+                      style={{ marginLeft: `${level * 12}px`, width: `calc(100% - ${level * 12}px)` }}
+                    >
+                      {level > 0 && <span className="text-gray-300 font-light">└</span>}
+                      <span className={`truncate ${level === 0 ? 'font-bold' : 'font-medium'}`}>{node.name}</span>
+                      {categorySlug === node.slug && <div className="w-1.5 h-1.5 rounded-full bg-primary-600 ml-auto" />}
+                    </button>
+                  </li>
+                  {node.children.length > 0 && (
+                    <div className="mt-0.5 mb-1">
+                      {node.children.map((child: any) => renderNode(child, level + 1))}
+                    </div>
+                  )}
+                </div>
+              );
+
+              return tree.map(root => renderNode(root));
+            })()
+          }
         </ul>
       </div>
 

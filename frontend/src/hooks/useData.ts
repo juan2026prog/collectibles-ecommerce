@@ -139,7 +139,8 @@ export function useCategories() {
         .from('categories')
         .select('*')
         .eq('is_active', true)
-        .order('sort_order');
+        .order('sort_order')
+        .order('name');
       setCategories(data || []);
       setLoading(false);
     }

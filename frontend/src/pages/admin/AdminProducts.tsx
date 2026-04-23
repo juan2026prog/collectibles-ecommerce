@@ -167,7 +167,7 @@ export default function AdminProducts() {
 
   function openCreate() {
     setEditing(null);
-    setForm({ title: '', slug: '', description: '', short_description: '', base_price: '', compare_at_price: '', sku: `SKU-${Date.now()}`, stock: '10', status: 'published', badge: '', is_featured: false, category_id: '', brand_id: '', image_url: '', video_url: '', categories: [], tags: [], brands: [], gallery: [] });
+    setForm({ title: '', slug: '', description: '', short_description: '', base_price: '', compare_at_price: '', sku: `${Date.now()}`, stock: '10', status: 'published', badge: '', is_featured: false, category_id: '', brand_id: '', image_url: '', video_url: '', categories: [], tags: [], brands: [], gallery: [] });
     setShowForm(true);
   }
 
@@ -187,7 +187,7 @@ export default function AdminProducts() {
       short_description: product.short_description || '',
       base_price: product.base_price.toString(), 
       compare_at_price: product.compare_at_price?.toString() || '',
-      sku: product.variants?.[0]?.sku || `SKU-${Date.now()}`, 
+      sku: product.variants?.[0]?.sku || `${Date.now()}`, 
       stock: product.variants?.[0]?.inventory_count?.toString() || '10',
       status: product.status, 
       badge: product.badge || '', 
@@ -239,9 +239,14 @@ export default function AdminProducts() {
       }
 
       // 📦 Variants 📦
-      const skuVal = form.sku || `SKU-${Date.now()}`;
-      const { error: varErr } = await supabase.from('product_variants').upsert({ product_id: productId, sku: skuVal, name: 'Standard', inventory_count: parseInt(form.stock) || 0 }, { onConflict: 'product_id' });
-      if (varErr) throw varErr;
+      const skuVal = form.sku || `${Date.now()}`;
+      if (editing && editing.variants?.[0]?.id) {
+        const { error: varErr } = await supabase.from('product_variants').update({ sku: skuVal, inventory_count: parseInt(form.stock) || 0 }).eq('id', editing.variants[0].id);
+        if (varErr) throw varErr;
+      } else {
+        const { error: varErr } = await supabase.from('product_variants').insert({ product_id: productId, sku: skuVal, name: 'Standard', inventory_count: parseInt(form.stock) || 0 });
+        if (varErr) throw varErr;
+      }
 
       // 📦 Junctions 📦
       const [delCats, delTags] = await Promise.all([
@@ -260,7 +265,12 @@ export default function AdminProducts() {
       if (form.tags.length > 0) {
         for (const tagName of form.tags) {
            const slugTag = tagName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-           const { data: tag } = await supabase.from('tags').upsert({ name: tagName, slug: slugTag }, { onConflict: 'name' }).select().single();
+           let { data: tag } = await supabase.from('tags').select('*').eq('name', tagName).single();
+           if (!tag) {
+             const { data: newTag, error: tagErr } = await supabase.from('tags').insert({ name: tagName, slug: slugTag }).select().single();
+             if (tagErr) console.error("Error creating tag:", tagErr);
+             else tag = newTag;
+           }
            if (tag) await supabase.from('product_tags').insert({ product_id: productId, tag_id: tag.id });
         }
       }
@@ -342,7 +352,7 @@ export default function AdminProducts() {
           const { error } = await supabase.from('product_variants').update({ inventory_count: parseInt(value) || 0 }).eq('id', vars[0].id).select().single();
           if (error) throw error;
         } else {
-          await supabase.from('product_variants').insert({ product_id: id, sku: `SKU-${Date.now()}`, name: 'Standard', inventory_count: parseInt(value) || 0 });
+          await supabase.from('product_variants').insert({ product_id: id, sku: `${Date.now()}`, name: 'Standard', inventory_count: parseInt(value) || 0 });
         }
       } else {
         updates[field] = value;
