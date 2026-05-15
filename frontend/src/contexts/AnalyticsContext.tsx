@@ -42,13 +42,13 @@ export default function AnalyticsProvider({ children }: { children: React.ReactN
     (window as any).fbq('init', pixelId);
     (window as any).fbq('track', 'PageView');
 
-    console.log(`[Analytics] Meta Pixel Initialized: ${pixelId}`);
+    if (import.meta.env.DEV) console.log(`[Analytics] Meta Pixel Initialized: ${pixelId}`);
   }, [pixelId]);
 
   const trackEvent = useCallback((eventName: string, params?: Record<string, any>) => {
     if ((window as any).fbq) {
       (window as any).fbq('track', eventName, params);
-      console.log(`[Analytics] Tracked Event: ${eventName}`, params);
+      if (import.meta.env.DEV) console.log(`[Analytics] Tracked Event: ${eventName}`, params);
     }
     
     // Fallback or additional trackers (e.g., GA4, Mixpanel) could be added here

@@ -11,8 +11,8 @@ export function useReferralTracking() {
       const refCode = searchParams.get('ref');
 
       if (refCode) {
-        // 1. Store locally for attribution on checkout
-        localStorage.setItem('active_referral_code', refCode);
+        // Persist a single canonical key for checkout attribution.
+        localStorage.setItem('affiliate_code', refCode);
 
         try {
           // 2. Resolve affiliate_id from code
@@ -33,7 +33,7 @@ export function useReferralTracking() {
               session_id: sessionId,
               ip_address: 'client' // usually captured server-side via Edge Function or PostgREST headers
             });
-            console.log('Referral tracked automatically.');
+            if (import.meta.env.DEV) console.log('Referral tracked automatically.');
           }
         } catch (err) {
           console.error('Failed to track referral:', err);

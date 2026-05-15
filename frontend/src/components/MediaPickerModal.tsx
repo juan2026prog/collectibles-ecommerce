@@ -157,13 +157,13 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
 
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="bg-white  shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold flex flex-col sm:flex-row sm:items-center gap-2">
               <span>Biblioteca de Medios</span>
-              <div className="flex items-center text-sm font-medium text-gray-500 bg-gray-50 px-2 py-1 rounded-lg">
+              <div className="flex items-center text-sm font-medium text-slate-400 bg-white/5 px-2 py-1 ">
                 <button onClick={() => setCurrentPath('')} className="hover:text-primary-600 transition-colors">Inicio</button>
                 {currentPath.split('/').filter(Boolean).map((part, i, arr) => {
                    const targetPath = arr.slice(0, i + 1).join('/') + '/';
@@ -181,14 +181,14 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
           </div>
           <div className="flex items-center gap-2">
             {multiple && selectedFiles.size > 0 && (
-              <span className="text-sm text-gray-500 bg-primary-50 px-3 py-1 rounded-lg">
+              <span className="text-sm text-slate-400 bg-primary-500/10 px-3 py-1 ">
                 {selectedFiles.size} seleccionado(s)
               </span>
             )}
-            <button onClick={handleCreateFolder} className="p-2 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="Crear carpeta">
+            <button onClick={handleCreateFolder} className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-500/10  transition-colors" title="Crear carpeta">
               <FolderPlus className="w-5 h-5" />
             </button>
-            <button onClick={() => fileInputRef.current?.click()} className="p-2 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="Subir archivos">
+            <button onClick={() => fileInputRef.current?.click()} className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-500/10  transition-colors" title="Subir archivos">
               <Upload className="w-5 h-5" />
             </button>
             <input
@@ -199,22 +199,22 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
               className="hidden"
               onChange={handleFileSelect}
             />
-            <button onClick={onClose} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors">
+            <button onClick={onClose} className="p-2 text-slate-500 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors">
               <X className="w-6 h-6" />
             </button>
           </div>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+        <div className="flex-1 overflow-y-auto p-6 bg-white/5">
           {/* Drag & Drop Zone */}
           <div 
             ref={dropZoneRef}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            className={`mb-4 border-2 border-dashed rounded-xl p-4 text-center transition-colors ${
-              isDragging ? 'border-primary-500 bg-primary-50' : 'border-gray-300 hover:border-gray-400'
+            className={`mb-4 border-2 border-dashed  p-4 text-center transition-colors ${
+              isDragging ? 'border-primary-500 bg-primary-500/10' : 'border-gray-300 hover:border-white/30'
             }`}
           >
             {uploading ? (
@@ -223,7 +223,7 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
                 <span>Subiendo archivos...</span>
               </div>
             ) : (
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-slate-400">
                 <span className="font-medium text-primary-600">Arrastra y suelta</span> archivos aquí, o 
                 <button onClick={() => fileInputRef.current?.click()} className="text-primary-600 hover:underline ml-1">selecciona</button>
               </p>
@@ -231,12 +231,12 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
           </div>
 
           {loading ? (
-            <div className="flex flex-col items-center justify-center h-48 text-gray-400">
+            <div className="flex flex-col items-center justify-center h-48 text-slate-500">
               <RefreshCw className="w-8 h-8 animate-spin mb-4" />
               <p>Cargando medios...</p>
             </div>
           ) : files.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-48 text-gray-400">
+            <div className="flex flex-col items-center justify-center h-48 text-slate-500">
                <ImageIcon className="w-12 h-12 mb-3 opacity-50" />
                <p>No hay archivos en esta carpeta.</p>
             </div>
@@ -250,7 +250,7 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
                     <button 
                       key={file.name} 
                       onClick={() => setCurrentPath(currentPath + file.name + '/')}
-                      className="group bg-white border border-gray-200 rounded-xl p-4 flex flex-col items-center justify-center hover:border-primary-400 hover:shadow-md transition-all aspect-square"
+                      className="group glass  p-4 flex flex-col items-center justify-center hover:border-primary-400 hover:shadow-md transition-all aspect-square"
                     >
                       <Folder className="w-12 h-12 text-blue-400 mb-2 group-hover:scale-110 transition-transform" />
                       <span className="text-xs font-bold text-gray-700 truncate w-full text-center">{file.name}</span>
@@ -266,26 +266,26 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
                   <button 
                     key={file.id} 
                     onClick={(e) => handleFileClick(file, e)}
-                    className={`group bg-white border-2 rounded-xl overflow-hidden transition-all shadow-sm aspect-square relative ${
-                      isSelected ? 'border-primary-500 ring-2 ring-primary-500 ring-offset-2' : 'border-gray-200 hover:border-primary-400 hover:shadow-md'
+                    className={`group bg-white border-2  overflow-hidden transition-all shadow-sm aspect-square relative ${
+                      isSelected ? 'border-primary-500 ring-2 ring-primary-500 ring-offset-2' : 'border-white/10 hover:border-primary-400 hover:shadow-md'
                     }`}
                   >
                     {multiple && (
                       <div className={`absolute top-2 left-2 z-10 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
-                        isSelected ? 'bg-primary-500 border-primary-500' : 'bg-white border-gray-300'
+                        isSelected ? 'bg-primary-500/100 border-primary-500' : 'bg-white border-gray-300'
                       }`}>
                         {isSelected && <Check className="w-4 h-4 text-white" />}
                       </div>
                     )}
-                    <div className="w-full h-full flex items-center justify-center bg-gray-50 p-2">
+                    <div className="w-full h-full flex items-center justify-center bg-white/5 p-2">
                        {img ? (
                           <img src={url} alt={file.name} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform" />
                        ) : (
-                          <FileIcon className="w-10 h-10 text-gray-300" />
+                          <FileIcon className="w-10 h-10 text-slate-500" />
                        )}
                     </div>
-                    <div className="absolute inset-x-0 bottom-0 bg-white/90 backdrop-blur-sm px-2 py-1 border-t border-gray-100">
-                      <p className="text-[10px] font-bold text-gray-600 truncate text-left">{file.name}</p>
+                    <div className="absolute inset-x-0 bottom-0 bg-[#05070f]/90 backdrop-blur-sm px-2 py-1 border-t border-white/10">
+                      <p className="text-[10px] font-bold text-slate-400 truncate text-left">{file.name}</p>
                     </div>
                   </button>
                 );
@@ -296,7 +296,7 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
 
         {/* Footer with Actions */}
         {multiple && (
-          <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+          <div className="px-6 py-4 border-t border-white/10 flex justify-end gap-3">
             <button onClick={onClose} className="btn-secondary">Cancelar</button>
             <button 
               onClick={handleConfirmSelection} 

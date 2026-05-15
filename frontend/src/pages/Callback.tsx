@@ -52,7 +52,7 @@ export default function Callback() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white p-4 font-sans">
-      <div className="max-w-md w-full bg-slate-800 rounded-3xl shadow-2xl p-10 border border-slate-700 relative overflow-hidden">
+      <div className="max-w-md w-full bg-slate-800  shadow-2xl p-10 border border-slate-700 relative overflow-hidden">
         {/* Abstract Background Decoration */}
         <div className="absolute -top-20 -right-20 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl"></div>
         <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-yellow-500/10 rounded-full blur-3xl"></div>

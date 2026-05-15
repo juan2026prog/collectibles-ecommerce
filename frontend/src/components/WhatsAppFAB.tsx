@@ -38,7 +38,7 @@ export default function WhatsAppFAB() {
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3 group/fab">
       {/* Tooltip bubble */}
-      <div className="bg-white text-gray-800 text-sm font-semibold px-4 py-2 rounded-2xl shadow-xl border border-gray-100 opacity-0 translate-y-2 group-hover/fab:opacity-100 group-hover/fab:translate-y-0 transition-all duration-200 whitespace-nowrap">
+      <div className="bg-white text-gray-800 text-sm font-semibold px-4 py-2  shadow-xl border border-white/10 opacity-0 translate-y-2 group-hover/fab:opacity-100 group-hover/fab:translate-y-0 transition-all duration-200 whitespace-nowrap">
         💬 ¿Necesitás ayuda?
         <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-white -mt-px" />
       </div>
@@ -47,7 +47,7 @@ export default function WhatsAppFAB() {
         {/* Dismiss button */}
         <button
           onClick={() => setShown(false)}
-          className="w-7 h-7 bg-white/80 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-white transition-all opacity-0 group-hover/fab:opacity-100"
+          className="w-7 h-7 bg-white/80 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center text-slate-500 hover:text-gray-700 hover:bg-white transition-all opacity-0 group-hover/fab:opacity-100"
           aria-label="Cerrar WhatsApp"
         >
           <X className="w-3.5 h-3.5" />

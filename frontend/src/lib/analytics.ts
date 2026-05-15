@@ -30,7 +30,7 @@ export const analytics = {
     // 1. Client-Side: Meta Pixel (FBQ)
     if (pixelId && (window as any).fbq) {
       (window as any).fbq('track', event.eventName, event.eventData || {}, { eventID: eventId });
-      console.log(`[Analytics] Pixel Track: ${event.eventName}`, event.eventData);
+      if (import.meta.env.DEV) console.log(`[Analytics] Pixel Track: ${event.eventName}`, event.eventData);
     }
 
     // 2. Server-Side: Meta CAPI (via Supabase Edge Function)
@@ -54,7 +54,7 @@ export const analytics = {
         });
 
         if (error) throw error;
-        console.log(`[Analytics] CAPI Track: ${event.eventName}`, data);
+        if (import.meta.env.DEV) console.log(`[Analytics] CAPI Track: ${event.eventName}`, data);
       } catch (err) {
         console.error(`[Analytics] CAPI Error for ${event.eventName}:`, err);
       }

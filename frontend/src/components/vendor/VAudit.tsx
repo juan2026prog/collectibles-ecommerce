@@ -1,4 +1,4 @@
-import { FileText, Search } from 'lucide-react';
+import { FileText, Search, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 
 const mockAudit = [
@@ -17,31 +17,71 @@ export default function VAudit() {
   const filtered = search ? mockAudit.filter(a => a.action.toLowerCase().includes(search.toLowerCase()) || a.entity.toLowerCase().includes(search.toLowerCase()) || a.user.toLowerCase().includes(search.toLowerCase())) : mockAudit;
 
   return (
-    <div className="space-y-5 max-w-6xl">
-      <h2 className="text-2xl font-black text-gray-900">Auditoría de Cambios</h2>
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar acción, entidad o usuario..."
-          className="w-full bg-white border border-gray-200 rounded-lg pl-9 pr-3 py-2.5 text-sm outline-none focus:border-blue-500" />
+    <div className="max-w-7xl space-y-10 animation-fade-in pb-20 px-4 sm:px-6">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
+        <div className="space-y-4">
+           <div className="text-[12px] text-[#f00856] font-black uppercase tracking-[0.5em] flex items-center gap-3">
+             <ShieldCheck className="w-5 h-5" /> Security & Accountability
+           </div>
+           <h2 className="text-5xl font-black text-white tracking-tighter">Registro de Auditoría</h2>
+           <p className="text-sm text-slate-500 font-bold uppercase tracking-[0.2em] max-w-2xl">Trazabilidad completa de modificaciones en catálogo, pedidos y finanzas</p>
+        </div>
+        <div className="relative w-full lg:w-[400px] group">
+           <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-[#f00856] transition-colors" />
+           <input 
+              value={search} 
+              onChange={e => setSearch(e.target.value)} 
+              placeholder="SEARCH AUDIT LOGS..."
+              className="w-full bg-white/5 border border-white/10 pl-16 pr-6 py-6 rounded-2xl text-[12px] font-black uppercase tracking-widest outline-none focus:border-[#f00856] focus:bg-white/[0.08] transition-all placeholder:text-slate-800 shadow-xl" 
+           />
+        </div>
       </div>
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-            <tr><th className="p-3 pl-4">Fecha</th><th className="p-3">Usuario</th><th className="p-3">Acción</th><th className="p-3">Entidad</th><th className="p-3">Valor Anterior</th><th className="p-3">Valor Nuevo</th></tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {filtered.map(a => (
-              <tr key={a.id} className="hover:bg-gray-50">
-                <td className="p-3 pl-4 text-xs text-gray-500">{a.date}</td>
-                <td className="p-3 text-xs text-gray-600">{a.user}</td>
-                <td className="p-3 font-bold text-gray-900">{a.action}</td>
-                <td className="p-3 font-mono text-xs text-gray-600">{a.entity}</td>
-                <td className="p-3 text-xs text-red-500 bg-red-50/50">{a.oldVal}</td>
-                <td className="p-3 text-xs text-green-600 bg-green-50/50">{a.newVal}</td>
+
+      <div className="glass rounded-[2.5rem] border border-white/10 overflow-hidden shadow-2xl">
+        <div className="overflow-x-auto no-scrollbar">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-white/[0.04] border-b border-white/5">
+              <tr className="text-[11px] font-black text-slate-500 uppercase tracking-[0.4em]">
+                <th className="p-10">Timestamp</th>
+                <th className="p-10">Origin User</th>
+                <th className="p-10">Operation</th>
+                <th className="p-10">Entity Target</th>
+                <th className="p-10">Previous State</th>
+                <th className="p-10">Modified State</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {filtered.map(a => (
+                <tr key={a.id} className="hover:bg-white/[0.02] transition-colors group">
+                  <td className="p-10">
+                    <span className="text-[11px] text-slate-600 font-black uppercase tracking-widest">{a.date}</span>
+                  </td>
+                  <td className="p-10">
+                    <span className="text-[12px] font-black text-slate-400 uppercase tracking-widest bg-white/5 px-4 py-2 rounded-xl">{a.user}</span>
+                  </td>
+                  <td className="p-10">
+                    <p className="font-black text-white text-[15px] uppercase tracking-widest group-hover:text-[#f00856] transition-colors">{a.action}</p>
+                    <p className="text-[10px] text-slate-600 font-bold uppercase tracking-[0.2em] mt-1">{a.field}</p>
+                  </td>
+                  <td className="p-10">
+                     <span className="font-mono text-[11px] text-white/70 uppercase bg-white/10 px-3 py-1.5 rounded-lg border border-white/5">{a.entity}</span>
+                  </td>
+                  <td className="p-10">
+                     <span className="text-[10px] font-black text-red-500/60 line-through bg-red-500/10 px-4 py-2 rounded-full border border-red-500/20 uppercase tracking-widest">{a.oldVal}</span>
+                  </td>
+                  <td className="p-10">
+                     <span className="text-[10px] font-black text-emerald-400 bg-emerald-400/10 px-4 py-2 rounded-full border border-emerald-400/20 uppercase tracking-widest shadow-[0_0_20px_rgba(52,211,153,0.1)]">{a.newVal}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="flex flex-col items-center gap-6 mt-16 pb-10">
+         <div className="w-1.5 h-20 bg-gradient-to-b from-[#f00856] to-transparent rounded-full opacity-20"></div>
+         <p className="text-[11px] text-slate-700 font-black uppercase tracking-[0.5em] bg-white/5 px-10 py-4 rounded-full border border-white/5">End of Secure Protocol Logs</p>
       </div>
     </div>
   );

@@ -116,7 +116,7 @@ export default function AdminTags() {
       {showForm && (
         <>
           <div className="fixed inset-0 bg-dark-900/60 z-[110] backdrop-blur-sm animate-fade-in" onClick={() => setShowForm(false)} />
-          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-white z-[120] rounded-3xl shadow-2xl p-8 animate-scale-in">
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-white z-[120]  shadow-2xl p-8 animate-scale-in">
             <div className="flex items-center justify-between mb-8">
               <h3 className="text-xl font-black text-gray-900">{editing ? 'Editar Etiqueta' : 'Nueva Etiqueta'}</h3>
               <button onClick={() => setShowForm(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-900 transition-colors"><X className="w-5 h-5" /></button>

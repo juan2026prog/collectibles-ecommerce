@@ -1,4 +1,4 @@
-import { DollarSign, TrendingUp, ArrowDownCircle, Clock, CreditCard, FileText, Download } from 'lucide-react';
+import { DollarSign, TrendingUp, ArrowDownCircle, Clock, CreditCard, FileText, Download, ArrowRight } from 'lucide-react';
 
 const mockFinances = [
   { date: '27/03', order: 'ORD-4821', client: 'María López', gross: 4500, feePlatform: 450, feeGateway: 135, shipping: 169, net: 3746, status: 'pending' },
@@ -15,43 +15,90 @@ const mockSettlements = [
 ];
 
 const stMap: Record<string, { l: string; c: string }> = {
-  pending: { l: 'Pendiente', c: 'bg-orange-50 text-orange-700' }, held: { l: 'Retenido', c: 'bg-yellow-50 text-yellow-700' },
-  settlable: { l: 'Liquidable', c: 'bg-green-50 text-green-700' }, paid: { l: 'Pagado', c: 'bg-emerald-50 text-emerald-700' },
-  adjusted: { l: 'Ajustado', c: 'bg-blue-50 text-blue-700' }, refunded: { l: 'Reembolsado', c: 'bg-red-50 text-red-700' },
+  pending: { l: 'Pendiente', c: 'border-orange-500/20 text-orange-500 bg-orange-500/5' },
+  held: { l: 'Retenido', c: 'border-yellow-500/20 text-yellow-500 bg-yellow-500/5' },
+  settlable: { l: 'Liquidable', c: 'border-green-500/20 text-green-500 bg-green-500/5' },
+  paid: { l: 'Pagado', c: 'border-emerald-500/20 text-emerald-500 bg-emerald-500/5' },
+  adjusted: { l: 'Ajustado', c: 'border-blue-500/20 text-blue-500 bg-blue-500/5' },
+  refunded: { l: 'Reembolsado', c: 'border-red-500/20 text-red-500 bg-red-500/5' },
 };
 
 export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | 'settlements' }) {
   if (mode === 'settlements') {
     return (
-      <div className="space-y-5 max-w-5xl">
-        <h2 className="text-2xl font-black text-gray-900">Liquidaciones</h2>
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-              <tr><th className="p-3 pl-4">ID</th><th className="p-3">Período</th><th className="p-3">Pedidos</th><th className="p-3 text-right">Bruto</th><th className="p-3 text-right">Descuentos</th><th className="p-3 text-right">Ajustes</th><th className="p-3 text-right">Final</th><th className="p-3">Pago</th><th className="p-3">Estado</th><th className="p-3"></th></tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {mockSettlements.map(s => (
-                <tr key={s.id} className="hover:bg-gray-50">
-                  <td className="p-3 pl-4 font-bold text-gray-900">{s.id}</td>
-                  <td className="p-3 text-gray-700 text-xs">{s.period}</td>
-                  <td className="p-3 text-gray-600 text-center">{s.orders}</td>
-                  <td className="p-3 text-right font-medium">${s.gross.toLocaleString()}</td>
-                  <td className="p-3 text-right text-red-500">-${s.discounts.toLocaleString()}</td>
-                  <td className="p-3 text-right text-gray-500">{s.adjustments < 0 ? `-$${Math.abs(s.adjustments).toLocaleString()}` : '$0'}</td>
-                  <td className="p-3 text-right font-black text-gray-900">${s.final.toLocaleString()}</td>
-                  <td className="p-3 text-xs text-gray-500">{s.payDate}</td>
-                  <td className="p-3"><span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${s.status === 'paid' ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700'}`}>{s.status === 'paid' ? 'Pagado' : 'Pendiente'}</span></td>
-                  <td className="p-3"><button className="text-[10px] text-blue-600 font-bold flex items-center gap-1"><Download className="w-3 h-3" /> PDF</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div className="space-y-8 animation-fade-in pb-20">
+        <div>
+           <div className="text-[11px] text-[#f00856] font-black uppercase tracking-[0.4em] mb-3">Accounting Ledger</div>
+           <h2 className="text-5xl font-black text-white">Liquidaciones & Pagos</h2>
+           <p className="text-sm text-slate-500 font-bold mt-3 uppercase tracking-[0.2em]">Historial de transferencias bancarias procesadas</p>
         </div>
-        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-600">
-          <p className="font-bold text-gray-800 mb-2">Información de Cobro</p>
-          <p>Cuenta: BROU — **** 4521 · Titular: Tienda Demo SRL</p>
-          <p>Frecuencia: Semanal · Día estimado: Viernes</p>
+
+        <div className="glass rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl">
+          <div className="overflow-x-auto no-scrollbar">
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-white/[0.03] border-b border-white/5">
+                <tr className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">
+                  <th className="p-8">Statement ID</th>
+                  <th className="p-8">Period</th>
+                  <th className="p-8 text-center">Orders</th>
+                  <th className="p-8 text-right">Gross</th>
+                  <th className="p-8 text-right">Fees</th>
+                  <th className="p-8 text-right">Adjust</th>
+                  <th className="p-8 text-right font-black text-white">Net Final</th>
+                  <th className="p-8">Bank Status</th>
+                  <th className="p-8"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {mockSettlements.map(s => (
+                  <tr key={s.id} className="hover:bg-white/[0.02] group transition-colors">
+                    <td className="p-8 font-black text-white text-[16px] group-hover:text-[#f00856] transition-colors">{s.id}</td>
+                    <td className="p-8">
+                       <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{s.period}</p>
+                       <p className="text-[9px] text-slate-600 font-black uppercase mt-1.5">Paid: {s.payDate}</p>
+                    </td>
+                    <td className="p-8 text-center font-black text-white text-[16px]">{s.orders}</td>
+                    <td className="p-8 text-right font-black text-slate-400 text-[15px]">${s.gross.toLocaleString()}</td>
+                    <td className="p-8 text-right font-black text-red-500 text-[15px]">-${s.discounts.toLocaleString()}</td>
+                    <td className="p-8 text-right font-black text-slate-600 text-[15px]">{s.adjustments < 0 ? `-$${Math.abs(s.adjustments).toLocaleString()}` : '$0'}</td>
+                    <td className="p-8 text-right font-black text-white text-[18px] bg-white/[0.01] group-hover:bg-white/[0.03] transition-colors tracking-tighter">${s.final.toLocaleString()}</td>
+                    <td className="p-8">
+                       <span className={`badge px-4 py-2 ${s.status === 'paid' ? 'text-emerald-400 bg-emerald-400/10' : 'text-orange-400 bg-orange-400/10'}`}>
+                          {s.status === 'paid' ? 'Transfered' : 'Processing'}
+                       </span>
+                    </td>
+                    <td className="p-8 text-right">
+                       <button className="w-12 h-12 rounded-full glass border border-white/10 flex items-center justify-center text-slate-500 hover:text-[#f00856] hover:border-[#f00856]/50 transition-all active:scale-90"><Download className="w-4 h-4" /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        
+        <div className="glass rounded-[2rem] border border-white/10 p-12 bg-white/[0.02] shadow-2xl">
+           <div className="flex items-center gap-5 mb-10">
+              <div className="w-12 h-12 rounded-2xl bg-[#f00856]/10 flex items-center justify-center shadow-[0_0_20px_rgba(240,8,86,0.1)]">
+                 <CreditCard className="w-6 h-6 text-[#f00856]" />
+              </div>
+              <h4 className="text-[11px] font-black text-white uppercase tracking-[0.4em]">Banking Information</h4>
+           </div>
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
+              <div className="soft p-8 rounded-3xl border border-white/5">
+                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Primary Account</p>
+                 <p className="text-lg font-black text-white uppercase tracking-widest">BROU — **** 4521</p>
+                 <p className="text-[11px] text-slate-600 font-black mt-2 uppercase tracking-widest">Tienda Demo SRL</p>
+              </div>
+              <div className="soft p-8 rounded-3xl border border-white/5">
+                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Payout Schedule</p>
+                 <p className="text-lg font-black text-white uppercase tracking-widest">Weekly / Every Friday</p>
+                 <p className="text-[11px] text-slate-600 font-black mt-2 uppercase tracking-widest">Next: 28/03/2026</p>
+              </div>
+              <div className="lg:flex lg:items-center lg:justify-end">
+                 <button className="text-[11px] font-black text-[#f00856] uppercase tracking-[0.3em] hover:underline hover:translate-x-2 transition-all flex items-center gap-3">Update Payment Method <ArrowRight className="w-4 h-4" /></button>
+              </div>
+           </div>
         </div>
       </div>
     );
@@ -67,45 +114,79 @@ export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | '
   };
 
   return (
-    <div className="space-y-5 max-w-6xl">
-      <h2 className="text-2xl font-black text-gray-900">Finanzas</h2>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Card label="Ventas Brutas" value={`$${totals.gross.toLocaleString()}`} icon={DollarSign} color="emerald" />
-        <Card label="Comisiones" value={`$${totals.fees.toLocaleString()}`} icon={ArrowDownCircle} color="red" />
-        <Card label="Costo Envío" value={`$${totals.shipping.toLocaleString()}`} icon={CreditCard} color="purple" />
-        <Card label="Neto a Cobrar" value={`$${totals.net.toLocaleString()}`} icon={TrendingUp} color="green" />
+    <div className="space-y-8 animation-fade-in pb-20">
+      <div>
+         <div className="text-[11px] text-[#f00856] font-black uppercase tracking-[0.4em] mb-3">Financial Engine</div>
+         <h2 className="text-5xl font-black text-white">Balances & Rendimiento</h2>
+         <p className="text-sm text-slate-500 font-bold mt-3 uppercase tracking-[0.2em]">Análisis de ingresos netos y estructuras de costos</p>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-gray-900 text-white p-6 rounded-xl">
-          <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">Saldo Retenido</p>
-          <p className="text-3xl font-black">${totals.pending.toLocaleString()}</p>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="Ventas Brutas" value={`$${totals.gross.toLocaleString()}`} icon={DollarSign} color="emerald" />
+        <StatCard label="Comisiones" value={`$${totals.fees.toLocaleString()}`} icon={ArrowDownCircle} color="red" />
+        <StatCard label="Logística" value={`$${totals.shipping.toLocaleString()}`} icon={CreditCard} color="purple" />
+        <StatCard label="Neto Estimado" value={`$${totals.net.toLocaleString()}`} icon={TrendingUp} color="green" />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="soft rounded-[2.5rem] p-12 hover:bg-white/[0.04] transition-all border border-white/5 shadow-xl">
+          <p className="text-[11px] text-[#f00856] font-black uppercase tracking-[0.4em] mb-6">Escrow Balance</p>
+          <div className="flex items-end gap-5">
+             <p className="text-6xl font-black text-white tracking-tighter">${totals.pending.toLocaleString()}</p>
+             <span className="text-[11px] font-black text-slate-600 uppercase tracking-[0.2em] mb-2">Pendiente de cierre</span>
+          </div>
         </div>
-        <div className="bg-white border border-gray-200 p-6 rounded-xl">
-          <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">Saldo Liquidable</p>
-          <p className="text-3xl font-black text-green-600">${totals.settlable.toLocaleString()}</p>
-          <p className="text-xs text-gray-500 mt-1">Próxima liquidación: 28/03/2026</p>
+        <div className="glass rounded-[2.5rem] border border-[#f00856]/30 p-12 bg-[#f00856]/5 relative overflow-hidden group shadow-2xl">
+          <div className="absolute top-0 right-0 p-12 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
+             <CreditCard className="w-48 h-48 text-white -rotate-12" />
+          </div>
+          <div className="relative z-10">
+            <p className="text-[11px] text-emerald-500 font-black uppercase tracking-[0.4em] mb-6">Settlable Amount</p>
+            <p className="text-6xl font-black text-emerald-500 tracking-tighter mb-6">${totals.settlable.toLocaleString()}</p>
+            <p className="text-[11px] font-black text-white/40 uppercase tracking-widest">Release Date: <span className="text-white">28/03/2026</span></p>
+          </div>
         </div>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-gray-100 bg-gray-50"><h3 className="text-sm font-black text-gray-900">Detalle Financiero</h3></div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-              <tr><th className="p-3 pl-4">Fecha</th><th className="p-3">Pedido</th><th className="p-3">Cliente</th><th className="p-3 text-right">Bruto</th><th className="p-3 text-right">Fee Plat.</th><th className="p-3 text-right">Fee Pasarela</th><th className="p-3 text-right">Envío</th><th className="p-3 text-right">Neto</th><th className="p-3">Estado</th></tr>
+      <div className="glass rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl">
+        <div className="p-10 md:p-12 border-b border-white/5 bg-white/[0.03] flex items-center justify-between">
+           <div>
+              <h3 className="text-[11px] font-black text-[#f00856] uppercase tracking-[0.4em] mb-1">Transaction Stream</h3>
+              <h4 className="text-2xl font-black text-white uppercase tracking-widest">Detalle Financiero por Pedido</h4>
+           </div>
+           <button className="text-[11px] font-black text-slate-400 uppercase tracking-widest border border-white/10 px-8 py-4 rounded-full hover:bg-white hover:text-black transition-all active:scale-95">Export XLS</button>
+        </div>
+        <div className="overflow-x-auto no-scrollbar">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-white/[0.01] border-b border-white/5">
+              <tr className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">
+                <th className="p-8">Timestamp</th>
+                <th className="p-8">Order</th>
+                <th className="p-8">Client</th>
+                <th className="p-8 text-right">Gross</th>
+                <th className="p-8 text-right">Platform Fee</th>
+                <th className="p-8 text-right">Gateway</th>
+                <th className="p-8 text-right">Ship</th>
+                <th className="p-8 text-right font-black text-white">Net Flow</th>
+                <th className="p-8">Status</th>
+              </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-white/5">
               {mockFinances.map(f => (
-                <tr key={f.order} className="hover:bg-gray-50">
-                  <td className="p-3 pl-4 text-gray-600 text-xs">{f.date}</td>
-                  <td className="p-3 font-bold text-gray-900">{f.order}</td>
-                  <td className="p-3 text-gray-700">{f.client}</td>
-                  <td className="p-3 text-right">${f.gross.toLocaleString()}</td>
-                  <td className="p-3 text-right text-red-500">-${f.feePlatform}</td>
-                  <td className="p-3 text-right text-red-400">-${f.feeGateway}</td>
-                  <td className="p-3 text-right text-gray-500">-${f.shipping}</td>
-                  <td className="p-3 text-right font-black text-green-600">+${f.net.toLocaleString()}</td>
-                  <td className="p-3"><span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${stMap[f.status]?.c}`}>{stMap[f.status]?.l}</span></td>
+                <tr key={f.order} className="hover:bg-white/[0.02] group transition-colors">
+                  <td className="p-8 text-slate-500 text-[11px] font-black uppercase tracking-widest">{f.date}</td>
+                  <td className="p-8 font-black text-white text-[16px] group-hover:text-[#f00856] transition-colors uppercase">{f.order}</td>
+                  <td className="p-8 text-slate-400 text-[13px] font-black uppercase tracking-widest">{f.client}</td>
+                  <td className="p-8 text-right font-black text-white text-[16px]">${f.gross.toLocaleString()}</td>
+                  <td className="p-8 text-right font-black text-red-500 text-[15px]">-${f.feePlatform}</td>
+                  <td className="p-8 text-right font-black text-red-500 text-[15px]">-${f.feeGateway}</td>
+                  <td className="p-8 text-right font-black text-slate-600 text-[15px]">-${f.shipping}</td>
+                  <td className="p-8 text-right font-black text-emerald-500 text-[18px] bg-white/[0.01] group-hover:bg-emerald-500/5 transition-colors tracking-tighter">+${f.net.toLocaleString()}</td>
+                  <td className="p-8">
+                     <span className={`badge px-4 py-2 ${stMap[f.status]?.c.replace('border-', 'text-').split(' ')[0] + ' bg' + stMap[f.status]?.c.split(' bg')[1]}`}>
+                        {stMap[f.status]?.l}
+                     </span>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -116,12 +197,20 @@ export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | '
   );
 }
 
-function Card({ label, value, icon: Icon, color }: { label: string; value: string; icon: any; color: string }) {
-  const c: Record<string, string> = { emerald: 'bg-emerald-50 text-emerald-600', red: 'bg-red-50 text-red-600', purple: 'bg-purple-50 text-purple-600', green: 'bg-green-50 text-green-600' };
+function StatCard({ label, value, icon: Icon, color }: { label: string; value: string; icon: any; color: string }) {
+  const c: Record<string, string> = { 
+    emerald: 'bg-emerald-500/10 text-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.1)]', 
+    red: 'bg-red-500/10 text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.1)]', 
+    purple: 'bg-purple-500/10 text-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.1)]', 
+    green: 'bg-green-500/10 text-green-500 shadow-[0_0_20px_rgba(34,197,94,0.1)]' 
+  };
   return (
-    <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
-      <div className="flex justify-between items-start mb-2"><div className={`p-2 rounded-lg ${c[color]}`}><Icon className="w-4 h-4" /></div><span className="text-lg font-black text-gray-900">{value}</span></div>
-      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</p>
+    <div className="soft rounded-3xl p-10 group hover:bg-white/[0.04] transition-all border border-white/5 hover:border-[#f00856]/30 shadow-xl">
+      <div className="flex justify-between items-start mb-8">
+        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${c[color]}`}><Icon className="w-5 h-5" /></div>
+        <span className="text-3xl font-black text-white group-hover:text-[#f00856] transition-colors">{value}</span>
+      </div>
+      <p className="text-[11px] font-black text-slate-500 uppercase tracking-[0.3em]">{label}</p>
     </div>
   );
 }

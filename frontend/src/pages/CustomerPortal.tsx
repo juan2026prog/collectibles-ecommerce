@@ -168,35 +168,35 @@ export default function CustomerPortal() {
     }
   }
 
-  if (loading) return <div className="p-12 text-center text-gray-500">Cargando perfil...</div>;
+  if (loading) return <div className="p-12 text-center text-slate-400">Cargando perfil...</div>;
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-12">
       {/* Header */}
-      <div className="bg-white rounded-2xl shadow-sm border p-8 mb-8 flex flex-col md:flex-row items-center gap-6 justify-between">
+      <div className="glass  shadow-sm border p-8 mb-8 flex flex-col md:flex-row items-center gap-6 justify-between">
         <div className="flex items-center gap-6">
-          <div className="w-20 h-20 bg-primary-100 rounded-full flex items-center justify-center text-primary-600">
+          <div className="w-20 h-20 bg-primary-500/15 rounded-full flex items-center justify-center text-primary-600">
             <User size={40} />
           </div>
           <div>
             <h1 className="text-3xl font-bold">Mi Cuenta</h1>
-            <p className="text-gray-500">{user?.email}</p>
-            {firstName && <p className="text-sm text-gray-700 font-medium mt-1">{firstName} {lastName}</p>}
+            <p className="text-slate-400">{user?.email}</p>
+            {firstName && <p className="text-sm text-slate-300 font-medium mt-1">{firstName} {lastName}</p>}
           </div>
         </div>
-        <div className="bg-gray-50 border rounded-xl p-6 w-full md:w-auto">
-          <h3 className="text-sm font-bold flex items-center gap-2 mb-4 text-gray-700"><Settings className="w-4 h-4" /> Preferencias</h3>
+        <div className="bg-white/5 border  p-6 w-full md:w-auto">
+          <h3 className="text-sm font-bold flex items-center gap-2 mb-4 text-slate-300"><Settings className="w-4 h-4" /> Preferencias</h3>
           <div className="flex items-center gap-4">
             <div>
-              <label className="text-xs uppercase font-bold text-gray-500 block mb-1">Idioma</label>
-              <select className="bg-white border rounded px-3 py-1.5 text-sm focus:outline-none focus:border-primary-500" value={language} onChange={e => setLanguage(e.target.value as any)}>
+              <label className="text-xs uppercase font-bold text-slate-400 block mb-1">Idioma</label>
+              <select className="glass border rounded px-3 py-1.5 text-sm focus:outline-none focus:border-primary-500" value={language} onChange={e => setLanguage(e.target.value as any)}>
                 <option value="es">Español</option>
                 <option value="en">English</option>
               </select>
             </div>
             <div>
-              <label className="text-xs uppercase font-bold text-gray-500 block mb-1">Moneda</label>
-              <select className="bg-white border rounded px-3 py-1.5 text-sm focus:outline-none focus:border-primary-500" value={currency} onChange={e => setCurrency(e.target.value as any)}>
+              <label className="text-xs uppercase font-bold text-slate-400 block mb-1">Moneda</label>
+              <select className="glass border rounded px-3 py-1.5 text-sm focus:outline-none focus:border-primary-500" value={currency} onChange={e => setCurrency(e.target.value as any)}>
                 <option value="UYU">UYU</option>
                 <option value="USD">USD</option>
                 <option value="ARS">ARS</option>
@@ -217,12 +217,12 @@ export default function CustomerPortal() {
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
             className={`flex items-center gap-2 px-5 py-3 font-bold text-sm whitespace-nowrap transition-colors border-b-2 -mb-px ${
-              activeTab === tab.key ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-400 hover:text-gray-600'
+              activeTab === tab.key ? 'border-primary-500 text-primary-600' : 'border-transparent text-slate-500 hover:text-slate-400'
             }`}
           >
             <tab.icon className="w-4 h-4" /> {tab.label}
             {'count' in tab && tab.count! > 0 && (
-              <span className="bg-primary-100 text-primary-700 text-xs font-bold px-2 py-0.5 rounded-full">{tab.count}</span>
+              <span className="bg-primary-500/15 text-primary-700 text-xs font-bold px-2 py-0.5 rounded-full">{tab.count}</span>
             )}
           </button>
         ))}
@@ -232,26 +232,26 @@ export default function CustomerPortal() {
       {activeTab === 'orders' && (
         <div className="space-y-6">
           {orders.length === 0 ? (
-            <div className="bg-gray-50 p-12 rounded-xl text-center border border-dashed">
-              <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500 mb-4">Aún no has realizado ninguna compra.</p>
+            <div className="bg-white/5 p-12  text-center border border-dashed">
+              <Package className="w-12 h-12 text-slate-500 mx-auto mb-4" />
+              <p className="text-slate-400 mb-4">Aún no has realizado ninguna compra.</p>
               <Link to="/shop" className="btn-primary px-6 py-2 inline-flex items-center gap-2"><ShoppingCart className="w-4 h-4" /> Ir a la Tienda</Link>
             </div>
           ) : (
             <div className="space-y-4">
               {orders.map(order => (
-                <div key={order.id} className="bg-white border rounded-xl overflow-hidden shadow-sm">
-                  <div className="bg-gray-50 px-6 py-4 flex flex-wrap items-center justify-between gap-4 border-b">
+                <div key={order.id} className="glass border  overflow-hidden shadow-sm">
+                  <div className="bg-white/5 px-6 py-4 flex flex-wrap items-center justify-between gap-4 border-b">
                     <div>
-                      <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">PEDIDO</p>
+                      <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">PEDIDO</p>
                       <p className="font-medium">{new Date(order.created_at).toLocaleDateString('es-UY', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">N° DE ORDEN</p>
+                      <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">N° DE ORDEN</p>
                       <p className="font-mono font-medium text-sm">#{order.id.slice(0, 8).toUpperCase()}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 font-bold uppercase tracking-wider text-right">TOTAL</p>
+                      <p className="text-xs text-slate-400 font-bold uppercase tracking-wider text-right">TOTAL</p>
                       <p className="font-bold text-lg text-primary-600">{formatPrice(order.total_amount)}</p>
                     </div>
                     <span className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase ${
@@ -259,7 +259,7 @@ export default function CustomerPortal() {
                       order.status === 'shipped' ? 'bg-blue-100 text-blue-700' :
                       order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                       order.status === 'cancelada' || order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                      'bg-gray-100 text-gray-700'
+                      'bg-white/10 text-slate-300'
                     }`}>
                       {order.status === 'pending' && 'Pendiente'}
                       {order.status === 'paid' && 'Pagado'}
@@ -273,17 +273,17 @@ export default function CustomerPortal() {
                     {order.order_items.map((item: any, i: number) => (
                       <div key={i} className="flex gap-4 py-3 border-b last:border-0 last:pb-0 items-center">
                         <Link to={item.products?.slug ? `/p/${item.products.slug}` : '#'}>
-                          <img src={getOrderItemImage(item)} className="w-16 h-16 object-contain rounded-lg border bg-gray-50 p-1 hover:border-primary-300 transition-colors" />
+                          <img src={getOrderItemImage(item)} className="w-16 h-16 object-contain  border bg-white/5 p-1 hover:border-primary-300 transition-colors" />
                         </Link>
                         <div className="flex-1 min-w-0">
-                          <Link to={item.products?.slug ? `/p/${item.products.slug}` : '#'} className="font-bold text-gray-900 hover:text-primary-600 transition-colors line-clamp-1">{item.products?.title}</Link>
-                          <p className="text-sm text-gray-500">Cant: {item.quantity} · {formatPrice(item.unit_price)} c/u</p>
+                          <Link to={item.products?.slug ? `/p/${item.products.slug}` : '#'} className="font-bold text-white hover:text-primary-600 transition-colors line-clamp-1">{item.products?.title}</Link>
+                          <p className="text-sm text-slate-400">Cant: {item.quantity} · {formatPrice(item.unit_price)} c/u</p>
                         </div>
                       </div>
                     ))}
                   </div>
                   <div className="px-6 pb-5 flex gap-3">
-                    <button onClick={() => handleBuyAgain(order)} className="flex items-center gap-2 px-5 py-2 bg-primary-50 text-primary-700 hover:bg-primary-100 rounded-xl font-bold text-sm transition-colors border border-primary-200">
+                    <button onClick={() => handleBuyAgain(order)} className="flex items-center gap-2 px-5 py-2 bg-primary-500/10 text-primary-700 hover:bg-primary-500/15  font-bold text-sm transition-colors border border-primary-200">
                       <RotateCcw className="w-4 h-4" /> Volver a Comprar
                     </button>
                   </div>
@@ -298,8 +298,8 @@ export default function CustomerPortal() {
       {activeTab === 'profile' && (
         <div className="space-y-6">
           {/* Personal Info */}
-          <div className="bg-white border rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-8 py-5 border-b bg-gray-50">
+          <div className="glass border  shadow-sm overflow-hidden">
+            <div className="px-8 py-5 border-b bg-white/5">
               <h2 className="text-lg font-bold flex items-center gap-2"><User className="w-5 h-5 text-primary-500" /> Datos Personales</h2>
             </div>
             <div className="p-8 space-y-4">
@@ -321,21 +321,21 @@ export default function CustomerPortal() {
           </div>
 
           {/* Saved Addresses */}
-          <div className="bg-white border rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-8 py-5 border-b bg-gray-50 flex items-center justify-between">
+          <div className="glass border  shadow-sm overflow-hidden">
+            <div className="px-8 py-5 border-b bg-white/5 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold flex items-center gap-2"><MapPin className="w-5 h-5 text-primary-500" /> Mis Direcciones</h2>
-                <p className="text-xs text-gray-500 mt-1">Guardá hasta 3 direcciones para usar en el checkout.</p>
+                <p className="text-xs text-slate-400 mt-1">Guardá hasta 3 direcciones para usar en el checkout.</p>
               </div>
               {addresses.length < 3 && (
-                <button onClick={addAddress} className="flex items-center gap-1.5 px-4 py-2 bg-primary-50 text-primary-700 hover:bg-primary-100 rounded-xl font-bold text-sm border border-primary-200 transition-colors">
+                <button onClick={addAddress} className="flex items-center gap-1.5 px-4 py-2 bg-primary-500/10 text-primary-700 hover:bg-primary-500/15  font-bold text-sm border border-primary-200 transition-colors">
                   <Plus className="w-4 h-4" /> Agregar
                 </button>
               )}
             </div>
             <div className="p-8">
               {addresses.length === 0 ? (
-                <div className="text-center py-8 text-gray-400">
+                <div className="text-center py-8 text-slate-500">
                   <MapPin className="w-10 h-10 mx-auto mb-3 opacity-50" />
                   <p>No tenés direcciones guardadas.</p>
                   <button onClick={addAddress} className="text-primary-600 font-bold text-sm mt-2 hover:underline">+ Agregar dirección</button>
@@ -343,23 +343,23 @@ export default function CustomerPortal() {
               ) : (
                 <div className="space-y-4">
                   {addresses.map((addr, idx) => (
-                    <div key={idx} className={`border rounded-xl overflow-hidden transition-all ${editingAddr === idx ? 'border-primary-300 shadow-md' : 'border-gray-200'}`}>
+                    <div key={idx} className={`border  overflow-hidden transition-all ${editingAddr === idx ? 'border-primary-300 shadow-md' : 'border-white/10'}`}>
                       {/* Address header */}
-                      <div className="flex items-center justify-between px-5 py-3 bg-gray-50 border-b">
+                      <div className="flex items-center justify-between px-5 py-3 bg-white/5 border-b">
                         <div className="flex items-center gap-3">
-                          <MapPin className={`w-4 h-4 ${editingAddr === idx ? 'text-primary-500' : 'text-gray-400'}`} />
+                          <MapPin className={`w-4 h-4 ${editingAddr === idx ? 'text-primary-500' : 'text-slate-500'}`} />
                           {editingAddr === idx ? (
-                            <input className="font-bold text-sm bg-white border rounded px-2 py-1 w-32" value={addr.label} onChange={e => updateAddress(idx, 'label', e.target.value)} placeholder="Nombre..." />
+                            <input className="font-bold text-sm glass border rounded px-2 py-1 w-32" value={addr.label} onChange={e => updateAddress(idx, 'label', e.target.value)} placeholder="Nombre..." />
                           ) : (
                             <span className="font-bold text-sm text-gray-800">{addr.label || `Dirección ${idx + 1}`}</span>
                           )}
-                          {idx === 0 && <span className="text-[10px] font-bold uppercase bg-primary-100 text-primary-600 px-2 py-0.5 rounded-full">Principal</span>}
+                          {idx === 0 && <span className="text-[10px] font-bold uppercase bg-primary-500/15 text-primary-600 px-2 py-0.5 rounded-full">Principal</span>}
                         </div>
                         <div className="flex items-center gap-1">
-                          <button onClick={() => setEditingAddr(editingAddr === idx ? null : idx)} className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors">
+                          <button onClick={() => setEditingAddr(editingAddr === idx ? null : idx)} className="p-1.5 text-slate-500 hover:text-primary-600 hover:bg-primary-500/10  transition-colors">
                             <Edit3 className="w-4 h-4" />
                           </button>
-                          <button onClick={() => removeAddress(idx)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                          <button onClick={() => removeAddress(idx)} className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50  transition-colors">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
@@ -413,14 +413,14 @@ export default function CustomerPortal() {
                         </div>
                       ) : (
                         /* Display mode */
-                        <div className="px-5 py-3 text-sm text-gray-600">
+                        <div className="px-5 py-3 text-sm text-slate-400">
                           {addr.street ? (
                             <>
                               <p>{addr.street}{addr.apartment ? `, ${addr.apartment}` : ''}</p>
-                              <p className="text-gray-400">{[addr.city, addr.department, addr.postal_code].filter(Boolean).join(', ')}</p>
+                              <p className="text-slate-500">{[addr.city, addr.department, addr.postal_code].filter(Boolean).join(', ')}</p>
                             </>
                           ) : (
-                            <p className="text-gray-400 italic">Dirección incompleta — hacé clic en el lápiz para editar.</p>
+                            <p className="text-slate-500 italic">Dirección incompleta — hacé clic en el lápiz para editar.</p>
                           )}
                         </div>
                       )}
@@ -443,17 +443,17 @@ export default function CustomerPortal() {
 
       {/* ═══ TAB: Seguridad ═══ */}
       {activeTab === 'security' && (
-        <div className="bg-white border rounded-2xl shadow-sm overflow-hidden max-w-lg">
-          <div className="px-8 py-5 border-b bg-gray-50">
+        <div className="glass border  shadow-sm overflow-hidden max-w-lg">
+          <div className="px-8 py-5 border-b bg-white/5">
             <h2 className="text-lg font-bold flex items-center gap-2"><Lock className="w-5 h-5 text-primary-500" /> Cambiar Contraseña</h2>
-            <p className="text-xs text-gray-500 mt-1">Actualizá tu contraseña de acceso a la plataforma.</p>
+            <p className="text-xs text-slate-400 mt-1">Actualizá tu contraseña de acceso a la plataforma.</p>
           </div>
           <div className="p-8 space-y-5">
             <div>
               <label className="form-label">Nueva Contraseña</label>
               <div className="relative">
                 <input type={showPw ? 'text' : 'password'} className="form-input pr-10" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="Mínimo 6 caracteres" />
-                <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-400">
                   {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
@@ -464,7 +464,7 @@ export default function CustomerPortal() {
             </div>
 
             {pwMessage && (
-              <div className={`p-3 rounded-lg text-sm font-medium ${pwMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+              <div className={`p-3  text-sm font-medium ${pwMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
                 {pwMessage.text}
               </div>
             )}

@@ -1,11 +1,13 @@
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
-import { ChevronRight, SlidersHorizontal, X, Heart, ShoppingCart, LayoutGrid, List, Search } from 'lucide-react';
+import { ChevronRight, ChevronLeft, SlidersHorizontal, X, ShoppingCart, Search } from 'lucide-react';
 import { useProducts, useCategories, useBrands } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
 import { useLocale } from '../contexts/LocaleContext';
 import { ProductSkeleton } from '../components/Skeletons';
 import { ProductBadge } from '../components/ProductBadge';
+import { getProductImage } from '../lib/imageUtils';
+import SEO from '../components/SEO';
 
 export default function Shop() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -14,7 +16,6 @@ export default function Shop() {
   const badge = searchParams.get('badge') || '';
   const searchQ = searchParams.get('q') || '';
   const [sortBy, setSortBy] = useState('default');
-  const [viewMode, setViewMode] = useState<'grid-2' | 'grid-3' | 'grid-4' | 'grid-5' | 'list'>('grid-4');
   const [mobileFilters, setMobileFilters] = useState(false);
   const [page, setPage] = useState(0);
   const [priceMin, setPriceMin] = useState('');
@@ -26,6 +27,7 @@ export default function Shop() {
   const { brands, loading: brandsLoading } = useBrands();
   const cart = useCartContext();
   const { formatPrice, t } = useLocale();
+  const navigate = useNavigate();
 
   // ✅ Fully server-side — useProducts now resolves slug → id internally
   const { products, count, loading } = useProducts({
@@ -42,17 +44,12 @@ export default function Shop() {
 
   const totalPages = Math.ceil(count / limit);
 
-  function getProductImage(product: any): string {
-  const img = product.images?.[0];
-  if (!img?.url) return 'https://via.placeholder.com/400';
-  if (img.url.match(/^[a-f0-9-]{36}$/)) return 'https://via.placeholder.com/400';
-  return img.url;
-}
+  // getProductImage imported from lib/imageUtils
 
-function handleAddToCart(p: any) {
-  const variant = p.variants?.[0];
-  if (!variant) return;
-  cart.addItem({ product_id: p.id, variant_id: variant.id, quantity: 1, title: p.title, price: p.base_price + (variant.price_adjustment || 0), image: getProductImage(p), variant_name: variant.name });
+  function handleAddToCart(p: any) {
+    const variant = p.variants?.[0];
+    if (!variant) return;
+    cart.addItem({ product_id: p.id, variant_id: variant.id, quantity: 1, title: p.title, price: p.base_price + (variant.price_adjustment || 0), image: getProductImage(p), variant_name: variant.name });
   }
 
   function setFilter(key: string, value: string) {
@@ -67,115 +64,119 @@ function handleAddToCart(p: any) {
     setFilter('q', searchInput);
   }
 
-  const Sidebar = () => (
+  function clearAllFilters() {
+    setSearchParams({});
+    setPriceMin('');
+    setPriceMax('');
+    setSearchInput('');
+    setPage(0);
+  }
+
+  function applyPriceFilter() {
+    setPage(0);
+    // Price filter is already reactive via useProducts
+  }
+
+  const FilterContent = () => (
     <div className="space-y-6">
       {/* Search */}
       <form onSubmit={handleSearch}>
-        <label className="font-bold text-gray-900 uppercase text-xs tracking-widest mb-2 block">{t('shop.search')}</label>
+        <label className="font-bold text-white uppercase text-xs tracking-widest mb-2 block">Buscar</label>
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
           <input
             value={searchInput}
             onChange={e => setSearchInput(e.target.value)}
-            placeholder={t('shop.search')}
-            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-400 placeholder:text-gray-400"
+            placeholder="Buscar productos..."
+            className="w-full pl-9 pr-3 py-2 text-sm border border-white/10 bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-primary-400 placeholder:text-slate-500 rounded-xl"
           />
         </div>
       </form>
 
       {/* Categories */}
       <div>
-        <h3 className="font-bold text-gray-900 uppercase text-xs tracking-widest mb-3">{t('shop.filters')} — {t('nav.categories')}</h3>
-        <ul className="space-y-0.5">
-          <li>
-            <button onClick={() => setFilter('category', '')} className={`text-sm w-full text-left py-1.5 px-2 rounded-lg transition-colors ${!categorySlug ? 'font-bold text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50'}`}>
-              {t('shop.allProducts') || 'Todos los productos'}
-            </button>
-          </li>
-          {catsLoading ? [...Array(5)].map((_, i) => <li key={i} className="h-7 bg-white/5 rounded animate-pulse mb-1" />) :
-            (() => {
-              const buildTree = (list: any[]) => {
-                const map = new Map(list.map(c => [c.id, { ...c, children: [] }]));
-                const roots: any[] = [];
-                list.forEach(c => {
-                  if (c.parent_id && map.has(c.parent_id)) map.get(c.parent_id).children.push(map.get(c.id));
-                  else roots.push(map.get(c.id));
-                });
-                return roots;
-              };
-              
-              const tree = buildTree(categories);
-              
-              const renderNode = (node: any, level = 0) => (
-                <div key={node.id}>
-                  <li>
-                    <button 
-                      onClick={() => setFilter('category', node.slug)} 
-                      className={`text-sm w-full text-left py-2 px-3 rounded-xl transition-all duration-200 group flex items-center gap-2 ${
-                        categorySlug === node.slug 
-                          ? 'font-bold text-primary-600 bg-primary-50 shadow-sm' 
-                          : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50'
-                      }`}
-                      style={{ marginLeft: `${level * 12}px`, width: `calc(100% - ${level * 12}px)` }}
-                    >
-                      {level > 0 && <span className="text-gray-300 font-light">└</span>}
-                      <span className={`truncate ${level === 0 ? 'font-bold' : 'font-medium'}`}>{node.name}</span>
-                      {categorySlug === node.slug && <div className="w-1.5 h-1.5 rounded-full bg-primary-600 ml-auto" />}
-                    </button>
-                  </li>
-                  {node.children.length > 0 && (
-                    <div className="mt-0.5 mb-1">
-                      {node.children.map((child: any) => renderNode(child, level + 1))}
-                    </div>
-                  )}
-                </div>
-              );
-
-              return tree.map(root => renderNode(root));
-            })()
+        <h3 className="font-bold text-white uppercase text-xs tracking-widest mb-3">Categoría</h3>
+        <div className="grid gap-2">
+          <button
+            onClick={() => setFilter('category', '')}
+            className={`soft rounded-xl p-3 text-left text-sm font-bold transition-all ${!categorySlug ? 'border-[#f00856] bg-[#f00856]/10 text-white' : 'text-slate-400 hover:text-white'}`}
+          >
+            Todos los productos
+          </button>
+          {catsLoading
+            ? [...Array(5)].map((_, i) => <div key={i} className="h-10 bg-white/5 rounded-xl animate-pulse" />)
+            : categories.map(c => (
+              <button
+                key={c.id}
+                onClick={() => setFilter('category', c.slug)}
+                className={`soft rounded-xl p-3 text-left text-sm font-bold transition-all ${categorySlug === c.slug ? 'border-[#f00856] bg-[#f00856]/10 text-white' : 'text-slate-400 hover:text-white'}`}
+              >
+                {c.name}
+              </button>
+            ))
           }
-        </ul>
+        </div>
       </div>
 
       {/* Brands */}
       <div>
-        <h3 className="font-bold text-gray-900 uppercase text-xs tracking-widest mb-3">{t('nav.brands')}</h3>
-        <ul className="space-y-1">
-          <li>
-            <button onClick={() => setFilter('brand', '')} className={`text-sm w-full text-left py-1.5 px-2 rounded-lg transition-colors ${!brandSlug ? 'font-bold text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50'}`}>
-              {t('shop.allBrands') || 'Todas las marcas'}
-            </button>
-          </li>
-          {brandsLoading ? [...Array(4)].map((_, i) => <li key={i} className="h-7 bg-white/5 rounded animate-pulse mb-1" />) :
-            brands.map(b => (
-              <li key={b.id}>
-                <button onClick={() => setFilter('brand', b.slug)} className={`text-sm w-full text-left py-1.5 px-2 rounded-lg transition-colors ${brandSlug === b.slug ? 'font-bold text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50'}`}>
-                  {b.name}
-                </button>
-              </li>
-            ))}
-        </ul>
+        <h3 className="font-bold text-white uppercase text-xs tracking-widest mb-3">Marca</h3>
+        <div className="grid gap-2">
+          <button
+            onClick={() => setFilter('brand', '')}
+            className={`soft rounded-xl p-3 text-left text-sm font-bold transition-all ${!brandSlug ? 'border-[#f00856] bg-[#f00856]/10 text-white' : 'text-slate-400 hover:text-white'}`}
+          >
+            Todas las marcas
+          </button>
+          {brandsLoading
+            ? [...Array(4)].map((_, i) => <div key={i} className="h-10 bg-white/5 rounded-xl animate-pulse" />)
+            : brands.map(b => (
+              <button
+                key={b.id}
+                onClick={() => setFilter('brand', b.slug)}
+                className={`soft rounded-xl p-3 text-left text-sm font-bold transition-all ${brandSlug === b.slug ? 'border-[#f00856] bg-[#f00856]/10 text-white' : 'text-slate-400 hover:text-white'}`}
+              >
+                {b.name}
+              </button>
+            ))
+          }
+        </div>
       </div>
 
-      {/* Price Range */}
+      {/* Price Range — functional inputs */}
       <div>
-        <h3 className="font-bold text-gray-900 uppercase text-xs tracking-widest mb-3">{t('shop.priceRange') || 'Precio'}</h3>
+        <h3 className="font-bold text-white uppercase text-xs tracking-widest mb-3">Precio</h3>
         <div className="flex gap-2">
-          <input type="number" placeholder="Min" value={priceMin} onChange={e => setPriceMin(e.target.value)}
-            className="w-1/2 border border-gray-200 rounded-xl px-3 py-2 text-sm bg-gray-50 text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-400 placeholder:text-gray-400" />
-          <input type="number" placeholder="Max" value={priceMax} onChange={e => setPriceMax(e.target.value)}
-            className="w-1/2 border border-gray-200 rounded-xl px-3 py-2 text-sm bg-gray-50 text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-400 placeholder:text-gray-400" />
+          <input
+            type="number"
+            placeholder="Mín"
+            value={priceMin}
+            onChange={e => setPriceMin(e.target.value)}
+            className="w-1/2 border border-white/10 px-3 py-2 text-sm bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-primary-400 placeholder:text-slate-500 rounded-xl"
+          />
+          <input
+            type="number"
+            placeholder="Máx"
+            value={priceMax}
+            onChange={e => setPriceMax(e.target.value)}
+            className="w-1/2 border border-white/10 px-3 py-2 text-sm bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-primary-400 placeholder:text-slate-500 rounded-xl"
+          />
         </div>
-        <button onClick={() => setPage(0)} className="mt-2 w-full py-2 text-xs font-bold bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-colors">
-          {t('shop.applyFilters') || 'Aplicar'}
+        <button
+          onClick={applyPriceFilter}
+          className="mt-2 w-full py-2 text-xs font-bold bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-colors"
+        >
+          Aplicar
         </button>
       </div>
 
       {/* Clear filters */}
       {(categorySlug || brandSlug || searchQ || priceMin || priceMax) && (
-        <button onClick={() => { setSearchParams({}); setPriceMin(''); setPriceMax(''); setSearchInput(''); setPage(0); }}
-          className="w-full py-2 text-xs font-bold text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition-colors">
-          {t('shop.clearFilters') || 'Limpiar filtros'}
+        <button
+          onClick={clearAllFilters}
+          className="w-full py-2 text-xs font-bold text-red-400 border border-red-500/30 rounded-xl hover:bg-red-500/10 transition-colors"
+        >
+          Limpiar filtros
         </button>
       )}
     </div>
@@ -186,170 +187,236 @@ function handleAddToCart(p: any) {
   const pageTitle = currentCategory?.name || currentBrand?.name || (searchQ ? `"${searchQ}"` : t('shop.title'));
 
   return (
-    <div className="bg-white min-h-screen pb-20">
-      {/* ═══ SHOP HERO BANNER ═══ */}
-      <div className="bg-gradient-to-br from-gray-50 to-gray-100 relative overflow-hidden py-16 mb-10 border-b border-gray-100">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-primary-100/40 rounded-full blur-[100px] -mt-20 -mr-20" />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
-          <div>
-            <nav className="flex items-center text-xs font-bold tracking-widest uppercase text-gray-400 mb-4">
-              <Link to="/" className="hover:text-gray-900 transition-colors">{t('nav.home')}</Link>
-              <ChevronRight className="w-4 h-4 mx-2" />
-              <span className="text-primary-600">{pageTitle}</span>
-            </nav>
-            <h1 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tight">{pageTitle}</h1>
-            <p className="text-gray-500 font-medium mt-3 max-w-xl">
-              {t('shop.subtitle') || 'Descubre piezas exclusivas, figuras de edición limitada y los mejores artículos para tu colección.'}
-            </p>
-          </div>
+    <div className="bg-[#05070f] text-white">
+      <SEO
+        title="Catálogo — Collectibles"
+        description="Explora nuestro catálogo unificado de figuras, coleccionables y productos oficiales de las mejores marcas."
+      />
+
+      {/* EDITORIAL HERO SECTION */}
+      <section className="relative hero-noise overflow-hidden border-b border-white/10">
+        <div className="absolute -right-40 top-0 w-[560px] h-[560px] bg-[#f00856]/20 blur-3xl rounded-full"></div>
+        <div className="relative max-w-7xl mx-auto px-6 py-14 md:py-20">
+          <div className="label-tag">Catálogo unificado</div>
+          <h1 className="text-5xl md:text-7xl font-black leading-[.9] mt-3 tracking-tighter">
+            Productos de tienda <br className="hidden md:block" /> + sellers oficiales.
+          </h1>
+          <p className="text-slate-300 text-lg mt-5 max-w-3xl leading-relaxed">
+            Un catálogo premium donde conviven stock propio, distribuidores oficiales y oportunidades curadas.
+          </p>
+        </div>
+      </section>
+
+      {/* MOBILE FILTER BUTTON */}
+      <div className="lg:hidden sticky top-20 z-30 bg-[#05070f]/90 backdrop-blur-lg border-b border-white/10 px-6 py-3 flex items-center justify-between">
+        <span className="text-sm font-bold text-slate-400">{count} productos</span>
+        <div className="flex items-center gap-3">
+          <select
+            value={sortBy}
+            onChange={e => { setSortBy(e.target.value); setPage(0); }}
+            className="bg-white/5 border border-white/10 rounded-full px-4 py-2 text-xs font-bold text-white focus:outline-none"
+          >
+            <option value="default">Recomendados</option>
+            <option value="newest">Más nuevos</option>
+            <option value="price-low">Menor precio</option>
+            <option value="price-high">Mayor precio</option>
+            <option value="name">A-Z</option>
+          </select>
+          <button
+            onClick={() => setMobileFilters(true)}
+            className="flex items-center gap-2 bg-[#f00856] text-white rounded-full px-5 py-2.5 text-xs font-black uppercase tracking-wider shadow-lg shadow-[#f00856]/30"
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+            Filtros
+            {(categorySlug || brandSlug || priceMin || priceMax) && (
+              <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+            )}
+          </button>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 flex gap-8">
-        {/* Desktop Sidebar */}
-        <aside className="hidden lg:block w-64 flex-shrink-0">
-          <div className="bg-white rounded-3xl border border-gray-200 p-6 sticky top-24 shadow-sm">
-            <Sidebar />
+      {/* MOBILE FILTER DRAWER */}
+      {mobileFilters && (
+        <div className="fixed inset-0 z-[200] lg:hidden">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileFilters(false)} />
+          <div className="absolute inset-y-0 right-0 w-[85%] max-w-sm bg-[#05070f] border-l border-white/10 flex flex-col animate-slide-in-right">
+            <div className="flex items-center justify-between p-6 border-b border-white/10">
+              <h2 className="font-black text-xl text-white">Filtros</h2>
+              <button onClick={() => setMobileFilters(false)} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              <FilterContent />
+            </div>
+            <div className="p-6 border-t border-white/10">
+              <button
+                onClick={() => setMobileFilters(false)}
+                className="btn-primary w-full rounded-full py-4 text-sm font-black uppercase"
+              >
+                Ver {count} resultados
+              </button>
+            </div>
           </div>
+        </div>
+      )}
+
+      <main className="max-w-7xl mx-auto px-6 py-10 grid lg:grid-cols-[280px_1fr] gap-8">
+        {/* FILTERS ASIDE — hidden on mobile, shown on desktop */}
+        <aside className="hidden lg:block glass rounded-[2rem] p-6 h-fit sticky top-24 z-10">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="font-black text-2xl tracking-tight">Filtros</h2>
+            {(categorySlug || brandSlug || searchQ) && (
+              <button onClick={() => navigate('/shop')} className="text-xs font-black text-[#f00856] uppercase hover:underline">Limpiar</button>
+            )}
+          </div>
+          <FilterContent />
         </aside>
 
-        {/* Main */}
-        <div className="flex-1 min-w-0">
-          {/* Toolbar */}
-          <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-8 flex flex-wrap items-center justify-between gap-4 shadow-sm">
-            <p className="text-sm text-gray-500 font-medium hidden sm:block">
-              <span className="font-black text-gray-900">{count}</span> {t('shop.results')}
-            </p>
-            <div className="flex items-center gap-3 w-full sm:w-auto">
-              <button onClick={() => setMobileFilters(true)} className="lg:hidden flex-1 sm:flex-none p-3 border border-gray-200 rounded-xl hover:bg-gray-50 flex justify-center items-center gap-2 font-bold text-sm text-gray-600">
-                <SlidersHorizontal className="w-4 h-4" /> {t('shop.filters')}
-              </button>
-              
-              {/* Grid Switcher Icons */}
-              <div className="hidden sm:flex items-center gap-1 border border-gray-200 rounded-xl bg-gray-50 p-1">
-                <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-lg transition-all ${viewMode === 'list' ? 'bg-primary-600 shadow-sm text-white' : 'text-gray-400 hover:text-gray-700'}`} title="Lista">
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
-                </button>
-                <button onClick={() => setViewMode('grid-2')} className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid-2' ? 'bg-primary-600 shadow-sm text-white' : 'text-gray-400 hover:text-gray-700'}`} title="2 Columnas">
-                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="18" rx="1"/></svg>
-                </button>
-                <button onClick={() => setViewMode('grid-3')} className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid-3' ? 'bg-primary-600 shadow-sm text-white' : 'text-gray-400 hover:text-gray-700'}`} title="3 Columnas">
-                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="2" y="3" width="5" height="18" rx="1"/><rect x="9.5" y="3" width="5" height="18" rx="1"/><rect x="17" y="3" width="5" height="18" rx="1"/></svg>
-                </button>
-                <button onClick={() => setViewMode('grid-4')} className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid-4' ? 'bg-primary-600 shadow-sm text-white' : 'text-gray-400 hover:text-gray-700'}`} title="4 Columnas">
-                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><circle cx="4" cy="12" r="2.5"/><circle cx="12" cy="12" r="2.5"/><circle cx="20" cy="12" r="2.5"/><path d="M4 12c-0.5 0-1 0.5-1 1s0.5 1 1 1 1-0.5 1-1-0.5-1-1-1z" opacity="0"/></svg>
-                   <div className="flex gap-0.5">
-                      <div className="w-1.5 h-1.5 rounded-full bg-current" /><div className="w-1.5 h-1.5 rounded-full bg-current" />
-                      <div className="w-1.5 h-1.5 rounded-full bg-current" /><div className="w-1.5 h-1.5 rounded-full bg-current" />
-                   </div>
-                </button>
-                <button onClick={() => setViewMode('grid-5')} className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid-5' ? 'bg-primary-600 shadow-sm text-white' : 'text-gray-400 hover:text-gray-700'}`} title="5 Columnas">
-                   <div className="flex gap-0.5 flex-wrap w-4 justify-center">
-                      {[...Array(6)].map((_, i) => <div key={i} className="w-1 h-1 rounded-full bg-current" />)}
-                   </div>
-                </button>
-              </div>
-
-              <select value={sortBy} onChange={e => { setSortBy(e.target.value); setPage(0); }}
-                className="flex-1 sm:flex-none border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-700 bg-white focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none cursor-pointer">
-                <option value="default">{t('shop.sort.recommended') || 'Recomendados'}</option>
-                <option value="newest">{t('shop.sort.newest') || 'Más Nuevos'}</option>
-                <option value="price-low">{t('shop.sort.priceLow') || 'Menor Precio'}</option>
-                <option value="price-high">{t('shop.sort.priceHigh') || 'Mayor Precio'}</option>
-                <option value="name">{t('shop.sort.name') || 'A-Z'}</option>
+        {/* PRODUCTS GRID */}
+        <section>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+            <div>
+              <div className="label-tag">Marketplace integrado</div>
+              <h2 className="text-3xl font-black mt-1 text-white tracking-tight">
+                {searchQ ? `Resultados para "${searchQ}"` : "Resultados destacados"}
+              </h2>
+            </div>
+            <div className="hidden lg:flex items-center gap-3">
+              <span className="text-sm font-bold text-slate-500">{count} productos encontrados</span>
+              <select
+                value={sortBy}
+                onChange={e => { setSortBy(e.target.value); setPage(0); }}
+                className="glass rounded-full px-6 py-2.5 text-xs font-black uppercase tracking-widest text-white border border-white/10 hover:border-white/20 bg-transparent focus:outline-none"
+              >
+                <option value="default">Recomendados</option>
+                <option value="newest">Más nuevos</option>
+                <option value="price-low">Menor precio</option>
+                <option value="price-high">Mayor precio</option>
+                <option value="name">A-Z</option>
               </select>
             </div>
           </div>
 
-          {/* Grid */}
           {loading ? (
-            <div className={`grid gap-6 ${viewMode === 'list' ? 'grid-cols-1' : 'grid-cols-2 md:grid-cols-3 xl:grid-cols-4'}`}>
-              {[...Array(8)].map((_, i) => (
-                <ProductSkeleton key={i} viewMode={viewMode === 'list' ? 'list' : 'grid'} />
-              ))}
+            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-6">
+              {[...Array(6)].map((_, i) => <ProductSkeleton key={i} />)}
             </div>
           ) : products.length === 0 ? (
-            <div className="bg-gray-50 rounded-3xl border border-gray-200 p-20 text-center">
-              <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <LayoutGrid className="w-10 h-10 text-gray-400" />
-              </div>
-              <h3 className="text-2xl font-black text-gray-900 mb-2">{t('shop.empty')}</h3>
-              <p className="text-gray-500 font-medium max-w-md mx-auto mb-8">
-                {t('shop.emptyHint') || 'Intenta ajustar los filtros de búsqueda o cambiar de categoría.'}
-              </p>
-              <button onClick={() => { setSearchParams({}); setPriceMin(''); setPriceMax(''); setSearchInput(''); setPage(0); }}
-                className="px-8 py-4 bg-primary-600 text-white font-black rounded-xl hover:bg-primary-500 transition-colors shadow-lg shadow-primary-600/30">
-                {t('shop.clearFilters') || 'Limpiar Filtros'}
-              </button>
+            <div className="glass rounded-[2rem] p-20 text-center">
+              <Search className="w-12 h-12 text-slate-700 mx-auto mb-4" />
+              <h3 className="text-xl font-black text-white">No encontramos resultados</h3>
+              <p className="text-slate-500 mt-1">Probá con otros filtros o términos de búsqueda.</p>
+              <button onClick={clearAllFilters} className="btn-primary mt-6">Ver todo el catálogo</button>
             </div>
           ) : (
-            <div className={`grid gap-6 ${
-               viewMode === 'list' ? 'grid-cols-1' :
-               viewMode === 'grid-2' ? 'grid-cols-2' :
-               viewMode === 'grid-3' ? 'grid-cols-2 md:grid-cols-3' :
-               viewMode === 'grid-4' ? 'grid-cols-2 md:grid-cols-3 xl:grid-cols-4' :
-               'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
-            }`}>
-              {products.map(p => (
-                <div key={p.id} className={`group bg-white border border-gray-200 overflow-hidden hover:border-primary-300 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex ${viewMode === 'list' ? 'flex-row rounded-2xl h-48' : 'flex-col rounded-3xl h-full'}`}>
-                  <div className={`relative overflow-hidden bg-gray-50 ${viewMode === 'list' ? 'w-48 shrink-0' : 'aspect-square'}`}>
-                    <Link to={`/p/${p.slug}`}>
-                      <img src={getProductImage(p)} alt={p.title} className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-700 ease-out" />
-                    </Link>
-                    <ProductBadge 
-                      badgeId={p.badge} 
-                      compareAtPrice={p.compare_at_price} 
-                      basePrice={p.base_price} 
-                      className="absolute top-4 left-4 text-[10px] uppercase tracking-wider" 
-                    />
-                    <div className={`absolute top-4 right-4 flex gap-2 transition-all duration-300 ${viewMode.startsWith('grid') ? 'flex-col translate-x-12 opacity-0 group-hover:translate-x-0 group-hover:opacity-100' : 'flex-row'}`}>
-                      <button className="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center hover:bg-primary-600 hover:text-white transition-colors border border-gray-200 text-gray-500"><Heart className="w-4 h-4" /></button>
-                      <button onClick={() => handleAddToCart(p)} className="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center hover:bg-primary-600 hover:text-white transition-colors border border-gray-200 text-gray-500"><ShoppingCart className="w-4 h-4" /></button>
+            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-6">
+              {products.map(p => {
+                const img = getProductImage(p);
+                const finalPrice = p.base_price + (p.variants?.[0]?.price_adjustment || 0);
+                return (
+                  <article key={p.id} className="glass rounded-[2.5rem] p-4 flex flex-col group transition-all hover:-translate-y-2 hover:shadow-2xl hover:shadow-black/60 hover:border-[#f00856]/40">
+                    <div className="relative aspect-square rounded-[2rem] overflow-hidden bg-black/30 grid place-items-center mb-5">
+                      <Link to={`/p/${p.slug}`} className="w-full h-full p-6 block">
+                        <img
+                          src={img}
+                          alt={p.title}
+                          className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-110"
+                        />
+                      </Link>
+                      <div className="absolute top-4 left-4">
+                        <ProductBadge
+                          badgeId={p.badge}
+                          compareAtPrice={p.compare_at_price}
+                          basePrice={p.base_price}
+                          className="text-[10px] px-3 py-1.5"
+                        />
+                      </div>
+                      <button
+                        onClick={() => handleAddToCart(p)}
+                        className="absolute bottom-4 right-4 w-12 h-12 bg-[#f00856] text-white rounded-full flex items-center justify-center opacity-100 md:opacity-0 md:translate-y-4 group-hover:opacity-100 group-hover:translate-y-0 transition-all shadow-lg shadow-[#f00856]/30"
+                      >
+                        <ShoppingCart className="w-5 h-5" />
+                      </button>
                     </div>
-                  </div>
-                  <div className={`${viewMode === 'grid-5' ? 'p-3' : 'p-5'} flex flex-col flex-1 justify-between`}>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-1.5">{p.category?.name || p.brand?.name || ''}</p>
-                      <Link to={`/p/${p.slug}`} className={`${viewMode === 'grid-5' ? 'text-xs' : 'text-sm'} font-bold text-gray-900 hover:text-primary-600 line-clamp-2 leading-snug transition-colors`}>{p.title}</Link>
-                      {viewMode === 'list' && <p className="mt-2 text-sm text-gray-500 line-clamp-2">{p.description}</p>}
+
+                    <div className="px-2 flex-1 flex flex-col">
+                      <div className="label-tag mb-1 opacity-60">{p.brand?.name || p.category?.name || 'Producto'}</div>
+                      <Link to={`/p/${p.slug}`} className="font-black text-xl text-white group-hover:text-[#f00856] transition-colors leading-tight line-clamp-2 min-h-[3rem]">
+                        {p.title}
+                      </Link>
+
+                      <div className="mt-4 flex items-end justify-between">
+                        <div>
+                          <div className="text-[10px] uppercase text-slate-500 font-black tracking-widest mb-0.5">Precio</div>
+                          <div className="text-2xl font-black text-white">${formatPrice(finalPrice)}</div>
+                        </div>
+                        <Link
+                          to={`/p/${p.slug}`}
+                          className="btn-primary px-5 py-2.5 text-xs rounded-full"
+                        >
+                          Ver
+                        </Link>
+                      </div>
+
+                      {/* SELLER METADATA — real data only */}
+                      {p.brand?.name && (
+                        <div className="mt-5 pt-4 border-t border-white/10 flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center font-black text-xs text-slate-400 group-hover:bg-[#f00856] group-hover:text-white transition-colors">
+                            {p.brand.name[0]}
+                          </div>
+                          <div className="font-bold text-xs text-white line-clamp-1">{p.brand.name}</div>
+                        </div>
+                      )}
                     </div>
-                    <div className={`flex items-center gap-3 ${viewMode === 'grid-5' ? 'mt-2' : 'mt-4'}`}>
-                      <span className={`${viewMode === 'grid-5' ? 'text-sm' : 'text-lg'} font-black text-gray-900`}>{formatPrice(p.base_price)}</span>
-                      {p.compare_at_price && <span className="text-[10px] font-bold text-gray-400 line-through">{formatPrice(p.compare_at_price)}</span>}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           )}
 
-          {/* Pagination */}
+          {/* PAGINATION */}
           {totalPages > 1 && (
-            <div className="flex justify-center gap-2 mt-12 bg-white p-4 rounded-2xl border border-gray-200 max-w-fit mx-auto shadow-sm">
-              {[...Array(totalPages)].map((_, i) => (
-                <button key={i} onClick={() => { setPage(i); window.scrollTo({top: 0, behavior: 'smooth'}); }}
-                  className={`w-12 h-12 rounded-xl text-sm font-black transition-all ${i === page ? 'bg-primary-600 text-white shadow-lg shadow-primary-500/30 hover:bg-primary-500' : 'bg-transparent text-gray-500 hover:bg-gray-100'}`}>
-                  {i + 1}
-                </button>
-              ))}
+            <div className="mt-16 flex items-center justify-center gap-2">
+              <button
+                disabled={page === 0}
+                onClick={() => setPage(page - 1)}
+                className="w-12 h-12 glass rounded-full flex items-center justify-center text-slate-500 hover:text-white transition-colors disabled:opacity-30"
+              >
+                 <ChevronLeft className="w-5 h-5" />
+              </button>
+              <div className="flex items-center gap-2">
+                 {[...Array(totalPages)].map((_, i) => (
+                   <button
+                    key={i}
+                    onClick={() => setPage(i)}
+                    className={`w-12 h-12 rounded-full font-black transition-all ${page === i ? 'bg-[#f00856] text-white' : 'glass text-slate-400 hover:text-white'}`}
+                   >
+                    {i + 1}
+                   </button>
+                 ))}
+              </div>
+              <button
+                disabled={page === totalPages - 1}
+                onClick={() => setPage(page + 1)}
+                className="w-12 h-12 glass rounded-full flex items-center justify-center text-slate-500 hover:text-white transition-colors disabled:opacity-30"
+              >
+                 <ChevronRight className="w-5 h-5" />
+              </button>
             </div>
           )}
-        </div>
-      </div>
+        </section>
+      </main>
 
-      {/* Mobile Filter Drawer */}
-      {mobileFilters && (
-        <>
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 lg:hidden" onClick={() => setMobileFilters(false)} />
-          <div className="fixed inset-y-0 left-0 w-72 bg-white z-50 p-6 overflow-y-auto lg:hidden animate-slide-in-left border-r border-gray-200 shadow-xl">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="font-bold text-lg text-gray-900">{t('shop.filters')}</h2>
-              <button onClick={() => setMobileFilters(false)}><X className="w-5 h-5" /></button>
-            </div>
-            <Sidebar />
-          </div>
-        </>
-      )}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes slide-in-right {
+          from { transform: translateX(100%); }
+          to { transform: translateX(0); }
+        }
+        .animate-slide-in-right {
+          animation: slide-in-right 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+      `}} />
     </div>
   );
 }

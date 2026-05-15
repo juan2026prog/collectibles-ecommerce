@@ -52,7 +52,7 @@ export default function MLCallback() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
+      <div className="glass rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
         {status === 'loading' && (
           <>
             <Loader2 className="w-16 h-16 text-blue-500 animate-spin mx-auto mb-4" />

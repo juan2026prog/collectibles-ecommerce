@@ -275,7 +275,7 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
       })
       .catch(() => {
         // API unavailable — keep fallback rates silently
-        console.log('Exchange rate API unavailable, using fallback rates');
+        if (import.meta.env.DEV) console.log('Exchange rate API unavailable, using fallback rates');
       });
   }, []);
 

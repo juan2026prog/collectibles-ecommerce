@@ -24,3 +24,20 @@ dist-ssr
 *.sw?
 
 .vercel
+
+# Environment (CRITICAL)
+.env
+.env.*
+!.env.example
+
+# Debug & test output files
+build_err.txt
+build_log.txt
+dev_output.txt
+error.txt
+vercel_list.txt
+patch.js
+test_upsert.js
+playwright-report/
+run-tests.bat
+run-tests.ps1

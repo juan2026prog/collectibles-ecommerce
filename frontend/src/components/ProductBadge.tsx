@@ -16,7 +16,7 @@ const DEFAULT_BADGES: Record<string, BadgeData> = {
   new: { id: 'new', label: 'NEW', color: 'bg-emerald-500/90 text-white', bg_color: '#22c55e', text_color: '#ffffff', config: { position: 'top-left', size: 'medium' } },
   sale: { id: 'sale', label: 'SALE', color: 'bg-blue-500/90 text-white', bg_color: '#3b82f6', text_color: '#ffffff', config: { position: 'top-left', size: 'medium' } },
   preorder: { id: 'preorder', label: 'PRE-ORDER', color: 'bg-orange-500/90 text-white', bg_color: '#f97316', text_color: '#ffffff', config: { position: 'top-left', size: 'medium' } },
-  soldout: { id: 'soldout', label: 'SOLD OUT', color: 'bg-gray-500/90 text-white', bg_color: '#6b7280', text_color: '#ffffff', config: { position: 'top-left', size: 'medium' } }
+  soldout: { id: 'soldout', label: 'SOLD OUT', color: 'bg-white/50/90 text-white', bg_color: '#6b7280', text_color: '#ffffff', config: { position: 'top-left', size: 'medium' } }
 };
 
 let cachedBadges: Record<string, BadgeData> | null = null;
@@ -56,7 +56,7 @@ export function ProductBadge({
 
     if (!cachedBadges) {
       if (!badgesPromise) {
-        badgesPromise = supabase.from('badges').select('*').then(({ data }) => {
+        badgesPromise = Promise.resolve(supabase.from('badges').select('*')).then(({ data }) => {
           const map: Record<string, BadgeData> = { ...DEFAULT_BADGES };
           if (data) {
             data.forEach((b: any) => {
@@ -136,7 +136,7 @@ export function ProductBadge({
     return (
       <span 
         key={`${b.id}-${index}`}
-        className={`px-2 py-1 text-[10px] md:text-xs font-black uppercase tracking-wider rounded-lg shadow-sm backdrop-blur-md pointer-events-none ${b.color || ''}`}
+        className={`px-2 py-1 text-[10px] md:text-xs font-black uppercase tracking-wider  shadow-sm backdrop-blur-md pointer-events-none ${b.color || ''}`}
         style={!b.color ? { backgroundColor: b.bg_color, color: b.text_color } : undefined}
       >
         {label}

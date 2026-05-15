@@ -6,6 +6,7 @@ import { useCartContext } from '../contexts/CartContext';
 import { useLocale } from '../contexts/LocaleContext';
 import { ProductSkeleton, CategoryGridSkeleton, BannerSkeleton, BrandCarouselSkeleton, CollectionCarouselSkeleton } from '../components/Skeletons';
 import { ProductBadge } from '../components/ProductBadge';
+import { getProductImage } from '../lib/imageUtils';
 
 export default function Home() {
   const { banners, loading: bannersLoading } = useBanners();
@@ -17,6 +18,14 @@ export default function Home() {
   const cart = useCartContext();
   const { formatPrice, t } = useLocale();
   const [heroIdx, setHeroIdx] = useState(0);
+  const [layoutBlocks, setLayoutBlocks] = useState<any[]>([
+    { id: 'hero', visible: true },
+    { id: 'trust', visible: true },
+    { id: 'bento', visible: true },
+    { id: 'collections', visible: true },
+    { id: 'trending', visible: true },
+    { id: 'brands', visible: true }
+  ]);
 
   useEffect(() => {
     if (banners.length <= 1) return;
@@ -24,12 +33,23 @@ export default function Home() {
     return () => clearInterval(timer);
   }, [banners.length]);
 
-  function getProductImage(product: any): string {
-    const img = product.images?.[0];
-    if (!img?.url) return 'https://via.placeholder.com/400';
-    if (img.url.match(/^[a-f0-9-]{36}$/)) return 'https://via.placeholder.com/400';
-    return img.url;
-  }
+  useEffect(() => {
+    import('../lib/supabase').then(({ supabase }) => {
+      supabase.from('site_settings').select('value').eq('key', 'appearance_home_layout_json').maybeSingle()
+        .then(({ data }) => {
+          if (data?.value) {
+            try {
+              const parsed = JSON.parse(data.value);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                setLayoutBlocks(parsed);
+              }
+            } catch {}
+          }
+        });
+    });
+  }, []);
+
+  // getProductImage imported from lib/imageUtils
 
   function handleAddToCart(p: any) {
     const variant = p.variants?.[0];
@@ -45,215 +65,192 @@ export default function Home() {
     });
   }
 
-  const ProductCard = ({ p }: { p: any }) => (
-    <div className="group bg-surface-card rounded-2xl border border-white/5 overflow-hidden hover:border-primary-500/30 hover:shadow-glow-card transition-all duration-400 transform hover:-translate-y-1 flex flex-col h-full shrink-0 w-[240px] sm:w-[280px]">
-      <div className="relative overflow-hidden aspect-square bg-dark-600">
-        <Link to={`/p/${p.slug}`}>
-          <img src={getProductImage(p)} alt={p.title} className="w-full h-full object-contain p-3 group-hover:scale-105 transition-transform duration-700 ease-out" />
-        </Link>
-        <ProductBadge
-          badgeId={p.badge}
-          compareAtPrice={p.compare_at_price}
-          basePrice={p.base_price}
-        />
-        <div className="absolute top-3 right-3 flex flex-col gap-2 translate-x-12 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all duration-300">
-          <button className="w-10 h-10 bg-dark-700/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center hover:bg-primary-600 transition-colors border border-white/10"><Heart className="w-4 h-4 text-gray-300 hover:text-white" /></button>
-          <button onClick={() => handleAddToCart(p)} className="w-10 h-10 bg-dark-700/90 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center hover:bg-primary-600 transition-colors border border-white/10"><ShoppingCart className="w-4 h-4 text-gray-300 hover:text-white" /></button>
+  const ProductCard = ({ p }: { p: any }) => {
+    const img = getProductImage(p);
+    const finalPrice = p.base_price + (p.variants?.[0]?.price_adjustment || 0);
+    return (
+      <article className="glass rounded-[2rem] p-4 flex flex-col group transition-all hover:-translate-y-2 hover:shadow-2xl hover:shadow-black/60 hover:border-[#f00856]/40 w-[280px] shrink-0">
+        <div className="relative aspect-square rounded-[1.5rem] overflow-hidden bg-black/30 grid place-items-center mb-5">
+          <Link to={`/p/${p.slug}`} className="w-full h-full p-6 block">
+            <img 
+              src={img} 
+              alt={p.title} 
+              className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-110" 
+            />
+          </Link>
+          <div className="absolute top-4 left-4">
+            <ProductBadge 
+              badgeId={p.badge} 
+              compareAtPrice={p.compare_at_price} 
+              basePrice={p.base_price}
+              className="text-[10px] px-3 py-1.5"
+            />
+          </div>
+          <button 
+            onClick={() => handleAddToCart(p)}
+            className="absolute bottom-4 right-4 w-12 h-12 bg-[#f00856] text-white rounded-full flex items-center justify-center opacity-100 md:opacity-0 md:translate-y-4 group-hover:opacity-100 group-hover:translate-y-0 transition-all shadow-lg shadow-[#f00856]/30"
+          >
+            <ShoppingCart className="w-5 h-5" />
+          </button>
         </div>
-      </div>
-      <div className="p-5 flex flex-col flex-1 justify-between">
-        <div>
-          <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-1.5">{p.category?.name || p.brand?.name || ''}</p>
-          <Link to={`/p/${p.slug}`} className="text-sm font-bold text-gray-200 hover:text-neon-cyan line-clamp-2 leading-snug transition-colors">{p.title}</Link>
-        </div>
-        <div className="flex items-center gap-2 mt-4">
-          <span className="text-lg font-black text-white">{formatPrice(p.base_price)}</span>
-          {p.compare_at_price && <span className="text-sm font-bold text-gray-600 line-through decoration-primary-500">{formatPrice(p.compare_at_price)}</span>}
-        </div>
-      </div>
-    </div>
-  );
 
-  const [layoutBlocks, setLayoutBlocks] = useState<any[]>([
-    { id: 'hero', visible: true },
-    { id: 'bento', visible: true },
-    { id: 'collections', visible: true },
-    { id: 'trending', visible: true },
-    { id: 'brands', visible: true }
-  ]);
+        <div className="px-2 flex-1 flex flex-col">
+          <div className="label-tag mb-1 opacity-60 text-[10px]">{p.brand?.name || p.category?.name || 'Producto'}</div>
+          <Link to={`/p/${p.slug}`} className="font-black text-lg text-white group-hover:text-[#f00856] transition-colors leading-tight line-clamp-2 min-h-[2.5rem]">
+            {p.title}
+          </Link>
 
-  useEffect(() => {
-    import('../lib/supabase').then(({ supabase }) => {
-      supabase.from('site_settings').select('value').eq('key', 'appearance_home_layout_json').single()
-        .then(({ data }) => {
-          if (data?.value) {
-            try {
-              const parsed = JSON.parse(data.value);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                setLayoutBlocks(parsed);
-              }
-            } catch {}
-          }
-        });
-    });
-  }, []);
+          <div className="mt-4 flex items-end justify-between">
+            <div>
+              <div className="text-[10px] uppercase text-slate-500 font-black tracking-widest mb-0.5">Precio</div>
+              <div className="text-xl font-black text-white">${formatPrice(finalPrice)}</div>
+            </div>
+            <Link 
+              to={`/p/${p.slug}`}
+              className="btn-primary px-5 py-2.5 text-[10px] rounded-full"
+            >
+              Ver más
+            </Link>
+          </div>
+        </div>
+      </article>
+    );
+  };
 
   const renderBlock = (blockId: string) => {
     switch (blockId) {
       case 'hero':
         return (
-          <>
-            {/* ═══ HERO SLIDER (GAMGER DARK) ═══ */}
-            <section className="relative h-[85vh] min-h-[600px] max-h-[900px] overflow-hidden bg-dark-900 flex group/hero">
-              {bannersLoading ? (
-                <BannerSkeleton />
-              ) : (
-                <>
-                  {banners.map((b, i) => (
-                    <div key={b.id} className={`absolute inset-0 transition-all duration-1000 ease-out origin-center ${i === heroIdx ? 'opacity-100 scale-100 z-10' : 'opacity-0 scale-105 z-0'}`}>
-                      <div className="absolute inset-0 bg-gradient-to-r from-dark-900 via-dark-900/60 to-transparent z-10" />
-                      <div className="absolute inset-0 bg-gradient-to-t from-dark-900/80 via-transparent to-transparent z-10" />
-                      {/* Grid overlay */}
-                      <div className="absolute inset-0 z-10 opacity-10 gamger-grid" />
-                      <img src={b.image_url} alt={b.title} className="absolute inset-0 w-full h-full object-cover opacity-70 object-center" />
-                      
-                      <div className="relative z-20 max-w-7xl mx-auto px-6 h-full flex flex-col justify-center items-start">
-                        <div className="max-w-2xl transform transition-all duration-1000 delay-300 translate-y-0 opacity-100">
-                          <h1 className="text-5xl md:text-7xl lg:text-8xl font-black text-white leading-[1.05] tracking-tight mb-6 drop-shadow-2xl">
-                            {b.title}
-                          </h1>
-                          <p className="text-lg md:text-xl text-gray-400 font-medium max-w-lg leading-relaxed mb-8 drop-shadow-md">
-                            {b.subtitle}
-                          </p>
-                          <Link to={b.link_url || '/shop'} className="group/btn relative inline-flex items-center justify-center overflow-hidden rounded-2xl bg-primary-600 px-8 py-4 font-black text-white shadow-xl shadow-primary-600/30 transition-all hover:scale-105 hover:shadow-primary-500/50 uppercase tracking-wider">
-                            <span className="relative z-10 flex items-center gap-2">
-                              {b.button_text || t('hero.cta')} <ArrowRight className="w-5 h-5 group-hover/btn:translate-x-1 transition-transform" />
-                            </span>
-                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover/btn:animate-[shimmer_1.5s_infinite]" />
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  {banners.length > 1 && (
-                    <>
-                      <button onClick={() => setHeroIdx(i => (i - 1 + banners.length) % banners.length)} className="absolute left-6 top-1/2 -translate-y-1/2 z-30 w-12 h-12 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full flex items-center justify-center backdrop-blur-md transition-all opacity-0 group-hover/hero:opacity-100 -translate-x-4 group-hover/hero:translate-x-0"><ChevronLeft className="w-6 h-6 text-white" /></button>
-                      <button onClick={() => setHeroIdx(i => (i + 1) % banners.length)} className="absolute right-6 top-1/2 -translate-y-1/2 z-30 w-12 h-12 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full flex items-center justify-center backdrop-blur-md transition-all opacity-0 group-hover/hero:opacity-100 translate-x-4 group-hover/hero:translate-x-0"><ChevronRight className="w-6 h-6 text-white" /></button>
-                      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30 flex gap-3">
-                        {banners.map((_, i) => (<button key={i} onClick={() => setHeroIdx(i)} className={`relative flex h-2 transition-all duration-500 rounded-full overflow-hidden ${i === heroIdx ? 'w-12 bg-white/20' : 'w-2 bg-white/30 hover:bg-white/50'}`}>
-                          {i === heroIdx && <div className="absolute inset-y-0 left-0 bg-primary-500 w-full animate-[progress_6s_linear]" />}
-                        </button>))}
-                      </div>
-                    </>
-                  )}
-                </>
-              )}
-            </section>
-
-            {/* ═══ TRUST BAR (DARK GLASSMORPHISM) ═══ */}
-            <section className="relative z-20 -mt-10 max-w-7xl mx-auto px-4 sm:px-6">
-              <div className="bg-surface-card/80 backdrop-blur-xl border border-white/5 shadow-dark-lg rounded-2xl grid grid-cols-2 md:grid-cols-4 gap-4 p-6 overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-r from-primary-900/10 via-transparent to-neon-cyan/5 opacity-50 pointer-events-none rounded-2xl" />
-                {[
-                  { icon: Truck, text: t('footer.freeShipping'), sub: t('footer.freeShipping.sub') || 'Desde $4000' },
-                  { icon: Shield, text: t('footer.securePayment'), sub: t('footer.securePayment.sub') || 'Encriptación SSL' },
-                  { icon: RotateCcw, text: t('footer.returns'), sub: t('footer.returns.sub') || '14 días de plazo' },
-                  { icon: Headphones, text: t('footer.support'), sub: t('footer.support.sub') || 'Asistencia Local' },
-                ].map((t, i) => (
-                  <div key={i} className="flex flex-col items-center justify-center text-center p-2 group">
-                    <div className="w-12 h-12 bg-white/5 text-primary-400 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-primary-600 group-hover:text-white transition-all duration-300 border border-white/5">
-                      <t.icon className="w-5 h-5" />
-                    </div>
-                    <span className="text-sm font-black text-white uppercase tracking-wide">{t.text}</span>
-                    <span className="text-xs text-gray-500 font-medium mt-0.5">{t.sub}</span>
+          <section className="relative hero-noise overflow-hidden min-h-[85vh] flex items-center pt-20">
+            <div className="absolute -right-40 top-0 w-[800px] h-[800px] bg-[#f00856]/10 blur-[150px] rounded-full" />
+            <div className="absolute -left-40 bottom-0 w-[600px] h-[600px] bg-blue-600/5 blur-[120px] rounded-full" />
+            
+            <div className="max-w-7xl mx-auto px-6 w-full relative z-10">
+              <div className="grid lg:grid-cols-[1.2fr_0.8fr] gap-12 items-center">
+                <div className="animate-fade-in-up">
+                  <div className="label-tag">New Season 2026</div>
+                  <h1 className="text-6xl md:text-8xl font-black leading-[0.9] mt-4 tracking-tighter text-white">
+                    Figuras que <br /> <span className="text-[#f00856]">cuentan</span> historias.
+                  </h1>
+                  <p className="text-slate-400 text-xl mt-6 max-w-xl leading-relaxed font-medium">
+                    Plataforma premium, marketplace curado y lanzamientos exclusivos para la comunidad collector más grande de la región.
+                  </p>
+                  <div className="flex flex-wrap gap-4 mt-10">
+                    <Link to="/shop" className="btn-primary px-10 py-5 text-base rounded-full group">
+                      Explorar catálogo <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+                    </Link>
+                    <Link to="/club-collector" className="btn-secondary px-10 py-5 text-base rounded-full">
+                      Club Collector
+                    </Link>
                   </div>
-                ))}
+                  
+                  <div className="mt-12 flex items-center gap-4">
+                     <div className="text-sm font-bold text-slate-500">
+                        Comunidad de collectors en crecimiento 🚀
+                     </div>
+                  </div>
+                </div>
+
+                <div className="hidden lg:block relative animate-float">
+                  <div className="glass rounded-[3rem] p-8 relative overflow-hidden group">
+                     <div className="absolute inset-0 bg-gradient-to-br from-[#f00856]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                     <div className="aspect-[4/5] rounded-[2.5rem] bg-black/40 overflow-hidden relative">
+                        {featured[0] ? (
+                          <img 
+                            src={getProductImage(featured[0])} 
+                            alt="Featured" 
+                            className="w-full h-full object-contain p-12 transition-transform duration-700 group-hover:scale-110" 
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-8xl">🧸</div>
+                        )}
+                        <div className="absolute bottom-6 left-6 right-6 glass rounded-2xl p-4 translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all">
+                           <div className="text-xs font-black text-[#f00856] uppercase mb-1">Drop destacado</div>
+                           <div className="text-white font-black text-xl truncate">{featured[0]?.title || 'Próximo lanzamiento'}</div>
+                        </div>
+                     </div>
+                  </div>
+                </div>
               </div>
-            </section>
-          </>
+            </div>
+          </section>
+        );
+      case 'trust':
+        return (
+          <section className="max-w-7xl mx-auto px-6 -mt-12 relative z-20">
+            <div className="glass rounded-[2.5rem] p-8 grid grid-cols-2 lg:grid-cols-4 gap-8">
+              {[
+                { icon: Truck, title: 'Envío Express', desc: 'En 24/48 horas' },
+                { icon: Shield, title: 'Compra Segura', desc: 'Garantía oficial' },
+                { icon: RotateCcw, title: 'Devoluciones', desc: '14 días de plazo' },
+                { icon: Headphones, title: 'Soporte VIP', desc: 'Canal prioritario' },
+              ].map(({ icon: Icon, title, desc }) => (
+                <div key={title} className="flex flex-col items-center text-center group">
+                  <div className="w-14 h-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-3 group-hover:bg-[#f00856] group-hover:text-white transition-all duration-300">
+                    <Icon className="w-6 h-6" />
+                  </div>
+                  <h4 className="text-white font-black text-sm uppercase tracking-wider">{title}</h4>
+                  <p className="text-slate-500 text-xs font-bold mt-1 uppercase tracking-tighter">{desc}</p>
+                </div>
+              ))}
+            </div>
+          </section>
         );
       case 'bento':
         return (
           <section className="max-w-7xl mx-auto px-6 py-24">
-            <div className="flex items-center justify-between mb-10">
+            <div className="flex items-center justify-between mb-12">
               <div>
-                <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight">
-                  {t('home.categories') || 'Explorar Categorías'}
-                </h2>
-                <p className="text-gray-500 font-medium mt-2">
-                  {t('home.categories.sub') || 'Encuentra exactamente lo que buscas para tu colección.'}
-                </p>
+                <div className="label-tag">Mundos coleccionables</div>
+                <h2 className="text-4xl font-black text-white mt-2 tracking-tight">Explorá por categoría</h2>
               </div>
+              <Link to="/shop" className="btn-secondary rounded-full px-6 py-3 text-xs font-black uppercase">Ver todas</Link>
             </div>
             
-            {catsLoading ? (
-              <CategoryGridSkeleton />
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[600px]">
-                 {categories[0] && (
-                   <Link to={`/shop?category=${categories[0].slug}`} className="group relative rounded-3xl overflow-hidden bg-dark-900 md:col-span-2 h-[300px] md:h-full border border-white/5 hover:border-primary-500/30 transition-all">
-                     {categories[0].image_url && <img src={categories[0].image_url} alt={categories[0].name} className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-70 group-hover:scale-105 transition-all duration-700" />}
-                     <div className="absolute inset-0 bg-gradient-to-t from-dark-900 via-dark-900/40 to-transparent" />
-                     <div className="absolute bottom-0 left-0 p-8">
-                       <span className="px-3 py-1 bg-primary-600 text-white text-[10px] font-black uppercase tracking-widest rounded-full mb-3 inline-block shadow-lg shadow-primary-600/30">{t('home.mostPopular') || 'Más Popular'}</span>
-                       <h3 className="text-4xl font-black text-white drop-shadow-lg mb-2">{categories[0].name}</h3>
-                       <p className="text-gray-400 flex items-center gap-2 font-medium">
-                         {t('home.viewCollection') || 'Ver colección'} <ArrowRight className="w-4 h-4 group-hover:translate-x-2 transition-transform" />
-                       </p>
-                     </div>
-                   </Link>
-                 )}
-                 <div className="flex flex-col gap-6 h-[300px] md:h-full">
-                   {categories.slice(1, 3).map(c => (
-                     <Link key={c.id} to={`/shop?category=${c.slug}`} className="group relative rounded-3xl overflow-hidden bg-dark-900 flex-1 border border-white/5 hover:border-primary-500/30 transition-all">
-                       {c.image_url && <img src={c.image_url} alt={c.name} className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-60 group-hover:scale-105 transition-all duration-700" />}
-                       <div className="absolute inset-0 bg-gradient-to-t from-dark-900 to-transparent" />
-                       <div className="absolute bottom-0 left-0 p-6">
-                         <h3 className="text-2xl font-black text-white drop-shadow-md">{c.name}</h3>
-                       </div>
-                     </Link>
-                   ))}
-                 </div>
-              </div>
-            )}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 h-[700px]">
+              {categories.slice(0, 4).map((c, i) => (
+                <Link 
+                  key={c.id} 
+                  to={`/shop?category=${c.slug}`}
+                  className={`glass rounded-[2.5rem] p-8 group overflow-hidden relative flex flex-col justify-end transition-all hover:border-[#f00856]/40 hover:-translate-y-2 ${
+                    i === 0 ? 'md:col-span-2 md:row-span-2' : ''
+                  }`}
+                >
+                  {c.image_url && (
+                    <img 
+                      src={c.image_url} 
+                      alt={c.name} 
+                      className="absolute inset-0 w-full h-full object-cover opacity-20 group-hover:opacity-40 group-hover:scale-110 transition-all duration-700" 
+                    />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#05070f] via-transparent to-transparent opacity-80" />
+                  <div className="relative z-10">
+                    <h3 className={`${i === 0 ? 'text-4xl' : 'text-2xl'} font-black text-white mb-2`}>{c.name}</h3>
+                    <p className="text-slate-400 font-bold text-sm flex items-center gap-2 group-hover:text-[#f00856] transition-colors">
+                      Ver colección <ArrowRight className="w-4 h-4" />
+                    </p>
+                  </div>
+                </Link>
+              ))}
+            </div>
           </section>
         );
       case 'collections':
-        if (groupsLoading) {
-          return (
-            <section className="py-20 border-y border-white/5">
-              <div className="max-w-7xl mx-auto px-6">
-                <div className="h-10 w-64 bg-white/5 rounded animate-pulse mb-10" />
-                <CollectionCarouselSkeleton />
-              </div>
-            </section>
-          );
-        }
-        if (groups.length === 0) return null;
         return (
           <>
-            {groups.map((g, i) => g.product_group_items && g.product_group_items.length > 0 && (
-              <section key={g.id} className={`py-20 ${i % 2 === 0 ? 'border-y border-white/5' : ''}`}>
+            {groups.map((g, i) => (
+              <section key={g.id || `group-${i}`} className="py-16 border-t border-white/5 overflow-hidden">
                 <div className="max-w-7xl mx-auto px-6">
                   <div className="flex items-center justify-between mb-10">
                     <div>
-                      <h2 className="text-3xl font-black text-white tracking-tight flex items-center gap-3">
-                        {i === 0 && <TrendingUp className="w-8 h-8 text-primary-500 drop-shadow-sm" />}
-                        {g.name}
-                      </h2>
-                      <p className="text-gray-500 font-medium mt-2">{g.description}</p>
+                      <div className="label-tag">Selección destacada</div>
+                      <h2 className="text-4xl font-black text-white mt-2 tracking-tight">{g.name}</h2>
                     </div>
-                    <Link to={`/shop?group=${g.slug}`} className="hidden md:flex items-center gap-2 text-sm font-bold text-white hover:text-neon-cyan px-5 py-2.5 rounded-full border-2 border-white/20 hover:border-neon-cyan/50 transition-all">
-                      {t('home.viewAll')} <ArrowRight className="w-4 h-4" />
-                    </Link>
                   </div>
                   
-                  <div className="flex overflow-x-auto gap-6 pb-8 snap-x snap-mandatory scrollbar-hide -mx-6 px-6">
+                  <div className="flex gap-6 overflow-x-auto pb-10 no-scrollbar">
                     {(g.product_group_items || []).map(({ product }: any) => product && (
-                      <div key={product.id} className="snap-start">
-                        <ProductCard p={product} />
-                      </div>
+                      <ProductCard key={product.id} p={product} />
                     ))}
                   </div>
                 </div>
@@ -263,68 +260,42 @@ export default function Home() {
         );
       case 'trending':
         return (
-          <section className="py-20 border-y border-white/5">
+          <section className="py-24 bg-white/5 border-y border-white/5 overflow-hidden">
              <div className="max-w-7xl mx-auto px-6">
-                <div className="flex items-center justify-between mb-10">
-                  <h2 className="text-3xl font-black text-white tracking-tight">{t('home.featured')}</h2>
-                  <Link to="/shop" className="hidden md:flex items-center gap-2 text-sm font-bold text-white hover:text-neon-cyan px-5 py-2.5 rounded-full border-2 border-white/20 hover:border-neon-cyan/50 transition-all">
-                    {t('home.viewAll')} <ArrowRight className="w-4 h-4" />
-                  </Link>
+                <div className="flex items-center justify-between mb-12">
+                  <div>
+                    <div className="label-tag">Lo más buscado</div>
+                    <h2 className="text-4xl font-black text-white mt-2 tracking-tight">Trending Now</h2>
+                  </div>
                 </div>
-                <div className="flex overflow-x-auto gap-6 pb-8 snap-x snap-mandatory scrollbar-hide -mx-6 px-6">
-                  {featuredLoading ? (
-                    [...Array(5)].map((_, i) => (
-                      <div key={i} className="shrink-0 w-[240px] sm:w-[280px]">
-                        <ProductSkeleton />
-                      </div>
-                    ))
-                  ) : (
-                    featured.map(p => (
-                       <div key={p.id} className="snap-start"><ProductCard p={p} /></div>
-                    ))
-                  )}
+                <div className="flex gap-6 overflow-x-auto pb-10 no-scrollbar">
+                   {featured.map(p => (
+                      <ProductCard key={p.id} p={p} />
+                   ))}
                 </div>
              </div>
           </section>
         );
       case 'brands':
         return (
-          <>
-            {brandsLoading ? (
-              <section className="py-24 overflow-hidden relative">
-                <div className="max-w-7xl mx-auto px-6 mb-12 text-center relative z-10 flex flex-col items-center">
-                  <div className="h-4 w-32 bg-white/5 rounded animate-pulse mb-4" />
-                  <div className="h-10 w-64 bg-white/5 rounded animate-pulse" />
-                </div>
-                <BrandCarouselSkeleton />
-              </section>
-            ) : brands.length > 0 && (
-              <section className="py-24 overflow-hidden relative">
-                <div className="absolute inset-0 opacity-5 gamger-grid" />
-                <div className="max-w-7xl mx-auto px-6 mb-12 text-center relative z-10">
-                  <h2 className="text-sm font-black text-primary-500 mb-2 uppercase tracking-[0.2em]">Sponsors & Partners</h2>
-                  <h3 className="text-3xl md:text-4xl font-black text-white tracking-tight">
-                    {t('home.brands') || 'Tus marcas de siempre'}
-                  </h3>
-                </div>
-                <div className="relative w-full overflow-hidden z-10 flex border-y border-white/5 bg-surface-card/50 py-8">
-                   <div className="absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-dark-700 to-transparent z-20" />
-                   <div className="absolute inset-y-0 right-0 w-32 bg-gradient-to-l from-dark-700 to-transparent z-20" />
-                   <div className="flex animate-[slide_30s_linear_infinite] whitespace-nowrap min-w-max hover:[animation-play-state:paused] items-center">
-                      {[...brands, ...brands, ...brands].map((b, i) => (
-                         <Link key={`${b.id}-${i}`} to={`/shop?brand=${b.slug}`} className="mx-12 shrink-0 group transition-transform hover:scale-110">
-                            {b.logo_url ? (
-                               <img src={b.logo_url} alt={b.name} className="h-10 md:h-12 w-auto object-contain filter grayscale opacity-30 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300" />
-                            ) : (
-                               <span className="text-xl md:text-2xl font-black text-gray-600 group-hover:text-primary-500 uppercase tracking-widest">{b.name}</span>
-                            )}
-                         </Link>
-                      ))}
-                   </div>
-                </div>
-              </section>
-            )}
-          </>
+          <section className="py-24 overflow-hidden relative">
+            <div className="max-w-7xl mx-auto px-6 mb-16 text-center">
+              <div className="label-tag mb-3">Distribuidores oficiales</div>
+              <h2 className="text-4xl font-black text-white tracking-tight">Las mejores marcas del mundo</h2>
+            </div>
+            
+            <div className="flex animate-marquee whitespace-nowrap gap-20 items-center opacity-40 hover:opacity-100 transition-opacity">
+              {[...brands, ...brands].map((b, i) => (
+                <Link key={`${b.id}-${i}`} to={`/shop?brand=${b.slug}`} className="shrink-0 grayscale hover:grayscale-0 transition-all duration-500">
+                  {b.logo_url ? (
+                    <img src={b.logo_url} alt={b.name} className="h-12 w-auto object-contain" />
+                  ) : (
+                    <span className="text-2xl font-black text-slate-500 uppercase tracking-widest">{b.name}</span>
+                  )}
+                </Link>
+              ))}
+            </div>
+          </section>
         );
       default:
         return null;
@@ -332,56 +303,63 @@ export default function Home() {
   };
 
   return (
-    <div className="bg-dark-700">
+    <div className="bg-[#05070f] text-white">
       {layoutBlocks.filter((b: any) => b.visible !== false).map((b: any) => (
         <div key={b.id}>
           {renderBlock(b.id)}
         </div>
       ))}
 
-      {/* ═══ VIP NEWSLETTER (GAMGER NEON STYLE) ═══ */}
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary-900/30 via-dark-800 to-dark-900" />
-        <div className="absolute inset-0 gamger-grid opacity-10" />
-        {/* Neon glow accents */}
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary-600/10 rounded-full blur-[120px]" />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-neon-cyan/5 rounded-full blur-[120px]" />
-        
-        <div className="max-w-7xl mx-auto px-6 py-24 relative z-10 flex flex-col md:flex-row items-center justify-between gap-12 text-center md:text-left">
-          <div className="md:w-1/2">
-            <h2 className="text-4xl md:text-5xl font-black text-white mb-4 tracking-tight">Join the Elite Collector's Club</h2>
-            <p className="text-lg text-gray-500 font-medium">Suscríbete para acceso anticipado a nuevas oleadas, drops limitados, y un 10% OFF en tu primera compra premium.</p>
-          </div>
-          <div className="md:w-1/2 w-full max-w-md bg-white/5 backdrop-blur-md p-8 rounded-3xl border border-white/10 shadow-dark-lg">
-            <form className="flex flex-col gap-4" onSubmit={e => { e.preventDefault(); alert('Subscribed!'); }}>
-              <input type="email" placeholder="Ingresa tu mejor email..." className="px-6 py-4 rounded-xl bg-dark-800/80 text-white border border-white/10 placeholder:text-gray-600 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 outline-none text-center font-medium transition-colors" required />
-              <button type="submit" className="px-6 py-4 rounded-xl bg-primary-600 text-white font-black tracking-widest uppercase hover:bg-primary-500 hover:shadow-glow-red transition-all transform hover:-translate-y-1">Desbloquear Beneficios</button>
+      {/* VIP NEWSLETTER */}
+      <section className="max-w-7xl mx-auto px-6 py-24">
+        <div className="glass rounded-[3rem] p-12 md:p-20 relative overflow-hidden text-center flex flex-col items-center">
+          <div className="absolute inset-0 bg-gradient-to-br from-[#f00856]/20 to-blue-600/10 opacity-30" />
+          <div className="relative z-10 max-w-2xl">
+            <div className="label-tag mb-4">Membresía exclusiva</div>
+            <h2 className="text-5xl md:text-6xl font-black text-white tracking-tighter mb-6">Unite al Club Collector.</h2>
+            <p className="text-slate-400 text-lg font-medium mb-10 leading-relaxed">
+              Recibí notificaciones de drops exclusivos, preventas limitadas y acumulá puntos para canjear por envíos gratis y descuentos.
+            </p>
+            <form className="flex flex-col sm:flex-row gap-3 w-full" onSubmit={e => e.preventDefault()}>
+              <input 
+                type="email" 
+                placeholder="Tu email de coleccionista..." 
+                className="flex-1 bg-white/5 border border-white/10 rounded-full px-8 py-5 text-white outline-none focus:border-[#f00856] transition-colors"
+                disabled
+              />
+              <button className="btn-primary rounded-full px-10 py-5 font-black uppercase tracking-widest opacity-60 cursor-not-allowed" disabled>
+                Próximamente
+              </button>
             </form>
-            <p className="text-xs text-gray-600 mt-4 text-center">Unsubscribe at any time. We respect your privacy.</p>
+            <p className="text-xs text-slate-500 mt-6 font-bold uppercase tracking-widest">Suscripción al newsletter próximamente.</p>
           </div>
         </div>
       </section>
 
-      {/* Custom CSS animations */}
       <style dangerouslySetInnerHTML={{__html: `
-        @keyframes slide {
+        @keyframes marquee {
           0% { transform: translateX(0); }
-          100% { transform: translateX(-33.33%); }
+          100% { transform: translateX(-50%); }
         }
-        @keyframes progress {
-          0% { width: 0%; }
-          100% { width: 100%; }
+        .animate-marquee {
+          animation: marquee 40s linear infinite;
         }
-        @keyframes shimmer {
-          100% { transform: translateX(100%); }
+        .animate-float {
+          animation: float 6s ease-in-out infinite;
         }
-        .scrollbar-hide::-webkit-scrollbar {
-          display: none;
+        @keyframes float {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-20px); }
         }
-        .scrollbar-hide {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
+        .animate-fade-in-up {
+          animation: fadeInUp 0.8s ease-out forwards;
         }
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(30px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}} />
     </div>
   );

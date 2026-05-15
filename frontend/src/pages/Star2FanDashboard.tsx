@@ -153,7 +153,7 @@ export default function Star2FanDashboard() {
   };
 
   const handleUploadVideo = async (requestId: string, file: File) => {
-    console.log('Uploading video for', requestId, file.name);
+    if (import.meta.env.DEV) console.log('Uploading video for', requestId, file.name);
     try {
        const fileExt = file.name.split('.').pop();
        const fileName = `${requestId}_${Date.now()}.${fileExt}`;

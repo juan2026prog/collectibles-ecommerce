@@ -497,8 +497,8 @@ export default function AdminSettings() {
                    </div>
                  </div>
                  <div>
-                   <label className="block text-sm font-bold text-gray-700 mb-1">Inyecciones en &lt;head&gt; (Scripts Personalizados)</label>
-                   <textarea rows={3} className="form-input font-mono text-xs w-full" placeholder="<!-- Meta tags o scripts -->" value={settings['appearance_head_code'] || ''} onChange={e => setSettings({ ...settings, appearance_head_code: e.target.value })} onBlur={() => saveSetting('appearance_head_code', settings['appearance_head_code'] || '')} />
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Inyecciones seguras en &lt;head&gt; (meta, link y JSON-LD)</label>
+                    <textarea rows={3} className="form-input font-mono text-xs w-full" placeholder="&lt;meta name=&quot;description&quot; ...&gt;" value={settings['appearance_head_code'] || ''} onChange={e => setSettings({ ...settings, appearance_head_code: e.target.value })} onBlur={() => saveSetting('appearance_head_code', settings['appearance_head_code'] || '')} />
                  </div>
                  <div>
                    <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-2">Meta Ads Pixel ID <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-[10px] uppercase font-black">Marketing</span></label>
@@ -594,6 +594,10 @@ export default function AdminSettings() {
                     <div>
                        <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Secret Key</label>
                        <input type="password" sx={{WebkitTextSecurity: 'disc'}} className="form-input w-full font-mono text-xs" value={settings['payments_dlocal_go_secret_key'] || ''} onChange={e => setSettings({ ...settings, payments_dlocal_go_secret_key: e.target.value })} onBlur={() => saveSetting('payments_dlocal_go_secret_key', settings['payments_dlocal_go_secret_key'] || '')} placeholder="sk_..." />
+                    </div>
+                    <div>
+                       <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Webhook X-Login</label>
+                       <input className="form-input w-full font-mono text-xs" value={settings['payments_dlocal_go_x_login'] || ''} onChange={e => setSettings({ ...settings, payments_dlocal_go_x_login: e.target.value })} onBlur={() => saveSetting('payments_dlocal_go_x_login', settings['payments_dlocal_go_x_login'] || '')} placeholder="x-login para validar firmas" />
                     </div>
                     <div>
                        <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">SmartFields API Key</label>

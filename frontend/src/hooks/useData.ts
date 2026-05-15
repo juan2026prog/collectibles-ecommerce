@@ -224,7 +224,7 @@ export function useCart() {
           content_name: item.title,
           content_ids: [item.product_id],
           value: item.price * item.quantity,
-          currency: 'USD'
+          currency: 'UYU'
         });
       }
     } catch (err) {

@@ -1,59 +1,94 @@
 import { test, expect } from '@playwright/test';
 
-// ==========================================
-// TESTER AGENT REPORT: E2E Checkout Flow
-// ==========================================
-// Este archivo representa la Capa de Pruebas Automatizadas 
-// solicitada por el Arquitecto. Asegura que ninguna actualización 
-// futura rompa el flujo de ventas principal (Checkout).
+const cartPayload = [
+  {
+    product_id: '11111111-1111-1111-1111-111111111111',
+    variant_id: '22222222-2222-2222-2222-222222222222',
+    quantity: 1,
+    title: 'Figura Test',
+    price: 1990,
+    image: '',
+    variant_name: 'Default',
+  },
+];
 
-test.describe('E-Commerce Core E2E', () => {
-  
-  test('Flujo de la orden: De la Frontpage a Completar Checkout', async ({ page }) => {
-    // 1. Visitar Web
-    await page.goto('http://localhost:5173/');
-    await expect(page).toHaveTitle(/Collectibles/);
+test.describe('Checkout flow', () => {
+  test('creates an order and redirects to the success screen using the validated flow', async ({ page }) => {
+    await page.addInitScript((cart) => {
+      localStorage.setItem('cart', JSON.stringify(cart));
+      localStorage.setItem('affiliate_code', 'AFI-TEST');
+    }, cartPayload);
 
-    // 2. Navegar a Tienda
-    await page.click('text=SHOP NOW');
-    await expect(page).toHaveURL(/.*shop/);
-
-    // 3. Añadir Producto al Carrito (Intercepción simulada de UI)
-    // El Test espera que exista un botón de 'Add to Cart' en la primera tarjeta de producto
-    const productCard = page.locator('.group').first();
-    await productCard.hover();
-    await productCard.locator('button:has-text("Add to Cart")').click();
-
-    // 4. Ir a Checkout
-    await page.goto('http://localhost:5173/checkout');
-    await expect(page.locator('text=BILLING DETAILS')).toBeVisible();
-
-    // 5. Rellenar Datos
-    await page.fill('input[type="email"]', 'tester-agent@collectibles.com');
-    await page.fill('input:has-text("First Name"), input[placeholder="First Name"]', 'Agent');
-    await page.fill('input:has-text("Last Name"), input[placeholder="Last Name"]', 'Tester');
-    await page.fill('input:has-text("Phone"), input[placeholder="Phone"]', '+59899123456');
-    await page.fill('input:has-text("Street Address"), input[placeholder="Street Address"]', 'Av. 18 de Julio 1234');
-    await page.fill('input:has-text("City"), input[placeholder="City"]', 'Montevideo');
-
-    // 6. Seleccionar dLocal Go
-    await page.click('label:has-text("dLocal Go")');
-
-    // MOCK: Prevenir redirección real a Sandbox Dlocal
-    await page.route('**/functions/v1/dlocalgo-checkout', route => {
-      route.fulfill({
+    await page.route('**/functions/v1/create-order', async (route) => {
+      const request = route.request();
+      const body = JSON.parse(request.postData() || '{}');
+      expect(body.payment_method).toBe('mercadopago');
+      expect(body.affiliate_code).toBe('AFI-TEST');
+      await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ redirect_url: 'http://localhost:5173/checkout/success?order_id=test-1234' })
+        body: JSON.stringify({
+          success: true,
+          order: {
+            id: 'ord-test-12345678',
+            total_amount: 1990,
+            subtotal: 1990,
+            discount: 0,
+            bank_discount: 0,
+            shipping: 0,
+            status: 'pending',
+            items_count: 1,
+            currency: 'UYU',
+            payment_method: 'mercadopago',
+            customer_email: 'tester@example.com',
+          },
+        }),
       });
     });
 
-    // 7. Pagar
-    await page.click('button:has-text("PLACE ORDER")');
+    await page.route('**/functions/v1/create-payment', async (route) => {
+      const body = JSON.parse(route.request().postData() || '{}');
+      expect(body.order_id).toBe('ord-test-12345678');
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          checkout_url: 'http://localhost:5173/checkout/success?order_id=ord-test-12345678&provider=mercadopago',
+        }),
+      });
+    });
 
-    // Verificación
-    // Como simulamos dlocal, deberá navegar a /checkout/success (este endpoint existe idealmente)
-    await page.waitForURL(/.*success/);
-    await expect(page.locator('text=Order placed')).toBeVisible();
+    await page.route('**/functions/v1/confirm-payment', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          status: 'paid',
+          order: {
+            id: 'ord-test-12345678',
+            status: 'paid',
+            total_amount: 1990,
+            currency: 'UYU',
+            payment_method: 'mercadopago',
+            customer_email: 'tester@example.com',
+          },
+        }),
+      });
+    });
+
+    await page.goto('/checkout');
+    await expect(page.getByText('Datos de facturacion', { exact: false })).toBeVisible();
+
+    await page.fill('input[type="email"]', 'tester@example.com');
+    await page.locator('input').nth(1).fill('Test');
+    await page.locator('input').nth(2).fill('Buyer');
+    await page.getByLabel('Retiro en local').click({ force: true });
+
+    await page.getByRole('button', { name: /Finalizar compra/i }).click();
+
+    await page.waitForURL(/checkout\/success/);
+    await expect(page.getByText('Gracias por tu compra')).toBeVisible();
+    await expect(page.getByText('Numero de orden')).toBeVisible();
   });
 });

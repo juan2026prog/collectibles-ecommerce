@@ -30,75 +30,75 @@ export default function Login() {
     } else {
       const { error } = await signUp(email, password);
       if (error) setError(error.message);
-      else setSuccess('Account created! Check your email for confirmation.');
+      else setSuccess('¡Cuenta creada! Revisá tu email para confirmar.');
     }
     setLoading(false);
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-white/5 flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2">
             {!settingsLoaded ? (
-              <div className="h-10 w-36 bg-gray-200 rounded-lg animate-pulse" />
+              <div className="h-10 w-36 bg-gray-200  animate-pulse" />
             ) : (
               <>
                 <img src={STORE_ISOLOGO_URL} alt={settings['store_name'] || 'Store'} className="w-10 h-10 rounded-full object-cover" />
-                <span className="text-2xl font-extrabold tracking-tight text-dark-800">{settings['store_name'] || 'COLLECTIBLES'}</span>
+                <span className="text-2xl font-extrabold tracking-tight text-slate-200">{settings['store_name'] || 'COLLECTIBLES'}</span>
               </>
             )}
           </Link>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
-          <h1 className="text-2xl font-bold text-dark-900 text-center mb-2">
+        <div className="glass  shadow-lg border border-white/10 p-8">
+          <h1 className="text-2xl font-bold text-white text-center mb-2">
             {isLogin ? 'Bienvenido' : 'Crear Cuenta'}
           </h1>
-          <p className="text-sm text-gray-500 text-center mb-6">
+          <p className="text-sm text-slate-400 text-center mb-6">
             {isLogin ? 'Inicia sesión en tu cuenta' : 'Únete a la comunidad'}
           </p>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">{error}</div>
+            <div className="mb-4 p-3 bg-red-900/30 border border-red-500/30 text-sm text-red-400">{error}</div>
           )}
           {success && (
-            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-600">{success}</div>
+            <div className="mb-4 p-3 bg-green-900/30 border border-green-500/30 text-sm text-green-400">{success}</div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="form-label">Email Address</label>
+              <label className="form-label">Correo electrónico</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                 <input
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   className="form-input pl-10"
-                  placeholder="your@email.com"
+                  placeholder="tu@email.com"
                   required
                 />
               </div>
             </div>
 
             <div>
-              <label className="form-label">Password</label>
+              <label className="form-label">Contraseña</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   className="form-input pl-10 pr-10"
-                  placeholder={isLogin ? 'Enter password' : 'Create password (min 6 chars)'}
+                  placeholder={isLogin ? 'Tu contraseña' : 'Crear contraseña (mín 6 caracteres)'}
                   minLength={6}
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-400"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -107,7 +107,7 @@ export default function Login() {
 
             {isLogin && (
               <div className="text-right">
-                <button type="button" className="text-sm text-primary-600 hover:underline">Forgot password?</button>
+                <button type="button" className="text-sm text-slate-500 cursor-not-allowed" disabled title="Disponible próximamente">¿Olvidaste tu contraseña?</button>
               </div>
             )}
 
@@ -125,10 +125,10 @@ export default function Login() {
           <div className="mt-6">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200"></div>
+                <div className="w-full border-t border-white/10"></div>
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500 font-medium">O continuar con</span>
+                <span className="px-2 bg-[#0e1525] text-slate-400 font-medium">O continuar con</span>
               </div>
             </div>
 
@@ -136,7 +136,7 @@ export default function Login() {
               <button
                 type="button"
                 onClick={async () => await signInWithGoogle()}
-                className="w-full flex justify-center items-center gap-3 py-2.5 px-4 border border-gray-300 rounded-lg shadow-sm bg-white text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors"
+                className="w-full flex justify-center items-center gap-3 py-2.5 px-4 border border-white/10  shadow-sm glass text-sm font-bold text-slate-300 hover:bg-white/5 transition-colors"
               >
                 <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -151,7 +151,7 @@ export default function Login() {
           </div>
 
           <div className="mt-8 text-center">
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-slate-400">
               {isLogin ? "¿No tienes una cuenta?" : '¿Ya tienes una cuenta?'}{' '}
               <button
                 onClick={() => { setIsLogin(!isLogin); setError(''); setSuccess(''); }}
@@ -163,8 +163,8 @@ export default function Login() {
           </div>
         </div>
 
-        <p className="text-center text-xs text-gray-400 mt-6">
-          By continuing, you agree to our Terms of Service and Privacy Policy.
+        <p className="text-center text-xs text-slate-500 mt-6">
+          Al continuar, aceptás nuestros Términos de Servicio y Política de Privacidad.
         </p>
       </div>
     </div>

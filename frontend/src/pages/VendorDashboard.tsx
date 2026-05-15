@@ -46,8 +46,9 @@ export default function VendorDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
+      <div className="min-h-[400px] flex flex-col items-center justify-center gap-6">
+        <RefreshCw className="w-12 h-12 text-[#f00856] animate-spin" />
+        <p className="text-[11px] font-black text-slate-500 uppercase tracking-[0.4em] animate-pulse">Initializing Protocol...</p>
       </div>
     );
   }
@@ -55,16 +56,24 @@ export default function VendorDashboard() {
   // Onboarding for non-vendors
   if (!vendorData) {
     return (
-      <div className="flex-1 p-10 max-w-4xl mx-auto flex flex-col justify-center items-center text-center min-h-[60vh]">
-        <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mb-6">
-          <Store className="w-10 h-10 text-blue-500" />
+      <div className="flex-1 flex flex-col justify-center items-center text-center min-h-[60vh] py-20 px-6">
+        <div className="glass p-16 rounded-[3rem] border border-white/10 shadow-2xl relative overflow-hidden group max-w-2xl">
+          <div className="absolute -top-10 -right-10 w-40 h-40 bg-[#f00856]/5 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700" />
+          
+          <div className="w-24 h-24 bg-[#f00856]/10 border border-[#f00856]/20 rounded-[2rem] flex items-center justify-center mx-auto mb-10 shadow-xl relative z-10 group-hover:bg-[#f00856] group-hover:text-white transition-all duration-500">
+            <Store className="w-10 h-10 group-hover:scale-110 transition-transform" />
+          </div>
+          
+          <h1 className="text-5xl font-black text-white tracking-tighter mb-6 relative z-10">Activar Panel Seller</h1>
+          <p className="text-slate-400 font-bold uppercase tracking-widest text-[11px] mb-12 max-w-md mx-auto leading-relaxed relative z-10">
+            Unite al ecosistema de sellers oficiales de Collectibles. Gestioná tu stock, sincronizá con Mercado Libre y escalá tus ventas con logística inteligente.
+          </p>
+          
+          <button onClick={handleInitialize}
+            className="bg-white text-black px-12 py-6 rounded-full font-black uppercase tracking-[0.2em] text-[12px] hover:bg-[#f00856] hover:text-white shadow-2xl transition-all hover:scale-105 active:scale-95 border border-white/10 relative z-10">
+            Inicializar Mi Tienda
+          </button>
         </div>
-        <h1 className="text-3xl font-black text-gray-900 mb-2">Panel de Vendedor</h1>
-        <p className="text-gray-500 mb-8 max-w-md">Gestioná tu tienda, productos, pedidos, envíos, finanzas y más desde un solo lugar.</p>
-        <button onClick={handleInitialize}
-          className="bg-blue-600 text-white px-10 py-4 rounded-full font-black hover:bg-blue-700 shadow-xl transition-all hover:scale-105">
-          Activar Mi Tienda
-        </button>
       </div>
     );
   }
@@ -98,7 +107,7 @@ export default function VendorDashboard() {
   }
 
   return (
-    <div className="flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+    <div className="animation-fade-in">
       {activeTab === 'overview' && <VOverview onChangeTab={setActiveTab} />}
       {activeTab === 'products' && <VProducts />}
       {activeTab === 'imports' && <VImports />}

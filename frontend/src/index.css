@@ -6,27 +6,27 @@
 
 @layer base {
   :root {
-    --bg-surface: #ffffff;
-    --text-main: #111827;
-    --text-muted: #6b7280;
-    --border-color: #e5e7eb;
-    --input-bg: #f9fafb;
-    --card-bg: #ffffff;
-  }
+    --bg: #05070f;
+    --panel: #0e1525;
+    --panel2: #131c31;
+    --red: #f00856;
+    --red2: #ff2c68;
+    --text: #f8fafc;
+    --muted: #94a3b8;
 
-  .gamger-grid {
-    --bg-surface: #04060d;
-    --text-main: #ffffff;
-    --text-muted: #9ca3af;
-    --border-color: rgba(255, 255, 255, 0.1);
-    --input-bg: #151c2e;
-    --card-bg: #151c2e;
+    --bg-surface: #05070f;
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --border-color: rgba(255, 255, 255, 0.08);
+    --input-bg: rgba(0, 0, 0, 0.35);
+    --card-bg: rgba(14, 21, 37, 0.78);
   }
 
   body {
     @apply antialiased selection:bg-primary-500 selection:text-white font-sans;
-    background-color: var(--bg-surface);
-    color: var(--text-main);
+    background-color: var(--bg);
+    color: var(--text);
+    overflow-x: hidden;
   }
   * {
     @apply scroll-smooth;
@@ -34,62 +34,99 @@
 }
 
 @layer components {
+  /* ═══ GLASS PANELS ═══ */
+  .glass {
+    background: rgba(14, 21, 37, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px);
+  }
+
+  .soft {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  /* ═══ LABELS (Section pre-titles) ═══ */
+  .label-tag {
+    color: var(--red2);
+    font-size: 11px;
+    letter-spacing: 0.25em;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
   /* ═══ BUTTONS ═══ */
   .btn-primary {
-    @apply inline-flex items-center justify-center px-6 py-3 bg-primary-600 text-white font-bold rounded-xl shadow-lg hover:bg-primary-500 hover:shadow-glow-red transition-all duration-300 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none uppercase tracking-wider text-sm;
+    @apply inline-flex items-center justify-center px-7 py-4 text-white font-black uppercase tracking-wider text-sm transition-all duration-300 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none;
+    background: var(--red);
+    box-shadow: 0 0 40px rgba(240, 8, 86, 0.35);
+    border-radius: 9999px;
+  }
+  .btn-primary:hover {
+    background: #ff2c68;
+    box-shadow: 0 0 50px rgba(240, 8, 86, 0.5);
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center px-6 py-3 bg-transparent font-bold rounded-xl border-2 transition-all duration-300 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none;
-    color: var(--text-main);
-    border-color: var(--border-color);
+    @apply inline-flex items-center justify-center px-7 py-4 font-black uppercase tracking-wider text-sm transition-all duration-300 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none;
+    background: rgba(14, 21, 37, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px);
+    color: white;
+    border-radius: 9999px;
   }
   .btn-secondary:hover {
-    background-color: rgba(0,0,0,0.05);
-  }
-  .gamger-grid .btn-secondary:hover {
-    background-color: rgba(255,255,255,0.1);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
   }
 
   .btn-accent {
-    @apply inline-flex items-center justify-center px-6 py-3 bg-neon-cyan text-dark-900 font-bold rounded-xl shadow-lg hover:shadow-glow-sm transition-all duration-300 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none;
+    @apply inline-flex items-center justify-center px-6 py-3 text-dark-900 font-bold transition-all duration-300 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none;
+    background: var(--red);
+    box-shadow: 0 0 40px rgba(240, 8, 86, 0.35);
+    border-radius: 9999px;
+    color: white;
   }
 
   .btn-ghost {
     @apply inline-flex items-center font-medium transition-colors underline-offset-4 hover:underline;
-    color: var(--text-muted);
+    color: var(--muted);
   }
   .btn-ghost:hover {
-    color: var(--color-primary-500);
+    color: var(--red2);
   }
 
   /* ═══ PRODUCT CARD ═══ */
   .product-card {
-    @apply relative rounded-2xl overflow-hidden border hover:-translate-y-1 transition-all duration-300;
-    background-color: var(--card-bg);
-    border-color: var(--border-color);
+    @apply relative overflow-hidden transition-all duration-300;
+    background: rgba(14, 21, 37, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px);
   }
   .product-card:hover {
-    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-  }
-  .gamger-grid .product-card:hover {
-    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    transform: translateY(-6px);
+    border-color: rgba(255, 44, 104, 0.45);
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.45);
   }
 
   .product-card-image {
     @apply relative aspect-square overflow-hidden;
-    background-color: var(--input-bg);
+    background: rgba(0, 0, 0, 0.3);
   }
 
   .product-card-body {
-    @apply p-3 sm:p-4;
+    @apply p-4;
   }
 
   /* ═══ BADGES ═══ */
   .badge {
-    @apply inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-black uppercase tracking-wider text-white;
+    @apply inline-flex items-center px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-white;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.1);
   }
-  .badge-hot { @apply bg-badge-hot; }
+  .badge-hot {
+    background: var(--red);
+  }
   .badge-sale { @apply bg-badge-sale; }
   .badge-preorder { @apply bg-badge-preorder; }
   .badge-new { @apply bg-badge-new; }
@@ -97,24 +134,28 @@
 
   /* ═══ SECTION TITLE ═══ */
   .section-title {
-    @apply text-2xl sm:text-3xl font-black uppercase tracking-tight;
-    color: var(--text-main);
+    @apply text-3xl sm:text-4xl font-black;
+    color: var(--text);
   }
 
   /* ═══ FORM INPUTS ═══ */
   .form-input {
-    @apply w-full border rounded-xl px-4 py-3 text-sm font-medium outline-none transition-all;
-    background-color: var(--input-bg);
-    color: var(--text-main);
-    border-color: var(--border-color);
+    @apply w-full px-4 py-3.5 text-sm font-medium outline-none transition-all;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
   }
   .form-input:focus {
-    @apply ring-2 ring-primary-200 border-primary-500;
+    border-color: var(--red);
+    box-shadow: 0 0 0 2px rgba(240, 8, 86, 0.15);
+  }
+  .form-input::placeholder {
+    color: var(--muted);
   }
 
   .form-label {
-    @apply block text-sm font-bold mb-1.5;
-    color: var(--text-muted);
+    @apply block text-xs font-black uppercase tracking-wider mb-2;
+    color: var(--muted);
   }
 
   .overlay-backdrop {
@@ -125,10 +166,37 @@
     @apply text-yellow-400 fill-current;
   }
   .star-empty {
-    @apply text-gray-400 opacity-50;
+    @apply text-gray-600 opacity-50;
+  }
+
+  /* ═══ SIDEBAR ═══ */
+  .sidebar-link {
+    @apply flex items-center gap-3 py-3.5 px-4 font-extrabold text-sm transition-colors;
+    color: #cbd5e1;
+  }
+  .sidebar-link:hover,
+  .sidebar-link.active {
+    background: rgba(240, 8, 86, 0.14);
+    color: white;
+  }
+
+  /* ═══ TABLE ROWS ═══ */
+  .table-row {
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr 0.8fr 0.8fr auto;
+    gap: 1rem;
+    align-items: center;
+    padding: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  @media (max-width: 900px) {
+    .table-row {
+      grid-template-columns: 1fr;
+    }
   }
 }
 
+/* ═══ MARQUEE ═══ */
 .marquee-track {
   display: flex;
   width: max-content;
@@ -138,6 +206,7 @@
   animation-play-state: paused;
 }
 
+/* ═══ SCROLLBAR ═══ */
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -146,6 +215,7 @@
   display: none;
 }
 
+/* ═══ GAMGER GRID TEXTURE ═══ */
 .gamger-grid {
   background-image: 
     linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
@@ -153,11 +223,33 @@
   background-size: 40px 40px;
 }
 
+/* ═══ GLOW LINE ═══ */
 .glow-line {
-  background: linear-gradient(90deg, transparent, rgba(0,245,255,0.3), transparent);
+  background: linear-gradient(90deg, transparent, rgba(240, 8, 86, 0.4), transparent);
   height: 1px;
 }
 
+/* ═══ IMAGE ZOOM ═══ */
 .img-zoom:hover img {
   transform: scale(1.05);
+}
+
+/* ═══ HERO NOISE ═══ */
+.hero-noise::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255,255,255,0.06) 1px, transparent 1px);
+  background-size: 16px 16px;
+  opacity: 0.05;
+  pointer-events: none;
+}
+
+/* ═══ NO SCROLLBAR ═══ */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }

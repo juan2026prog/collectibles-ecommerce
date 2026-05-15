@@ -14,44 +14,81 @@ const mockLogs = [
   { time: '26/03 22:00', action: 'Sync precios', items: 5, status: 'ok', user: 'Auto' },
   { time: '26/03 16:30', action: 'Importar publicación MLA-12349', items: 1, status: 'ok', user: 'admin' },
 ];
-
 export default function VMercadoLibre() {
   return (
-    <div className="space-y-5 max-w-6xl">
-      <div className="flex justify-between items-center">
-        <div><h2 className="text-2xl font-black text-gray-900">Mercado Libre</h2><p className="text-sm text-gray-500">Sincronización de catálogo</p></div>
-        <div className="flex gap-2">
-          <button className="text-sm font-bold bg-yellow-400 text-yellow-900 px-4 py-2.5 rounded-lg hover:bg-yellow-300 flex items-center gap-1.5"><RefreshCw className="w-4 h-4" /> Sincronizar Ahora</button>
-          <button className="text-sm font-bold bg-white border border-gray-200 px-4 py-2.5 rounded-lg hover:bg-gray-50 flex items-center gap-1.5"><Link2 className="w-4 h-4" /> Conectar Cuenta ML</button>
+    <div className="max-w-7xl space-y-8 animation-fade-in pb-20">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
+        <div>
+           <div className="text-[11px] text-[#f00856] font-black uppercase tracking-[0.4em] mb-3">Ecosystem Sync</div>
+           <h2 className="text-5xl font-black text-white">Mercado Libre</h2>
+           <p className="text-sm text-slate-500 font-bold mt-3 uppercase tracking-[0.2em]">Sincronización omnicanal de catálogo, stock y precios</p>
+        </div>
+        <div className="flex gap-4">
+          <button className="bg-[#FFE600] text-black text-[12px] font-black uppercase tracking-widest px-12 py-5 rounded-full hover:shadow-[0_0_50px_rgba(255,230,0,0.4)] transition-all flex items-center gap-4 active:scale-[0.98] border border-black/10">
+             <RefreshCw className="w-5 h-5" /> Sync ML Catalog
+          </button>
+          <button className="glass border border-white/10 text-white text-[12px] font-black uppercase tracking-widest px-12 py-5 rounded-full hover:bg-white/10 transition-all flex items-center gap-4 shadow-xl">
+             <Link2 className="w-5 h-5" /> Account Manager
+          </button>
         </div>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <MiniStat label="Sincronizados" value={mockSync.filter(s => s.syncStatus === 'synced').length} color="green" />
-        <MiniStat label="Con Error" value={mockSync.filter(s => s.syncStatus === 'error').length} color="red" />
-        <MiniStat label="Sin Vincular" value={mockSync.filter(s => s.syncStatus === 'unlinked').length} color="orange" />
-        <MiniStat label="Última Sync" value="10:15" color="blue" />
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+        <MiniStat label="Synced Nodes" value={mockSync.filter(s => s.syncStatus === 'synced').length} color="emerald" />
+        <MiniStat label="Sync Failures" value={mockSync.filter(s => s.syncStatus === 'error').length} color="red" />
+        <MiniStat label="Pending Link" value={mockSync.filter(s => s.syncStatus === 'unlinked').length} color="orange" />
+        <MiniStat label="Last Update" value="10:15" color="blue" />
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-gray-100 bg-gray-50"><h3 className="text-sm font-black text-gray-900">Panel de Sincronización</h3></div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-              <tr><th className="p-3 pl-4">Producto</th><th className="p-3">ID ML</th><th className="p-3">Sync</th><th className="p-3 text-center">Stock Local</th><th className="p-3 text-center">Stock ML</th><th className="p-3 text-right">Precio Local</th><th className="p-3 text-right">Precio ML</th><th className="p-3">Última Sync</th><th className="p-3">Error</th><th className="p-3"></th></tr>
+      <div className="glass rounded-[2.5rem] border border-white/10 overflow-hidden shadow-2xl">
+        <div className="p-10 md:p-12 border-b border-white/5 bg-white/[0.04] flex items-center gap-6">
+           <div className="w-12 h-12 rounded-2xl bg-[#f00856]/10 flex items-center justify-center shadow-xl">
+              <Layers className="w-6 h-6 text-[#f00856]" />
+           </div>
+           <h3 className="text-[12px] font-black text-white uppercase tracking-[0.5em]">Synchronization Matrix</h3>
+        </div>
+        <div className="overflow-x-auto no-scrollbar">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-white/[0.02] border-b border-white/5">
+              <tr className="text-[11px] font-black text-slate-500 uppercase tracking-[0.4em]">
+                <th className="p-10">Asset / SKU</th>
+                <th className="p-10">ML Publication ID</th>
+                <th className="p-10 text-center">Sync</th>
+                <th className="p-10 text-center">Local Qty</th>
+                <th className="p-10 text-center">ML Qty</th>
+                <th className="p-10 text-right">Local Price</th>
+                <th className="p-10 text-right">ML Price</th>
+                <th className="p-10">Diagnostic</th>
+                <th className="p-10"></th>
+              </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-white/5">
               {mockSync.map(s => (
-                <tr key={s.sku} className="hover:bg-gray-50">
-                  <td className="p-3 pl-4"><p className="font-bold text-gray-900 text-xs">{s.internal}</p><p className="text-[10px] text-gray-400">{s.sku}</p></td>
-                  <td className="p-3 font-mono text-xs text-gray-500">{s.mlId || '—'}</td>
-                  <td className="p-3"><span className={`w-2.5 h-2.5 rounded-full inline-block ${s.syncStatus === 'synced' ? 'bg-green-400' : s.syncStatus === 'error' ? 'bg-red-500' : 'bg-gray-300'}`}></span></td>
-                  <td className="p-3 text-center font-bold">{s.localStock}</td>
-                  <td className="p-3 text-center font-bold text-gray-500">{s.mlStock ?? '—'}</td>
-                  <td className="p-3 text-right">${s.localPrice}</td>
-                  <td className="p-3 text-right text-gray-500">{s.mlPrice ? `$${s.mlPrice}` : '—'}</td>
-                  <td className="p-3 text-xs text-gray-500">{s.lastSync || '—'}</td>
-                  <td className="p-3">{s.error && <span className="text-[10px] text-red-600 font-bold">{s.error}</span>}</td>
-                  <td className="p-3"><button className="text-[10px] font-bold text-blue-600">{s.syncStatus === 'unlinked' ? 'Vincular' : 'Reintentar'}</button></td>
+                <tr key={s.sku} className="hover:bg-white/[0.02] transition-colors group">
+                  <td className="p-10">
+                     <p className="font-black text-white text-[18px] group-hover:text-[#f00856] transition-colors uppercase tracking-tight">{s.internal}</p>
+                     <p className="text-[11px] text-slate-600 font-black uppercase tracking-[0.2em] mt-2 bg-white/5 px-2 py-0.5 rounded inline-block">{s.sku}</p>
+                  </td>
+                  <td className="p-10">
+                     <span className="font-mono text-[12px] text-slate-500 uppercase bg-white/5 px-3 py-1.5 rounded-lg border border-white/5 group-hover:text-white transition-colors">{s.mlId || '—'}</span>
+                  </td>
+                  <td className="p-10 text-center">
+                     <div className="flex justify-center">
+                        <div className={`w-4 h-4 rounded-full border-2 border-black ${s.syncStatus === 'synced' ? 'bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.5)]' : s.syncStatus === 'error' ? 'bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)]' : 'bg-slate-800 shadow-xl'}`}></div>
+                     </div>
+                  </td>
+                  <td className="p-10 text-center font-black text-white text-[18px] tracking-tighter">{s.localStock}</td>
+                  <td className="p-10 text-center font-black text-slate-600 text-[18px] tracking-tighter group-hover:text-slate-400 transition-colors">{s.mlStock ?? '—'}</td>
+                  <td className="p-10 text-right text-[18px] font-black text-white tracking-tighter">${s.localPrice}</td>
+                  <td className="p-10 text-right text-[18px] font-black text-slate-500 tracking-tighter group-hover:text-slate-300 transition-colors">{s.mlPrice ? `$${s.mlPrice}` : '—'}</td>
+                  <td className="p-10">
+                     {s.error && <span className="badge rounded-lg border border-red-500/20 text-red-500 bg-red-500/10 px-4 py-2 text-[10px] whitespace-nowrap shadow-lg">{s.error}</span>}
+                  </td>
+                  <td className="p-10 text-right">
+                     <button className="text-[11px] font-black text-white uppercase tracking-widest border border-white/10 px-8 py-4 rounded-full hover:bg-[#f00856] hover:border-[#f00856] transition-all active:scale-[0.95] shadow-xl group-hover:shadow-[#f00856]/20">
+                        {s.syncStatus === 'unlinked' ? 'Link Now' : 'Retry'}
+                     </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -59,21 +96,30 @@ export default function VMercadoLibre() {
         </div>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-gray-100 bg-gray-50"><h3 className="text-sm font-black text-gray-900">Logs de Sincronización</h3></div>
-        <table className="w-full text-left text-sm">
-          <tbody className="divide-y divide-gray-50">
-            {mockLogs.map((l, i) => (
-              <tr key={i} className="hover:bg-gray-50">
-                <td className="p-3 pl-4 text-xs text-gray-500 w-32">{l.time}</td>
-                <td className="p-3 font-medium text-gray-800">{l.action}</td>
-                <td className="p-3 text-gray-500 text-xs">{l.items} productos</td>
-                <td className="p-3"><span className={`text-[10px] font-bold px-2 py-0.5 rounded ${l.status === 'ok' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>{l.status === 'ok' ? 'OK' : 'Error'}</span></td>
-                <td className="p-3 text-xs text-gray-400">{l.user}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="glass rounded-[2.5rem] border border-white/10 overflow-hidden shadow-2xl">
+        <div className="p-10 md:p-12 border-b border-white/5 bg-white/[0.04] flex items-center gap-6">
+           <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center">
+              <Clock className="w-6 h-6 text-slate-500" />
+           </div>
+           <h3 className="text-[12px] font-black text-white uppercase tracking-[0.5em]">Event Log / System Activity</h3>
+        </div>
+        <div className="overflow-x-auto no-scrollbar">
+          <table className="w-full text-left border-collapse">
+            <tbody className="divide-y divide-white/5">
+              {mockLogs.map((l, i) => (
+                <tr key={i} className="hover:bg-white/[0.02] transition-colors group">
+                  <td className="p-10 text-[12px] text-slate-700 font-black uppercase tracking-[0.2em] w-56">{l.time}</td>
+                  <td className="p-10 font-black text-white text-[16px] uppercase tracking-widest group-hover:text-[#f00856] group-hover:translate-x-3 transition-all">{l.action}</td>
+                  <td className="p-10 text-slate-600 text-[12px] font-black uppercase tracking-widest">{l.items} products affected</td>
+                  <td className="p-10">
+                     <span className={`badge px-5 py-2.5 rounded-full shadow-2xl text-[10px] ${l.status === 'ok' ? 'text-emerald-400 bg-emerald-400/10' : 'text-red-400 bg-red-400/10'}`}>{l.status}</span>
+                  </td>
+                  <td className="p-10 text-[12px] font-black text-slate-800 uppercase tracking-widest text-right group-hover:text-slate-600 transition-colors">{l.user}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -81,9 +127,10 @@ export default function VMercadoLibre() {
 
 function MiniStat({ label, value, color }: { label: string; value: number | string; color: string }) {
   return (
-    <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
-      <p className="text-xl font-black text-gray-900">{value}</p>
-      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</p>
+    <div className="soft rounded-[2rem] p-12 group hover:bg-white/[0.04] transition-all border border-white/5 hover:border-[#f00856]/30 shadow-xl overflow-hidden relative">
+      <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-white/5 rounded-full group-hover:scale-150 transition-transform duration-700"></div>
+      <p className="text-5xl font-black text-white group-hover:text-[#f00856] transition-all mb-4 tracking-tighter relative z-10">{value}</p>
+      <p className="text-[11px] font-black text-slate-600 uppercase tracking-[0.4em] relative z-10 group-hover:text-slate-400 transition-colors">{label}</p>
     </div>
   );
 }

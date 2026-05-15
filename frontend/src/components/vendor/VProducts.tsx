@@ -11,12 +11,12 @@ const mockProducts = [
 ];
 
 const statusMap: Record<string, { label: string; cls: string }> = {
-  draft: { label: 'Borrador', cls: 'bg-gray-100 text-gray-600' },
-  active: { label: 'Activo', cls: 'bg-green-50 text-green-700' },
-  paused: { label: 'Pausado', cls: 'bg-yellow-50 text-yellow-700' },
-  out_of_stock: { label: 'Sin Stock', cls: 'bg-red-50 text-red-700' },
-  archived: { label: 'Archivado', cls: 'bg-gray-50 text-gray-500' },
-  sync_error: { label: 'Error Sync', cls: 'bg-red-100 text-red-700' },
+  draft: { label: 'Borrador', cls: 'border-white/10 text-slate-500 bg-white/5' },
+  active: { label: 'Activo', cls: 'border-emerald-500/20 text-emerald-500 bg-emerald-500/5' },
+  paused: { label: 'Pausado', cls: 'border-yellow-500/20 text-yellow-500 bg-yellow-500/5' },
+  out_of_stock: { label: 'Sin Stock', cls: 'border-red-500/20 text-red-500 bg-red-500/5' },
+  archived: { label: 'Archivado', cls: 'border-white/5 text-slate-600 bg-white/5' },
+  sync_error: { label: 'Error Sync', cls: 'border-red-500/20 text-red-500 bg-red-500/5' },
 };
 
 export default function VProducts() {
@@ -31,111 +31,143 @@ export default function VProducts() {
   });
 
   const toggleSelect = (id: string) => setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  const toggleAll = () => setSelected(selected.length === filtered.length ? [] : filtered.map(p => p.id));
+  const toggleAll = () => setSelected(selected.length === filtered.length && filtered.length > 0 ? [] : filtered.map(p => p.id));
 
   return (
-    <div className="space-y-5 max-w-7xl">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="max-w-7xl space-y-8 animation-fade-in pb-20">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
         <div>
-          <h2 className="text-2xl font-black text-gray-900">Productos</h2>
-          <p className="text-sm text-gray-500">{mockProducts.length} productos · {mockProducts.filter(p => p.status === 'active').length} activos</p>
+           <div className="text-[11px] text-[#f00856] font-black uppercase tracking-[0.4em] mb-3">Inventory Control</div>
+           <h2 className="text-5xl font-black text-white">Gestión de Catálogo</h2>
+           <p className="text-sm text-slate-500 font-bold mt-3 uppercase tracking-[0.2em]">{mockProducts.length} items total · {mockProducts.filter(p => p.status === 'active').length} publicados</p>
         </div>
-        <div className="flex gap-2">
-          <button className="bg-gray-900 text-white text-sm font-bold px-4 py-2.5 rounded-lg hover:bg-gray-800 flex items-center gap-1.5"><Plus className="w-4 h-4" /> Crear Producto</button>
-          <button className="bg-white border border-gray-200 text-sm font-bold px-4 py-2.5 rounded-lg hover:bg-gray-50 flex items-center gap-1.5"><Upload className="w-4 h-4" /> Importar</button>
+        <div className="flex gap-4 w-full lg:w-auto">
+          <button className="flex-1 lg:flex-none bg-[#f00856] text-white text-[12px] font-black uppercase tracking-widest px-12 py-5 rounded-full hover:bg-[#ff2c68] transition-all shadow-[0_0_40px_rgba(240,8,86,0.3)] active:scale-[0.98] border border-white/10">
+             + New Product
+          </button>
+          <button className="flex-1 lg:flex-none glass border border-white/10 text-white text-[12px] font-black uppercase tracking-widest px-12 py-5 rounded-full hover:bg-white/10 transition-all shadow-xl">
+             <Upload className="w-5 h-5 inline mr-3" /> Import CSV
+          </button>
         </div>
       </div>
 
       {/* Filters & Search */}
-      <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm flex flex-wrap gap-2 items-center">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre o SKU..."
-            className="w-full bg-gray-50 border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-sm outline-none focus:border-blue-500" />
+      <div className="flex flex-col xl:flex-row gap-6">
+        <div className="relative flex-1 group">
+          <Search className="absolute left-8 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-600 group-focus-within:text-[#f00856] transition-colors" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by SKU, Name or Category..."
+            className="w-full bg-white/5 border border-white/10 p-7 pl-20 rounded-[2rem] text-sm font-black uppercase tracking-widest outline-none focus:border-[#f00856] focus:bg-white/[0.08] transition-all placeholder:text-slate-800 shadow-inner group-hover:border-white/20" />
         </div>
-        {['all', 'active', 'draft', 'out_of_stock', 'paused', 'sync_error'].map(s => (
-          <button key={s} onClick={() => setFilterStatus(s)}
-            className={`px-3 py-2 rounded-lg text-xs font-bold transition-all ${filterStatus === s ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}>
-            {s === 'all' ? 'Todos' : statusMap[s]?.label || s}
-          </button>
-        ))}
+        <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
+          {['all', 'active', 'draft', 'out_of_stock', 'paused', 'sync_error'].map(s => (
+            <button key={s} onClick={() => setFilterStatus(s)}
+              className={`px-10 py-6 text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap rounded-3xl border ${filterStatus === s ? 'bg-white text-black border-white shadow-2xl scale-[1.05]' : 'bg-white/5 text-slate-500 border-white/10 hover:bg-white/10 hover:border-white/20'}`}>
+              {s === 'all' ? 'Ver Todos' : statusMap[s]?.label || s}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Bulk Actions */}
       {selected.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center justify-between">
-          <span className="text-sm font-bold text-blue-800">{selected.length} seleccionados</span>
-          <div className="flex gap-2">
-            <button className="text-xs font-bold bg-white border border-blue-200 px-3 py-1.5 rounded-lg text-blue-700 hover:bg-blue-50">Editar Precios</button>
-            <button className="text-xs font-bold bg-white border border-blue-200 px-3 py-1.5 rounded-lg text-blue-700 hover:bg-blue-50">Editar Stock</button>
-            <button className="text-xs font-bold bg-white border border-blue-200 px-3 py-1.5 rounded-lg text-blue-700 hover:bg-blue-50">Pausar</button>
-            <button className="text-xs font-bold bg-white border border-blue-200 px-3 py-1.5 rounded-lg text-blue-700 hover:bg-blue-50">Duplicar</button>
-            <button className="text-xs font-bold bg-white border border-red-200 px-3 py-1.5 rounded-lg text-red-600 hover:bg-red-50">Archivar</button>
+        <div className="bg-[#f00856] p-10 rounded-[3rem] flex flex-col md:flex-row items-center justify-between gap-10 animation-slide-up shadow-[0_30px_60px_rgba(240,8,86,0.4)] border border-white/20 relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-10 opacity-10 pointer-events-none">
+             <Package className="w-32 h-32 text-white -rotate-12" />
+          </div>
+          <div className="flex items-center gap-6 relative z-10">
+             <div className="w-14 h-14 rounded-2xl bg-white text-[#f00856] flex items-center justify-center font-black text-2xl shadow-2xl animate-in zoom-in duration-300">{selected.length}</div>
+             <div>
+                <span className="text-[12px] font-black text-white uppercase tracking-[0.4em]">Items seleccionados</span>
+                <p className="text-[10px] text-white/60 font-black uppercase mt-1">Acción masiva en progreso</p>
+             </div>
+          </div>
+          <div className="flex flex-wrap justify-center gap-3 relative z-10">
+            {['Edit Prices', 'Edit Stock', 'Pause', 'Duplicate'].map(act => (
+              <button key={act} className="text-[11px] font-black uppercase tracking-widest bg-black/20 text-white px-8 py-4 rounded-full hover:bg-black/40 transition-all border border-white/10 active:scale-95 shadow-lg">
+                {act}
+              </button>
+            ))}
+            <button className="text-[11px] font-black uppercase tracking-widest bg-white text-[#f00856] px-8 py-4 rounded-full hover:bg-black hover:text-white transition-all shadow-2xl active:scale-95">
+              Delete Forever
+            </button>
           </div>
         </div>
       )}
 
-      {/* Table */}
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr>
-                <th className="p-3 pl-4 w-10"><input type="checkbox" checked={selected.length === filtered.length && filtered.length > 0} onChange={toggleAll} className="rounded" /></th>
-                <th className="p-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Producto</th>
-                <th className="p-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">SKU</th>
-                <th className="p-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Precio</th>
-                <th className="p-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Stock</th>
-                <th className="p-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Variantes</th>
-                <th className="p-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">ML</th>
-                <th className="p-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Estado</th>
-                <th className="p-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Origen</th>
-                <th className="p-3"></th>
+      {/* Table Area */}
+      <div className="glass rounded-[2.5rem] border border-white/10 overflow-hidden shadow-2xl">
+        <div className="overflow-x-auto no-scrollbar">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-white/[0.04] border-b border-white/5">
+              <tr className="text-[11px] font-black text-slate-500 uppercase tracking-[0.4em]">
+                <th className="p-10 w-16">
+                  <input type="checkbox" checked={selected.length === filtered.length && filtered.length > 0} onChange={toggleAll} 
+                    className="w-6 h-6 bg-black/40 border-white/10 rounded-lg checked:bg-[#f00856] transition-all cursor-pointer shadow-inner" />
+                </th>
+                <th className="p-10">Product Details</th>
+                <th className="p-10">SKU</th>
+                <th className="p-10">Financials</th>
+                <th className="p-10">Inventory</th>
+                <th className="p-10">Sync</th>
+                <th className="p-10 text-center">Status</th>
+                <th className="p-10"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-white/5">
               {filtered.map(p => (
-                <tr key={p.id} className="hover:bg-gray-50 group">
-                  <td className="p-3 pl-4"><input type="checkbox" checked={selected.includes(p.id)} onChange={() => toggleSelect(p.id)} className="rounded" /></td>
-                  <td className="p-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <Image className="w-4 h-4 text-gray-400" />
+                <tr key={p.id} className="hover:bg-white/[0.02] group transition-colors">
+                  <td className="p-10">
+                    <input type="checkbox" checked={selected.includes(p.id)} onChange={() => toggleSelect(p.id)} 
+                      className="w-6 h-6 bg-black/40 border-white/10 rounded-lg checked:bg-[#f00856] transition-all cursor-pointer shadow-inner" />
+                  </td>
+                  <td className="p-10">
+                    <div className="flex items-center gap-8">
+                      <div className="w-20 h-20 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0 group-hover:border-[#f00856]/40 group-hover:bg-[#f00856]/5 transition-all overflow-hidden shadow-inner">
+                        <Image className="w-8 h-8 text-slate-800 group-hover:text-[#f00856] transition-colors" />
                       </div>
                       <div>
-                        <p className="font-bold text-gray-900 text-sm">{p.name}</p>
-                        <p className="text-[10px] text-gray-400">{p.category} · {p.brand}</p>
+                        <p className="font-black text-white text-[18px] group-hover:text-[#f00856] transition-colors uppercase tracking-tight">{p.name}</p>
+                        <p className="text-[11px] text-slate-600 font-black uppercase tracking-[0.2em] mt-2 bg-white/5 px-2 py-1 rounded inline-block">{p.category} · {p.brand}</p>
                       </div>
                     </div>
                   </td>
-                  <td className="p-3 font-mono text-xs text-gray-500">{p.sku}</td>
-                  <td className="p-3">
+                  <td className="p-10">
+                    <span className="font-mono text-[12px] text-slate-500 tracking-tighter bg-white/5 px-3 py-1.5 rounded-lg border border-white/5 group-hover:text-white transition-colors">{p.sku}</span>
+                  </td>
+                  <td className="p-10">
                     {p.promoPrice ? (
-                      <div>
-                        <span className="line-through text-gray-400 text-xs">${p.price}</span>
-                        <span className="font-black text-red-600 ml-1">${p.promoPrice}</span>
+                      <div className="space-y-1">
+                        <p className="line-through text-slate-700 text-[12px] font-black">${p.price}</p>
+                        <p className="font-black text-[#f00856] text-[20px] tracking-tighter">${p.promoPrice}</p>
                       </div>
-                    ) : <span className="font-black text-gray-900">${p.price}</span>}
+                    ) : <p className="font-black text-white text-[20px] tracking-tighter">${p.price}</p>}
                   </td>
-                  <td className="p-3">
-                    <span className={`font-black ${p.stock === 0 ? 'text-red-600' : p.stock <= 5 ? 'text-yellow-600' : 'text-gray-900'}`}>{p.stock}</span>
-                    {p.stock <= 5 && p.stock > 0 && <AlertTriangle className="w-3 h-3 text-yellow-500 inline ml-1" />}
+                  <td className="p-10">
+                    <div className="flex items-center gap-4">
+                       <span className={`text-[20px] font-black ${p.stock === 0 ? 'text-red-500' : p.stock <= 5 ? 'text-amber-500' : 'text-white'}`}>{p.stock}</span>
+                       {p.stock <= 5 && <AlertTriangle className={`w-5 h-5 ${p.stock === 0 ? 'text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.4)] animate-pulse' : 'text-amber-500'}`} />}
+                    </div>
+                    <p className="text-[11px] text-slate-600 font-black uppercase tracking-widest mt-2 bg-white/5 px-2 py-0.5 rounded inline-block">{p.variants} variants</p>
                   </td>
-                  <td className="p-3 text-gray-600">{p.variants}</td>
-                  <td className="p-3">
-                    <span className={`w-2 h-2 rounded-full inline-block ${p.ml_synced ? 'bg-green-400' : 'bg-gray-300'}`}></span>
+                  <td className="p-10">
+                    <div className={`w-4 h-4 rounded-full border-2 border-black ${p.ml_synced ? 'bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.5)]' : 'bg-slate-800 shadow-[0_0_10px_rgba(0,0,0,0.5)]'}`} title={p.ml_synced ? 'Synced' : 'Not Synced'}></div>
                   </td>
-                  <td className="p-3">
-                    <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded ${statusMap[p.status]?.cls || 'bg-gray-100 text-gray-500'}`}>
+                  <td className="p-10 text-center">
+                    <span className={`badge px-5 py-2.5 rounded-full ${statusMap[p.status]?.cls.split(' border')[0]} shadow-xl text-[10px]`}>
                       {statusMap[p.status]?.label || p.status}
                     </span>
                   </td>
-                  <td className="p-3 text-[10px] text-gray-400 uppercase">{p.origin}</td>
-                  <td className="p-3">
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button className="p-1.5 rounded hover:bg-gray-100"><Eye className="w-3.5 h-3.5 text-gray-400" /></button>
-                      <button className="p-1.5 rounded hover:bg-gray-100"><Edit3 className="w-3.5 h-3.5 text-gray-400" /></button>
-                      <button className="p-1.5 rounded hover:bg-gray-100"><Copy className="w-3.5 h-3.5 text-gray-400" /></button>
+                  <td className="p-10">
+                    <div className="flex gap-3 opacity-0 group-hover:opacity-100 transition-all justify-end scale-95 group-hover:scale-100">
+                      <button className="w-12 h-12 rounded-2xl border border-white/5 bg-white/5 hover:bg-[#f00856] hover:text-white hover:border-[#f00856] flex items-center justify-center transition-all shadow-xl">
+                        <Eye className="w-5 h-5" />
+                      </button>
+                      <button className="w-12 h-12 rounded-2xl border border-white/5 bg-white/5 hover:bg-[#f00856] hover:text-white hover:border-[#f00856] flex items-center justify-center transition-all shadow-xl">
+                        <Edit3 className="w-5 h-5" />
+                      </button>
+                      <button className="w-12 h-12 rounded-2xl border border-white/5 bg-white/5 hover:bg-[#f00856] hover:text-white hover:border-[#f00856] flex items-center justify-center transition-all shadow-xl">
+                        <Copy className="w-5 h-5" />
+                      </button>
                     </div>
                   </td>
                 </tr>

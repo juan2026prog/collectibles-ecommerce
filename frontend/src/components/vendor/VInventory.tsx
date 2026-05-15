@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Warehouse, Search, Plus, ArrowRightLeft, Lock, Unlock, TrendingDown, AlertTriangle, History, Package } from 'lucide-react';
+import { Warehouse, Search, Plus, ArrowRightLeft, Lock, Unlock, TrendingDown, AlertTriangle, History, Package, Clock } from 'lucide-react';
 
 const mockInventory = [
   { sku: 'REM-OVS-001', name: 'Remera Oversize Urban', current: 45, reserved: 3, available: 42, minimum: 10, warehouse: 'Principal', status: 'ok' },
@@ -24,41 +24,62 @@ const mockWarehouses = [
   { id: 3, name: 'Pickup Pocitos', address: 'Av. Brasil 2845, Pocitos', city: 'Montevideo', responsible: 'Carlos Ruiz', hours: 'L-S 10-20', products: 0, type: 'pickup' },
 ];
 
+import { MapPin } from 'lucide-react';
+
 export default function VInventory({ mode = 'inventory' }: { mode?: 'inventory' | 'warehouses' }) {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
 
   if (mode === 'warehouses') {
     return (
-      <div className="space-y-5 max-w-5xl">
-        <div className="flex justify-between items-center">
-          <div><h2 className="text-2xl font-black text-gray-900">Depósitos</h2><p className="text-sm text-gray-500">{mockWarehouses.length} depósitos configurados</p></div>
-          <button className="bg-gray-900 text-white text-sm font-bold px-4 py-2.5 rounded-lg hover:bg-gray-800 flex items-center gap-1.5"><Plus className="w-4 h-4" /> Agregar Depósito</button>
+      <div className="space-y-8 animation-fade-in pb-20">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
+          <div>
+            <div className="text-[11px] text-[#f00856] font-black uppercase tracking-[0.4em] mb-3">Network Architecture</div>
+            <h2 className="text-5xl font-black text-white">Centros de Distribución</h2>
+            <p className="text-sm text-slate-500 font-bold mt-3 uppercase tracking-[0.2em]">{mockWarehouses.length} nodos activos en la red</p>
+          </div>
+          <button className="bg-white text-black text-[11px] font-black uppercase tracking-widest px-10 py-5 rounded-full hover:bg-[#f00856] hover:text-white transition-all shadow-xl active:scale-[0.98]">
+             + Add Distribution Center
+          </button>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {mockWarehouses.map(w => (
-            <div key={w.id} className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex justify-between items-start mb-3">
-                <div className="flex items-center gap-2">
-                  <div className={`p-2 rounded-lg ${w.type === 'principal' ? 'bg-blue-50 text-blue-600' : w.type === 'pickup' ? 'bg-green-50 text-green-600' : 'bg-purple-50 text-purple-600'}`}>
-                    <Warehouse className="w-4 h-4" />
+            <div key={w.id} className="soft rounded-[2.5rem] p-10 hover:bg-white/[0.04] transition-all group border border-white/5 hover:border-[#f00856]/30 shadow-xl">
+              <div className="flex justify-between items-start mb-10">
+                <div className="flex items-center gap-5">
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${w.type === 'principal' ? 'bg-blue-500/10 text-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.1)]' : w.type === 'pickup' ? 'bg-emerald-500/10 text-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 'bg-purple-500/10 text-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.1)]'}`}>
+                    <Warehouse className="w-6 h-6" />
                   </div>
                   <div>
-                    <h3 className="font-black text-gray-900">{w.name}</h3>
-                    <span className="text-[10px] font-bold uppercase text-gray-400">{w.type}</span>
+                    <h3 className="text-xl font-black text-white uppercase tracking-widest">{w.name}</h3>
+                    <span className="badge mt-2">{w.type} center</span>
                   </div>
                 </div>
-                <span className="text-lg font-black text-gray-900">{w.products}</span>
+                <div className="text-right">
+                   <p className="text-3xl font-black text-white group-hover:text-[#f00856] transition-colors">{w.products}</p>
+                   <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest mt-1">SKUs</p>
+                </div>
               </div>
-              <div className="space-y-1.5 text-xs text-gray-600">
-                <p>📍 {w.address}</p>
-                <p>👤 {w.responsible}</p>
-                <p>🕐 {w.hours}</p>
+              <div className="space-y-5">
+                <div className="flex items-start gap-4">
+                  <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0"><MapPin className="w-4 h-4 text-[#f00856]" /></div>
+                  <p className="text-[12px] font-black text-slate-400 uppercase tracking-widest leading-relaxed">{w.address}</p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0"><Lock className="w-4 h-4 text-slate-700" /></div>
+                  <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Lead: {w.responsible}</p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0"><Clock className="w-4 h-4 text-slate-700" /></div>
+                  <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">{w.hours}</p>
+                </div>
               </div>
-              <div className="mt-4 flex gap-2">
-                <button className="text-[10px] font-bold bg-gray-50 border border-gray-200 px-2.5 py-1.5 rounded-lg hover:bg-gray-100">Ver Stock</button>
-                <button className="text-[10px] font-bold bg-gray-50 border border-gray-200 px-2.5 py-1.5 rounded-lg hover:bg-gray-100">Editar</button>
-                <button className="text-[10px] font-bold bg-gray-50 border border-gray-200 px-2.5 py-1.5 rounded-lg hover:bg-gray-100">Transferir</button>
+              <div className="mt-12 pt-10 border-t border-white/5 flex flex-wrap gap-3">
+                <button className="text-[10px] font-black uppercase tracking-widest bg-white/5 text-white px-6 py-3 rounded-full hover:bg-white hover:text-black transition-all border border-white/10">Stock</button>
+                <button className="text-[10px] font-black uppercase tracking-widest bg-white/5 text-white px-6 py-3 rounded-full hover:bg-white hover:text-black transition-all border border-white/10">Edit</button>
+                <button className="text-[10px] font-black uppercase tracking-widest bg-white/5 text-white px-6 py-3 rounded-full hover:bg-white hover:text-black transition-all border border-white/10">Transfer</button>
               </div>
             </div>
           ))}
@@ -75,91 +96,137 @@ export default function VInventory({ mode = 'inventory' }: { mode?: 'inventory' 
   });
 
   return (
-    <div className="space-y-5 max-w-7xl">
-      <h2 className="text-2xl font-black text-gray-900">Inventario</h2>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div className="space-y-8 animation-fade-in pb-20">
+      <div>
+         <div className="text-[11px] text-[#f00856] font-black uppercase tracking-[0.4em] mb-3">Inventory System</div>
+         <h2 className="text-5xl font-black text-white">Control de Existencias</h2>
+         <p className="text-sm text-slate-500 font-bold mt-3 uppercase tracking-[0.2em]">Monitoreo en tiempo real de unidades disponibles</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard label="Stock Total" value={mockInventory.reduce((s, p) => s + p.current, 0).toString()} color="blue" />
         <StatCard label="Reservado" value={mockInventory.reduce((s, p) => s + p.reserved, 0).toString()} color="purple" />
         <StatCard label="Sin Stock" value={mockInventory.filter(p => p.status === 'out').length.toString()} color="red" />
         <StatCard label="Stock Bajo" value={mockInventory.filter(p => p.status === 'low').length.toString()} color="yellow" />
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm flex flex-wrap gap-2 items-center">
-        <div className="relative flex-1 min-w-[180px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar producto..."
-            className="w-full bg-gray-50 border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-sm outline-none focus:border-blue-500" />
+      <div className="flex flex-col xl:flex-row gap-4">
+        <div className="relative flex-1 group">
+          <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 group-focus-within:text-[#f00856] transition-colors" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by SKU or Product Name..."
+            className="w-full bg-white/5 border border-white/10 p-6 pl-16 rounded-2xl text-xs font-black uppercase tracking-widest outline-none focus:border-[#f00856] focus:bg-white/[0.08] transition-all placeholder:text-slate-800" />
         </div>
-        {['all', 'low', 'out'].map(f => (
-          <button key={f} onClick={() => setFilterStatus(f)}
-            className={`px-3 py-2 rounded-lg text-xs font-bold ${filterStatus === f ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}>
-            {f === 'all' ? 'Todos' : f === 'low' ? 'Stock Bajo' : 'Sin Stock'}
+        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+          {['all', 'low', 'out'].map(f => (
+            <button key={f} onClick={() => setFilterStatus(f)}
+              className={`px-8 py-5 text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap rounded-2xl border ${filterStatus === f ? 'bg-white text-black border-white shadow-xl' : 'bg-white/5 text-slate-500 border-white/10 hover:bg-white/10 hover:border-white/20'}`}>
+              {f === 'all' ? 'Ver Todos' : f === 'low' ? 'Stock Bajo' : 'Sin Stock'}
+            </button>
+          ))}
+          <button className="px-8 py-5 text-[10px] font-black uppercase tracking-widest bg-[#f00856] text-white rounded-2xl hover:bg-[#ff2c68] transition-all whitespace-nowrap flex items-center gap-3 shadow-[0_0_20px_rgba(240,8,86,0.2)] active:scale-95">
+            <Plus className="w-4 h-4" /> Add Units
           </button>
-        ))}
-        <button className="ml-auto text-xs font-bold bg-gray-900 text-white px-3 py-2 rounded-lg flex items-center gap-1"><Plus className="w-3 h-3" /> Ingreso</button>
-        <button className="text-xs font-bold bg-white border border-gray-200 px-3 py-2 rounded-lg flex items-center gap-1"><ArrowRightLeft className="w-3 h-3" /> Transferir</button>
+        </div>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-            <tr><th className="p-3 pl-4">Producto</th><th className="p-3">SKU</th><th className="p-3 text-center">Actual</th><th className="p-3 text-center">Reservado</th><th className="p-3 text-center">Disponible</th><th className="p-3 text-center">Mínimo</th><th className="p-3">Depósito</th><th className="p-3">Estado</th><th className="p-3"></th></tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {filtered.map(p => (
-              <tr key={p.sku} className="hover:bg-gray-50">
-                <td className="p-3 pl-4 font-bold text-gray-900">{p.name}</td>
-                <td className="p-3 font-mono text-xs text-gray-500">{p.sku}</td>
-                <td className="p-3 text-center font-black">{p.current}</td>
-                <td className="p-3 text-center text-purple-600 font-bold">{p.reserved}</td>
-                <td className="p-3 text-center font-black text-gray-900">{p.available}</td>
-                <td className="p-3 text-center text-gray-400">{p.minimum}</td>
-                <td className="p-3 text-xs text-gray-500">{p.warehouse}</td>
-                <td className="p-3">
-                  <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${p.status === 'ok' ? 'bg-green-50 text-green-700' : p.status === 'low' ? 'bg-yellow-50 text-yellow-700' : 'bg-red-50 text-red-700'}`}>
-                    {p.status === 'ok' ? 'OK' : p.status === 'low' ? 'Bajo' : 'Agotado'}
-                  </span>
-                </td>
-                <td className="p-3"><button className="text-[10px] font-bold text-blue-600 hover:text-blue-700">Ajustar</button></td>
+      <div className="glass rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl">
+        <div className="overflow-x-auto no-scrollbar">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-white/[0.03] border-b border-white/5">
+              <tr className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">
+                <th className="p-8">Product Item</th>
+                <th className="p-8">SKU</th>
+                <th className="p-8 text-center">In Hand</th>
+                <th className="p-8 text-center">Reserved</th>
+                <th className="p-8 text-center font-black text-white">Net Avail</th>
+                <th className="p-8 text-center">Threshold</th>
+                <th className="p-8">Warehouse</th>
+                <th className="p-8">Status</th>
+                <th className="p-8"></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {filtered.map(p => (
+                <tr key={p.sku} className="hover:bg-white/[0.02] group transition-colors">
+                  <td className="p-8">
+                     <p className="font-black text-white text-[15px] group-hover:text-[#f00856] transition-colors uppercase tracking-widest">{p.name}</p>
+                  </td>
+                  <td className="p-8">
+                     <span className="font-mono text-[11px] text-slate-500 tracking-tighter bg-white/5 px-2 py-1 rounded-md">{p.sku}</span>
+                  </td>
+                  <td className="p-8 text-center font-black text-white text-[16px]">{p.current}</td>
+                  <td className="p-8 text-center text-purple-500 font-black text-[16px]">{p.reserved}</td>
+                  <td className="p-8 text-center font-black text-[#f00856] text-[18px] bg-white/[0.01] group-hover:bg-[#f00856]/5 transition-colors">{p.available}</td>
+                  <td className="p-8 text-center text-slate-600 font-black text-[16px]">{p.minimum}</td>
+                  <td className="p-8">
+                     <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{p.warehouse}</span>
+                  </td>
+                  <td className="p-8">
+                    <span className={`badge px-4 py-2 ${p.status === 'ok' ? 'text-emerald-400 bg-emerald-400/10' : p.status === 'low' ? 'text-yellow-400 bg-yellow-400/10' : 'text-red-400 bg-red-400/10'}`}>
+                      {p.status === 'ok' ? 'Nominal' : p.status === 'low' ? 'Critical' : 'Depleted'}
+                    </span>
+                  </td>
+                  <td className="p-8 text-right">
+                     <button className="text-[11px] font-black uppercase tracking-widest text-[#f00856] hover:underline px-6 py-3 rounded-full hover:bg-[#f00856]/10 transition-all">Adjust</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Movement History */}
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
-          <History className="w-4 h-4 text-gray-500" /><h3 className="text-sm font-black text-gray-900">Últimos Movimientos</h3>
+      <div className="glass rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl">
+        <div className="p-10 md:p-12 border-b border-white/5 bg-white/[0.03] flex items-center gap-6">
+          <div className="w-12 h-12 rounded-2xl bg-[#f00856]/10 flex items-center justify-center flex-shrink-0 shadow-[0_0_20px_rgba(240,8,86,0.1)]">
+             <History className="w-6 h-6 text-[#f00856]" />
+          </div>
+          <div>
+             <h3 className="text-[11px] font-black text-[#f00856] uppercase tracking-[0.4em] mb-1">Operational Logs</h3>
+             <h4 className="text-2xl font-black text-white uppercase tracking-widest">Historial de Movimientos</h4>
+          </div>
         </div>
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-            <tr><th className="p-3 pl-4">Fecha</th><th className="p-3">SKU</th><th className="p-3">Acción</th><th className="p-3 text-center">Qty</th><th className="p-3">Usuario</th><th className="p-3">Nota</th></tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {mockMovements.map((m, i) => (
-              <tr key={i} className="hover:bg-gray-50">
-                <td className="p-3 pl-4 text-gray-600 text-xs">{m.date}</td>
-                <td className="p-3 font-mono text-xs text-gray-500">{m.sku}</td>
-                <td className="p-3 text-gray-700 font-medium">{m.action}</td>
-                <td className={`p-3 text-center font-black ${m.qty > 0 ? 'text-green-600' : 'text-red-600'}`}>{m.qty > 0 ? `+${m.qty}` : m.qty}</td>
-                <td className="p-3 text-xs text-gray-500">{m.user}</td>
-                <td className="p-3 text-xs text-gray-400">{m.note}</td>
+        <div className="overflow-x-auto no-scrollbar">
+          <table className="w-full text-left">
+            <thead className="bg-white/[0.01] border-b border-white/5">
+              <tr className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">
+                <th className="p-8">Timestamp</th>
+                <th className="p-8">Ref SKU</th>
+                <th className="p-8">Operation</th>
+                <th className="p-8 text-center">Delta</th>
+                <th className="p-8">Operator</th>
+                <th className="p-8">System Note</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {mockMovements.map((m, i) => (
+                <tr key={i} className="hover:bg-white/[0.01] transition-colors group">
+                  <td className="p-8 text-slate-500 text-[11px] font-black uppercase tracking-widest">{m.date}</td>
+                  <td className="p-8">
+                     <span className="font-mono text-[11px] text-slate-500 tracking-tighter bg-white/5 px-2 py-1 rounded-md">{m.sku}</span>
+                  </td>
+                  <td className="p-8 text-slate-300 text-[11px] font-black uppercase tracking-widest group-hover:text-white transition-colors">{m.action}</td>
+                  <td className={`p-8 text-center font-black ${m.qty > 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                     <span className="text-[16px]">{m.qty > 0 ? `+${m.qty}` : m.qty}</span>
+                  </td>
+                  <td className="p-8 text-slate-500 text-[11px] font-black uppercase tracking-widest">{m.user}</td>
+                  <td className="p-8 text-slate-600 text-[11px] font-black uppercase tracking-widest">{m.note}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
 }
 
 function StatCard({ label, value, color }: { label: string; value: string; color: string }) {
-  const cls: Record<string, string> = { blue: 'bg-blue-50 text-blue-600', purple: 'bg-purple-50 text-purple-600', red: 'bg-red-50 text-red-600', yellow: 'bg-yellow-50 text-yellow-600' };
   return (
-    <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
-      <p className="text-2xl font-black text-gray-900">{value}</p>
-      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</p>
+    <div className="soft rounded-3xl p-10 group hover:bg-white/[0.04] transition-all border border-white/5 hover:border-[#f00856]/30 shadow-xl">
+      <p className="text-4xl font-black text-white mb-3 group-hover:text-[#f00856] transition-colors">{value}</p>
+      <p className="text-[11px] font-black text-slate-500 uppercase tracking-[0.3em]">{label}</p>
     </div>
   );
 }

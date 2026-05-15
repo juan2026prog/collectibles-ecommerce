@@ -100,19 +100,19 @@ export default function AddressAutocomplete({ value, onChange, onSelect }: Addre
       {loading && <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-primary-600 border-t-transparent animate-spin"/>}
       
       {isOpen && results.length > 0 && (
-        <ul className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden animate-slide-down">
+        <ul className="absolute z-50 w-full mt-1 glass  shadow-xl overflow-hidden animate-slide-down">
           {results.map((result) => (
             <li 
               key={result.place_id} 
               onClick={() => handleSelect(result)}
-              className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-50 last:border-0 transition-colors"
+              className="flex items-start gap-3 px-4 py-3 hover:bg-white/5 cursor-pointer border-b border-gray-50 last:border-0 transition-colors"
             >
-              <MapPin className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" />
+              <MapPin className="w-5 h-5 text-slate-500 mt-0.5 flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <span className="block text-sm font-bold text-dark-900 truncate">
+                <span className="block text-sm font-bold text-white truncate">
                   {result.display_name.split(',')[0]}
                 </span>
-                <span className="block text-xs text-gray-500 truncate">
+                <span className="block text-xs text-slate-400 truncate">
                   {result.display_name.split(',').slice(1).join(',')}
                 </span>
               </div>
