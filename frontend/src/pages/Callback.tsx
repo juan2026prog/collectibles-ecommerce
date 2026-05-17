@@ -30,8 +30,12 @@ export default function Callback() {
       }
 
       // 2. Call the Edge Function to handle the exchange securely
+      const redirectUri = import.meta.env.VITE_ML_REDIRECT_URI || `${window.location.origin}/callback`;
       const { data, error } = await supabase.functions.invoke('mercadolibre-auth', {
-        body: { code: authCode }
+        body: { 
+          code: authCode,
+          redirect_uri: redirectUri
+        }
       });
 
       if (error) throw error;

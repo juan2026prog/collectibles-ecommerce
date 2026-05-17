@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { RefreshCw, Play, AlertCircle, CheckCircle2, Settings2, Save, ExternalLink, Link2, X, Loader2 } from 'lucide-react';
+import { useToast } from '../../components/admin/Toast';
 
 async function callEdgeFunction(body: any) {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -26,11 +27,13 @@ export default function AdminMercadoLibre() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
-  const [dbClientId, setDbClientId] = useState<string | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [syncProgress, setSyncProgress] = useState(0);
+  const [isConnected, setIsConnected] = useState(false);
+  const [dbClientId, setDbClientId] = useState('');
+
+  const { toast } = useToast();
   
   // Settings state
   const [markupType, setMarkupType] = useState('percentage');
@@ -77,16 +80,17 @@ export default function AdminMercadoLibre() {
        { key: 'ml_price_markup_value', value: markupValue, updated_at: new Date().toISOString() },
        { key: 'ml_price_rules_enabled', value: rulesEnabled ? 'true' : 'false', updated_at: new Date().toISOString() }
     ], { onConflict: 'key' });
+    toast.success('Configuración de Mercado Libre guardada');
     setSavingSettings(false);
   }
 
   function handleConnect() {
     // Priority: .env > database
     const clientId = import.meta.env.VITE_ML_CLIENT_ID || dbClientId;
-    const redirectUri = `${window.location.origin}/callback`;
+    const redirectUri = import.meta.env.VITE_ML_REDIRECT_URI || `${window.location.origin}/callback`;
     
     if (!clientId) {
-      alert('Error: No se encontró ML_CLIENT_ID en el sistema. Asegúrate de que esté configurado.');
+      toast.error('Error: No se encontró ML_CLIENT_ID en el sistema. Asegúrate de que esté configurado.');
       return;
     }
 
@@ -420,7 +424,7 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
       setFetchProgress(100);
     } catch (err: any) {
       console.error("Fetch ML Items Error:", err);
-      alert("Error al obtener items: " + err.message);
+      toast.error("Error al obtener items: " + err.message);
     } finally {
       setFetching(false);
       setFetchPhase('');

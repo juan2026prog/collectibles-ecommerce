@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useCartContext } from '../contexts/CartContext';
 import { Package, User, Settings, Save, Check, ShoppingCart, RotateCcw, MapPin, Phone, Plus, Trash2, Lock, Eye, EyeOff, Edit3 } from 'lucide-react';
 import { useLocale } from '../contexts/LocaleContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { URUGUAY_LOCATIONS, DEPARTAMENTOS } from '../utils/uruguayLocations';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 
@@ -31,7 +32,8 @@ const EMPTY_ADDRESS: SavedAddress = {
 
 export default function CustomerPortal() {
   const { user } = useAuth();
-  const { language, currency, setLanguage, setCurrency, formatPrice } = useLocale();
+  const { language, currency, setLanguage, setCurrency } = useLocale();
+  const { formatCurrencyPrice } = useCurrency();
   const cart = useCartContext();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -252,7 +254,7 @@ export default function CustomerPortal() {
                     </div>
                     <div>
                       <p className="text-xs text-slate-400 font-bold uppercase tracking-wider text-right">TOTAL</p>
-                      <p className="font-bold text-lg text-primary-600">{formatPrice(order.total_amount)}</p>
+                      <p className="font-bold text-lg text-primary-600">{formatCurrencyPrice(order.total_amount)}</p>
                     </div>
                     <span className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase ${
                       ['paid', 'delivered'].includes(order.status) ? 'bg-green-100 text-green-700' :
@@ -277,7 +279,7 @@ export default function CustomerPortal() {
                         </Link>
                         <div className="flex-1 min-w-0">
                           <Link to={item.products?.slug ? `/p/${item.products.slug}` : '#'} className="font-bold text-white hover:text-primary-600 transition-colors line-clamp-1">{item.products?.title}</Link>
-                          <p className="text-sm text-slate-400">Cant: {item.quantity} · {formatPrice(item.unit_price)} c/u</p>
+                          <p className="text-sm text-slate-400">Cant: {item.quantity} · {formatCurrencyPrice(item.unit_price)} c/u</p>
                         </div>
                       </div>
                     ))}

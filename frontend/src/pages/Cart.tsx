@@ -1,11 +1,13 @@
 import { Link } from 'react-router-dom';
 import { Minus, Plus, Trash2, ShoppingCart, ArrowRight, ChevronRight, Tag } from 'lucide-react';
 import { useCartContext } from '../contexts/CartContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { resolveImage } from '../lib/imageUtils';
 import { useState } from 'react';
 
 export default function Cart() {
   const { items, updateQuantity, removeItem, total, count } = useCartContext();
+  const { formatCurrencyPrice, selectedCurrency } = useCurrency();
   const [coupon, setCoupon] = useState('');
   const [couponError, setCouponError] = useState('');
   const shipping = total >= 4000 ? 0 : 350;
@@ -58,7 +60,7 @@ export default function Cart() {
                     <span className="px-3 text-sm font-bold">{item.quantity}</span>
                     <button onClick={() => updateQuantity(item.variant_id, item.quantity + 1)} className="p-2 hover:bg-white/5"><Plus className="w-3.5 h-3.5" /></button>
                   </div>
-                  <span className="text-lg font-extrabold text-white">${(item.price * item.quantity).toLocaleString()}</span>
+                  <span className="text-lg font-extrabold text-white">{formatCurrencyPrice(item.price * item.quantity)}</span>
                 </div>
               </div>
             </div>
@@ -70,9 +72,9 @@ export default function Cart() {
           <div className="glass p-6 sticky top-24 rounded-2xl">
             <h2 className="font-bold text-lg mb-4 text-white">Resumen del pedido</h2>
             <div className="space-y-3">
-              <div className="flex justify-between text-sm"><span className="text-slate-400">Subtotal</span><span className="font-bold">${total.toLocaleString()}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-slate-400">Envío</span><span className="font-bold">{shipping === 0 ? 'GRATIS' : `$${shipping}`}</span></div>
-              {shipping > 0 && <p className="text-xs text-slate-500">Envío gratis en compras mayores a $4.000</p>}
+              <div className="flex justify-between text-sm"><span className="text-slate-400">Subtotal</span><span className="font-bold">{formatCurrencyPrice(total)}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-slate-400">Envío</span><span className="font-bold">{shipping === 0 ? 'GRATIS' : formatCurrencyPrice(shipping)}</span></div>
+              {shipping > 0 && <p className="text-xs text-slate-500">Envío gratis en compras mayores a $4.000 (UYU)</p>}
             </div>
 
             <div className="border-t border-white/10 my-4" />
@@ -91,7 +93,14 @@ export default function Cart() {
 
             <div className="flex justify-between items-center">
               <span className="font-bold text-lg text-white">TOTAL</span>
-              <span className="text-2xl font-black text-primary-600">${grandTotal.toLocaleString()}</span>
+              <div className="text-right">
+                <span className="text-2xl font-black text-[#f00856]">{formatCurrencyPrice(grandTotal)}</span>
+                {selectedCurrency !== 'UYU' && (
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Conversión estimada. El cobro final se realiza en pesos uruguayos.
+                  </p>
+                )}
+              </div>
             </div>
 
             <Link to="/checkout" className="btn-primary w-full mt-6 py-3.5 text-base gap-2">

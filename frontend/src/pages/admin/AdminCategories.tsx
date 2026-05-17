@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Plus, Pencil, Trash2, Save, X, Image as ImageIcon, List, Grid3X3 } from 'lucide-react';
+import { useToast } from '../../components/admin/Toast';
+import { useConfirmModal } from '../../components/admin/ConfirmModal';
 
 export default function AdminCategories() {
   const [categories, setCategories] = useState<any[]>([]);
@@ -9,6 +11,9 @@ export default function AdminCategories() {
   const [editing, setEditing] = useState<any>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [form, setForm] = useState({ name: '', slug: '', image_url: '', sort_order: 0, ml_category_id: '', parent_id: '' });
+
+  const { toast } = useToast();
+  const { confirm } = useConfirmModal();
 
   useEffect(() => { fetch(); }, []);
 
@@ -65,12 +70,14 @@ export default function AdminCategories() {
     else await supabase.from('categories').insert(payload);
     setShowForm(false); 
     fetch();
+    toast.success(editing ? 'Categoría actualizada' : 'Categoría creada');
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('¿Eliminar esta categoría permanentemente?')) return;
+    if (!(await confirm('¿Eliminar esta categoría permanentemente?', { danger: true }))) return;
     await supabase.from('categories').delete().eq('id', id);
     fetch();
+    toast.success('Categoría eliminada');
   }
 
   return (

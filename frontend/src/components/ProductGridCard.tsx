@@ -1,0 +1,88 @@
+import { Star, ShoppingCart } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ProductBadge } from './ProductBadge';
+import { getProductImage } from '../lib/imageUtils';
+
+interface ProductGridCardProps {
+  product: any;
+  onAddToCart: (product: any) => void;
+  formatPrice: (price: number) => string;
+}
+
+/**
+ * COMPONENTE ÚNICO DE PRODUCTO PARA TODO EL MARKETPLACE
+ * Estilo Catálogo Premium: Imagen blanca + info limpia debajo.
+ */
+export function ProductGridCard({ product, onAddToCart, formatPrice }: ProductGridCardProps) {
+  const img = getProductImage(product);
+  const finalPrice = product.base_price + (product.variants?.[0]?.price_adjustment || 0);
+  const hasDiscount = product.compare_at_price > product.base_price;
+  const reviewsCount = product.reviews?.length || 0;
+
+  return (
+    <article className="grid-card group relative">
+      {/* 1. IMAGEN */}
+      <div className="relative">
+        <Link to={`/p/${product.slug}`} className="flex bg-white w-full aspect-square rounded-sm overflow-hidden p-6 items-center justify-center border border-white/5 group-hover:border-[#f00856]/20 transition-colors">
+          <img
+            src={img}
+            alt={product.title}
+            className="max-w-full max-h-full object-contain transition-transform duration-300 group-hover:scale-105"
+          />
+        </Link>
+
+        {/* Badge superior opcional */}
+        <div className="absolute top-2 right-2 z-20 scale-75 md:scale-90 origin-top-right pointer-events-none">
+           <ProductBadge
+             badgeId={product.badge}
+             compareAtPrice={product.compare_at_price}
+             basePrice={product.base_price}
+           />
+        </div>
+
+        {/* CTA COMPACTO */}
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onAddToCart(product);
+          }}
+          className="absolute bottom-3 right-3 w-9 h-9 md:w-11 md:h-11 bg-[#f00856] text-white flex items-center justify-center rounded-full shadow-lg z-30 
+                     opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all transform md:translate-y-2 md:group-hover:translate-y-0 active:scale-90"
+          title="Agregar al carrito"
+        >
+          <ShoppingCart className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* 2. INFORMACIÓN */}
+      <div className="pt-3">
+        <div className="flex items-center gap-1 text-[11px] text-yellow-400 mb-1">
+          <div className="flex">
+            {[...Array(5)].map((_, i) => (
+               <Star key={i} className={`w-3 h-3 ${i < Math.round(product.rating || 5) ? 'fill-yellow-400 text-yellow-400' : 'fill-transparent text-slate-600'}`} />
+            ))}
+          </div>
+          <span className="text-slate-500">({reviewsCount})</span>
+        </div>
+        
+        <Link to={`/p/${product.slug}`}>
+          <h3 className="text-xs md:text-sm font-bold leading-tight line-clamp-2 min-h-[34px] text-white hover:text-[#f00856] transition-colors">
+            {product.title}
+          </h3>
+        </Link>
+        
+        <div className="mt-2 flex flex-wrap items-baseline gap-2">
+          <span className="text-[#f00856] font-black text-base md:text-lg leading-none">
+            {formatPrice(finalPrice)}
+          </span>
+          {hasDiscount && (
+            <span className="text-[10px] text-slate-500 line-through leading-none">
+              {formatPrice(product.compare_at_price)}
+            </span>
+          )}
+        </div>
+      </div>
+    </article>
+  );
+}

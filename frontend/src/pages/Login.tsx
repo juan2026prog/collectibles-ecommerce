@@ -6,10 +6,11 @@ import { useSiteSettings } from '../hooks/useSiteSettings';
 import { STORE_ISOLOGO_URL } from '../lib/brand';
 
 export default function Login() {
-  const { signIn, signUp, signInWithGoogle } = useAuth();
+  const { signIn, signUp, signInWithGoogle, signInWithOtp } = useAuth();
   const navigate = useNavigate();
   const { settings, loaded: settingsLoaded } = useSiteSettings();
   const [isLogin, setIsLogin] = useState(true);
+  const [isMagicLink, setIsMagicLink] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -23,7 +24,11 @@ export default function Login() {
     setSuccess('');
     setLoading(true);
     
-    if (isLogin) {
+    if (isMagicLink) {
+      const { error } = await signInWithOtp(email);
+      if (error) setError(error.message);
+      else setSuccess('¡Te enviamos un enlace mágico! Revisa tu email para iniciar sesión.');
+    } else if (isLogin) {
       const { error } = await signIn(email, password);
       if (error) setError(error.message);
       else navigate('/');
@@ -53,10 +58,10 @@ export default function Login() {
 
         <div className="glass  shadow-lg border border-white/10 p-8">
           <h1 className="text-2xl font-bold text-white text-center mb-2">
-            {isLogin ? 'Bienvenido' : 'Crear Cuenta'}
+            {isMagicLink ? 'Enlace Mágico' : isLogin ? 'Bienvenido' : 'Crear Cuenta'}
           </h1>
           <p className="text-sm text-slate-400 text-center mb-6">
-            {isLogin ? 'Inicia sesión en tu cuenta' : 'Únete a la comunidad'}
+            {isMagicLink ? 'Ingresá tu email y te enviaremos un link para entrar sin contraseña' : isLogin ? 'Inicia sesión en tu cuenta' : 'Únete a la comunidad'}
           </p>
 
           {error && (
@@ -82,31 +87,40 @@ export default function Login() {
               </div>
             </div>
 
-            <div>
-              <label className="form-label">Contraseña</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  className="form-input pl-10 pr-10"
-                  placeholder={isLogin ? 'Tu contraseña' : 'Crear contraseña (mín 6 caracteres)'}
-                  minLength={6}
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-400"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+            {!isMagicLink && (
+              <div>
+                <label className="form-label">Contraseña</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    className="form-input pl-10 pr-10"
+                    placeholder={isLogin ? 'Tu contraseña' : 'Crear contraseña (mín 6 caracteres)'}
+                    minLength={6}
+                    required={!isMagicLink}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-400"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
-            {isLogin && (
-              <div className="text-right">
+            {!isMagicLink && isLogin && (
+              <div className="text-right flex justify-between items-center mt-2">
+                <button 
+                  type="button" 
+                  onClick={() => { setIsMagicLink(true); setError(''); setSuccess(''); }} 
+                  className="text-sm font-bold text-primary-500 hover:text-primary-400"
+                >
+                  Entrar sin contraseña
+                </button>
                 <button type="button" className="text-sm text-slate-500 cursor-not-allowed" disabled title="Disponible próximamente">¿Olvidaste tu contraseña?</button>
               </div>
             )}
@@ -116,9 +130,19 @@ export default function Login() {
               disabled={loading}
               className="btn-primary w-full py-3.5 text-base gap-2"
             >
-              {loading ? 'Procesando...' : (isLogin ? 'INICIAR SESIÓN' : 'CREAR CUENTA')}
+              {loading ? 'Procesando...' : isMagicLink ? 'ENVIAR ENLACE MÁGICO' : (isLogin ? 'INICIAR SESIÓN' : 'CREAR CUENTA')}
               {!loading && <ArrowRight className="w-4 h-4" />}
             </button>
+            
+            {isMagicLink && (
+              <button
+                type="button"
+                onClick={() => { setIsMagicLink(false); setIsLogin(true); setError(''); setSuccess(''); }}
+                className="w-full text-center text-sm text-slate-400 hover:text-white mt-2"
+              >
+                Volver a iniciar sesión con contraseña
+              </button>
+            )}
           </form>
 
           {/* Social Logins */}
@@ -152,12 +176,12 @@ export default function Login() {
 
           <div className="mt-8 text-center">
             <p className="text-sm text-slate-400">
-              {isLogin ? "¿No tienes una cuenta?" : '¿Ya tienes una cuenta?'}{' '}
+              {isLogin || isMagicLink ? "¿No tienes una cuenta?" : '¿Ya tienes una cuenta?'}{' '}
               <button
-                onClick={() => { setIsLogin(!isLogin); setError(''); setSuccess(''); }}
+                onClick={() => { setIsLogin(!isLogin); setIsMagicLink(false); setError(''); setSuccess(''); }}
                 className="font-bold text-primary-600 hover:underline"
               >
-                {isLogin ? 'Regístrate aquí' : 'Inicia Sesión'}
+                {isLogin || isMagicLink ? 'Regístrate aquí' : 'Inicia Sesión'}
               </button>
             </p>
           </div>

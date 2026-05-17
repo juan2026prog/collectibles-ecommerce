@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Truck, MapPin, Save, QrCode, FileText, CheckCircle2, ChevronRight, X, Edit2, Check, ToggleLeft, ToggleRight } from 'lucide-react';
+import { useToast } from '../../components/admin/Toast';
 import { supabase } from '../../lib/supabase';
 
 const INITIAL_ZONES = {
@@ -45,6 +46,8 @@ export default function AdminLogistics() {
   // SoyDelivery API Keys
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
+
+  const { toast } = useToast();
 
   useEffect(() => {
     async function loadSettings() {
@@ -111,7 +114,7 @@ export default function AdminLogistics() {
     }
     
     setIsSaving(false);
-    alert("Configuración de envíos y SoyDelivery guardada exitosamente.");
+    toast.success("Configuración de envíos y SoyDelivery guardada");
   }
 
   return (

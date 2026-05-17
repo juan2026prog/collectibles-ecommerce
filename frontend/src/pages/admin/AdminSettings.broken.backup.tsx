@@ -1,353 +1,48 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Save, ToggleLeft, ToggleRight, Settings, Store, Truck, Palette, LayoutTemplate, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, FileText, Share2, Link as LinkIcon, ImageIcon, CreditCard, ShieldCheck, Sparkles, Brain, Zap, Search as SearchIcon, Tag } from 'lucide-react';
-import { MediaPickerModal } from '../../components/MediaPickerModal';
+import { Save, ToggleLeft, ToggleRight, Settings, Store, Truck, Palette, LayoutTemplate, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, FileText, Share2, Link as LinkIcon, ImageIcon, CreditCard, Loader2, Sparkles } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 
-function MenuEditor({ title, description, initialJson, onSave }: any) {
-  const [items, setItems] = useState<any[]>([]);
-  useEffect(() => {
-    try { setItems(JSON.parse(initialJson || '[]')); } catch { setItems([]); }
-  }, [initialJson]);
-
-  const updateItem = (i: number, field: string, val: string) => {
-    const n = [...items]; n[i][field] = val; setItems(n);
-  };
-  const updateSub = (i: number, j: number, field: string, val: string) => {
-    const n = [...items]; n[i].subItems[j][field] = val; setItems(n);
-  };
-
-  const addItem = () => setItems([...items, { label: 'Nuevo Enlace', url: '/', subItems: [] }]);
-  const addSub = (i: number) => {
-    const n = [...items]; 
-    if (!n[i].subItems) n[i].subItems = [];
-    n[i].subItems.push({ label: 'Sub-enlace', url: '/' });
-    setItems(n);
-  };
-
-  const remove = (i: number) => setItems(items.filter((_, idx) => idx !== i));
-  const removeSub = (i: number, j: number) => {
-    const n = [...items]; n[i].subItems = n[i].subItems.filter((_: any, idx: number) => idx !== j); setItems(n);
-  };
-
-  const move = (i: number, dir: number) => {
-    const n = [...items];
-    if (i + dir < 0 || i + dir >= n.length) return;
-    [n[i], n[i+dir]] = [n[i+dir], n[i]];
-    setItems(n);
-  };
-  const moveSub = (i: number, j: number, dir: number) => {
-    const n = [...items];
-    const s = n[i].subItems;
-    if (j + dir < 0 || j + dir >= s.length) return;
-    [s[j], s[j+dir]] = [s[j+dir], s[j]];
-    setItems(n);
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200 shadow-sm">
-        <div>
-          <h4 className="font-bold text-gray-800">{title}</h4>
-          <p className="text-xs text-gray-500 mt-0.5">{description}</p>
-        </div>
-        <button onClick={addItem} className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 bg-white"><Plus className="w-3.5 h-3.5" /> Agregar Elemento</button>
-      </div>
-
-      <div className="space-y-3">
-        {items.map((item, i) => (
-          <div key={i} className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden transition-all focus-within:ring-2 focus-within:ring-primary-500 focus-within:border-primary-500">
-             <div className="flex items-center gap-2 bg-gray-50 p-2.5 border-b border-gray-100">
-                <div className="flex flex-col gap-0.5">
-                   <button onClick={() => move(i, -1)} disabled={i === 0} className="p-0.5 text-gray-400 hover:text-gray-900 disabled:opacity-30"><ChevronUp className="w-4 h-4" /></button>
-                   <button onClick={() => move(i, 1)} disabled={i === items.length - 1} className="p-0.5 text-gray-400 hover:text-gray-900 disabled:opacity-30"><ChevronDown className="w-4 h-4" /></button>
-                </div>
-                <div className="w-6 flex items-center justify-center cursor-grab text-gray-300 hover:text-gray-500"><GripVertical className="w-4 h-4" /></div>
-                
-                <div className="flex-1 grid grid-cols-2 gap-3">
-                   <input className="form-input text-sm px-3 py-1.5 font-bold text-gray-800 border-gray-200 bg-white shadow-none focus:bg-white" value={item.label} onChange={e => updateItem(i, 'label', e.target.value)} placeholder="Nombre (ej. Inicio)" />
-                   <input className="form-input text-sm px-3 py-1.5 font-mono text-blue-600 border-gray-200 bg-white shadow-none focus:bg-white" value={item.url} onChange={e => updateItem(i, 'url', e.target.value)} placeholder="URL (ej. /)" />
-                </div>
-                
-                <div className="flex items-center gap-1 border-l border-gray-200 pl-2 ml-1">
-                   <button onClick={() => addSub(i)} className="p-1.5 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded" title="Añadir Sub-menú Desplegable"><Plus className="w-4 h-4" /></button>
-                   <button onClick={() => remove(i)} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded" title="Eliminar"><Trash2 className="w-4 h-4" /></button>
-                </div>
-             </div>
-             
-             {/* Render subitems */}
-             {item.subItems && item.subItems.length > 0 && (
-                <div className="p-3 bg-white pl-12 space-y-2 relative">
-                   <div className="absolute left-7 top-0 bottom-6 w-px bg-gray-200" />
-                   {item.subItems.map((sub: any, j: number) => (
-                      <div key={j} className="flex items-center gap-2 relative group hover:bg-gray-50 bg-white p-1 rounded transition-colors">
-                         <div className="absolute -left-5 top-1/2 w-4 h-px bg-gray-200" />
-                         <div className="flex flex-col gap-0">
-                            <button onClick={() => moveSub(i, j, -1)} disabled={j === 0} className="text-gray-300 hover:text-gray-800 disabled:opacity-30"><ChevronUp className="w-3 h-3" /></button>
-                            <button onClick={() => moveSub(i, j, 1)} disabled={j === item.subItems.length - 1} className="text-gray-300 hover:text-gray-800 disabled:opacity-30"><ChevronDown className="w-3 h-3" /></button>
-                         </div>
-                         <div className="flex-1 grid grid-cols-2 gap-2">
-                            <input className="form-input text-xs px-2 py-1.5 border-gray-200 focus:bg-white" value={sub.label} onChange={e => updateSub(i, j, 'label', e.target.value)} placeholder="Sub-etiqueta" />
-                            <input className="form-input text-xs px-2 py-1.5 font-mono text-blue-600 border-gray-200 focus:bg-white" value={sub.url} onChange={e => updateSub(i, j, 'url', e.target.value)} placeholder="/ruta" />
-                         </div>
-                         <button onClick={() => removeSub(i, j)} className="p-1 text-red-300 hover:text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3 h-3" /></button>
-                      </div>
-                   ))}
-                </div>
-             )}
-          </div>
-        ))}
-        {items.length === 0 && (
-           <div className="text-center py-8 bg-gray-50 border border-dashed border-gray-300 rounded-xl">
-              <p className="text-sm text-gray-500">Este menú está vacío actualmente.</p>
-              <button onClick={addItem} className="text-primary-600 font-bold text-sm mt-2 hover:underline">Añadir el primer elemento</button>
-           </div>
-        )}
-      </div>
-      
-      <button onClick={() => onSave(JSON.stringify(items))} className="w-full btn-primary py-2 shadow-[0_4px_14px_rgba(37,99,235,0.2)] flex justify-center gap-2 hover:translate-y-px mt-4">
-        <Save className="w-4 h-4" /> Guardar Menú
-      </button>
-    </div>
-  );
-}
-
-function HomeLayoutEditor({ title, description, initialJson, onSave }: any) {
-  const defaultBlocks = [
-    { id: 'hero', label: 'Hero Banner Principal', visible: true },
-    { id: 'bento', label: 'Categorías Destacadas (Bento)', visible: true },
-    { id: 'collections', label: 'Grupos/Colecciones', visible: true },
-    { id: 'trending', label: 'Novedades y Más Vendidos', visible: true },
-    { id: 'brands', label: 'Carrusel de Marcas', visible: true }
-  ];
-  const [blocks, setBlocks] = useState<any[]>([]);
-
-  useEffect(() => {
-    try {
-      const parsed = JSON.parse(initialJson);
-      if (Array.isArray(parsed) && parsed.length > 0) setBlocks(parsed);
-      else setBlocks(defaultBlocks);
-    } catch {
-      setBlocks(defaultBlocks);
-    }
-  }, [initialJson]);
-
-  const toggleVisible = (i: number) => {
-    const n = [...blocks]; n[i].visible = !n[i].visible; setBlocks(n);
-  };
-
-  const move = (i: number, dir: number) => {
-    const n = [...blocks];
-    if (i + dir < 0 || i + dir >= n.length) return;
-    [n[i], n[i+dir]] = [n[i+dir], n[i]];
-    setBlocks(n);
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200">
-        <div>
-          <h4 className="font-bold text-gray-800">{title}</h4>
-          <p className="text-xs text-gray-500 mt-0.5">{description}</p>
-        </div>
-      </div>
-      <div className="space-y-2">
-        {blocks.map((b, i) => (
-          <div key={b.id} className={`flex items-center gap-3 bg-white border rounded-lg p-3 transition-colors ${!b.visible ? 'opacity-50 border-gray-100 bg-gray-50' : 'border-gray-200 shadow-sm hover:border-primary-400'}`}>
-             <div className="flex flex-col gap-0.5">
-               <button onClick={() => move(i, -1)} disabled={i === 0} className="p-0.5 text-gray-400 hover:text-gray-900 disabled:opacity-30"><ChevronUp className="w-4 h-4" /></button>
-               <button onClick={() => move(i, 1)} disabled={i === blocks.length - 1} className="p-0.5 text-gray-400 hover:text-gray-900 disabled:opacity-30"><ChevronDown className="w-4 h-4" /></button>
-             </div>
-             <GripVertical className="w-4 h-4 text-gray-300" />
-             <span className="flex-1 font-bold text-sm text-gray-800">{b.label}</span>
-             <button onClick={() => toggleVisible(i)} className="pr-2">
-               {b.visible ? <ToggleRight className="w-8 h-8 text-primary-500" /> : <ToggleLeft className="w-8 h-8 text-gray-300" />}
-             </button>
-          </div>
-        ))}
-      </div>
-      <button onClick={() => onSave(JSON.stringify(blocks))} className="w-full btn-primary py-2 flex justify-center gap-2 mt-4"><Save className="w-4 h-4" /> Guardar Layout</button>
-    </div>
-  );
-}
-
-import { useSearchParams } from 'react-router-dom';
-
-// ═══ AI Usage Stats Component ═══
-function AiUsageStats({ period }: { period: string }) {
-  const [stats, setStats] = useState<{ tool_key: string; total_tokens: number; total_cost: number; count: number }[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchStats();
-  }, [period]);
-
-  async function fetchStats() {
-    setLoading(true);
-    let query = supabase
-      .from('ai_usage_log')
-      .select('tool_key, tokens_used, estimated_cost, created_at');
-
-    if (period !== 'all') {
-      const daysAgo = new Date();
-      daysAgo.setDate(daysAgo.getDate() - parseInt(period));
-      query = query.gte('created_at', daysAgo.toISOString());
-    }
-
-    const { data } = await query;
-    
-    // Aggregate by tool_key
-    const grouped: Record<string, { total_tokens: number; total_cost: number; count: number }> = {};
-    (data || []).forEach(row => {
-      if (!grouped[row.tool_key]) grouped[row.tool_key] = { total_tokens: 0, total_cost: 0, count: 0 };
-      grouped[row.tool_key].total_tokens += row.tokens_used || 0;
-      grouped[row.tool_key].total_cost += parseFloat(String(row.estimated_cost)) || 0;
-      grouped[row.tool_key].count += 1;
-    });
-
-    setStats(Object.entries(grouped).map(([tool_key, v]) => ({ tool_key, ...v })));
-    setLoading(false);
-  }
-
-  const totalTokens = stats.reduce((s, r) => s + r.total_tokens, 0);
-  const totalCost = stats.reduce((s, r) => s + r.total_cost, 0);
-  const totalCalls = stats.reduce((s, r) => s + r.count, 0);
-
-  const toolLabels: Record<string, { label: string; color: string }> = {
-    'ai_category_matching': { label: 'Category Matching', color: 'bg-amber-500' },
-    'ai_catalog_generator': { label: 'Catalog Generator', color: 'bg-purple-500' },
-    'ai_seo': { label: 'Auto-SEO', color: 'bg-green-500' },
-    'ai_description_improver': { label: 'Descripción IA', color: 'bg-blue-500' },
-    'generate_content': { label: 'Generador Contenido', color: 'bg-pink-500' },
-  };
-
-  const maxTokens = Math.max(...stats.map(s => s.total_tokens), 1);
-
-  if (loading) {
-    return <div className="p-8 text-center text-gray-400 animate-pulse text-sm">Cargando estadísticas...</div>;
-  }
-
-  return (
-    <div className="p-6 space-y-6">
-      {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-5 border border-amber-100">
-          <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Tokens Usados</p>
-          <p className="text-3xl font-black text-amber-900 tracking-tight">{totalTokens.toLocaleString()}</p>
-          <p className="text-xs text-amber-600 mt-1">{totalCalls} llamadas a la API</p>
-        </div>
-        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-5 border border-green-100">
-          <p className="text-[10px] font-black text-green-600 uppercase tracking-widest mb-1">Costo Estimado</p>
-          <p className="text-3xl font-black text-green-900 tracking-tight">${totalCost.toFixed(4)}</p>
-          <p className="text-xs text-green-600 mt-1">USD (Gemini Flash pricing)</p>
-        </div>
-        <div className="bg-gradient-to-br from-indigo-50 to-violet-50 rounded-xl p-5 border border-indigo-100">
-          <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Promedio/Llamada</p>
-          <p className="text-3xl font-black text-indigo-900 tracking-tight">{totalCalls > 0 ? Math.round(totalTokens / totalCalls) : 0}</p>
-          <p className="text-xs text-indigo-600 mt-1">tokens promedio</p>
-        </div>
-      </div>
-
-      {/* Per-tool breakdown */}
-      {stats.length > 0 ? (
-        <div className="space-y-3">
-          <h4 className="text-xs font-black text-gray-500 uppercase tracking-widest">Desglose por Herramienta</h4>
-          {stats.sort((a, b) => b.total_tokens - a.total_tokens).map(s => {
-            const info = toolLabels[s.tool_key] || { label: s.tool_key, color: 'bg-gray-500' };
-            const pct = (s.total_tokens / maxTokens) * 100;
-            return (
-              <div key={s.tool_key} className="group">
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2.5 h-2.5 rounded-full ${info.color}`} />
-                    <span className="text-sm font-bold text-gray-800">{info.label}</span>
-                    <span className="text-[10px] text-gray-400 font-mono">{s.count} calls</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs">
-                    <span className="font-bold text-gray-700">{s.total_tokens.toLocaleString()} tokens</span>
-                    <span className="text-gray-400">${s.total_cost.toFixed(4)}</span>
-                  </div>
-                </div>
-                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                  <div className={`h-full ${info.color} rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-          <Zap className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-          <p className="text-sm text-gray-500 font-medium">Sin datos de uso en este período</p>
-          <p className="text-xs text-gray-400 mt-1">Las estadísticas aparecerán cuando las herramientas de IA se utilicen.</p>
-        </div>
-      )}
-
-      {/* Pricing Info */}
-      <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
-        <p className="text-[11px] text-gray-500">
-          <strong>Referencia de precios:</strong> Gemini 2.0 Flash — Input: $0.10/1M tokens · Output: $0.40/1M tokens. 
-          Los costos mostrados son estimaciones basadas en un promedio de tokens por llamada.
-        </p>
-      </div>
-    </div>
-  );
-}
-
 export default function AdminSettings() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const currentTab = (searchParams.get('tab') as any) || 'general';
-  
-  const setTab = (tab: string) => {
-    setSearchParams({ tab });
-  };
-  
   const [settings, setSettings] = useState<Record<string, string>>({});
-  const [toggles, setToggles] = useState<any[]>([]);
-  const [shipping, setShipping] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showMediaPicker, setShowMediaPicker] = useState<false | 'logo'>(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [currentTab, setTab] = useState<any>('general');
   const { toast } = useToast();
 
-  useEffect(() => { fetchData(); }, []);
-
-  async function fetchData() {
-    setLoading(true);
-    const [{ data: s }, { data: t }, { data: sh }] = await Promise.all([
-      supabase.from('site_settings').select('*'),
-      supabase.from('feature_toggles').select('*').order('id'),
-      supabase.from('shipping_rules').select('*').order('zone'),
-    ]);
-    const settingsMap: Record<string, string> = {};
-    (s || []).forEach(item => { settingsMap[item.key] = item.value || ''; });
-    setSettings(settingsMap);
-    setToggles(t || []);
-    setShipping(sh || []);
-    setLoading(false);
-  }
+  useEffect(() => {
+    async function loadConfig() {
+      const { data } = await supabase.from('site_settings').select('*');
+      if (data) {
+        const mapped = data.reduce((acc: any, row: any) => ({ ...acc, [row.key]: row.value }), {});
+        setSettings(mapped);
+      }
+      setLoading(false);
+    }
+    loadConfig();
+  }, []);
 
   async function saveSetting(key: string, value: string) {
-    if (!key) return; // Prevent empty keys
-    await supabase.from('site_settings').upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
-    setSettings(prev => ({ ...prev, [key]: value }));
+    setSavingSettings(true);
+    await supabase.from('site_settings').upsert(
+      { key, value, updated_at: new Date().toISOString() }, 
+      { onConflict: 'key' }
+    );
     toast.success('Configuración guardada');
+    setSavingSettings(false);
   }
 
-  async function toggleModule(id: string, current: boolean) {
-    await supabase.from('feature_toggles').update({ is_enabled: !current, updated_at: new Date().toISOString() }).eq('id', id);
-    setToggles(prev => prev.map(t => t.id === id ? { ...t, is_enabled: !current } : t));
-  }
-
-  if (loading) return <div className="text-center py-12 text-gray-400 animate-pulse">Cargando configuración...</div>;
+  if (loading) return <div className="p-12 text-center text-gray-500"><Loader2 className="w-8 h-8 animate-spin mx-auto" /></div>;
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold dark:text-white">Configuración Global</h2>
+    <div className="space-y-6 pb-20">
+      <div>
+        <h2 className="text-2xl font-bold dark:text-white">Configuración de la Tienda</h2>
+        <p className="text-sm text-gray-500 mt-1">Administra todos los parámetros globales de la plataforma.</p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-gray-100 rounded-lg p-1 w-fit overflow-x-auto">
+      {/* TABS */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b">
         {[
           { key: 'general', label: 'General', icon: Store },
           { key: 'appearance', label: 'Theme Builder', icon: LayoutTemplate },

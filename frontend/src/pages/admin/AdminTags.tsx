@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Plus, Pencil, Trash2, Save, X, Tag as TagIcon, Search } from 'lucide-react';
+import { useToast } from '../../components/admin/Toast';
+import { useConfirmModal } from '../../components/admin/ConfirmModal';
 
 export default function AdminTags() {
   const [tags, setTags] = useState<any[]>([]);
@@ -9,6 +11,9 @@ export default function AdminTags() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState({ name: '', slug: '' });
+
+  const { toast } = useToast();
+  const { confirm } = useConfirmModal();
 
   useEffect(() => { fetchTags(); }, []);
 
@@ -43,12 +48,14 @@ export default function AdminTags() {
     
     setShowForm(false); 
     fetchTags();
+    toast.success(editing ? 'Etiqueta actualizada' : 'Etiqueta creada');
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('¿Eliminar esta etiqueta? Se quitará de todos los productos.')) return;
+    if (!(await confirm('¿Eliminar esta etiqueta? Se quitará de todos los productos.', { danger: true }))) return;
     await supabase.from('tags').delete().eq('id', id);
     fetchTags();
+    toast.success('Etiqueta eliminada');
   }
 
   const filteredTags = tags.filter(t => t.name.toLowerCase().includes(search.toLowerCase()) || t.slug.toLowerCase().includes(search.toLowerCase()));

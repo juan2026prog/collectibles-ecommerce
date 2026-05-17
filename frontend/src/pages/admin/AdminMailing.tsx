@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Mail, Plus, Send, Trash2, Save, X, Users, Clock, CheckCircle2, Download, AlertCircle, History } from 'lucide-react';
+import { useToast } from '../../components/admin/Toast';
+import { useConfirmModal } from '../../components/admin/ConfirmModal';
 import * as XLSX from 'xlsx';
 
 export default function AdminMailing() {
@@ -10,7 +12,9 @@ export default function AdminMailing() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<any>(null);
   const [customerCount, setCustomerCount] = useState(0);
-  const [saved, setSaved] = useState(false);
+
+  const { toast } = useToast();
+  const { confirm } = useConfirmModal();
 
   useEffect(() => { 
     fetchCustomerCount(); 
@@ -51,18 +55,19 @@ export default function AdminMailing() {
     } else {
       await supabase.from('mailing_campaigns').insert(editing);
     }
-    setSaved(true); setTimeout(() => setSaved(false), 2000);
+    toast.success('Campaña guardada');
     setEditing(null); fetchCampaigns();
   }
 
   async function deleteCampaign(id: string) {
-    if (!confirm('¿Eliminar esta campaña?')) return;
+    if (!(await confirm('¿Eliminar esta campaña?', { danger: true }))) return;
     await supabase.from('mailing_campaigns').delete().eq('id', id);
+    toast.success('Campaña eliminada');
     fetchCampaigns();
   }
 
   async function sendCampaign(campaign: any) {
-    if (!confirm(`¿Estás seguro de enviar la campaña "${campaign.name}" a ${customerCount} destinatarios activos en este instante?`)) return;
+    if (!(await confirm(`¿Estás seguro de enviar la campaña "${campaign.name}" a ${customerCount} destinatarios activos en este instante?`))) return;
     
     // Mark as sent in DB
     await supabase.from('mailing_campaigns').update({ 
@@ -88,14 +93,18 @@ export default function AdminMailing() {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
         body: JSON.stringify({ type: 'campaign', campaign_id: campaign.id }),
       });
-    } catch (err) { console.error('Error invocando el worker de envío masivo:', err); }
+      toast.success('Campaña enviada al servidor de cola');
+    } catch (err) { 
+      console.error('Error invocando el worker de envío masivo:', err);
+      toast.error('Error al iniciar envío masivo');
+    }
     
     fetchCampaigns();
   }
 
   async function exportSubscribers() {
     const { data } = await supabase.from('profiles').select('email, first_name, last_name, created_at, is_vendor, is_artist, is_affiliate').not('email', 'is', null);
-    if (!data || data.length === 0) return alert('No hay suscriptores para exportar.');
+    if (!data || data.length === 0) return toast.error('No hay suscriptores para exportar.');
     
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -119,7 +128,6 @@ export default function AdminMailing() {
           <p className="text-sm text-gray-500 mt-1">Automatizaciones, Newsletters e Historial Transaccional</p>
         </div>
         <div className="flex gap-2">
-          {saved && <span className="text-sm font-bold text-green-600 bg-green-50 px-3 py-1.5 rounded-lg border border-green-200 flex items-center gap-1"><Save className="w-4 h-4" /> Guardado</span>}
           <button onClick={exportSubscribers} className="btn-secondary flex items-center gap-2"><Download className="w-4 h-4" /> Exportar Suscriptores</button>
           {activeTab === 'campaigns' && <button onClick={startNew} className="btn-primary flex items-center gap-2"><Plus className="w-4 h-4" /> Nueva Campaña</button>}
         </div>

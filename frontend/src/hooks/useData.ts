@@ -50,18 +50,21 @@ export function useProducts(filters: ProductFilters = {}) {
     }
 
     // ── Step 2: main product query ──
-    let query = supabase
-      .from('products')
-      .select(`
+    const selectStr = `
         *,
         category:categories(id, name, slug),
         brand:brands(id, name, slug, logo_url),
         images:product_images(id, url, alt_text, sort_order, is_primary),
         variants:product_variants(id, sku, name, price_adjustment, inventory_count)
-      `, { count: 'exact' })
+        ${categoryId ? ', product_categories!inner(category_id)' : ''}
+    `;
+
+    let query = supabase
+      .from('products')
+      .select(selectStr, { count: 'exact' })
       .eq('status', 'published');
 
-    if (categoryId) query = query.eq('category_id', categoryId);
+    if (categoryId) query = query.eq('product_categories.category_id', categoryId);
     if (brandId) query = query.eq('brand_id', brandId);
     if (filters.badge) query = query.eq('badge', filters.badge);
     if (filters.featured) query = query.eq('is_featured', true);
@@ -323,4 +326,34 @@ export function useProductGroups() {
   }, []);
 
   return { groups, loading };
+}
+
+// ═══ useFilterMappings ═══
+export function useFilterMappings() {
+  const [mappings, setMappings] = useState<{ category_id: string; brand_id: string }[]>([]);
+
+  useEffect(() => {
+    async function fetchMappings() {
+      const { data } = await supabase
+        .from('products')
+        .select('brand_id, product_categories!inner(category_id)')
+        .eq('status', 'published');
+        
+      if (data) {
+        const pairs: { category_id: string; brand_id: string }[] = [];
+        data.forEach((p: any) => {
+          if (p.brand_id && p.product_categories) {
+            const cats = Array.isArray(p.product_categories) ? p.product_categories : [p.product_categories];
+            cats.forEach((c: any) => {
+              if (c.category_id) pairs.push({ category_id: c.category_id, brand_id: p.brand_id });
+            });
+          }
+        });
+        setMappings(pairs);
+      }
+    }
+    fetchMappings();
+  }, []);
+
+  return mappings;
 }

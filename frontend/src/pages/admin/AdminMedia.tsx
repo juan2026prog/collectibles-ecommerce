@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Upload, Trash2, Copy, FileIcon, ImageIcon, ExternalLink, RefreshCw, AlertCircle, Folder, ChevronRight, FolderPlus } from 'lucide-react';
+import { useToast } from '../../components/admin/Toast';
+import { useConfirmModal } from '../../components/admin/ConfirmModal';
 
 export default function AdminMedia() {
   const [files, setFiles] = useState<any[]>([]);
@@ -9,6 +11,9 @@ export default function AdminMedia() {
   const [error, setError] = useState<string | null>(null);
   const [currentPath, setCurrentPath] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { toast } = useToast();
+  const { confirm, prompt } = useConfirmModal();
 
   const BUCKET_NAME = 'public-assets';
 
@@ -38,7 +43,7 @@ export default function AdminMedia() {
   }
 
   async function handleCreateFolder() {
-    const folderName = prompt('Nombre de la nueva carpeta (sin espacios ni caracteres raros):');
+    const folderName = await prompt('Nombre de la nueva carpeta (sin espacios ni caracteres raros):');
     if (!folderName) return;
     
     const sanitized = folderName.toLowerCase().replace(/[^a-z0-9_-]/g, '-');
@@ -51,9 +56,10 @@ export default function AdminMedia() {
     setUploading(false);
 
     if (error) {
-      setError(`Error creando carpeta: ${error.message}`);
+      toast.error('Error creando la carpeta: ' + error.message);
     } else {
       fetchMedia(currentPath);
+      toast.success('Carpeta creada');
     }
   }
 
@@ -86,6 +92,7 @@ export default function AdminMedia() {
     setUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
     fetchMedia(currentPath);
+    toast.success('Carga completada');
   }
 
   async function handleDelete(fileName: string, isFolder: boolean) {
@@ -93,7 +100,7 @@ export default function AdminMedia() {
     
     const msg = isFolder ? `¿Eliminar la carpeta "${fileName}" y su contenido vacío?` : `¿Eliminar permanentemente el archivo "${fileName}"?`;
     
-    if (!confirm(msg)) return;
+    if (!(await confirm(msg, { danger: true }))) return;
     
     try {
       const pathsToDelete = isFolder ? [`${targetPath}/.emptyFolderPlaceholder`] : [targetPath];
@@ -101,6 +108,7 @@ export default function AdminMedia() {
       const { error } = await supabase.storage.from(BUCKET_NAME).remove(pathsToDelete);
       if (error) throw error;
       fetchMedia(currentPath);
+      toast.success(isFolder ? 'Carpeta eliminada' : 'Archivo eliminado');
     } catch (err: any) {
       console.error(err);
       setError(`Error al eliminar: ${err.message}`);
@@ -114,7 +122,7 @@ export default function AdminMedia() {
 
   function handleCopy(url: string) {
     navigator.clipboard.writeText(url);
-    alert('¡URL copiada al portapapeles!');
+    toast.success('URL copiada al portapapeles');
   }
 
   const isImage = (name: string) => /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(name);

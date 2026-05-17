@@ -8,8 +8,8 @@ const UY_CARDS = [
   { id: 'oca_blue', name: 'OCA Blue', color: '#1A73E8', textColor: '#fff', bins: ['650501'] },
   { id: 'mi_dinero', name: 'Mi Dinero', color: '#00B140', textColor: '#fff', bins: ['603693'] },
   { id: 'visa', name: 'Visa', color: '#1A1F71', textColor: '#fff', bins: ['4'] },
-  { id: 'mastercard', name: 'Mastercard', color: '#EB001B', textColor: '#fff', bins: ['51','52','53','54','55','2221'] },
-  { id: 'amex', name: 'American Express', color: '#006FCF', textColor: '#fff', bins: ['34','37'] },
+  { id: 'mastercard', name: 'Mastercard', color: '#EB001B', textColor: '#fff', bins: ['51', '52', '53', '54', '55', '2221'] },
+  { id: 'amex', name: 'American Express', color: '#006FCF', textColor: '#fff', bins: ['34', '37'] },
   { id: 'santander', name: 'Santander', color: '#EC0000', textColor: '#fff', bins: [] },
   { id: 'bbva', name: 'BBVA', color: '#004481', textColor: '#fff', bins: [] },
   { id: 'itau', name: 'Itaú', color: '#FF6600', textColor: '#fff', bins: [] },
@@ -195,13 +195,12 @@ export default function AdminPromotions() {
                       key={card.id}
                       type="button"
                       onClick={() => selectCard(card.id)}
-                      className={`relative flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-left transition-all duration-200 hover:scale-[1.02] ${
-                        editing.bank_name === card.name
+                      className={`relative flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-left transition-all duration-200 hover:scale-[1.02] ${editing.bank_name === card.name
                           ? 'border-blue-500 shadow-lg shadow-blue-100 ring-2 ring-blue-200'
                           : 'border-gray-100 hover:border-gray-200 hover:shadow-sm'
-                      }`}
+                        }`}
                     >
-                      <div 
+                      <div
                         className="w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black shrink-0"
                         style={{ backgroundColor: card.color, color: card.textColor }}
                       >
@@ -221,7 +220,7 @@ export default function AdminPromotions() {
               {editing.bank_name && (
                 <div className="bg-gradient-to-r from-gray-50 to-blue-50/30 rounded-xl p-4 border border-blue-100">
                   <div className="flex items-center gap-3 mb-3">
-                    <div 
+                    <div
                       className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black"
                       style={{ backgroundColor: getCardColor(editing.bank_name), color: '#fff' }}
                     >
@@ -234,18 +233,18 @@ export default function AdminPromotions() {
                   </div>
                   <div>
                     <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Etiqueta visible al cliente</label>
-                    <input 
-                      className="form-input w-full" 
-                      value={editing.promo_label} 
-                      onChange={e => setEditing({ ...editing, promo_label: e.target.value })} 
-                      placeholder={`${editing.discount_value}% OFF con ${editing.bank_name}`} 
+                    <input
+                      className="form-input w-full"
+                      value={editing.promo_label}
+                      onChange={e => setEditing({ ...editing, promo_label: e.target.value })}
+                      placeholder={`${editing.discount_value}% OFF con ${editing.bank_name}`}
                     />
                   </div>
                 </div>
               )}
 
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-                <strong>💡 ¿Cómo funciona?</strong> El cliente verá las promociones bancarias activas en el checkout. Al pagar con <strong>dLocal Go</strong>, 
+                <strong>💡 ¿Cómo funciona?</strong> El cliente verá las promociones bancarias activas en el checkout. Al pagar con <strong>dLocal Go</strong>,
                 el sistema identifica la tarjeta por su BIN (primeros dígitos). Si coincide con la tarjeta de la promo, el descuento se aplica automáticamente al total.
               </div>
             </div>
@@ -297,16 +296,15 @@ export default function AdminPromotions() {
             return (
               <div key={p.id} className={`bg-white rounded-xl border shadow-sm p-5 flex items-center justify-between hover:shadow-md transition-shadow ${isExpired ? 'opacity-60 border-gray-200' : 'border-gray-200'}`}>
                 <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-sm ${
-                    isBank ? '' :
-                    p.discount_type === 'percentage' ? 'bg-green-100 text-green-700' :
-                    'bg-purple-100 text-purple-700'
-                  }`}
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-sm ${isBank ? '' :
+                      p.discount_type === 'percentage' ? 'bg-green-100 text-green-700' :
+                        'bg-purple-100 text-purple-700'
+                    }`}
                     style={isBank ? { backgroundColor: getCardColor(p.bank_name || ''), color: '#fff' } : {}}
                   >
                     {isBank ? (p.bank_name || 'BK').substring(0, 2).toUpperCase() :
-                     p.discount_type === 'percentage' ? `${p.discount_value}%` : 
-                     p.discount_type === '2x1' ? '2x1' : `$${p.discount_value}`}
+                      p.discount_type === 'percentage' ? `${p.discount_value}%` :
+                        p.discount_type === '2x1' ? '2x1' : `$${p.discount_value}`}
                   </div>
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">

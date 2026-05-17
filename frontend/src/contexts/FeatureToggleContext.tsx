@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 
 interface FeatureToggles {
@@ -67,8 +67,10 @@ export function FeatureToggleProvider({ children }: { children: React.ReactNode 
     loadConfig();
   }, []);
 
+  const value = useMemo(() => ({ features, loading }), [features, loading]);
+
   return (
-    <FeatureToggleContext.Provider value={{ features, loading }}>
+    <FeatureToggleContext.Provider value={value}>
         {children}
     </FeatureToggleContext.Provider>
   );

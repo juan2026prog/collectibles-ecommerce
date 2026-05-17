@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Eye, ChevronDown, Package, Truck, PhoneCall, X, Save, Ban, AlertTriangle, UserX, Gift } from 'lucide-react';
+import { useToast } from '../../components/admin/Toast';
+import { useConfirmModal } from '../../components/admin/ConfirmModal';
 
 const SUPABASE_URL = 'https://cobtsgkwcftvexaarwmo.supabase.co';
 const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNvYnRzZ2t3Y2Z0dmV4YWFyd21vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NzIwNTMsImV4cCI6MjA5MDE0ODA1M30.vXyiMl093ojZ8OyEpRuGnX5O5lHsLXxljynrYtMmf50';
@@ -25,6 +27,9 @@ export default function AdminOrders() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [isBlocking, setIsBlocking] = useState(false);
   const [isSendingDiscount, setIsSendingDiscount] = useState(false);
+
+  const { toast } = useToast();
+  const { confirm, prompt } = useConfirmModal();
 
   useEffect(() => { fetchOrders(); }, [statusFilter]);
 
@@ -60,14 +65,14 @@ export default function AdminOrders() {
   async function handleCancelOrder() {
     if (!selectedOrder) return;
     const isPending = selectedOrder.status === 'pending';
-    const reason = prompt("Por favor ingresa la razón de la cancelación. Esta será enviada al cliente:");
+    const reason = await prompt("Por favor ingresa la razón de la cancelación. Esta será enviada al cliente:");
     if (reason === null) return;
     
     const confirmMessage = isPending 
       ? `¿Estás SEGURO de que deseas cancelar esta orden? Al estar pendiente, no se procesará reembolso de dinero.` 
       : `¿Estás SEGURO de que deseas cancelar esta orden y devolver el dinero? Esta acción no se puede deshacer.`;
 
-    if (!confirm(confirmMessage)) return;
+    if (!(await confirm(confirmMessage, { danger: true }))) return;
 
     setIsCancelling(true);
     try {
@@ -94,15 +99,15 @@ export default function AdminOrders() {
       if (!res.ok) throw new Error(data.error || `Error ${res.status} al cancelar la orden`);
       
       if (isPending) {
-         alert("La orden pendiente fue cancelada exitosamente.");
+         toast.success("La orden pendiente fue cancelada exitosamente.");
       } else {
          if (data.refundSuccess) {
            const details = data.refundDetails || {};
-           const testWarning = details.isTestMode ? '\n\n⚠️ ATENCIÓN: Estás usando un token de PRUEBA (TEST). Este reembolso solo se procesó en el sandbox de MercadoPago y NO se reflejará en la tarjeta de crédito real del cliente. Para reembolsos reales, necesitás configurar un token de PRODUCCIÓN.' : '';
-           alert(`✅ Orden cancelada y reembolso procesado.\n\nRefund ID: ${details.refund_id || 'N/A'}\nMonto: ${details.amount || 'Total'}\nEstado: ${details.status || 'approved'}${testWarning}\n\nNota: El reembolso puede demorar entre 5 y 30 días hábiles en reflejarse en la tarjeta.`);
+           const testWarning = details.isTestMode ? '\n\n⚠️ ATENCIÓN: Estás usando un token de PRUEBA (TEST). Este reembolso solo se procesó en el sandbox de MercadoPago y NO se reflejará en la tarjeta de crédito real del cliente.' : '';
+           toast.success(`Orden cancelada y reembolso procesado. Refund ID: ${details.refund_id || 'N/A'}${testWarning}`, 8000);
          } else {
            const details = data.refundDetails || {};
-           alert(`⚠️ La orden fue cancelada, pero el reembolso NO se pudo procesar.\n\nError: ${details.error || 'Desconocido'}\nMP Status: ${details.mp_status || 'N/A'}\n\nPosibles causas:\n- El token de MP es de prueba (TEST) y no puede procesar reembolsos reales\n- El pago ya fue reembolsado previamente\n- El payment_id almacenado es incorrecto\n\nPor favor, procesar el reembolso manualmente desde el panel de MercadoPago.`);
+           toast.error(`La orden fue cancelada, pero el reembolso NO se pudo procesar. Error: ${details.error || 'Desconocido'}`);
          }
       }
         
@@ -118,11 +123,11 @@ export default function AdminOrders() {
 
   async function handleBlockUser() {
     if (!selectedOrder || !selectedOrder.customer?.id) {
-       alert("Esta orden no parece tener un usuario registrado para bloquear (compra como invitado o sin cuenta).");
+       toast.warning("Esta orden no parece tener un usuario registrado para bloquear.");
        return;
     }
     
-    if (!confirm(`¿Estás SEGURO de que deseas bloquear irrevocablemente al usuario? No podrá volver a comprar ni iniciar sesión en su cuenta.`)) return;
+    if (!(await confirm(`¿Estás SEGURO de que deseas bloquear irrevocablemente al usuario? No podrá volver a comprar ni iniciar sesión en su cuenta.`, { danger: true }))) return;
 
     setIsBlocking(true);
     try {
@@ -142,9 +147,9 @@ export default function AdminOrders() {
 
       if (!res.ok) throw new Error(data.error || "Error al bloquear usuario");
       
-      alert("Usuario bloqueado y baneado de la plataforma exitosamente.");
+      toast.success("Usuario bloqueado exitosamente.");
     } catch (e: any) {
-      alert(`Error al bloquear: ${e.message}`);
+      toast.error(`Error al bloquear: ${e.message}`);
     } finally {
       setIsBlocking(false);
     }
@@ -152,7 +157,7 @@ export default function AdminOrders() {
 
   async function handleSendDiscount() {
     if (!selectedOrder) return;
-    const discountCode = prompt("Ingresa el cupón de descuento que deseas enviarle al cliente (Ej: VUELVE10):", "VUELVE10");
+    const discountCode = await prompt("Ingresa el cupón de descuento que deseas enviarle al cliente:", { defaultValue: "VUELVE10" });
     if (discountCode === null) return;
     
     setIsSendingDiscount(true);
@@ -180,16 +185,16 @@ export default function AdminOrders() {
       // 2. Change status to abandonada
       if (selectedOrder.status !== 'abandonada') {
          await supabase.from('orders').update({ status: 'abandonada' }).eq('id', selectedOrder.id);
-         alert("Descuento enviado exitosamente y orden marcada como Abandonada.");
+         toast.success("Descuento enviado y orden marcada como Abandonada.");
       } else {
-         alert("Descuento enviado exitosamente.");
+         toast.success("Descuento enviado exitosamente.");
       }
       
       fetchOrders();
       setSelectedOrder(null);
     } catch (e: any) {
       console.error('Send discount error:', e);
-      alert(`Error al enviar descuento: ${e.message}`);
+      toast.error(`Error al enviar descuento: ${e.message}`);
     } finally {
       setIsSendingDiscount(false);
     }

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Plus, Pencil, Trash2, Save, X, ExternalLink, RefreshCw } from 'lucide-react';
+import { useToast } from '../../components/admin/Toast';
+import { useConfirmModal } from '../../components/admin/ConfirmModal';
 import { Link } from 'react-router-dom';
 
 export default function AdminPages() {
@@ -9,6 +11,9 @@ export default function AdminPages() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState({ title: '', slug: '', content: '', status: 'published' });
+
+  const { toast } = useToast();
+  const { confirm } = useConfirmModal();
 
   useEffect(() => { fetchPages(); }, []);
 
@@ -41,13 +46,15 @@ export default function AdminPages() {
     };
     if (editing) await supabase.from('pages').update(payload).eq('id', editing.id);
     else await supabase.from('pages').insert(payload);
+    toast.success('Página guardada');
     setShowForm(false); 
     fetchPages();
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('¿Eliminar esta página de forma definitiva?')) return;
+    if (!(await confirm('¿Eliminar esta página de forma definitiva?', { danger: true }))) return;
     await supabase.from('pages').delete().eq('id', id);
+    toast.success('Página eliminada');
     fetchPages();
   }
 

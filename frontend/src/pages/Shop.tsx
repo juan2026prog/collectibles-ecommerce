@@ -1,13 +1,23 @@
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
-import { ChevronRight, ChevronLeft, SlidersHorizontal, X, ShoppingCart, Search } from 'lucide-react';
-import { useProducts, useCategories, useBrands } from '../hooks/useData';
+import { useState, useEffect } from 'react';
+import { ChevronRight, ChevronLeft, SlidersHorizontal, X, Search } from 'lucide-react';
+import { useProducts, useCategories, useBrands, useFilterMappings } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
 import { useLocale } from '../contexts/LocaleContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { ProductSkeleton } from '../components/Skeletons';
 import { ProductBadge } from '../components/ProductBadge';
+import { ProductGridCard } from '../components/ProductGridCard';
 import { getProductImage } from '../lib/imageUtils';
+import { supabase } from '../lib/supabase';
 import SEO from '../components/SEO';
+
+function getVisiblePages(currentPage: number, total: number) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i);
+  if (currentPage < 4) return [0, 1, 2, 3, 4, '...', total - 1];
+  if (currentPage > total - 5) return [0, '...', total - 5, total - 4, total - 3, total - 2, total - 1];
+  return [0, '...', currentPage - 1, currentPage, currentPage + 1, '...', total - 1];
+}
 
 export default function Shop() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -17,6 +27,13 @@ export default function Shop() {
   const searchQ = searchParams.get('q') || '';
   const [sortBy, setSortBy] = useState('default');
   const [mobileFilters, setMobileFilters] = useState(false);
+  const [gridCols, setGridCols] = useState<number>(() => {
+    try { const saved = localStorage.getItem('shop_grid_cols'); return saved ? Number(saved) : 5; } catch { return 5; }
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem('shop_grid_cols', String(gridCols)); } catch {}
+  }, [gridCols]);
   const [page, setPage] = useState(0);
   const [priceMin, setPriceMin] = useState('');
   const [priceMax, setPriceMax] = useState('');
@@ -25,8 +42,21 @@ export default function Shop() {
 
   const { categories, loading: catsLoading } = useCategories();
   const { brands, loading: brandsLoading } = useBrands();
+  const mappings = useFilterMappings();
+
+  const currentCategory = categories.find(c => c.slug === categorySlug);
+  const currentBrand = brands.find(b => b.slug === brandSlug);
+
+  const visibleCategories = currentBrand && mappings.length > 0
+    ? categories.filter(c => mappings.some(m => m.category_id === c.id && m.brand_id === currentBrand.id) || c.id === currentCategory?.id)
+    : categories;
+
+  const visibleBrands = currentCategory && mappings.length > 0
+    ? brands.filter(b => mappings.some(m => m.brand_id === b.id && m.category_id === currentCategory.id) || b.id === currentBrand?.id)
+    : brands;
   const cart = useCartContext();
-  const { formatPrice, t } = useLocale();
+  const { t } = useLocale();
+  const { formatCurrencyPrice } = useCurrency();
   const navigate = useNavigate();
 
   // ✅ Fully server-side — useProducts now resolves slug → id internally
@@ -105,7 +135,7 @@ export default function Shop() {
           </button>
           {catsLoading
             ? [...Array(5)].map((_, i) => <div key={i} className="h-10 bg-white/5 rounded-xl animate-pulse" />)
-            : categories.map(c => (
+            : visibleCategories.map(c => (
               <button
                 key={c.id}
                 onClick={() => setFilter('category', c.slug)}
@@ -130,7 +160,7 @@ export default function Shop() {
           </button>
           {brandsLoading
             ? [...Array(4)].map((_, i) => <div key={i} className="h-10 bg-white/5 rounded-xl animate-pulse" />)
-            : brands.map(b => (
+            : visibleBrands.map(b => (
               <button
                 key={b.id}
                 onClick={() => setFilter('brand', b.slug)}
@@ -182,8 +212,6 @@ export default function Shop() {
     </div>
   );
 
-  const currentCategory = categories.find(c => c.slug === categorySlug);
-  const currentBrand = brands.find(b => b.slug === brandSlug);
   const pageTitle = currentCategory?.name || currentBrand?.name || (searchQ ? `"${searchQ}"` : t('shop.title'));
 
   return (
@@ -196,7 +224,7 @@ export default function Shop() {
       {/* EDITORIAL HERO SECTION */}
       <section className="relative hero-noise overflow-hidden border-b border-white/10">
         <div className="absolute -right-40 top-0 w-[560px] h-[560px] bg-[#f00856]/20 blur-3xl rounded-full"></div>
-        <div className="relative max-w-7xl mx-auto px-6 py-14 md:py-20">
+        <div className="relative max-w-7xl mx-auto px-6 py-10 md:py-14">
           <div className="label-tag">Catálogo unificado</div>
           <h1 className="text-5xl md:text-7xl font-black leading-[.9] mt-3 tracking-tighter">
             Productos de tienda <br className="hidden md:block" /> + sellers oficiales.
@@ -261,7 +289,7 @@ export default function Shop() {
         </div>
       )}
 
-      <main className="max-w-7xl mx-auto px-6 py-10 grid lg:grid-cols-[280px_1fr] gap-8">
+      <main className="max-w-[1500px] mx-auto px-6 py-10 grid lg:grid-cols-[240px_1fr] gap-10 overflow-hidden">
         {/* FILTERS ASIDE — hidden on mobile, shown on desktop */}
         <aside className="hidden lg:block glass rounded-[2rem] p-6 h-fit sticky top-24 z-10">
           <div className="flex items-center justify-between mb-6">
@@ -274,20 +302,41 @@ export default function Shop() {
         </aside>
 
         {/* PRODUCTS GRID */}
-        <section>
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-            <div>
-              <div className="label-tag">Marketplace integrado</div>
-              <h2 className="text-3xl font-black mt-1 text-white tracking-tight">
-                {searchQ ? `Resultados para "${searchQ}"` : "Resultados destacados"}
-              </h2>
+        <section className="min-w-0">
+          {/* Header: título + controles */}
+          <div className="mb-8">
+            <div className="flex items-end justify-between gap-4 flex-wrap">
+              <div>
+                <div className="label-tag">Marketplace integrado</div>
+                <h2 className="text-3xl font-black mt-1 text-white tracking-tight">
+                  {searchQ ? `Resultados para "${searchQ}"` : "Resultados destacados"}
+                </h2>
+              </div>
+              {/* Column selector — siempre visible en desktop */}
+              <div className="hidden md:flex items-center gap-2 text-xs font-bold text-slate-400">
+                <span>Vista</span>
+                {[3, 4, 5].map(n => (
+                  <button
+                    key={n}
+                    onClick={() => setGridCols(n)}
+                    className={`w-8 h-8 rounded font-black text-sm transition-all ${
+                      gridCols === n
+                        ? 'bg-[#f00856] text-white shadow-lg shadow-[#f00856]/30'
+                        : 'border border-white/10 text-slate-400 hover:text-white hover:border-white/30'
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="hidden lg:flex items-center gap-3">
+            {/* Barra secundaria: count + sort */}
+            <div className="hidden lg:flex items-center gap-3 mt-4">
               <span className="text-sm font-bold text-slate-500">{count} productos encontrados</span>
               <select
                 value={sortBy}
                 onChange={e => { setSortBy(e.target.value); setPage(0); }}
-                className="glass rounded-full px-6 py-2.5 text-xs font-black uppercase tracking-widest text-white border border-white/10 hover:border-white/20 bg-transparent focus:outline-none"
+                className="glass rounded-full px-5 py-2 text-xs font-black uppercase tracking-widest text-white border border-white/10 hover:border-white/20 bg-transparent focus:outline-none"
               >
                 <option value="default">Recomendados</option>
                 <option value="newest">Más nuevos</option>
@@ -299,79 +348,49 @@ export default function Shop() {
           </div>
 
           {loading ? (
-            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-6">
-              {[...Array(6)].map((_, i) => <ProductSkeleton key={i} />)}
+            <div className={`grid gap-x-6 gap-y-12 grid-cols-2 ${
+              gridCols === 3 ? 'md:grid-cols-3' :
+              gridCols === 4 ? 'md:grid-cols-3 lg:grid-cols-4' :
+              'md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
+            }`}>
+              {[...Array(gridCols * 2)].map((_, i) => <ProductSkeleton key={i} />)}
             </div>
           ) : products.length === 0 ? (
             <div className="glass rounded-[2rem] p-20 text-center">
               <Search className="w-12 h-12 text-slate-700 mx-auto mb-4" />
-              <h3 className="text-xl font-black text-white">No encontramos resultados</h3>
-              <p className="text-slate-500 mt-1">Probá con otros filtros o términos de búsqueda.</p>
-              <button onClick={clearAllFilters} className="btn-primary mt-6">Ver todo el catálogo</button>
+              {categorySlug && brandSlug ? (
+                <>
+                  <h3 className="text-xl font-black text-white">No hay productos con esta combinación</h3>
+                  <p className="text-slate-500 mt-2">La categoría y la marca seleccionadas no tienen productos en común.</p>
+                  <div className="flex flex-wrap items-center justify-center gap-3 mt-8">
+                    <button onClick={() => setFilter('brand', '')} className="btn-secondary whitespace-nowrap">
+                      Ver solo {currentCategory?.name || 'la categoría'}
+                    </button>
+                    <button onClick={() => setFilter('category', '')} className="btn-secondary whitespace-nowrap">
+                      Ver solo {currentBrand?.name || 'la marca'}
+                    </button>
+                    <button onClick={clearAllFilters} className="text-slate-400 hover:text-white text-sm font-bold ml-2">
+                      Limpiar filtros
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-xl font-black text-white">No encontramos resultados</h3>
+                  <p className="text-slate-500 mt-1">Probá con otros filtros o términos de búsqueda.</p>
+                  <button onClick={clearAllFilters} className="btn-primary mt-6">Ver todo el catálogo</button>
+                </>
+              )}
             </div>
           ) : (
-            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-6">
-              {products.map(p => {
-                const img = getProductImage(p);
-                const finalPrice = p.base_price + (p.variants?.[0]?.price_adjustment || 0);
-                return (
-                  <article key={p.id} className="glass rounded-[2.5rem] p-4 flex flex-col group transition-all hover:-translate-y-2 hover:shadow-2xl hover:shadow-black/60 hover:border-[#f00856]/40">
-                    <div className="relative aspect-square rounded-[2rem] overflow-hidden bg-black/30 grid place-items-center mb-5">
-                      <Link to={`/p/${p.slug}`} className="w-full h-full p-6 block">
-                        <img
-                          src={img}
-                          alt={p.title}
-                          className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-110"
-                        />
-                      </Link>
-                      <div className="absolute top-4 left-4">
-                        <ProductBadge
-                          badgeId={p.badge}
-                          compareAtPrice={p.compare_at_price}
-                          basePrice={p.base_price}
-                          className="text-[10px] px-3 py-1.5"
-                        />
-                      </div>
-                      <button
-                        onClick={() => handleAddToCart(p)}
-                        className="absolute bottom-4 right-4 w-12 h-12 bg-[#f00856] text-white rounded-full flex items-center justify-center opacity-100 md:opacity-0 md:translate-y-4 group-hover:opacity-100 group-hover:translate-y-0 transition-all shadow-lg shadow-[#f00856]/30"
-                      >
-                        <ShoppingCart className="w-5 h-5" />
-                      </button>
-                    </div>
-
-                    <div className="px-2 flex-1 flex flex-col">
-                      <div className="label-tag mb-1 opacity-60">{p.brand?.name || p.category?.name || 'Producto'}</div>
-                      <Link to={`/p/${p.slug}`} className="font-black text-xl text-white group-hover:text-[#f00856] transition-colors leading-tight line-clamp-2 min-h-[3rem]">
-                        {p.title}
-                      </Link>
-
-                      <div className="mt-4 flex items-end justify-between">
-                        <div>
-                          <div className="text-[10px] uppercase text-slate-500 font-black tracking-widest mb-0.5">Precio</div>
-                          <div className="text-2xl font-black text-white">${formatPrice(finalPrice)}</div>
-                        </div>
-                        <Link
-                          to={`/p/${p.slug}`}
-                          className="btn-primary px-5 py-2.5 text-xs rounded-full"
-                        >
-                          Ver
-                        </Link>
-                      </div>
-
-                      {/* SELLER METADATA — real data only */}
-                      {p.brand?.name && (
-                        <div className="mt-5 pt-4 border-t border-white/10 flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center font-black text-xs text-slate-400 group-hover:bg-[#f00856] group-hover:text-white transition-colors">
-                            {p.brand.name[0]}
-                          </div>
-                          <div className="font-bold text-xs text-white line-clamp-1">{p.brand.name}</div>
-                        </div>
-                      )}
-                    </div>
-                  </article>
-                );
-              })}
+            <div className={`grid gap-x-6 gap-y-12 grid-cols-2 ${
+              gridCols === 3 ? 'md:grid-cols-3' :
+              gridCols === 4 ? 'md:grid-cols-3 lg:grid-cols-4' :
+              'md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
+            }`}>
+              {products.map(p => (
+                <ProductGridCard key={p.id} product={p} onAddToCart={handleAddToCart} formatPrice={formatCurrencyPrice} />
+              ))}
             </div>
           )}
 
@@ -386,14 +405,18 @@ export default function Shop() {
                  <ChevronLeft className="w-5 h-5" />
               </button>
               <div className="flex items-center gap-2">
-                 {[...Array(totalPages)].map((_, i) => (
-                   <button
-                    key={i}
-                    onClick={() => setPage(i)}
-                    className={`w-12 h-12 rounded-full font-black transition-all ${page === i ? 'bg-[#f00856] text-white' : 'glass text-slate-400 hover:text-white'}`}
-                   >
-                    {i + 1}
-                   </button>
+                 {getVisiblePages(page, totalPages).map((p, i) => (
+                   p === '...' ? (
+                     <span key={`ellipsis-${i}`} className="w-10 text-center text-slate-500 font-bold tracking-widest">...</span>
+                   ) : (
+                     <button
+                      key={p}
+                      onClick={() => setPage(p as number)}
+                      className={`w-12 h-12 rounded-full font-black transition-all ${page === p ? 'bg-[#f00856] text-white shadow-lg shadow-[#f00856]/30' : 'glass border border-white/5 text-slate-400 hover:text-white hover:border-white/20'}`}
+                     >
+                      {(p as number) + 1}
+                     </button>
+                   )
                  ))}
               </div>
               <button

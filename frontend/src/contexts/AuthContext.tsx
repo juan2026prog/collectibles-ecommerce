@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useMemo, useCallback, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
@@ -22,6 +22,7 @@ interface AuthContextType {
   signUp: (email: string, password: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signInWithGoogle: () => Promise<{ error: any }>;
+  signInWithOtp: (email: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
 }
 
@@ -70,17 +71,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function signUp(email: string, password: string) {
+  const signUp = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signUp({ email, password });
     return { error };
-  }
+  }, []);
 
-  async function signIn(email: string, password: string) {
+  const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error };
-  }
+  }, []);
 
-  async function signInWithGoogle() {
+  const signInWithGoogle = useCallback(async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -88,15 +89,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
     return { error };
-  }
+  }, []);
 
-  async function signOut() {
+  const signInWithOtp = useCallback(async (email: string) => {
+    const { error } = await supabase.auth.signInWithOtp({ 
+      email,
+      options: { emailRedirectTo: `${window.location.origin}/` }
+    });
+    return { error };
+  }, []);
+
+  const signOutFn = useCallback(async () => {
     await supabase.auth.signOut();
     setProfile(null);
-  }
+  }, []);
+
+  const value = useMemo(() => ({
+    session, user, profile, loading,
+    signUp, signIn, signInWithGoogle, signInWithOtp, signOut: signOutFn
+  }), [session, user, profile, loading, signUp, signIn, signInWithGoogle, signInWithOtp, signOutFn]);
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, loading, signUp, signIn, signInWithGoogle, signOut }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

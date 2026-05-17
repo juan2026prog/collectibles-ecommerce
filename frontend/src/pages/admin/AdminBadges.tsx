@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { ShieldCheck, Search, Plus, Trash2, Upload, Image as ImageIcon, CheckSquare, Square } from 'lucide-react';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
+import { useToast } from '../../components/admin/Toast';
+import { useConfirmModal } from '../../components/admin/ConfirmModal';
 
 interface BadgeConfig {
   url: string;
@@ -40,6 +42,9 @@ export default function AdminBadges() {
   const [newBadgeSize, setNewBadgeSize] = useState<'small' | 'medium' | 'large'>('medium');
   const [newBadgeStartDate, setNewBadgeStartDate] = useState('');
   const [newBadgeEndDate, setNewBadgeEndDate] = useState('');
+
+  const { toast } = useToast();
+  const { confirm } = useConfirmModal();
 
   const [showMediaPicker, setShowMediaPicker] = useState(false);
 
@@ -85,11 +90,11 @@ export default function AdminBadges() {
     if (list.includes(badgeToToggle)) {
       list = list.filter(b => b !== badgeToToggle);
     } else {
-      if (list.length >= 3) return alert('Un producto puede tener un máximo de 3 cocardas.');
       list.push(badgeToToggle);
     }
     await supabase.from('products').update({ badge: list.join(',') || null }).eq('id', productId);
     fetchData();
+    toast.success('Cocarda actualizada');
   }
 
   const filteredProducts = products.filter(p => {
@@ -126,14 +131,14 @@ export default function AdminBadges() {
   }
 
   async function handleMassAssign() {
-    if (!selectedBadge) return alert('Selecciona una cocarda primero');
+    if (!selectedBadge) return toast.warning('Selecciona una cocarda primero');
     const targetProducts = selectedProductIds.size > 0 
       ? products.filter(p => selectedProductIds.has(p.id)) 
       : filteredProducts;
 
-    if (targetProducts.length === 0) return alert('No hay productos seleccionados ni filtrados.');
+    if (targetProducts.length === 0) return toast.warning('No hay productos seleccionados ni filtrados.');
 
-    if (!confirm(`¿Asignar esta cocarda a los ${targetProducts.length} productos? Los productos que ya tengan 3 cocardas se ignorarán si no la tienen.`)) return;
+    if (!(await confirm(`¿Asignar esta cocarda a los ${targetProducts.length} productos? Los productos que ya tengan 3 cocardas se ignorarán si no la tienen.`))) return;
     
     for (const p of targetProducts) {
       let list = getProductBadges(p.badge);
@@ -144,17 +149,18 @@ export default function AdminBadges() {
     }
     fetchData();
     setSelectedProductIds(new Set());
+    toast.success('Asignación masiva completada');
   }
 
   async function handleMassClear() {
-    if (!selectedBadge) return alert('Selecciona una cocarda primero para quitarla');
+    if (!selectedBadge) return toast.warning('Selecciona una cocarda primero para quitarla');
     const targetProducts = selectedProductIds.size > 0 
       ? products.filter(p => selectedProductIds.has(p.id)) 
       : filteredProducts;
 
-    if (targetProducts.length === 0) return alert('No hay productos seleccionados ni filtrados.');
+    if (targetProducts.length === 0) return toast.warning('No hay productos seleccionados ni filtrados.');
 
-    if (!confirm(`¿Quitar la cocarda seleccionada de los ${targetProducts.length} productos?`)) return;
+    if (!(await confirm(`¿Quitar la cocarda seleccionada de los ${targetProducts.length} productos?`, { danger: true }))) return;
     
     for (const p of targetProducts) {
       let list = getProductBadges(p.badge);
@@ -165,11 +171,12 @@ export default function AdminBadges() {
     }
     fetchData();
     setSelectedProductIds(new Set());
+    toast.success('Cocardas removidas exitosamente');
   }
 
   async function handleCreateBadge() {
-    if (!newBadgeImage) return alert('Debes seleccionar una imagen PNG para la cocarda.');
-    if (!newBadgeLabel.trim()) return alert('Debes dar un nombre interno a esta cocarda.');
+    if (!newBadgeImage) return toast.error('Debes seleccionar una imagen PNG para la cocarda.');
+    if (!newBadgeLabel.trim()) return toast.error('Debes dar un nombre interno a esta cocarda.');
     
     const config: BadgeConfig = {
       url: newBadgeImage,
@@ -196,12 +203,14 @@ export default function AdminBadges() {
     setNewBadgeEndDate('');
     setShowCreateModal(false);
     loadCustomBadges();
+    toast.success('Cocarda creada correctamente');
   }
 
   async function handleDeleteBadge(badgeId: string) {
-    if (!confirm('¿Eliminar esta cocarda de la base de datos?')) return;
+    if (!(await confirm('¿Eliminar esta cocarda de la base de datos?', { danger: true }))) return;
     await supabase.from('badges').delete().eq('id', badgeId).or(`slug.eq.${badgeId}`);
     loadCustomBadges();
+    toast.success('Cocarda eliminada');
   }
 
   return (

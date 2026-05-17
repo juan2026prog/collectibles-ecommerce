@@ -4,13 +4,9 @@ import { Plus, Pencil, Trash2, Search, Eye, X, Upload, Save, AlertCircle, Check,
 import { MediaPickerModal } from '../../components/MediaPickerModal';
 import ImportModal from '../../components/admin/ImportModal';
 import type { ParsedProduct } from '../../lib/bulkImportUtils';
-
-function getProductImage(product: any): string {
-  const img = product.images?.[0];
-  if (!img?.url) return 'https://via.placeholder.com/40';
-  if (img.url.match(/^[a-f0-9-]{36}$/)) return 'https://via.placeholder.com/40';
-  return img.url;
-}
+import { getProductImage } from '../../lib/imageUtils';
+import { useToast } from '../../components/admin/Toast';
+import { useConfirmModal } from '../../components/admin/ConfirmModal';
 
 interface InlineEditProps {
   value: string | number;
@@ -117,10 +113,15 @@ export default function AdminProducts() {
   const [loadingAI, setLoadingAI] = useState(false);
   const [inlineEdit, setInlineEdit] = useState<{ id: string, field: string } | null>(null);
   const [inlineValue, setInlineValue] = useState<any>(null);
+
+  const { toast } = useToast();
+  const { confirm } = useConfirmModal();
   
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [itemsPerPage, setItemsPerPage] = useState<number | 'Todos'>(50);
   const [currentPage, setCurrentPage] = useState(1);
+  const [sortField, setSortField] = useState<string>('created_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   
   const [categories, setCategories] = useState<any[]>([]);
   const [brands, setBrands] = useState<any[]>([]);
@@ -278,8 +279,9 @@ export default function AdminProducts() {
       setShowForm(false);
       fetchProducts();
       fetchMeta();
+      toast.success(editing ? 'Producto actualizado' : 'Producto creado');
     } catch (err: any) {
-      alert(`Error: ${err.message}`);
+      toast.error(`Error: ${err.message}`);
     }
   }
 
@@ -314,7 +316,8 @@ export default function AdminProducts() {
       setCategories([...categories, data]);
       toggleCategory(data.id);
       setNewCatInput('');
-    } catch (err: any) { alert(err.message); }
+      toast.success('Categoría creada');
+    } catch (err: any) { toast.error(err.message); }
   };
 
   const handleAddBrand = async () => {
@@ -326,7 +329,8 @@ export default function AdminProducts() {
       setBrands([...brands, data]);
       toggleBrand(data.id);
       setNewBrandInput('');
-    } catch (err: any) { alert(err.message); }
+      toast.success('Marca creada');
+    } catch (err: any) { toast.error(err.message); }
   };
 
   const handleInlineUpdate = async (id: string, field: string, value: any) => {
@@ -355,20 +359,21 @@ export default function AdminProducts() {
           await supabase.from('product_variants').insert({ product_id: id, sku: `${Date.now()}`, name: 'Standard', inventory_count: parseInt(value) || 0 });
         }
       } else {
-        updates[field] = value;
+        updates[field] = value === '' ? null : value;
         const { error } = await supabase.from('products').update(updates).eq('id', id).select().single();
         if (error) throw error;
       }
       
       setInlineEdit(null);
       fetchProducts();
+      toast.success('Actualizado');
     } catch (err: any) {
-      alert(`Error updating: ${err.message}`);
+      toast.error(`Error updating: ${err.message}`);
     }
   };
 
   const handleGenerateAI = async (action: 'improve' | 'generate') => {
-    if (action === 'generate' && !form.title) { alert("Ingresa un título primero"); return; }
+    if (action === 'generate' && !form.title) { toast.warning("Ingresa un título primero"); return; }
     setLoadingAI(true);
     try {
       const { data, error } = await supabase.functions.invoke('generate-content', {
@@ -377,32 +382,98 @@ export default function AdminProducts() {
       if (error) throw error;
       if (data.success) {
         setForm({ ...form, description: data.text });
+        toast.success('IA: Contenido generado');
       } else {
         throw new Error(data.error || "Error de la IA");
       }
     } catch (err: any) {
-      alert(`Error IA: ${err.message}`);
+      toast.error(`Error IA: ${err.message}`);
     } finally {
       setLoadingAI(false);
     }
   };
 
   const handleBulkPublish = async () => {
-    if (!confirm(`¿Publicar ${selectedProducts.length} productos seleccionados?`)) return;
+    if (!(await confirm(`¿Publicar ${selectedProducts.length} productos seleccionados?`))) return;
     try {
        await supabase.from('products').update({ status: 'published' }).in('id', selectedProducts);
        setSelectedProducts([]);
        fetchProducts();
-    } catch (err: any) { alert(err.message); }
+       toast.success(`${selectedProducts.length} productos publicados`);
+    } catch (err: any) { toast.error(err.message); }
   };
 
   const handleBulkDelete = async () => {
-    if (!confirm(`¿Eliminar permanente ${selectedProducts.length} productos seleccionados? Esta acción no se puede deshacer.`)) return;
+    if (!(await confirm(`¿Eliminar permanente ${selectedProducts.length} productos seleccionados? Esta acción no se puede deshacer.`, { danger: true }))) return;
     try {
        await supabase.from('products').delete().in('id', selectedProducts);
        setSelectedProducts([]);
        fetchProducts();
-    } catch (err: any) { alert(err.message); }
+       toast.success(`${selectedProducts.length} productos eliminados`);
+    } catch (err: any) { toast.error(err.message); }
+  };
+
+  const toggleSort = (field: string) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder(field === 'created_at' || field === 'stock' ? 'desc' : 'asc');
+    }
+  };
+
+  const getSortedProducts = (prods: any[]) => {
+    return [...prods].sort((a, b) => {
+      let valA, valB;
+      switch (sortField) {
+        case 'created_at':
+          valA = new Date(a.created_at).getTime();
+          valB = new Date(b.created_at).getTime();
+          break;
+        case 'category':
+          valA = a.product_categories?.[0]?.categories?.name || '';
+          valB = b.product_categories?.[0]?.categories?.name || '';
+          break;
+        case 'brand':
+          valA = a.brand?.name || '';
+          valB = b.brand?.name || '';
+          break;
+        case 'stock':
+          valA = a.variants?.[0]?.inventory_count || 0;
+          valB = b.variants?.[0]?.inventory_count || 0;
+          break;
+        case 'status':
+          valA = a.status || '';
+          valB = b.status || '';
+          break;
+        default:
+          valA = a[sortField] || '';
+          valB = b[sortField] || '';
+      }
+      
+      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+  };
+
+  const handleBulkUpdate = async (field: string, value: string) => {
+    if (!value || selectedProducts.length === 0) return;
+    if (!(await confirm(`¿Aplicar este cambio a ${selectedProducts.length} productos seleccionados?`))) return;
+    try {
+       for (const id of selectedProducts) {
+          if (field === 'category_id') {
+             await supabase.from('product_categories').delete().eq('product_id', id);
+             await supabase.from('product_categories').insert({ product_id: id, category_id: value });
+             await supabase.from('products').update({ category_id: value }).eq('id', id);
+          } else {
+             await supabase.from('products').update({ [field]: value }).eq('id', id);
+          }
+       }
+       setSelectedProducts([]);
+       fetchProducts();
+       toast.success(`${selectedProducts.length} productos actualizados`);
+    } catch (err: any) { toast.error(err.message); }
   };
 
   const addToGallery = (url: string) => setForm({ ...form, gallery: [...form.gallery, { url }] });
@@ -425,18 +496,41 @@ export default function AdminProducts() {
             <p className="text-gray-500 text-sm italic mt-1">Gestión de catálogo y stock</p>
           </div>
           
-          <div className="flex items-center gap-2 bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm hover:border-blue-400 transition-colors">
-            <input 
-              type="checkbox" 
-              className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer" 
-              checked={products.length > 0 && products.slice(0, itemsPerPage === 'Todos' ? products.length : itemsPerPage).every(p => selectedProducts.includes(p.id))}
-              onChange={(e) => {
-                const currentList = products.slice(0, itemsPerPage === 'Todos' ? products.length : (itemsPerPage as number));
-                if (e.target.checked) setSelectedProducts(currentList.map(p => p.id));
-                else setSelectedProducts([]);
-              }}
-            />
-            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Seleccionar Página</span>
+          <div className="flex items-center gap-4 bg-white border border-gray-200 px-4 py-2 rounded-xl shadow-sm hover:border-blue-400 transition-colors">
+            <label className="flex items-center gap-2 cursor-pointer group">
+              <input 
+                type="checkbox" 
+                className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer" 
+                checked={products.length > 0 && products.slice(0, itemsPerPage === 'Todos' ? products.length : itemsPerPage).every(p => selectedProducts.includes(p.id)) && selectedProducts.length !== products.length}
+                onChange={(e) => {
+                  const filtered = getSortedProducts(products.filter(p => p.title.toLowerCase().includes(search.toLowerCase())));
+                  const currentSubset = itemsPerPage === 'Todos' ? filtered : filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+                  if (e.target.checked) {
+                    const uniqueIds = Array.from(new Set([...selectedProducts, ...currentSubset.map((p: any) => p.id)]));
+                    setSelectedProducts(uniqueIds);
+                  } else {
+                    const currentIds = currentSubset.map((p: any) => p.id);
+                    setSelectedProducts(selectedProducts.filter(id => !currentIds.includes(id)));
+                  }
+                }}
+              />
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest group-hover:text-blue-600 transition-colors">Página</span>
+            </label>
+            
+            <div className="w-px h-4 bg-gray-200"></div>
+            
+            <label className="flex items-center gap-2 cursor-pointer group">
+              <input 
+                type="checkbox" 
+                className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer" 
+                checked={products.length > 0 && products.length === selectedProducts.length}
+                onChange={(e) => {
+                  if (e.target.checked) setSelectedProducts(products.map(p => p.id));
+                  else setSelectedProducts([]);
+                }}
+              />
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest group-hover:text-blue-600 transition-colors">Todos ({products.length})</span>
+            </label>
           </div>
         </div>
         <div className="flex gap-3">
@@ -473,6 +567,14 @@ export default function AdminProducts() {
             <div className="bg-blue-50 border-b border-blue-100 px-6 py-2.5 flex gap-4 items-center animate-fade-in">
                <span className="text-sm font-bold text-blue-800 tracking-tight">{selectedProducts.length} seleccionados</span>
                <div className="flex gap-2">
+                 <select className="border-blue-200 border rounded text-xs p-1 text-blue-700 bg-white" onChange={(e) => { handleBulkUpdate('category_id', e.target.value); e.target.value = ''; }}>
+                   <option value="">Cambiar Categoría</option>
+                   {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                 </select>
+                 <select className="border-blue-200 border rounded text-xs p-1 text-blue-700 bg-white" onChange={(e) => { handleBulkUpdate('brand_id', e.target.value); e.target.value = ''; }}>
+                   <option value="">Cambiar Marca</option>
+                   {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                 </select>
                  <button onClick={handleBulkPublish} className="btn-secondary py-1 text-xs px-4 text-green-700 bg-white border-green-200 hover:bg-green-50 shadow-sm">Publicar Todos</button>
                  <button onClick={handleBulkDelete} className="btn-secondary py-1 text-xs px-4 text-red-600 bg-white border-red-200 hover:bg-red-50 shadow-sm">Eliminar Todos</button>
                </div>
@@ -484,7 +586,7 @@ export default function AdminProducts() {
                  <tr className="text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">
                    <th className="px-6 py-4 w-12">
                      {(() => {
-                        const filtered = products.filter(p => p.title.toLowerCase().includes(search.toLowerCase()));
+                        const filtered = getSortedProducts(products.filter(p => p.title.toLowerCase().includes(search.toLowerCase())));
                         const currentSubset = itemsPerPage === 'Todos' ? filtered : filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
                         return (
                           <input 
@@ -501,17 +603,28 @@ export default function AdminProducts() {
                    </th>
                    <th className="px-6 py-4">Producto</th>
                    <th className="px-6 py-4">Precio</th>
-                   <th className="px-6 py-4">Categoría</th>
-                   <th className="px-6 py-4">Stock</th>
-                   <th className="px-6 py-4">Estado</th>
-                   <th className="px-6 py-4 text-right">Fecha</th>
+                   <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('category')}>
+                     Categoría {sortField === 'category' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+                   </th>
+                   <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('brand')}>
+                     Marca {sortField === 'brand' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+                   </th>
+                   <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('stock')}>
+                     Stock {sortField === 'stock' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+                   </th>
+                   <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('status')}>
+                     Estado {sortField === 'status' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+                   </th>
+                   <th className="px-6 py-4 text-right cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('created_at')}>
+                     Fecha {sortField === 'created_at' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+                   </th>
                  </tr>
                </thead>
                <tbody className="divide-y divide-gray-100">
                  {loading ? (
-                    <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400 animate-pulse">Cargando catálogo...</td></tr>
+                    <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-400 animate-pulse">Cargando catálogo...</td></tr>
                  ) : (() => {
-                    const filtered = products.filter(p => p.title.toLowerCase().includes(search.toLowerCase()));
+                    const filtered = getSortedProducts(products.filter(p => p.title.toLowerCase().includes(search.toLowerCase())));
                     const currentSubset = itemsPerPage === 'Todos' ? filtered : filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
                     return currentSubset.map((p: any) => {
                     const primaryCat = p.product_categories?.[0]?.categories;
@@ -571,6 +684,23 @@ export default function AdminProducts() {
                           </select>
                         ) : (
                           primaryCat?.name || '-'
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-xs font-bold text-gray-500 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'brand_id'}); setInlineValue(p.brand?.id || ''); }}>
+                        {inlineEdit?.id === p.id && inlineEdit.field === 'brand_id' ? (
+                          <select 
+                            autoFocus
+                            className="bg-white border rounded text-[10px] p-1 font-bold outline-none"
+                            value={inlineValue || ''}
+                            onChange={e => { setInlineValue(e.target.value); handleInlineUpdate(p.id, 'brand_id', e.target.value); }}
+                            onBlur={() => setInlineEdit(null)}
+                            onClick={e => e.stopPropagation()}
+                          >
+                            <option value="">- Sin Marca -</option>
+                            {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                          </select>
+                        ) : (
+                          p.brand?.name || '-'
                         )}
                       </td>
                       <td className="px-6 py-4 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'stock'}); setInlineValue(p.variants?.[0]?.inventory_count || 0); }}>

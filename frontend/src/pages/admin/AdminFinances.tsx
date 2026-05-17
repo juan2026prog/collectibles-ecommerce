@@ -1,11 +1,16 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { CreditCard, FileText, ArrowUpRight, CheckCircle, Clock, XCircle, Download } from 'lucide-react';
+import { useToast } from '../../components/admin/Toast';
+import { useConfirmModal } from '../../components/admin/ConfirmModal';
 
 export default function AdminFinances() {
   const [activeTab, setActiveTab] = useState<'invoices' | 'payouts'>('payouts');
   const [payouts, setPayouts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const { toast } = useToast();
+  const { confirm } = useConfirmModal();
 
   useEffect(() => {
     fetchPayouts();
@@ -31,6 +36,7 @@ export default function AdminFinances() {
   };
 
   const approvePayout = async (id: string) => {
+    if (!(await confirm('¿Aprobar este pago y marcar como enviado?'))) return;
     try {
       const { error } = await supabase
         .from('vendor_payouts')
@@ -38,9 +44,10 @@ export default function AdminFinances() {
         .eq('id', id);
       if (error) throw error;
       fetchPayouts();
+      toast.success('Pago aprobado con éxito');
     } catch (err) {
       console.error(err);
-      alert('Error al aprobar el pago');
+      toast.error('Error al aprobar el pago');
     }
   };
 

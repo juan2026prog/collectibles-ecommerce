@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useCallback, useMemo } from 'react';
 
 interface AnalyticsContextType {
   trackEvent: (eventName: string, params?: Record<string, any>) => void;
@@ -54,8 +54,10 @@ export default function AnalyticsProvider({ children }: { children: React.ReactN
     // Fallback or additional trackers (e.g., GA4, Mixpanel) could be added here
   }, []);
 
+  const value = useMemo(() => ({ trackEvent }), [trackEvent]);
+
   return (
-    <AnalyticsContext.Provider value={{ trackEvent }}>
+    <AnalyticsContext.Provider value={value}>
       {children}
     </AnalyticsContext.Provider>
   );

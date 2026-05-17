@@ -4,7 +4,7 @@ import { ShoppingCart, Minus, Plus, Truck, ShieldCheck, Star } from 'lucide-reac
 import { useProduct } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
-import { useLocale } from '../contexts/LocaleContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { ProductBadge } from '../components/ProductBadge';
 import { getProductImage, resolveImage, FALLBACK_IMAGE } from '../lib/imageUtils';
 import { analytics } from '../lib/analytics';
@@ -15,7 +15,7 @@ export default function ProductDetail() {
   const { product, loading } = useProduct(slug);
   const cart = useCartContext();
   const { user } = useAuth();
-  const { formatPrice } = useLocale();
+  const { formatCurrencyPrice } = useCurrency();
   
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -166,9 +166,9 @@ export default function ProductDetail() {
 
       <div className="grid lg:grid-cols-[1.05fr_.95fr] gap-8">
         {/* GALLERY SECTION */}
-        <section className="glass rounded-[2.5rem] p-4 flex flex-col gap-4">
+        <section className="flex flex-col gap-4">
           <div
-            className="aspect-square rounded-[2rem] bg-black/30 grid place-items-center relative overflow-hidden group cursor-crosshair"
+            className="w-full aspect-square md:aspect-auto md:h-[450px] lg:h-[500px] rounded-2xl bg-white flex items-center justify-center relative overflow-hidden group cursor-crosshair border border-slate-200 hover:border-slate-300 transition-colors shadow-sm"
             onMouseMove={handleMouseMove}
             onMouseEnter={() => setIsHovering(true)}
             onMouseLeave={() => setIsHovering(false)}
@@ -176,32 +176,28 @@ export default function ProductDetail() {
             <img
               src={displayImage}
               alt={product.title}
-              className={`w-full h-full object-contain p-8 transition-all duration-500 ${isHovering ? 'opacity-20 scale-110' : 'opacity-100 scale-100'}`}
+              className={`max-w-[75%] max-h-[75%] object-contain mix-blend-multiply transition-all duration-700 ${isHovering ? 'scale-105' : 'scale-100'}`}
             />
             
             {/* Magnifier Lens */}
             {isHovering && (
               <div
-                className="absolute pointer-events-none border-2 border-white/20 shadow-2xl bg-no-repeat z-20 rounded-full"
+                className="absolute pointer-events-none border border-slate-200 shadow-xl bg-no-repeat z-20 rounded-full bg-white"
                 style={{
                   left: `${mousePos.x}%`,
                   top: `${mousePos.y}%`,
-                  width: '200px',
-                  height: '200px',
+                  width: '300px',
+                  height: '300px',
                   transform: 'translate(-50%, -50%)',
                   backgroundImage: `url(${displayImage})`,
-                  backgroundSize: '800%',
+                  backgroundSize: '250%',
                   backgroundPosition: `${mousePos.x}% ${mousePos.y}%`,
                 }}
               />
             )}
-
-            <span className="absolute top-5 left-5 bg-[#f00856] rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-wider shadow-lg shadow-[#f00856]/30">
-              Seleccionado por Collectibles
-            </span>
           </div>
 
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-4 gap-4 mt-2">
             {images.slice(0, 4).map((img: any, i: number) => {
               const src = resolveImage(img.url);
               return (
@@ -209,9 +205,9 @@ export default function ProductDetail() {
                   key={img.id || i}
                   onClick={() => setSelectedImage(i)}
                   onMouseEnter={() => setSelectedImage(i)}
-                  className={`soft rounded-2xl aspect-square overflow-hidden transition-all border-2 ${i === selectedImage ? 'border-[#f00856] scale-95' : 'border-white/5 hover:border-white/20'}`}
+                  className={`relative rounded-xl aspect-square overflow-hidden transition-all duration-300 bg-white ${i === selectedImage ? 'ring-2 ring-[#f00856] ring-offset-2 ring-offset-[#05070f] scale-[0.98] opacity-100' : 'border border-slate-200 opacity-60 hover:opacity-100 hover:border-slate-300'}`}
                 >
-                  <img src={src} alt="" className="w-full h-full object-cover" />
+                  <img src={src} alt="" className="w-full h-full object-contain p-2 mix-blend-multiply" />
                 </button>
               );
             })}
@@ -264,33 +260,36 @@ export default function ProductDetail() {
             </div>
           )}
 
-          <div className="glass rounded-[2rem] p-7 mt-8">
-            <div className="flex items-end justify-between gap-4 flex-wrap">
+          <div className="glass rounded-[2rem] p-6 sm:p-8 mt-8 border border-white/10 shadow-lg relative overflow-hidden">
+            <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
               <div>
                 <div className="text-[10px] uppercase text-slate-500 font-black tracking-[0.2em] mb-1">Precio actual</div>
-                <div className="text-5xl font-black text-white">${formatPrice(finalPrice)}</div>
-                <div className="text-sm text-slate-400 mt-2 flex items-center gap-2">
+                <div className="text-4xl sm:text-5xl font-black text-white flex items-start gap-1">
+                  {formatCurrencyPrice(finalPrice)}
+                </div>
+                <div className="text-sm text-slate-400 mt-2 flex items-center gap-2 font-medium">
                    <Truck className="w-4 h-4 text-[#f00856]" /> Envío calculado al finalizar
                 </div>
-                <div className={`text-sm font-bold mt-2 ${stockInfo.className}`}>
+                <div className={`text-sm font-bold mt-2 flex items-center gap-2 ${stockInfo.className}`}>
+                  <span className="w-2 h-2 rounded-full bg-current shadow-[0_0_10px_currentColor]" />
                   {stockInfo.text}
                 </div>
               </div>
 
               {/* QUANTITY SELECTOR + ADD TO CART */}
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="flex items-center border border-white/10 rounded-full overflow-hidden">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full md:w-auto">
+                <div className="flex items-center justify-between border border-white/10 bg-white/5 rounded-full overflow-hidden w-full sm:w-32 shadow-inner">
                   <button
                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="w-12 h-12 flex items-center justify-center hover:bg-white/5 transition-colors"
+                    className="w-12 h-12 flex items-center justify-center hover:bg-white/10 transition-colors text-slate-300 hover:text-white"
                     disabled={quantity <= 1}
                   >
                     <Minus className="w-4 h-4" />
                   </button>
-                  <span className="w-12 text-center font-black text-lg">{quantity}</span>
+                  <span className="flex-1 text-center font-black text-lg text-white">{quantity}</span>
                   <button
                     onClick={() => setQuantity(Math.min(stock, quantity + 1))}
-                    className="w-12 h-12 flex items-center justify-center hover:bg-white/5 transition-colors"
+                    className="w-12 h-12 flex items-center justify-center hover:bg-white/10 transition-colors text-slate-300 hover:text-white"
                     disabled={quantity >= stock}
                   >
                     <Plus className="w-4 h-4" />
@@ -299,11 +298,12 @@ export default function ProductDetail() {
                 <button
                   onClick={addToCart}
                   disabled={stock <= 0}
-                  className={`btn-primary rounded-full px-10 py-5 text-base transition-all ${
-                    stock <= 0 ? 'opacity-50 cursor-not-allowed' : ''
-                  } ${addedToCart ? 'bg-green-500 border-green-500' : ''}`}
+                  className={`btn-primary rounded-full px-8 py-4 sm:py-0 sm:h-12 flex-1 sm:flex-none flex items-center justify-center gap-3 text-sm uppercase tracking-widest font-black transition-all shadow-lg shadow-[#f00856]/20 hover:shadow-[#f00856]/40 ${
+                    stock <= 0 ? 'opacity-50 cursor-not-allowed bg-slate-800' : 'hover:-translate-y-1'
+                  } ${addedToCart ? 'bg-green-500 border-green-500 hover:bg-green-600 shadow-green-500/20' : ''}`}
                 >
-                  {addedToCart ? '✓ Agregado' : stock <= 0 ? 'Agotado' : 'Agregar al carrito'}
+                  <ShoppingCart className="w-5 h-5" />
+                  {addedToCart ? 'Agregado' : stock <= 0 ? 'Agotado' : 'Comprar Ahora'}
                 </button>
               </div>
             </div>

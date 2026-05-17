@@ -6,6 +6,7 @@ import { FeatureToggleProvider } from './contexts/FeatureToggleContext';
 import AnalyticsProvider from './contexts/AnalyticsContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import { LocaleProvider } from './contexts/LocaleContext';
+import { CurrencyProvider } from './contexts/CurrencyContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import { PageSkeleton } from './components/Skeletons';
 
@@ -79,7 +80,8 @@ function App() {
           <CartProvider>
             <FeatureToggleProvider>
               <LocaleProvider>
-                <Suspense fallback={<PageSkeleton />}>
+                <CurrencyProvider>
+                  <Suspense fallback={<PageSkeleton />}>
                   <Routes>
                   {/* Public Storefront */}
                   <Route element={<StorefrontLayout />}>
@@ -90,6 +92,9 @@ function App() {
                     <Route path="/about" element={<DynamicPage forcedSlug="about" />} />
                     <Route path="/contact" element={<DynamicPage forcedSlug="contact" />} />
                     <Route path="/blog" element={<DynamicPage forcedSlug="blog" />} />
+                    <Route path="/terms" element={<Navigate to="/page/terminos" replace />} />
+                    <Route path="/privacy" element={<Navigate to="/page/pol-ticas-de-privacidad" replace />} />
+                    <Route path="/help" element={<Navigate to="/page/condiciones-de-compra" replace />} />
                     <Route path="/cart" element={<Cart />} />
                     <Route path="/checkout" element={<Checkout />} />
                     <Route path="/checkout/success" element={<CheckoutSuccess />} />
@@ -179,6 +184,7 @@ function App() {
                 </Route>
                   </Routes>
                 </Suspense>
+                </CurrencyProvider>
               </LocaleProvider>
             </FeatureToggleProvider>
           </CartProvider>

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Plus, Pencil, Trash2, Save, X, Tag } from 'lucide-react';
+import { useToast } from '../../components/admin/Toast';
+import { useConfirmModal } from '../../components/admin/ConfirmModal';
 
 export default function AdminCoupons() {
   const [coupons, setCoupons] = useState<any[]>([]);
@@ -8,6 +10,9 @@ export default function AdminCoupons() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState({ code: '', discount_type: 'percentage', discount_value: '', min_order_amount: '', max_uses: '', expires_at: '', is_active: true });
+
+  const { toast } = useToast();
+  const { confirm } = useConfirmModal();
 
   useEffect(() => { fetch(); }, []);
 
@@ -33,13 +38,16 @@ export default function AdminCoupons() {
     };
     if (editing) await supabase.from('coupons').update(payload).eq('id', editing.id);
     else await supabase.from('coupons').insert(payload);
-    setShowForm(false); fetch();
+    setShowForm(false); 
+    fetch();
+    toast.success(editing ? 'Cupón actualizado' : 'Cupón creado');
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Delete this coupon?')) return;
+    if (!(await confirm('¿Eliminar este cupón?', { danger: true }))) return;
     await supabase.from('coupons').delete().eq('id', id);
     fetch();
+    toast.success('Cupón eliminado');
   }
 
   return (

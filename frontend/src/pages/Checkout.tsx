@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { ChevronRight, Truck, Store, Tag, Sparkles, X, Home, Ticket, Share2 } from 'lucide-react';
 import { useCartContext } from '../contexts/CartContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { analytics } from '../lib/analytics';
@@ -44,6 +45,7 @@ interface BankPromo {
 
 export default function Checkout() {
   const { items, total } = useCartContext();
+  const { formatCurrencyPrice, selectedCurrency } = useCurrency();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState('');
@@ -479,9 +481,9 @@ export default function Checkout() {
                             </div>
                             <p className="text-xs text-slate-400 leading-snug">{promo.promo_label || `${promo.discount_value}% OFF pagando con ${promo.bank_name}`}</p>
                             {meetsMinimum ? (
-                              <p className="text-xs font-bold text-green-600 mt-1.5">Ahorras ${promoDiscount.toLocaleString()}</p>
+                              <p className="text-xs font-bold text-green-600 mt-1.5">Ahorras {formatCurrencyPrice(promoDiscount)}</p>
                             ) : (
-                              <p className="text-[10px] text-slate-500 mt-1.5">Mínimo ${promo.min_purchase.toLocaleString()} para aplicar</p>
+                              <p className="text-[10px] text-slate-500 mt-1.5">Mínimo {formatCurrencyPrice(promo.min_purchase)} para aplicar</p>
                             )}
                           </div>
                         </div>
@@ -493,7 +495,7 @@ export default function Checkout() {
                   <div className="mt-4 flex items-center justify-between bg-green-50 border border-green-200  px-4 py-3">
                     <div className="flex items-center gap-2">
                       <Tag className="w-4 h-4 text-green-600" />
-                      <span className="text-sm font-bold text-green-700">Promo {selectedPromo.bank_name} aplicada: -{selectedPromo.discount_value}% {bankDiscount > 0 && <span className="ml-1 text-green-600">(-${bankDiscount.toLocaleString()})</span>}</span>
+                      <span className="text-sm font-bold text-green-700">Promo {selectedPromo.bank_name} aplicada: -{selectedPromo.discount_value}% {bankDiscount > 0 && <span className="ml-1 text-green-600">(-{formatCurrencyPrice(bankDiscount)})</span>}</span>
                     </div>
                     <button type="button" onClick={() => setSelectedPromo(null)} className="p-1 hover:bg-green-100 rounded-full transition-colors">
                       <X className="w-4 h-4 text-green-500" />
@@ -517,24 +519,29 @@ export default function Checkout() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-white line-clamp-1">{item.title}</p>
                     </div>
-                    <span className="text-sm font-bold">${(item.price * item.quantity).toLocaleString()}</span>
+                    <span className="text-sm font-bold">{formatCurrencyPrice(item.price * item.quantity)}</span>
                   </div>
                 ))}
               </div>
               <div className="border-t pt-4 space-y-2">
-                <div className="flex justify-between text-sm"><span className="text-slate-400">Subtotal</span><span className="font-bold">${total.toLocaleString()}</span></div>
-                <div className="flex justify-between text-sm"><span className="text-slate-400">Envío</span><span className="font-bold">{shipping === 0 ? 'GRATIS' : `$${shipping}`}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-slate-400">Subtotal</span><span className="font-bold">{formatCurrencyPrice(total)}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-slate-400">Envío</span><span className="font-bold">{shipping === 0 ? 'GRATIS' : formatCurrencyPrice(shipping)}</span></div>
                 {bankDiscount > 0 && selectedPromo && (
                   <div className="flex justify-between text-sm">
                     <span className="text-green-600 flex items-center gap-1"><Tag className="w-3 h-3" />Promo {selectedPromo.bank_name}</span>
-                    <span className="font-bold text-green-600">-${bankDiscount.toLocaleString()}</span>
+                    <span className="font-bold text-green-600">-{formatCurrencyPrice(bankDiscount)}</span>
                   </div>
                 )}
                 <div className="border-t pt-2 mt-2 flex justify-between">
                   <span className="font-bold text-lg">Total</span>
                   <div className="text-right">
-                    {bankDiscount > 0 && <span className="text-sm text-slate-500 line-through mr-2">${subtotalWithShipping.toLocaleString()}</span>}
-                    <span className="text-2xl font-black text-primary-600">${grandTotal.toLocaleString()}</span>
+                    {bankDiscount > 0 && <span className="text-sm text-slate-500 line-through mr-2">{formatCurrencyPrice(subtotalWithShipping)}</span>}
+                    <span className="text-2xl font-black text-[#f00856]">{formatCurrencyPrice(grandTotal)}</span>
+                    {selectedCurrency !== 'UYU' && (
+                      <p className="text-[10px] text-slate-500 mt-1">
+                        Conversión estimada. El cobro final se realiza en pesos uruguayos.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

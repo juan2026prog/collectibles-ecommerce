@@ -8,6 +8,10 @@ import { useAuth } from '../contexts/AuthContext';
 import LocaleSwitcher from '../components/LocaleSwitcher';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { STORE_ISOLOGO_URL } from '../lib/brand';
+import { ToastProvider } from '../components/admin/Toast';
+import { ConfirmModalProvider } from '../components/admin/ConfirmModal';
+import AdminSearchGlobal from '../components/admin/AdminSearchGlobal';
+import AdminBreadcrumbs from '../components/admin/AdminBreadcrumbs';
 
 export default function AdminLayout() {
   const location = useLocation();
@@ -49,80 +53,97 @@ export default function AdminLayout() {
   };
 
   return (
-    <div className="min-h-screen flex bg-gray-100 font-sans">
-      <aside className="w-64 bg-dark-900 text-gray-300 flex flex-col relative z-20 shadow-xl overflow-y-auto scrollbar-hide">
-        <div className="p-6 sticky top-0 bg-dark-900 border-b border-dark-800 z-10">
-          <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-            {!settingsLoaded ? (
-              <div className="h-8 w-28 bg-white/10 rounded-lg animate-pulse" />
-            ) : (
-              <>
-                <img src={STORE_ISOLOGO_URL} alt="Logo" className="w-8 h-8 rounded-full object-cover" />
-                <span className="text-lg font-bold text-white tracking-widest uppercase truncate">
-                  {settings['store_name'] || 'Admin Pro'}
-                </span>
-              </>
-            )}
-          </Link>
-        </div>
-        <nav className="flex-1 px-3 py-4 space-y-1">
-          {navItems.map((item) => {
-            const isActive = location.pathname === item.path || (location.pathname.startsWith(item.path) && item.path !== '/admin');
-            const Icon = item.icon;
-            return (
-              <Link key={item.name} to={item.path}
-                className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  isActive ? 'bg-primary-600 text-white shadow-md' : 'hover:bg-dark-800 hover:text-white'
-                }`}>
-                <Icon className={`mr-3 h-5 w-5 ${isActive ? 'text-white' : 'text-gray-400'}`} />
-                {item.name}
+    <ToastProvider>
+      <ConfirmModalProvider>
+        <div className="min-h-screen flex bg-gray-100 font-sans">
+          <aside className="w-64 bg-dark-900 text-gray-300 flex flex-col relative z-20 shadow-xl overflow-y-auto scrollbar-hide">
+            <div className="p-6 sticky top-0 bg-dark-900 border-b border-dark-800 z-10">
+              <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                {!settingsLoaded ? (
+                  <div className="h-8 w-28 bg-white/10 rounded-lg animate-pulse" />
+                ) : (
+                  <>
+                    <img src={STORE_ISOLOGO_URL} alt="Logo" className="w-8 h-8 rounded-full object-cover" />
+                    <span className="text-lg font-bold text-white tracking-widest uppercase truncate">
+                      {settings['store_name'] || 'Admin Pro'}
+                    </span>
+                  </>
+                )}
               </Link>
-            );
-          })}
+            </div>
+            <nav className="flex-1 px-3 py-4 space-y-1">
+              {navItems.map((item) => {
+                const isActive = location.pathname === item.path || (location.pathname.startsWith(item.path) && item.path !== '/admin');
+                const Icon = item.icon;
+                return (
+                  <Link key={item.name} to={item.path}
+                    className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                      isActive ? 'bg-primary-600 text-white shadow-md' : 'hover:bg-dark-800 hover:text-white'
+                    }`}>
+                    <Icon className={`mr-3 h-5 w-5 ${isActive ? 'text-white' : 'text-gray-400'}`} />
+                    {item.name}
+                  </Link>
+                );
+              })}
 
-          {/* Otros Portales */}
-          <div className="pt-4 pb-2">
-            <p className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">Otros Portales</p>
-            {profile?.is_vendor && (
-              <Link to="/vendor" className="flex items-center px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors">
-                <Store className="mr-3 h-4 w-4" /> Vendor Dashboard
+              {/* Otros Portales */}
+              <div className="pt-4 pb-2">
+                <p className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">Otros Portales</p>
+                {profile?.is_vendor && (
+                  <Link to="/vendor" className="flex items-center px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors">
+                    <Store className="mr-3 h-4 w-4" /> Vendor Dashboard
+                  </Link>
+                )}
+                {profile?.is_artist && (
+                  <Link to="/artist" className="flex items-center px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors">
+                    <Star className="mr-3 h-4 w-4" /> Artist Dashboard
+                  </Link>
+                )}
+                {profile?.is_affiliate && (
+                  <Link to="/affiliate" className="flex items-center px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors">
+                    <Share2 className="mr-3 h-4 w-4" /> Affiliate Dashboard
+                  </Link>
+                )}
+              </div>
+            </nav>
+            <div className="p-4 border-t border-dark-800 sticky bottom-0 bg-dark-900">
+              <Link to="/" className="flex items-center w-full px-3 py-2 text-sm font-medium text-gray-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors mb-1">
+                <ExternalLink className="mr-3 h-4 w-4" /> Ver Tienda
               </Link>
-            )}
-            {profile?.is_artist && (
-              <Link to="/artist" className="flex items-center px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors">
-                <Star className="mr-3 h-4 w-4" /> Artist Dashboard
-              </Link>
-            )}
-            {profile?.is_affiliate && (
-              <Link to="/affiliate" className="flex items-center px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors">
-                <Share2 className="mr-3 h-4 w-4" /> Affiliate Dashboard
-              </Link>
-            )}
-          </div>
-        </nav>
-        <div className="p-4 border-t border-dark-800 sticky bottom-0 bg-dark-900">
-          <Link to="/" className="flex items-center w-full px-3 py-2 text-sm font-medium text-gray-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors mb-1">
-            <ExternalLink className="mr-3 h-4 w-4" /> Ver Tienda
-          </Link>
-          <button onClick={handleSignOut} className="flex items-center w-full px-3 py-2 text-sm font-medium text-gray-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors">
-            <LogOut className="mr-3 h-5 w-5" /> Cerrar Sesión
-          </button>
-        </div>
-      </aside>
+              <button onClick={handleSignOut} className="flex items-center w-full px-3 py-2 text-sm font-medium text-gray-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors">
+                <LogOut className="mr-3 h-5 w-5" /> Cerrar Sesión
+              </button>
+            </div>
+          </aside>
 
-      <main className="flex-1 flex flex-col relative z-10 overflow-hidden">
-        <header className="bg-white shadow-sm border-b border-gray-200 h-16 flex items-center justify-between px-8 z-20">
-          <h1 className="text-xl font-bold text-gray-800">
-            {navItems.find(item => item.path === location.pathname || (location.pathname.startsWith(item.path) && item.path !== '/admin'))?.name || 'Dashboard'}
-          </h1>
-          <div className="flex items-center gap-3 border-l border-gray-200 pl-4">
-            <LocaleSwitcher compact />
-          </div>
-        </header>
-        <div className="flex-1 overflow-auto p-8 bg-gray-50">
-          <Outlet />
+          <main className="flex-1 flex flex-col relative z-10 overflow-hidden">
+            <header className="bg-white shadow-sm border-b border-gray-200 h-16 flex items-center justify-between px-8 z-20">
+              <h1 className="text-xl font-bold text-gray-800">
+                {navItems.find(item => item.path === location.pathname || (location.pathname.startsWith(item.path) && item.path !== '/admin'))?.name || 'Dashboard'}
+              </h1>
+              <div className="flex items-center gap-3 border-l border-gray-200 pl-4">
+                <button
+                  onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}
+                  className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-400 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                  title="Búsqueda rápida (Ctrl+K)"
+                >
+                  <Search className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Buscar...</span>
+                  <kbd className="text-[9px] font-mono bg-gray-200 px-1.5 py-0.5 rounded">⌘K</kbd>
+                </button>
+                <LocaleSwitcher compact />
+              </div>
+            </header>
+            <div className="flex-1 overflow-auto p-8 bg-gray-50">
+              <AdminBreadcrumbs />
+              <Outlet />
+            </div>
+          </main>
+
+          {/* Global Search Overlay */}
+          <AdminSearchGlobal />
         </div>
-      </main>
-    </div>
+      </ConfirmModalProvider>
+    </ToastProvider>
   );
 }

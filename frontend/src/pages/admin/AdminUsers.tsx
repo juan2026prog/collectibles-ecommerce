@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Shield, ShieldCheck, Store, Star, Share2, Search, RefreshCw, UserCog, Clock, ChevronDown } from 'lucide-react';
+import { useToast } from '../../components/admin/Toast';
+import { useConfirmModal } from '../../components/admin/ConfirmModal';
 
 export default function AdminUsers() {
   const [users, setUsers] = useState<any[]>([]);
@@ -10,6 +12,9 @@ export default function AdminUsers() {
   const [saving, setSaving] = useState<string | null>(null);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [showAudit, setShowAudit] = useState(false);
+
+  const { toast } = useToast();
+  const { confirm } = useConfirmModal();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -41,14 +46,19 @@ export default function AdminUsers() {
 
   async function toggleRole(userId: string, role: string, current: boolean) {
     setSaving(userId + role);
-    await supabase.from('profiles').update({ [role]: !current }).eq('id', userId);
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, [role]: !current } : u));
+    const { error } = await supabase.from('profiles').update({ [role]: !current }).eq('id', userId);
+    if (!error) {
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, [role]: !current } : u));
+      toast.success('Rol actualizado');
+    } else {
+      toast.error('Error al actualizar rol');
+    }
     setSaving(null);
   }
 
   async function handleCreateUser(e: React.FormEvent) {
     e.preventDefault();
-    if (!newUser.email || !newUser.password) return alert("Correo y contraseña son obligatorios");
+    if (!newUser.email || !newUser.password) return toast.error("Correo y contraseña son obligatorios");
     
     setCreating(true);
     try {
@@ -60,12 +70,12 @@ export default function AdminUsers() {
          throw new Error(data?.error || error?.message || "Error desconocido creando usuario");
       }
 
-      alert("¡Usuario creado con éxito!");
+      toast.success("¡Usuario creado con éxito!");
       setShowCreateModal(false);
       setNewUser({ email: '', password: '', firstName: '', lastName: '', roles: [] });
       fetchUsers();
     } catch (err: any) {
-      alert("Error: " + err.message);
+      toast.error("Error: " + err.message);
     } finally {
       setCreating(false);
     }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { BarChart3, TrendingUp, DollarSign, ShoppingCart, Users, Package, Download, RefreshCw, Calendar, AlertTriangle, Bell, Mail } from 'lucide-react';
+import { useToast } from '../../components/admin/Toast';
 
 export default function AdminReports() {
   const [stats, setStats] = useState({
@@ -14,6 +15,8 @@ export default function AdminReports() {
   const [alerts, setAlerts] = useState<any[]>([]);
   const [abandonedCarts, setAbandonedCarts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const { toast } = useToast();
 
   useEffect(() => { fetchReports(); }, []);
 
@@ -226,9 +229,10 @@ export default function AdminReports() {
                              try {
                                await supabase.functions.invoke('transactional-emails', { body: { type: 'abandoned_cart', cart_id: c.id }});
                                setAbandonedCarts(prev => prev.map(cart => cart.id === c.id ? { ...cart, recovery_email_sent: true } : cart));
+                               toast.success("Email de recuperación enviado");
                              } catch (e) {
                                console.error(e);
-                               alert("Error al enviar email de recuperación");
+                               toast.error("Error al enviar email de recuperación");
                              }
                           }}
                           className="text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded text-[10px] font-black tracking-widest uppercase items-center gap-1 flex transition-colors"

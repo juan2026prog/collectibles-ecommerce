@@ -1,4 +1,4 @@
-import { createContext, useContext, ReactNode } from 'react';
+import { createContext, useContext, ReactNode, useMemo } from 'react';
 import { useCart as useCartHook } from '../hooks/useData';
 import type { CartItem } from '../hooks/useData';
 
@@ -16,7 +16,8 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const cart = useCartHook();
-  return <CartContext.Provider value={cart}>{children}</CartContext.Provider>;
+  const value = useMemo(() => cart, [cart.items, cart.total, cart.count]);
+  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
 
 export function useCartContext() {

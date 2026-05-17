@@ -19,10 +19,57 @@ import { useSiteSettings } from '../hooks/useSiteSettings';
 import { STORE_ISOLOGO_URL } from '../lib/brand';
 import { sanitizeHeadMarkup, sanitizeRichHtml } from '../lib/sanitize';
 import { FacebookIcon, InstagramIcon, TwitterIcon, YoutubeIcon, TiktokIcon, WhatsappIcon } from '../components/SocialIcons';
+import { CurrencySelector } from '../components/CurrencySelector';
+import React from 'react';
 
 // NAV_LINKS and MEGA_MENU are built dynamically inside the component
 // using t() for translations and useCategories() for live DB data.
 
+const DesktopMegaMenu = React.memo(({ isVisible, megaType, menuColumns, allBrands, onClose }: { isVisible: boolean | undefined, megaType: 'categories' | 'brands', menuColumns: any, allBrands: any[], onClose: () => void }) => {
+  if (!isVisible) return null;
+  return (
+    <div className="absolute top-full left-1/2 -translate-x-1/2 pt-4 w-[600px] animate-fade-in pointer-events-auto z-50">
+      <div className="glass rounded-[2rem] p-8 grid grid-cols-3 gap-8 shadow-2xl border-white/10">
+        {megaType === 'categories' ? (
+          menuColumns?.slice(0, 3).map((col: any) => (
+            <div key={col.title}>
+              <div className="text-[10px] text-[#f00856] font-black tracking-widest mb-4 uppercase">{col.title}</div>
+              <div className="flex flex-col gap-2.5">
+                {col.items.map((item: any) => (
+                  <Link 
+                    key={item.name} 
+                    to={item.href} 
+                    className="text-sm font-bold text-slate-300 hover:text-white transition-colors"
+                    onClick={onClose}
+                  >
+                    {item.name}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ))
+        ) : (
+           <div className="col-span-3 grid grid-cols-4 gap-4">
+              {allBrands.slice(0, 8).map(b => (
+                <Link 
+                  key={b.id} 
+                  to={`/shop?brand=${b.slug}`}
+                  className="soft rounded-2xl p-4 flex flex-col items-center justify-center gap-2 hover:border-[#f00856]/40 transition-all"
+                  onClick={onClose}
+                >
+                  {b.logo_url ? (
+                    <img src={b.logo_url} className="h-8 object-contain opacity-60 group-hover:opacity-100" />
+                  ) : (
+                    <span className="text-xs font-black">{b.name}</span>
+                  )}
+                </Link>
+              ))}
+           </div>
+        )}
+      </div>
+    </div>
+  );
+});
 
 export default function StorefrontLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -242,7 +289,7 @@ export default function StorefrontLayout() {
           location.pathname === '/' ? 'bg-[#05070f]/80 backdrop-blur-xl' : 'bg-[#05070f] shadow-lg shadow-black/40'
         }`}
       >
-        <div className="max-w-7xl mx-auto px-6 h-20 md:h-24 flex items-center justify-between gap-6">
+        <div className="max-w-[1500px] mx-auto px-6 w-full h-20 md:h-24 flex items-center justify-between gap-6">
           {/* LOGO */}
           <Link to="/" className="shrink-0 group">
             <img 
@@ -269,49 +316,13 @@ export default function StorefrontLayout() {
                   {link.hasMega && <ChevronDown className="w-3.5 h-3.5 opacity-50" />}
                 </Link>
 
-                {/* MEGA MENU */}
-                {megaMenuState === link.megaType && link.hasMega && (
-                  <div className="absolute top-full left-1/2 -translate-x-1/2 pt-4 w-[600px] animate-fade-in">
-                    <div className="glass rounded-[2rem] p-8 grid grid-cols-3 gap-8 shadow-2xl border-white/10">
-                      {link.megaType === 'categories' ? (
-                        MENU_COLUMNS?.slice(0, 3).map(col => (
-                          <div key={col.title}>
-                            <div className="text-[10px] text-[#f00856] font-black tracking-widest mb-4 uppercase">{col.title}</div>
-                            <div className="flex flex-col gap-2.5">
-                              {col.items.map(item => (
-                                <Link 
-                                  key={item.name} 
-                                  to={item.href} 
-                                  className="text-sm font-bold text-slate-300 hover:text-white transition-colors"
-                                  onClick={() => setMegaMenuState(null)}
-                                >
-                                  {item.name}
-                                </Link>
-                              ))}
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                         <div className="col-span-3 grid grid-cols-4 gap-4">
-                            {allBrands.slice(0, 8).map(b => (
-                              <Link 
-                                key={b.id} 
-                                to={`/shop?brand=${b.slug}`}
-                                className="soft rounded-2xl p-4 flex flex-col items-center justify-center gap-2 hover:border-[#f00856]/40 transition-all"
-                                onClick={() => setMegaMenuState(null)}
-                              >
-                                {b.logo_url ? (
-                                  <img src={b.logo_url} className="h-8 object-contain opacity-60 group-hover:opacity-100" />
-                                ) : (
-                                  <span className="text-xs font-black">{b.name}</span>
-                                )}
-                              </Link>
-                            ))}
-                         </div>
-                      )}
-                    </div>
-                  </div>
-                )}
+                <DesktopMegaMenu 
+                   isVisible={megaMenuState === link.megaType && link.hasMega} 
+                   megaType={link.megaType as 'categories' | 'brands'} 
+                   menuColumns={MENU_COLUMNS} 
+                   allBrands={allBrands} 
+                   onClose={() => setMegaMenuState(null)} 
+                />
               </div>
             ))}
           </nav>
@@ -329,6 +340,9 @@ export default function StorefrontLayout() {
 
           {/* ACTIONS */}
           <div className="flex items-center gap-3">
+            <div className="hidden xl:block">
+              <CurrencySelector />
+            </div>
             <button className="w-11 h-11 hidden md:flex items-center justify-center rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors">
               <Heart className="w-4 h-4" />
             </button>
@@ -361,10 +375,10 @@ export default function StorefrontLayout() {
                      </div>
                    ) : (
                      <div className="p-2 space-y-2">
-                        <Link to="/auth" className="btn-primary w-full py-3 rounded-2xl flex items-center justify-center gap-2">
+                        <Link to="/login" className="btn-primary w-full py-3 rounded-2xl flex items-center justify-center gap-2">
                            <LogIn className="w-4 h-4" /> Iniciar Sesión
                         </Link>
-                        <Link to="/auth?signup=true" className="btn-secondary w-full py-3 rounded-2xl flex items-center justify-center gap-2">
+                        <Link to="/login?signup=true" className="btn-secondary w-full py-3 rounded-2xl flex items-center justify-center gap-2">
                            Crear Cuenta
                         </Link>
                      </div>
@@ -402,6 +416,10 @@ export default function StorefrontLayout() {
                  <button onClick={() => setMobileMenuOpen(false)}><X className="w-6 h-6 text-white" /></button>
               </div>
               
+              <div className="mb-6">
+                 <CurrencySelector />
+              </div>
+              
               <nav className="flex flex-col gap-4 overflow-y-auto flex-1 no-scrollbar">
                  {NAV_LINKS.map(link => (
                    <Link 
@@ -437,57 +455,68 @@ export default function StorefrontLayout() {
       </main>
 
       {/* ═══ FOOTER ═══ */}
-      <footer className="border-t border-white/10 bg-black/40 py-20 relative overflow-hidden">
+      <footer className="border-t border-white/10 bg-black/40 pt-24 pb-12 relative overflow-hidden">
         <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-[#f00856]/5 blur-[120px] rounded-full pointer-events-none" />
         
-        <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-2 lg:grid-cols-4 gap-12 relative z-10">
+        <div className="max-w-[1500px] mx-auto px-6 grid md:grid-cols-2 lg:grid-cols-5 gap-12 lg:gap-10 relative z-10">
           {/* BRAND */}
-          <div className="space-y-6">
+          <div className="lg:col-span-2 space-y-6">
              <Link to="/">
                 <img src="/logo-horizontal.png" alt="Collectibles" className="h-10 object-contain" />
              </Link>
-             <p className="text-slate-400 font-medium leading-relaxed">
-               Figuras que cuentan historias. La plataforma premium para coleccionistas, marketplace curado y sincronización oficial.
+             <p className="text-slate-400 font-medium leading-relaxed max-w-sm">
+               Figuras que cuentan historias. Tu tienda premium de coleccionables, figuras y productos oficiales.
              </p>
              <div className="flex items-center gap-3">
                 {[InstagramIcon, FacebookIcon, YoutubeIcon, TiktokIcon].map((Icon, i) => (
-                  <button key={i} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-[#f00856] transition-all hover:-translate-y-1 text-white">
+                  <button key={i} className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-[#f00856] hover:border-[#f00856] transition-all hover:-translate-y-1 text-white">
                     <Icon />
                   </button>
                 ))}
              </div>
           </div>
 
-          {/* LINKS */}
+          {/* NAVEGACIÓN */}
           <div>
-             <h4 className="text-white font-black uppercase text-xs tracking-widest mb-8">Navegación</h4>
-             <ul className="space-y-4">
-                {['Catálogo completo', 'Preventas & Drops', 'Ofertas relámpago', 'Club Collector', 'Sobre nosotros'].map(link => (
-                  <li key={link}>
-                    <Link to="/shop" className="text-slate-400 font-bold hover:text-[#f00856] transition-colors text-sm">{link}</Link>
+             <h4 className="text-white font-black uppercase text-[11px] tracking-[0.2em] mb-6">Navegación</h4>
+             <ul className="space-y-3">
+                {[
+                  { label: 'Catálogo completo', href: '/shop' },
+                  { label: 'Novedades', href: '/shop?badge=new' },
+                  { label: 'Sobre nosotros', href: '/about' },
+                  { label: 'Blog', href: '/blog' },
+                  { label: 'Contacto', href: '/contact' },
+                ].map(link => (
+                  <li key={link.label}>
+                    <Link to={link.href} className="text-slate-400 font-bold hover:text-[#f00856] transition-colors text-sm">{link.label}</Link>
                   </li>
                 ))}
              </ul>
           </div>
 
-          {/* HELP */}
+          {/* AYUDA */}
           <div>
-             <h4 className="text-white font-black uppercase text-xs tracking-widest mb-8">Centro de ayuda</h4>
-             <ul className="space-y-4">
-                {['Tiempos de envío', 'Garantía oficial', 'Cómo comprar', 'Vender en Collectibles', 'Preguntas frecuentes'].map(link => (
-                  <li key={link}>
-                    <Link to="/help" className="text-slate-400 font-bold hover:text-[#f00856] transition-colors text-sm">{link}</Link>
+             <h4 className="text-white font-black uppercase text-[11px] tracking-[0.2em] mb-6">Ayuda</h4>
+             <ul className="space-y-3">
+                {[
+                  { label: 'Condiciones de Compra', href: '/page/condiciones-de-compra' },
+                  { label: 'Políticas de Privacidad', href: '/page/pol-ticas-de-privacidad' },
+                  { label: 'Envios/Devoluciones', href: '/page/envios-devoluciones' },
+                  { label: 'Términos y condiciones', href: '/page/terminos' },
+                ].map(link => (
+                  <li key={link.label}>
+                    <Link to={link.href} className="text-slate-400 font-bold hover:text-[#f00856] transition-colors text-sm">{link.label}</Link>
                   </li>
                 ))}
              </ul>
           </div>
 
-          {/* STORE INFO */}
+          {/* CONTACTO */}
           <div>
-             <h4 className="text-white font-black uppercase text-xs tracking-widest mb-8">Showroom & Pickups</h4>
+             <h4 className="text-white font-black uppercase text-[11px] tracking-[0.2em] mb-6">Contacto</h4>
              <div className="space-y-4 text-sm font-bold text-slate-400">
                 <div className="flex items-start gap-3">
-                   <MapPin className="w-4 h-4 text-[#f00856] shrink-0" />
+                   <MapPin className="w-4 h-4 text-[#f00856] shrink-0 mt-0.5" />
                    <span>Vázquez 1418, Montevideo, Uruguay.</span>
                 </div>
                 <div className="flex items-center gap-3">
@@ -499,21 +528,21 @@ export default function StorefrontLayout() {
                    <span>soporte@collectibles.com.uy</span>
                 </div>
              </div>
-             <div className="mt-8 pt-8 border-t border-white/5">
+             <div className="mt-6 pt-6 border-t border-white/5">
                 <div className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Horarios</div>
-                <div className="text-xs text-slate-400 mt-1">Lunes a Viernes 12:00 a 19:00 | Sábados 10:00 a 14:00</div>
+                <div className="text-xs text-slate-400 mt-1">Lun a Vie 12:00–19:00 | Sáb 10:00–14:00</div>
              </div>
           </div>
         </div>
 
-        <div className="max-w-7xl mx-auto px-6 mt-20 pt-10 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-6">
+        <div className="max-w-[1500px] mx-auto px-6 mt-16 pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
            <div className="text-xs font-bold text-slate-500">
              © 2026 Collectibles. Todos los derechos reservados.
            </div>
-           <div className="flex items-center gap-6 grayscale opacity-30">
-              <span className="text-[10px] font-black uppercase tracking-widest text-white">Sincronización oficial</span>
-              <img src="https://logodownload.org/wp-content/uploads/2018/01/mercado-libre-logo.png" alt="Mercado Libre" className="h-4 object-contain" />
-              <img src="https://upload.wikimedia.org/wikipedia/commons/b/b5/PayPal.svg" alt="PayPal" className="h-4 object-contain" />
+           <div className="flex items-center gap-6 text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+              <Link to="/page/terminos" className="hover:text-slate-400 transition-colors">Términos</Link>
+              <Link to="/page/pol-ticas-de-privacidad" className="hover:text-slate-400 transition-colors">Privacidad</Link>
+              <Link to="/page/condiciones-de-compra" className="hover:text-slate-400 transition-colors">Condiciones</Link>
            </div>
         </div>
       </footer>

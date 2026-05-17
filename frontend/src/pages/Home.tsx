@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, ChevronLeft, ChevronRight, Heart, ShoppingCart, Truck, Shield, RotateCcw, Headphones, Sparkles, TrendingUp } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { ArrowRight, Truck, Shield, Package } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { useProducts, useCategories, useBrands, useBanners, useProductGroups } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
 import { useLocale } from '../contexts/LocaleContext';
-import { ProductSkeleton, CategoryGridSkeleton, BannerSkeleton, BrandCarouselSkeleton, CollectionCarouselSkeleton } from '../components/Skeletons';
-import { ProductBadge } from '../components/ProductBadge';
+import { useCurrency } from '../contexts/CurrencyContext';
+import { ProductSkeleton } from '../components/Skeletons';
+import { ProductGridCard } from '../components/ProductGridCard';
 import { getProductImage } from '../lib/imageUtils';
 
 export default function Home() {
@@ -16,15 +17,19 @@ export default function Home() {
   const { brands, loading: brandsLoading } = useBrands();
   const { groups, loading: groupsLoading } = useProductGroups();
   const cart = useCartContext();
-  const { formatPrice, t } = useLocale();
+  const { t } = useLocale();
+  const { formatCurrencyPrice } = useCurrency();
   const [heroIdx, setHeroIdx] = useState(0);
   const [layoutBlocks, setLayoutBlocks] = useState<any[]>([
     { id: 'hero', visible: true },
     { id: 'trust', visible: true },
+    { id: 'banners', visible: true },
     { id: 'bento', visible: true },
     { id: 'collections', visible: true },
     { id: 'trending', visible: true },
-    { id: 'brands', visible: true }
+    { id: 'mundial', visible: true },
+    { id: 'brands', visible: true },
+    { id: 'cta', visible: true }
   ]);
 
   useEffect(() => {
@@ -65,169 +70,152 @@ export default function Home() {
     });
   }
 
-  const ProductCard = ({ p }: { p: any }) => {
-    const img = getProductImage(p);
-    const finalPrice = p.base_price + (p.variants?.[0]?.price_adjustment || 0);
-    return (
-      <article className="glass rounded-[2rem] p-4 flex flex-col group transition-all hover:-translate-y-2 hover:shadow-2xl hover:shadow-black/60 hover:border-[#f00856]/40 w-[280px] shrink-0">
-        <div className="relative aspect-square rounded-[1.5rem] overflow-hidden bg-black/30 grid place-items-center mb-5">
-          <Link to={`/p/${p.slug}`} className="w-full h-full p-6 block">
-            <img 
-              src={img} 
-              alt={p.title} 
-              className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-110" 
-            />
-          </Link>
-          <div className="absolute top-4 left-4">
-            <ProductBadge 
-              badgeId={p.badge} 
-              compareAtPrice={p.compare_at_price} 
-              basePrice={p.base_price}
-              className="text-[10px] px-3 py-1.5"
-            />
-          </div>
-          <button 
-            onClick={() => handleAddToCart(p)}
-            className="absolute bottom-4 right-4 w-12 h-12 bg-[#f00856] text-white rounded-full flex items-center justify-center opacity-100 md:opacity-0 md:translate-y-4 group-hover:opacity-100 group-hover:translate-y-0 transition-all shadow-lg shadow-[#f00856]/30"
-          >
-            <ShoppingCart className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="px-2 flex-1 flex flex-col">
-          <div className="label-tag mb-1 opacity-60 text-[10px]">{p.brand?.name || p.category?.name || 'Producto'}</div>
-          <Link to={`/p/${p.slug}`} className="font-black text-lg text-white group-hover:text-[#f00856] transition-colors leading-tight line-clamp-2 min-h-[2.5rem]">
-            {p.title}
-          </Link>
-
-          <div className="mt-4 flex items-end justify-between">
-            <div>
-              <div className="text-[10px] uppercase text-slate-500 font-black tracking-widest mb-0.5">Precio</div>
-              <div className="text-xl font-black text-white">${formatPrice(finalPrice)}</div>
-            </div>
-            <Link 
-              to={`/p/${p.slug}`}
-              className="btn-primary px-5 py-2.5 text-[10px] rounded-full"
-            >
-              Ver más
-            </Link>
-          </div>
-        </div>
-      </article>
-    );
-  };
-
   const renderBlock = (blockId: string) => {
     switch (blockId) {
-      case 'hero':
+
+      /* ━━━━━━━━━━━ HERO CINEMATOGRÁFICO ━━━━━━━━━━━ */
+      case 'hero': {
+        const heroBanner = banners[heroIdx];
+        const heroImg = heroBanner?.image_url || (featured[0] ? getProductImage(featured[0]) : '');
         return (
-          <section className="relative hero-noise overflow-hidden min-h-[85vh] flex items-center pt-20">
-            <div className="absolute -right-40 top-0 w-[800px] h-[800px] bg-[#f00856]/10 blur-[150px] rounded-full" />
-            <div className="absolute -left-40 bottom-0 w-[600px] h-[600px] bg-blue-600/5 blur-[120px] rounded-full" />
-            
-            <div className="max-w-7xl mx-auto px-6 w-full relative z-10">
-              <div className="grid lg:grid-cols-[1.2fr_0.8fr] gap-12 items-center">
+          <section className="relative overflow-hidden min-h-[85vh] flex items-center">
+            <div className="absolute inset-0 bg-[#05070f]" />
+            <div className="absolute -right-40 -top-40 w-[800px] h-[800px] bg-[#f00856]/[.07] blur-[180px] rounded-full" />
+            <div className="absolute -left-60 bottom-0 w-[500px] h-[500px] bg-[#f00856]/[.04] blur-[140px] rounded-full" />
+            <div className="absolute inset-0 opacity-[0.025]" style={{
+              backgroundImage: 'linear-gradient(rgba(255,255,255,.15) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.15) 1px, transparent 1px)',
+              backgroundSize: '60px 60px'
+            }} />
+
+            <div className="max-w-[1500px] mx-auto px-6 w-full relative z-10 py-20">
+              <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
                 <div className="animate-fade-in-up">
-                  <div className="label-tag">New Season 2026</div>
-                  <h1 className="text-6xl md:text-8xl font-black leading-[0.9] mt-4 tracking-tighter text-white">
-                    Figuras que <br /> <span className="text-[#f00856]">cuentan</span> historias.
+                  <div className="inline-block px-4 py-1.5 rounded-full border border-[#f00856]/30 bg-[#f00856]/10 text-[#f00856] text-[10px] font-black uppercase tracking-[0.25em] mb-6">
+                    Collectibles Uruguay
+                  </div>
+                  <h1 className="text-5xl md:text-7xl lg:text-[5.5rem] font-black leading-[0.88] tracking-tighter text-white">
+                    La colección<br /><span className="text-[#f00856]">empieza</span> acá.
                   </h1>
-                  <p className="text-slate-400 text-xl mt-6 max-w-xl leading-relaxed font-medium">
-                    Plataforma premium, marketplace curado y lanzamientos exclusivos para la comunidad collector más grande de la región.
+                  <p className="text-slate-400 text-lg md:text-xl mt-6 max-w-lg leading-relaxed font-medium">
+                    Figuras, juguetes, licencias icónicas y coleccionables seleccionados por Collectibles Uruguay.
                   </p>
                   <div className="flex flex-wrap gap-4 mt-10">
-                    <Link to="/shop" className="btn-primary px-10 py-5 text-base rounded-full group">
-                      Explorar catálogo <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+                    <Link to="/shop" className="btn-primary px-10 py-5 text-base rounded-full group inline-flex items-center">
+                      Ver catálogo <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
                     </Link>
-                    <Link to="/club-collector" className="btn-secondary px-10 py-5 text-base rounded-full">
-                      Club Collector
+                    <Link to="/shop?badge=sale" className="px-10 py-5 text-base rounded-full border border-white/15 text-white font-black hover:bg-white/5 transition-colors inline-flex items-center">
+                      Ver promociones
                     </Link>
-                  </div>
-                  
-                  <div className="mt-12 flex items-center gap-4">
-                     <div className="text-sm font-bold text-slate-500">
-                        Comunidad de collectors en crecimiento 🚀
-                     </div>
                   </div>
                 </div>
 
-                <div className="hidden lg:block relative animate-float">
-                  <div className="glass rounded-[3rem] p-8 relative overflow-hidden group">
-                     <div className="absolute inset-0 bg-gradient-to-br from-[#f00856]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                     <div className="aspect-[4/5] rounded-[2.5rem] bg-black/40 overflow-hidden relative">
-                        {featured[0] ? (
-                          <img 
-                            src={getProductImage(featured[0])} 
-                            alt="Featured" 
-                            className="w-full h-full object-contain p-12 transition-transform duration-700 group-hover:scale-110" 
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-8xl">🧸</div>
-                        )}
-                        <div className="absolute bottom-6 left-6 right-6 glass rounded-2xl p-4 translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all">
-                           <div className="text-xs font-black text-[#f00856] uppercase mb-1">Drop destacado</div>
-                           <div className="text-white font-black text-xl truncate">{featured[0]?.title || 'Próximo lanzamiento'}</div>
-                        </div>
-                     </div>
+                <div className="hidden lg:block relative">
+                  <div className="relative rounded-2xl overflow-hidden aspect-[4/3] border border-white/10 shadow-2xl shadow-black/50">
+                    {heroImg ? (
+                      <img src={heroImg} alt="Hero" className="w-full h-full object-cover transition-transform duration-700 hover:scale-105" />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-[#f00856]/20 to-[#05070f] flex items-center justify-center text-8xl opacity-40">🧸</div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+                    <div className="absolute bottom-5 left-5 right-5 z-10">
+                      <div className="text-[10px] font-black text-[#f00856] uppercase tracking-[0.25em] mb-1">Slide destacado</div>
+                      <div className="text-white font-black text-lg">{heroBanner?.title || 'Beyblade · Mortal Kombat · Figuras'}</div>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </section>
         );
+      }
+
+      /* ━━━━━━━━━━━ TRUST BAR (3 items) ━━━━━━━━━━━ */
       case 'trust':
         return (
-          <section className="max-w-7xl mx-auto px-6 -mt-12 relative z-20">
-            <div className="glass rounded-[2.5rem] p-8 grid grid-cols-2 lg:grid-cols-4 gap-8">
+          <section className="max-w-[1500px] mx-auto px-6 -mt-8 relative z-20">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-sm p-6 md:p-8 grid grid-cols-1 md:grid-cols-3 gap-6">
               {[
-                { icon: Truck, title: 'Envío Express', desc: 'En 24/48 horas' },
-                { icon: Shield, title: 'Compra Segura', desc: 'Garantía oficial' },
-                { icon: RotateCcw, title: 'Devoluciones', desc: '14 días de plazo' },
-                { icon: Headphones, title: 'Soporte VIP', desc: 'Canal prioritario' },
+                { icon: Truck, title: 'Envíos a todo Uruguay', desc: 'Entregas rápidas y seguras' },
+                { icon: Package, title: 'Productos oficiales', desc: 'Licencias verificadas' },
+                { icon: Shield, title: 'Compra segura', desc: 'Pagos protegidos' },
               ].map(({ icon: Icon, title, desc }) => (
-                <div key={title} className="flex flex-col items-center text-center group">
-                  <div className="w-14 h-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-3 group-hover:bg-[#f00856] group-hover:text-white transition-all duration-300">
-                    <Icon className="w-6 h-6" />
+                <div key={title} className="flex items-center gap-4 group">
+                  <div className="w-12 h-12 rounded-xl bg-[#f00856]/10 border border-[#f00856]/20 flex items-center justify-center shrink-0 group-hover:bg-[#f00856] transition-all duration-300">
+                    <Icon className="w-5 h-5 text-[#f00856] group-hover:text-white transition-colors" />
                   </div>
-                  <h4 className="text-white font-black text-sm uppercase tracking-wider">{title}</h4>
-                  <p className="text-slate-500 text-xs font-bold mt-1 uppercase tracking-tighter">{desc}</p>
+                  <div>
+                    <h4 className="text-white font-black text-sm">{title}</h4>
+                    <p className="text-slate-500 text-xs font-medium">{desc}</p>
+                  </div>
                 </div>
               ))}
             </div>
           </section>
         );
+
+      /* ━━━━━━━━━━━ BANNERS CINEMATOGRÁFICOS ━━━━━━━━━━━ */
+      case 'banners':
+        if (!banners.length) return null;
+        return (
+          <section className="max-w-[1500px] mx-auto px-6 py-16">
+            <div className={`grid gap-6 ${banners.length === 1 ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`}>
+              {banners.slice(0, 2).map((banner: any, i: number) => (
+                <Link
+                  key={banner.id || i}
+                  to={banner.link || '/shop'}
+                  className="group relative rounded-2xl overflow-hidden aspect-[16/7] border border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02]"
+                >
+                  <img
+                    src={banner.image_url}
+                    alt={banner.title || 'Banner'}
+                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/5 to-transparent" />
+                  {banner.title && (
+                    <div className="absolute bottom-6 left-6 right-6 z-10">
+                      <h3 className="text-white font-black text-xl md:text-2xl drop-shadow-lg">{banner.title}</h3>
+                      {banner.subtitle && <p className="text-slate-200 text-sm mt-1 drop-shadow">{banner.subtitle}</p>}
+                    </div>
+                  )}
+                </Link>
+              ))}
+            </div>
+          </section>
+        );
+
+      /* ━━━━━━━━━━━ CATEGORÍAS (BENTO) ━━━━━━━━━━━ */
       case 'bento':
         return (
-          <section className="max-w-7xl mx-auto px-6 py-24">
-            <div className="flex items-center justify-between mb-12">
+          <section className="max-w-[1500px] mx-auto px-6 py-20">
+            <div className="flex items-end justify-between mb-10">
               <div>
-                <div className="label-tag">Mundos coleccionables</div>
-                <h2 className="text-4xl font-black text-white mt-2 tracking-tight">Explorá por categoría</h2>
+                <div className="text-[10px] text-[#f00856] font-black tracking-[0.3em] uppercase mb-2">Mundos coleccionables</div>
+                <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight">Explorá por categoría</h2>
               </div>
-              <Link to="/shop" className="btn-secondary rounded-full px-6 py-3 text-xs font-black uppercase">Ver todas</Link>
+              <Link to="/shop" className="hidden md:inline-flex items-center gap-2 text-sm font-black text-slate-400 hover:text-white transition-colors uppercase tracking-wider">
+                Ver catálogo <ArrowRight className="w-4 h-4" />
+              </Link>
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 h-[700px]">
-              {categories.slice(0, 4).map((c, i) => (
-                <Link 
-                  key={c.id} 
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {categories.slice(0, 3).map((c) => (
+                <Link
+                  key={c.id}
                   to={`/shop?category=${c.slug}`}
-                  className={`glass rounded-[2.5rem] p-8 group overflow-hidden relative flex flex-col justify-end transition-all hover:border-[#f00856]/40 hover:-translate-y-2 ${
-                    i === 0 ? 'md:col-span-2 md:row-span-2' : ''
-                  }`}
+                  className="relative rounded-2xl overflow-hidden group border border-white/10 transition-all hover:border-[#f00856]/30 hover:-translate-y-1 flex flex-col justify-end aspect-[3/2]"
                 >
                   {c.image_url && (
-                    <img 
-                      src={c.image_url} 
-                      alt={c.name} 
-                      className="absolute inset-0 w-full h-full object-cover opacity-20 group-hover:opacity-40 group-hover:scale-110 transition-all duration-700" 
+                    <img
+                      src={c.image_url}
+                      alt={c.name}
+                      className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-60 group-hover:scale-110 transition-all duration-700"
                     />
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#05070f] via-transparent to-transparent opacity-80" />
-                  <div className="relative z-10">
-                    <h3 className={`${i === 0 ? 'text-4xl' : 'text-2xl'} font-black text-white mb-2`}>{c.name}</h3>
-                    <p className="text-slate-400 font-bold text-sm flex items-center gap-2 group-hover:text-[#f00856] transition-colors">
-                      Ver colección <ArrowRight className="w-4 h-4" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#05070f] via-[#05070f]/50 to-transparent" />
+                  <div className="relative z-10 p-6">
+                    <h3 className="text-xl md:text-2xl font-black text-white mb-1">{c.name}</h3>
+                    <p className="text-slate-400 font-bold text-sm flex items-center gap-1 group-hover:text-[#f00856] transition-colors">
+                      Ver colección <span className="ml-1">→</span>
                     </p>
                   </div>
                 </Link>
@@ -235,22 +223,24 @@ export default function Home() {
             </div>
           </section>
         );
+
+      /* ━━━━━━━━━━━ COLECCIONES (PRODUCT GROUPS) ━━━━━━━━━━━ */
       case 'collections':
         return (
           <>
             {groups.map((g, i) => (
-              <section key={g.id || `group-${i}`} className="py-16 border-t border-white/5 overflow-hidden">
-                <div className="max-w-7xl mx-auto px-6">
-                  <div className="flex items-center justify-between mb-10">
+              <section key={g.id || `group-${i}`} className="py-16 border-t border-white/5">
+                <div className="max-w-[1500px] mx-auto px-6">
+                  <div className="flex items-end justify-between mb-10">
                     <div>
-                      <div className="label-tag">Selección destacada</div>
-                      <h2 className="text-4xl font-black text-white mt-2 tracking-tight">{g.name}</h2>
+                      <div className="text-[10px] text-[#f00856] font-black tracking-[0.3em] uppercase mb-2">Colección curada</div>
+                      <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight">{g.name}</h2>
                     </div>
                   </div>
-                  
-                  <div className="flex gap-6 overflow-x-auto pb-10 no-scrollbar">
+
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-7 gap-y-12">
                     {(g.product_group_items || []).map(({ product }: any) => product && (
-                      <ProductCard key={product.id} p={product} />
+                      <ProductGridCard key={product.id} product={product} onAddToCart={handleAddToCart} formatPrice={formatCurrencyPrice} />
                     ))}
                   </div>
                 </div>
@@ -258,33 +248,40 @@ export default function Home() {
             ))}
           </>
         );
+
+      /* ━━━━━━━━━━━ TENDENCIAS ━━━━━━━━━━━ */
       case 'trending':
         return (
-          <section className="py-24 bg-white/5 border-y border-white/5 overflow-hidden">
-             <div className="max-w-7xl mx-auto px-6">
-                <div className="flex items-center justify-between mb-12">
-                  <div>
-                    <div className="label-tag">Lo más buscado</div>
-                    <h2 className="text-4xl font-black text-white mt-2 tracking-tight">Trending Now</h2>
-                  </div>
+          <section className="py-20 bg-white/[0.02] border-y border-white/5">
+            <div className="max-w-[1500px] mx-auto px-6">
+              <div className="flex items-end justify-between mb-10">
+                <div>
+                  <div className="text-[10px] text-[#f00856] font-black tracking-[0.3em] uppercase mb-2">Lo más buscado</div>
+                  <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight">Tendencias</h2>
                 </div>
-                <div className="flex gap-6 overflow-x-auto pb-10 no-scrollbar">
-                   {featured.map(p => (
-                      <ProductCard key={p.id} p={p} />
-                   ))}
-                </div>
-             </div>
+                <Link to="/shop" className="hidden md:inline-flex items-center gap-2 text-sm font-black text-slate-400 hover:text-white transition-colors uppercase tracking-wider">
+                  Ver todo <ArrowRight className="w-4 h-4" />
+                </Link>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-7 gap-y-12">
+                {featured.map(p => (
+                  <ProductGridCard key={p.id} product={p} onAddToCart={handleAddToCart} formatPrice={formatCurrencyPrice} />
+                ))}
+              </div>
+            </div>
           </section>
         );
+
+      /* ━━━━━━━━━━━ MARCAS DESTACADAS ━━━━━━━━━━━ */
       case 'brands':
         return (
-          <section className="py-24 overflow-hidden relative">
-            <div className="max-w-7xl mx-auto px-6 mb-16 text-center">
-              <div className="label-tag mb-3">Distribuidores oficiales</div>
-              <h2 className="text-4xl font-black text-white tracking-tight">Las mejores marcas del mundo</h2>
+          <section className="py-20 overflow-hidden">
+            <div className="max-w-[1500px] mx-auto px-6 mb-12 text-center">
+              <div className="text-[10px] text-[#f00856] font-black tracking-[0.3em] uppercase mb-2">Universos que coleccionamos</div>
+              <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight">Marcas destacadas</h2>
             </div>
-            
-            <div className="flex animate-marquee whitespace-nowrap gap-20 items-center opacity-40 hover:opacity-100 transition-opacity">
+
+            <div className="flex animate-marquee whitespace-nowrap gap-20 items-center opacity-40 hover:opacity-100 transition-opacity duration-500">
               {[...brands, ...brands].map((b, i) => (
                 <Link key={`${b.id}-${i}`} to={`/shop?brand=${b.slug}`} className="shrink-0 grayscale hover:grayscale-0 transition-all duration-500">
                   {b.logo_url ? (
@@ -297,6 +294,61 @@ export default function Home() {
             </div>
           </section>
         );
+
+      /* ━━━━━━━━━━━ ESPECIAL MUNDIAL ━━━━━━━━━━━ */
+      case 'mundial': {
+        const mundialImg = banners.find((b: any) => /mundial|album|mascota|figurita/i.test(b.title || ''))?.image_url
+          || (newArrivals[0] ? getProductImage(newArrivals[0]) : (featured[1] ? getProductImage(featured[1]) : ''));
+        return (
+          <section className="py-20 border-t border-white/5">
+            <div className="max-w-[1500px] mx-auto px-6">
+              <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-gradient-to-r from-[#05070f] to-[#1a0510]">
+                <div className="absolute inset-0 bg-[#f00856]/[.04] blur-[100px] rounded-full w-[600px] h-[600px] -right-40 -top-40" />
+                <div className="grid lg:grid-cols-2 gap-8 items-center p-8 md:p-12 lg:p-16 relative z-10">
+                  <div>
+                    <div className="text-[10px] text-[#f00856] font-black tracking-[0.3em] uppercase mb-3">Edición especial</div>
+                    <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight leading-[0.9]">Especial Mundial</h2>
+                    <p className="text-slate-400 text-base md:text-lg mt-4 leading-relaxed max-w-md">
+                      Álbum, figuritas y mascotas. Armá tu colección con productos disponibles, promos reales y atención directa de Collectibles.
+                    </p>
+                    <Link to="/shop?q=mundial" className="btn-primary px-8 py-4 text-sm rounded-full inline-flex items-center gap-2 mt-8">
+                      Ver especial Mundial <ArrowRight className="w-4 h-4" />
+                    </Link>
+                  </div>
+                  {mundialImg && (
+                    <div className="hidden lg:block rounded-xl overflow-hidden aspect-[4/3] border border-white/10">
+                      <img src={mundialImg} alt="Especial Mundial" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        );
+      }
+
+      /* ━━━━━━━━━━━ CTA FINAL ━━━━━━━━━━━ */
+      case 'cta':
+        return (
+          <section className="py-24">
+            <div className="max-w-[1500px] mx-auto px-6">
+              <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-gradient-to-br from-[#0d0515] to-[#05070f] p-12 md:p-20 text-center">
+                <div className="absolute inset-0 opacity-[0.03]" style={{
+                  backgroundImage: 'linear-gradient(rgba(255,255,255,.15) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.15) 1px, transparent 1px)',
+                  backgroundSize: '40px 40px'
+                }} />
+                <div className="relative z-10 max-w-2xl mx-auto">
+                  <div className="text-[10px] text-[#f00856] font-black tracking-[0.3em] uppercase mb-3">Collectibles Uruguay</div>
+                  <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight">Tu próxima pieza de colección te está esperando.</h2>
+                  <Link to="/shop" className="btn-primary px-10 py-5 text-base rounded-full inline-flex items-center gap-2 mt-10">
+                    Explorar catálogo <ArrowRight className="w-5 h-5" />
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </section>
+        );
+
       default:
         return null;
     }
@@ -310,31 +362,56 @@ export default function Home() {
         </div>
       ))}
 
-      {/* VIP NEWSLETTER */}
-      <section className="max-w-7xl mx-auto px-6 py-24">
-        <div className="glass rounded-[3rem] p-12 md:p-20 relative overflow-hidden text-center flex flex-col items-center">
-          <div className="absolute inset-0 bg-gradient-to-br from-[#f00856]/20 to-blue-600/10 opacity-30" />
-          <div className="relative z-10 max-w-2xl">
-            <div className="label-tag mb-4">Membresía exclusiva</div>
-            <h2 className="text-5xl md:text-6xl font-black text-white tracking-tighter mb-6">Unite al Club Collector.</h2>
-            <p className="text-slate-400 text-lg font-medium mb-10 leading-relaxed">
-              Recibí notificaciones de drops exclusivos, preventas limitadas y acumulá puntos para canjear por envíos gratis y descuentos.
+      {/* ━━━ FOOTER HOME ━━━ */}
+      <footer className="border-t border-white/10 bg-black/40 pt-20 pb-10">
+        <div className="max-w-[1500px] mx-auto px-6 grid md:grid-cols-2 lg:grid-cols-5 gap-10 lg:gap-8">
+          <div className="lg:col-span-2 space-y-5">
+            <Link to="/"><img src="/logo-horizontal.png" alt="Collectibles" className="h-10 object-contain" /></Link>
+            <p className="text-slate-400 font-medium leading-relaxed max-w-sm text-sm">
+              Tienda uruguaya especializada en figuras, juguetes, álbumes, accesorios y coleccionables seleccionados.
             </p>
-            <form className="flex flex-col sm:flex-row gap-3 w-full" onSubmit={e => e.preventDefault()}>
-              <input 
-                type="email" 
-                placeholder="Tu email de coleccionista..." 
-                className="flex-1 bg-white/5 border border-white/10 rounded-full px-8 py-5 text-white outline-none focus:border-[#f00856] transition-colors"
-                disabled
-              />
-              <button className="btn-primary rounded-full px-10 py-5 font-black uppercase tracking-widest opacity-60 cursor-not-allowed" disabled>
-                Próximamente
-              </button>
-            </form>
-            <p className="text-xs text-slate-500 mt-6 font-bold uppercase tracking-widest">Suscripción al newsletter próximamente.</p>
+          </div>
+          <div>
+            <h4 className="text-white font-black uppercase text-[11px] tracking-[0.2em] mb-5">Categorías</h4>
+            <ul className="space-y-2.5">
+              {categories.slice(0, 6).map(c => (
+                <li key={c.id}><Link to={`/shop?category=${c.slug}`} className="text-slate-400 font-bold hover:text-[#f00856] transition-colors text-sm">{c.name}</Link></li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h4 className="text-white font-black uppercase text-[11px] tracking-[0.2em] mb-5">Ayuda</h4>
+            <ul className="space-y-2.5">
+              {[
+                { label: 'Condiciones de Compra', href: '/page/condiciones-de-compra' },
+                { label: 'Políticas de Privacidad', href: '/page/pol-ticas-de-privacidad' },
+                { label: 'Envios/Devoluciones', href: '/page/envios-devoluciones' },
+                { label: 'Términos y condiciones', href: '/page/terminos' },
+              ].map(link => (
+                <li key={link.label}>
+                  <Link to={link.href} className="text-slate-400 font-bold hover:text-[#f00856] transition-colors text-sm">{link.label}</Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h4 className="text-white font-black uppercase text-[11px] tracking-[0.2em] mb-5">Contacto</h4>
+            <div className="space-y-3 text-sm font-bold text-slate-400">
+              <p>Vázquez 1418, Montevideo</p>
+              <p>soporte@collectibles.com.uy</p>
+              <p>Lun–Vie 12:00–19:00</p>
+            </div>
+            <div className="mt-5 pt-5 border-t border-white/5 flex items-center gap-5 text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+              <Link to="/page/terminos" className="hover:text-slate-400">Términos</Link>
+              <Link to="/page/pol-ticas-de-privacidad" className="hover:text-slate-400">Privacidad</Link>
+              <Link to="/page/condiciones-de-compra" className="hover:text-slate-400">Condiciones</Link>
+            </div>
           </div>
         </div>
-      </section>
+        <div className="max-w-[1500px] mx-auto px-6 mt-12 pt-6 border-t border-white/5 text-center">
+          <div className="text-xs font-bold text-slate-600">© 2026 Collectibles Uruguay. Todos los derechos reservados.</div>
+        </div>
+      </footer>
 
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes marquee {

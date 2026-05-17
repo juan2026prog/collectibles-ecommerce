@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Plus, Pencil, Trash2, Save, X, Image as ImageIcon, GripVertical, Upload } from 'lucide-react';
+import { useToast } from '../../components/admin/Toast';
+import { useConfirmModal } from '../../components/admin/ConfirmModal';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
 
 export default function AdminBanners() {
@@ -11,6 +13,9 @@ export default function AdminBanners() {
   const [form, setForm] = useState({ title: '', subtitle: '', image_url: '', link_url: '', button_text: 'SHOP NOW', is_active: true, sort_order: 0 });
   const [uploadingImage, setUploadingImage] = useState(false);
   const [showMediaPicker, setShowMediaPicker] = useState(false);
+
+  const { toast } = useToast();
+  const { confirm } = useConfirmModal();
 
   useEffect(() => { fetch(); }, []);
 
@@ -45,7 +50,7 @@ export default function AdminBanners() {
       setForm({...form, image_url: data.publicUrl});
     } catch (err: any) {
       console.error(err);
-      alert('Error al subir imagen a la biblioteca de medios.');
+      toast.error('Error al subir imagen a la biblioteca de medios.');
     }
     setUploadingImage(false);
   }
@@ -54,13 +59,16 @@ export default function AdminBanners() {
     const payload = { ...form };
     if (editing) await supabase.from('banners').update(payload).eq('id', editing.id);
     else await supabase.from('banners').insert(payload);
-    setShowForm(false); fetch();
+    setShowForm(false); 
+    fetch();
+    toast.success(editing ? 'Banner actualizado' : 'Banner creado');
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Delete banner?')) return;
+    if (!(await confirm('¿Eliminar este banner?', { danger: true }))) return;
     await supabase.from('banners').delete().eq('id', id);
     fetch();
+    toast.success('Banner eliminado');
   }
 
   async function toggleActive(id: string, active: boolean) {

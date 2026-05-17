@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 
@@ -298,23 +298,23 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
-  const setLanguage = async (lang: Language) => {
+  const setLanguage = useCallback(async (lang: Language) => {
     setLanguageState(lang);
     localStorage.setItem('preferred_language', lang);
     if (user) {
       await supabase.from('profiles').update({ preferred_language: lang }).eq('id', user.id);
     }
-  };
+  }, [user]);
 
-  const setCurrency = async (curr: Currency) => {
+  const setCurrency = useCallback(async (curr: Currency) => {
     setCurrencyState(curr);
     localStorage.setItem('preferred_currency', curr);
     if (user) {
       await supabase.from('profiles').update({ preferred_currency: curr }).eq('id', user.id);
     }
-  };
+  }, [user]);
 
-  const formatPrice = (amount: number) => {
+  const formatPrice = useCallback((amount: number) => {
     // Base amount is always UYU internally. Convert using live rates.
     const converted = amount * rates[currency];
     return new Intl.NumberFormat(language === 'es' ? 'es-UY' : 'en-US', {
@@ -322,14 +322,18 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
       currency: currency,
       maximumFractionDigits: currency === 'UYU' ? 0 : 2
     }).format(converted);
-  };
+  }, [rates, currency, language]);
 
-  const t = (key: string) => {
+  const t = useCallback((key: string) => {
     return i18n[language][key] || key;
-  };
+  }, [language]);
+
+  const value = useMemo(() => ({
+    language, currency, setLanguage, setCurrency, formatPrice, t
+  }), [language, currency, setLanguage, setCurrency, formatPrice, t]);
 
   return (
-    <LocaleContext.Provider value={{ language, currency, setLanguage, setCurrency, formatPrice, t }}>
+    <LocaleContext.Provider value={value}>
       {children}
     </LocaleContext.Provider>
   );

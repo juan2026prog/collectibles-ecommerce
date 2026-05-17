@@ -29,10 +29,14 @@ export default function MLCallback() {
 
   async function exchangeCodeForToken(code: string) {
     try {
+      const redirectUri = import.meta.env.VITE_ML_REDIRECT_URI || `${window.location.origin}/callback`;
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mercadolibre-auth`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code })
+        body: JSON.stringify({ 
+          code,
+          redirect_uri: redirectUri
+        })
       });
 
       const data = await response.json();
