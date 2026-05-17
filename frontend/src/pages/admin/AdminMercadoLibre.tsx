@@ -51,12 +51,12 @@ export default function AdminMercadoLibre() {
     const { data } = await supabase
       .from('site_settings')
       .select('key, value')
-      .in('key', ['mercadolibre_access_token', 'mercadolibre_client_id']);
+      .in('key', ['ml_connection_status', 'mercadolibre_client_id']);
     
     if (data) {
-      const token = data.find(d => d.key === 'mercadolibre_access_token')?.value;
+      const isConn = data.find(d => d.key === 'ml_connection_status')?.value === 'true';
       const clientId = data.find(d => d.key === 'mercadolibre_client_id')?.value;
-      setIsConnected(!!token);
+      setIsConnected(isConn);
       if (clientId) setDbClientId(clientId);
     }
   }
@@ -159,6 +159,68 @@ export default function AdminMercadoLibre() {
     }
   }
 
+  async function fixInvisibleProducts() {
+    setSyncing(true);
+    setSyncStatus('Diagnosticando y reparando productos invisibles...');
+    try {
+      let fixedCount = 0;
+      
+      // 1. Fix missing slugs
+      const { data: missingSlugs } = await supabase.from('products').select('id, title').is('slug', null);
+      if (missingSlugs && missingSlugs.length > 0) {
+         for (const p of missingSlugs) {
+            const slug = p.title.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Math.random().toString(36).substring(7);
+            await supabase.from('products').update({ slug }).eq('id', p.id);
+            fixedCount++;
+         }
+      }
+
+      // 2. Fix missing category_id for published products
+      const { data: cat } = await supabase.from('categories').select('id').eq('slug', 'otras-colecciones').single();
+      if (cat) {
+        const { data: missingCats } = await supabase.from('products').select('id').is('category_id', null).eq('status', 'published');
+        if (missingCats && missingCats.length > 0) {
+           await supabase.from('products').update({ category_id: cat.id }).is('category_id', null).eq('status', 'published');
+           fixedCount += missingCats.length;
+           
+           // Ensure junction table exists
+           for (const p of missingCats) {
+             const { error } = await supabase.from('product_categories').insert({ product_id: p.id, category_id: cat.id });
+             // Ignore duplicate conflicts
+           }
+        }
+      }
+
+      // 3. Fix missing variants (create fallback)
+      const { data: productsWithoutVariants } = await supabase
+        .from('products')
+        .select('id, title, base_price, product_variants(id)')
+        .eq('status', 'published');
+      
+      const toFix = productsWithoutVariants?.filter(p => !p.product_variants || p.product_variants.length === 0) || [];
+      if (toFix.length > 0) {
+        for (const p of toFix) {
+           await supabase.from('product_variants').insert({
+              product_id: p.id,
+              name: 'Estándar',
+              sku: 'COL-ML-' + p.id.substring(0,8),
+              inventory_count: 1,
+              price: p.base_price
+           });
+           fixedCount++;
+        }
+      }
+
+      setSyncStatus(fixedCount > 0 ? `¡Reparación completada! ${fixedCount} anomalías corregidas.` : 'No se encontraron anomalías en el catálogo.');
+      fetchProducts();
+    } catch(e:any) {
+      setSyncStatus(`Error: ${e.message}`);
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setSyncStatus(null), 5000);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -234,6 +296,69 @@ export default function AdminMercadoLibre() {
          <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-lg text-sm text-blue-800">
             <strong>Ejemplo:</strong> Si un producto en Mercado Libre cuesta <strong>$1000</strong> y tienes un "Aumento Porcentual de 10", el precio en tu tienda local se configurará en <strong>$1100</strong> para absorber la comisión, o dar margen extra.
          </div>
+      </div>
+
+      {/* Dashboard Operativo ML */}
+      <div className="bg-slate-900 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
+           <svg className="w-64 h-64" viewBox="0 0 24 24" fill="currentColor"><path d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18-.21 0-.41-.06-.57-.18l-7.9-4.44A.991.991 0 0 1 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18.21 0 .41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9M12 4.15L5.6 7.75 12 11.35l6.4-3.6L12 4.15M5 15.91l6 3.38v-6.71L5 9.21v6.7m14 0v-6.7l-6 3.37v6.71l6-3.38z"/></svg>
+        </div>
+        <div className="relative z-10">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+             <div>
+               <h3 className="text-xl font-black flex items-center gap-2">
+                 <RefreshCw className="w-5 h-5 text-blue-400" />
+                 Centro Operativo de Sincronización
+               </h3>
+               <p className="text-sm text-slate-400 mt-1">Monitoreo de estado, trazabilidad y reparación de catálogo.</p>
+             </div>
+             <div className="flex gap-3">
+               <button onClick={fetchProducts} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm font-bold transition-colors flex items-center gap-2">
+                 <RefreshCw className="w-4 h-4" /> Refrescar Stats
+               </button>
+             </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
+              <p className="text-slate-400 text-[10px] uppercase tracking-widest font-black mb-1">Estado Conexión</p>
+              <p className="text-xl font-bold flex items-center gap-2">
+                 <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+                 {isConnected ? 'Conectado (OAuth)' : 'Desconectado'}
+              </p>
+            </div>
+            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
+              <p className="text-slate-400 text-[10px] uppercase tracking-widest font-black mb-1">Total Catálogo ML</p>
+              <p className="text-xl font-bold">{products.filter(p => p.ml_item_id).length}</p>
+            </div>
+            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
+              <p className="text-slate-400 text-[10px] uppercase tracking-widest font-black mb-1">Activos Locales</p>
+              <p className="text-xl font-bold">{products.filter(p => p.status === 'published').length}</p>
+            </div>
+            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
+              <p className="text-slate-400 text-[10px] uppercase tracking-widest font-black mb-1">Reglas Pricing</p>
+              <p className="text-xl font-bold">{rulesEnabled ? 'Activas' : 'Inactivas'}</p>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-700 pt-5">
+             <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+                <div>
+                   <p className="font-bold text-sm text-yellow-400 flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4" /> Herramientas de Mantenimiento
+                   </p>
+                   <p className="text-xs text-slate-400 mt-1">Usa estas herramientas si los productos importados no se ven en la tienda.</p>
+                </div>
+                <button 
+                  onClick={fixInvisibleProducts}
+                  disabled={syncing}
+                  className="px-6 py-2.5 bg-yellow-500 hover:bg-yellow-400 text-yellow-950 rounded-xl text-sm font-black transition-all disabled:opacity-50 shadow-lg shadow-yellow-500/20 active:scale-95"
+                >
+                  {syncing ? 'Reparando...' : 'Reparar Productos Invisibles'}
+                </button>
+             </div>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -387,10 +512,73 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
   const [searchQuery, setSearchQuery] = useState('');
   const [orderBy, setOrderBy] = useState('relevance');
 
+  const [categories, setCategories] = useState<any[]>([]);
+  const [existingProducts, setExistingProducts] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
   useEffect(() => {
     fetchMLItems();
   }, [limit, itemStatus, orderBy]);
 
+  async function fetchCategories() {
+    const { data } = await supabase.from('categories').select('id, name, slug');
+    setCategories(data || []);
+  }
+
+  function extractRealSkuFromML(item: any, variation: any = null) {
+     let sku = null;
+     let source = 'missing';
+     const getFromAttr = (attrs: any[], code: string) => attrs?.find((a: any) => a.id === code)?.value_name;
+     if (variation?.seller_custom_field) { sku = variation.seller_custom_field; source = 'seller_custom_field_var'; }
+     else if (item.seller_custom_field) { sku = item.seller_custom_field; source = 'seller_custom_field'; }
+     else if (getFromAttr(item.attributes, 'SELLER_SKU')) { sku = getFromAttr(item.attributes, 'SELLER_SKU'); source = 'seller_sku'; }
+     else if (getFromAttr(item.attributes, 'SKU')) { sku = getFromAttr(item.attributes, 'SKU'); source = 'sku'; }
+     else if (getFromAttr(item.attributes, 'GTIN')) { sku = getFromAttr(item.attributes, 'GTIN'); source = 'gtin'; }
+     else if (getFromAttr(item.attributes, 'EAN')) { sku = getFromAttr(item.attributes, 'EAN'); source = 'ean'; }
+     else if (getFromAttr(item.attributes, 'UPC')) { sku = getFromAttr(item.attributes, 'UPC'); source = 'upc'; }
+     else if (getFromAttr(item.attributes, 'ISBN')) { sku = getFromAttr(item.attributes, 'ISBN'); source = 'isbn'; }
+     if (!sku) { sku = null; source = 'missing'; }
+     return { sku, source, generated_sku: `COL-ML-${item.id}` };
+  }
+
+  function getSuggestedCategory(title: string) {
+    const t = title.toLowerCase();
+    let slug = "otras-colecciones";
+    if (t.includes("funko") || t.includes("pop!")) slug = "funko-pop";
+    else if (t.includes("beyblade")) slug = "beyblade";
+    else if (t.includes("panini") || t.includes("album") || t.includes("álbum") || t.includes("figuritas") || t.includes("sticker")) slug = "albumes-y-figuritas";
+    else if (t.includes("peluche") || t.includes("plush") || t.includes("mascota")) slug = "peluches";
+    else if (t.includes("mortal kombat") || t.includes("marvel legends") || t.includes("mcfarlane") || t.includes("neca") || t.includes("figura")) slug = "figuras-de-accion";
+    else if (t.includes("lego")) slug = "lego";
+
+    const match = categories.find(c => c.slug === slug) || categories.find(c => c.slug === 'otras-colecciones');
+    return match ? match.name : 'Otra';
+  }
+
+  function getBrand(item: any) {
+    return item.attributes?.find((a: any) => a.id === 'BRAND')?.value_name || '-';
+  }
+
+  async function checkExistingProducts(newItems: any[]) {
+      if (!newItems.length) return;
+      const ids = newItems.map(i => i.id);
+      const skus = newItems.map(i => extractRealSkuFromML(i).sku).filter(Boolean);
+
+      let query = supabase.from('products').select('id, title, ml_item_id, status, product_variants(sku)');
+      
+      const { data } = await query;
+      if (data) {
+          // Filtrar localmente en lugar de armar consultas complejas de Supabase que pueden dar error
+          const relevant = data.filter((p: any) => {
+              const pSku = p.product_variants?.[0]?.sku;
+              return ids.includes(p.ml_item_id) || (pSku && skus.includes(pSku));
+          });
+          setExistingProducts(relevant);
+      }
+  }
 
   async function fetchMLItems() {
     setFetching(true);
@@ -398,7 +586,6 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
     setFetchPhase('Buscando IDs en Mercado Libre...');
     setItems([]);
     try {
-      // Phase 1: Get all item IDs (fast)
       const idsData = await callEdgeFunction({ action: 'list_item_ids', limit, status: itemStatus, sort: orderBy });
       const allIds: string[] = idsData.item_ids || [];
       
@@ -408,7 +595,6 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
         return;
       }
 
-      // Phase 2: Fetch details in batches of 50
       setFetchPhase(`Cargando detalles de ${allIds.length} productos...`);
       const BATCH_SIZE = 50;
       const accumulated: any[] = [];
@@ -419,11 +605,11 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
         accumulated.push(...(detailData.items || []));
         setItems([...accumulated]);
         setFetchProgress(Math.round(((i + chunk.length) / allIds.length) * 100));
+        await checkExistingProducts(detailData.items || []);
       }
       
       setFetchProgress(100);
     } catch (err: any) {
-      console.error("Fetch ML Items Error:", err);
       toast.error("Error al obtener items: " + err.message);
     } finally {
       setFetching(false);
@@ -445,12 +631,12 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
 
   return (
     <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-zoom-in">
+      <div className="bg-white rounded-2xl w-full max-w-6xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-zoom-in">
         <div className="p-6 border-b flex items-center justify-between bg-gray-50 text-blue-900 border-blue-100">
           <div>
             <h2 className="text-xl font-bold flex items-center gap-2">
               <RefreshCw className="w-5 h-5 text-blue-600" />
-              Mercado Libre: Selección de Productos
+              Mercado Libre: Import Preview
             </h2>
             <div className="flex items-center flex-wrap gap-3 mt-3">
                <div className="flex items-center gap-2 mr-4 bg-white border border-blue-100 rounded-lg px-2 py-1 shadow-inner focus-within:ring-2 focus-within:ring-blue-500/20">
@@ -473,8 +659,6 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
                  <option value={20}>20 prod.</option>
                  <option value={50}>50 prod.</option>
                  <option value={100}>100 prod.</option>
-                 <option value={200}>200 prod.</option>
-                 <option value={500}>500 prod.</option>
                  <option value={-1}>Todos (Sin límite)</option>
                </select>
 
@@ -486,26 +670,14 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
                >
                  <option value="active">Activas</option>
                  <option value="paused">Pausadas</option>
-                 <option value="closed">Finalizadas</option>
                  <option value="all">Todas</option>
-               </select>
-
-               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Orden:</span>
-               <select 
-                 value={orderBy} 
-                 onChange={(e) => setOrderBy(e.target.value)}
-                 className="text-xs font-bold bg-white border border-blue-200 text-blue-600 rounded-md px-2 py-1.5 outline-none transition-all focus:border-blue-500 shadow-sm"
-               >
-                 <option value="relevance">Recientes / Rellevancia</option>
-                 <option value="price_asc">Menor Precio</option>
-                 <option value="price_desc">Mayor Precio</option>
                </select>
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-full transition-colors"><X className="w-5 h-5" /></button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 bg-white">
+        <div className="flex-1 overflow-y-auto p-0 bg-white">
           {fetching && items.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-blue-600">
               <Loader2 className="w-12 h-12 animate-spin mb-4 opacity-70" />
@@ -521,7 +693,6 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
                   </div>
                 </div>
               )}
-              <p className="text-xs text-gray-400 mt-2">{items.length > 0 ? `${items.length} productos cargados...` : 'Esto puede demorar unos segundos para listas largas.'}</p>
             </div>
           ) : !fetching && items.length === 0 ? (
             <div className="text-center py-24">
@@ -529,23 +700,10 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
                   <AlertCircle className="w-8 h-8 text-gray-300" />
                </div>
                <p className="text-gray-500 font-medium">No se encontraron productos activos.</p>
-               <p className="text-xs text-gray-400 mt-1">Verifica que tu cuenta de ML Uruguay tenga publicaciones vigentes.</p>
             </div>
           ) : (
-            <>
-            {fetching && fetchProgress > 0 && (
-              <div className="mb-3 p-3 bg-blue-50 border border-blue-100 rounded-lg">
-                <div className="flex justify-between items-center text-xs font-bold text-blue-800 mb-1.5">
-                  <span className="flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {fetchPhase}</span>
-                  <span>{fetchProgress}%</span>
-                </div>
-                <div className="w-full bg-blue-100 rounded-full h-2 overflow-hidden">
-                  <div className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out" style={{ width: `${fetchProgress}%` }}></div>
-                </div>
-              </div>
-            )}
             <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-white border-b-2 border-gray-100 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">
+              <thead className="sticky top-0 bg-white border-b-2 border-gray-100 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest z-10">
                 <tr>
                   <th className="p-4 w-12 pb-2">
                     <input 
@@ -555,16 +713,37 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
                       className="rounded border-gray-300 w-4 h-4 text-blue-600 cursor-pointer"
                     />
                   </th>
-                  <th className="p-4 pb-2">Producto</th>
-                  <th className="p-4 pb-2">Categoría ML</th>
-                  <th className="p-4 pb-2">Inventario / Precio</th>
-                  <th className="p-4 pb-2 text-right pr-6">Estado ML</th>
+                  <th className="p-4 pb-2 w-[25%]">Producto ML</th>
+                  <th className="p-4 pb-2 w-[15%]">SKU y Marca</th>
+                  <th className="p-4 pb-2 w-[15%]">Categoría / Inv.</th>
+                  <th className="p-4 pb-2 w-[25%]">Mapeo Collectibles</th>
+                  <th className="p-4 pb-2 text-right pr-6 w-[15%]">Acción</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {filteredItems.map((item:any) => (
+                {filteredItems.map((item:any) => {
+                  const skuInfo = extractRealSkuFromML(item);
+                  const suggestedCat = getSuggestedCategory(item.title);
+                  const brand = getBrand(item);
+                  
+                  // Analizar si es duplicado o update
+                  let actionRec = 'Importar';
+                  let matchReason = '';
+                  
+                  const exByMlId = existingProducts.find(p => p.ml_item_id === item.id);
+                  const exBySku = existingProducts.find(p => p.product_variants?.[0]?.sku === skuInfo.sku && skuInfo.sku !== null);
+                  
+                  if (exByMlId) {
+                      actionRec = 'Actualizar';
+                      matchReason = 'Ya vinculado por ML ID';
+                  } else if (exBySku) {
+                      actionRec = 'Vincular';
+                      matchReason = 'Coincide SKU con BD local';
+                  }
+
+                  return (
                   <tr key={item.id} className={`hover:bg-blue-50/20 transition-all ${selected.has(item.id) ? 'bg-blue-50/50' : ''}`}>
-                    <td className="p-4">
+                    <td className="p-4 align-top">
                       <input 
                         type="checkbox" 
                         checked={selected.has(item.id)}
@@ -572,68 +751,78 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
                         className="rounded border-gray-300 text-blue-600 w-4 h-4 cursor-pointer"
                       />
                     </td>
-                    <td className="p-4">
-                      <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 rounded-xl object-cover border-2 border-gray-50 overflow-hidden shadow-sm flex-shrink-0">
+                    <td className="p-4 align-top">
+                      <div className="flex gap-3">
+                        <div className="w-12 h-12 rounded bg-gray-100 border object-cover overflow-hidden flex-shrink-0">
                            <img src={item.thumbnail?.replace('http://', 'https://')} alt="" className="w-full h-full object-cover" />
                         </div>
                         <div>
-                          <p className="font-bold text-gray-800 leading-tight line-clamp-2">{item.title}</p>
-                          <p className="text-[9px] text-gray-400 mt-1 font-mono">{item.id}</p>
+                          <p className="font-bold text-[13px] text-gray-800 leading-tight line-clamp-2">{item.title}</p>
+                          <p className="text-[10px] text-gray-400 mt-1 font-mono">{item.id}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="p-4">
-                      {item.category_name ? (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-100 rounded-full px-2 py-0.5 inline-block max-w-[180px] truncate" title={item.category_name}>
-                            {item.category_name.split(' > ').pop()}
-                          </span>
-                          <span className="text-[8px] text-gray-400 truncate max-w-[180px]" title={item.category_name}>
-                            {item.category_name}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-gray-300 text-xs">—</span>
-                      )}
+                    <td className="p-4 align-top">
+                       <div className="flex flex-col gap-1">
+                          {skuInfo.sku ? (
+                             <span className="font-mono text-xs font-bold text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded w-max">{skuInfo.sku}</span>
+                          ) : (
+                             <span className="font-mono text-[10px] text-orange-500 bg-orange-50 border border-orange-100 px-1.5 py-0.5 rounded w-max">Falta SKU</span>
+                          )}
+                          <span className="text-[10px] text-gray-400">Src: {skuInfo.source}</span>
+                          <span className="text-[10px] font-bold text-gray-500 mt-1 uppercase">Marca: {brand}</span>
+                       </div>
                     </td>
-                    <td className="p-4 text-xs">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1.5 font-bold text-gray-700">
-                           <span className={`w-2 h-2 rounded-full ${item.available_quantity > 0 ? 'bg-green-500' : 'bg-red-500'}`} />
-                           {item.available_quantity || 0} disponibles
-                        </div>
-                        <p className="font-black text-blue-700 text-sm tracking-tight">UYU ${item.price.toLocaleString()}</p>
-                      </div>
+                    <td className="p-4 align-top text-xs">
+                       <div className="flex flex-col gap-1">
+                          <span className="font-bold text-gray-700 truncate" title={item.category_name || ''}>{item.category_name?.split(' > ').pop() || 'Desconocida'}</span>
+                          <span className="font-black text-blue-700">UYU ${item.price.toLocaleString()}</span>
+                          <span className={`flex items-center gap-1 font-medium ${item.available_quantity > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                             {item.available_quantity || 0} disp.
+                          </span>
+                       </div>
                     </td>
-                    <td className="p-4 text-right pr-6">
-                       <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-tighter ${item.status === 'active' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}>
-                         {item.status === 'active' ? 'ACTIVA' : item.status}
+                    <td className="p-4 align-top text-xs border-l border-gray-100 bg-gray-50/50">
+                       <div className="flex flex-col gap-1.5">
+                          <div className="flex items-center justify-between">
+                             <span className="text-[10px] text-gray-500 font-bold uppercase">Categoría Sugerida:</span>
+                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-200 truncate max-w-[120px]" title={suggestedCat}>{suggestedCat}</span>
+                          </div>
+                          {matchReason && (
+                             <div className="flex items-start gap-1.5 mt-1 text-[10px] text-blue-700 bg-blue-50 p-1.5 rounded border border-blue-100">
+                                <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                                <span>{matchReason}</span>
+                             </div>
+                          )}
+                       </div>
+                    </td>
+                    <td className="p-4 align-top text-right pr-6">
+                       <span className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest ${actionRec === 'Importar' ? 'bg-green-100 text-green-700' : actionRec === 'Actualizar' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                         {actionRec}
                        </span>
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
-            </>
           )}
         </div>
 
-        <div className="p-6 border-t bg-gray-50 flex items-center justify-between">
+        <div className="p-5 border-t bg-white shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)] flex items-center justify-between relative z-20">
            <div className="flex flex-col">
               <span className="text-sm font-black text-blue-900">
                 {selected.size} productos seleccionados para importar
               </span>
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">De un total de {filteredItems.length} filtrados ({items.length} cargados)</p>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">De un total de {filteredItems.length} en la vista</p>
            </div>
            <div className="flex gap-4">
-             <button onClick={onClose} className="px-6 py-2.5 rounded-xl text-gray-500 font-bold hover:bg-gray-200 transition-all active:scale-95">Descartar</button>
+             <button onClick={onClose} className="px-6 py-2.5 rounded-xl text-gray-500 font-bold hover:bg-gray-100 transition-all">Cancelar</button>
              <button 
               onClick={() => onImport(Array.from(selected), limit, itemStatus)}
               disabled={selected.size === 0 || loading}
-              className="px-10 py-3 rounded-xl bg-blue-600 text-white font-black hover:bg-blue-700 disabled:opacity-40 disabled:grayscale shadow-lg shadow-blue-200 transition-all transform hover:-translate-y-1 active:translate-y-0 active:scale-95"
+              className="px-8 py-2.5 rounded-xl bg-blue-600 text-white font-black hover:bg-blue-700 disabled:opacity-50 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0"
              >
-               {loading ? 'PROCESANDO...' : 'IMPORTAR AHORA'}
+               {loading ? 'PROCESANDO...' : 'CONFIRMAR IMPORTACIÓN'}
              </button>
            </div>
         </div>
@@ -641,3 +830,4 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
     </div>
   );
 }
+

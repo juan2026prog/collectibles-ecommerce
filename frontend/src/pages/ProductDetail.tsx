@@ -372,7 +372,7 @@ export default function ProductDetail() {
                 <span className="text-slate-400 font-bold text-sm uppercase tracking-wider">Marca</span>
                 <b className="text-white">{product.brand?.name || 'N/A'}</b>
               </div>
-              {selectedVariant?.sku && (
+              {selectedVariant?.sku && !selectedVariant.sku.startsWith('COL-ML') && (
                 <div className="soft rounded-2xl p-5 flex justify-between items-center group hover:bg-white/5 transition-colors">
                   <span className="text-slate-400 font-bold text-sm uppercase tracking-wider">SKU</span>
                   <b className="text-white font-mono">{selectedVariant.sku}</b>
