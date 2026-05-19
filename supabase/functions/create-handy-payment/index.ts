@@ -149,12 +149,31 @@ Deno.serve(async (req: Request) => {
 
     const transactionExternalId = order.id;
     const safeOrderItems = Array.isArray(orderItems) ? orderItems : [];
-    const products = safeOrderItems.map((item: any) => ({
-      Name: item.product?.title || "Producto",
-      Quantity: Number(item.quantity),
-      Amount: Number(item.unit_price),
-      TaxedAmount: Number(item.unit_price),
-    }));
+    const isTesting = handy.environment === "testing";
+
+    // Products mapping with strict numeric constraints
+    const products = safeOrderItems.map((item: any) => {
+      const quantity = Number(item.quantity || 1);
+      const unitPrice = Number(item.unit_price || 0);
+      let productAmount = unitPrice * quantity;
+
+      // Rule: Product.Amount debe ser decimal mayor a 0. Probar con 5.00 en testing si es menor
+      if (isTesting && productAmount < 5.00) {
+        productAmount = 5.00;
+      }
+
+      return {
+        Name: String(item.product?.title || "Producto").trim() || "Producto",
+        Quantity: quantity,
+        Amount: productAmount,
+        TaxedAmount: 0.0, // Use 0 for TaxedAmount to avoid errors
+      };
+    });
+
+    // Enforce that total matches the sum of product amounts in testing
+    const sumProductsAmount = products.reduce((sum, p) => sum + p.Amount, 0);
+    const finalTotalAmount = isTesting ? Math.max(amount, sumProductsAmount, 5.00) : amount;
+    const currencyCode = order.currency?.toUpperCase() === "USD" ? 840 : 858;
 
     const orderTime = order.created_at ? new Date(order.created_at).getTime() : Date.now();
     const invoiceNumber = Math.floor(orderTime / 1000);
@@ -166,22 +185,36 @@ Deno.serve(async (req: Request) => {
       throw new Error("InvoiceNumber debe ser integer");
     }
 
+    // Ensure we do not use localhost for SiteUrl
+    const siteUrl = handy.siteUrl && !handy.siteUrl.includes("localhost")
+      ? handy.siteUrl.trim()
+      : "https://collectibles-ecommerce.vercel.app";
+
+    // Ensure we omit LinkImageUrl if empty or invalid
+    const linkImageUrl = handy.defaultImageUrl && handy.defaultImageUrl.trim().startsWith("http")
+      ? handy.defaultImageUrl.trim()
+      : undefined;
+
+    // CallbackUrl must be exactly:
+    const callbackUrl = "https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/handy-webhook";
+
     const requestPayload = {
       Cart: {
-        Currency: handy.currency,
-        TotalAmount: amount,
-        TaxedAmount: amount,
+        Currency: currencyCode,
+        TotalAmount: finalTotalAmount,
+        TaxedAmount: 0.0,
         Products: products,
         InvoiceNumber: invoiceNumber,
-        LinkImageUrl: handy.defaultImageUrl.trim() || undefined,
+        LinkImageUrl: linkImageUrl,
         TransactionExternalId: transactionExternalId,
       },
       Client: {
-        CommerceName: handy.commerceName,
-        SiteUrl: handy.siteUrl.trim() || undefined,
+        CommerceName: String(handy.commerceName || "Collectibles").trim() || "Collectibles",
+        SiteUrl: siteUrl,
       },
-      CallbackURL: handy.callbackUrl,
-      ResponseType: handy.responseType,
+      CallbackURL: callbackUrl,
+      CallbackUrl: callbackUrl, // Send both casings to be absolutely foolproof
+      ResponseType: "Json",
       Customer: {
         Name: getCustomerName(order),
         Email: order.customer_email,
@@ -189,13 +222,13 @@ Deno.serve(async (req: Request) => {
       },
     };
 
-    console.log("Handy Request Payload:", JSON.stringify(requestPayload, null, 2));
+    console.log("Handy payload:", JSON.stringify(requestPayload, null, 2));
 
     const insertPayload = {
       order_id: orderId,
       provider: "handy",
       transaction_external_id: transactionExternalId,
-      amount,
+      amount: finalTotalAmount,
       currency: order.currency || "UYU",
       status: "pending",
       raw_request: requestPayload,
@@ -224,12 +257,15 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify(requestPayload),
     });
 
-    const responseText = await response.text();
+    const handyText = await response.text();
+    console.error("Handy status:", response.status);
+    console.error("Handy response:", handyText);
+
     let responseBody: Record<string, any> = {};
     try {
-      responseBody = responseText ? JSON.parse(responseText) : {};
+      responseBody = handyText ? JSON.parse(handyText) : {};
     } catch {
-      responseBody = { raw: responseText };
+      responseBody = { raw: handyText };
     }
 
     if (!response.ok) {
@@ -250,8 +286,23 @@ Deno.serve(async (req: Request) => {
         })
         .eq("id", orderId);
 
-      throw new Error(
-        `Handy devolvio ${response.status}: ${JSON.stringify(responseBody)}`
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Handy devolvió 500",
+          details: {
+            handyStatus: response.status,
+            handyResponse: handyText,
+            sentPayload: requestPayload,
+          },
+        }),
+        {
+          status: 200,
+          headers: {
+            ...getCorsHeaders(req),
+            "Content-Type": "application/json",
+          },
+        }
       );
     }
 
