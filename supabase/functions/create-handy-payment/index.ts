@@ -147,7 +147,7 @@ Deno.serve(async (req: Request) => {
       throw new Error("La orden no tiene un total valido para cobrar.");
     }
 
-    const transactionExternalId = crypto.randomUUID();
+    const transactionExternalId = order.id;
     const safeOrderItems = Array.isArray(orderItems) ? orderItems : [];
     const products = safeOrderItems.map((item: any) => ({
       Name: item.product?.title || "Producto",
@@ -156,12 +156,15 @@ Deno.serve(async (req: Request) => {
       TaxedAmount: Number(item.unit_price),
     }));
 
-    let hash = 0;
-    for (let i = 0; i < order.id.length; i++) {
-      hash = (hash << 5) - hash + order.id.charCodeAt(i);
-      hash |= 0;
+    const orderTime = order.created_at ? new Date(order.created_at).getTime() : Date.now();
+    const invoiceNumber = Math.floor(orderTime / 1000);
+
+    console.log("Handy InvoiceNumber:", invoiceNumber);
+    console.log("Handy TransactionExternalId:", order.id);
+
+    if (!Number.isInteger(invoiceNumber)) {
+      throw new Error("InvoiceNumber debe ser integer");
     }
-    const invoiceNumber = Math.abs(hash);
 
     const requestPayload = {
       Cart: {
