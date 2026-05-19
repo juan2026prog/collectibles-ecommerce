@@ -78,7 +78,11 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (orderError || !order) {
-      throw new Error("La orden indicada no existe.");
+      throw new Error(
+        `La orden indicada no existe. Detalles del error: ${
+          orderError ? JSON.stringify(orderError) : "No hay error de consulta pero la orden no fue devuelta."
+        }`
+      );
     }
 
     if (order.payment_processed_at || order.status === "paid") {
@@ -152,13 +156,20 @@ Deno.serve(async (req: Request) => {
       TaxedAmount: Number(item.unit_price),
     }));
 
+    let hash = 0;
+    for (let i = 0; i < order.id.length; i++) {
+      hash = (hash << 5) - hash + order.id.charCodeAt(i);
+      hash |= 0;
+    }
+    const invoiceNumber = Math.abs(hash);
+
     const requestPayload = {
       Cart: {
         Currency: handy.currency,
         TotalAmount: amount,
         TaxedAmount: amount,
         Products: products,
-        InvoiceNumber: order.id.slice(0, 8).toUpperCase(),
+        InvoiceNumber: invoiceNumber,
         LinkImageUrl: handy.defaultImageUrl,
         TransactionExternalId: transactionExternalId,
       },
