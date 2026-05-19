@@ -170,12 +170,12 @@ Deno.serve(async (req: Request) => {
         TaxedAmount: amount,
         Products: products,
         InvoiceNumber: invoiceNumber,
-        LinkImageUrl: handy.defaultImageUrl,
+        LinkImageUrl: handy.defaultImageUrl.trim() || undefined,
         TransactionExternalId: transactionExternalId,
       },
       Client: {
         CommerceName: handy.commerceName,
-        SiteUrl: handy.siteUrl,
+        SiteUrl: handy.siteUrl.trim() || undefined,
       },
       CallbackUrl: handy.callbackUrl,
       ResponseType: handy.responseType,
@@ -185,6 +185,8 @@ Deno.serve(async (req: Request) => {
         Phone: order.customer_phone || undefined,
       },
     };
+
+    console.log("Handy Request Payload:", JSON.stringify(requestPayload, null, 2));
 
     const insertPayload = {
       order_id: orderId,
