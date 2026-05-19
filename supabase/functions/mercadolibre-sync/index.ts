@@ -5,6 +5,102 @@ import { verifyAdmin } from "../_shared/auth.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const ML_CLIENT_ID = Deno.env.get("MERCADOLIBRE_CLIENT_ID") || "";
+const ML_CLIENT_SECRET = Deno.env.get("MERCADOLIBRE_CLIENT_SECRET") || "";
+
+async function getValidMercadoLibreToken(supabase: any) {
+  const { data } = await supabase.from('ml_credentials').select('*').single();
+  if (!data) return null;
+  
+  if (data.expires_at && new Date(data.expires_at) <= new Date()) {
+    // Token expired, refresh
+    const params = new URLSearchParams({
+      grant_type: "refresh_token",
+      client_id: ML_CLIENT_ID,
+      client_secret: ML_CLIENT_SECRET,
+      refresh_token: data.refresh_token
+    });
+    const res = await fetch("https://api.mercadolibre.com/oauth/token", {
+       method: "POST",
+       headers: { "Content-Type": "application/x-www-form-urlencoded" },
+       body: params.toString()
+    });
+    if (res.ok) {
+       const mlData = await res.json();
+       const expiresAt = new Date(Date.now() + (mlData.expires_in * 1000)).toISOString();
+       await supabase.from('ml_credentials').update({
+           access_token: mlData.access_token,
+           refresh_token: mlData.refresh_token || data.refresh_token,
+           expires_at: expiresAt,
+           updated_at: new Date().toISOString()
+       }).eq('id', data.id);
+       return mlData.access_token;
+    } else {
+       throw new Error("Mercado Libre token refresh failed. Por favor reconecta la cuenta.");
+    }
+  }
+  return data.access_token;
+}
+
+async function resolveCollectiblesCategoryFromML(supabase: any, title: string, brand: string | null) {
+    const t = title.toLowerCase();
+    
+    const rules = [
+      { slug: "funko-pop", keywords: ["funko", "pop!"], priority: 100 },
+      { slug: "beyblade", keywords: ["beyblade", "takara", "hasbro blade"], priority: 90 },
+      { slug: "juegos-de-cartas-coleccionables", keywords: ["tcg", "pokemon tcg", "magic", "yugioh", "cartas"], priority: 80 },
+      { slug: "albumes-y-figuritas", keywords: ["panini", "album", "álbum", "figuritas", "sticker"], priority: 70 },
+      { slug: "figuras-de-accion", keywords: ["mortal kombat", "marvel legends", "mcfarlane", "neca", "figura"], priority: 60 },
+      { slug: "lego", keywords: ["lego"], priority: 55 },
+      { slug: "peluches", keywords: ["peluche", "plush", "mascota"], priority: 50 },
+      { slug: "juegos-y-juguetes", keywords: ["juguete", "juego"], priority: 40 }
+    ];
+
+    let bestMatch = null;
+    let highestPriority = -1;
+
+    for (const rule of rules) {
+       for (const kw of rule.keywords) {
+          if (t.includes(kw) && rule.priority > highestPriority) {
+              bestMatch = rule.slug;
+              highestPriority = rule.priority;
+          }
+       }
+    }
+
+    const finalSlug = bestMatch || "otras-colecciones";
+    
+    const { data } = await supabase.from('categories').select('id, slug').eq('slug', finalSlug).maybeSingle();
+    if (data) return data.id;
+
+    const { data: d3 } = await supabase.from('categories').select('id').in('slug', ['otras-colecciones', 'sin-categorizar']).limit(1).maybeSingle();
+    if (d3) return d3.id;
+
+    const { data: d4 } = await supabase.from('categories').insert({ name: 'Otras Colecciones', slug: 'otras-colecciones' }).select().single();
+    return d4?.id || null;
+}
+
+function extractRealSkuFromML(item: any, variation: any = null) {
+   let sku = null;
+   let source = 'missing';
+
+   const getFromAttr = (attrs: any[], code: string) => attrs?.find((a: any) => a.id === code)?.value_name;
+
+   if (variation?.seller_custom_field) { sku = variation.seller_custom_field; source = 'seller_custom_field_var'; }
+   else if (item.seller_custom_field) { sku = item.seller_custom_field; source = 'seller_custom_field'; }
+   else if (getFromAttr(item.attributes, 'SELLER_SKU')) { sku = getFromAttr(item.attributes, 'SELLER_SKU'); source = 'seller_sku'; }
+   else if (getFromAttr(item.attributes, 'SKU')) { sku = getFromAttr(item.attributes, 'SKU'); source = 'sku'; }
+   else if (getFromAttr(item.attributes, 'GTIN')) { sku = getFromAttr(item.attributes, 'GTIN'); source = 'gtin'; }
+   else if (getFromAttr(item.attributes, 'EAN')) { sku = getFromAttr(item.attributes, 'EAN'); source = 'ean'; }
+   else if (getFromAttr(item.attributes, 'UPC')) { sku = getFromAttr(item.attributes, 'UPC'); source = 'upc'; }
+   else if (getFromAttr(item.attributes, 'ISBN')) { sku = getFromAttr(item.attributes, 'ISBN'); source = 'isbn'; }
+
+   if (!sku) {
+       sku = null; 
+       source = 'missing';
+   }
+   return { sku, source, generated_sku: \`COL-ML-\${item.id}\` };
+}
 
 Deno.serve(async (req) => {
   const options = handleOptions(req);
@@ -27,8 +123,7 @@ Deno.serve(async (req) => {
 
     let mlToken = body.auth_token;
     if (!mlToken) {
-      const { data: tokenData } = await supabase.from('site_settings').select('value').eq('key', 'mercadolibre_access_token').single();
-      mlToken = tokenData?.value;
+      mlToken = await getValidMercadoLibreToken(supabase);
     }
     if (!mlToken) {
       return new Response(
@@ -195,7 +290,8 @@ Deno.serve(async (req) => {
         const results: any[] = [];
         await Promise.all(product_ids.map(async (mlId) => {
             try {
-                const res = await fetch(`https://api.mercadolibre.com/items/${mlId}`, { headers });
+                // 1. Fetch ML Item
+                const res = await fetch(\`https://api.mercadolibre.com/items/\${mlId}\`, { headers });
                 const item = await res.json();
                 
                 if (!res.ok) {
@@ -203,19 +299,23 @@ Deno.serve(async (req) => {
                   return;
                 }
                 
+                // 2. Fetch Description
                 let description = item.title;
                 try {
-                  const descRes = await fetch(`https://api.mercadolibre.com/items/${mlId}/description`, { headers });
+                  const descRes = await fetch(\`https://api.mercadolibre.com/items/\${mlId}/description\`, { headers });
                   if (descRes.ok) {
                     const descData = await descRes.json();
                     description = descData.plain_text || item.title;
                   }
                 } catch(_e) { /* description fallback to title */ }
 
+                // 3. Extract Brand
                 let brandId = null;
+                let brandName = null;
                 try {
                   const brandAttr = item.attributes?.find((a: any) => a.id === 'BRAND')?.value_name;
                   if (brandAttr) {
+                     brandName = brandAttr;
                      const slugBrand = brandAttr.toLowerCase().replace(/[^a-z0-9]+/g, '-');
                      const { data: br } = await supabase.from('brands').upsert({
                         name: brandAttr,
@@ -225,119 +325,27 @@ Deno.serve(async (req) => {
                   }
                 } catch(_e) { /* brand extraction optional */ }
 
-                // ═══ Extract category from ML API (with optional AI Matching) ═══
-                let categoryId = null;
-                try {
-                  if (item.category_id) {
-                    // Step 1: Check direct ML category ID mapping
-                    const { data: matchedCat } = await supabase
-                      .from('categories')
-                      .select('id')
-                      .contains('metadata', { ml_category_id: item.category_id })
-                      .maybeSingle();
+                // 4. Resolve Internal Category
+                const categoryId = await resolveCollectiblesCategoryFromML(supabase, item.title, brandName);
 
-                    if (matchedCat) {
-                      categoryId = matchedCat.id;
-                    } else {
-                      // Step 2: Check if AI category matching is enabled
-                      const { data: aiToggle } = await supabase
-                        .from('site_settings')
-                        .select('value')
-                        .eq('key', 'ai_category_matching_enabled')
-                        .maybeSingle();
-                      const aiEnabled = aiToggle?.value === 'true';
-                      const geminiKey = Deno.env.get('GEMINI_API_KEY');
-
-                      // Fetch all internal categories for matching
-                      const { data: internalCats } = await supabase
-                        .from('categories')
-                        .select('id, name, slug')
-                        .eq('is_active', true)
-                        .order('name');
-
-                      // Step 2a: Try LLM matching if enabled
-                      if (aiEnabled && geminiKey && internalCats && internalCats.length > 0) {
-                        try {
-                          const categoryList = internalCats.map(c => `- "${c.name}" (id: ${c.id})`).join('\n');
-                          const prompt = `Eres un sistema de clasificación de productos para una tienda de coleccionables.
-
-Producto: "${item.title}"
-
-Categorías disponibles en la tienda:
-${categoryList}
-
-REGLAS ESTRICTAS DE CATEGORIZACIÓN:
-1. Si el producto contiene "funko" o "funko pop", DEBE ir a la categoría "Funko POP".
-2. Si el producto contiene "iron studios", "esculturas", "estatuas" o "minico", DEBE ir a "Esculturas y Estatuas".
-3. Todo lo que tenga que ver con ropa, indumentaria, accesorios, tiaras, guantes, remeras, etc., DEBE ir a "Ropa & Accesorios".
-4. Todo lo que tenga que ver con escolar y oficina, DEBE ir a "Papelería".
-5. Todo lo que sea vehículos a escala (autos, motos, naves), DEBE ir a "Vehículos a Escala".
-
-Responde SOLO con el id (UUID) de la categoría más adecuada para este producto siguiendo estrictamente las reglas anteriores.
-Si ninguna categoría es apropiada y no aplica ninguna regla, responde exactamente: NONE
-No agregues explicación, solo el id o NONE.`;
-
-                          const geminiRes = await fetch(
-                            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-                            {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-                            }
-                          );
-
-                          if (geminiRes.ok) {
-                            const geminiData = await geminiRes.json();
-                            const aiResponse = (geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
-
-                            // Log token usage
-                            const usageMeta = geminiData.usageMetadata;
-                            const tokensUsed = (usageMeta?.promptTokenCount || 0) + (usageMeta?.candidatesTokenCount || 0);
-                            const estimatedCost = ((usageMeta?.promptTokenCount || 0) * 0.0000001) + ((usageMeta?.candidatesTokenCount || 0) * 0.0000004);
-                            await supabase.from('ai_usage_log').insert({
-                              tool_key: 'ai_category_matching',
-                              tokens_used: tokensUsed,
-                              estimated_cost: estimatedCost
-                            }).then(() => {});
-
-                            // Validate: check if response is a valid UUID that exists in our categories
-                            if (aiResponse !== 'NONE' && aiResponse.length > 10) {
-                              const matchedInternal = internalCats.find(c => c.id === aiResponse);
-                              if (matchedInternal) {
-                                categoryId = matchedInternal.id;
-                                console.log(`AI matched "${item.title}" → "${matchedInternal.name}"`);
-                              }
-                            }
-                          }
-                        } catch (aiErr) {
-                          console.error('AI category matching error (non-fatal):', aiErr);
-                        }
-                      }
-
-                      // Step 3: Fallback to ML taxonomy-based matching if AI didn't match
-                      if (!categoryId) {
-                        const { data: existingCat } = await supabase
-                          .from('categories')
-                          .select('id')
-                          .contains('metadata', { ml_category_id: item.category_id })
-                          .maybeSingle();
-
-                        if (existingCat) {
-                          categoryId = existingCat.id;
-                        } else {
-                          // Note: We deliberately do NOT create new categories here
-                          // to prevent polluting the store's custom taxonomy.
-                          // Products without a matched category will remain uncategorized (categoryId = null).
-                          console.log(`No category match found for ML item ${item.id} (Category ${item.category_id}). Leaving uncategorized.`);
-                        }
-                      }
-                    }
+                // 5. Anti-Duplicados y Extracción de SKU
+                const { sku, source, generated_sku } = extractRealSkuFromML(item);
+                
+                // Buscar si existe por ml_item_id
+                let existingProdId = null;
+                const { data: existingProdByMlId } = await supabase.from('products').select('id').eq('ml_item_id', item.id).maybeSingle();
+                
+                if (existingProdByMlId) {
+                  existingProdId = existingProdByMlId.id;
+                } else if (sku) {
+                  // Si no existe por ml_item_id, buscar por SKU real para no duplicar un producto creado a mano
+                  const { data: existingVariantBySku } = await supabase.from('product_variants').select('product_id').eq('sku', sku).maybeSingle();
+                  if (existingVariantBySku) {
+                     existingProdId = existingVariantBySku.product_id;
                   }
-                } catch(_e) { 
-                  console.error("Category extraction error:", _e);
-                  /* category extraction is optional, don't fail the import */ 
                 }
 
+                // Metadata base
                 const meta = {
                     attributes: item.attributes || [],
                     permalink: item.permalink,
@@ -346,33 +354,56 @@ No agregues explicación, solo el id o NONE.`;
                     accepts_mercadopago: item.accepts_mercadopago,
                     health: item.health,
                     video_id: item.video_id,
-                    ml_category_id: item.category_id
+                    ml_category_id: item.category_id,
+                    source: "mercadolibre",
+                    sku_source: source,
+                    generated_sku: generated_sku
                 };
 
-                const { data: prod, error: ep } = await supabase.from('products').upsert({
-                    title: item.title,
-                    description: description,
-                    slug: `mercadolibre-${item.id}`, 
-                    base_price: item.price,
-                    ml_item_id: item.id,
-                    ml_status: item.status,
-                    condition: item.condition,
-                    listing_type_id: item.listing_type_id,
-                    brand_id: brandId,
-                    category_id: categoryId,
-                    metadata: meta,
-                    status: item.status === 'active' ? 'published' : 'draft',
-                    updated_at: new Date().toISOString()
-                }, { onConflict: 'ml_item_id' }).select().single();
+                let prod;
+                if (existingProdId) {
+                    // Update existing
+                    const { data: updatedProd, error: ep } = await supabase.from('products').update({
+                        ml_item_id: item.id,
+                        ml_status: item.status,
+                        base_price: item.price,
+                        source_platform: 'mercadolibre',
+                        external_id: item.id,
+                        last_ml_sync_at: new Date().toISOString(),
+                        last_ml_status: item.status,
+                        updated_at: new Date().toISOString()
+                    }).eq('id', existingProdId).select().single();
+                    if (ep) throw new Error(ep.message);
+                    prod = updatedProd;
+                } else {
+                    // Create new
+                    const { data: newProd, error: ep } = await supabase.from('products').insert({
+                        title: item.title,
+                        description: description,
+                        slug: \`mercadolibre-\${item.id}\`, 
+                        base_price: item.price,
+                        ml_item_id: item.id,
+                        ml_status: item.status,
+                        condition: item.condition,
+                        listing_type_id: item.listing_type_id,
+                        brand_id: brandId,
+                        category_id: categoryId,
+                        metadata: { ...meta, sync_source: 'imported' },
+                        status: item.status === 'active' ? 'published' : 'draft',
+                        source_platform: 'mercadolibre',
+                        external_id: item.id,
+                        last_ml_sync_at: new Date().toISOString(),
+                        last_ml_status: item.status
+                    }).select().single();
+                    if (ep) throw new Error(ep.message);
+                    prod = newProd;
+                }
                 
-                if (ep) throw new Error(ep.message);
-                
-                // ═══ Media (Download from ML and Upload to Supabase Storage) ═══
+                // 6. Sync Images
                 await supabase.from('product_images').delete().eq('product_id', prod.id);
                 const pics = item.pictures || [];
                 const localImages = [];
                 
-                // Sequential download and upload for images to avoid memory limits (HTTP 546 OOM)
                 const topPics = pics.slice(0, 10);
                 for (let i = 0; i < topPics.length; i++) {
                   const p = topPics[i];
@@ -382,8 +413,8 @@ No agregues explicación, solo el id o NONE.`;
                     const imgRes = await fetch(imageUrl);
                     if (!imgRes.ok) throw new Error("Could not fetch ML image");
                     
-                    const arrayBuffer = await imgRes.arrayBuffer(); // use arrayBuffer for lower memory overhead
-                    const fileName = `ml-sync/${prod.id}-${i}-${Date.now()}.jpg`;
+                    const arrayBuffer = await imgRes.arrayBuffer(); 
+                    const fileName = \`ml-sync/\${prod.id}-\${i}-\${Date.now()}.jpg\`;
                     
                     const { error: uploadError } = await supabase.storage
                       .from('public-assets')
@@ -403,8 +434,6 @@ No agregues explicación, solo el id o NONE.`;
                       is_primary: i === 0
                     });
                   } catch (imgErr) {
-                    console.error(`Error syncing image ${i} for ${mlId}:`, imgErr);
-                    // Fallback to original URL if upload fails
                     localImages.push({
                       product_id: prod.id,
                       url: imageUrl,
@@ -414,41 +443,54 @@ No agregues explicación, solo el id o NONE.`;
                   }
                 }
 
-
                 if (localImages.length > 0) {
                     await supabase.from('product_images').insert(localImages);
                 }
 
-                // ═══ Extract real SKU: SELLER_SKU > GTIN/UPC/EAN > seller_custom_field > ML-ID ═══
-                const attrs = item.attributes || [];
-                const sellerSku = attrs.find((a: any) => a.id === 'SELLER_SKU')?.value_name;
-                const gtin = attrs.find((a: any) => a.id === 'GTIN')?.value_name;
-                const upc = attrs.find((a: any) => a.id === 'UPC')?.value_name;
-                const ean = attrs.find((a: any) => a.id === 'EAN')?.value_name;
-                const mpn = attrs.find((a: any) => a.id === 'MPN')?.value_name;
-                const realSku = sellerSku || gtin || upc || ean || mpn || item.seller_custom_field || (item.id ? item.id.replace(/\D/g, '') : `${Date.now()}`);
-
-                // ═══ Calculate real stock: ML returns 999 for "buy it now" listings ═══
-                const mlAvailable = item.available_quantity || 0;
-                const mlInitial = item.initial_quantity || 0;
-                const mlSold = item.sold_quantity || 0;
-                const realStock = mlAvailable >= 999 
-                  ? Math.max(mlInitial - mlSold, 0) 
-                  : mlAvailable;
-
-                // Delete existing variant for this product, then insert with real SKU
+                // 7. Update Real Stock and Variants
                 await supabase.from('product_variants').delete().eq('product_id', prod.id);
-                await supabase.from('product_variants').insert({
-                    product_id: prod.id,
-                    sku: realSku,
-                    name: 'Estándar',
-                    inventory_count: realStock
-                });
 
-                // ═══ Link product to category in junction table (many-to-many) ═══
+                if (item.variations && item.variations.length > 0) {
+                    const variantsToInsert = item.variations.map((v: any) => {
+                       const { sku: varSku } = extractRealSkuFromML(item, v);
+                       const varStock = v.available_quantity >= 999 ? Math.max((v.initial_quantity || 0) - (v.sold_quantity || 0), 0) : v.available_quantity;
+                       const varName = v.attribute_combinations ? v.attribute_combinations.map((a:any) => a.value_name).join(' - ') : `Variación ${v.id}`;
+                       
+                       return {
+                          product_id: prod.id,
+                          sku: varSku || `COL-ML-${item.id}-${v.id}`,
+                          name: varName,
+                          inventory_count: varStock,
+                          price: v.price || item.price,
+                          external_variant_id: v.id.toString(),
+                          metadata: { attributes: v.attribute_combinations }
+                       };
+                    });
+                    await supabase.from('product_variants').insert(variantsToInsert);
+                    
+                    // Update global product stock sync time
+                    await supabase.from('products').update({ last_ml_stock_sync_at: new Date().toISOString() }).eq('id', prod.id);
+                } else {
+                    const mlAvailable = item.available_quantity || 0;
+                    const mlInitial = item.initial_quantity || 0;
+                    const mlSold = item.sold_quantity || 0;
+                    const realStock = mlAvailable >= 999 
+                      ? Math.max(mlInitial - mlSold, 0) 
+                      : mlAvailable;
+
+                    await supabase.from('product_variants').insert({
+                        product_id: prod.id,
+                        sku: sku || generated_sku,
+                        name: 'Estándar',
+                        inventory_count: realStock
+                    });
+                    
+                    await supabase.from('products').update({ last_ml_stock_sync_at: new Date().toISOString() }).eq('id', prod.id);
+                }
+
+                // 8. Junction table (product_categories)
                 if (categoryId) {
                   try {
-                    // Check if link already exists to avoid duplicate
                     const { data: existingLink } = await supabase
                       .from('product_categories')
                       .select('id')
@@ -462,11 +504,15 @@ No agregues explicación, solo el id o NONE.`;
                         category_id: categoryId
                       });
                     }
-                  } catch(_e) { /* junction table link optional */ }
+                  } catch(_e) { /* silent fail on junction */ }
                 }
 
-                results.push({ ml_id: mlId, status: "success" });
+                // 9. Logs controlados sin tokens
+                console.log(\`Importado ML ID: \${item.id} | SKU Detectado: \${sku || 'No'} | Fuente SKU: \${source} | Categoría Interna: \${categoryId} | Acción: \${existingProdId ? 'updated/linked' : 'imported'}\`);
+
+                results.push({ ml_id: mlId, status: "success", action: existingProdId ? 'linked/updated' : 'imported' });
             } catch (e: any) {
+              console.error(\`Fallo importar ML \${mlId}:\`, e.message);
               results.push({ ml_id: mlId, status: "error", error: e.message });
             }
         }));

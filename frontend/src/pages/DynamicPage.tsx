@@ -32,7 +32,34 @@ export default function DynamicPage({ forcedSlug }: { forcedSlug?: string }) {
         if (error || !data) throw new Error('Not found');
         setPage(data);
       } catch {
-        setError(true);
+        const s = slug.toLowerCase();
+        if (s.includes('privacidad') || s.includes('privacy')) {
+          setPage({
+            title: 'Políticas de Privacidad',
+            slug: 'pol-ticas-de-privacidad',
+            updated_at: new Date().toISOString()
+          });
+        } else if (s.includes('terminos') || s.includes('términos')) {
+          setPage({
+            title: 'Términos y condiciones',
+            slug: 'terminos',
+            updated_at: new Date().toISOString()
+          });
+        } else if (s.includes('condiciones')) {
+          setPage({
+            title: 'Condiciones de compra',
+            slug: 'condiciones-de-compra',
+            updated_at: new Date().toISOString()
+          });
+        } else if (s.includes('envio') || s.includes('envío') || s.includes('devolucion')) {
+          setPage({
+            title: 'Envíos y devoluciones',
+            slug: 'envios-devoluciones',
+            updated_at: new Date().toISOString()
+          });
+        } else {
+          setError(true);
+        }
       } finally {
         setLoading(false);
       }
@@ -41,7 +68,151 @@ export default function DynamicPage({ forcedSlug }: { forcedSlug?: string }) {
     fetchPage();
   }, [slug]);
 
-  const safeContent = useMemo(() => sanitizeRichHtml(page?.content || ''), [page?.content]);
+  const safeContent = useMemo(() => {
+    const s = slug?.toLowerCase() || '';
+    if (s.includes('privacidad') || s.includes('privacy')) {
+      return `<p><strong>Collectibles Uruguay</strong> respecta la privacidad de sus clientes y usuarios. Esta política explica qué datos podemos solicitar, cómo se utilizan y qué medidas aplicamos para protegerlos.</p>
+
+<h2>1. Información que recopilamos</h2>
+<p>Podemos recopilar información necesaria para procesar pedidos, responder consultas y mejorar la experiencia de compra. Esto puede incluir nombre, email, teléfono, dirección de envío, productos comprados y datos de facturación.</p>
+<ul>
+  <li>Datos de contacto para coordinar compras y envíos.</li>
+  <li>Información de pedidos y productos agregados al carrito.</li>
+  <li>Datos técnicos básicos para seguridad y análisis del sitio.</li>
+</ul>
+
+<h2>2. Uso de la información</h2>
+<p>Utilizamos tus datos para gestionar compras, confirmar pagos, coordinar entregas, brindar soporte y comunicar información relacionada con productos o promociones de Collectibles.</p>
+
+<h2>3. Pagos y seguridad</h2>
+<p>Los pagos se procesan mediante proveedores externos seguros. Collectibles no almacena datos completos de tarjetas ni información bancaria sensible en sus servidores públicos.</p>
+
+<h2>4. Comunicación</h2>
+<p>Podemos comunicarnos por email, WhatsApp o redes sociales para responder consultas, confirmar pedidos o enviar información relevante sobre tu compra.</p>
+
+<h2>5. Derechos del usuario</h2>
+<p>Podés solicitar acceso, corrección o eliminación de tus datos personales escribiendo a nuestros canales oficiales de contacto.</p>
+
+<h2>6. Cambios en esta política</h2>
+<p>Collectibles puede actualizar esta política cuando sea necesario. Los cambios se publicarán en esta misma página.</p>`;
+    }
+
+    if (s.includes('condiciones')) {
+      return `<p>Al comprar cualquiera de nuestros productos, el cliente acepta los términos y condiciones detallados a continuación.</p>
+
+<ul>
+  <li>Todas las transacciones del sitio utilizan sistemas de seguridad para proteger la confidencialidad de los datos personales.</li>
+  <li>El cliente es la única persona responsable de sus datos de acceso y contraseña.</li>
+  <li>El comprador debe ser mayor de edad para utilizar el sitio web.</li>
+  <li>Al realizar una compra, el cliente acepta formar parte de nuestra base de datos para recibir novedades, promociones o comunicaciones comerciales. Puede solicitar la baja en cualquier momento.</li>
+  <li>Todos los precios están expresados en pesos uruguayos e incluyen impuestos. Los costos de envío pueden variar según la compra.</li>
+  <li>Los precios tienen validez únicamente durante la sesión activa y pueden cambiar sin previo aviso.</li>
+  <li>Todos los productos están sujetos a disponibilidad de stock.</li>
+  <li>Los colores y medidas son aproximados y pueden variar.</li>
+  <li>Los plazos de entrega y retiro son estimados.</li>
+  <li>No todos los productos disponibles en el sitio se encuentran necesariamente disponibles en el local físico y viceversa.</li>
+  <li>El cliente dispone de hasta 30 días corridos desde la compra para solicitar cambios o devoluciones.</li>
+  <li>Es responsabilidad del cliente revisar el estado del producto al momento de recibirlo.</li>
+</ul>
+
+<h2>Condiciones de preventa / reserva</h2>
+<p>Los productos disponibles para preventa o reserva siguen el mismo procedimiento de compra que los productos en stock.</p>
+<p>El producto puede entregarse hasta 180 días después de su llegada a nuestro warehouse en origen, dependiendo del fabricante y procesos de importación.</p>
+<p>Superado ese plazo, el cliente podrá solicitar la devolución del dinero abonado.</p>
+
+<h2>Información de la empresa</h2>
+<p><strong>Razón Social:</strong> Sagittarius Importaciones SRL</p>
+<p><strong>RUT:</strong> 217180080010</p>
+<p><strong>Email:</strong> info@collectibles.com.uy</p>
+<p><strong>Teléfono:</strong> (+598) 096 889 596</p>`;
+    }
+
+    if (s.includes('envio') || s.includes('envío') || s.includes('devolucion')) {
+      return `<h2>Devoluciones</h2>
+<p>El producto deberá encontrarse en perfectas condiciones, con empaques originales y acompañado de ticket de cambio, factura o envoltorio original.</p>
+<p>Los cambios deben realizarse dentro de un plazo máximo de 15 días.</p>
+<p>Los reintegros pueden demorar hasta 10 días hábiles una vez aprobada la devolución.</p>
+
+<h2>Cambios por correo</h2>
+<p>Para realizar cambios mediante correo, el cliente deberá enviar el paquete previamente pago incluyendo una copia de la factura original.</p>
+<p>El envío debe dirigirse a:</p>
+
+<div class="rounded-2xl border border-white/10 bg-[#101522]/60 p-6 my-6">
+  <p class="font-extrabold text-[#f00856] tracking-widest text-[10px] uppercase mb-2">Dirección de Envío</p>
+  <p class="text-white font-black text-lg">COLLECTIBLES</p>
+  <p class="text-slate-300">Vazquez 1418</p>
+  <p class="text-slate-300">Montevideo · CP 11200</p>
+  <p class="text-slate-300">Teléfono: 096 889 596</p>
+</div>`;
+    }
+
+    if (s.includes('terminos') || s.includes('términos')) {
+      return `<p>Al acceder o utilizar el sitio web de Collectibles, el usuario acepta estos términos de uso, los cuales constituyen un acuerdo legalmente vinculante.</p>
+
+<h2>1. Productos</h2>
+<p>Collectibles es una empresa uruguaya con más de 13 años de trayectoria y distribuidor oficial de distintas marcas internacionales.</p>
+<p>La información de productos es referencial y puede modificarse sin previo aviso, incluyendo precios, disponibilidad y tiempos estimados de entrega.</p>
+
+<h2>2. Información del cliente</h2>
+<p>El cliente es responsable de proporcionar correctamente los datos de envío y facturación. Collectibles no se responsabiliza por errores derivados de información incorrecta.</p>
+
+<h2>3. Entrega de productos</h2>
+<ul>
+  <li>Los colores pueden variar según la pantalla del usuario.</li>
+  <li>Las medidas son aproximadas.</li>
+  <li>Todos los productos están sujetos a disponibilidad.</li>
+  <li>Los plazos de entrega son estimados.</li>
+  <li>Los productos se entregan en su packaging original.</li>
+</ul>
+
+<h2>4. Preventa</h2>
+<p>Algunos productos pueden estar sujetos a restricciones de importación, retrasos logísticos o disponibilidad limitada.</p>
+<p>En caso de cancelación o falta definitiva de stock, el cliente podrá optar por una alternativa o solicitar reembolso.</p>
+
+<h2>5. Cambios en pedidos</h2>
+<p>Solo se cobrará por los productos efectivamente enviados. En determinados casos, las demoras pueden alcanzar hasta 180 días dependiendo del fabricante o importador.</p>
+<p>El cliente podrá optar por esperar el producto o aceptar un reemplazo equivalente si estuviera disponible.</p>
+
+<h2>6. Devoluciones</h2>
+<p>El cliente podrá retractarse de la compra dentro de los primeros 5 días y solicitar devoluciones hasta 30 días desde la entrega, siempre que el producto se encuentre en perfectas condiciones y con su packaging original.</p>
+
+<h2>7. Cuenta de usuario</h2>
+<ul>
+  <li>El usuario es responsable de la seguridad de su cuenta.</li>
+  <li>Debe informar cualquier acceso no autorizado.</li>
+  <li>No se permite transferir cuentas entre personas.</li>
+  <li>Collectibles podrá bloquear cuentas por uso abusivo o fraudulento.</li>
+</ul>
+
+<h2>8. Precios y pagos</h2>
+<p>Los precios incluyen IVA. El sitio acepta diferentes medios de pago y redes de cobranza.</p>
+<p>Impuestos internacionales, costos aduaneros o cargos externos serán responsabilidad del cliente cuando corresponda.</p>
+
+<h2>9. Protección de datos</h2>
+<p>Los datos personales serán tratados conforme a la legislación uruguaya vigente, incluyendo la Ley Nº 18.331 de Protección de Datos Personales.</p>
+
+<h2>10. Propiedad intelectual</h2>
+<p>Todo el contenido del sitio web, incluyendo textos, imágenes, diseño y marcas, está protegido y no puede utilizarse sin autorización previa.</p>
+
+<h2>11. Responsabilidad</h2>
+<p>Collectibles no garantiza disponibilidad permanente del sitio web ni se responsabiliza por daños indirectos derivados del uso de la plataforma.</p>
+
+<h2>12. Limitación de responsabilidad</h2>
+<p>La responsabilidad máxima de Collectibles no excederá el valor abonado por el producto adquirido o USD 200, según corresponda.</p>
+
+<h2>13. Ley aplicable</h2>
+<p>Estos términos se rigen por la legislación de la República Oriental del Uruguay, con jurisdicción en los tribunales de Montevideo.</p>
+
+<h2>Contacto</h2>
+<p><strong>Razón Social:</strong> Sagittarius Importaciones SRL</p>
+<p><strong>RUT:</strong> 217180080010</p>
+<p><strong>Email:</strong> info@collectibles.com.uy</p>
+<p><strong>Teléfono:</strong> (+598) 096 889 596</p>
+<p><strong>Horario:</strong> Lunes a viernes de 13 a 19 hs</p>`;
+    }
+
+    return sanitizeRichHtml(page?.content || '');
+  }, [page?.content, slug]);
 
   // Dynamic subtitles depending on the current slug
   const pageSubtitle = useMemo(() => {

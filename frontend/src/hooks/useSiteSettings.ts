@@ -24,7 +24,12 @@ function fetchSettings(): Promise<Record<string, string>> {
       _cache = s;
       try { localStorage.setItem('site_settings_cache', JSON.stringify(s)); } catch (e) {}
       _listeners.forEach(fn => fn(s));
+      _promise = null; // Clear promise so the next call/mount fetches again
       return s;
+    })
+    .catch((err) => {
+      _promise = null; // Clear promise on error too
+      throw err;
     });
   return _promise;
 }
@@ -42,18 +47,18 @@ export function useSiteSettings() {
   const [loaded, setLoaded] = useState(!!_cache);
 
   useEffect(() => {
-    if (_cache) {
-      setSettings(_cache);
-      setLoaded(true);
-      return;
-    }
-
     const listener = (s: Record<string, string>) => {
       setSettings(s);
       setLoaded(true);
     };
     _listeners.add(listener);
-    fetchSettings();
+
+    if (_cache) {
+      setSettings(_cache);
+      setLoaded(true);
+    }
+
+    fetchSettings().catch(() => {});
 
     return () => {
       _listeners.delete(listener);

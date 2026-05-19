@@ -26,6 +26,19 @@ export async function verifyAuth(req: Request) {
   return user;
 }
 
+export async function verifyOptionalAuth(req: Request) {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader) {
+    return null;
+  }
+
+  try {
+    return await verifyAuth(req);
+  } catch {
+    return null;
+  }
+}
+
 export async function verifyAdmin(req: Request) {
   const user = await verifyAuth(req);
 

@@ -116,7 +116,7 @@ export default function AdminLayout() {
             </div>
           </aside>
 
-          <main className="flex-1 flex flex-col relative z-10 overflow-hidden">
+          <main className="flex-1 flex flex-col relative overflow-hidden">
             <header className="bg-white shadow-sm border-b border-gray-200 h-16 flex items-center justify-between px-8 z-20">
               <h1 className="text-xl font-bold text-gray-800">
                 {navItems.find(item => item.path === location.pathname || (location.pathname.startsWith(item.path) && item.path !== '/admin'))?.name || 'Dashboard'}

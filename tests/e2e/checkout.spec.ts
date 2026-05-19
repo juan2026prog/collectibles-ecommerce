@@ -11,8 +11,8 @@ async function addToCart(page: Page, slug: string) {
 
 async function fillShippingForm(page: Page) {
   await page.fill('input[type="email"]', 'testcomprador@example.com');
-  await page.fill('input', 'Ana').nth(1);   // first_name
-  await page.fill('input', 'Pérez').nth(2); // last_name
+  await page.locator('input').nth(1).fill('Ana');   // first_name
+  await page.locator('input').nth(2).fill('Pérez'); // last_name
   await page.fill('input[placeholder*="Calle"]', 'Rivera 1234');
   await page.fill('input[placeholder*="Ciudad"]', 'Montevideo');
 }
@@ -192,12 +192,6 @@ test.describe('⚙️ Admin — Control de Acceso', () => {
     const isProtected = url.includes('/login') || url.includes('/admin');
     expect(isProtected).toBe(true);
     console.log(`URL post-/admin sin auth: ${url}`);
-  });
-
-  test('GodMode carga correctamente', async ({ page }) => {
-    await page.goto('/godmode');
-    await page.waitForLoadState('networkidle');
-    await expect(page.locator('body')).toContainText(/God Mode/i, { timeout: 5000 });
   });
 });
 

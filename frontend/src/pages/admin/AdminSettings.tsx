@@ -4,6 +4,69 @@ import { Save, ToggleLeft, ToggleRight, Settings, Store, Truck, Palette, LayoutT
 import { MediaPickerModal } from '../../components/MediaPickerModal';
 import { useToast } from '../../components/admin/Toast';
 
+type HandyProviderRecord = {
+  id?: string;
+  provider_key: 'handy';
+  name: string;
+  is_active: boolean;
+  environment: 'testing' | 'production';
+  status: 'active' | 'inactive';
+  config: {
+    testing_base_url: string;
+    production_base_url: string;
+    merchant_secret_key: string;
+    commerce_name: string;
+    site_url: string;
+    callback_url: string;
+    currency: number;
+    response_type: string;
+    default_image_url: string;
+    checkout_text: string;
+  };
+};
+
+const HANDY_DEFAULTS: HandyProviderRecord = {
+  provider_key: 'handy',
+  name: 'Handy Boton de Pago',
+  is_active: false,
+  environment: 'testing',
+  status: 'inactive',
+  config: {
+    testing_base_url: 'https://api.payments.arriba.uy/api/v2',
+    production_base_url: 'https://api.payments.handy.uy/api/v2',
+    merchant_secret_key: '',
+    commerce_name: 'Collectibles',
+    site_url: '',
+    callback_url: '',
+    currency: 858,
+    response_type: 'Json',
+    default_image_url: '',
+    checkout_text: 'Pagar con Handy',
+  },
+};
+
+function normalizeHandyProvider(row?: any): HandyProviderRecord {
+  if (!row) return HANDY_DEFAULTS;
+  return {
+    id: row.id,
+    provider_key: 'handy',
+    name: row.name || HANDY_DEFAULTS.name,
+    is_active: !!row.is_active,
+    environment: row.environment === 'production' ? 'production' : 'testing',
+    status: row.status === 'active' ? 'active' : 'inactive',
+    config: {
+      ...HANDY_DEFAULTS.config,
+      ...(row.config || {}),
+    },
+  };
+}
+
+function maskSecret(secret?: string) {
+  if (!secret) return '';
+  if (secret.length <= 4) return '****';
+  return `${'*'.repeat(Math.max(secret.length - 4, 4))}${secret.slice(-4)}`;
+}
+
 function MenuEditor({ title, description, initialJson, onSave }: any) {
   const [items, setItems] = useState<any[]>([]);
   useEffect(() => {
@@ -305,6 +368,9 @@ export default function AdminSettings() {
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [toggles, setToggles] = useState<any[]>([]);
   const [shipping, setShipping] = useState<any[]>([]);
+  const [handyProvider, setHandyProvider] = useState<HandyProviderRecord>(HANDY_DEFAULTS);
+  const [handySecretInput, setHandySecretInput] = useState('');
+  const [testingHandyConnection, setTestingHandyConnection] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showMediaPicker, setShowMediaPicker] = useState<false | 'logo'>(false);
   const { toast } = useToast();
@@ -313,16 +379,19 @@ export default function AdminSettings() {
 
   async function fetchData() {
     setLoading(true);
-    const [{ data: s }, { data: t }, { data: sh }] = await Promise.all([
+    const [{ data: s }, { data: t }, { data: sh }, { data: handy }] = await Promise.all([
       supabase.from('site_settings').select('*'),
       supabase.from('feature_toggles').select('*').order('id'),
       supabase.from('shipping_rules').select('*').order('zone'),
+      supabase.from('payment_providers').select('*').eq('provider_key', 'handy').maybeSingle(),
     ]);
     const settingsMap: Record<string, string> = {};
     (s || []).forEach(item => { settingsMap[item.key] = item.value || ''; });
     setSettings(settingsMap);
     setToggles(t || []);
     setShipping(sh || []);
+    setHandyProvider(normalizeHandyProvider(handy || undefined));
+    setHandySecretInput('');
     setLoading(false);
   }
 
@@ -336,6 +405,55 @@ export default function AdminSettings() {
   async function toggleModule(id: string, current: boolean) {
     await supabase.from('feature_toggles').update({ is_enabled: !current, updated_at: new Date().toISOString() }).eq('id', id);
     setToggles(prev => prev.map(t => t.id === id ? { ...t, is_enabled: !current } : t));
+  }
+
+  async function saveHandyProvider(nextProvider?: HandyProviderRecord) {
+    const providerToSave = nextProvider || handyProvider;
+    const merchantSecretKey = handySecretInput.trim() || providerToSave.config.merchant_secret_key || '';
+    const payload = {
+      provider_key: 'handy',
+      name: providerToSave.name,
+      is_active: providerToSave.is_active,
+      environment: providerToSave.environment,
+      status: providerToSave.status,
+      config: {
+        ...providerToSave.config,
+        merchant_secret_key: merchantSecretKey,
+      },
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await supabase
+      .from('payment_providers')
+      .upsert(payload, { onConflict: 'provider_key' })
+      .select('*')
+      .single();
+
+    if (error) {
+      toast.error(error.message || 'No se pudo guardar Handy');
+      return;
+    }
+
+    setHandyProvider(normalizeHandyProvider(data));
+    setHandySecretInput('');
+    toast.success('Configuracion de Handy guardada');
+  }
+
+  async function testHandyConnection() {
+    setTestingHandyConnection(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('handy-test-connection');
+      if (error) throw error;
+      if (data?.success) {
+        toast.success(data.message || 'Conexion Handy OK');
+      } else {
+        throw new Error(data?.error || data?.message || 'No se pudo validar Handy');
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Falló la prueba de Handy');
+    } finally {
+      setTestingHandyConnection(false);
+    }
   }
 
   if (loading) return <div className="text-center py-12 text-gray-400 animate-pulse">Cargando configuración...</div>;
@@ -708,6 +826,243 @@ export default function AdminSettings() {
                        }}>
                           {settings['payments_paypal_sandbox'] === 'true' ? <ToggleRight className="w-8 h-8 text-orange-500" /> : <ToggleLeft className="w-8 h-8 text-gray-300" />}
                        </button>
+                    </div>
+                 </div>
+              </div>
+
+              <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                 <div className="flex items-center justify-between border-b pb-4 mb-6">
+                    <div className="flex items-center gap-3">
+                       <div className="p-2 bg-emerald-50 rounded-lg">
+                          <CreditCard className="w-5 h-5 text-emerald-600" />
+                       </div>
+                       <div>
+                          <h3 className="font-black text-dark-900">Handy Boton de Pago</h3>
+                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">Redirect Checkout</p>
+                       </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const nextProvider: HandyProviderRecord = {
+                          ...handyProvider,
+                          is_active: !handyProvider.is_active,
+                          status: !handyProvider.is_active ? 'active' : 'inactive',
+                        };
+                        setHandyProvider(nextProvider);
+                        saveHandyProvider(nextProvider);
+                      }}
+                    >
+                      {handyProvider.is_active
+                        ? <ToggleRight className="w-10 h-10 text-emerald-600" />
+                        : <ToggleLeft className="w-10 h-10 text-gray-300" />}
+                    </button>
+                 </div>
+
+                 <div className="space-y-5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="rounded-xl border border-gray-200 p-4 bg-gray-50">
+                        <p className="text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">1. Estado del metodo</p>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-bold text-gray-900">{handyProvider.is_active ? 'Activo' : 'Inactivo'}</div>
+                            <div className="text-xs text-gray-500">{handyProvider.is_active ? 'Visible en checkout' : 'Oculto en checkout'}</div>
+                          </div>
+                          <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-md ${handyProvider.status === 'active' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}>
+                            {handyProvider.status}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-amber-200 p-4 bg-amber-50">
+                        <p className="text-[11px] font-black text-amber-700 uppercase tracking-widest mb-1.5">Advertencias</p>
+                        <p className="text-xs text-amber-800">La clave <span className="font-mono">merchant-secret-key</span> nunca debe exponerse en frontend.</p>
+                        <p className="text-xs text-amber-800 mt-2">Testing usa <span className="font-mono">api.payments.arriba.uy</span>. Produccion usa <span className="font-mono">api.payments.handy.uy</span>.</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">2. Merchant Secret Key</label>
+                        <input
+                          type="password"
+                          className="form-input w-full font-mono text-xs"
+                          value={handySecretInput}
+                          onChange={e => setHandySecretInput(e.target.value)}
+                          placeholder={handyProvider.config.merchant_secret_key ? maskSecret(handyProvider.config.merchant_secret_key) : 'Ingresa la merchant-secret-key'}
+                        />
+                        <p className="text-[10px] text-gray-400 mt-1">
+                          {handyProvider.config.merchant_secret_key
+                            ? `Clave almacenada: ${maskSecret(handyProvider.config.merchant_secret_key)}`
+                            : 'Aun no hay una clave guardada.'}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Texto visible en checkout</label>
+                        <input
+                          className="form-input w-full"
+                          value={handyProvider.config.checkout_text}
+                          onChange={e => setHandyProvider({
+                            ...handyProvider,
+                            config: { ...handyProvider.config, checkout_text: e.target.value },
+                          })}
+                          placeholder="Pagar con Handy"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">3. Ambiente</label>
+                        <select
+                          className="form-input w-full"
+                          value={handyProvider.environment}
+                          onChange={e => setHandyProvider({
+                            ...handyProvider,
+                            environment: e.target.value === 'production' ? 'production' : 'testing',
+                          })}
+                        >
+                          <option value="testing">Testing</option>
+                          <option value="production">Production</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Moneda por defecto</label>
+                        <select
+                          className="form-input w-full"
+                          value={String(handyProvider.config.currency)}
+                          onChange={e => setHandyProvider({
+                            ...handyProvider,
+                            config: { ...handyProvider.config, currency: Number(e.target.value) },
+                          })}
+                        >
+                          <option value="858">UYU 858</option>
+                          <option value="840">USD 840</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">4. Nombre del comercio</label>
+                        <input
+                          className="form-input w-full"
+                          value={handyProvider.config.commerce_name}
+                          onChange={e => setHandyProvider({
+                            ...handyProvider,
+                            config: { ...handyProvider.config, commerce_name: e.target.value },
+                          })}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">URL del sitio</label>
+                        <input
+                          className="form-input w-full"
+                          value={handyProvider.config.site_url}
+                          onChange={e => setHandyProvider({
+                            ...handyProvider,
+                            config: { ...handyProvider.config, site_url: e.target.value },
+                          })}
+                          placeholder="https://collectibles.com.uy"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">ResponseType</label>
+                        <select
+                          className="form-input w-full"
+                          value={handyProvider.config.response_type}
+                          onChange={e => setHandyProvider({
+                            ...handyProvider,
+                            config: { ...handyProvider.config, response_type: e.target.value },
+                          })}
+                        >
+                          <option value="Json">Json</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Imagen por defecto</label>
+                        <input
+                          className="form-input w-full"
+                          value={handyProvider.config.default_image_url}
+                          onChange={e => setHandyProvider({
+                            ...handyProvider,
+                            config: { ...handyProvider.config, default_image_url: e.target.value },
+                          })}
+                          placeholder="https://..."
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">5. Callback / Webhook URL</label>
+                        <input
+                          className="form-input w-full font-mono text-xs"
+                          value={handyProvider.config.callback_url}
+                          onChange={e => setHandyProvider({
+                            ...handyProvider,
+                            config: { ...handyProvider.config, callback_url: e.target.value },
+                          })}
+                          placeholder="https://TU-PROYECTO.supabase.co/functions/v1/handy-webhook"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Testing Base URL</label>
+                          <input
+                            className="form-input w-full font-mono text-xs"
+                            value={handyProvider.config.testing_base_url}
+                            onChange={e => setHandyProvider({
+                              ...handyProvider,
+                              config: { ...handyProvider.config, testing_base_url: e.target.value },
+                            })}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Production Base URL</label>
+                          <input
+                            className="form-input w-full font-mono text-xs"
+                            value={handyProvider.config.production_base_url}
+                            onChange={e => setHandyProvider({
+                              ...handyProvider,
+                              config: { ...handyProvider.config, production_base_url: e.target.value },
+                            })}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-gray-200 p-4 bg-gray-50">
+                      <p className="text-[11px] font-black text-gray-500 uppercase tracking-widest mb-3">6. Prueba de conexion</p>
+                      <p className="text-xs text-gray-500 mb-4">La prueba llama a <span className="font-mono">POST /payments</span> con payload vacio para validar conectividad y autenticacion basica sin exponer secretos al frontend.</p>
+                      <div className="flex flex-wrap gap-3">
+                        <button onClick={() => saveHandyProvider()} className="btn-primary flex items-center gap-2">
+                          <Save className="w-4 h-4" /> Guardar configuracion
+                        </button>
+                        <button
+                          onClick={testHandyConnection}
+                          disabled={testingHandyConnection}
+                          className="btn-secondary flex items-center gap-2"
+                        >
+                          <ShieldCheck className="w-4 h-4" /> {testingHandyConnection ? 'Probando...' : 'Probar conexion'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            const nextProvider: HandyProviderRecord = {
+                              ...handyProvider,
+                              is_active: !handyProvider.is_active,
+                              status: !handyProvider.is_active ? 'active' : 'inactive',
+                            };
+                            setHandyProvider(nextProvider);
+                            saveHandyProvider(nextProvider);
+                          }}
+                          className="btn-secondary flex items-center gap-2"
+                        >
+                          {handyProvider.is_active ? <ToggleLeft className="w-4 h-4" /> : <ToggleRight className="w-4 h-4" />}
+                          {handyProvider.is_active ? 'Desactivar' : 'Activar'}
+                        </button>
+                      </div>
                     </div>
                  </div>
               </div>

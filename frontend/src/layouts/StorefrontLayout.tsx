@@ -90,6 +90,31 @@ export default function StorefrontLayout() {
   const { brands: allBrands } = useBrands();
   const { settings, loaded: settingsLoaded } = useSiteSettings();
 
+  const getSocialUrl = (key: string, value: string) => {
+    if (!value) return '#';
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      return value;
+    }
+    const prefixMap: Record<string, string> = {
+      instagram: 'instagram.com/',
+      facebook: 'facebook.com/',
+      tiktok: 'tiktok.com/@',
+      whatsapp: 'wa.me/',
+      youtube: 'youtube.com/c/',
+      x: 'x.com/'
+    };
+    return `https://${prefixMap[key] || ''}${value}`;
+  };
+
+  const activeSocials = useMemo(() => [
+    { key: 'instagram', Icon: InstagramIcon },
+    { key: 'facebook', Icon: FacebookIcon },
+    { key: 'tiktok', Icon: TiktokIcon },
+    { key: 'whatsapp', Icon: WhatsappIcon },
+    { key: 'youtube', Icon: YoutubeIcon },
+    { key: 'x', Icon: TwitterIcon }
+  ].filter(social => settings[`social_${social.key}_enabled`] === 'true'), [settings]);
+
   // Dynamic nav links — re-computed when language changes
   const NAV_LINKS = useMemo(() => [
     { name: t('nav.home'), href: '/' },
@@ -438,13 +463,27 @@ export default function StorefrontLayout() {
                  </div>
               </nav>
 
-              <div className="mt-auto pt-8 border-t border-white/10">
-                 <div className="flex items-center gap-4">
-                    <button className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white"><InstagramIcon /></button>
-                    <button className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white"><FacebookIcon /></button>
-                    <button className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white"><YoutubeIcon /></button>
-                 </div>
-              </div>
+              {activeSocials.length > 0 && (
+                <div className="mt-auto pt-8 border-t border-white/10">
+                   <div className="flex items-center gap-4">
+                      {activeSocials.map(social => {
+                        const Icon = social.Icon;
+                        const url = getSocialUrl(social.key, settings[`social_${social.key}_url`] || '');
+                        return (
+                          <a 
+                            key={social.key} 
+                            href={url} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white hover:bg-[#f00856] transition-all"
+                          >
+                            <Icon />
+                          </a>
+                        );
+                      })}
+                   </div>
+                </div>
+              )}
            </div>
         </div>
       )}
@@ -467,13 +506,25 @@ export default function StorefrontLayout() {
              <p className="text-slate-400 font-medium leading-relaxed max-w-sm">
                Figuras que cuentan historias. Tu tienda premium de coleccionables, figuras y productos oficiales.
              </p>
-             <div className="flex items-center gap-3">
-                {[InstagramIcon, FacebookIcon, YoutubeIcon, TiktokIcon].map((Icon, i) => (
-                  <button key={i} className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-[#f00856] hover:border-[#f00856] transition-all hover:-translate-y-1 text-white">
-                    <Icon />
-                  </button>
-                ))}
-             </div>
+             {activeSocials.length > 0 && (
+               <div className="flex items-center gap-3">
+                  {activeSocials.map(social => {
+                    const Icon = social.Icon;
+                    const url = getSocialUrl(social.key, settings[`social_${social.key}_url`] || '');
+                    return (
+                      <a 
+                        key={social.key} 
+                        href={url} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-[#f00856] hover:border-[#f00856] transition-all hover:-translate-y-1 text-white"
+                      >
+                        <Icon />
+                      </a>
+                    );
+                  })}
+               </div>
+             )}
           </div>
 
           {/* NAVEGACIÓN */}

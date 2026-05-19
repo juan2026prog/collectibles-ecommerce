@@ -1,13 +1,14 @@
 import { Link } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronRight, Truck, Store, Tag, Sparkles, X, Home, Ticket, Share2 } from 'lucide-react';
 import { useCartContext } from '../contexts/CartContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { useSiteSettings } from '../hooks/useSiteSettings';
 import { analytics } from '../lib/analytics';
 import AddressAutocomplete from '../components/AddressAutocomplete';
-import { createCheckoutOrder, startCheckoutPayment } from '../lib/payments';
+import { createCheckoutOrder, getPublicPaymentProviders, startCheckoutPayment, type PublicPaymentProvider } from '../lib/payments';
 import { URUGUAY_LOCATIONS, DEPARTAMENTOS, calculateShipping } from '../utils/uruguayLocations';
 
 const CARD_COLORS: Record<string, { bg: string; text: string }> = {
@@ -45,18 +46,22 @@ interface BankPromo {
 
 export default function Checkout() {
   const { items, total } = useCartContext();
+  const { settings, loaded: settingsLoaded } = useSiteSettings();
   const { formatCurrencyPrice, selectedCurrency } = useCurrency();
   const { user } = useAuth();
-  const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [checkoutError, setCheckoutError] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'mercadopago' | 'dlocalgo' | 'paypal'>('mercadopago');
+  const [paymentMethod, setPaymentMethod] = useState<'mercadopago' | 'dlocalgo' | 'paypal' | 'handy'>('mercadopago');
   const [shippingMethod, setShippingMethod] = useState<'delivery' | 'pickup'>('delivery');
+  const [publicPaymentProviders, setPublicPaymentProviders] = useState<PublicPaymentProvider[]>([]);
   const [bankPromos, setBankPromos] = useState<BankPromo[]>([]);
   const [selectedPromo, setSelectedPromo] = useState<BankPromo | null>(null);
   const [couponCode, setCouponCode] = useState('');
   const [affiliateCode, setAffiliateCode] = useState('');
   const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<number>(-1);
+  const [showPaymentMethodsModal, setShowPaymentMethodsModal] = useState(false);
+  const submitLockRef = useRef(false);
   const [form, setForm] = useState({
     email: user?.email || '',
     first_name: '',
@@ -138,6 +143,50 @@ export default function Checkout() {
   }, []);
 
   useEffect(() => {
+    async function fetchPaymentProviders() {
+      try {
+        const providers = await getPublicPaymentProviders();
+        console.log("payment providers:", providers);
+        setPublicPaymentProviders(providers);
+      } catch (error) {
+        console.error('No se pudieron cargar los medios de pago publicos', error);
+      }
+    }
+
+    fetchPaymentProviders();
+  }, []);
+
+  const mercadopagoEnabled = settings['payments_mercadopago_enabled'] !== 'false';
+  const dlocalgoEnabled = settings['payments_dlocal_go_enabled'] !== 'false';
+  const paypalEnabled = settings['payments_paypal_enabled'] !== 'false';
+  const handyProvider = publicPaymentProviders.find((provider) => provider.provider_key === 'handy');
+  const handyEnabled = !!handyProvider?.is_active;
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+
+    // Check if the current paymentMethod is still active
+    const isCurrentActive =
+      (paymentMethod === 'mercadopago' && mercadopagoEnabled) ||
+      (paymentMethod === 'dlocalgo' && dlocalgoEnabled) ||
+      (paymentMethod === 'paypal' && paypalEnabled) ||
+      (paymentMethod === 'handy' && handyEnabled);
+
+    if (!isCurrentActive) {
+      // Find the first active payment method
+      if (mercadopagoEnabled) {
+        setPaymentMethod('mercadopago');
+      } else if (dlocalgoEnabled) {
+        setPaymentMethod('dlocalgo');
+      } else if (paypalEnabled) {
+        setPaymentMethod('paypal');
+      } else if (handyEnabled) {
+        setPaymentMethod('handy');
+      }
+    }
+  }, [settingsLoaded, mercadopagoEnabled, dlocalgoEnabled, paypalEnabled, handyEnabled, paymentMethod]);
+
+  useEffect(() => {
     if (!items.length) return;
     analytics.track({
       eventName: 'InitiateCheckout',
@@ -151,9 +200,40 @@ export default function Checkout() {
     });
   }, [items, total, user?.email]);
 
+  async function processPaymentFlow(orderId: string, provider: string, email: string) {
+    console.log("create-order processPaymentFlow started:", orderId, provider, email);
+
+    try {
+      const paymentResult = await startCheckoutPayment({
+        provider: provider as any,
+        order_id: orderId,
+        customer_email: email,
+      });
+
+      console.log("create-order paymentResult:", paymentResult);
+
+      if (paymentResult?.redirectUrl) {
+        console.log("create-order redirecting to:", paymentResult.redirectUrl);
+        window.location.href = paymentResult.redirectUrl;
+        return;
+      }
+
+      throw new Error("El proveedor no devolvió URL de redirección");
+    } catch (err: any) {
+      console.error("create-order processPaymentFlow error:", err);
+      setCheckoutError("Error en el pago: " + (err.message || String(err)));
+      setIsSubmitting(false);
+      submitLockRef.current = false;
+    }
+  }
+
   async function handlePlaceOrder(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
+    if (submitLockRef.current || isSubmitting) return;
+
+    submitLockRef.current = true;
+    setIsSubmitting(true);
+    setCheckoutError('');
 
     try {
       const order = await createCheckoutOrder({
@@ -184,30 +264,30 @@ export default function Checkout() {
         bank_promo: selectedPromo ? { promo_id: selectedPromo.id } : undefined,
       });
 
-      analytics.track({
-        eventName: 'InitiateCheckout',
-        eventData: {
-          content_ids: items.map((item) => item.product_id),
-          value: order.total_amount || grandTotal,
-          currency: 'UYU',
-        },
-        user: { email: form.email || undefined, phone: form.phone || undefined },
-      });
+      console.log("create-order success:", order);
 
-      const providerMap: Record<typeof paymentMethod, 'dlocal' | 'paypal' | 'mercadopago'> = {
-        dlocalgo: 'dlocal',
-        paypal: 'paypal',
-        mercadopago: 'mercadopago',
-      };
+      const orderId = order?.id;
+      const epm = String(order?.payment_method || paymentMethod || "").toLowerCase().trim();
+      const email = form.email;
 
-      await startCheckoutPayment({
-        provider: providerMap[paymentMethod],
-        order_id: order.id,
-        customer_email: form.email,
-      });
+      console.log("create-order launching payment flow:", orderId, epm, email);
+
+      if (!orderId) {
+        throw new Error("La orden no devolvió ID");
+      }
+
+      if (!epm) {
+        throw new Error("La orden no devolvió método de pago");
+      }
+
+      await processPaymentFlow(orderId, epm, email);
+
+      console.log("create-order processPaymentFlow returned without redirect");
     } catch (err: any) {
-      setCheckoutError(`Error procesando el pedido: ${err.message}`);
-      setLoading(false);
+      console.error("create-order handlePlaceOrder error:", err);
+      setCheckoutError("Error creando la orden: " + (err.message || String(err)));
+      setIsSubmitting(false);
+      submitLockRef.current = false;
     }
   }
 
@@ -415,25 +495,66 @@ export default function Checkout() {
             <div className="glass p-6">
               <h2 className="font-bold text-lg mb-4">Método de pago</h2>
               <div className="space-y-3">
-                <label className={`flex items-center gap-4 p-4  border-2 cursor-pointer transition-all ${paymentMethod === 'mercadopago' ? 'border-blue-500 bg-blue-50/50 shadow-sm' : 'border-white/10 hover:border-white/10'}`}>
-                  <input type="radio" name="payment" value="mercadopago" checked={paymentMethod === 'mercadopago'} onChange={() => setPaymentMethod('mercadopago')} className="text-primary-600 shrink-0" />
-                  <img src="/logos/Mercado_Pago.png" alt="Mercado Pago" className="h-6 object-contain" />
-                </label>
-                <label className={`flex items-center gap-4 p-4  border-2 cursor-pointer transition-all ${paymentMethod === 'dlocalgo' ? 'border-blue-500 bg-blue-50/50 shadow-sm' : 'border-white/10 hover:border-white/10'}`}>
-                  <input type="radio" name="payment" value="dlocalgo" checked={paymentMethod === 'dlocalgo'} onChange={() => setPaymentMethod('dlocalgo')} className="text-primary-600 shrink-0" />
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <img src="/logos/visa-mastercard.jpg" alt="Visa / Mastercard" className="h-6 object-contain rounded" />
-                    <img src="/logos/OCA_LOGO.png" alt="OCA" className="h-6 object-contain" />
-                    <img src="/logos/DINERS.png" alt="Diners Club" className="h-6 object-contain" />
-                    <img src="/logos/lider.png" alt="Lider" className="h-6 object-contain" />
-                    <div className="w-px h-6 bg-gray-200 mx-1" />
-                    <img src="/logos/Red_Pagos_Logos.png" alt="RedPagos" className="h-6 object-contain" />
-                  </div>
-                </label>
-                <label className={`flex items-center gap-4 p-4  border-2 cursor-pointer transition-all ${paymentMethod === 'paypal' ? 'border-blue-500 bg-blue-50/50 shadow-sm' : 'border-white/10 hover:border-white/10'}`}>
-                  <input type="radio" name="payment" value="paypal" checked={paymentMethod === 'paypal'} onChange={() => setPaymentMethod('paypal')} className="text-primary-600 shrink-0" />
-                  <img src="/logos/paypal.png" alt="PayPal" className="h-6 object-contain" />
-                </label>
+                {mercadopagoEnabled && (
+                  <label className={`flex items-center gap-4 p-4  border-2 cursor-pointer transition-all ${paymentMethod === 'mercadopago' ? 'border-blue-500 bg-blue-50/50 shadow-sm' : 'border-white/10 hover:border-white/10'}`}>
+                    <input type="radio" name="payment" value="mercadopago" checked={paymentMethod === 'mercadopago'} onChange={() => setPaymentMethod('mercadopago')} className="text-primary-600 shrink-0" />
+                    <img src="/logos/Mercado_Pago.png" alt="Mercado Pago" className="h-6 object-contain" />
+                  </label>
+                )}
+                {dlocalgoEnabled && (
+                  <label className={`flex items-center gap-4 p-4  border-2 cursor-pointer transition-all ${paymentMethod === 'dlocalgo' ? 'border-blue-500 bg-blue-50/50 shadow-sm' : 'border-white/10 hover:border-white/10'}`}>
+                    <input type="radio" name="payment" value="dlocalgo" checked={paymentMethod === 'dlocalgo'} onChange={() => setPaymentMethod('dlocalgo')} className="text-primary-600 shrink-0" />
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <img src="/logos/visa-mastercard.png" alt="Visa / Mastercard" className="h-6 object-contain rounded" />
+                      <img src="/logos/OCA_LOGO.png" alt="OCA" className="h-6 object-contain" />
+                      <img src="/logos/DINERS.png" alt="Diners Club" className="h-6 object-contain" />
+                      <img src="/logos/lider.png" alt="Lider" className="h-6 object-contain" />
+                      <div className="w-px h-6 bg-gray-200 mx-1" />
+                      <img src="/logos/Red_Pagos_Logos.png" alt="RedPagos" className="h-6 object-contain" />
+                    </div>
+                  </label>
+                )}
+                {paypalEnabled && (
+                  <label className={`flex items-center gap-4 p-4  border-2 cursor-pointer transition-all ${paymentMethod === 'paypal' ? 'border-blue-500 bg-blue-50/50 shadow-sm' : 'border-white/10 hover:border-white/10'}`}>
+                    <input type="radio" name="payment" value="paypal" checked={paymentMethod === 'paypal'} onChange={() => setPaymentMethod('paypal')} className="text-primary-600 shrink-0" />
+                    <img src="/logos/paypal.png" alt="PayPal" className="h-6 object-contain" />
+                  </label>
+                )}
+                {handyEnabled && (
+                  <label className={`flex items-center gap-4 p-4 border-2 cursor-pointer transition-all ${paymentMethod === 'handy' ? 'border-emerald-500 bg-emerald-50/50 shadow-sm' : 'border-white/10 hover:border-white/10'}`}>
+                    <input type="radio" name="payment" value="handy" checked={paymentMethod === 'handy'} onChange={() => setPaymentMethod('handy')} className="text-primary-600 shrink-0" />
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between flex-wrap gap-4">
+                        <div>
+                          <div className="font-bold text-white">Tarjetas y redes de cobranza</div>
+                          <div className="text-xs text-slate-400 mt-0.5">
+                            Botón de pago externo ({handyProvider?.environment === 'production' ? 'Producción' : 'Pruebas'})
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <img src="/logos/visa-mastercard.png" alt="Visa / Mastercard" className="h-6 object-contain rounded" />
+                            <img src="/logos/OCA_LOGO.png" alt="OCA" className="h-6 object-contain" />
+                            <img src="/logos/lider.png" alt="Lider" className="h-6 object-contain" />
+                            <div className="w-px h-6 bg-white/20 mx-1" />
+                            <img src="/logos/Red_Pagos_Logos.png" alt="RedPagos" className="h-6 object-contain" />
+                          </div>
+                          <button
+                            type="button"
+                            className="text-[11px] text-primary-400 hover:text-primary-300 hover:underline font-medium mt-1 bg-transparent border-none p-0 cursor-pointer outline-none"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setShowPaymentMethodsModal(true);
+                            }}
+                          >
+                            Ver más medios de pago
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </label>
+                )}
               </div>
             </div>
 
@@ -545,13 +666,38 @@ export default function Checkout() {
                   </div>
                 </div>
               </div>
-              <button type="submit" disabled={loading} className="btn-primary w-full mt-6 py-3.5 text-base">
-                {loading ? 'Procesando...' : 'Finalizar compra'}
+              <button type="submit" disabled={isSubmitting} className="btn-primary w-full mt-6 py-3.5 text-base">
+                {isSubmitting ? 'Procesando...' : 'Finalizar compra'}
               </button>
             </div>
           </div>
         </div>
       </form>
+
+      {showPaymentMethodsModal && (
+        <div 
+          className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-6" 
+          onClick={() => setShowPaymentMethodsModal(false)}
+        >
+          <div 
+            className="relative max-w-md w-full max-h-[80vh] bg-transparent rounded-xl flex items-center justify-center" 
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="absolute top-3 right-3 text-white/90 hover:text-white bg-black/60 hover:bg-black/80 p-2 rounded-full transition-colors z-20 shadow-lg animate-pulse-subtle"
+              onClick={() => setShowPaymentMethodsModal(false)}
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <img
+              src="/logos/Tarjetas.jpg"
+              alt="Medios de pago aceptados"
+              className="max-w-full max-h-[75vh] object-contain rounded-xl shadow-2xl"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

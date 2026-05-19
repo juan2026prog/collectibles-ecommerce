@@ -362,56 +362,7 @@ export default function Home() {
         </div>
       ))}
 
-      {/* ━━━ FOOTER HOME ━━━ */}
-      <footer className="border-t border-white/10 bg-black/40 pt-20 pb-10">
-        <div className="max-w-[1500px] mx-auto px-6 grid md:grid-cols-2 lg:grid-cols-5 gap-10 lg:gap-8">
-          <div className="lg:col-span-2 space-y-5">
-            <Link to="/"><img src="/logo-horizontal.png" alt="Collectibles" className="h-10 object-contain" /></Link>
-            <p className="text-slate-400 font-medium leading-relaxed max-w-sm text-sm">
-              Tienda uruguaya especializada en figuras, juguetes, álbumes, accesorios y coleccionables seleccionados.
-            </p>
-          </div>
-          <div>
-            <h4 className="text-white font-black uppercase text-[11px] tracking-[0.2em] mb-5">Categorías</h4>
-            <ul className="space-y-2.5">
-              {categories.slice(0, 6).map(c => (
-                <li key={c.id}><Link to={`/shop?category=${c.slug}`} className="text-slate-400 font-bold hover:text-[#f00856] transition-colors text-sm">{c.name}</Link></li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <h4 className="text-white font-black uppercase text-[11px] tracking-[0.2em] mb-5">Ayuda</h4>
-            <ul className="space-y-2.5">
-              {[
-                { label: 'Condiciones de Compra', href: '/page/condiciones-de-compra' },
-                { label: 'Políticas de Privacidad', href: '/page/pol-ticas-de-privacidad' },
-                { label: 'Envios/Devoluciones', href: '/page/envios-devoluciones' },
-                { label: 'Términos y condiciones', href: '/page/terminos' },
-              ].map(link => (
-                <li key={link.label}>
-                  <Link to={link.href} className="text-slate-400 font-bold hover:text-[#f00856] transition-colors text-sm">{link.label}</Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <h4 className="text-white font-black uppercase text-[11px] tracking-[0.2em] mb-5">Contacto</h4>
-            <div className="space-y-3 text-sm font-bold text-slate-400">
-              <p>Vázquez 1418, Montevideo</p>
-              <p>soporte@collectibles.com.uy</p>
-              <p>Lun–Vie 12:00–19:00</p>
-            </div>
-            <div className="mt-5 pt-5 border-t border-white/5 flex items-center gap-5 text-[10px] font-bold text-slate-600 uppercase tracking-wider">
-              <Link to="/page/terminos" className="hover:text-slate-400">Términos</Link>
-              <Link to="/page/pol-ticas-de-privacidad" className="hover:text-slate-400">Privacidad</Link>
-              <Link to="/page/condiciones-de-compra" className="hover:text-slate-400">Condiciones</Link>
-            </div>
-          </div>
-        </div>
-        <div className="max-w-[1500px] mx-auto px-6 mt-12 pt-6 border-t border-white/5 text-center">
-          <div className="text-xs font-bold text-slate-600">© 2026 Collectibles Uruguay. Todos los derechos reservados.</div>
-        </div>
-      </footer>
+
 
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes marquee {

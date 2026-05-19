@@ -9,15 +9,15 @@ const ALLOWED_ORIGINS = [
 
 export function getCorsOrigin(req: Request): string {
   const origin = req.headers.get('origin') || '';
-  // Allow the origin if it's in our whitelist, otherwise default to the production URL
-  if (ALLOWED_ORIGINS.includes(origin)) {
+  // Allow the origin if it's in our whitelist, or if it's a Vercel preview URL
+  if (ALLOWED_ORIGINS.includes(origin) || origin.endsWith('.vercel.app')) {
     return origin;
   }
   return ALLOWED_ORIGINS[0]; // Default to production
 }
 
 export const corsHeaders = {
-  'Access-Control-Allow-Origin': '*', // Overridden per-request by getCorsOrigin()
+  'Access-Control-Allow-Origin': ALLOWED_ORIGINS[0], // Default to production domain — use getCorsHeaders(req) for dynamic per-request origin
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 

@@ -24,7 +24,7 @@ export default function CheckoutSuccess() {
   const [error, setError] = useState('');
 
   const orderNumber = orderId ? orderId.slice(0, 8).toUpperCase() : '---';
-  const isPending = statusParam === 'pending' || order?.status === 'pending';
+  const isPending = statusParam === 'pending' || order?.status === 'pending' || order?.payment_status === 'pending_payment' || order?.payment_status === 'redirected';
 
   const shouldTrackPurchase = useMemo(() => {
     if (!orderId || order?.status !== 'paid') return false;
@@ -129,13 +129,19 @@ export default function CheckoutSuccess() {
               <div className="flex items-center justify-between py-2 border-t border-white/10">
                 <span className="text-sm text-slate-400">Metodo</span>
                 <span className="text-sm font-semibold text-gray-700 capitalize">
-                  {order.payment_method === 'dlocalgo' || order.payment_method === 'dlocal' ? 'Tarjeta / dLocal Go' : order.payment_method === 'mercadopago' ? 'Mercado Pago' : 'PayPal'}
+                  {order.payment_method === 'dlocalgo' || order.payment_method === 'dlocal'
+                    ? 'Tarjeta / dLocal Go'
+                    : order.payment_method === 'mercadopago'
+                      ? 'Mercado Pago'
+                      : order.payment_method === 'handy'
+                        ? 'Handy Boton de Pago'
+                        : 'PayPal'}
                 </span>
               </div>
               <div className="flex items-center justify-between py-2 border-t border-white/10">
                 <span className="text-sm text-slate-400">Estado</span>
-                <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest  ${order.status === 'paid' ? 'bg-green-100 text-green-700 border border-green-200' : order.status === 'pending' ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-white/10 text-slate-400 border border-white/10'}`}>
-                  {order.status === 'paid' ? 'Confirmada' : order.status === 'pending' ? 'Pendiente' : order.status}
+                <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest  ${order.status === 'paid' ? 'bg-green-100 text-green-700 border border-green-200' : isPending ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-white/10 text-slate-400 border border-white/10'}`}>
+                  {order.status === 'paid' ? 'Confirmada' : isPending ? 'Pendiente' : order.payment_status || order.status}
                 </span>
               </div>
             </>

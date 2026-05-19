@@ -18,7 +18,7 @@ Deno.serve(async (req) => {
   try {
     await verifyAdmin(req);
 
-    const { code } = await req.json();
+    const { code, redirect_uri } = await req.json();
 
     if (!code) {
       return new Response(
@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
       client_id: ML_CLIENT_ID,
       client_secret: ML_CLIENT_SECRET,
       code,
-      redirect_uri: ML_REDIRECT_URI,
+      redirect_uri: redirect_uri || ML_REDIRECT_URI,
     });
 
     const response = await fetch(tokenUrl, {
@@ -51,25 +51,26 @@ Deno.serve(async (req) => {
       );
     }
 
+    const expiresAt = new Date(Date.now() + (data.expires_in * 1000)).toISOString();
+    
+    // Clear old credentials
+    await supabase.from("ml_credentials").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+
+    await supabase.from("ml_credentials").insert({
+      access_token: data.access_token,
+      refresh_token: data.refresh_token || null,
+      expires_at: expiresAt,
+      updated_at: new Date().toISOString(),
+    });
+
     await supabase.from("site_settings").upsert(
       {
-        key: "mercadolibre_access_token",
-        value: data.access_token,
+        key: "ml_connection_status",
+        value: "true",
         updated_at: new Date().toISOString(),
       },
       { onConflict: "key" }
     );
-
-    if (data.refresh_token) {
-      await supabase.from("site_settings").upsert(
-        {
-          key: "mercadolibre_refresh_token",
-          value: data.refresh_token,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "key" }
-      );
-    }
 
     return new Response(
       JSON.stringify({
