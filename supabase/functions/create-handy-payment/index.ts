@@ -177,7 +177,7 @@ Deno.serve(async (req: Request) => {
         CommerceName: handy.commerceName,
         SiteUrl: handy.siteUrl.trim() || undefined,
       },
-      CallbackUrl: handy.callbackUrl,
+      CallbackURL: handy.callbackUrl,
       ResponseType: handy.responseType,
       Customer: {
         Name: getCustomerName(order),
