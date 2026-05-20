@@ -630,6 +630,15 @@ export default function Checkout() {
 
                     {(savedAddresses.length === 0 || selectedAddress === -2) && (
                       <>
+                        <div>
+                          <label className="form-label">Dirección (calle y número) *</label>
+                          <AddressAutocomplete
+                            value={form.street}
+                            onChange={value => setForm({ ...form, street: value })}
+                            onSelect={handleAddressSelect}
+                          />
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label className="form-label">Departamento *</label>
@@ -697,15 +706,6 @@ export default function Checkout() {
                               />
                             )}
                           </div>
-                        </div>
-
-                        <div>
-                          <label className="form-label">Dirección (calle y número) *</label>
-                          <AddressAutocomplete
-                            value={form.street}
-                            onChange={value => setForm({ ...form, street: value })}
-                            onSelect={handleAddressSelect}
-                          />
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
@@ -949,12 +949,12 @@ export default function Checkout() {
                 {shippingMethod === 'delivery' && logistics.providerName && (
                   <div className="border-t border-white/5 pt-3 mt-3 space-y-1">
                     <div className="flex justify-between text-xs">
-                      <span className="text-slate-400">Logística Interna</span>
+                      <span className="text-slate-400">Logística por</span>
                       <span className="font-semibold text-slate-200">{logistics.providerName}</span>
                     </div>
-                    <div className="flex items-start gap-1.5 text-xs text-primary-400 mt-1">
-                      <Clock className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                      <span>{logistics.message}</span>
+                    <div className="flex items-start gap-1.5 text-xs mt-1">
+                      <Clock className="w-3.5 h-3.5 mt-0.5 shrink-0 text-green-500" />
+                      <span className="font-bold text-green-500">{logistics.message}</span>
                     </div>
                   </div>
                 )}
