@@ -946,7 +946,7 @@ export default function Checkout() {
                     <span className="font-bold text-green-600">-{formatCurrencyPrice(bankDiscount)}</span>
                   </div>
                 )}
-                {shippingMethod === 'delivery' && logistics.providerName && (
+                {shippingMethod === 'delivery' && form.department && logistics.providerName && (
                   <div className="border-t border-white/5 pt-3 mt-3 space-y-1">
                     <div className="flex justify-between text-xs">
                       <span className="text-slate-400">Logística por</span>
