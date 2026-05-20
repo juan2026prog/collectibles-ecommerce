@@ -128,15 +128,72 @@ export default function StorefrontLayout() {
     ];
   }, [settings]);
 
-  // Dynamic nav links — re-computed when language changes
-  const NAV_LINKS = useMemo(() => [
-    { name: t('nav.home'), href: '/' },
-    { name: t('nav.categories'), href: '/shop', hasMega: true, megaType: 'categories' },
-    { name: t('nav.brands'), href: '/shop', hasMega: true, megaType: 'brands' },
-    { name: t('nav.about'), href: '/about' },
-    { name: t('nav.contact'), href: '/contact' },
-    { name: t('nav.blog'), href: '/blog' },
-  ], [t]);
+  // Dynamic nav links — re-computed when language changes or settings update
+  const NAV_LINKS = useMemo(() => {
+    const customMenuStr = settings['appearance_menu_json'];
+    if (customMenuStr) {
+      try {
+        const parsed = JSON.parse(customMenuStr);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((item: any) => {
+            const hasMega = item.url === '/shop' || item.url.includes('/shop');
+            let megaType: 'categories' | 'brands' | undefined = undefined;
+            if (hasMega) {
+              if (item.label.toLowerCase().includes('marca') || item.url.includes('brand')) {
+                megaType = 'brands';
+              } else {
+                megaType = 'categories';
+              }
+            }
+            return {
+              name: item.label,
+              href: item.url,
+              hasMega: !!megaType,
+              megaType,
+              subItems: item.subItems || []
+            };
+          });
+        }
+      } catch (e) {
+        console.error('Error parsing appearance_menu_json:', e);
+      }
+    }
+
+    return [
+      { name: settings['header_menu_home'] || t('nav.home'), href: '/' },
+      { name: settings['header_menu_categories'] || t('nav.categories'), href: '/shop', hasMega: true, megaType: 'categories' },
+      { name: settings['header_menu_brands'] || t('nav.brands'), href: '/shop', hasMega: true, megaType: 'brands' },
+      { name: settings['header_menu_about'] || t('nav.about'), href: '/about' },
+      { name: settings['header_menu_contact'] || t('nav.contact'), href: '/contact' },
+      { name: settings['header_menu_blog'] || t('nav.blog'), href: '/blog' },
+    ];
+  }, [t, settings]);
+
+  const FOOTER_LINKS = useMemo(() => {
+    const customFooterStr = settings['appearance_footer_menu_json'];
+    if (customFooterStr) {
+      try {
+        const parsed = JSON.parse(customFooterStr);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((item: any) => ({
+            label: item.label,
+            href: item.url
+          }));
+        }
+      } catch (e) {
+        console.error('Error parsing appearance_footer_menu_json:', e);
+      }
+    }
+
+    return [
+      { label: 'Condiciones de Compra', href: '/page/condiciones-de-compra' },
+      { label: 'Políticas de Privacidad', href: '/page/pol-ticas-de-privacidad' },
+      { label: 'Envios/Devoluciones', href: '/page/envios-devoluciones' },
+      { label: 'Términos y condiciones', href: '/page/terminos' },
+    ];
+  }, [settings]);
+
+
 
   // Dynamic mega menu columns from DB categories (group by parent)
   // Top-level categories become columns, children become items
@@ -350,7 +407,7 @@ export default function StorefrontLayout() {
             {NAV_LINKS.map(link => (
               <div 
                 key={link.name}
-                className="relative h-full flex items-center"
+                className="relative h-full flex items-center group"
                 onMouseEnter={() => link.hasMega && setMegaMenuState(link.megaType as any)}
                 onMouseLeave={() => setMegaMenuState(null)}
               >
@@ -359,19 +416,38 @@ export default function StorefrontLayout() {
                   className={`hover:text-white transition-colors flex items-center gap-1.5 ${location.pathname === link.href ? 'text-white' : ''}`}
                 >
                   {link.name}
-                  {link.hasMega && <ChevronDown className="w-3.5 h-3.5 opacity-50" />}
+                  {(link.hasMega || (link.subItems && link.subItems.length > 0)) && <ChevronDown className="w-3.5 h-3.5 opacity-50" />}
                 </Link>
 
-                <DesktopMegaMenu 
-                   isVisible={megaMenuState === link.megaType && link.hasMega} 
-                   megaType={link.megaType as 'categories' | 'brands'} 
-                   menuColumns={MENU_COLUMNS} 
-                   allBrands={allBrands} 
-                   onClose={() => setMegaMenuState(null)} 
-                />
+                {link.hasMega ? (
+                  <DesktopMegaMenu 
+                     isVisible={megaMenuState === link.megaType && link.hasMega} 
+                     megaType={link.megaType as 'categories' | 'brands'} 
+                     menuColumns={MENU_COLUMNS} 
+                     allBrands={allBrands} 
+                     onClose={() => setMegaMenuState(null)} 
+                  />
+                ) : (
+                  link.subItems && link.subItems.length > 0 && (
+                    <div className="absolute top-full left-0 pt-4 w-48 hidden group-hover:block hover:block z-50">
+                      <div className="glass rounded-xl p-4 flex flex-col gap-2.5 shadow-xl border border-white/10">
+                        {link.subItems.map((sub: any) => (
+                          <Link 
+                            key={sub.label} 
+                            to={sub.url} 
+                            className="text-[10px] font-black text-slate-300 hover:text-white transition-colors tracking-wider"
+                          >
+                            {sub.label}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                )}
               </div>
             ))}
           </nav>
+
 
           {/* SEARCH BOX (DESKTOP) */}
           <div className="hidden lg:flex flex-1 max-w-sm relative">
@@ -468,14 +544,25 @@ export default function StorefrontLayout() {
               
               <nav className="flex flex-col gap-4 overflow-y-auto flex-1 no-scrollbar">
                  {NAV_LINKS.map(link => (
-                   <Link 
-                    key={link.name} 
-                    to={link.href} 
-                    className="text-2xl font-black text-white hover:text-[#f00856] transition-colors"
-                    onClick={() => setMobileMenuOpen(false)}
-                   >
-                    {link.name}
-                   </Link>
+                   <div key={link.name} className="flex flex-col gap-2">
+                     <Link 
+                      to={link.href} 
+                      className="text-2xl font-black text-white hover:text-[#f00856] transition-colors"
+                      onClick={() => setMobileMenuOpen(false)}
+                     >
+                      {link.name}
+                     </Link>
+                     {link.subItems && link.subItems.map((sub: any) => (
+                       <Link 
+                         key={sub.label} 
+                         to={sub.url} 
+                         className="pl-4 text-lg font-bold text-slate-400 hover:text-white transition-colors"
+                         onClick={() => setMobileMenuOpen(false)}
+                       >
+                         {sub.label}
+                       </Link>
+                     ))}
+                   </div>
                  ))}
                  <div className="mt-8 pt-8 border-t border-white/10">
                     <div className="text-[10px] text-[#f00856] font-black uppercase tracking-[0.2em] mb-4">Soporte y contacto</div>
@@ -573,12 +660,7 @@ export default function StorefrontLayout() {
           <div>
              <h4 className="text-white font-black uppercase text-[11px] tracking-[0.2em] mb-6">Ayuda</h4>
              <ul className="space-y-3">
-                {[
-                  { label: 'Condiciones de Compra', href: '/page/condiciones-de-compra' },
-                  { label: 'Políticas de Privacidad', href: '/page/pol-ticas-de-privacidad' },
-                  { label: 'Envios/Devoluciones', href: '/page/envios-devoluciones' },
-                  { label: 'Términos y condiciones', href: '/page/terminos' },
-                ].map(link => (
+                {FOOTER_LINKS.map(link => (
                   <li key={link.label}>
                     <Link to={link.href} className="text-slate-400 font-bold hover:text-[#f00856] transition-colors text-sm">{link.label}</Link>
                   </li>

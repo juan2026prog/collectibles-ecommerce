@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Save, ToggleLeft, ToggleRight, Settings, Store, Truck, Palette, LayoutTemplate, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, FileText, Share2, Link as LinkIcon, ImageIcon, CreditCard, ShieldCheck, Sparkles, Brain, Zap, Search as SearchIcon, Tag } from 'lucide-react';
+import { Save, ToggleLeft, ToggleRight, Settings, Store, Truck, Palette, LayoutTemplate, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, FileText, Share2, Link as LinkIcon, ImageIcon, CreditCard, ShieldCheck, Sparkles, Brain, Zap, Search as SearchIcon, Tag, Menu } from 'lucide-react';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
 import { useToast } from '../../components/admin/Toast';
 import { updateCachedSetting } from '../../hooks/useSiteSettings';
@@ -71,8 +71,33 @@ function maskSecret(secret?: string) {
 function MenuEditor({ title, description, initialJson, onSave }: any) {
   const [items, setItems] = useState<any[]>([]);
   useEffect(() => {
-    try { setItems(JSON.parse(initialJson || '[]')); } catch { setItems([]); }
-  }, [initialJson]);
+    try {
+      if (!initialJson) {
+        if (title.includes('Header') || title.toLowerCase().includes('header')) {
+          setItems([
+            { label: 'INICIO', url: '/', subItems: [] },
+            { label: 'CATEGORÍAS', url: '/shop', subItems: [] },
+            { label: 'MARCAS', url: '/shop', subItems: [] },
+            { label: 'NOSOTROS', url: '/about', subItems: [] },
+            { label: 'CONTACTO', url: '/contact', subItems: [] },
+            { label: 'BLOG', url: '/blog', subItems: [] }
+          ]);
+          return;
+        } else if (title.includes('Footer') || title.toLowerCase().includes('footer')) {
+          setItems([
+            { label: 'Condiciones de Compra', url: '/page/condiciones-de-compra', subItems: [] },
+            { label: 'Políticas de Privacidad', url: '/page/pol-ticas-de-privacidad', subItems: [] },
+            { label: 'Envios/Devoluciones', url: '/page/envios-devoluciones', subItems: [] },
+            { label: 'Términos y condiciones', url: '/page/terminos', subItems: [] }
+          ]);
+          return;
+        }
+      }
+      setItems(JSON.parse(initialJson || '[]'));
+    } catch {
+      setItems([]);
+    }
+  }, [initialJson, title]);
 
   const updateItem = (i: number, field: string, val: string) => {
     const n = [...items]; n[i][field] = val; setItems(n);
