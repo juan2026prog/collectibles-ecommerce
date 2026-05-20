@@ -115,6 +115,19 @@ export default function StorefrontLayout() {
     { key: 'x', Icon: TwitterIcon }
   ].filter(social => settings[`social_${social.key}_enabled`] === 'true'), [settings]);
 
+  const announcementItems = useMemo(() => {
+    const customText = settings['appearance_announcement_text'];
+    if (customText) {
+      return customText.split(/[•|;]/).map(t => t.trim()).filter(Boolean);
+    }
+    return [
+      '🚚 Envío gratis desde UYU $1.500',
+      '🛡️ Sellers oficiales verificados',
+      '🔁 Sincronización Mercado Libre',
+      '💎 Club Collector: Sumá puntos'
+    ];
+  }, [settings]);
+
   // Dynamic nav links — re-computed when language changes
   const NAV_LINKS = useMemo(() => [
     { name: t('nav.home'), href: '/' },
@@ -289,15 +302,23 @@ export default function StorefrontLayout() {
       )}
       {/* ═══ ANNOUNCEMENT BAR ═══ */}
       {announcementVisible && (
-        <div className="bg-[#f00856] text-white text-[10px] md:text-xs font-black uppercase tracking-[0.15em] h-10 flex items-center justify-center relative overflow-hidden">
-          <div className="max-w-7xl mx-auto px-6 flex items-center justify-center gap-8 animate-marquee-header whitespace-nowrap">
-            <span>🚚 Envío gratis desde UYU $1.500</span>
-            <span className="hidden md:inline text-white/40">•</span>
-            <span>🛡️ Sellers oficiales verificados</span>
-            <span className="hidden md:inline text-white/40">•</span>
-            <span>🔁 Sincronización Mercado Libre</span>
-            <span className="hidden md:inline text-white/40">•</span>
-            <span>💎 Club Collector: Sumá puntos</span>
+        <div 
+          className="text-white text-[10px] md:text-xs font-black uppercase tracking-[0.15em] h-10 flex items-center justify-center relative overflow-hidden"
+          style={{
+            backgroundColor: settings['appearance_announcement_bg'] || '#f00856',
+            color: settings['appearance_announcement_color'] || '#ffffff'
+          }}
+        >
+          <div 
+            className={`max-w-7xl mx-auto px-6 flex items-center justify-center gap-8 ${settings['appearance_announcement_marquee'] !== 'false' ? 'animate-marquee-header' : ''} whitespace-nowrap`}
+            style={settings['appearance_announcement_speed'] ? { animationDuration: `${settings['appearance_announcement_speed']}s` } : undefined}
+          >
+            {announcementItems.map((item, index) => (
+              <React.Fragment key={index}>
+                {index > 0 && <span className="hidden md:inline opacity-40">•</span>}
+                <span>{item}</span>
+              </React.Fragment>
+            ))}
           </div>
           <button 
             onClick={() => setAnnouncementVisible(false)}
@@ -525,6 +546,9 @@ export default function StorefrontLayout() {
                   })}
                </div>
              )}
+             <div className="text-xs font-bold text-slate-500 pt-4">
+               {settings['appearance_footer_text'] || '© 2026 Collectibles. Todos los derechos reservados.'}
+             </div>
           </div>
 
           {/* NAVEGACIÓN */}
@@ -584,17 +608,6 @@ export default function StorefrontLayout() {
                 <div className="text-xs text-slate-400 mt-1">Lun a Vie 12:00–19:00 | Sáb 10:00–14:00</div>
              </div>
           </div>
-        </div>
-
-        <div className="max-w-[1500px] mx-auto px-6 mt-16 pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
-           <div className="text-xs font-bold text-slate-500">
-             © 2026 Collectibles. Todos los derechos reservados.
-           </div>
-           <div className="flex items-center gap-6 text-[10px] font-bold text-slate-600 uppercase tracking-wider">
-              <Link to="/page/terminos" className="hover:text-slate-400 transition-colors">Términos</Link>
-              <Link to="/page/pol-ticas-de-privacidad" className="hover:text-slate-400 transition-colors">Privacidad</Link>
-              <Link to="/page/condiciones-de-compra" className="hover:text-slate-400 transition-colors">Condiciones</Link>
-           </div>
         </div>
       </footer>
 

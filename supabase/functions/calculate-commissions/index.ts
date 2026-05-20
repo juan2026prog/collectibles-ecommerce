@@ -147,13 +147,14 @@ serve(async (req) => {
         order_id: order_id
       });
 
-      await supabase.rpc('increment_loyalty', {
+      const { error: loyaltyError } = await supabase.rpc('increment_loyalty', {
         p_user_id: order.customer_id,
         p_points: loyaltyPoints
-      }).catch(() => {
-        // RPC might not exist yet; silently skip
-        console.log('Loyalty RPC not found, skipping increment');
       });
+      
+      if (loyaltyError) {
+        console.log('Loyalty RPC not found or failed, skipping increment:', loyaltyError);
+      }
 
       results.push({ type: 'loyalty_points', points: loyaltyPoints });
     }

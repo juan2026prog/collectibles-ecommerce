@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Search, Globe, Save, RefreshCw, FileText, Code, ExternalLink, CheckCircle2 } from 'lucide-react';
+import { updateCachedSetting } from '../../hooks/useSiteSettings';
 
 export default function AdminSeo() {
   const [products, setProducts] = useState<any[]>([]);
@@ -29,6 +30,7 @@ export default function AdminSeo() {
 
   async function saveSetting(key: string, value: string) {
     await supabase.from('site_settings').upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    updateCachedSetting(key, value);
     setSettings(prev => ({ ...prev, [key]: value }));
     setSaved(true); setTimeout(() => setSaved(false), 2000);
   }

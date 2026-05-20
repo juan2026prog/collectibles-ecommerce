@@ -91,3 +91,38 @@ export function useSiteSettings() {
 
   return { settings, loaded };
 }
+
+/**
+ * Updates a single setting in the cache and notifies all listeners.
+ */
+export function updateCachedSetting(key: string, value: string) {
+  if (!_cache) _cache = {};
+  _cache[key] = value;
+  try {
+    localStorage.setItem('site_settings_cache', JSON.stringify(_cache));
+  } catch (e) {}
+  _listeners.forEach(fn => fn({ ..._cache }));
+}
+
+/**
+ * Updates multiple settings in the cache and notifies all listeners.
+ */
+export function updateCachedSettings(map: Record<string, string>) {
+  if (!_cache) _cache = {};
+  Object.assign(_cache, map);
+  try {
+    localStorage.setItem('site_settings_cache', JSON.stringify(_cache));
+  } catch (e) {}
+  _listeners.forEach(fn => fn({ ..._cache }));
+}
+
+/**
+ * Clears the cache.
+ */
+export function clearCachedSettings() {
+  _cache = null;
+  try {
+    localStorage.removeItem('site_settings_cache');
+  } catch (e) {}
+  _listeners.forEach(fn => fn({}));
+}

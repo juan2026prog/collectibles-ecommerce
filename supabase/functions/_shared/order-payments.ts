@@ -28,10 +28,13 @@ export async function triggerPostPaymentActions(
   if (orderItems) {
     for (const item of orderItems) {
       if (item.variant_id) {
-        await supabaseClient.rpc("decrement_inventory", {
+        const { error: invError } = await supabaseClient.rpc("decrement_inventory", {
           p_variant_id: item.variant_id,
           p_quantity: item.quantity,
-        }).catch((err: any) => console.error("Inventory error:", err));
+        });
+        if (invError) {
+          console.error("Inventory error:", invError);
+        }
       }
     }
   }
@@ -47,11 +50,20 @@ export async function triggerPostPaymentActions(
     body: JSON.stringify({ order_id: orderId }),
   }).catch((err: any) => console.error("Commissions error:", err));
 
-  await fetch(`${supabaseUrl}/functions/v1/soydelivery-sync`, {
-    method: "POST",
-    headers: functionHeaders,
-    body: JSON.stringify({ order_id: orderId }),
-  }).catch((err: any) => console.error("SoyDelivery error:", err));
+  try {
+    const soyResponse = await fetch(`${supabaseUrl}/functions/v1/soydelivery-sync`, {
+      method: "POST",
+      headers: functionHeaders,
+      body: JSON.stringify({ order_id: orderId }),
+    });
+
+    if (!soyResponse.ok) {
+      const errorText = await soyResponse.text();
+      console.error(`Soy Delivery provider validation error (Status: ${soyResponse.status}):`, errorText);
+    }
+  } catch (err: any) {
+    console.error("Soy Delivery provider validation error:", err);
+  }
 
   const { data: fullOrder } = await supabaseClient
     .from("orders")
@@ -101,7 +113,6 @@ export async function finalizeOrderIfNeeded(
       payment_status: "approved",
       payment_id: paymentId || currentOrder.payment_id,
       payment_processed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
     })
     .eq("id", orderId)
     .select("*")

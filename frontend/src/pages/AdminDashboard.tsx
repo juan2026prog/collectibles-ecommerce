@@ -33,13 +33,13 @@ export default function AdminDashboard() {
       ] = await Promise.all([
         supabase.from('products').select('*', { count: 'exact', head: true }),
         supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_admin', false),
-        supabase.from('orders').select('id, total, status, created_at, profiles(email, first_name, last_name)').order('created_at', { ascending: false }).limit(10),
+        supabase.from('orders').select('id, total_amount, status, created_at, customer:profiles(email, first_name, last_name)').order('created_at', { ascending: false }).limit(10),
         supabase.from('products').select('id, title, base_price, status, product_variants(inventory_count)').order('created_at', { ascending: false }).limit(5),
         supabase.from('product_variants').select('id, sku, inventory_count, products(title)').lt('inventory_count', 5).order('inventory_count').limit(5),
       ]);
 
       const allOrders = orders || [];
-      const revenue = allOrders.reduce((sum: number, o: any) => sum + (o.status === 'paid' || o.status === 'shipped' || o.status === 'delivered' ? Number(o.total) || 0 : 0), 0);
+      const revenue = allOrders.reduce((sum: number, o: any) => sum + (o.status === 'paid' || o.status === 'shipped' || o.status === 'delivered' ? Number(o.total_amount) || 0 : 0), 0);
       const pending = allOrders.filter((o: any) => o.status === 'pending').length;
 
       setStats({
@@ -169,12 +169,12 @@ export default function AdminDashboard() {
                 <tbody className="divide-y divide-gray-50">
                   {recentOrders.map((o: any) => {
                     const st = statusMap[o.status] || { label: o.status, cls: 'bg-gray-100 text-gray-600' };
-                    const profile = o.profiles;
+                    const profile = o.customer;
                     return (
                       <tr key={o.id} className="hover:bg-gray-50/50 transition-colors group cursor-pointer">
                         <td className="px-6 py-4 text-sm font-black text-primary-600 group-hover:text-primary-700">{o.id.slice(0, 8)}...</td>
                         <td className="px-6 py-4 text-sm font-semibold text-gray-700">{profile?.first_name || profile?.email || 'Anónimo'}</td>
-                        <td className="px-6 py-4 text-sm font-black text-gray-900">${Number(o.total).toLocaleString()}</td>
+                        <td className="px-6 py-4 text-sm font-black text-gray-900">${Number(o.total_amount).toLocaleString()}</td>
                         <td className="px-6 py-4"><span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-md border ${st.cls}`}>{st.label}</span></td>
                         <td className="px-6 py-4 text-xs text-gray-400">{new Date(o.created_at).toLocaleDateString('es')}</td>
                       </tr>

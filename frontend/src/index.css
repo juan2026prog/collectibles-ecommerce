@@ -178,6 +178,24 @@
     color: #0f172a;
   }
 
+  .admin-container h1,
+  .admin-container h2,
+  .admin-container h3,
+  .admin-container h4,
+  .admin-container h5,
+  .admin-container h6 {
+    color: #0f172a;
+  }
+
+  .admin-container label,
+  .admin-container .form-label {
+    color: #334155;
+  }
+
+  .admin-container p {
+    color: #475569;
+  }
+
   .form-label {
     @apply block text-xs font-black uppercase tracking-wider mb-2;
     color: var(--muted);
@@ -278,3 +296,72 @@
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* ═══ PROSE STYLING FOR DYNAMIC PAGES (TAILWIND TYPOGRAPHY FALLBACK) ═══ */
+.prose-invert, .prose {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+.prose-invert h1, .prose h1 {
+  font-size: 2.25rem !important; /* text-4xl */
+  font-weight: 900 !important;
+  margin-top: 2rem !important;
+  margin-bottom: 1.25rem !important;
+  color: #ffffff !important;
+  letter-spacing: -0.025em !important;
+}
+.prose-invert h2, .prose h2 {
+  font-size: 1.5rem !important; /* text-2xl */
+  font-weight: 900 !important;
+  margin-top: 2.5rem !important;
+  margin-bottom: 1.25rem !important;
+  color: #ffffff !important;
+  letter-spacing: -0.025em !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.75rem !important;
+}
+.prose-invert h2 span, .prose h2 span {
+  width: 6px !important;
+  height: 24px !important;
+  background-color: #f00856 !important;
+  border-radius: 9999px !important;
+  display: inline-block !important;
+}
+.prose-invert h3, .prose h3 {
+  font-size: 1.25rem !important; /* text-xl */
+  font-weight: 800 !important;
+  margin-top: 2rem !important;
+  margin-bottom: 1rem !important;
+  color: #ffffff !important;
+  letter-spacing: -0.025em !important;
+}
+.prose-invert p, .prose p {
+  color: #cbd5e1 !important; /* text-slate-300 */
+  line-height: 1.85 !important;
+  margin-bottom: 1.25rem !important;
+  font-size: 1rem !important;
+}
+.prose-invert ul, .prose ul {
+  list-style-type: none !important;
+  margin-top: 1rem !important;
+  margin-bottom: 1.5rem !important;
+  padding-left: 0 !important;
+}
+.prose-invert li, .prose li {
+  color: #cbd5e1 !important;
+  line-height: 1.85 !important;
+  margin-bottom: 0.75rem !important;
+}
+.prose-invert strong, .prose strong {
+  color: #ffffff !important;
+  font-weight: 800 !important;
+}
+.prose-invert a, .prose a {
+  color: #f00856 !important;
+  font-weight: 800 !important;
+  text-decoration: none !important;
+}
+.prose-invert a:hover, .prose a:hover {
+  text-decoration: underline !important;
+}
+

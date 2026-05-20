@@ -4,6 +4,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { verifyOptionalAuth } from "../_shared/auth.ts";
 import { finalizeOrderIfNeeded, orderSummary } from "../_shared/order-payments.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 declare const Deno: any;
 
@@ -15,10 +16,7 @@ interface ConfirmRequest {
 }
 
 Deno.serve(async (req: Request) => {
-  const corsHeaders = {
-    "Access-Control-Allow-Origin": "https://collectibles-ecommerce.vercel.app",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  };
+  const corsHeaders = getCorsHeaders(req);
 
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });

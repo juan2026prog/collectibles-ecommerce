@@ -15,3 +15,19 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/transactional-emails/deno.json"
 entrypoint = "./functions/transactional-emails/index.ts"
+
+[functions.trigger-soy]
+enabled = true
+verify_jwt = false
+import_map = "./functions/trigger-soy/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/trigger-soy/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/trigger-soy/*.html" ]
+
+[functions.dac-webhook]
+enabled = true
+verify_jwt = false
+

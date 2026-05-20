@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { Save, ToggleLeft, ToggleRight, Settings, Store, Truck, Palette, LayoutTemplate, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, FileText, Share2, Link as LinkIcon, ImageIcon, CreditCard, ShieldCheck, Sparkles, Brain, Zap, Search as SearchIcon, Tag } from 'lucide-react';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
 import { useToast } from '../../components/admin/Toast';
+import { updateCachedSetting } from '../../hooks/useSiteSettings';
 
 type HandyProviderRecord = {
   id?: string;
@@ -395,6 +396,7 @@ export default function AdminSettings() {
   async function saveSetting(key: string, value: string) {
     if (!key) return; // Prevent empty keys
     await supabase.from('site_settings').upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    updateCachedSetting(key, value);
     setSettings(prev => ({ ...prev, [key]: value }));
     toast.success('Configuración guardada');
   }

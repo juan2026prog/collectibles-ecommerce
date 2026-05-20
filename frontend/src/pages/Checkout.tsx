@@ -666,6 +666,14 @@ export default function Checkout() {
                   </div>
                 </div>
               </div>
+              {checkoutError && (
+                <div className="mt-4 p-3 bg-red-900/30 border border-red-500/30 text-xs text-red-400 rounded-lg flex items-start justify-between">
+                  <span className="flex-1 pr-2">{checkoutError}</span>
+                  <button type="button" onClick={() => setCheckoutError('')} className="text-red-400 hover:text-red-300 shrink-0">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
               <button type="submit" disabled={isSubmitting} className="btn-primary w-full mt-6 py-3.5 text-base">
                 {isSubmitting ? 'Procesando...' : 'Finalizar compra'}
               </button>

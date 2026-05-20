@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { RefreshCw, Play, AlertCircle, CheckCircle2, Settings2, Save, ExternalLink, Link2, X, Loader2 } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
+import { updateCachedSettings } from '../../hooks/useSiteSettings';
 
 async function callEdgeFunction(body: any) {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -80,6 +81,11 @@ export default function AdminMercadoLibre() {
        { key: 'ml_price_markup_value', value: markupValue, updated_at: new Date().toISOString() },
        { key: 'ml_price_rules_enabled', value: rulesEnabled ? 'true' : 'false', updated_at: new Date().toISOString() }
     ], { onConflict: 'key' });
+    updateCachedSettings({
+       'ml_price_markup_type': markupType,
+       'ml_price_markup_value': markupValue,
+       'ml_price_rules_enabled': rulesEnabled ? 'true' : 'false'
+    });
     toast.success('Configuración de Mercado Libre guardada');
     setSavingSettings(false);
   }

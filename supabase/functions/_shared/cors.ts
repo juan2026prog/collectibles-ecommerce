@@ -9,8 +9,13 @@ const ALLOWED_ORIGINS = [
 
 export function getCorsOrigin(req: Request): string {
   const origin = req.headers.get('origin') || '';
-  // Allow the origin if it's in our whitelist, or if it's a Vercel preview URL
-  if (ALLOWED_ORIGINS.includes(origin) || origin.endsWith('.vercel.app')) {
+  // Allow the origin if it's in our whitelist, a Vercel preview URL, or a local development URL
+  if (
+    ALLOWED_ORIGINS.includes(origin) || 
+    origin.endsWith('.vercel.app') ||
+    /^https?:\/\/localhost(:\d+)?$/.test(origin) ||
+    /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)
+  ) {
     return origin;
   }
   return ALLOWED_ORIGINS[0]; // Default to production

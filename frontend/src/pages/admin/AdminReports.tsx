@@ -30,7 +30,7 @@ export default function AdminReports() {
       { data: alertData },
       { data: cartsData },
     ] = await Promise.all([
-      supabase.from('orders').select('id, total, status, created_at'),
+      supabase.from('orders').select('id, total_amount, status, created_at'),
       supabase.from('products').select('*', { count: 'exact', head: true }),
       supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_admin', false),
       supabase.from('order_items').select('quantity, unit_price, products(title)').limit(100),
@@ -41,7 +41,7 @@ export default function AdminReports() {
     const allOrders = orders || [];
     const paidStatuses = ['paid', 'shipped', 'delivered'];
     const paid = allOrders.filter(o => paidStatuses.includes(o.status));
-    const revenue = paid.reduce((s, o) => s + (Number(o.total) || 0), 0);
+    const revenue = paid.reduce((s, o) => s + (Number(o.total_amount) || 0), 0);
     const pending = allOrders.filter(o => o.status === 'pending').length;
     const cancelled = allOrders.filter(o => o.status === 'cancelled').length;
 
@@ -71,7 +71,7 @@ export default function AdminReports() {
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       if (!monthMap[key]) monthMap[key] = { revenue: 0, orders: 0 };
       monthMap[key].orders++;
-      if (paidStatuses.includes(o.status)) monthMap[key].revenue += Number(o.total) || 0;
+      if (paidStatuses.includes(o.status)) monthMap[key].revenue += Number(o.total_amount) || 0;
     });
     const monthly = Object.entries(monthMap)
       .sort(([a], [b]) => a.localeCompare(b))
@@ -92,10 +92,10 @@ export default function AdminReports() {
   }
 
   async function exportCSV() {
-    const { data } = await supabase.from('orders').select('id, total, status, created_at, profiles(email)');
+    const { data } = await supabase.from('orders').select('id, total_amount, status, created_at, customer:profiles(email)');
     if (!data || data.length === 0) return;
     const header = 'ID,Email,Total,Estado,Fecha\n';
-    const rows = data.map((o: any) => `${o.id},${o.profiles?.email || ''},${o.total},${o.status},${o.created_at}`).join('\n');
+    const rows = data.map((o: any) => `${o.id},${o.customer?.email || ''},${o.total_amount},${o.status},${o.created_at}`).join('\n');
     const blob = new Blob([header + rows], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

@@ -186,24 +186,7 @@ export default function VShipping() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* INTERIOR Y COSTO FIJO */}
-        <div className="soft rounded-[2.5rem] p-12 border border-white/5 hover:bg-white/[0.02] transition-all group shadow-xl">
-          <div className="flex items-start gap-10">
-            <div className="w-16 h-16 rounded-2xl bg-orange-500/10 text-orange-500 border border-orange-500/20 flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(249,115,22,0.1)] group-hover:scale-110 transition-transform">
-              <MapPin className="w-8 h-8" />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-black text-white text-2xl uppercase tracking-widest mb-3">Resto del País (Interior)</h3>
-              <p className="text-[11px] text-slate-500 font-black uppercase tracking-widest leading-relaxed mb-10">Tarifa plana para departamentos fuera del hub metropolitano</p>
-              <div className="flex items-center gap-6 bg-black/40 p-8 rounded-3xl border border-white/10 w-full group-hover:border-orange-500/40 transition-all shadow-inner">
-                <span className="text-2xl font-black text-slate-700">$</span>
-                <input type="number" value={interiorPrice} onChange={e => setInteriorPrice(e.target.value)} className="bg-transparent font-black text-5xl text-white outline-none w-full tracking-tighter" />
-              </div>
-            </div>
-          </div>
-        </div>
-        
+      <div className="grid grid-cols-1 gap-8">
         {/* ETIQUETAS DE ENVÍO */}
         <div className="soft rounded-[2.5rem] p-12 border border-white/5 hover:bg-white/[0.02] transition-all group shadow-xl">
            <div className="flex items-start gap-10 h-full">
