@@ -153,6 +153,31 @@
     color: var(--muted);
   }
 
+  /* Admin specific overrides for form elements to guarantee high contrast in the light theme admin panel */
+  .admin-container .form-input,
+  .admin-container select.form-input,
+  .admin-container textarea.form-input {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #0f172a;
+  }
+  .admin-container .form-input:focus,
+  .admin-container select.form-input:focus,
+  .admin-container textarea.form-input:focus {
+    border-color: var(--red);
+    box-shadow: 0 0 0 2px rgba(240, 8, 86, 0.15);
+  }
+  .admin-container .form-input::placeholder,
+  .admin-container select.form-input::placeholder,
+  .admin-container textarea.form-input::placeholder {
+    color: #64748b;
+  }
+  .admin-container input,
+  .admin-container select,
+  .admin-container textarea {
+    color: #0f172a;
+  }
+
   .form-label {
     @apply block text-xs font-black uppercase tracking-wider mb-2;
     color: var(--muted);

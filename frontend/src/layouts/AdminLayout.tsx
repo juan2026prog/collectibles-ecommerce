@@ -55,7 +55,7 @@ export default function AdminLayout() {
   return (
     <ToastProvider>
       <ConfirmModalProvider>
-        <div className="min-h-screen flex bg-gray-100 font-sans">
+        <div className="min-h-screen flex bg-gray-100 font-sans admin-container">
           <aside className="w-64 bg-dark-900 text-gray-300 flex flex-col relative z-20 shadow-xl overflow-y-auto scrollbar-hide">
             <div className="p-6 sticky top-0 bg-dark-900 border-b border-dark-800 z-10">
               <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
