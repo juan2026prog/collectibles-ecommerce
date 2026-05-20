@@ -26,6 +26,8 @@ const checkoutSchema = z.object({
     apartment: z.string().optional(),
     city: z.string().min(1),
     department: z.string().optional(),
+    barrio: z.string().optional(),
+    reference: z.string().optional(),
     postal_code: z.string().optional(),
     country: z.string().default('Uruguay'),
   }),
@@ -175,7 +177,9 @@ Deno.serve(async (req: any) => {
     const subtotal = verifiedItems.reduce((s: number, i: any) => s + i.price * i.quantity, 0);
 
     // ═══ FUNC-HIGH-04: Use location-based shipping (matches frontend) ═══
-    const shippingCity = payload.shipping_address.city || '';
+    const shippingCity = payload.shipping_address.department === 'Montevideo'
+      ? (payload.shipping_address.barrio || '')
+      : (payload.shipping_address.city || '');
     const shippingDept = payload.shipping_address.department || '';
     const shippingRate = calculateShipping(shippingCity, shippingDept, subtotal);
 

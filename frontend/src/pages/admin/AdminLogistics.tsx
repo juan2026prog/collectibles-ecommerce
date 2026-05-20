@@ -43,6 +43,7 @@ export default function AdminLogistics() {
   const [sameday, setSameday] = useState(true);
   const [weekdayCutoff, setWeekdayCutoff] = useState('15:00');
   const [saturdayCutoff, setSaturdayCutoff] = useState('13:00');
+  const [dacCutoff, setDacCutoff] = useState('14:00');
   const [saturdayActive, setSaturdayActive] = useState(true);
   const [sundayActive, setSundayActive] = useState(false);
   const [maxOrders, setMaxOrders] = useState('50');
@@ -75,6 +76,8 @@ export default function AdminLogistics() {
         data.forEach(item => { map[item.key] = item.value || ''; });
         setSettings(map);
         if (map['shipping_soydelivery_enabled'] === 'false') setFlexActive(false);
+        if (map['shipping_soydelivery_cutoff_time']) setWeekdayCutoff(map['shipping_soydelivery_cutoff_time']);
+        if (map['shipping_dac_cutoff_time']) setDacCutoff(map['shipping_dac_cutoff_time']);
       }
 
       // Load DAC settings
@@ -183,10 +186,14 @@ export default function AdminLogistics() {
         'shipping_soydelivery_api_key',
         'shipping_soydelivery_negocio_id',
         'shipping_soydelivery_negocio_clave',
-        'shipping_soydelivery_sandbox'
+        'shipping_soydelivery_sandbox',
+        'shipping_soydelivery_cutoff_time',
+        'shipping_dac_cutoff_time'
       ];
       
       settings['shipping_soydelivery_enabled'] = flexActive ? 'true' : 'false';
+      settings['shipping_soydelivery_cutoff_time'] = weekdayCutoff;
+      settings['shipping_dac_cutoff_time'] = dacCutoff;
 
       const settingsMap: Record<string, string> = {};
       for (const key of keysToSave) {
@@ -562,13 +569,22 @@ export default function AdminLogistics() {
                   placeholder="••••••••••••••" 
                 />
               </div>
-              <div className="md:col-span-2">
+              <div className="md:col-span-1">
                 <label className="block text-[11px] font-black text-orange-900 uppercase tracking-widest mb-1.5">URL de WebService SOAP</label>
                 <input 
                   className="form-input w-full font-mono text-xs border-orange-200" 
                   value={dacApiUrl} 
                   onChange={e => setDacApiUrl(e.target.value)} 
                   placeholder="https://altis-ws.grupoagencia.com:444/GAgencia/GAgencia.asmx" 
+                />
+              </div>
+              <div className="md:col-span-1">
+                <label className="block text-[11px] font-black text-orange-900 uppercase tracking-widest mb-1.5">Horario de Corte (Cutoff)</label>
+                <input 
+                  type="time" 
+                  className="form-input w-full font-mono text-xs border-orange-200 font-bold" 
+                  value={dacCutoff} 
+                  onChange={e => setDacCutoff(e.target.value)} 
                 />
               </div>
             </div>

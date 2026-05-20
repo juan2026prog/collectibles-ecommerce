@@ -31,6 +31,8 @@ const checkoutSchema = z.object({
     apartment: z.string().trim().optional(),
     city: z.string().trim().optional(),
     department: z.string().trim().optional(),
+    barrio: z.string().trim().optional(),
+    reference: z.string().trim().optional(),
     postal_code: z.string().trim().optional(),
     country: z.string().trim().default("Uruguay"),
   }),
@@ -395,10 +397,14 @@ Deno.serve(async (req) => {
       };
     }
 
+    const shippingCity = payload.shipping_address.department === "Montevideo"
+      ? (payload.shipping_address.barrio || "")
+      : (payload.shipping_address.city || "");
+
     const shippingRate = payload.shipping_method === "pickup"
       ? 0
       : calculateShipping(
-        payload.shipping_address.city || "",
+        shippingCity,
         payload.shipping_address.department || "",
         subtotal,
       );

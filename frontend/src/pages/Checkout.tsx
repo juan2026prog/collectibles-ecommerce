@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRight, Truck, Store, Tag, Sparkles, X, Home, Ticket, Share2 } from 'lucide-react';
+import { ChevronRight, Truck, Store, Tag, Sparkles, X, Home, Ticket, Share2, Clock } from 'lucide-react';
 import { useCartContext } from '../contexts/CartContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,6 +10,32 @@ import { analytics } from '../lib/analytics';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import { createCheckoutOrder, getPublicPaymentProviders, startCheckoutPayment, type PublicPaymentProvider } from '../lib/payments';
 import { URUGUAY_LOCATIONS, DEPARTAMENTOS, calculateShipping } from '../utils/uruguayLocations';
+
+function normalizeLocation(value?: string | null) {
+  return (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function findClosestLocation(locationName: string, list: string[]): string {
+  if (!locationName) return '';
+  const normalizedInput = normalizeLocation(locationName).toLowerCase();
+  
+  // 1. Try exact normalized match
+  const directMatch = list.find(item => normalizeLocation(item).toLowerCase() === normalizedInput);
+  if (directMatch) return directMatch;
+  
+  // 2. Try substring match
+  const substringMatch = list.find(item => {
+    const normalizedItem = normalizeLocation(item).toLowerCase();
+    return normalizedItem.includes(normalizedInput) || normalizedInput.includes(normalizedItem);
+  });
+  if (substringMatch) return substringMatch;
+  
+  return '';
+}
+
 
 const CARD_COLORS: Record<string, { bg: string; text: string }> = {
   OCA: { bg: '#E31937', text: '#fff' },
@@ -71,12 +97,184 @@ export default function Checkout() {
     apartment: '',
     city: '',
     department: '',
+    barrio: '',
+    reference: '',
     postal_code: '',
     country: 'Uruguay',
   });
 
-  const shipping = shippingMethod === 'pickup' ? 0 : calculateShipping(form.city, form.department, total);
+  const resolvedCityForShipping = form.department === 'Montevideo' ? form.barrio : form.city;
+  const shipping = shippingMethod === 'pickup' ? 0 : calculateShipping(resolvedCityForShipping, form.department, total);
   const subtotalWithShipping = total + shipping;
+
+  const getUruguayDateTime = () => {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Montevideo',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+      hour12: false
+    });
+    const parts = formatter.formatToParts(now);
+    const partValue = (type: string) => parts.find(p => p.type === type)?.value || '';
+    
+    const year = parseInt(partValue('year'), 10);
+    const month = parseInt(partValue('month'), 10) - 1; // 0-indexed
+    const day = parseInt(partValue('day'), 10);
+    const hour = parseInt(partValue('hour'), 10);
+    const minute = parseInt(partValue('minute'), 10);
+    const second = parseInt(partValue('second'), 10);
+    
+    const localDate = new Date(year, month, day, hour, minute, second);
+    const dayOfWeek = localDate.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+    return { hour, minute, dayOfWeek, localDate };
+  };
+
+  const parseTimeStr = (timeStr: string) => {
+    const [h, m] = timeStr.split(':').map(Number);
+    return { hour: h || 0, minute: m || 0 };
+  };
+
+  const getLogisticsDetails = () => {
+    if (shippingMethod === 'pickup') {
+      return {
+        providerName: null,
+        message: 'Retirá tu pedido gratis en nuestro local',
+        assignedProvider: null
+      };
+    }
+
+    const isMontevideo = form.department === 'Montevideo';
+    const provider = isMontevideo ? 'soy_delivery' : 'dac';
+    const providerLabel = isMontevideo ? 'Soy Delivery' : 'DAC';
+
+    const { hour: curHour, minute: curMin, dayOfWeek } = getUruguayDateTime();
+
+    if (provider === 'soy_delivery') {
+      const cutoffTime = settings['shipping_soydelivery_cutoff_time'] || '15:00';
+      const cutoff = parseTimeStr(cutoffTime);
+      const isBefore = curHour < cutoff.hour || (curHour === cutoff.hour && curMin < cutoff.minute);
+
+      // Mon-Sat: 1 to 6
+      if (dayOfWeek >= 1 && dayOfWeek <= 6) {
+        if (isBefore) {
+          return {
+            providerName: providerLabel,
+            message: `Recibilo hoy mismo comprando antes de las ${cutoffTime}`,
+            assignedProvider: 'soy_delivery'
+          };
+        } else {
+          return {
+            providerName: providerLabel,
+            message: 'Recibilo mañana mismo en tu domicilio',
+            assignedProvider: 'soy_delivery'
+          };
+        }
+      } else {
+        // Sunday: 0
+        return {
+          providerName: providerLabel,
+          message: 'Recibilo mañana lunes en tu domicilio',
+          assignedProvider: 'soy_delivery'
+        };
+      }
+    } else {
+      // DAC
+      const cutoffTime = settings['shipping_dac_cutoff_time'] || '14:00';
+      const cutoff = parseTimeStr(cutoffTime);
+      const isBefore = curHour < cutoff.hour || (curHour === cutoff.hour && curMin < cutoff.minute);
+
+      // Mon-Fri: 1 to 5
+      if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+        if (isBefore) {
+          return {
+            providerName: providerLabel,
+            message: `Despacho hoy mismo por DAC comprando antes de las ${cutoffTime}`,
+            assignedProvider: 'dac'
+          };
+        } else {
+          return {
+            providerName: providerLabel,
+            message: 'Despacho próximo día hábil por DAC',
+            assignedProvider: 'dac'
+          };
+        }
+      } else {
+        // Sat or Sun
+        return {
+          providerName: providerLabel,
+          message: 'Despacho próximo día hábil por DAC',
+          assignedProvider: 'dac'
+        };
+      }
+    }
+  };
+
+  const logistics = getLogisticsDetails();
+
+  const handleDepartmentChange = (val: string) => {
+    setForm(current => ({
+      ...current,
+      department: val,
+      city: val === 'Montevideo' ? 'Montevideo' : '',
+      barrio: '',
+    }));
+  };
+
+  const handleAddressSelect = (details: {
+    street?: string;
+    city?: string;
+    department?: string;
+    postal_code?: string;
+    country?: string;
+    barrio?: string;
+  }) => {
+    setForm((current) => {
+      const updated = { ...current };
+
+      if (details.street) updated.street = details.street;
+      if (details.postal_code) updated.postal_code = details.postal_code;
+      if (details.country) updated.country = details.country;
+
+      // Handle department mapping
+      if (details.department) {
+        const foundDep = DEPARTAMENTOS.find(
+          (dep) => dep.toLowerCase() === details.department!.toLowerCase()
+        );
+        if (foundDep) {
+          updated.department = foundDep;
+          if (foundDep === 'Montevideo') {
+            updated.city = 'Montevideo';
+            updated.barrio = ''; // Reset barrio initially, then try to fill
+          } else {
+            updated.city = '';
+            updated.barrio = '';
+          }
+        }
+      }
+
+      // If department is Montevideo, try to map the barrio from details
+      if (updated.department === 'Montevideo' && (details.barrio || details.city)) {
+        const sourceBarrio = details.barrio || details.city;
+        const matchingBarrio = findClosestLocation(sourceBarrio || '', URUGUAY_LOCATIONS['Montevideo'] || []);
+        if (matchingBarrio) {
+          updated.barrio = matchingBarrio;
+        }
+      } else if (updated.department && updated.department !== 'Montevideo' && details.city) {
+        // If department is NOT Montevideo, try to map the city/localidad
+        const matchingCity = findClosestLocation(details.city, URUGUAY_LOCATIONS[updated.department] || []);
+        if (matchingCity) {
+          updated.city = matchingCity;
+        }
+      }
+
+      return updated;
+    });
+  };
 
   let bankDiscount = 0;
   if (selectedPromo && subtotalWithShipping >= (selectedPromo.min_purchase || 0)) {
@@ -117,6 +315,8 @@ export default function Checkout() {
         apartment: address.apartment || current.apartment,
         city: address.city || current.city,
         department: address.department || current.department,
+        barrio: address.barrio || current.barrio || '',
+        reference: address.reference || current.reference || '',
         postal_code: address.postal_code || current.postal_code,
         country: address.country || current.country,
       }));
@@ -258,6 +458,8 @@ export default function Checkout() {
           department: shippingMethod === 'pickup' ? 'Montevideo' : form.department,
           postal_code: form.postal_code || undefined,
           country: form.country,
+          barrio: shippingMethod === 'pickup' ? undefined : form.barrio,
+          reference: shippingMethod === 'pickup' ? undefined : form.reference,
         },
         customer_email: form.email,
         customer_phone: form.phone || undefined,
@@ -376,7 +578,7 @@ export default function Checkout() {
                         <label className="form-label text-xs">Elegir dirección guardada</label>
                         <div className="grid gap-2">
                           {savedAddresses.map((address: any, index: number) => (
-                            <label key={index} className={`flex items-center gap-3 p-3  border-2 cursor-pointer transition-all ${selectedAddress === index ? 'border-primary-500 bg-primary-500/100/10' : 'border-white/10 hover:border-white/10'}`}>
+                            <label key={index} className={`flex items-center gap-3 p-3  border-2 cursor-pointer transition-all ${selectedAddress === index ? 'border-primary-500 bg-primary-500/10' : 'border-white/10 hover:border-white/10'}`}>
                               <input
                                 type="radio"
                                 name="savedAddr"
@@ -390,6 +592,8 @@ export default function Checkout() {
                                     apartment: address.apartment || '',
                                     city: address.city || '',
                                     department: address.department || '',
+                                    barrio: address.barrio || '',
+                                    reference: address.reference || '',
                                     postal_code: address.postal_code || '',
                                     country: address.country || 'Uruguay',
                                   }));
@@ -399,8 +603,8 @@ export default function Checkout() {
                                 <Home className="w-4 h-4" />
                               </div>
                               <div className="flex-1 min-w-0">
-                                <span className="font-bold text-sm block">{address.label || `Direccion ${index + 1}`}</span>
-                            <span className="text-xs text-slate-400 block truncate">{address.street}{address.apartment ? `, ${address.apartment}` : ''} - {address.city}, {address.department}</span>
+                                <span className="font-bold text-sm block">{address.label || `Dirección ${index + 1}`}</span>
+                                <span className="text-xs text-slate-400 block truncate">{address.street}{address.apartment ? `, ${address.apartment}` : ''} - {address.city}, {address.department}</span>
                               </div>
                             </label>
                           ))}
@@ -412,7 +616,7 @@ export default function Checkout() {
                               checked={selectedAddress === -2}
                               onChange={() => {
                                 setSelectedAddress(-2);
-                                setForm((current) => ({ ...current, street: '', apartment: '', city: '', department: '', postal_code: '' }));
+                                setForm((current) => ({ ...current, street: '', apartment: '', city: '', department: '', barrio: '', reference: '', postal_code: '' }));
                               }}
                             />
                             <div className={`p-1.5  ${selectedAddress === -2 ? 'bg-primary-500/100 text-white' : 'bg-white/10 text-slate-500'}`}>
@@ -426,52 +630,141 @@ export default function Checkout() {
 
                     {(savedAddresses.length === 0 || selectedAddress === -2) && (
                       <>
-                        <div>
-                          <label className="form-label">Dirección (calle y número) *</label>
-                          <AddressAutocomplete
-                            value={form.street}
-                            onChange={value => setForm({ ...form, street: value })}
-                            onSelect={(details) => setForm((current) => ({
-                              ...current,
-                              street: details.street || current.street,
-                              city: details.city || current.city,
-                              department: details.department ? (DEPARTAMENTOS.find(dep => dep.toLowerCase() === details.department.toLowerCase()) || details.department) : current.department,
-                              postal_code: details.postal_code || current.postal_code,
-                              country: details.country || current.country,
-                            }))}
-                          />
-                        </div>
-                        <div><label className="form-label">Apartamento / Timbre</label><input className="form-input" value={form.apartment} onChange={e => setForm({ ...form, apartment: e.target.value })} /></div>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label className="form-label">Departamento *</label>
-                            <select required={shippingMethod === 'delivery'} className="form-input" value={form.department} onChange={e => setForm({ ...form, department: e.target.value, city: '' })}>
+                            <select
+                              required={shippingMethod === 'delivery'}
+                              className="form-input"
+                              value={form.department}
+                              onChange={e => handleDepartmentChange(e.target.value)}
+                            >
                               <option value="">Selecciona un departamento...</option>
                               {DEPARTAMENTOS.map((department) => (
                                 <option key={department} value={department}>{department}</option>
                               ))}
                             </select>
                           </div>
+
                           <div>
-                            <label className="form-label">Localidad / Barrio *</label>
-                            <select required={shippingMethod === 'delivery'} className="form-input" value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} disabled={!form.department}>
-                              <option value="">Selecciona una localidad...</option>
-                              {form.department && URUGUAY_LOCATIONS[form.department]?.map((location) => (
-                                <option key={location} value={location}>{location}</option>
-                              ))}
-                            </select>
+                            <label className="form-label">Ciudad / Localidad *</label>
+                            {form.department === 'Montevideo' ? (
+                              <input
+                                type="text"
+                                className="form-input opacity-80 cursor-not-allowed"
+                                value="Montevideo"
+                                readOnly
+                              />
+                            ) : (
+                              <select
+                                required={shippingMethod === 'delivery'}
+                                className="form-input"
+                                value={form.city}
+                                onChange={e => setForm({ ...form, city: e.target.value })}
+                                disabled={!form.department}
+                              >
+                                <option value="">Selecciona una localidad...</option>
+                                {form.department && URUGUAY_LOCATIONS[form.department]?.map((location) => (
+                                  <option key={location} value={location}>{location}</option>
+                                ))}
+                              </select>
+                            )}
                           </div>
                         </div>
+
+                        <div className="grid grid-cols-1 gap-4">
+                          <div>
+                            <label className="form-label">Barrio {form.department === 'Montevideo' ? '*' : '(Opcional)'}</label>
+                            {form.department === 'Montevideo' ? (
+                              <select
+                                required={shippingMethod === 'delivery'}
+                                className="form-input"
+                                value={form.barrio}
+                                onChange={e => setForm({ ...form, barrio: e.target.value })}
+                              >
+                                <option value="">Selecciona un barrio...</option>
+                                {URUGUAY_LOCATIONS['Montevideo']?.map((barrioName) => (
+                                  <option key={barrioName} value={barrioName}>{barrioName}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input
+                                type="text"
+                                className="form-input"
+                                placeholder="Ej: Centro, La Floresta, etc."
+                                value={form.barrio}
+                                onChange={e => setForm({ ...form, barrio: e.target.value })}
+                              />
+                            )}
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="form-label">Dirección (calle y número) *</label>
+                          <AddressAutocomplete
+                            value={form.street}
+                            onChange={value => setForm({ ...form, street: value })}
+                            onSelect={handleAddressSelect}
+                          />
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4">
-                          <div><label className="form-label">Código postal</label><input className="form-input" value={form.postal_code} onChange={e => setForm({ ...form, postal_code: e.target.value })} /></div>
+                          <div>
+                            <label className="form-label">Apartamento / Timbre</label>
+                            <input
+                              className="form-input"
+                              placeholder="Ej: Apto 302, Timbre 4"
+                              value={form.apartment}
+                              onChange={e => setForm({ ...form, apartment: e.target.value })}
+                            />
+                          </div>
+                          <div>
+                            <label className="form-label">Referencia / Indicaciones</label>
+                            <input
+                              className="form-input"
+                              placeholder="Ej: Portón de madera, reja negra"
+                              value={form.reference}
+                              onChange={e => setForm({ ...form, reference: e.target.value })}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="form-label">Código postal</label>
+                            <input
+                              className="form-input"
+                              placeholder="Ej: 11300"
+                              value={form.postal_code}
+                              onChange={e => setForm({ ...form, postal_code: e.target.value })}
+                            />
+                          </div>
                           <div>
                             <label className="form-label">País</label>
-                            <select className="form-input" value={form.country} onChange={e => setForm({ ...form, country: e.target.value })}>
+                            <select
+                              className="form-input"
+                              value={form.country}
+                              onChange={e => setForm({ ...form, country: e.target.value })}
+                            >
                               <option value="Uruguay">Uruguay</option>
                             </select>
                           </div>
                         </div>
                       </>
+                    )}
+
+                    {shippingMethod === 'delivery' && form.department && logistics.providerName && (
+                      <div className="mt-4 p-4 rounded-xl border border-primary-500/30 bg-primary-500/5 flex items-start gap-3 shadow-lg">
+                        <Clock className="w-5 h-5 text-primary-500 shrink-0 mt-0.5 animate-pulse" />
+                        <div>
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-primary-400">
+                            Información de entrega ({logistics.providerName})
+                          </h4>
+                          <p className="text-sm font-semibold text-white mt-1">
+                            {logistics.message}
+                          </p>
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}
@@ -651,6 +944,18 @@ export default function Checkout() {
                   <div className="flex justify-between text-sm">
                     <span className="text-green-600 flex items-center gap-1"><Tag className="w-3 h-3" />Promo {selectedPromo.bank_name}</span>
                     <span className="font-bold text-green-600">-{formatCurrencyPrice(bankDiscount)}</span>
+                  </div>
+                )}
+                {shippingMethod === 'delivery' && logistics.providerName && (
+                  <div className="border-t border-white/5 pt-3 mt-3 space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-400">Logística Interna</span>
+                      <span className="font-semibold text-slate-200">{logistics.providerName}</span>
+                    </div>
+                    <div className="flex items-start gap-1.5 text-xs text-primary-400 mt-1">
+                      <Clock className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                      <span>{logistics.message}</span>
+                    </div>
                   </div>
                 )}
                 <div className="border-t pt-2 mt-2 flex justify-between">

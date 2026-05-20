@@ -67,10 +67,14 @@ export default function AddressAutocomplete({ value, onChange, onSelect }: Addre
     let rawDept = addressDetails.state || addressDetails.county || '';
     rawDept = rawDept.replace(/ department/i, '').replace(/departamento de /i, '').trim();
     
+    const city = addressDetails.city || addressDetails.town || addressDetails.village || '';
+    const barrio = addressDetails.suburb || addressDetails.neighbourhood || addressDetails.city_district || addressDetails.quarter || addressDetails.subdivision || '';
+    
     // Map OSM fields to our form fields
     const mapped = {
       street: `${addressDetails.road || ''} ${addressDetails.house_number || ''}`.trim() || result.display_name.split(',')[0],
-      city: addressDetails.city || addressDetails.town || addressDetails.village || addressDetails.suburb || '',
+      city: rawDept.toLowerCase() === 'montevideo' ? 'Montevideo' : (city || barrio || ''),
+      barrio: rawDept.toLowerCase() === 'montevideo' ? barrio : (city ? barrio : ''),
       department: rawDept,
       postal_code: addressDetails.postcode || '',
       country: addressDetails.country || 'Uruguay',

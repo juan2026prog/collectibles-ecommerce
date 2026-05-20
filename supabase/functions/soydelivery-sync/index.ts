@@ -45,6 +45,11 @@ serve(async (req) => {
 
     if (orderErr || !order) throw new Error(orderErr?.message || "Order not found");
     
+    // Skip if the order is not assigned to SoyDelivery
+    if (order.shipping_provider !== "SoyDelivery") {
+      return new Response(JSON.stringify({ skipped: true, reason: `Not a SoyDelivery order (assigned to: ${order.shipping_provider})` }), { headers: corsHeaders });
+    }
+
     // Only process if shipping to an address (not pickup)
     const addr = order.shipping_address;
     if (!addr || typeof addr === 'string' || !addr.street) {
