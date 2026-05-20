@@ -8,8 +8,10 @@ import { useCurrency } from '../contexts/CurrencyContext';
 import { ProductSkeleton } from '../components/Skeletons';
 import { ProductGridCard } from '../components/ProductGridCard';
 import { getProductImage } from '../lib/imageUtils';
+import { useSiteSettings } from '../hooks/useSiteSettings';
 
 export default function Home() {
+  const { settings } = useSiteSettings();
   const { banners, loading: bannersLoading } = useBanners();
   const { categories, loading: catsLoading } = useCategories();
   const { products: featured, loading: featuredLoading } = useProducts({ featured: true, limit: 10 });
@@ -91,20 +93,24 @@ export default function Home() {
               <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
                 <div className="animate-fade-in-up">
                   <div className="inline-block px-4 py-1.5 rounded-full border border-[#f00856]/30 bg-[#f00856]/10 text-[#f00856] text-[10px] font-black uppercase tracking-[0.25em] mb-6">
-                    Collectibles Uruguay
+                    {settings['home_hero_subtitle'] || 'Collectibles Uruguay'}
                   </div>
                   <h1 className="text-5xl md:text-7xl lg:text-[5.5rem] font-black leading-[0.88] tracking-tighter text-white">
-                    La colección<br /><span className="text-[#f00856]">empieza</span> acá.
+                    {settings['home_hero_title'] ? (
+                      <span dangerouslySetInnerHTML={{ __html: settings['home_hero_title'] }} />
+                    ) : (
+                      <>La colección<br /><span className="text-[#f00856]">empieza</span> acá.</>
+                    )}
                   </h1>
                   <p className="text-slate-400 text-lg md:text-xl mt-6 max-w-lg leading-relaxed font-medium">
-                    Figuras, juguetes, licencias icónicas y coleccionables seleccionados por Collectibles Uruguay.
+                    {settings['home_hero_desc'] || 'Figuras, juguetes, licencias icónicas y coleccionables seleccionados por Collectibles Uruguay.'}
                   </p>
                   <div className="flex flex-wrap gap-4 mt-10">
                     <Link to="/shop" className="btn-primary px-10 py-5 text-base rounded-full group inline-flex items-center">
-                      Ver catálogo <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+                      {settings['home_hero_btn_primary'] || 'Ver catálogo'} <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
                     </Link>
                     <Link to="/shop?badge=sale" className="px-10 py-5 text-base rounded-full border border-white/15 text-white font-black hover:bg-white/5 transition-colors inline-flex items-center">
-                      Ver promociones
+                      {settings['home_hero_btn_secondary'] || 'Ver promociones'}
                     </Link>
                   </div>
                 </div>
@@ -189,11 +195,15 @@ export default function Home() {
           <section className="max-w-[1500px] mx-auto px-6 py-20">
             <div className="flex items-end justify-between mb-10">
               <div>
-                <div className="text-[10px] text-[#f00856] font-black tracking-[0.3em] uppercase mb-2">Mundos coleccionables</div>
-                <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight">Explorá por categoría</h2>
+                <div className="text-[10px] text-[#f00856] font-black tracking-[0.3em] uppercase mb-2">
+                  {settings['home_bento_subtitle'] || 'Mundos coleccionables'}
+                </div>
+                <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight">
+                  {settings['home_bento_title'] || 'Explorá por categoría'}
+                </h2>
               </div>
               <Link to="/shop" className="hidden md:inline-flex items-center gap-2 text-sm font-black text-slate-400 hover:text-white transition-colors uppercase tracking-wider">
-                Ver catálogo <ArrowRight className="w-4 h-4" />
+                {settings['home_hero_btn_primary'] || 'Ver catálogo'} <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
 
@@ -306,13 +316,17 @@ export default function Home() {
                 <div className="absolute inset-0 bg-[#f00856]/[.04] blur-[100px] rounded-full w-[600px] h-[600px] -right-40 -top-40" />
                 <div className="grid lg:grid-cols-2 gap-8 items-center p-8 md:p-12 lg:p-16 relative z-10">
                   <div>
-                    <div className="text-[10px] text-[#f00856] font-black tracking-[0.3em] uppercase mb-3">Edición especial</div>
-                    <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight leading-[0.9]">Especial Mundial</h2>
+                    <div className="text-[10px] text-[#f00856] font-black tracking-[0.3em] uppercase mb-3">
+                      {settings['home_mundial_subtitle'] || 'Edición especial'}
+                    </div>
+                    <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight leading-[0.9]">
+                      {settings['home_mundial_title'] || 'Especial Mundial'}
+                    </h2>
                     <p className="text-slate-400 text-base md:text-lg mt-4 leading-relaxed max-w-md">
-                      Álbum, figuritas y mascotas. Armá tu colección con productos disponibles, promos reales y atención directa de Collectibles.
+                      {settings['home_mundial_desc'] || 'Álbum, figuritas y mascotas. Armá tu colección con productos disponibles, promos reales y atención directa de Collectibles.'}
                     </p>
                     <Link to="/shop?q=mundial" className="btn-primary px-8 py-4 text-sm rounded-full inline-flex items-center gap-2 mt-8">
-                      Ver especial Mundial <ArrowRight className="w-4 h-4" />
+                      {settings['home_mundial_btn'] || 'Ver especial Mundial'} <ArrowRight className="w-4 h-4" />
                     </Link>
                   </div>
                   {mundialImg && (
@@ -338,10 +352,14 @@ export default function Home() {
                   backgroundSize: '40px 40px'
                 }} />
                 <div className="relative z-10 max-w-2xl mx-auto">
-                  <div className="text-[10px] text-[#f00856] font-black tracking-[0.3em] uppercase mb-3">Collectibles Uruguay</div>
-                  <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight">Tu próxima pieza de colección te está esperando.</h2>
+                  <div className="text-[10px] text-[#f00856] font-black tracking-[0.3em] uppercase mb-3">
+                    {settings['home_cta_subtitle'] || 'Collectibles Uruguay'}
+                  </div>
+                  <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight">
+                    {settings['home_cta_title'] || 'Tu próxima pieza de colección te está esperando.'}
+                  </h2>
                   <Link to="/shop" className="btn-primary px-10 py-5 text-base rounded-full inline-flex items-center gap-2 mt-10">
-                    Explorar catálogo <ArrowRight className="w-5 h-5" />
+                    {settings['home_cta_btn'] || 'Explorar catálogo'} <ArrowRight className="w-5 h-5" />
                   </Link>
                 </div>
               </div>

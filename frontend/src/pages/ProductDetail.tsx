@@ -9,8 +9,10 @@ import { ProductBadge } from '../components/ProductBadge';
 import { getProductImage, resolveImage, FALLBACK_IMAGE } from '../lib/imageUtils';
 import { analytics } from '../lib/analytics';
 import SEO from '../components/SEO';
+import { useSiteSettings } from '../hooks/useSiteSettings';
 
 export default function ProductDetail() {
+  const { settings } = useSiteSettings();
   const { slug } = useParams();
   const { product, loading } = useProduct(slug);
   const cart = useCartContext();
@@ -216,7 +218,7 @@ export default function ProductDetail() {
 
         {/* INFO SECTION */}
         <section>
-          <div className="label-tag">Ficha de producto</div>
+          <div className="label-tag">{settings['product_tag_label'] || 'Ficha de producto'}</div>
           <h1 className="text-4xl md:text-6xl font-black leading-[1.1] mt-3 tracking-tight text-white">
             {product.title}
           </h1>
@@ -268,7 +270,7 @@ export default function ProductDetail() {
                   {formatCurrencyPrice(finalPrice)}
                 </div>
                 <div className="text-sm text-slate-400 mt-2 flex items-center gap-2 font-medium">
-                   <Truck className="w-4 h-4 text-[#f00856]" /> Envío calculado al finalizar
+                   <Truck className="w-4 h-4 text-[#f00856]" /> {settings['product_shipping_calc_label'] || 'Envío calculado al finalizar'}
                 </div>
                 <div className={`text-sm font-bold mt-2 flex items-center gap-2 ${stockInfo.className}`}>
                   <span className="w-2 h-2 rounded-full bg-current shadow-[0_0_10px_currentColor]" />
@@ -312,7 +314,7 @@ export default function ProductDetail() {
           {/* SELLER INFO — real data, no Math.random */}
           {product.brand?.name && (
             <div className="glass rounded-[2rem] p-6 mt-4">
-              <div className="text-[10px] uppercase text-slate-500 font-black tracking-[0.2em]">Vendido por</div>
+              <div className="text-[10px] uppercase text-slate-500 font-black tracking-[0.2em]">{settings['product_sold_by_label'] || 'Vendido por'}</div>
               <div className="flex items-center justify-between gap-4 mt-4">
                 <div className="flex items-center gap-4">
                   <div className="w-14 h-14 rounded-full bg-[#f00856] flex items-center justify-center font-black text-xl shadow-lg shadow-[#f00856]/20">
@@ -323,7 +325,7 @@ export default function ProductDetail() {
                   </div>
                 </div>
                 <span className="badge hidden sm:inline-flex items-center gap-1.5">
-                  <ShieldCheck className="w-3 h-3 text-green-400" /> Distribuidor oficial
+                  <ShieldCheck className="w-3 h-3 text-green-400" /> {settings['product_distributor_label'] || 'Distribuidor oficial'}
                 </span>
               </div>
             </div>
@@ -331,16 +333,16 @@ export default function ProductDetail() {
 
           <div className="grid grid-cols-3 gap-3 mt-4">
             <div className="soft rounded-2xl p-4 transition-colors hover:bg-white/5">
-              <b className="text-white block text-sm">⚡ Entrega</b>
-              <p className="text-[11px] text-slate-500 mt-1 uppercase font-black">24-48 horas</p>
+              <b className="text-white block text-sm">{settings['product_trust_title_1'] || '⚡ Entrega'}</b>
+              <p className="text-[11px] text-slate-500 mt-1 uppercase font-black">{settings['product_trust_desc_1'] || '24-48 horas'}</p>
             </div>
             <div className="soft rounded-2xl p-4 transition-colors hover:bg-white/5">
-              <b className="text-white block text-sm">✅ Estado</b>
-              <p className="text-[11px] text-slate-500 mt-1 uppercase font-black">Nuevo / Sellado</p>
+              <b className="text-white block text-sm">{settings['product_trust_title_2'] || '✅ Estado'}</b>
+              <p className="text-[11px] text-slate-500 mt-1 uppercase font-black">{settings['product_trust_desc_2'] || 'Nuevo / Sellado'}</p>
             </div>
             <div className="soft rounded-2xl p-4 transition-colors hover:bg-white/5">
-              <b className="text-white block text-sm">🔄 Devolución</b>
-              <p className="text-[11px] text-slate-500 mt-1 uppercase font-black">14 días gratis</p>
+              <b className="text-white block text-sm">{settings['product_trust_title_3'] || '🔄 Devolución'}</b>
+              <p className="text-[11px] text-slate-500 mt-1 uppercase font-black">{settings['product_trust_desc_3'] || '14 días gratis'}</p>
             </div>
           </div>
         </section>
@@ -349,12 +351,12 @@ export default function ProductDetail() {
       <section className="grid lg:grid-cols-[1fr_.8fr] gap-6 mt-10">
         <div className="glass rounded-[2.5rem] p-8 md:p-12">
           <div className="label-tag">Historia del producto</div>
-          <h2 className="text-3xl md:text-4xl font-black mt-3 text-white tracking-tight">¿Por qué importa?</h2>
+          <h2 className="text-3xl md:text-4xl font-black mt-3 text-white tracking-tight">{settings['product_history_title'] || '¿Por qué importa?'}</h2>
           <div className="prose prose-invert mt-6 max-w-none text-slate-300 leading-relaxed text-lg">
              {product.description ? (
                <p>{product.description}</p>
              ) : (
-               <p>Cada detalle ha sido verificado para garantizar su autenticidad y estado. Contexto del personaje, rareza, franquicia y valor para coleccionistas.</p>
+               <p>{settings['product_history_default_text'] || 'Cada detalle ha sido verificado para garantizar su autenticidad y estado. Contexto del personaje, rareza, franquicia y valor para coleccionistas.'}</p>
              )}
           </div>
         </div>
@@ -362,7 +364,7 @@ export default function ProductDetail() {
         <div className="space-y-4">
           <div className="glass rounded-[2.5rem] p-8 h-full">
             <div className="label-tag">Especificaciones</div>
-            <h2 className="text-3xl font-black mt-3 text-white tracking-tight">Detalles técnicos</h2>
+            <h2 className="text-3xl font-black mt-3 text-white tracking-tight">{settings['product_specs_title'] || 'Detalles técnicos'}</h2>
             <div className="space-y-3 mt-6">
               <div className="soft rounded-2xl p-5 flex justify-between items-center group hover:bg-white/5 transition-colors">
                 <span className="text-slate-400 font-bold text-sm uppercase tracking-wider">Categoría</span>
@@ -391,8 +393,8 @@ export default function ProductDetail() {
       <section className="mt-16 border-t border-white/10 pt-16">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
           <div>
-            <div className="label-tag">Opiniones de compradores</div>
-            <h2 className="text-4xl font-black mt-2 text-white">Lo que dicen los coleccionistas</h2>
+            <div className="label-tag">{settings['product_reviews_label'] || 'Opiniones de compradores'}</div>
+            <h2 className="text-4xl font-black mt-2 text-white">{settings['product_reviews_title'] || 'Lo que dicen los coleccionistas'}</h2>
           </div>
           {/* "Escribir reseña" disabled — no backend handler */}
         </div>

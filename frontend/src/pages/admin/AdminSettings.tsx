@@ -367,7 +367,6 @@ export default function AdminSettings() {
   
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [toggles, setToggles] = useState<any[]>([]);
-  const [shipping, setShipping] = useState<any[]>([]);
   const [handyProvider, setHandyProvider] = useState<HandyProviderRecord>(HANDY_DEFAULTS);
   const [handySecretInput, setHandySecretInput] = useState('');
   const [testingHandyConnection, setTestingHandyConnection] = useState(false);
@@ -379,17 +378,15 @@ export default function AdminSettings() {
 
   async function fetchData() {
     setLoading(true);
-    const [{ data: s }, { data: t }, { data: sh }, { data: handy }] = await Promise.all([
+    const [{ data: s }, { data: t }, { data: handy }] = await Promise.all([
       supabase.from('site_settings').select('*'),
       supabase.from('feature_toggles').select('*').order('id'),
-      supabase.from('shipping_rules').select('*').order('zone'),
       supabase.from('payment_providers').select('*').eq('provider_key', 'handy').maybeSingle(),
     ]);
     const settingsMap: Record<string, string> = {};
     (s || []).forEach(item => { settingsMap[item.key] = item.value || ''; });
     setSettings(settingsMap);
     setToggles(t || []);
-    setShipping(sh || []);
     setHandyProvider(normalizeHandyProvider(handy || undefined));
     setHandySecretInput('');
     setLoading(false);
@@ -469,6 +466,7 @@ export default function AdminSettings() {
         {[
           { key: 'general', label: 'General', icon: Store },
           { key: 'appearance', label: 'Theme Builder', icon: LayoutTemplate },
+          { key: 'texts', label: 'Textos de Páginas', icon: FileText },
           { key: 'payments', label: 'Pagos', icon: CreditCard },
           { key: 'modules', label: 'Modulos Activos', icon: Settings },
           { key: 'shipping', label: 'Envios', icon: Truck },
@@ -674,6 +672,221 @@ export default function AdminSettings() {
                    </div>
                 </div>
               </div>
+          </div>
+        </div>
+      )}
+
+      {/* Page Texts Settings */}
+      {currentTab === 'texts' && (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+          {/* COL 1: HOME PAGE TEXTS */}
+          <div className="space-y-8">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6 shadow-sm">
+               <h3 className="font-bold text-lg border-b pb-2 flex items-center gap-2 text-gray-900">
+                 <Store className="w-5 h-5 text-[#f00856]" /> Textos de Página de Inicio (Home)
+               </h3>
+               
+               <div className="space-y-6">
+                 {/* Hero Section */}
+                 <div className="border-b pb-4">
+                   <h4 className="font-bold text-sm text-gray-800 mb-4 uppercase tracking-wider">Sección Hero (Banner Principal)</h4>
+                   <div className="space-y-4">
+                     <div>
+                       <label className="block text-xs font-bold text-gray-700 mb-1">Subtítulo Hero</label>
+                       <input className="form-input w-full" value={settings['home_hero_subtitle'] || ''} onChange={e => setSettings({ ...settings, home_hero_subtitle: e.target.value })} onBlur={() => saveSetting('home_hero_subtitle', settings['home_hero_subtitle'] || '')} placeholder="Collectibles Uruguay" />
+                     </div>
+                     <div>
+                       <label className="block text-xs font-bold text-gray-700 mb-1">Título Hero (Soporta HTML/br)</label>
+                       <textarea rows={2} className="form-input w-full font-mono text-sm" value={settings['home_hero_title'] || ''} onChange={e => setSettings({ ...settings, home_hero_title: e.target.value })} onBlur={() => saveSetting('home_hero_title', settings['home_hero_title'] || '')} placeholder="La colección empieza acá." />
+                     </div>
+                     <div>
+                       <label className="block text-xs font-bold text-gray-700 mb-1">Descripción Hero</label>
+                       <textarea rows={3} className="form-input w-full" value={settings['home_hero_desc'] || ''} onChange={e => setSettings({ ...settings, home_hero_desc: e.target.value })} onBlur={() => saveSetting('home_hero_desc', settings['home_hero_desc'] || '')} placeholder="Figuras, juguetes, licencias icónicas..." />
+                     </div>
+                     <div className="grid grid-cols-2 gap-4">
+                       <div>
+                         <label className="block text-xs font-bold text-gray-700 mb-1">Botón Primario</label>
+                         <input className="form-input w-full" value={settings['home_hero_btn_primary'] || ''} onChange={e => setSettings({ ...settings, home_hero_btn_primary: e.target.value })} onBlur={() => saveSetting('home_hero_btn_primary', settings['home_hero_btn_primary'] || '')} placeholder="Ver catálogo" />
+                       </div>
+                       <div>
+                         <label className="block text-xs font-bold text-gray-700 mb-1">Botón Secundario</label>
+                         <input className="form-input w-full" value={settings['home_hero_btn_secondary'] || ''} onChange={e => setSettings({ ...settings, home_hero_btn_secondary: e.target.value })} onBlur={() => saveSetting('home_hero_btn_secondary', settings['home_hero_btn_secondary'] || '')} placeholder="Ver promociones" />
+                       </div>
+                     </div>
+                   </div>
+                 </div>
+
+                 {/* Bento Section */}
+                 <div className="border-b pb-4">
+                   <h4 className="font-bold text-sm text-gray-800 mb-4 uppercase tracking-wider">Sección Categorías (Bento)</h4>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     <div>
+                       <label className="block text-xs font-bold text-gray-700 mb-1">Subtítulo Categorías</label>
+                       <input className="form-input w-full" value={settings['home_bento_subtitle'] || ''} onChange={e => setSettings({ ...settings, home_bento_subtitle: e.target.value })} onBlur={() => saveSetting('home_bento_subtitle', settings['home_bento_subtitle'] || '')} placeholder="Mundos coleccionables" />
+                     </div>
+                     <div>
+                       <label className="block text-xs font-bold text-gray-700 mb-1">Título Categorías</label>
+                       <input className="form-input w-full" value={settings['home_bento_title'] || ''} onChange={e => setSettings({ ...settings, home_bento_title: e.target.value })} onBlur={() => saveSetting('home_bento_title', settings['home_bento_title'] || '')} placeholder="Explorá por categoría" />
+                     </div>
+                   </div>
+                 </div>
+
+                 {/* Especial Mundial Section */}
+                 <div className="border-b pb-4">
+                   <h4 className="font-bold text-sm text-gray-800 mb-4 uppercase tracking-wider">Sección Especial Mundial</h4>
+                   <div className="space-y-4">
+                     <div className="grid grid-cols-2 gap-4">
+                       <div>
+                         <label className="block text-xs font-bold text-gray-700 mb-1">Subtítulo Especial</label>
+                         <input className="form-input w-full" value={settings['home_mundial_subtitle'] || ''} onChange={e => setSettings({ ...settings, home_mundial_subtitle: e.target.value })} onBlur={() => saveSetting('home_mundial_subtitle', settings['home_mundial_subtitle'] || '')} placeholder="Edición especial" />
+                       </div>
+                       <div>
+                         <label className="block text-xs font-bold text-gray-700 mb-1">Título Especial</label>
+                         <input className="form-input w-full" value={settings['home_mundial_title'] || ''} onChange={e => setSettings({ ...settings, home_mundial_title: e.target.value })} onBlur={() => saveSetting('home_mundial_title', settings['home_mundial_title'] || '')} placeholder="Especial Mundial" />
+                       </div>
+                     </div>
+                     <div>
+                       <label className="block text-xs font-bold text-gray-700 mb-1">Descripción Especial</label>
+                       <textarea rows={3} className="form-input w-full" value={settings['home_mundial_desc'] || ''} onChange={e => setSettings({ ...settings, home_mundial_desc: e.target.value })} onBlur={() => saveSetting('home_mundial_desc', settings['home_mundial_desc'] || '')} placeholder="Álbum, figuritas y mascotas..." />
+                     </div>
+                     <div>
+                       <label className="block text-xs font-bold text-gray-700 mb-1">Texto del Botón</label>
+                       <input className="form-input w-full" value={settings['home_mundial_btn'] || ''} onChange={e => setSettings({ ...settings, home_mundial_btn: e.target.value })} onBlur={() => saveSetting('home_mundial_btn', settings['home_mundial_btn'] || '')} placeholder="Ver especial Mundial" />
+                     </div>
+                   </div>
+                 </div>
+
+                 {/* CTA Final Section */}
+                 <div>
+                   <h4 className="font-bold text-sm text-gray-800 mb-4 uppercase tracking-wider">Sección de Cierre (CTA Final)</h4>
+                   <div className="space-y-4">
+                     <div className="grid grid-cols-2 gap-4">
+                       <div>
+                         <label className="block text-xs font-bold text-gray-700 mb-1">Subtítulo CTA</label>
+                         <input className="form-input w-full" value={settings['home_cta_subtitle'] || ''} onChange={e => setSettings({ ...settings, home_cta_subtitle: e.target.value })} onBlur={() => saveSetting('home_cta_subtitle', settings['home_cta_subtitle'] || '')} placeholder="Collectibles Uruguay" />
+                       </div>
+                       <div>
+                         <label className="block text-xs font-bold text-gray-700 mb-1">Texto del Botón</label>
+                         <input className="form-input w-full" value={settings['home_cta_btn'] || ''} onChange={e => setSettings({ ...settings, home_cta_btn: e.target.value })} onBlur={() => saveSetting('home_cta_btn', settings['home_cta_btn'] || '')} placeholder="Explorar catálogo" />
+                       </div>
+                     </div>
+                     <div>
+                       <label className="block text-xs font-bold text-gray-700 mb-1">Título CTA</label>
+                       <textarea rows={2} className="form-input w-full" value={settings['home_cta_title'] || ''} onChange={e => setSettings({ ...settings, home_cta_title: e.target.value })} onBlur={() => saveSetting('home_cta_title', settings['home_cta_title'] || '')} placeholder="Tu próxima pieza de colección te está esperando." />
+                     </div>
+                   </div>
+                 </div>
+               </div>
+            </div>
+          </div>
+
+          {/* COL 2: PRODUCT PAGE TEXTS */}
+          <div className="space-y-8">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6 shadow-sm">
+               <h3 className="font-bold text-lg border-b pb-2 flex items-center gap-2 text-gray-900">
+                 <Tag className="w-5 h-5 text-indigo-600" /> Textos de Página de Producto (Ficha)
+               </h3>
+               
+               <div className="space-y-6">
+                 {/* Badges and Labels */}
+                 <div className="border-b pb-4">
+                   <h4 className="font-bold text-sm text-gray-800 mb-4 uppercase tracking-wider">Etiquetas e Información de Venta</h4>
+                   <div className="space-y-4">
+                     <div className="grid grid-cols-2 gap-4">
+                       <div>
+                         <label className="block text-xs font-bold text-gray-700 mb-1">Etiqueta Principal</label>
+                         <input className="form-input w-full" value={settings['product_tag_label'] || ''} onChange={e => setSettings({ ...settings, product_tag_label: e.target.value })} onBlur={() => saveSetting('product_tag_label', settings['product_tag_label'] || '')} placeholder="Ficha de producto" />
+                       </div>
+                       <div>
+                         <label className="block text-xs font-bold text-gray-700 mb-1">Etiqueta Distribuidor Oficial</label>
+                         <input className="form-input w-full" value={settings['product_distributor_label'] || ''} onChange={e => setSettings({ ...settings, product_distributor_label: e.target.value })} onBlur={() => saveSetting('product_distributor_label', settings['product_distributor_label'] || '')} placeholder="Distribuidor oficial" />
+                       </div>
+                     </div>
+                     <div className="grid grid-cols-2 gap-4">
+                       <div>
+                         <label className="block text-xs font-bold text-gray-700 mb-1">Texto "Vendido por"</label>
+                         <input className="form-input w-full" value={settings['product_sold_by_label'] || ''} onChange={e => setSettings({ ...settings, product_sold_by_label: e.target.value })} onBlur={() => saveSetting('product_sold_by_label', settings['product_sold_by_label'] || '')} placeholder="Vendido por" />
+                       </div>
+                       <div>
+                         <label className="block text-xs font-bold text-gray-700 mb-1">Texto Envío en Precio</label>
+                         <input className="form-input w-full" value={settings['product_shipping_calc_label'] || ''} onChange={e => setSettings({ ...settings, product_shipping_calc_label: e.target.value })} onBlur={() => saveSetting('product_shipping_calc_label', settings['product_shipping_calc_label'] || '')} placeholder="Envío calculado al finalizar" />
+                       </div>
+                     </div>
+                   </div>
+                 </div>
+
+                 {/* Trust Badges */}
+                 <div className="border-b pb-4">
+                   <h4 className="font-bold text-sm text-gray-800 mb-4 uppercase tracking-wider">Tarjetas de Confianza</h4>
+                   <div className="space-y-4">
+                     {/* Badge 1: Delivery */}
+                     <div className="grid grid-cols-2 gap-4">
+                       <div>
+                         <label className="block text-xs font-bold text-gray-700 mb-1">Título Tarjeta 1 (Envío)</label>
+                         <input className="form-input w-full" value={settings['product_trust_title_1'] || ''} onChange={e => setSettings({ ...settings, product_trust_title_1: e.target.value })} onBlur={() => saveSetting('product_trust_title_1', settings['product_trust_title_1'] || '')} placeholder="⚡ Entrega" />
+                       </div>
+                       <div>
+                         <label className="block text-xs font-bold text-gray-700 mb-1">Descripción Tarjeta 1</label>
+                         <input className="form-input w-full" value={settings['product_trust_desc_1'] || ''} onChange={e => setSettings({ ...settings, product_trust_desc_1: e.target.value })} onBlur={() => saveSetting('product_trust_desc_1', settings['product_trust_desc_1'] || '')} placeholder="24-48 horas" />
+                       </div>
+                     </div>
+                     {/* Badge 2: State */}
+                     <div className="grid grid-cols-2 gap-4">
+                       <div>
+                         <label className="block text-xs font-bold text-gray-700 mb-1">Título Tarjeta 2 (Estado)</label>
+                         <input className="form-input w-full" value={settings['product_trust_title_2'] || ''} onChange={e => setSettings({ ...settings, product_trust_title_2: e.target.value })} onBlur={() => saveSetting('product_trust_title_2', settings['product_trust_title_2'] || '')} placeholder="✅ Estado" />
+                       </div>
+                       <div>
+                         <label className="block text-xs font-bold text-gray-700 mb-1">Descripción Tarjeta 2</label>
+                         <input className="form-input w-full" value={settings['product_trust_desc_2'] || ''} onChange={e => setSettings({ ...settings, product_trust_desc_2: e.target.value })} onBlur={() => saveSetting('product_trust_desc_2', settings['product_trust_desc_2'] || '')} placeholder="Nuevo / Sellado" />
+                       </div>
+                     </div>
+                     {/* Badge 3: Returns */}
+                     <div className="grid grid-cols-2 gap-4">
+                       <div>
+                         <label className="block text-xs font-bold text-gray-700 mb-1">Título Tarjeta 3 (Devolución)</label>
+                         <input className="form-input w-full" value={settings['product_trust_title_3'] || ''} onChange={e => setSettings({ ...settings, product_trust_title_3: e.target.value })} onBlur={() => saveSetting('product_trust_title_3', settings['product_trust_title_3'] || '')} placeholder="🔄 Devolución" />
+                       </div>
+                       <div>
+                         <label className="block text-xs font-bold text-gray-700 mb-1">Descripción Tarjeta 3</label>
+                         <input className="form-input w-full" value={settings['product_trust_desc_3'] || ''} onChange={e => setSettings({ ...settings, product_trust_desc_3: e.target.value })} onBlur={() => saveSetting('product_trust_desc_3', settings['product_trust_desc_3'] || '')} placeholder="14 días gratis" />
+                       </div>
+                     </div>
+                   </div>
+                 </div>
+
+                 {/* Sections */}
+                 <div>
+                   <h4 className="font-bold text-sm text-gray-800 mb-4 uppercase tracking-wider">Secciones de Información y Reseñas</h4>
+                   <div className="space-y-4">
+                     <div className="grid grid-cols-2 gap-4">
+                       <div>
+                         <label className="block text-xs font-bold text-gray-700 mb-1">Título Sección Historia</label>
+                         <input className="form-input w-full" value={settings['product_history_title'] || ''} onChange={e => setSettings({ ...settings, product_history_title: e.target.value })} onBlur={() => saveSetting('product_history_title', settings['product_history_title'] || '')} placeholder="¿Por qué importa?" />
+                       </div>
+                       <div>
+                         <label className="block text-xs font-bold text-gray-700 mb-1">Título Sección Ficha Técnica</label>
+                         <input className="form-input w-full" value={settings['product_specs_title'] || ''} onChange={e => setSettings({ ...settings, product_specs_title: e.target.value })} onBlur={() => saveSetting('product_specs_title', settings['product_specs_title'] || '')} placeholder="Detalles técnicos" />
+                       </div>
+                     </div>
+                     <div>
+                       <label className="block text-xs font-bold text-gray-700 mb-1">Texto de Historia por Defecto</label>
+                       <textarea rows={3} className="form-input w-full" value={settings['product_history_default_text'] || ''} onChange={e => setSettings({ ...settings, product_history_default_text: e.target.value })} onBlur={() => saveSetting('product_history_default_text', settings['product_history_default_text'] || '')} placeholder="Cada detalle ha sido verificado para garantizar su autenticidad..." />
+                     </div>
+                     <div className="grid grid-cols-2 gap-4">
+                       <div>
+                         <label className="block text-xs font-bold text-gray-700 mb-1">Etiqueta Opiniones</label>
+                         <input className="form-input w-full" value={settings['product_reviews_label'] || ''} onChange={e => setSettings({ ...settings, product_reviews_label: e.target.value })} onBlur={() => saveSetting('product_reviews_label', settings['product_reviews_label'] || '')} placeholder="Opiniones de compradores" />
+                       </div>
+                       <div>
+                         <label className="block text-xs font-bold text-gray-700 mb-1">Título Opiniones</label>
+                         <input className="form-input w-full" value={settings['product_reviews_title'] || ''} onChange={e => setSettings({ ...settings, product_reviews_title: e.target.value })} onBlur={() => saveSetting('product_reviews_title', settings['product_reviews_title'] || '')} placeholder="Lo que dicen los coleccionistas" />
+                       </div>
+                     </div>
+                   </div>
+                 </div>
+               </div>
+            </div>
           </div>
         </div>
       )}
@@ -1153,32 +1366,6 @@ export default function AdminSettings() {
                    </button>
                 </div>
              </div>
-          </div>
-
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-            <div className="p-4 border-b bg-gray-50">
-               <h3 className="font-bold text-gray-900">Zonas de Envío Logístico Estáticas</h3>
-            </div>
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Zona</th>
-                  <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Tarifa</th>
-                  <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Gratis superando</th>
-                  <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Estado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {shipping.map(s => (
-                  <tr key={s.id} className="hover:bg-gray-50/50">
-                    <td className="px-6 py-4 text-sm font-bold text-gray-900 capitalize">{s.name}</td>
-                    <td className="px-6 py-4 text-sm font-black text-blue-600">${s.rate}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{s.free_above ? `$${s.free_above}` : '—'}</td>
-                    <td className="px-6 py-4"><span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-md ${s.is_active ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}>{s.is_active ? 'Activa' : 'Inactiva'}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         </div>
       )}
