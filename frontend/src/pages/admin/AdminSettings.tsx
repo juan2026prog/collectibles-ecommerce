@@ -133,6 +133,28 @@ function MenuEditor({ title, description, initialJson, onSave }: any) {
     setItems(n);
   };
 
+  const resetToDefault = () => {
+    if (window.confirm('¿Estás seguro de que quieres restablecer este menú a los valores por defecto? Se perderán los cambios que no hayas guardado.')) {
+      if (title.includes('Header') || title.toLowerCase().includes('header')) {
+        setItems([
+          { label: 'INICIO', url: '/', subItems: [] },
+          { label: 'CATEGORÍAS', url: '/shop', subItems: [] },
+          { label: 'MARCAS', url: '/shop', subItems: [] },
+          { label: 'NOSOTROS', url: '/about', subItems: [] },
+          { label: 'CONTACTO', url: '/contact', subItems: [] },
+          { label: 'BLOG', url: '/blog', subItems: [] }
+        ]);
+      } else {
+        setItems([
+          { label: 'Condiciones de Compra', url: '/page/condiciones-de-compra', subItems: [] },
+          { label: 'Políticas de Privacidad', url: '/page/pol-ticas-de-privacidad', subItems: [] },
+          { label: 'Envios/Devoluciones', url: '/page/envios-devoluciones', subItems: [] },
+          { label: 'Términos y condiciones', url: '/page/terminos', subItems: [] }
+        ]);
+      }
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200 shadow-sm">
@@ -140,7 +162,10 @@ function MenuEditor({ title, description, initialJson, onSave }: any) {
           <h4 className="font-bold text-gray-800">{title}</h4>
           <p className="text-xs text-gray-500 mt-0.5">{description}</p>
         </div>
-        <button onClick={addItem} className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 bg-white"><Plus className="w-3.5 h-3.5" /> Agregar Elemento</button>
+        <div className="flex items-center gap-2">
+          <button onClick={resetToDefault} className="btn-secondary text-xs px-3 py-1.5 text-red-600 hover:text-red-700 bg-white border border-red-200">Restablecer Predeterminados</button>
+          <button onClick={addItem} className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 bg-white"><Plus className="w-3.5 h-3.5" /> Agregar Elemento</button>
+        </div>
       </div>
 
       <div className="space-y-3">
