@@ -69,146 +69,317 @@ export default function DynamicPage({ forcedSlug }: { forcedSlug?: string }) {
   }, [slug]);
 
   const safeContent = useMemo(() => {
+    // Si la página viene de base de datos con contenido personalizado, lo priorizamos
+    if (page?.content) {
+      return sanitizeRichHtml(page.content);
+    }
+
     const s = slug?.toLowerCase() || '';
     if (s.includes('privacidad') || s.includes('privacy')) {
-      return `<p><strong>Collectibles Uruguay</strong> respecta la privacidad de sus clientes y usuarios. Esta política explica qué datos podemos solicitar, cómo se utilizan y qué medidas aplicamos para protegerlos.</p>
+      return `<div class="space-y-8 font-sans">
+  <div class="rounded-2xl border border-white/10 bg-white/[0.02] p-6 md:p-8 mb-8">
+    <p class="text-base md:text-lg text-slate-200 leading-relaxed font-semibold mb-0">
+      En <strong class="text-white font-extrabold">Collectibles Uruguay</strong> respetamos la privacidad de nuestros clientes y usuarios. 
+      Esta política explica de forma clara y transparente qué datos recopilamos, cómo los utilizamos y qué medidas aplicamos para garantizar su seguridad.
+    </p>
+  </div>
 
-<h2>1. Información que recopilamos</h2>
-<p>Podemos recopilar información necesaria para procesar pedidos, responder consultas y mejorar la experiencia de compra. Esto puede incluir nombre, email, teléfono, dirección de envío, productos comprados y datos de facturación.</p>
-<ul>
-  <li>Datos de contacto para coordinar compras y envíos.</li>
-  <li>Información de pedidos y productos agregados al carrito.</li>
-  <li>Datos técnicos básicos para seguridad y análisis del sitio.</li>
-</ul>
+  <div class="border-t border-white/5 pt-8">
+    <h2 class="text-xl md:text-2xl font-black text-white mb-4 tracking-tight flex items-center gap-3">
+      <span class="w-1.5 h-6 bg-[#f00856] rounded-full inline-block"></span>
+      1. Información que recopilamos
+    </h2>
+    <p class="text-slate-300 leading-relaxed">Recopilamos únicamente la información necesaria para procesar pedidos, responder consultas y mejorar la experiencia de compra en la tienda. Esto puede incluir:</p>
+    <div class="grid md:grid-cols-2 gap-6 my-6">
+      <div class="bg-[#0e1320] border border-white/10 rounded-2xl p-6 hover:border-white/20 transition-all duration-300">
+        <h3 class="font-extrabold text-[#f00856] text-xs uppercase tracking-widest mb-3">Datos de Contacto y Envío</h3>
+        <p class="text-sm text-slate-400 leading-relaxed mb-0">Nombre completo, correo electrónico, número de teléfono y dirección de entrega para coordinar los envíos en todo el país.</p>
+      </div>
+      <div class="bg-[#0e1320] border border-white/10 rounded-2xl p-6 hover:border-white/20 transition-all duration-300">
+        <h3 class="font-extrabold text-[#f00856] text-xs uppercase tracking-widest mb-3">Datos de Compra y Actividad</h3>
+        <p class="text-sm text-slate-400 leading-relaxed mb-0">Detalles de pedidos, productos seleccionados en el carrito y configuraciones de cuenta del usuario.</p>
+      </div>
+    </div>
+  </div>
 
-<h2>2. Uso de la información</h2>
-<p>Utilizamos tus datos para gestionar compras, confirmar pagos, coordinar entregas, brindar soporte y comunicar información relacionada con productos o promociones de Collectibles.</p>
+  <div class="border-t border-white/5 pt-8">
+    <h2 class="text-xl md:text-2xl font-black text-white mb-4 tracking-tight flex items-center gap-3">
+      <span class="w-1.5 h-6 bg-[#f00856] rounded-full inline-block"></span>
+      2. Uso de la información
+    </h2>
+    <p class="text-slate-300 leading-relaxed">Toda la información personal recopilada es confidencial y se utiliza exclusivamente para:</p>
+    <ul class="list-none space-y-3.5 my-6 pl-0">
+      <li class="flex items-start gap-3">
+        <span class="text-[#f00856] font-bold text-base mt-0.5">•</span>
+        <span class="text-slate-300">Gestionar y entregar tus compras con la agencia seleccionada.</span>
+      </li>
+      <li class="flex items-start gap-3">
+        <span class="text-[#f00856] font-bold text-base mt-0.5">•</span>
+        <span class="text-slate-300">Procesar pagos y validar transacciones de forma segura.</span>
+      </li>
+      <li class="flex items-start gap-3">
+        <span class="text-[#f00856] font-bold text-base mt-0.5">•</span>
+        <span class="text-slate-300">Brindar soporte técnico y atención post-venta personalizada.</span>
+      </li>
+      <li class="flex items-start gap-3">
+        <span class="text-[#f00856] font-bold text-base mt-0.5">•</span>
+        <span class="text-slate-300">Enviar promociones y novedades sobre productos si el usuario se encuentra suscripto.</span>
+      </li>
+    </ul>
+  </div>
 
-<h2>3. Pagos y seguridad</h2>
-<p>Los pagos se procesan mediante proveedores externos seguros. Collectibles no almacena datos completos de tarjetas ni información bancaria sensible en sus servidores públicos.</p>
+  <div class="border-t border-white/5 pt-8">
+    <h2 class="text-xl md:text-2xl font-black text-white mb-4 tracking-tight flex items-center gap-3">
+      <span class="w-1.5 h-6 bg-[#f00856] rounded-full inline-block"></span>
+      3. Pagos y seguridad
+    </h2>
+    <p class="text-slate-300 leading-relaxed">
+      Los pagos se procesan mediante proveedores y pasarelas de pago externas con altos estándares de seguridad (SSL). 
+      <strong class="text-white">Collectibles Uruguay no almacena</strong> datos completos de tarjetas de crédito o débito ni credenciales bancarias sensibles en sus servidores públicos.
+    </p>
+  </div>
 
-<h2>4. Comunicación</h2>
-<p>Podemos comunicarnos por email, WhatsApp o redes sociales para responder consultas, confirmar pedidos o enviar información relevante sobre tu compra.</p>
+  <div class="border-t border-white/5 pt-8">
+    <h2 class="text-xl md:text-2xl font-black text-white mb-4 tracking-tight flex items-center gap-3">
+      <span class="w-1.5 h-6 bg-[#f00856] rounded-full inline-block"></span>
+      4. Comunicación con el cliente
+    </h2>
+    <p class="text-slate-300 leading-relaxed">
+      Podemos comunicarnos contigo por correo electrónico, WhatsApp o llamada telefónica con el único objetivo de coordinar el éxito de tu orden, responder tus solicitudes de soporte o confirmar el despacho del producto.
+    </p>
+  </div>
 
-<h2>5. Derechos del usuario</h2>
-<p>Podés solicitar acceso, corrección o eliminación de tus datos personales escribiendo a nuestros canales oficiales de contacto.</p>
-
-<h2>6. Cambios en esta política</h2>
-<p>Collectibles puede actualizar esta política cuando sea necesario. Los cambios se publicarán en esta misma página.</p>`;
+  <div class="border-t border-white/5 pt-8">
+    <h2 class="text-xl md:text-2xl font-black text-white mb-4 tracking-tight flex items-center gap-3">
+      <span class="w-1.5 h-6 bg-[#f00856] rounded-full inline-block"></span>
+      5. Derechos del usuario
+    </h2>
+    <p class="text-slate-300 leading-relaxed mb-4">
+      Tienes pleno derecho a solicitar el acceso, rectificación o eliminación definitiva de tus datos personales de nuestra base de datos. 
+      Puedes hacerlo escribiendo a cualquiera de nuestros canales oficiales de contacto.
+    </p>
+  </div>
+</div>`;
     }
 
     if (s.includes('condiciones')) {
-      return `<p>Al comprar cualquiera de nuestros productos, el cliente acepta los términos y condiciones detallados a continuación.</p>
+      return `<div class="space-y-8 font-sans">
+  <div class="rounded-2xl border border-white/10 bg-white/[0.02] p-6 md:p-8 mb-8">
+    <p class="text-base md:text-lg text-slate-200 leading-relaxed font-semibold mb-0">
+      Al adquirir cualquiera de nuestros productos en el sitio, el comprador acepta y está sujeto a las condiciones y pautas de compra comerciales descritas a continuación.
+    </p>
+  </div>
 
-<ul>
-  <li>Todas las transacciones del sitio utilizan sistemas de seguridad para proteger la confidencialidad de los datos personales.</li>
-  <li>El cliente es la única persona responsable de sus datos de acceso y contraseña.</li>
-  <li>El comprador debe ser mayor de edad para utilizar el sitio web.</li>
-  <li>Al realizar una compra, el cliente acepta formar parte de nuestra base de datos para recibir novedades, promociones o comunicaciones comerciales. Puede solicitar la baja en cualquier momento.</li>
-  <li>Todos los precios están expresados en pesos uruguayos e incluyen impuestos. Los costos de envío pueden variar según la compra.</li>
-  <li>Los precios tienen validez únicamente durante la sesión activa y pueden cambiar sin previo aviso.</li>
-  <li>Todos los productos están sujetos a disponibilidad de stock.</li>
-  <li>Los colores y medidas son aproximados y pueden variar.</li>
-  <li>Los plazos de entrega y retiro son estimados.</li>
-  <li>No todos los productos disponibles en el sitio se encuentran necesariamente disponibles en el local físico y viceversa.</li>
-  <li>El cliente dispone de hasta 30 días corridos desde la compra para solicitar cambios o devoluciones.</li>
-  <li>Es responsabilidad del cliente revisar el estado del producto al momento de recibirlo.</li>
-</ul>
+  <div class="border-t border-white/5 pt-8">
+    <h2 class="text-xl md:text-2xl font-black text-white mb-4 tracking-tight flex items-center gap-3">
+      <span class="w-1.5 h-6 bg-[#f00856] rounded-full inline-block"></span>
+      Aspectos Generales de Transacción
+    </h2>
+    <ul class="list-none space-y-3.5 my-6 pl-0">
+      <li class="flex items-start gap-3">
+        <span class="text-[#f00856] font-bold text-base mt-0.5">•</span>
+        <span class="text-slate-300">Toda transacción se realiza bajo rigurosas medidas de seguridad SSL para proteger los datos de compra.</span>
+      </li>
+      <li class="flex items-start gap-3">
+        <span class="text-[#f00856] font-bold text-base mt-0.5">•</span>
+        <span class="text-slate-300">El cliente es responsable del resguardo de su contraseña de acceso y uso del perfil.</span>
+      </li>
+      <li class="flex items-start gap-3">
+        <span class="text-[#f00856] font-bold text-base mt-0.5">•</span>
+        <span class="text-slate-300">Los precios del sitio web se expresan en <strong>Pesos Uruguayos (UYU)</strong> e incluyen IVA.</span>
+      </li>
+      <li class="flex items-start gap-3">
+        <span class="text-[#f00856] font-bold text-base mt-0.5">•</span>
+        <span class="text-slate-300">Los precios y promociones están vigentes durante la sesión activa y pueden fluctuar o modificarse sin previo aviso.</span>
+      </li>
+      <li class="flex items-start gap-3">
+        <span class="text-[#f00856] font-bold text-base mt-0.5">•</span>
+        <span class="text-slate-300">Todos los artículos están sujetos a disponibilidad de stock al momento del empaque.</span>
+      </li>
+      <li class="flex items-start gap-3">
+        <span class="text-[#f00856] font-bold text-base mt-0.5">•</span>
+        <span class="text-slate-300">El cliente dispone de un plazo de hasta 30 días corridos para solicitar cambios de mercadería en stock.</span>
+      </li>
+    </ul>
+  </div>
 
-<h2>Condiciones de preventa / reserva</h2>
-<p>Los productos disponibles para preventa o reserva siguen el mismo procedimiento de compra que los productos en stock.</p>
-<p>El producto puede entregarse hasta 180 días después de su llegada a nuestro warehouse en origen, dependiendo del fabricante y procesos de importación.</p>
-<p>Superado ese plazo, el cliente podrá solicitar la devolución del dinero abonado.</p>
+  <div class="border-t border-white/5 pt-8">
+    <h2 class="text-xl md:text-2xl font-black text-white mb-4 tracking-tight flex items-center gap-3">
+      <span class="w-1.5 h-6 bg-[#f00856] rounded-full inline-block"></span>
+      Preventas y Reservas Especiales
+    </h2>
+    <p class="text-slate-300 leading-relaxed">Los productos disponibles en preventa corresponden a lanzamientos del exterior y tienen características de entrega particulares:</p>
+    <div class="bg-gradient-to-r from-red-950/20 to-[#f00856]/5 border border-[#f00856]/20 rounded-2xl p-6 my-6">
+      <h3 class="font-extrabold text-[#f00856] text-sm uppercase tracking-wider mb-2">Tiempos de Llegada de Preventa</h3>
+      <p class="text-sm text-slate-300 leading-relaxed mb-0">
+        Debido a los procesos logísticos y de importación, el producto puede tardar hasta un máximo de <strong>180 días corridos</strong> desde su llegada a nuestro depósito de origen. 
+        Si se excede este plazo límite de entrega, el comprador podrá solicitar la devolución completa de su dinero o seña abonada.
+      </p>
+    </div>
+  </div>
 
-<h2>Información de la empresa</h2>
-<p><strong>Razón Social:</strong> Sagittarius Importaciones SRL</p>
-<p><strong>RUT:</strong> 217180080010</p>
-<p><strong>Email:</strong> info@collectibles.com.uy</p>
-<p><strong>Teléfono:</strong> (+598) 096 889 596</p>`;
+  <div class="border-t border-white/5 pt-8">
+    <h2 class="text-xl md:text-2xl font-black text-white mb-4 tracking-tight flex items-center gap-3">
+      <span class="w-1.5 h-6 bg-[#f00856] rounded-full inline-block"></span>
+      Datos de Facturación Comercial
+    </h2>
+    <p class="text-slate-300 leading-relaxed">Toda compra genera una factura legal. Los datos de la firma operadora son:</p>
+    <div class="grid sm:grid-cols-2 gap-6 my-6">
+      <div class="bg-[#0e1320] border border-white/10 rounded-2xl p-5">
+        <span class="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">Razón Social</span>
+        <p class="text-white font-extrabold text-base mt-1 mb-0">Sagittarius Importaciones SRL</p>
+      </div>
+      <div class="bg-[#0e1320] border border-white/10 rounded-2xl p-5">
+        <span class="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">RUT de la Empresa</span>
+        <p class="text-white font-extrabold text-base mt-1 mb-0">217180080010</p>
+      </div>
+      <div class="bg-[#0e1320] border border-white/10 rounded-2xl p-5">
+        <span class="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">Correo Institucional</span>
+        <p class="text-white font-extrabold text-base mt-1 mb-0">info@collectibles.com.uy</p>
+      </div>
+      <div class="bg-[#0e1320] border border-white/10 rounded-2xl p-5">
+        <span class="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">Teléfono de Soporte</span>
+        <p class="text-white font-extrabold text-base mt-1 mb-0">(+598) 096 889 596</p>
+      </div>
+    </div>
+  </div>
+</div>`;
     }
 
     if (s.includes('envio') || s.includes('envío') || s.includes('devolucion')) {
-      return `<h2>Devoluciones</h2>
-<p>El producto deberá encontrarse en perfectas condiciones, con empaques originales y acompañado de ticket de cambio, factura o envoltorio original.</p>
-<p>Los cambios deben realizarse dentro de un plazo máximo de 15 días.</p>
-<p>Los reintegros pueden demorar hasta 10 días hábiles una vez aprobada la devolución.</p>
+      return `<div class="space-y-8 font-sans">
+  <div class="rounded-2xl border border-white/10 bg-white/[0.02] p-6 md:p-8 mb-8">
+    <p class="text-base md:text-lg text-slate-200 leading-relaxed font-semibold mb-0">
+      En Collectibles queremos que tu experiencia sea totalmente satisfactoria. Aquí encontrarás la información oficial sobre nuestras políticas de envíos y devoluciones.
+    </p>
+  </div>
 
-<h2>Cambios por correo</h2>
-<p>Para realizar cambios mediante correo, el cliente deberá enviar el paquete previamente pago incluyendo una copia de la factura original.</p>
-<p>El envío debe dirigirse a:</p>
+  <div class="border-t border-white/5 pt-8">
+    <h2 class="text-xl md:text-2xl font-black text-white mb-4 tracking-tight flex items-center gap-3">
+      <span class="w-1.5 h-6 bg-[#f00856] rounded-full inline-block"></span>
+      Devoluciones y Cambios
+    </h2>
+    <p class="text-slate-300 leading-relaxed">Para procesar una devolución o cambio de producto, es requisito indispensable que el artículo:</p>
+    <ul class="list-none space-y-3.5 my-6 pl-0">
+      <li class="flex items-start gap-3">
+        <span class="text-[#f00856] font-bold text-base mt-0.5">•</span>
+        <span class="text-slate-300">Se encuentre en perfectas condiciones, sin marcas de uso ni aperturas.</span>
+      </li>
+      <li class="flex items-start gap-3">
+        <span class="text-[#f00856] font-bold text-base mt-0.5">•</span>
+        <span class="text-slate-300">Conserve todos los empaques, folletos, plásticos protectores y etiquetas originales de fábrica.</span>
+      </li>
+      <li class="flex items-start gap-3">
+        <span class="text-[#f00856] font-bold text-base mt-0.5">•</span>
+        <span class="text-slate-300">Se presente acompañado del ticket de cambio, factura digital o el código de compra correspondiente.</span>
+      </li>
+      <li class="flex items-start gap-3">
+        <span class="text-[#f00856] font-bold text-base mt-0.5">•</span>
+        <span class="text-slate-300">Los cambios de stock estándar deben gestionarse dentro de los primeros 15 días corridos.</span>
+      </li>
+    </ul>
+  </div>
 
-<div class="rounded-2xl border border-white/10 bg-[#101522]/60 p-6 my-6">
-  <p class="font-extrabold text-[#f00856] tracking-widest text-[10px] uppercase mb-2">Dirección de Envío</p>
-  <p class="text-white font-black text-lg">COLLECTIBLES</p>
-  <p class="text-slate-300">Vazquez 1418</p>
-  <p class="text-slate-300">Montevideo · CP 11200</p>
-  <p class="text-slate-300">Teléfono: 096 889 596</p>
+  <div class="border-t border-white/5 pt-8">
+    <h2 class="text-xl md:text-2xl font-black text-white mb-4 tracking-tight flex items-center gap-3">
+      <span class="w-1.5 h-6 bg-[#f00856] rounded-full inline-block"></span>
+      Cambios por Agencia o Correo
+    </h2>
+    <p class="text-slate-300 leading-relaxed">Para realizar cambios a distancia mediante agencias de envío:</p>
+    <div class="rounded-2xl border border-white/10 bg-[#101522]/60 p-6 my-6">
+      <p class="font-extrabold text-[#f00856] tracking-widest text-[10px] uppercase mb-2">Dirección de Retorno Autorizada</p>
+      <p class="text-white font-black text-lg">COLLECTIBLES</p>
+      <p class="text-slate-300">Vazquez 1418</p>
+      <p class="text-slate-300">Montevideo · CP 11200</p>
+      <p class="text-slate-300">Teléfono: 096 889 596</p>
+    </div>
+    <p class="text-xs text-slate-500 mt-2">Nota: Los costos de envío relacionados con cambios o devoluciones que no provengan de fallas de fábrica correrán por cuenta del cliente.</p>
+  </div>
 </div>`;
     }
 
     if (s.includes('terminos') || s.includes('términos')) {
-      return `<p>Al acceder o utilizar el sitio web de Collectibles, el usuario acepta estos términos de uso, los cuales constituyen un acuerdo legalmente vinculante.</p>
+      return `<div class="space-y-8 font-sans">
+  <div class="rounded-2xl border border-white/10 bg-white/[0.02] p-6 md:p-8 mb-8">
+    <p class="text-base md:text-lg text-slate-200 leading-relaxed font-semibold mb-0">
+      Bienvenido a Collectibles Uruguay. Al acceder, navegar o utilizar este sitio web, usted acepta cumplir y estar sujeto a los siguientes términos y condiciones de uso del servicio.
+    </p>
+  </div>
 
-<h2>1. Productos</h2>
-<p>Collectibles es una empresa uruguaya con más de 13 años de trayectoria y distribuidor oficial de distintas marcas internacionales.</p>
-<p>La información de productos es referencial y puede modificarse sin previo aviso, incluyendo precios, disponibilidad y tiempos estimados de entrega.</p>
+  <div class="border-t border-white/5 pt-8">
+    <h2 class="text-xl md:text-2xl font-black text-white mb-4 tracking-tight flex items-center gap-3">
+      <span class="w-1.5 h-6 bg-[#f00856] rounded-full inline-block"></span>
+      1. Productos y Autenticidad
+    </h2>
+    <p class="text-slate-300 leading-relaxed">
+      <strong>Collectibles Uruguay</strong> posee más de 13 años de trayectoria en el mercado y opera como distribuidor autorizado oficial de destacadas marcas internacionales en el país. 
+      Nos comprometemos a entregar únicamente productos oficiales, en perfectas condiciones y embalajes sellados de fábrica.
+    </p>
+  </div>
 
-<h2>2. Información del cliente</h2>
-<p>El cliente es responsable de proporcionar correctamente los datos de envío y facturación. Collectibles no se responsabiliza por errores derivados de información incorrecta.</p>
+  <div class="border-t border-white/5 pt-8">
+    <h2 class="text-xl md:text-2xl font-black text-white mb-4 tracking-tight flex items-center gap-3">
+      <span class="w-1.5 h-6 bg-[#f00856] rounded-full inline-block"></span>
+      2. Responsabilidad de Datos
+    </h2>
+    <p class="text-slate-300 leading-relaxed">
+      Es responsabilidad exclusiva del cliente proveer con absoluta precisión los datos para la facturación y el domicilio de entrega. 
+      La empresa no se responsabiliza por demoras o retornos de paquetes derivados de información incorrecta suministrada por el usuario.
+    </p>
+  </div>
 
-<h2>3. Entrega de productos</h2>
-<ul>
-  <li>Los colores pueden variar según la pantalla del usuario.</li>
-  <li>Las medidas son aproximadas.</li>
-  <li>Todos los productos están sujetos a disponibilidad.</li>
-  <li>Los plazos de entrega son estimados.</li>
-  <li>Los productos se entregan en su packaging original.</li>
-</ul>
+  <div class="border-t border-white/5 pt-8">
+    <h2 class="text-xl md:text-2xl font-black text-white mb-4 tracking-tight flex items-center gap-3">
+      <span class="w-1.5 h-6 bg-[#f00856] rounded-full inline-block"></span>
+      3. Pautas Logísticas y Entrega
+    </h2>
+    <ul class="list-none space-y-3.5 my-6 pl-0">
+      <li class="flex items-start gap-3">
+        <span class="text-[#f00856] font-bold text-base mt-0.5">•</span>
+        <span class="text-slate-300">Las fotos e imágenes son ilustrativas; las tonalidades y colores reales pueden diferir levemente de la pantalla.</span>
+      </li>
+      <li class="flex items-start gap-3">
+        <span class="text-[#f00856] font-bold text-base mt-0.5">•</span>
+        <span class="text-slate-300">Las medidas y pesos descritos son provistos directamente por el fabricante del artículo.</span>
+      </li>
+      <li class="flex items-start gap-3">
+        <span class="text-[#f00856] font-bold text-base mt-0.5">•</span>
+        <span class="text-slate-300">Todo producto es transportado y despachado con la protección adecuada para conservar su estado de colección.</span>
+      </li>
+    </ul>
+  </div>
 
-<h2>4. Preventa</h2>
-<p>Algunos productos pueden estar sujetos a restricciones de importación, retrasos logísticos o disponibilidad limitada.</p>
-<p>En caso de cancelación o falta definitiva de stock, el cliente podrá optar por una alternativa o solicitar reembolso.</p>
+  <div class="border-t border-white/5 pt-8">
+    <h2 class="text-xl md:text-2xl font-black text-white mb-4 tracking-tight flex items-center gap-3">
+      <span class="w-1.5 h-6 bg-[#f00856] rounded-full inline-block"></span>
+      4. Cambios y Derechos de Devolución
+    </h2>
+    <p class="text-slate-300 leading-relaxed">
+      El comprador puede solicitar la devolución del pago o desistimiento de la compra dentro de los primeros 5 días hábiles desde la entrega del paquete. 
+      Posteriormente, el cliente tiene hasta 30 días para realizar cambios físicos de productos en stock, siempre y cuando se encuentren cerrados y en perfecto estado.
+    </p>
+  </div>
 
-<h2>5. Cambios en pedidos</h2>
-<p>Solo se cobrará por los productos efectivamente enviados. En determinados casos, las demoras pueden alcanzar hasta 180 días dependiendo del fabricante o importador.</p>
-<p>El cliente podrá optar por esperar el producto o aceptar un reemplazo equivalente si estuviera disponible.</p>
+  <div class="border-t border-white/5 pt-8">
+    <h2 class="text-xl md:text-2xl font-black text-white mb-4 tracking-tight flex items-center gap-3">
+      <span class="w-1.5 h-6 bg-[#f00856] rounded-full inline-block"></span>
+      5. Seguridad de Cuentas de Usuario
+    </h2>
+    <p class="text-slate-300 leading-relaxed">
+      El usuario es responsable de mantener la confidencialidad de sus datos de acceso. La transferencia de cuentas entre diferentes personas está prohibida, y nos reservamos el derecho de desactivar cuentas que demuestren comportamiento abusivo o fraudulento.
+    </p>
+  </div>
 
-<h2>6. Devoluciones</h2>
-<p>El cliente podrá retractarse de la compra dentro de los primeros 5 días y solicitar devoluciones hasta 30 días desde la entrega, siempre que el producto se encuentre en perfectas condiciones y con su packaging original.</p>
-
-<h2>7. Cuenta de usuario</h2>
-<ul>
-  <li>El usuario es responsable de la seguridad de su cuenta.</li>
-  <li>Debe informar cualquier acceso no autorizado.</li>
-  <li>No se permite transferir cuentas entre personas.</li>
-  <li>Collectibles podrá bloquear cuentas por uso abusivo o fraudulento.</li>
-</ul>
-
-<h2>8. Precios y pagos</h2>
-<p>Los precios incluyen IVA. El sitio acepta diferentes medios de pago y redes de cobranza.</p>
-<p>Impuestos internacionales, costos aduaneros o cargos externos serán responsabilidad del cliente cuando corresponda.</p>
-
-<h2>9. Protección de datos</h2>
-<p>Los datos personales serán tratados conforme a la legislación uruguaya vigente, incluyendo la Ley Nº 18.331 de Protección de Datos Personales.</p>
-
-<h2>10. Propiedad intelectual</h2>
-<p>Todo el contenido del sitio web, incluyendo textos, imágenes, diseño y marcas, está protegido y no puede utilizarse sin autorización previa.</p>
-
-<h2>11. Responsabilidad</h2>
-<p>Collectibles no garantiza disponibilidad permanente del sitio web ni se responsabiliza por daños indirectos derivados del uso de la plataforma.</p>
-
-<h2>12. Limitación de responsabilidad</h2>
-<p>La responsabilidad máxima de Collectibles no excederá el valor abonado por el producto adquirido o USD 200, según corresponda.</p>
-
-<h2>13. Ley aplicable</h2>
-<p>Estos términos se rigen por la legislación de la República Oriental del Uruguay, con jurisdicción en los tribunales de Montevideo.</p>
-
-<h2>Contacto</h2>
-<p><strong>Razón Social:</strong> Sagittarius Importaciones SRL</p>
-<p><strong>RUT:</strong> 217180080010</p>
-<p><strong>Email:</strong> info@collectibles.com.uy</p>
-<p><strong>Teléfono:</strong> (+598) 096 889 596</p>
-<p><strong>Horario:</strong> Lunes a viernes de 13 a 19 hs</p>`;
+  <div class="border-t border-white/5 pt-8">
+    <h2 class="text-xl md:text-2xl font-black text-white mb-4 tracking-tight flex items-center gap-3">
+      <span class="w-1.5 h-6 bg-[#f00856] rounded-full inline-block"></span>
+      6. Propiedad Intelectual y Derechos de Autor
+    </h2>
+    <p class="text-slate-300 leading-relaxed mb-8">
+      El diseño de la tienda, logotipos, banners, textos y material gráfico están protegidos por derechos de propiedad intelectual. Queda estrictamente prohibida la copia, reproducción o distribución de cualquier elemento sin autorización previa de la empresa.
+    </p>
+  </div>
+</div>`;
     }
 
     return sanitizeRichHtml(page?.content || '');
