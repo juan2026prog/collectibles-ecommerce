@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Truck, MapPin, Save, QrCode, FileText, CheckCircle2, ChevronRight, X, Edit2, Check,
-  ToggleLeft, ToggleRight, Settings, Info, AlertCircle, RefreshCw
+  ToggleLeft, ToggleRight, Settings, Info, AlertCircle, RefreshCw, Calculator
 } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 import { supabase } from '../../lib/supabase';
@@ -60,6 +60,20 @@ export default function AdminLogistics() {
   const [dacPassword, setDacPassword] = useState('');
   const [dacEnv, setDacEnv] = useState<'uat' | 'production'>('uat');
   const [dacApiUrl, setDacApiUrl] = useState('https://altis-ws.grupoagencia.com:444/GAgencia/GAgencia.asmx');
+  const [dacKTipoGuia, setDacKTipoGuia] = useState(4);
+  const [dacKTipoEnvio, setDacKTipoEnvio] = useState(1);
+  const [dacKClienteDestinatario, setDacKClienteDestinatario] = useState(5);
+  const [dacEntrega, setDacEntrega] = useState(1);
+  const [dacEsRecoleccion, setDacEsRecoleccion] = useState(1);
+  const [dacUsaBolsa, setDacUsaBolsa] = useState(0);
+  const [dacKOficinaOrigen, setDacKOficinaOrigen] = useState("800");
+
+  // Test Cost Panel States
+  const [isTestingCost, setIsTestingCost] = useState(false);
+  const [testRequestJson, setTestRequestJson] = useState('');
+  const [testResponseJson, setTestResponseJson] = useState('');
+  const [testDetectedCost, setTestDetectedCost] = useState<number | null>(null);
+  const [testError, setTestError] = useState('');
   
   // Action state flags
   const [isSaving, setIsSaving] = useState(false);
@@ -84,7 +98,7 @@ export default function AdminLogistics() {
       try {
         const { data: dacProv } = await supabase
           .from('delivery_providers_admin')
-          .select('id, provider_key, provider_name, is_active, environment, api_url, username')
+          .select('id, provider_key, provider_name, is_active, environment, api_url, username, settings')
           .eq('provider_key', 'dac')
           .maybeSingle();
 
@@ -94,6 +108,15 @@ export default function AdminLogistics() {
           setDacPassword('');
           setDacEnv(dacProv.environment || 'uat');
           setDacApiUrl(dacProv.api_url || 'https://altis-ws.grupoagencia.com:444/GAgencia/GAgencia.asmx');
+          
+          const s = dacProv.settings || {};
+          setDacKTipoGuia(s.k_tipo_guia !== undefined ? Number(s.k_tipo_guia) : 4);
+          setDacKTipoEnvio(s.k_tipo_envio !== undefined ? Number(s.k_tipo_envio) : 1);
+          setDacKClienteDestinatario(s.k_cliente_destinatario !== undefined ? Number(s.k_cliente_destinatario) : 5);
+          setDacEntrega(s.entrega !== undefined ? Number(s.entrega) : 1);
+          setDacEsRecoleccion(s.es_recoleccion !== undefined ? Number(s.es_recoleccion) : 1);
+          setDacUsaBolsa(s.usa_bolsa !== undefined ? Number(s.usa_bolsa) : 0);
+          setDacKOficinaOrigen(s.k_oficina_origen !== undefined ? String(s.k_oficina_origen) : "800");
         }
       } catch (err) {
         console.error("Error loading DAC provider config:", err);
@@ -175,6 +198,74 @@ export default function AdminLogistics() {
     }
   }
 
+  // Cost calculation test for DAC
+  async function handleTestCostCalculation() {
+    setIsTestingCost(true);
+    setTestError('');
+    setTestRequestJson('');
+    setTestResponseJson('');
+    setTestDetectedCost(null);
+
+    const reqBody = {
+      direccion: "test",
+      packages: 1,
+      k_oficina_destino: 601
+    };
+
+    setTestRequestJson(JSON.stringify(reqBody, null, 2));
+
+    try {
+      // Temporarily save provider config to DB before testing so Deno function picks up latest inputs
+      const tempUpdateData: any = {
+        username: dacUsername,
+        api_url: dacApiUrl,
+        environment: dacEnv,
+        settings: {
+          k_tipo_guia: dacKTipoGuia,
+          k_tipo_envio: dacKTipoEnvio,
+          k_cliente_destinatario: dacKClienteDestinatario,
+          entrega: dacEntrega,
+          es_recoleccion: dacEsRecoleccion,
+          usa_bolsa: dacUsaBolsa,
+          k_oficina_origen: dacKOficinaOrigen
+        },
+        updated_at: new Date().toISOString()
+      };
+      if (dacPassword) {
+        tempUpdateData.password_encrypted = dacPassword;
+      }
+
+      const { error: saveErr } = await supabase
+        .from('delivery_providers')
+        .update(tempUpdateData)
+        .eq('provider_key', 'dac');
+
+      if (saveErr) throw new Error(`Error al pre-guardar configuración: ${saveErr.message}`);
+
+      const { data, error } = await supabase.functions.invoke('dac-get-cost', {
+        body: reqBody
+      });
+
+      if (error) throw error;
+
+      setTestResponseJson(JSON.stringify(data, null, 2));
+
+      if (data && data.success) {
+        setTestDetectedCost(data.costo);
+        toast.success(`Cálculo de costo probado con éxito. Costo: $${data.costo}`);
+      } else {
+        setTestError(data?.error || "Error al calcular costo en DAC");
+        toast.error(`Error de cotización: ${data?.error || "Desconocido"}`);
+      }
+    } catch (e: any) {
+      console.error("[DAC Test Cost Error]:", e);
+      setTestError(e.message || "Error al invocar edge function dac-get-cost");
+      toast.error(`Fallo de cotización: ${e.message || e}`);
+    } finally {
+      setIsTestingCost(false);
+    }
+  }
+
   // Global Save
   async function handleSave() {
     setIsSaving(true);
@@ -212,6 +303,15 @@ export default function AdminLogistics() {
         username: dacUsername,
         environment: dacEnv,
         api_url: dacApiUrl,
+        settings: {
+          k_tipo_guia: dacKTipoGuia,
+          k_tipo_envio: dacKTipoEnvio,
+          k_cliente_destinatario: dacKClienteDestinatario,
+          entrega: dacEntrega,
+          es_recoleccion: dacEsRecoleccion,
+          usa_bolsa: dacUsaBolsa,
+          k_oficina_origen: dacKOficinaOrigen
+        },
         updated_at: new Date().toISOString()
       };
       if (dacPassword) {
@@ -621,6 +721,117 @@ export default function AdminLogistics() {
                   {isTestingDac ? 'Probando...' : 'Probar Conexión SOAP'}
                 </button>
               </div>
+            </div>
+
+            {/* Parámetros Avanzados DAC */}
+            <div className="border-t border-orange-100 pt-6 mt-6">
+              <h4 className="text-xs font-bold text-orange-950 uppercase tracking-wider mb-4">Parámetros Avanzados DAC</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-orange-900 uppercase tracking-widest mb-1.5">K_Tipo_Guia</label>
+                  <input 
+                    type="number"
+                    className="form-input w-full font-mono text-xs border-orange-200" 
+                    value={dacKTipoGuia} 
+                    onChange={e => setDacKTipoGuia(Number(e.target.value))} 
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-orange-900 uppercase tracking-widest mb-1.5">K_Tipo_Envio</label>
+                  <input 
+                    type="number"
+                    className="form-input w-full font-mono text-xs border-orange-200" 
+                    value={dacKTipoEnvio} 
+                    onChange={e => setDacKTipoEnvio(Number(e.target.value))} 
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-orange-900 uppercase tracking-widest mb-1.5">K_Cliente_Destinatario</label>
+                  <input 
+                    type="number"
+                    className="form-input w-full font-mono text-xs border-orange-200" 
+                    value={dacKClienteDestinatario} 
+                    onChange={e => setDacKClienteDestinatario(Number(e.target.value))} 
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-orange-900 uppercase tracking-widest mb-1.5">Entrega</label>
+                  <input 
+                    type="number"
+                    className="form-input w-full font-mono text-xs border-orange-200" 
+                    value={dacEntrega} 
+                    onChange={e => setDacEntrega(Number(e.target.value))} 
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-orange-900 uppercase tracking-widest mb-1.5">Es Recolección</label>
+                  <select 
+                    className="form-input w-full font-mono text-xs border-orange-200"
+                    value={dacEsRecoleccion}
+                    onChange={e => setDacEsRecoleccion(Number(e.target.value))}
+                  >
+                    <option value={1}>Sí (1)</option>
+                    <option value={0}>No (0)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-orange-900 uppercase tracking-widest mb-1.5">Usa Bolsa</label>
+                  <select 
+                    className="form-input w-full font-mono text-xs border-orange-200"
+                    value={dacUsaBolsa}
+                    onChange={e => setDacUsaBolsa(Number(e.target.value))}
+                  >
+                    <option value={0}>No (0)</option>
+                    <option value={1}>Sí (1)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-orange-900 uppercase tracking-widest mb-1.5">Oficina de Origen</label>
+                  <input 
+                    className="form-input w-full font-mono text-xs border-orange-200" 
+                    value={dacKOficinaOrigen} 
+                    onChange={e => setDacKOficinaOrigen(e.target.value)} 
+                    placeholder="Ej. 800"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Test Cost Section */}
+            <div className="border-t border-orange-100 pt-6 mt-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-orange-950 uppercase tracking-wider">Prueba de Cálculo de Costo (wsObtieneCosto_Nuevo)</h4>
+                  <p className="text-[11px] text-gray-500 mt-0.5">Permite cotizar un envío de prueba al local Montevideo (601) con los parámetros configurados.</p>
+                </div>
+                <button 
+                  onClick={handleTestCostCalculation}
+                  disabled={isTestingCost}
+                  className="btn-secondary py-2 px-4 gap-2 border-orange-200 hover:bg-orange-50 text-orange-950 text-xs font-bold shadow-sm"
+                >
+                  <Calculator className={`w-3.5 h-3.5 ${isTestingCost ? 'animate-spin' : ''}`} />
+                  {isTestingCost ? 'Cotizando...' : 'Probar cálculo de costo'}
+                </button>
+              </div>
+
+              {(testRequestJson || testResponseJson || testError || testDetectedCost !== null) && (
+                <div className="grid md:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-xl border border-orange-100 text-xs font-mono">
+                  <div>
+                    <span className="block font-bold text-gray-700 mb-1 text-[10px] uppercase">Request JSON</span>
+                    <pre className="bg-gray-900 text-gray-100 p-3 rounded-lg overflow-x-auto text-[10px] max-h-48">{testRequestJson}</pre>
+                  </div>
+                  <div>
+                    <span className="block font-bold text-gray-700 mb-1 text-[10px] uppercase">Response JSON</span>
+                    <pre className="bg-gray-900 text-gray-100 p-3 rounded-lg overflow-x-auto text-[10px] max-h-48">{testResponseJson || testError}</pre>
+                  </div>
+                  {testDetectedCost !== null && (
+                    <div className="col-span-2 bg-green-50 border border-green-200 text-green-900 px-4 py-3 rounded-lg flex items-center justify-between font-sans">
+                      <span className="text-xs font-bold">Costo Detectado en Producción:</span>
+                      <span className="text-sm font-extrabold text-green-700">${testDetectedCost} UYU</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

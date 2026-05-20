@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
-import { wsInGuiaPeso, wsGetPegote, wsLogin } from "../_shared/dac-client.ts";
+import { wsInGuiaPeso, wsGetPegoteJson, wsLogin } from "../_shared/dac-client.ts";
 
 serve(async (req) => {
   const optionsResponse = handleOptions(req);
@@ -53,10 +53,11 @@ serve(async (req) => {
       throw new Error("DAC provider configuration not found in database.");
     }
 
-    const { username, password_encrypted, api_url } = provider;
+    const { username, password_encrypted, api_url, settings = {} } = provider;
     if (!username || !password_encrypted || !api_url) {
       throw new Error("Missing DAC credentials in delivery_providers.");
     }
+    const kOficinaOrigen = settings.k_oficina_origen !== undefined ? String(settings.k_oficina_origen) : "800";
 
     // 3. Resolve active session
     let { data: activeSession } = await supabase
@@ -133,7 +134,7 @@ serve(async (req) => {
     let labelBase64 = "";
     let labelPublicUrl = "";
     try {
-      labelBase64 = await wsGetPegote(api_url, sessionParam, dacResult.kGuia);
+      labelBase64 = await wsGetPegoteJson(api_url, sessionParam, dacResult.kGuia, kOficinaOrigen);
       
       // Convert base64 to binary buffer
       const binaryString = atob(labelBase64);

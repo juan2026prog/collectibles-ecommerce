@@ -366,3 +366,139 @@ function escapeXml(unsafe: string): string {
     }
   });
 }
+
+export interface DacCostInput {
+  ID_Sesion: string;
+  K_Tipo_Guia: number;
+  K_Tipo_Envio: number;
+  K_Cliente_Remitente: number;
+  K_Cliente_Destinatario: number;
+  Direccion_Destinatario: string;
+  K_Oficina_Destino: number;
+  Entrega: number;
+  Paquetes_Ampara: number;
+  Detalle_Paquetes: string; // JSON stringified array of packages
+  esRecoleccion: number;
+  usaBolsa: number;
+}
+
+export async function wsObtieneCostoNuevo(
+  apiUrl: string,
+  input: DacCostInput
+): Promise<number> {
+  const url = apiUrl.endsWith('/wsObtieneCosto_Nuevo') ? apiUrl : `${apiUrl.replace(/\/$/, '')}/wsObtieneCosto_Nuevo`;
+
+  if (isDebugEnabled()) {
+    console.log(`[DAC DEBUG] wsObtieneCostoNuevo URL: ${url}`);
+    console.log(`[DAC DEBUG] wsObtieneCostoNuevo Request Payload:`, JSON.stringify(input));
+  }
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify(input)
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`DAC wsObtieneCostoNuevo HTTP error: ${res.status} ${res.statusText}. Response: ${text}`);
+  }
+
+  const data = await res.json();
+  if (isDebugEnabled()) {
+    console.log(`[DAC DEBUG] wsObtieneCostoNuevo Response:`, JSON.stringify(data));
+  }
+
+  const dVal = data.d;
+  if (!dVal) {
+    throw new Error("Empty response from wsObtieneCostoNuevo JSON service");
+  }
+
+  let resultObj = dVal;
+  if (typeof dVal === 'string') {
+    try {
+      resultObj = JSON.parse(dVal);
+    } catch {
+      throw new Error(`Failed to parse stringified 'd' response: ${dVal}`);
+    }
+  }
+
+  if (typeof resultObj === 'number') {
+    return resultObj;
+  }
+
+  const cost = resultObj.Costo ?? resultObj.costo ?? resultObj.CostoTotal ?? resultObj.costo_total ?? resultObj.wsObtieneCosto_NuevoResult ?? resultObj.Valor ?? resultObj.valor;
+  if (cost === undefined) {
+    if (resultObj.ErrorMessage || resultObj.Message) {
+      throw new Error(`DAC API error: ${resultObj.ErrorMessage || resultObj.Message}`);
+    }
+    throw new Error(`Could not find cost field in response: ${JSON.stringify(resultObj)}`);
+  }
+
+  return Number(cost);
+}
+
+export async function wsGetPegoteJson(
+  apiUrl: string,
+  session: DacSession,
+  kGuia: string,
+  kOficina: string = "800",
+  codigoPedido: string = ""
+): Promise<string> {
+  const url = apiUrl.endsWith('/wsGetPegote') ? apiUrl : `${apiUrl.replace(/\/$/, '')}/wsGetPegote`;
+
+  const payload = {
+    K_Oficina: kOficina,
+    K_Guia: kGuia,
+    ID_Sesion: session.id_session,
+    CodigoPedido: codigoPedido
+  };
+
+  if (isDebugEnabled()) {
+    console.log(`[DAC DEBUG] wsGetPegoteJson URL: ${url}`);
+    console.log(`[DAC DEBUG] wsGetPegoteJson Request Payload:`, JSON.stringify(payload));
+  }
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`DAC wsGetPegoteJson HTTP error: ${res.status} ${res.statusText}. Response: ${text}`);
+  }
+
+  const data = await res.json();
+  if (isDebugEnabled()) {
+    console.log(`[DAC DEBUG] wsGetPegoteJson Response:`, JSON.stringify(data));
+  }
+
+  const dVal = data.d;
+  if (!dVal) {
+    throw new Error("Empty response from wsGetPegote JSON service");
+  }
+
+  if (typeof dVal === 'string') {
+    if (dVal.trim().startsWith('{') || dVal.trim().startsWith('[')) {
+      try {
+        const parsed = JSON.parse(dVal);
+        return parsed.Pegote || parsed.wsGetPegoteResult || parsed.base64 || dVal;
+      } catch {
+        return dVal;
+      }
+    }
+    return dVal;
+  } else if (typeof dVal === 'object') {
+    return dVal.Pegote || dVal.wsGetPegoteResult || dVal.base64 || '';
+  }
+
+  throw new Error("Invalid response format from wsGetPegote JSON service");
+}

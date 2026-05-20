@@ -401,13 +401,53 @@ Deno.serve(async (req) => {
       ? (payload.shipping_address.barrio || "")
       : (payload.shipping_address.city || "");
 
-    const shippingRate = payload.shipping_method === "pickup"
-      ? 0
-      : calculateShipping(
-        shippingCity,
-        payload.shipping_address.department || "",
-        subtotal,
-      );
+    let shippingRate = 0;
+    if (payload.shipping_method === "delivery") {
+      const isMontevideo = payload.shipping_address.department === "Montevideo";
+      if (isMontevideo) {
+        shippingRate = calculateShipping(shippingCity, "Montevideo", subtotal);
+      } else {
+        if (subtotal >= 4000) {
+          shippingRate = 0;
+        } else {
+          try {
+            const { data: provider } = await supabase
+              .from('delivery_providers')
+              .select('is_active')
+              .eq('provider_key', 'dac')
+              .single();
+
+            if (provider && provider.is_active) {
+              const dacCostResponse = await fetch(`${supabaseUrl}/functions/v1/dac-get-cost`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${supabaseServiceKey}`
+                },
+                body: JSON.stringify({
+                  department: payload.shipping_address.department,
+                  city: payload.shipping_address.city,
+                  direccion: payload.shipping_address.street || '',
+                  packages: 1
+                })
+              });
+              const dacCostResult = await dacCostResponse.json();
+              if (dacCostResult && dacCostResult.success) {
+                shippingRate = dacCostResult.costo;
+              } else {
+                console.warn("[Create Order] DAC cost function returned failure, fallback to 350:", dacCostResult?.error);
+                shippingRate = 350;
+              }
+            } else {
+              shippingRate = 350;
+            }
+          } catch (err) {
+            console.error("[Create Order] Error calculating DAC cost server-side, fallback to 350:", err);
+            shippingRate = 350;
+          }
+        }
+      }
+    }
 
     const totalAmount = Math.max(subtotal - discountAmount - bankDiscount + shippingRate, 0);
     const orderItems = verifiedItems.map((item) => ({

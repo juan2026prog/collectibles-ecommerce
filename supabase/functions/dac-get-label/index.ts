@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
-import { wsGetPegote, wsLogin } from "../_shared/dac-client.ts";
+import { wsGetPegoteJson, wsLogin } from "../_shared/dac-client.ts";
 
 serve(async (req) => {
   const optionsResponse = handleOptions(req);
@@ -53,7 +53,8 @@ serve(async (req) => {
       throw new Error("DAC provider configuration not found");
     }
 
-    const { username, password_encrypted, api_url } = provider;
+    const { username, password_encrypted, api_url, settings = {} } = provider;
+    const kOficinaOrigen = settings.k_oficina_origen !== undefined ? String(settings.k_oficina_origen) : "800";
 
     // Resolve active session
     let { data: activeSession } = await supabase
@@ -93,8 +94,8 @@ serve(async (req) => {
       rut: sessionObj.rut
     };
 
-    // Call wsGetPegote
-    const labelBase64 = await wsGetPegote(api_url, sessionParam, kGuia);
+    // Call wsGetPegoteJson (JSON endpoint)
+    const labelBase64 = await wsGetPegoteJson(api_url, sessionParam, kGuia, kOficinaOrigen);
 
     // Convert and Upload
     const binaryString = atob(labelBase64);

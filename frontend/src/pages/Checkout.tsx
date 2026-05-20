@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRight, Truck, Store, Tag, Sparkles, X, Home, Ticket, Share2, Clock } from 'lucide-react';
+import { ChevronRight, Truck, Store, Tag, Sparkles, X, Home, Ticket, Share2, Clock, AlertCircle } from 'lucide-react';
 import { useCartContext } from '../contexts/CartContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -103,8 +103,87 @@ export default function Checkout() {
     country: 'Uruguay',
   });
 
+  const [dacShippingCost, setDacShippingCost] = useState<number | null>(null);
+  const [isCalculatingDac, setIsCalculatingDac] = useState(false);
+  const [dacError, setDacError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const isMontevideo = form.department === 'Montevideo';
+    
+    if (shippingMethod !== 'delivery' || isMontevideo || !form.department || !form.city) {
+      setDacShippingCost(null);
+      setDacError(null);
+      return;
+    }
+
+    if (total >= 4000) {
+      setDacShippingCost(0);
+      setDacError(null);
+      return;
+    }
+
+    let active = true;
+    async function fetchDacCost() {
+      setIsCalculatingDac(true);
+      setDacError(null);
+      try {
+        const { data, error } = await supabase.functions.invoke('dac-get-cost', {
+          body: {
+            department: form.department,
+            city: form.city,
+            direccion: form.street || '',
+            packages: 1
+          }
+        });
+
+        if (!active) return;
+
+        if (error) throw error;
+
+        if (data && data.success) {
+          setDacShippingCost(data.costo);
+        } else {
+          throw new Error(data?.error || "Error al calcular costo DAC.");
+        }
+      } catch (err: any) {
+        console.error("Error fetching DAC cost:", err);
+        if (active) {
+          setDacError(err.message || "No pudimos calcular el costo DAC para esta localidad.");
+          setDacShippingCost(null);
+        }
+      } finally {
+        if (active) {
+          setIsCalculatingDac(false);
+        }
+      }
+    }
+
+    const timer = setTimeout(() => {
+      fetchDacCost();
+    }, 450);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [shippingMethod, form.department, form.city, form.street, total]);
+
   const resolvedCityForShipping = form.department === 'Montevideo' ? form.barrio : form.city;
-  const shipping = shippingMethod === 'pickup' ? 0 : calculateShipping(resolvedCityForShipping, form.department, total);
+  const isMontevideo = form.department === 'Montevideo';
+  
+  let shipping = 0;
+  if (shippingMethod === 'delivery') {
+    if (isMontevideo) {
+      shipping = calculateShipping(resolvedCityForShipping, form.department, total);
+    } else {
+      if (dacShippingCost !== null) {
+        shipping = dacShippingCost;
+      } else {
+        shipping = total >= 4000 ? 0 : 350;
+      }
+    }
+  }
+
   const subtotalWithShipping = total + shipping;
 
   const getUruguayDateTime = () => {
@@ -753,17 +832,54 @@ export default function Checkout() {
                       </>
                     )}
 
-                    {shippingMethod === 'delivery' && form.department && logistics.providerName && (
-                      <div className="mt-4 p-4 rounded-xl border border-primary-500/30 bg-primary-500/5 flex items-start gap-3 shadow-lg">
-                        <Clock className="w-5 h-5 text-primary-500 shrink-0 mt-0.5 animate-pulse" />
-                        <div>
-                          <h4 className="text-xs font-bold uppercase tracking-wider text-primary-400">
-                            Información de entrega ({logistics.providerName})
-                          </h4>
-                          <p className="text-sm font-semibold text-white mt-1">
-                            {logistics.message}
-                          </p>
+                     {shippingMethod === 'delivery' && form.department && logistics.providerName && (
+                      <div className="space-y-3 mt-4">
+                        <div className="p-4 rounded-xl border border-primary-500/30 bg-primary-500/5 flex items-start gap-3 shadow-lg">
+                          <Clock className="w-5 h-5 text-primary-500 shrink-0 mt-0.5 animate-pulse" />
+                          <div>
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-primary-400">
+                              Información de entrega ({logistics.providerName})
+                            </h4>
+                            <p className="text-sm font-semibold text-white mt-1">
+                              {logistics.message}
+                            </p>
+                          </div>
                         </div>
+
+                        {isCalculatingDac && (
+                          <div className="p-3 rounded-lg bg-white/5 border border-white/10 flex items-center gap-3">
+                            <div className="w-4 h-4 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+                            <span className="text-xs text-slate-300">Calculando costo de envío en tiempo real con DAC...</span>
+                          </div>
+                        )}
+
+                        {dacError && (
+                          <div className="p-4 rounded-lg bg-orange-950/20 border border-orange-500/30 space-y-3">
+                            <div className="flex items-start gap-2.5">
+                              <AlertCircle className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+                              <div className="text-xs text-orange-200 leading-relaxed">
+                                <strong className="block font-bold text-orange-300 mb-0.5">No fue posible calcular el costo automáticamente</strong>
+                                {dacError}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const productsList = items.map(item => `- ${item.title} x${item.quantity}`).join('%0A');
+                                const waNum = settings['whatsapp'] || '59899000000';
+                                const formattedNum = waNum.replace(/[^0-9]/g, '');
+                                const msg = `¡Hola! Quería realizar una compra desde la web pero no pudimos calcular el costo de envío automáticamente para ${form.city}, ${form.department}.%0A%0A*Productos:*%0A${productsList}%0A%0A*Dirección de envío:*%0A${form.street}%0A%0A¿Me podrían ayudar a coordinarlo?`;
+                                window.open(`https://wa.me/${formattedNum}?text=${msg}`, '_blank');
+                              }}
+                              className="w-full py-2 px-3 rounded bg-green-600 hover:bg-green-700 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md"
+                            >
+                              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.963C16.588 2.016 14.12 1 11.487 1 6.052 1 1.628 5.372 1.624 10.8c-.001 1.73.46 3.42 1.336 4.927L1.983 20.89l5.326-1.396zM17.91 14.3c-.336-.169-1.991-.983-2.299-1.096-.309-.113-.534-.169-.758.169-.224.338-.868 1.096-1.064 1.322-.196.225-.392.253-.729.084-.336-.168-1.42-.523-2.705-1.67-.999-.89-1.673-1.99-1.869-2.327-.196-.338-.021-.52.148-.687.151-.15.336-.394.504-.59.168-.198.224-.338.336-.563.112-.225.056-.422-.028-.59-.084-.169-.758-1.83-1.038-2.505-.272-.656-.547-.567-.758-.578-.196-.01-.42-.01-.645-.01-.224 0-.589.084-.897.422-.309.337-1.179 1.153-1.179 2.812 0 1.66 1.207 3.262 1.375 3.487.168.225 2.376 3.628 5.756 5.087.804.347 1.433.555 1.922.712.808.257 1.543.221 2.124.135.647-.096 1.992-.816 2.272-1.605.28-.79.28-1.464.196-1.605-.084-.14-.309-.225-.645-.394z"/>
+                              </svg>
+                              Coordinar y comprar por WhatsApp
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -939,7 +1055,19 @@ export default function Checkout() {
               </div>
               <div className="border-t pt-4 space-y-2">
                 <div className="flex justify-between text-sm"><span className="text-slate-400">Subtotal</span><span className="font-bold">{formatCurrencyPrice(total)}</span></div>
-                <div className="flex justify-between text-sm"><span className="text-slate-400">Envío</span><span className="font-bold">{shipping === 0 ? 'GRATIS' : formatCurrencyPrice(shipping)}</span></div>
+                 <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Envío</span>
+                  <span className="font-bold flex items-center gap-1.5">
+                    {isCalculatingDac ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-primary-500 border-t-transparent rounded-full animate-spin inline-block" />
+                        <span className="text-xs text-slate-400 font-normal">Calculando...</span>
+                      </>
+                    ) : (
+                      shipping === 0 ? 'GRATIS' : formatCurrencyPrice(shipping)
+                    )}
+                  </span>
+                </div>
                 {bankDiscount > 0 && selectedPromo && (
                   <div className="flex justify-between text-sm">
                     <span className="text-green-600 flex items-center gap-1"><Tag className="w-3 h-3" />Promo {selectedPromo.bank_name}</span>

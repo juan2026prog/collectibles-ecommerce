@@ -403,7 +403,7 @@ export default function StorefrontLayout() {
           </Link>
 
           {/* MAIN NAV (DESKTOP) */}
-          <nav className="hidden xl:flex items-center gap-8 text-xs font-black uppercase tracking-widest text-slate-400">
+          <nav className="hidden xl:flex items-center h-full gap-8 text-xs font-black uppercase tracking-widest text-slate-400">
             {NAV_LINKS.map(link => (
               <div 
                 key={link.name}
@@ -543,27 +543,65 @@ export default function StorefrontLayout() {
               </div>
               
               <nav className="flex flex-col gap-4 overflow-y-auto flex-1 no-scrollbar">
-                 {NAV_LINKS.map(link => (
-                   <div key={link.name} className="flex flex-col gap-2">
-                     <Link 
-                      to={link.href} 
-                      className="text-2xl font-black text-white hover:text-[#f00856] transition-colors"
-                      onClick={() => setMobileMenuOpen(false)}
-                     >
-                      {link.name}
-                     </Link>
-                     {link.subItems && link.subItems.map((sub: any) => (
-                       <Link 
-                         key={sub.label} 
-                         to={sub.url} 
-                         className="pl-4 text-lg font-bold text-slate-400 hover:text-white transition-colors"
-                         onClick={() => setMobileMenuOpen(false)}
-                       >
-                         {sub.label}
-                       </Link>
-                     ))}
-                   </div>
-                 ))}
+                {NAV_LINKS.map(link => (
+                  <div key={link.name} className="flex flex-col gap-2 border-b border-white/5 pb-2 last:border-0 last:pb-0">
+                    <div className="flex items-center justify-between">
+                      <Link 
+                       to={link.href} 
+                       className="text-2xl font-black text-white hover:text-[#f00856] transition-colors flex-grow py-1"
+                       onClick={() => setMobileMenuOpen(false)}
+                      >
+                       {link.name}
+                      </Link>
+                      {((link.subItems && link.subItems.length > 0) || link.hasMega) && (
+                        <button 
+                          onClick={() => setExpandedMobileGroup(expandedMobileGroup === link.name ? null : link.name)}
+                          className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all hover:scale-105 active:scale-95 ml-2"
+                        >
+                          <ChevronDown 
+                            className={`w-4 h-4 text-slate-400 transition-transform duration-300 ${
+                              expandedMobileGroup === link.name ? 'rotate-180 text-white' : ''
+                            }`} 
+                          />
+                        </button>
+                      )}
+                    </div>
+                    {((link.subItems && link.subItems.length > 0) || link.hasMega) && expandedMobileGroup === link.name && (
+                      <div className="pl-4 border-l border-[#f00856]/40 flex flex-col gap-3.5 mt-2 mb-2 animate-fade-in">
+                        {link.subItems && link.subItems.map((sub: any) => (
+                          <Link 
+                            key={sub.label} 
+                            to={sub.url} 
+                            className="text-lg font-bold text-slate-400 hover:text-white transition-colors py-0.5"
+                            onClick={() => setMobileMenuOpen(false)}
+                          >
+                            {sub.label}
+                          </Link>
+                        ))}
+                        {link.hasMega && link.megaType === 'categories' && topLevel.map((cat: any) => (
+                          <Link 
+                            key={cat.id} 
+                            to={`/shop?category=${cat.slug}`} 
+                            className="text-lg font-bold text-slate-400 hover:text-white transition-colors py-0.5"
+                            onClick={() => setMobileMenuOpen(false)}
+                          >
+                            {cat.name}
+                          </Link>
+                        ))}
+                        {link.hasMega && link.megaType === 'brands' && allBrands.slice(0, 8).map((b: any) => (
+                          <Link 
+                            key={b.id} 
+                            to={`/shop?brand=${b.slug}`} 
+                            className="text-lg font-bold text-slate-400 hover:text-white transition-colors py-0.5"
+                            onClick={() => setMobileMenuOpen(false)}
+                          >
+                            {b.name}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
                  <div className="mt-8 pt-8 border-t border-white/10">
                     <div className="text-[10px] text-[#f00856] font-black uppercase tracking-[0.2em] mb-4">Soporte y contacto</div>
                     <Link to="/centro-ayuda" className="flex items-center gap-3 text-slate-400 font-bold mb-4" onClick={() => setMobileMenuOpen(false)}>Centro de ayuda</Link>

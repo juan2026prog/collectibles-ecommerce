@@ -508,14 +508,16 @@ export default function DynamicPage({ forcedSlug }: { forcedSlug?: string }) {
 
           <div className="px-6 md:px-10 py-8 md:py-10 text-[15px] md:text-base">
             <div
-              className="prose prose-invert max-w-none text-[#cbd5e1]
-                prose-h2:text-white prose-h2:font-black prose-h2:text-xl md:prose-h2:text-2xl prose-h2:mt-8 prose-h2:mb-3 prose-h2:tracking-tight
-                prose-h3:text-white prose-h3:font-black prose-h3:text-[1.1rem] prose-h3:mt-6 prose-h3:mb-2
-                prose-p:text-[#cbd5e1] prose-p:leading-[1.85] prose-p:mb-4
-                prose-ul:text-[#cbd5e1] prose-ul:leading-[1.8] prose-ul:my-4 prose-ul:pl-5 prose-ul:list-disc
-                prose-li:mb-1.5
-                prose-a:text-[#f00856] prose-a:font-extrabold hover:underline
-                prose-strong:text-white"
+              className="max-w-none text-[#cbd5e1] font-sans
+                [&_h2]:text-white [&_h2]:font-black [&_h2]:text-xl md:[&_h2]:text-2xl [&_h2]:mt-8 [&_h2]:mb-3 [&_h2]:tracking-tight [&_h2]:flex [&_h2]:items-center [&_h2]:gap-3
+                [&_h2_span]:w-1.5 [&_h2_span]:h-6 [&_h2_span]:bg-[#f00856] [&_h2_span]:rounded-full [&_h2_span]:inline-block
+                [&_h2:not(:has(span))]:before:content-[''] [&_h2:not(:has(span))]:before:w-1.5 [&_h2:not(:has(span))]:before:h-6 [&_h2:not(:has(span))]:before:bg-[#f00856] [&_h2:not(:has(span))]:before:rounded-full [&_h2:not(:has(span))]:before:inline-block
+                [&_h3]:text-white [&_h3]:font-black [&_h3]:text-[1.1rem] [&_h3]:mt-6 [&_h3]:mb-2
+                [&_p]:text-[#cbd5e1] [&_p]:leading-[1.85] [&_p]:mb-4
+                [&_ul]:text-[#cbd5e1] [&_ul]:leading-[1.8] [&_ul]:my-4 [&_ul]:pl-5 [&_ul]:list-disc
+                [&_li]:mb-1.5
+                [&_strong]:text-white [&_strong]:font-extrabold
+                [&_a]:text-[#f00856] [&_a]:font-extrabold hover:[&_a]:underline"
               dangerouslySetInnerHTML={{ __html: safeContent }}
             />
           </div>
