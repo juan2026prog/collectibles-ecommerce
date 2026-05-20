@@ -23,7 +23,7 @@ const checkoutSchema = z.object({
   affiliate_code: z.string().trim().min(1).optional(),
   payment_method: z.enum(["dlocalgo", "mercadopago", "paypal", "handy"]),
   currency: z.string().default("UYU"),
-  shipping_method: z.enum(["delivery", "pickup"]).default("delivery"),
+  shipping_method: z.enum(["delivery", "pickup", "dac"]).default("delivery"),
   shipping_address: z.object({
     first_name: z.string().trim().min(1),
     last_name: z.string().trim().min(1),
@@ -154,7 +154,7 @@ Deno.serve(async (req) => {
     }
 
     if (
-      payload.shipping_method === "delivery" &&
+      (payload.shipping_method === "delivery" || payload.shipping_method === "dac") &&
       (!payload.shipping_address.street || !payload.shipping_address.city || !payload.shipping_address.department)
     ) {
       throw new Error("Completa la direccion de envio antes de continuar.");
@@ -402,7 +402,7 @@ Deno.serve(async (req) => {
       : (payload.shipping_address.city || "");
 
     let shippingRate = 0;
-    if (payload.shipping_method === "delivery") {
+    if (payload.shipping_method === "delivery" || payload.shipping_method === "dac") {
       const isMontevideo = payload.shipping_address.department === "Montevideo";
       if (isMontevideo) {
         shippingRate = calculateShipping(shippingCity, "Montevideo", subtotal);
@@ -427,13 +427,16 @@ Deno.serve(async (req) => {
                 body: JSON.stringify({
                   department: payload.shipping_address.department,
                   city: payload.shipping_address.city,
-                  direccion: payload.shipping_address.street || '',
-                  packages: 1
+                  address: payload.shipping_address.street || '',
+                  package_quantity: 1,
+                  package_type: 1,
+                  cart_total: subtotal,
+                  items: verifiedItems
                 })
               });
               const dacCostResult = await dacCostResponse.json();
               if (dacCostResult && dacCostResult.success) {
-                shippingRate = dacCostResult.costo;
+                shippingRate = dacCostResult.cost;
               } else {
                 console.warn("[Create Order] DAC cost function returned failure, fallback to 350:", dacCostResult?.error);
                 shippingRate = 350;
@@ -461,6 +464,9 @@ Deno.serve(async (req) => {
       ...payload.shipping_address,
       shipping_method: payload.shipping_method,
       bank_promo: bankPromoSummary,
+      shipping_cost: shippingRate,
+      discount_amount: discountAmount,
+      bank_discount: bankDiscount,
     };
 
     const { data: orderResult, error: rpcError } = await supabase.rpc("create_order_atomic", {

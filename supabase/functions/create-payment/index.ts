@@ -265,16 +265,57 @@ serve(async (req: Request) => {
         currency_id: currency,
       }));
 
-      const itemsTotal = mpItems.reduce((sum: number, item: any) => sum + (item.unit_price * item.quantity), 0);
-      const diff = Number((amount - itemsTotal).toFixed(2));
-      if (Math.abs(diff) > 0.01) {
+      // Cargar costos de envío y descuentos desde shipping_address JSONB
+      const shippingCost = Number(order.shipping_address?.shipping_cost || 0);
+      const shippingMethod = order.shipping_address?.shipping_method || "";
+      if (shippingCost > 0) {
         mpItems.push({
-          id: diff > 0 ? "shipping" : "discount",
-          title: diff > 0 ? "Envio" : "Descuento",
+          id: "shipping",
+          title: shippingMethod === "dac" ? "Envío DAC al interior" : "Envío a domicilio",
           quantity: 1,
-          unit_price: diff,
+          unit_price: shippingCost,
           currency_id: currency,
         });
+      }
+
+      const discountAmount = Number(order.shipping_address?.discount_amount || 0);
+      if (discountAmount > 0) {
+        mpItems.push({
+          id: "discount_coupon",
+          title: "Descuento por Cupón",
+          quantity: 1,
+          unit_price: -discountAmount,
+          currency_id: currency,
+        });
+      }
+
+      const bankDiscount = Number(order.shipping_address?.bank_discount || 0);
+      if (bankDiscount > 0) {
+        mpItems.push({
+          id: "discount_bank",
+          title: "Descuento Bancario",
+          quantity: 1,
+          unit_price: -bankDiscount,
+          currency_id: currency,
+        });
+      }
+
+      // Reconciliación exacta con order.total_amount (amount)
+      const currentSum = mpItems.reduce((sum: number, item: any) => sum + (item.unit_price * item.quantity), 0);
+      const diff = Number((amount - currentSum).toFixed(2));
+      if (Math.abs(diff) > 0.001) {
+        const shippingItem = mpItems.find((item: any) => item.id === "shipping");
+        if (shippingItem) {
+          shippingItem.unit_price = Number((shippingItem.unit_price + diff).toFixed(2));
+        } else {
+          mpItems.push({
+            id: "adjustment",
+            title: "Ajuste por redondeo",
+            quantity: 1,
+            unit_price: diff,
+            currency_id: currency,
+          });
+        }
       }
 
       const isLocalhost = origin.includes("localhost") || origin.includes("127.0.0.1");

@@ -104,56 +104,100 @@ export default function Checkout() {
   });
 
   const [dacShippingCost, setDacShippingCost] = useState<number | null>(null);
-  const [isCalculatingDac, setIsCalculatingDac] = useState(false);
-  const [dacError, setDacError] = useState<string | null>(null);
+  const [dacShippingLoading, setDacShippingLoading] = useState(false);
+  const [dacShippingError, setDacShippingError] = useState<string | null>(null);
+  const [selectedShippingMethod, setSelectedShippingMethod] = useState<'delivery' | 'pickup' | 'dac'>('delivery');
+  const [detectedKOficina, setDetectedKOficina] = useState<number | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [finalTotal, setFinalTotal] = useState(0);
+
+  // Synchronize selectedShippingMethod
+  useEffect(() => {
+    if (shippingMethod === 'pickup') {
+      setSelectedShippingMethod('pickup');
+    } else {
+      setSelectedShippingMethod(form.department === 'Montevideo' ? 'delivery' : 'dac');
+    }
+  }, [shippingMethod, form.department]);
+
+  // Debug log for department
+  useEffect(() => {
+    console.log("[Checkout Debug] Department elegido:", form.department);
+  }, [form.department]);
+
+  // Debug log for shipping method
+  useEffect(() => {
+    console.log("[Checkout Debug] Shipping method detectado (selectedShippingMethod):", selectedShippingMethod);
+  }, [selectedShippingMethod]);
 
   useEffect(() => {
     const isMontevideo = form.department === 'Montevideo';
     
     if (shippingMethod !== 'delivery' || isMontevideo || !form.department || !form.city) {
       setDacShippingCost(null);
-      setDacError(null);
+      setDacShippingError(null);
+      setDetectedKOficina(null);
       return;
     }
 
     if (total >= 4000) {
       setDacShippingCost(0);
-      setDacError(null);
+      setDacShippingError(null);
+      setDetectedKOficina(null);
       return;
     }
 
     let active = true;
     async function fetchDacCost() {
-      setIsCalculatingDac(true);
-      setDacError(null);
+      setDacShippingLoading(true);
+      setDacShippingError(null);
       try {
+        const bodyPayload = {
+          address: form.street,
+          department: form.department,
+          city: form.city,
+          locality: form.barrio || "",
+          phone: form.phone,
+          package_quantity: 1,
+          package_type: 1,
+          cart_total: total,
+          items: items.map(item => ({
+            product_id: item.product_id,
+            variant_id: item.variant_id || "",
+            quantity: item.quantity,
+            price: item.price,
+            title: item.title
+          }))
+        };
+
+        console.log("[Checkout Debug] Llamado a dac-get-cost con payload:", bodyPayload);
+
         const { data, error } = await supabase.functions.invoke('dac-get-cost', {
-          body: {
-            department: form.department,
-            city: form.city,
-            direccion: form.street || '',
-            packages: 1
-          }
+          body: bodyPayload
         });
 
         if (!active) return;
 
         if (error) throw error;
 
+        console.log("[Checkout Debug] Respuesta dac-get-cost:", data);
+
         if (data && data.success) {
-          setDacShippingCost(data.costo);
+          setDacShippingCost(data.cost);
+          setDetectedKOficina(data.raw_response?.k_oficina || null);
         } else {
           throw new Error(data?.error || "Error al calcular costo DAC.");
         }
       } catch (err: any) {
         console.error("Error fetching DAC cost:", err);
         if (active) {
-          setDacError(err.message || "No pudimos calcular el costo DAC para esta localidad.");
+          setDacShippingError(err.message || "No pudimos calcular el costo DAC para esta localidad.");
           setDacShippingCost(null);
+          setDetectedKOficina(null);
         }
       } finally {
         if (active) {
-          setIsCalculatingDac(false);
+          setDacShippingLoading(false);
         }
       }
     }
@@ -183,6 +227,11 @@ export default function Checkout() {
       }
     }
   }
+
+  // Debug log for shipping cost final
+  useEffect(() => {
+    console.log("[Checkout Debug] Shipping cost final:", shipping);
+  }, [shipping]);
 
   const subtotalWithShipping = total + shipping;
 
@@ -364,6 +413,15 @@ export default function Checkout() {
   }
   const grandTotal = Math.max(subtotalWithShipping - bankDiscount, 0);
 
+  // Synchronize finalTotal and log it
+  useEffect(() => {
+    setFinalTotal(grandTotal);
+  }, [grandTotal]);
+
+  useEffect(() => {
+    console.log("[Checkout Debug] Total final enviado a pago (finalTotal):", finalTotal);
+  }, [finalTotal]);
+
   useEffect(() => {
     setAffiliateCode(localStorage.getItem('affiliate_code') || '');
   }, []);
@@ -374,11 +432,12 @@ export default function Checkout() {
     async function loadProfile() {
       const { data } = await supabase
         .from('profiles')
-        .select('first_name, last_name, phone, saved_addresses, shipping_address')
+        .select('first_name, last_name, phone, saved_addresses, shipping_address, is_admin')
         .eq('id', user.id)
         .single();
 
       if (!data) return;
+      setIsAdmin(!!data.is_admin);
       const addresses = data.saved_addresses || [];
       setSavedAddresses(addresses);
       const address = addresses.length > 0 ? addresses[0] : (data.shipping_address || {});
@@ -506,6 +565,15 @@ export default function Checkout() {
     }
   }
 
+  const isPaymentBlocked = () => {
+    if (selectedShippingMethod === 'dac') {
+      if (dacShippingCost === null) return true;
+      if (dacShippingError !== null) return true;
+      if (!form.department || !form.city || !form.street || !form.phone) return true;
+    }
+    return false;
+  };
+
   async function handlePlaceOrder(e: React.FormEvent) {
     e.preventDefault();
     if (submitLockRef.current || isSubmitting) return;
@@ -527,18 +595,18 @@ export default function Checkout() {
         affiliate_code: affiliateCode.trim() || undefined,
         payment_method: paymentMethod,
         currency: 'UYU',
-        shipping_method: shippingMethod,
+        shipping_method: selectedShippingMethod,
         shipping_address: {
           first_name: form.first_name,
           last_name: form.last_name,
-          street: shippingMethod === 'pickup' ? 'Retiro en local' : form.street,
+          street: selectedShippingMethod === 'pickup' ? 'Retiro en local' : form.street,
           apartment: form.apartment || undefined,
-          city: shippingMethod === 'pickup' ? 'Montevideo' : form.city,
-          department: shippingMethod === 'pickup' ? 'Montevideo' : form.department,
+          city: selectedShippingMethod === 'pickup' ? 'Montevideo' : form.city,
+          department: selectedShippingMethod === 'pickup' ? 'Montevideo' : form.department,
           postal_code: form.postal_code || undefined,
           country: form.country,
-          barrio: shippingMethod === 'pickup' ? undefined : form.barrio,
-          reference: shippingMethod === 'pickup' ? undefined : form.reference,
+          barrio: selectedShippingMethod === 'pickup' ? undefined : form.barrio,
+          reference: selectedShippingMethod === 'pickup' ? undefined : form.reference,
         },
         customer_email: form.email,
         customer_phone: form.phone || undefined,
@@ -612,19 +680,58 @@ export default function Checkout() {
             <div className="glass p-6">
               <h2 className="font-bold text-lg mb-4">Método de envío</h2>
               <div className="grid sm:grid-cols-2 gap-4">
-                <label className={`flex items-start gap-4 p-4  border-2 cursor-pointer transition-all ${shippingMethod === 'delivery' ? 'border-primary-500 bg-primary-500/100/10' : 'border-white/10 hover:border-white/10 bg-white/5'}`}>
-                  <input type="radio" checked={shippingMethod === 'delivery'} onChange={() => setShippingMethod('delivery')} className="sr-only" />
-                  <div className={`p-2  ${shippingMethod === 'delivery' ? 'bg-primary-500/100 text-white' : 'glass text-slate-400 shadow-sm'}`}>
-                    <Truck className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-white">Envío a domicilio</div>
-                    <div className="text-sm text-slate-400 mt-1">Recibilo en tu puerta</div>
-                  </div>
-                </label>
-                <label className={`flex items-start gap-4 p-4  border-2 cursor-pointer transition-all ${shippingMethod === 'pickup' ? 'border-primary-500 bg-primary-500/100/10' : 'border-white/10 hover:border-white/10 bg-white/5'}`}>
+                {form.department === 'Montevideo' ? (
+                  <label className={`flex items-start gap-4 p-4 border-2 cursor-pointer transition-all ${shippingMethod === 'delivery' ? 'border-primary-500 bg-primary-500/10' : 'border-white/10 hover:border-white/10 bg-white/5'}`}>
+                    <input type="radio" checked={shippingMethod === 'delivery'} onChange={() => setShippingMethod('delivery')} className="sr-only" />
+                    <div className={`p-2 ${shippingMethod === 'delivery' ? 'bg-primary-500/100 text-white' : 'glass text-slate-400 shadow-sm'}`}>
+                      <Truck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-white">Envío a domicilio</div>
+                      <div className="text-sm text-slate-400 mt-1">Recibilo en tu puerta</div>
+                    </div>
+                  </label>
+                ) : (
+                  <label className={`flex items-start gap-4 p-4 border-2 cursor-pointer transition-all ${shippingMethod === 'delivery' ? 'border-primary-500 bg-primary-500/10' : 'border-white/10 hover:border-white/10 bg-white/5'}`}>
+                    <input type="radio" checked={shippingMethod === 'delivery'} onChange={() => setShippingMethod('delivery')} className="sr-only" />
+                    <div className={`p-2 ${shippingMethod === 'delivery' ? 'bg-primary-500/100 text-white' : 'glass text-slate-400 shadow-sm'}`}>
+                      <Truck className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-bold text-white">Envío DAC al interior</div>
+                      <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                        Retiramos tu pedido desde Collectibles y DAC lo entrega en tu localidad.
+                      </p>
+                      
+                      <div className="mt-3 space-y-1">
+                        {dacShippingLoading && (
+                          <div className="text-amber-400 text-xs font-semibold flex items-center gap-1.5">
+                            <span className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin inline-block" />
+                            <span>Calculando envío DAC...</span>
+                          </div>
+                        )}
+                        {!dacShippingLoading && dacShippingCost !== null && (
+                          <div className="text-emerald-400 text-sm font-black">
+                            Costo DAC: ${dacShippingCost} UYU
+                          </div>
+                        )}
+                        {!dacShippingLoading && dacShippingError && (
+                          <div className="text-red-400 text-xs font-semibold leading-relaxed">
+                            No pudimos calcular DAC para esta localidad. Consultanos por WhatsApp.
+                          </div>
+                        )}
+                        {isAdmin && detectedKOficina !== null && (
+                          <div className="text-amber-500 text-[11px] font-mono mt-1">
+                            Oficina DAC destino detectada: {detectedKOficina}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </label>
+                )}
+                <label className={`flex items-start gap-4 p-4 border-2 cursor-pointer transition-all ${shippingMethod === 'pickup' ? 'border-primary-500 bg-primary-500/10' : 'border-white/10 hover:border-white/10 bg-white/5'}`}>
                   <input type="radio" checked={shippingMethod === 'pickup'} onChange={() => setShippingMethod('pickup')} className="sr-only" />
-                  <div className={`p-2  ${shippingMethod === 'pickup' ? 'bg-primary-500/100 text-white' : 'glass text-slate-400 shadow-sm'}`}>
+                  <div className={`p-2 ${shippingMethod === 'pickup' ? 'bg-primary-500/100 text-white' : 'glass text-slate-400 shadow-sm'}`}>
                     <Store className="w-5 h-5" />
                   </div>
                   <div>
@@ -846,20 +953,20 @@ export default function Checkout() {
                           </div>
                         </div>
 
-                        {isCalculatingDac && (
+                        {dacShippingLoading && (
                           <div className="p-3 rounded-lg bg-white/5 border border-white/10 flex items-center gap-3">
                             <div className="w-4 h-4 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
                             <span className="text-xs text-slate-300">Calculando costo de envío en tiempo real con DAC...</span>
                           </div>
                         )}
 
-                        {dacError && (
+                        {dacShippingError && (
                           <div className="p-4 rounded-lg bg-orange-950/20 border border-orange-500/30 space-y-3">
                             <div className="flex items-start gap-2.5">
                               <AlertCircle className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
                               <div className="text-xs text-orange-200 leading-relaxed">
                                 <strong className="block font-bold text-orange-300 mb-0.5">No fue posible calcular el costo automáticamente</strong>
-                                {dacError}
+                                {dacShippingError}
                               </div>
                             </div>
                             <button
@@ -1056,9 +1163,11 @@ export default function Checkout() {
               <div className="border-t pt-4 space-y-2">
                 <div className="flex justify-between text-sm"><span className="text-slate-400">Subtotal</span><span className="font-bold">{formatCurrencyPrice(total)}</span></div>
                  <div className="flex justify-between text-sm">
-                  <span className="text-slate-400">Envío</span>
+                  <span className="text-slate-400">
+                    {selectedShippingMethod === 'dac' ? 'Envío DAC al interior' : 'Envío'}
+                  </span>
                   <span className="font-bold flex items-center gap-1.5">
-                    {isCalculatingDac ? (
+                    {dacShippingLoading ? (
                       <>
                         <span className="w-3.5 h-3.5 border-2 border-primary-500 border-t-transparent rounded-full animate-spin inline-block" />
                         <span className="text-xs text-slate-400 font-normal">Calculando...</span>
@@ -1107,9 +1216,27 @@ export default function Checkout() {
                   </button>
                 </div>
               )}
-              <button type="submit" disabled={isSubmitting} className="btn-primary w-full mt-6 py-3.5 text-base">
+              <button
+                type="submit"
+                disabled={isSubmitting || isPaymentBlocked() || (selectedShippingMethod === 'dac' && dacShippingLoading)}
+                className={`btn-primary w-full mt-6 py-3.5 text-base ${(isPaymentBlocked() || (selectedShippingMethod === 'dac' && dacShippingLoading)) ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
                 {isSubmitting ? 'Procesando...' : 'Finalizar compra'}
               </button>
+
+              {/* Blocking reason alerts */}
+              {selectedShippingMethod === 'dac' && (
+                <div className="mt-3 space-y-1">
+                  {!form.phone && <p className="text-[11px] text-orange-400 font-semibold">• Se requiere Teléfono para despacho por DAC.</p>}
+                  {!form.street && <p className="text-[11px] text-orange-400 font-semibold">• Se requiere Dirección para despacho por DAC.</p>}
+                  {!form.department && <p className="text-[11px] text-orange-400 font-semibold">• Se requiere Departamento.</p>}
+                  {!form.city && <p className="text-[11px] text-orange-400 font-semibold">• Se requiere Localidad.</p>}
+                  {dacShippingError && <p className="text-[11px] text-red-400 font-semibold">• Error en cálculo de envío DAC. Por favor use WhatsApp.</p>}
+                  {dacShippingCost === null && !dacShippingError && !dacShippingLoading && (form.phone && form.street && form.department && form.city) && (
+                    <p className="text-[11px] text-orange-400 font-semibold">• Esperando cálculo de envío de DAC...</p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

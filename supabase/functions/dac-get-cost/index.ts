@@ -15,14 +15,17 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-        const body = await req.json();
-    const {
-      department,
-      city,
-      direccion = "",
-      packages = 1,
-      k_oficina_destino
-    } = body;
+    const body = await req.json();
+    console.log("[DAC Get Cost] Raw payload received:", JSON.stringify(body));
+
+    // Support unified mapping for both Checkout payload and Admin Logistics payload
+    const department = body.department || "";
+    const city = body.city || body.locality || "";
+    const address = body.address || body.direccion || body.Direccion_Destinatario || "";
+    const packages = body.package_quantity || body.packages || body.Paquetes_Ampara || 1;
+    const k_oficina_destino = body.k_oficina_destino !== undefined ? body.k_oficina_destino : body.K_Oficina_Destino;
+
+    console.log("[DAC Get Cost] Resolved inputs:", { department, city, address, packages, k_oficina_destino });
 
     // 1. Fetch DAC provider details
     const { data: provider, error: providerErr } = await supabase
@@ -36,7 +39,11 @@ serve(async (req) => {
     }
 
     if (!provider.is_active) {
-      return new Response(JSON.stringify({ success: false, error: "El servicio DAC no está activo." }), {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: "El servicio DAC no está activo.",
+        technical_error: "Provider inactive in database" 
+      }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -50,10 +57,10 @@ serve(async (req) => {
     // 2. Resolve destination office (K_Oficina_Destino) from dac_offices or override
     let selectedOffice = null;
 
-    if (k_oficina_destino !== undefined) {
+    if (k_oficina_destino !== undefined && k_oficina_destino !== null && k_oficina_destino !== "") {
       selectedOffice = {
         k_oficina: Number(k_oficina_destino),
-        office_name: "Oficina de Prueba (Override)"
+        office_name: `Oficina de Prueba (${k_oficina_destino})`
       };
     } else {
       if (!department) throw new Error("Falta el departamento para cotizar");
@@ -73,23 +80,29 @@ serve(async (req) => {
 
       if (offices && offices.length > 0) {
         const normalizedCity = city.trim().toLowerCase();
-        selectedOffice = offices.find(o => o.office_name.toLowerCase().includes(normalizedCity) || normalizedCity.includes(o.office_name.toLowerCase()));
+        selectedOffice = offices.find(o => 
+          o.office_name.toLowerCase().includes(normalizedCity) || 
+          normalizedCity.includes(o.office_name.toLowerCase())
+        );
         
         if (!selectedOffice) {
-          selectedOffice = offices[0]; // fallback
+          selectedOffice = offices[0]; // fallback to first office in that department
         }
       }
 
+      // If still no office is found, fallback to settings.k_oficina_destino_default or 601
       if (!selectedOffice) {
-        return new Response(JSON.stringify({ 
-          success: false, 
-          error: `No pudimos calcular el costo DAC para esta localidad. Contactanos por WhatsApp.` 
-        }), {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
+        const defaultOfficeK = settings.k_oficina_destino_default !== undefined && settings.k_oficina_destino_default !== null
+          ? Number(settings.k_oficina_destino_default)
+          : 601;
+        selectedOffice = {
+          k_oficina: defaultOfficeK,
+          office_name: `Oficina Predeterminada (${defaultOfficeK})`
+        };
       }
     }
+
+    console.log("[DAC Get Cost] Resolved destination office:", selectedOffice);
 
     // 3. Resolve active session
     let { data: activeSession } = await supabase
@@ -147,7 +160,7 @@ serve(async (req) => {
       K_Tipo_Envio: kTipoEnvio,
       K_Cliente_Remitente: kClienteRemitente,
       K_Cliente_Destinatario: kClienteDestinatario,
-      Direccion_Destinatario: direccion,
+      Direccion_Destinatario: address,
       K_Oficina_Destino: selectedOffice.k_oficina,
       Entrega: entrega,
       Paquetes_Ampara: packages,
@@ -160,10 +173,15 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({
       success: true,
-      costo: cost,
-      oficina: selectedOffice.office_name,
-      k_oficina: selectedOffice.k_oficina,
-      tiempo_estimado: "24-48 hs hábiles" // Standard DAC delivery estimation
+      provider: "dac",
+      cost: cost,
+      currency: "UYU",
+      raw_response: {
+        costo: cost,
+        oficina: selectedOffice.office_name,
+        k_oficina: selectedOffice.k_oficina,
+        tiempo_estimado: "24-48 hs hábiles"
+      }
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -171,7 +189,11 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error("[DAC Get Cost Error]:", error.message);
-    return new Response(JSON.stringify({ success: false, error: error.message }), {
+    return new Response(JSON.stringify({ 
+      success: false, 
+      error: "No pudimos calcular DAC para esta localidad. Consultanos por WhatsApp.", 
+      technical_error: error.message 
+    }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });

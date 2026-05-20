@@ -388,10 +388,13 @@ export async function wsObtieneCostoNuevo(
 ): Promise<number> {
   const url = apiUrl.endsWith('/wsObtieneCosto_Nuevo') ? apiUrl : `${apiUrl.replace(/\/$/, '')}/wsObtieneCosto_Nuevo`;
 
-  if (isDebugEnabled()) {
-    console.log(`[DAC DEBUG] wsObtieneCostoNuevo URL: ${url}`);
-    console.log(`[DAC DEBUG] wsObtieneCostoNuevo Request Payload:`, JSON.stringify(input));
-  }
+  // Safe request logging (hide ID_Sesion completely or partially)
+  const safeInput = { 
+    ...input, 
+    ID_Sesion: input.ID_Sesion ? `${input.ID_Sesion.substring(0, 8)}...` : undefined 
+  };
+  console.log(`[DAC API Request] URL: ${url}`);
+  console.log(`[DAC API Request] Payload JSON: ${JSON.stringify(safeInput)}`);
 
   const res = await fetch(url, {
     method: 'POST',
@@ -402,15 +405,16 @@ export async function wsObtieneCostoNuevo(
     body: JSON.stringify(input)
   });
 
+  console.log(`[DAC API Response] Status HTTP: ${res.status}`);
+
   if (!res.ok) {
     const text = await res.text().catch(() => '');
+    console.log(`[DAC API Response] Error Response Text: ${text}`);
     throw new Error(`DAC wsObtieneCostoNuevo HTTP error: ${res.status} ${res.statusText}. Response: ${text}`);
   }
 
   const data = await res.json();
-  if (isDebugEnabled()) {
-    console.log(`[DAC DEBUG] wsObtieneCostoNuevo Response:`, JSON.stringify(data));
-  }
+  console.log(`[DAC API Response] Response Text: ${JSON.stringify(data)}`);
 
   const dVal = data.d;
   if (!dVal) {
@@ -427,6 +431,7 @@ export async function wsObtieneCostoNuevo(
   }
 
   if (typeof resultObj === 'number') {
+    console.log(`[DAC API Response] Costo Parseado: ${resultObj}`);
     return resultObj;
   }
 
@@ -438,6 +443,7 @@ export async function wsObtieneCostoNuevo(
     throw new Error(`Could not find cost field in response: ${JSON.stringify(resultObj)}`);
   }
 
+  console.log(`[DAC API Response] Costo Parseado: ${cost}`);
   return Number(cost);
 }
 

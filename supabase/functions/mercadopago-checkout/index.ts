@@ -46,6 +46,59 @@ serve(async (req: Request) => {
       currency_id: order.currency || "UYU",
     }));
 
+    // Cargar costos de envío y descuentos desde shipping_address
+    const shippingCost = Number(order.shipping_address?.shipping_cost || 0);
+    const shippingMethod = order.shipping_address?.shipping_method || order.shipping_method;
+    if (shippingCost > 0) {
+      items.push({
+        id: "shipping",
+        title: shippingMethod === "dac" ? "Envío DAC al interior" : "Envío a domicilio",
+        quantity: 1,
+        unit_price: shippingCost,
+        currency_id: order.currency || "UYU",
+      });
+    }
+
+    const discountAmount = Number(order.shipping_address?.discount_amount || 0);
+    if (discountAmount > 0) {
+      items.push({
+        id: "discount_coupon",
+        title: "Descuento por Cupón",
+        quantity: 1,
+        unit_price: -discountAmount,
+        currency_id: order.currency || "UYU",
+      });
+    }
+
+    const bankDiscount = Number(order.shipping_address?.bank_discount || 0);
+    if (bankDiscount > 0) {
+      items.push({
+        id: "discount_bank",
+        title: "Descuento Bancario",
+        quantity: 1,
+        unit_price: -bankDiscount,
+        currency_id: order.currency || "UYU",
+      });
+    }
+
+    // Reconciliación exacta con order.total_amount
+    const currentSum = items.reduce((sum: number, item: any) => sum + (item.unit_price * item.quantity), 0);
+    const diff = Number((Number(order.total_amount) - currentSum).toFixed(2));
+    if (Math.abs(diff) > 0.001) {
+      const shippingItem = items.find((item: any) => item.id === "shipping");
+      if (shippingItem) {
+        shippingItem.unit_price = Number((shippingItem.unit_price + diff).toFixed(2));
+      } else {
+        items.push({
+          id: "adjustment",
+          title: "Ajuste por redondeo",
+          quantity: 1,
+          unit_price: diff,
+          currency_id: order.currency || "UYU",
+        });
+      }
+    }
+
     const preferencePayload = {
       items,
       payer: {

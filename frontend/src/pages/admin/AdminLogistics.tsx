@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Truck, MapPin, Save, QrCode, FileText, CheckCircle2, ChevronRight, X, Edit2, Check,
-  ToggleLeft, ToggleRight, Settings, Info, AlertCircle, RefreshCw, Calculator
+  ToggleLeft, ToggleRight, Settings, Info, AlertCircle, RefreshCw, Calculator, Plus, Trash2
 } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 import { supabase } from '../../lib/supabase';
@@ -67,6 +67,16 @@ export default function AdminLogistics() {
   const [dacEsRecoleccion, setDacEsRecoleccion] = useState(1);
   const [dacUsaBolsa, setDacUsaBolsa] = useState(0);
   const [dacKOficinaOrigen, setDacKOficinaOrigen] = useState("800");
+  const [dacKOficinaDestinoDefault, setDacKOficinaDestinoDefault] = useState<number>(601);
+
+  // DAC Office Management States
+  const [offices, setOffices] = useState<any[]>([]);
+  const [newOfficeK, setNewOfficeK] = useState('');
+  const [newOfficeName, setNewOfficeName] = useState('');
+  const [newOfficeDep, setNewOfficeDep] = useState('');
+  const [newOfficeCity, setNewOfficeCity] = useState('');
+  const [newOfficeLoc, setNewOfficeLoc] = useState('');
+  const [isLoadingOffices, setIsLoadingOffices] = useState(false);
 
   // Test Cost Panel States
   const [isTestingCost, setIsTestingCost] = useState(false);
@@ -117,12 +127,14 @@ export default function AdminLogistics() {
           setDacEsRecoleccion(s.es_recoleccion !== undefined ? Number(s.es_recoleccion) : 1);
           setDacUsaBolsa(s.usa_bolsa !== undefined ? Number(s.usa_bolsa) : 0);
           setDacKOficinaOrigen(s.k_oficina_origen !== undefined ? String(s.k_oficina_origen) : "800");
+          setDacKOficinaDestinoDefault(s.k_oficina_destino_default !== undefined ? Number(s.k_oficina_destino_default) : 601);
         }
       } catch (err) {
         console.error("Error loading DAC provider config:", err);
       }
     }
     loadSettings();
+    loadOffices();
   }, []);
 
   function updateSetting(key: string, value: string) {
@@ -198,6 +210,77 @@ export default function AdminLogistics() {
     }
   }
 
+  // Office list loader
+  async function loadOffices() {
+    setIsLoadingOffices(true);
+    try {
+      const { data, error } = await supabase
+        .from('dac_offices')
+        .select('*')
+        .order('office_name', { ascending: true });
+      if (error) throw error;
+      setOffices(data || []);
+    } catch (err: any) {
+      console.error("Error loading offices:", err);
+      toast.error(`Error al cargar oficinas: ${err.message}`);
+    } finally {
+      setIsLoadingOffices(false);
+    }
+  }
+
+  // Office adder
+  async function handleAddOffice(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newOfficeK || !newOfficeName || !newOfficeDep) {
+      toast.warning("Por favor completa al menos K_Oficina, Nombre y Departamento.");
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from('dac_offices')
+        .insert({
+          k_oficina: Number(newOfficeK),
+          office_name: newOfficeName.trim(),
+          department: newOfficeDep.trim(),
+          city: newOfficeCity.trim() || null,
+          locality: newOfficeLoc.trim() || null,
+          is_active: true
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      toast.success(`Oficina ${newOfficeName} agregada con éxito.`);
+      setNewOfficeK('');
+      setNewOfficeName('');
+      setNewOfficeDep('');
+      setNewOfficeCity('');
+      setNewOfficeLoc('');
+      loadOffices();
+    } catch (err: any) {
+      console.error("Error adding office:", err);
+      toast.error(`Error al agregar oficina: ${err.message}`);
+    }
+  }
+
+  // Office deleter
+  async function handleDeleteOffice(id: string) {
+    if (!window.confirm("¿Estás seguro de eliminar esta oficina de DAC?")) return;
+    try {
+      const { error } = await supabase
+        .from('dac_offices')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      toast.success("Oficina eliminada con éxito.");
+      loadOffices();
+    } catch (err: any) {
+      console.error("Error deleting office:", err);
+      toast.error(`Error al eliminar oficina: ${err.message}`);
+    }
+  }
+
   // Cost calculation test for DAC
   async function handleTestCostCalculation() {
     setIsTestingCost(true);
@@ -207,9 +290,10 @@ export default function AdminLogistics() {
     setTestDetectedCost(null);
 
     const reqBody = {
-      direccion: "test",
-      packages: 1,
-      k_oficina_destino: 601
+      Direccion_Destinatario: "Test",
+      K_Oficina_Destino: Number(dacKOficinaDestinoDefault) || 601,
+      Paquetes_Ampara: 1,
+      Detalle_Paquetes: JSON.stringify([{ Cantidad: 1, Tipo: 1 }])
     };
 
     setTestRequestJson(JSON.stringify(reqBody, null, 2));
@@ -227,7 +311,8 @@ export default function AdminLogistics() {
           entrega: dacEntrega,
           es_recoleccion: dacEsRecoleccion,
           usa_bolsa: dacUsaBolsa,
-          k_oficina_origen: dacKOficinaOrigen
+          k_oficina_origen: dacKOficinaOrigen,
+          k_oficina_destino_default: dacKOficinaDestinoDefault
         },
         updated_at: new Date().toISOString()
       };
@@ -251,8 +336,9 @@ export default function AdminLogistics() {
       setTestResponseJson(JSON.stringify(data, null, 2));
 
       if (data && data.success) {
-        setTestDetectedCost(data.costo);
-        toast.success(`Cálculo de costo probado con éxito. Costo: $${data.costo}`);
+        const costVal = data.cost !== undefined ? data.cost : (data.raw_response?.costo || data.costo);
+        setTestDetectedCost(costVal);
+        toast.success(`Cálculo de costo probado con éxito. Costo: $${costVal}`);
       } else {
         setTestError(data?.error || "Error al calcular costo en DAC");
         toast.error(`Error de cotización: ${data?.error || "Desconocido"}`);
@@ -310,7 +396,8 @@ export default function AdminLogistics() {
           entrega: dacEntrega,
           es_recoleccion: dacEsRecoleccion,
           usa_bolsa: dacUsaBolsa,
-          k_oficina_origen: dacKOficinaOrigen
+          k_oficina_origen: dacKOficinaOrigen,
+          k_oficina_destino_default: dacKOficinaDestinoDefault
         },
         updated_at: new Date().toISOString()
       };
@@ -794,6 +881,16 @@ export default function AdminLogistics() {
                     placeholder="Ej. 800"
                   />
                 </div>
+                <div>
+                  <label className="block text-[10px] font-black text-orange-900 uppercase tracking-widest mb-1.5">Oficina de Destino por defecto</label>
+                  <input 
+                    type="number"
+                    className="form-input w-full font-mono text-xs border-orange-200" 
+                    value={dacKOficinaDestinoDefault} 
+                    onChange={e => setDacKOficinaDestinoDefault(Number(e.target.value))} 
+                    placeholder="Ej. 601"
+                  />
+                </div>
               </div>
             </div>
 
@@ -802,7 +899,7 @@ export default function AdminLogistics() {
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="text-xs font-bold text-orange-950 uppercase tracking-wider">Prueba de Cálculo de Costo (wsObtieneCosto_Nuevo)</h4>
-                  <p className="text-[11px] text-gray-500 mt-0.5">Permite cotizar un envío de prueba al local Montevideo (601) con los parámetros configurados.</p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">Permite cotizar un envío de prueba a la oficina de destino predeterminada con los parámetros configurados.</p>
                 </div>
                 <button 
                   onClick={handleTestCostCalculation}
@@ -810,7 +907,7 @@ export default function AdminLogistics() {
                   className="btn-secondary py-2 px-4 gap-2 border-orange-200 hover:bg-orange-50 text-orange-950 text-xs font-bold shadow-sm"
                 >
                   <Calculator className={`w-3.5 h-3.5 ${isTestingCost ? 'animate-spin' : ''}`} />
-                  {isTestingCost ? 'Cotizando...' : 'Probar cálculo de costo'}
+                  {isTestingCost ? 'Cotizando...' : 'Probar costo DAC'}
                 </button>
               </div>
 
@@ -826,10 +923,138 @@ export default function AdminLogistics() {
                   </div>
                   {testDetectedCost !== null && (
                     <div className="col-span-2 bg-green-50 border border-green-200 text-green-900 px-4 py-3 rounded-lg flex items-center justify-between font-sans">
-                      <span className="text-xs font-bold">Costo Detectado en Producción:</span>
+                      <span className="text-xs font-bold">Costo Detectado:</span>
                       <span className="text-sm font-extrabold text-green-700">${testDetectedCost} UYU</span>
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+
+            {/* DAC Office Management Section */}
+            <div className="border-t border-orange-100 pt-6 mt-6 space-y-6">
+              <div>
+                <h4 className="text-sm font-black text-orange-950 uppercase tracking-wider">Gestión de Oficinas DAC (dac_offices)</h4>
+                <p className="text-xs text-gray-500 mt-1">Lista, crea y elimina oficinas locales de DAC para asociar localidades del interior.</p>
+              </div>
+
+              {/* Form to Add New Office */}
+              <form onSubmit={handleAddOffice} className="bg-orange-50/30 p-5 rounded-xl border border-orange-100/50 space-y-4">
+                <h5 className="text-xs font-bold text-orange-900 uppercase">Agregar Nueva Oficina</h5>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-black text-orange-900 uppercase tracking-widest mb-1">K_Oficina *</label>
+                    <input
+                      type="number"
+                      required
+                      placeholder="Ej. 601"
+                      className="form-input w-full font-mono text-xs border-orange-200"
+                      value={newOfficeK}
+                      onChange={e => setNewOfficeK(e.target.value)}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-[10px] font-black text-orange-900 uppercase tracking-widest mb-1">Nombre de Oficina *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ej. DAC Maldonado"
+                      className="form-input w-full text-xs border-orange-200"
+                      value={newOfficeName}
+                      onChange={e => setNewOfficeName(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-orange-900 uppercase tracking-widest mb-1">Departamento *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ej. Maldonado"
+                      className="form-input w-full text-xs border-orange-200"
+                      value={newOfficeDep}
+                      onChange={e => setNewOfficeDep(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-orange-900 uppercase tracking-widest mb-1">Ciudad (Opcional)</label>
+                    <input
+                      type="text"
+                      placeholder="Ej. Maldonado"
+                      className="form-input w-full text-xs border-orange-100"
+                      value={newOfficeCity}
+                      onChange={e => setNewOfficeCity(e.target.value)}
+                    />
+                  </div>
+                  <div className="col-span-2 md:col-span-4">
+                    <label className="block text-[10px] font-black text-orange-900 uppercase tracking-widest mb-1">Barrio / Localidad (Opcional)</label>
+                    <input
+                      type="text"
+                      placeholder="Ej. Centro"
+                      className="form-input w-full text-xs border-orange-100"
+                      value={newOfficeLoc}
+                      onChange={e => setNewOfficeLoc(e.target.value)}
+                    />
+                  </div>
+                  <div className="col-span-2 md:col-span-1 flex items-end">
+                    <button
+                      type="submit"
+                      className="btn-primary w-full py-2 px-4 gap-1.5 text-xs font-bold bg-orange-600 hover:bg-orange-700 shadow-md shadow-orange-500/10 flex items-center justify-center text-white"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Agregar
+                    </button>
+                  </div>
+                </div>
+              </form>
+
+              {/* Offices List Cards Grid */}
+              {isLoadingOffices ? (
+                <div className="flex items-center justify-center py-6 text-xs text-gray-500">
+                  <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mr-2" />
+                  Cargando oficinas de DAC...
+                </div>
+              ) : offices.length === 0 ? (
+                <div className="text-center py-6 text-xs text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                  No hay oficinas configuradas. Agrega al menos una para cotizaciones al interior.
+                </div>
+              ) : (
+                <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  {offices.map((office) => (
+                    <div
+                      key={office.id}
+                      className="p-3.5 bg-white border border-gray-200 hover:border-orange-300 rounded-xl shadow-sm hover:shadow transition-all relative flex flex-col justify-between group"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black font-mono text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-100">
+                            K_{office.k_oficina}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteOffice(office.id)}
+                            className="text-gray-300 hover:text-red-600 p-1 hover:bg-red-50 rounded transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <h6 className="font-bold text-gray-900 text-sm">{office.office_name}</h6>
+                        <div className="text-[11px] text-gray-500 font-medium">
+                          <span className="font-semibold text-gray-700">Depto:</span> {office.department}
+                          {office.city && (
+                            <>
+                              <br />
+                              <span className="font-semibold text-gray-700">Ciudad:</span> {office.city}
+                            </>
+                          )}
+                          {office.locality && (
+                            <>
+                              <br />
+                              <span className="font-semibold text-gray-700">Localidad:</span> {office.locality}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
