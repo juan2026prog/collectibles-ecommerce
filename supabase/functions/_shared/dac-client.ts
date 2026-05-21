@@ -23,6 +23,10 @@ export interface DacShipmentInput {
   codigoPedido: string;
   paquetesAmpara: number;
   packages: Array<{ cantidad: number; peso: number }>;
+  kTipoGuia?: number;
+  kTipoEnvio?: number;
+  entrega?: number;
+  kOficinaDestino?: string | number;
 }
 
 export function parseXmlTag(xml: string, tag: string): string {
@@ -162,9 +166,10 @@ export async function wsInGuiaPeso(
       <ID_Sesion>${escapeXml(session.id_session)}</ID_Sesion>
       <K_Cliente>${escapeXml(session.k_cliente)}</K_Cliente>
       <K_Usuario>${escapeXml(session.k_usuario)}</K_Usuario>
-      <K_Tipo_Guia>2</K_Tipo_Guia>
-      <K_Tipo_Envio>1</K_Tipo_Envio>
-      <Entrega>2</Entrega>
+      <K_Tipo_Guia>${input.kTipoGuia ?? 2}</K_Tipo_Guia>
+      <K_Tipo_Envio>${input.kTipoEnvio ?? 1}</K_Tipo_Envio>
+      <Entrega>${input.entrega ?? 2}</Entrega>
+      ${input.kOficinaDestino !== undefined && input.kOficinaDestino !== null && input.kOficinaDestino !== '' ? `<K_Oficina_Destino>${escapeXml(String(input.kOficinaDestino))}</K_Oficina_Destino>` : ''}
       <RUT>${escapeXml(session.rut)}</RUT>
       <Celular>${escapeXml(input.celular)}</Celular>
       <Destinatario>${escapeXml(input.destinatario)}</Destinatario>
@@ -454,7 +459,10 @@ export async function wsGetPegoteJson(
   kOficina: string = "800",
   codigoPedido: string = ""
 ): Promise<string> {
-  const url = apiUrl.endsWith('/wsGetPegote') ? apiUrl : `${apiUrl.replace(/\/$/, '')}/wsGetPegote`;
+  let url = apiUrl.endsWith('/wsGetPegote') ? apiUrl : `${apiUrl.replace(/\/$/, '')}/wsGetPegote`;
+  if (url.includes('/GAgencia/GAgencia.asmx')) {
+    url = url.replace('/GAgencia/GAgencia.asmx', '/JAgencia/JAgencia.asmx');
+  }
 
   const payload = {
     K_Oficina: kOficina,

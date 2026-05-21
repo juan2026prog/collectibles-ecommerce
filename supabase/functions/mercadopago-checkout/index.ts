@@ -50,9 +50,15 @@ serve(async (req: Request) => {
     const shippingCost = Number(order.shipping_address?.shipping_cost || 0);
     const shippingMethod = order.shipping_address?.shipping_method || order.shipping_method;
     if (shippingCost > 0) {
+      let title = "Envío a domicilio";
+      if (shippingMethod === "dac_home" || shippingMethod === "dac") {
+        title = "Envío DAC a domicilio";
+      } else if (shippingMethod === "dac_agency") {
+        title = "Retiro en agencia DAC";
+      }
       items.push({
         id: "shipping",
-        title: shippingMethod === "dac" ? "Envío DAC al interior" : "Envío a domicilio",
+        title: title,
         quantity: 1,
         unit_price: shippingCost,
         currency_id: order.currency || "UYU",

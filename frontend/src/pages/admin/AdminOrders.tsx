@@ -794,36 +794,46 @@ export default function AdminOrders() {
                         </div>
                       </div>
 
-                      <div className="flex gap-2">
+                      <div className="flex flex-col gap-2">
                         {dacShipment.shipping_label_url ? (
-                          <a
-                            href={dacShipment.shipping_label_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex-1 py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-center flex items-center justify-center gap-1.5 shadow-sm transition-colors"
-                          >
-                            <FileText className="w-4 h-4" />
-                            Descargar Etiqueta
-                          </a>
+                          <div className="flex flex-col gap-2 w-full">
+                            <a
+                              href={dacShipment.shipping_label_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-center flex items-center justify-center gap-1.5 shadow-sm transition-colors text-xs"
+                            >
+                              <FileText className="w-4 h-4" />
+                              Descargar / Imprimir etiqueta DAC
+                            </a>
+                            <button
+                              onClick={handleRegenerateLabel}
+                              disabled={isRegeneratingLabel}
+                              className="w-full py-2.5 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg flex items-center justify-center gap-1.5 shadow-sm transition-colors disabled:opacity-50 text-xs"
+                            >
+                              <RefreshCw className={`w-4 h-4 ${isRegeneratingLabel ? 'animate-spin' : ''}`} />
+                              {isRegeneratingLabel ? 'Regenerando etiqueta...' : 'Regenerar etiqueta DAC'}
+                            </button>
+                          </div>
                         ) : (
                           <button
                             onClick={handleRegenerateLabel}
                             disabled={isRegeneratingLabel}
-                            className="flex-1 py-2 px-3 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg flex items-center justify-center gap-1.5 shadow-sm transition-colors"
+                            className="w-full py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg flex items-center justify-center gap-1.5 shadow-sm transition-colors disabled:opacity-50 text-xs"
                           >
                             <RefreshCw className={`w-4 h-4 ${isRegeneratingLabel ? 'animate-spin' : ''}`} />
-                            Generar Etiqueta
+                            {isRegeneratingLabel ? 'Regenerando etiqueta...' : 'Regenerar etiqueta DAC'}
                           </button>
                         )}
 
                         <button
                           onClick={handleSyncTracking}
                           disabled={isSyncingTracking}
-                          className="py-2 px-3 bg-gray-100 hover:bg-gray-200 border border-gray-300 text-gray-800 font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors"
+                          className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 border border-gray-300 text-gray-850 font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 text-xs"
                           title="Sincronizar tracking con DAC"
                         >
                           <RefreshCw className={`w-4 h-4 ${isSyncingTracking ? 'animate-spin' : ''}`} />
-                          Sincronizar
+                          Sincronizar Estado Tracking
                         </button>
                       </div>
                     </div>

@@ -63,7 +63,8 @@ export default function AdminLogistics() {
   const [dacKTipoGuia, setDacKTipoGuia] = useState(4);
   const [dacKTipoEnvio, setDacKTipoEnvio] = useState(1);
   const [dacKClienteDestinatario, setDacKClienteDestinatario] = useState(5);
-  const [dacEntrega, setDacEntrega] = useState(1);
+  const [dacEntregaDomicilio, setDacEntregaDomicilio] = useState(1);
+  const [dacEntregaAgencia, setDacEntregaAgencia] = useState(2);
   const [dacEsRecoleccion, setDacEsRecoleccion] = useState(1);
   const [dacUsaBolsa, setDacUsaBolsa] = useState(0);
   const [dacKOficinaOrigen, setDacKOficinaOrigen] = useState("800");
@@ -76,6 +77,10 @@ export default function AdminLogistics() {
   const [newOfficeDep, setNewOfficeDep] = useState('');
   const [newOfficeCity, setNewOfficeCity] = useState('');
   const [newOfficeLoc, setNewOfficeLoc] = useState('');
+  const [newOfficeAddress, setNewOfficeAddress] = useState('');
+  const [newOfficePhone, setNewOfficePhone] = useState('');
+  const [newOfficeSupportsPickup, setNewOfficeSupportsPickup] = useState(true);
+  const [newOfficeSupportsDelivery, setNewOfficeSupportsDelivery] = useState(true);
   const [isLoadingOffices, setIsLoadingOffices] = useState(false);
 
   // Test Cost Panel States
@@ -123,7 +128,8 @@ export default function AdminLogistics() {
           setDacKTipoGuia(s.k_tipo_guia !== undefined ? Number(s.k_tipo_guia) : 4);
           setDacKTipoEnvio(s.k_tipo_envio !== undefined ? Number(s.k_tipo_envio) : 1);
           setDacKClienteDestinatario(s.k_cliente_destinatario !== undefined ? Number(s.k_cliente_destinatario) : 5);
-          setDacEntrega(s.entrega !== undefined ? Number(s.entrega) : 1);
+          setDacEntregaDomicilio(s.entrega_domicilio !== undefined ? Number(s.entrega_domicilio) : (s.entrega !== undefined ? Number(s.entrega) : 1));
+          setDacEntregaAgencia(s.entrega_agencia !== undefined ? Number(s.entrega_agencia) : 2);
           setDacEsRecoleccion(s.es_recoleccion !== undefined ? Number(s.es_recoleccion) : 1);
           setDacUsaBolsa(s.usa_bolsa !== undefined ? Number(s.usa_bolsa) : 0);
           setDacKOficinaOrigen(s.k_oficina_origen !== undefined ? String(s.k_oficina_origen) : "800");
@@ -244,6 +250,10 @@ export default function AdminLogistics() {
           department: newOfficeDep.trim(),
           city: newOfficeCity.trim() || null,
           locality: newOfficeLoc.trim() || null,
+          address: newOfficeAddress.trim() || null,
+          phone: newOfficePhone.trim() || null,
+          supports_pickup: newOfficeSupportsPickup,
+          supports_delivery: newOfficeSupportsDelivery,
           is_active: true
         })
         .select()
@@ -256,6 +266,10 @@ export default function AdminLogistics() {
       setNewOfficeDep('');
       setNewOfficeCity('');
       setNewOfficeLoc('');
+      setNewOfficeAddress('');
+      setNewOfficePhone('');
+      setNewOfficeSupportsPickup(true);
+      setNewOfficeSupportsDelivery(true);
       loadOffices();
     } catch (err: any) {
       console.error("Error adding office:", err);
@@ -308,7 +322,8 @@ export default function AdminLogistics() {
           k_tipo_guia: dacKTipoGuia,
           k_tipo_envio: dacKTipoEnvio,
           k_cliente_destinatario: dacKClienteDestinatario,
-          entrega: dacEntrega,
+          entrega_domicilio: dacEntregaDomicilio,
+          entrega_agencia: dacEntregaAgencia,
           es_recoleccion: dacEsRecoleccion,
           usa_bolsa: dacUsaBolsa,
           k_oficina_origen: dacKOficinaOrigen,
@@ -393,7 +408,8 @@ export default function AdminLogistics() {
           k_tipo_guia: dacKTipoGuia,
           k_tipo_envio: dacKTipoEnvio,
           k_cliente_destinatario: dacKClienteDestinatario,
-          entrega: dacEntrega,
+          entrega_domicilio: dacEntregaDomicilio,
+          entrega_agencia: dacEntregaAgencia,
           es_recoleccion: dacEsRecoleccion,
           usa_bolsa: dacUsaBolsa,
           k_oficina_origen: dacKOficinaOrigen,
@@ -842,13 +858,24 @@ export default function AdminLogistics() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black text-orange-900 uppercase tracking-widest mb-1.5">Entrega</label>
+                  <label className="block text-[10px] font-black text-orange-900 uppercase tracking-widest mb-1.5">Entrega Domicilio</label>
                   <input 
                     type="number"
                     className="form-input w-full font-mono text-xs border-orange-200" 
-                    value={dacEntrega} 
-                    onChange={e => setDacEntrega(Number(e.target.value))} 
+                    value={dacEntregaDomicilio} 
+                    onChange={e => setDacEntregaDomicilio(Number(e.target.value))} 
                   />
+                  <span className="text-[9px] text-gray-500 mt-0.5 block">Código DAC para envíos a domicilio</span>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-orange-900 uppercase tracking-widest mb-1.5">Entrega Agencia</label>
+                  <input 
+                    type="number"
+                    className="form-input w-full font-mono text-xs border-orange-200" 
+                    value={dacEntregaAgencia} 
+                    onChange={e => setDacEntregaAgencia(Number(e.target.value))} 
+                  />
+                  <span className="text-[9px] text-gray-500 mt-0.5 block">Código DAC para retiro en agencia</span>
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-orange-900 uppercase tracking-widest mb-1.5">Es Recolección</label>
@@ -995,6 +1022,46 @@ export default function AdminLogistics() {
                       onChange={e => setNewOfficeLoc(e.target.value)}
                     />
                   </div>
+                  <div className="col-span-2 md:col-span-3">
+                    <label className="block text-[10px] font-black text-orange-900 uppercase tracking-widest mb-1">Dirección de la Oficina (Opcional)</label>
+                    <input
+                      type="text"
+                      placeholder="Ej. Av. Italia 1234"
+                      className="form-input w-full text-xs border-orange-100"
+                      value={newOfficeAddress}
+                      onChange={e => setNewOfficeAddress(e.target.value)}
+                    />
+                  </div>
+                  <div className="col-span-2 md:col-span-2">
+                    <label className="block text-[10px] font-black text-orange-900 uppercase tracking-widest mb-1">Teléfono (Opcional)</label>
+                    <input
+                      type="text"
+                      placeholder="Ej. 099 123 456"
+                      className="form-input w-full text-xs border-orange-100"
+                      value={newOfficePhone}
+                      onChange={e => setNewOfficePhone(e.target.value)}
+                    />
+                  </div>
+                  <div className="col-span-2 md:col-span-2 flex items-end gap-6 pb-1">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="rounded text-orange-600 w-4 h-4 cursor-pointer"
+                        checked={newOfficeSupportsPickup}
+                        onChange={e => setNewOfficeSupportsPickup(e.target.checked)}
+                      />
+                      <span className="text-xs font-bold text-gray-700">Retiro en agencia</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="rounded text-orange-600 w-4 h-4 cursor-pointer"
+                        checked={newOfficeSupportsDelivery}
+                        onChange={e => setNewOfficeSupportsDelivery(e.target.checked)}
+                      />
+                      <span className="text-xs font-bold text-gray-700">Entrega a domicilio</span>
+                    </label>
+                  </div>
                   <div className="col-span-2 md:col-span-1 flex items-end">
                     <button
                       type="submit"
@@ -1023,7 +1090,7 @@ export default function AdminLogistics() {
                       key={office.id}
                       className="p-3.5 bg-white border border-gray-200 hover:border-orange-300 rounded-xl shadow-sm hover:shadow transition-all relative flex flex-col justify-between group"
                     >
-                      <div className="space-y-1">
+                      <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] font-black font-mono text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-100">
                             K_{office.k_oficina}
@@ -1050,6 +1117,29 @@ export default function AdminLogistics() {
                               <br />
                               <span className="font-semibold text-gray-700">Localidad:</span> {office.locality}
                             </>
+                          )}
+                          {office.address && (
+                            <>
+                              <br />
+                              <span className="font-semibold text-gray-700">Dirección:</span> {office.address}
+                            </>
+                          )}
+                          {office.phone && (
+                            <>
+                              <br />
+                              <span className="font-semibold text-gray-700">Tel:</span> {office.phone}
+                            </>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 pt-1">
+                          {office.supports_pickup && (
+                            <span className="text-[9px] font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-100">Retiro</span>
+                          )}
+                          {office.supports_delivery && (
+                            <span className="text-[9px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">Entrega</span>
+                          )}
+                          {!office.supports_pickup && !office.supports_delivery && (
+                            <span className="text-[9px] font-bold text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">Sin servicios</span>
                           )}
                         </div>
                       </div>

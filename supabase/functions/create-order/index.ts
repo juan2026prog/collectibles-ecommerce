@@ -23,7 +23,7 @@ const checkoutSchema = z.object({
   affiliate_code: z.string().trim().min(1).optional(),
   payment_method: z.enum(["dlocalgo", "mercadopago", "paypal", "handy"]),
   currency: z.string().default("UYU"),
-  shipping_method: z.enum(["delivery", "pickup", "dac"]).default("delivery"),
+  shipping_method: z.enum(["delivery", "pickup", "dac", "dac_home", "dac_agency"]).default("delivery"),
   shipping_address: z.object({
     first_name: z.string().trim().min(1),
     last_name: z.string().trim().min(1),
@@ -35,7 +35,12 @@ const checkoutSchema = z.object({
     reference: z.string().trim().optional(),
     postal_code: z.string().trim().optional(),
     country: z.string().trim().default("Uruguay"),
-  }),
+    dac_delivery_mode: z.string().optional(),
+    dac_office_id: z.string().uuid().nullable().optional(),
+    dac_k_oficina_destino: z.number().int().nullable().optional(),
+    dac_office_name: z.string().optional(),
+    dac_office_address: z.string().optional(),
+  }).passthrough(),
   customer_email: z.string().email(),
   customer_phone: z.string().trim().optional(),
   bank_promo: z.object({
@@ -154,10 +159,17 @@ Deno.serve(async (req) => {
     }
 
     if (
-      (payload.shipping_method === "delivery" || payload.shipping_method === "dac") &&
+      (payload.shipping_method === "delivery" || payload.shipping_method === "dac" || payload.shipping_method === "dac_home") &&
       (!payload.shipping_address.street || !payload.shipping_address.city || !payload.shipping_address.department)
     ) {
       throw new Error("Completa la direccion de envio antes de continuar.");
+    }
+
+    if (
+      payload.shipping_method === "dac_agency" &&
+      (!payload.shipping_address.dac_office_id && !payload.shipping_address.dac_k_oficina_destino)
+    ) {
+      throw new Error("Selecciona una agencia DAC para el retiro.");
     }
 
     // 1. Agregar logs seguros antes de la verificación
@@ -402,7 +414,7 @@ Deno.serve(async (req) => {
       : (payload.shipping_address.city || "");
 
     let shippingRate = 0;
-    if (payload.shipping_method === "delivery" || payload.shipping_method === "dac") {
+    if (payload.shipping_method === "delivery" || payload.shipping_method === "dac" || payload.shipping_method === "dac_home" || payload.shipping_method === "dac_agency") {
       const isMontevideo = payload.shipping_address.department === "Montevideo";
       if (isMontevideo) {
         shippingRate = calculateShipping(shippingCity, "Montevideo", subtotal);
@@ -425,9 +437,12 @@ Deno.serve(async (req) => {
                   'Authorization': `Bearer ${supabaseServiceKey}`
                 },
                 body: JSON.stringify({
+                  mode: payload.shipping_method === "dac_agency" ? "agency" : "home",
                   department: payload.shipping_address.department,
                   city: payload.shipping_address.city,
                   address: payload.shipping_address.street || '',
+                  dac_office_id: payload.shipping_address.dac_office_id,
+                  k_oficina_destino: payload.shipping_address.dac_k_oficina_destino,
                   package_quantity: 1,
                   package_type: 1,
                   cart_total: subtotal,
@@ -467,6 +482,12 @@ Deno.serve(async (req) => {
       shipping_cost: shippingRate,
       discount_amount: discountAmount,
       bank_discount: bankDiscount,
+      dac_delivery_mode: payload.shipping_method === "dac_agency" ? "agency" : "home",
+      dac_office_id: payload.shipping_address.dac_office_id || null,
+      dac_k_oficina_destino: payload.shipping_address.dac_k_oficina_destino || null,
+      dac_office_name: payload.shipping_address.dac_office_name || null,
+      dac_office_address: payload.shipping_address.dac_office_address || null,
+      shipping_provider: "dac"
     };
 
     const { data: orderResult, error: rpcError } = await supabase.rpc("create_order_atomic", {

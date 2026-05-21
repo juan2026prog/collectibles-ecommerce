@@ -32,7 +32,6 @@ serve(async (req) => {
     if (!order_id) throw new Error("Missing order_id");
     if (!customer_name) throw new Error("Missing customer_name");
     if (!customer_phone) throw new Error("Missing customer_phone");
-    if (!customer_address) throw new Error("Missing customer_address");
     if (!customer_city) throw new Error("Missing customer_city");
     if (!customer_department) throw new Error("Missing customer_department");
     if (!package_weight || isNaN(Number(package_weight)) || Number(package_weight) <= 0) {
@@ -40,6 +39,25 @@ serve(async (req) => {
     }
     if (!package_quantity || isNaN(Number(package_quantity)) || Number(package_quantity) <= 0) {
       throw new Error("Invalid package_quantity. Must be an integer greater than 0");
+    }
+
+    // Fetch order to resolve DAC parameters
+    const { data: orderData, error: orderErr } = await supabase
+      .from('orders')
+      .select('shipping_address, shipping_method')
+      .eq('id', order_id)
+      .single();
+
+    if (orderErr || !orderData) {
+      throw new Error(`No se encontró la orden con ID ${order_id}: ${orderErr?.message}`);
+    }
+
+    const shippingAddress = orderData.shipping_address || {};
+    const shippingMethod = orderData.shipping_method;
+    const dacDeliveryMode = shippingAddress.dac_delivery_mode || (shippingMethod === "dac_agency" ? "agency" : "home");
+
+    if (dacDeliveryMode === "home" && !customer_address) {
+      throw new Error("Missing customer_address for home delivery");
     }
 
     // 2. Fetch DAC provider details
@@ -58,6 +76,11 @@ serve(async (req) => {
       throw new Error("Missing DAC credentials in delivery_providers.");
     }
     const kOficinaOrigen = settings.k_oficina_origen !== undefined ? String(settings.k_oficina_origen) : "800";
+
+    const entregaDomicilio = settings.entrega_domicilio !== undefined ? Number(settings.entrega_domicilio) : 1;
+    const entregaAgencia = settings.entrega_agencia !== undefined ? Number(settings.entrega_agencia) : 2;
+    const kTipoGuia = settings.k_tipo_guia !== undefined ? Number(settings.k_tipo_guia) : 4;
+    const kTipoEnvio = settings.k_tipo_envio !== undefined ? Number(settings.k_tipo_envio) : 1;
 
     // 3. Resolve active session
     let { data: activeSession } = await supabase
@@ -110,21 +133,32 @@ serve(async (req) => {
       });
     }
 
+    const entrega = dacDeliveryMode === "agency" ? entregaAgencia : entregaDomicilio;
+    const kOficinaDestino = shippingAddress.dac_k_oficina_destino || null;
+    
+    const dacAddress = dacDeliveryMode === "agency"
+      ? `RETIRO EN AGENCIA: ${shippingAddress.dac_office_name || "Agencia DAC"}${shippingAddress.dac_office_address ? ` (${shippingAddress.dac_office_address})` : ""}`
+      : customer_address;
+
     // 5. Call DAC wsInGuia_peso
     // Zip/CP is default to blank if not provided, since local delivery in Uruguay usually doesn't strictly use CP
     const shipmentInput = {
       celular: customer_phone,
       destinatario: customer_name,
-      direccion: customer_address,
+      direccion: dacAddress,
       cp: "",
-      localidad: customer_city,
-      departamento: customer_department,
+      localidad: dacDeliveryMode === "agency" ? (shippingAddress.city || customer_city) : customer_city,
+      departamento: dacDeliveryMode === "agency" ? (shippingAddress.department || customer_department) : customer_department,
       telefono: customer_phone,
       email: "",
       observaciones: observations,
       codigoPedido: order_id,
       paquetesAmpara: qty,
-      packages: packages
+      packages: packages,
+      kTipoGuia: kTipoGuia,
+      kTipoEnvio: kTipoEnvio,
+      entrega: entrega,
+      kOficinaDestino: kOficinaDestino || undefined
     };
 
     const dacResult = await wsInGuiaPeso(api_url, sessionParam, shipmentInput);
@@ -138,6 +172,10 @@ serve(async (req) => {
       
       // Convert base64 to binary buffer
       const binaryString = atob(labelBase64);
+      if (!binaryString.startsWith("%PDF")) {
+        throw new Error("Invalid PDF: Decoded content does not start with %PDF magic bytes.");
+      }
+
       const len = binaryString.length;
       const bytes = new Uint8Array(len);
       for (let i = 0; i < len; i++) {
@@ -145,7 +183,7 @@ serve(async (req) => {
       }
       
       // Upload to Supabase Storage
-      const labelPath = `dac/${dacResult.trackingCode}.pdf`;
+      const labelPath = `dac/${order_id}-${dacResult.kGuia}.pdf`;
       const { error: uploadErr } = await supabase.storage
         .from('shipping-labels')
         .upload(labelPath, bytes.buffer, {
@@ -176,21 +214,27 @@ serve(async (req) => {
         provider_key: 'dac',
         tracking_code: dacResult.trackingCode,
         external_guide: dacResult.kGuia,
-        destination_office: dacResult.destinationOffice,
+        destination_office: dacResult.destinationOffice || String(kOficinaDestino || ""),
         shipping_status: 'documented',
         shipping_label_url: labelPublicUrl || null,
         shipping_label_base64: labelBase64 || null,
         customer_name: customer_name,
         customer_phone: customer_phone,
-        customer_address: customer_address,
-        customer_city: customer_city,
-        customer_department: customer_department,
+        customer_address: dacAddress,
+        customer_city: dacDeliveryMode === "agency" ? (shippingAddress.city || customer_city) : customer_city,
+        customer_department: dacDeliveryMode === "agency" ? (shippingAddress.department || customer_department) : customer_department,
         package_weight: totalWt,
         package_quantity: qty,
         provider_response: {
           kGuia: dacResult.kGuia,
           trackingCode: dacResult.trackingCode,
-          destinationOffice: dacResult.destinationOffice
+          destinationOffice: dacResult.destinationOffice || kOficinaDestino,
+          kOficina: kOficinaOrigen,
+          codigoPedido: order_id,
+          dac_delivery_mode: dacDeliveryMode,
+          dac_office_id: shippingAddress.dac_office_id,
+          dac_office_name: shippingAddress.dac_office_name,
+          dac_office_address: shippingAddress.dac_office_address
         }
       })
       .select()

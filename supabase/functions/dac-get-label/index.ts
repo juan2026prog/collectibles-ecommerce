@@ -99,12 +99,16 @@ serve(async (req) => {
 
     // Convert and Upload
     const binaryString = atob(labelBase64);
+    if (!binaryString.startsWith("%PDF")) {
+      throw new Error("Invalid PDF: Decoded content does not start with %PDF magic bytes.");
+    }
+
     const bytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);
     }
 
-    const labelPath = `dac/${trackingCode}.pdf`;
+    const labelPath = `dac/${shipment.order_id}-${kGuia}.pdf`;
     const { error: uploadErr } = await supabase.storage
       .from('shipping-labels')
       .upload(labelPath, bytes.buffer, {

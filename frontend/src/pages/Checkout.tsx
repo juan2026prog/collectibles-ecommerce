@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRight, Truck, Store, Tag, Sparkles, X, Home, Ticket, Share2, Clock, AlertCircle } from 'lucide-react';
+import { ChevronRight, Truck, Store, Tag, Sparkles, X, Home, Ticket, Share2, Clock, AlertCircle, MapPin, Building2, Search } from 'lucide-react';
 import { useCartContext } from '../contexts/CartContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -106,19 +106,54 @@ export default function Checkout() {
   const [dacShippingCost, setDacShippingCost] = useState<number | null>(null);
   const [dacShippingLoading, setDacShippingLoading] = useState(false);
   const [dacShippingError, setDacShippingError] = useState<string | null>(null);
-  const [selectedShippingMethod, setSelectedShippingMethod] = useState<'delivery' | 'pickup' | 'dac'>('delivery');
+  const [selectedShippingMethod, setSelectedShippingMethod] = useState<'delivery' | 'pickup' | 'dac' | 'dac_home' | 'dac_agency'>('delivery');
   const [detectedKOficina, setDetectedKOficina] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [finalTotal, setFinalTotal] = useState(0);
+
+  // DAC Multimodal state
+  const [dacDeliveryMode, setDacDeliveryMode] = useState<'dac_home' | 'dac_agency'>('dac_home');
+  const [dacAgencies, setDacAgencies] = useState<any[]>([]);
+  const [selectedAgency, setSelectedAgency] = useState<any | null>(null);
+  const [agencySearchTerm, setAgencySearchTerm] = useState('');
 
   // Synchronize selectedShippingMethod
   useEffect(() => {
     if (shippingMethod === 'pickup') {
       setSelectedShippingMethod('pickup');
+    } else if (form.department === 'Montevideo') {
+      setSelectedShippingMethod('delivery');
     } else {
-      setSelectedShippingMethod(form.department === 'Montevideo' ? 'delivery' : 'dac');
+      setSelectedShippingMethod(dacDeliveryMode);
     }
-  }, [shippingMethod, form.department]);
+  }, [shippingMethod, form.department, dacDeliveryMode]);
+
+  // Load DAC agencies when department changes (non-Montevideo)
+  useEffect(() => {
+    if (form.department === 'Montevideo' || !form.department || shippingMethod === 'pickup') {
+      setDacAgencies([]);
+      setSelectedAgency(null);
+      return;
+    }
+
+    async function loadAgencies() {
+      try {
+        const { data, error } = await supabase
+          .from('dac_offices')
+          .select('*')
+          .eq('is_active', true)
+          .eq('supports_pickup', true)
+          .ilike('department', form.department.trim())
+          .order('office_name', { ascending: true });
+        if (error) throw error;
+        setDacAgencies(data || []);
+      } catch (err) {
+        console.error('[Checkout] Error loading DAC agencies:', err);
+        setDacAgencies([]);
+      }
+    }
+    loadAgencies();
+  }, [form.department, shippingMethod]);
 
   // Debug log for department
   useEffect(() => {
@@ -133,7 +168,21 @@ export default function Checkout() {
   useEffect(() => {
     const isMontevideo = form.department === 'Montevideo';
     
-    if (shippingMethod !== 'delivery' || isMontevideo || !form.department || !form.city) {
+    if (shippingMethod !== 'delivery' || isMontevideo || !form.department) {
+      setDacShippingCost(null);
+      setDacShippingError(null);
+      setDetectedKOficina(null);
+      return;
+    }
+
+    // For agency mode, need selected agency; for home mode, need city
+    if (dacDeliveryMode === 'dac_agency' && !selectedAgency) {
+      setDacShippingCost(null);
+      setDacShippingError(null);
+      setDetectedKOficina(null);
+      return;
+    }
+    if (dacDeliveryMode === 'dac_home' && !form.city) {
       setDacShippingCost(null);
       setDacShippingError(null);
       setDetectedKOficina(null);
@@ -152,8 +201,8 @@ export default function Checkout() {
       setDacShippingLoading(true);
       setDacShippingError(null);
       try {
-        const bodyPayload = {
-          address: form.street,
+        const bodyPayload: any = {
+          mode: dacDeliveryMode === 'dac_agency' ? 'agency' : 'home',
           department: form.department,
           city: form.city,
           locality: form.barrio || "",
@@ -169,6 +218,14 @@ export default function Checkout() {
             title: item.title
           }))
         };
+
+        if (dacDeliveryMode === 'dac_agency' && selectedAgency) {
+          bodyPayload.dac_office_id = selectedAgency.id;
+          bodyPayload.k_oficina_destino = selectedAgency.k_oficina;
+          bodyPayload.address = selectedAgency.address || selectedAgency.office_name;
+        } else {
+          bodyPayload.address = form.street;
+        }
 
         console.log("[Checkout Debug] Llamado a dac-get-cost con payload:", bodyPayload);
 
@@ -210,7 +267,7 @@ export default function Checkout() {
       active = false;
       clearTimeout(timer);
     };
-  }, [shippingMethod, form.department, form.city, form.street, total]);
+  }, [shippingMethod, form.department, form.city, form.street, total, dacDeliveryMode, selectedAgency]);
 
   const resolvedCityForShipping = form.department === 'Montevideo' ? form.barrio : form.city;
   const isMontevideo = form.department === 'Montevideo';
@@ -351,6 +408,8 @@ export default function Checkout() {
       city: val === 'Montevideo' ? 'Montevideo' : '',
       barrio: '',
     }));
+    setSelectedAgency(null);
+    setAgencySearchTerm('');
   };
 
   const handleAddressSelect = (details: {
@@ -566,10 +625,16 @@ export default function Checkout() {
   }
 
   const isPaymentBlocked = () => {
-    if (selectedShippingMethod === 'dac') {
+    if (selectedShippingMethod === 'dac' || selectedShippingMethod === 'dac_home') {
       if (dacShippingCost === null) return true;
       if (dacShippingError !== null) return true;
       if (!form.department || !form.city || !form.street || !form.phone) return true;
+    }
+    if (selectedShippingMethod === 'dac_agency') {
+      if (dacShippingCost === null) return true;
+      if (dacShippingError !== null) return true;
+      if (!form.department || !form.phone) return true;
+      if (!selectedAgency) return true;
     }
     return false;
   };
@@ -599,7 +664,7 @@ export default function Checkout() {
         shipping_address: {
           first_name: form.first_name,
           last_name: form.last_name,
-          street: selectedShippingMethod === 'pickup' ? 'Retiro en local' : form.street,
+          street: selectedShippingMethod === 'pickup' ? 'Retiro en local' : (selectedShippingMethod === 'dac_agency' ? (selectedAgency?.address || selectedAgency?.office_name || 'Retiro en agencia DAC') : form.street),
           apartment: form.apartment || undefined,
           city: selectedShippingMethod === 'pickup' ? 'Montevideo' : form.city,
           department: selectedShippingMethod === 'pickup' ? 'Montevideo' : form.department,
@@ -607,6 +672,17 @@ export default function Checkout() {
           country: form.country,
           barrio: selectedShippingMethod === 'pickup' ? undefined : form.barrio,
           reference: selectedShippingMethod === 'pickup' ? undefined : form.reference,
+          ...(selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency' ? {
+            dac_delivery_mode: dacDeliveryMode,
+            shipping_provider: 'DAC',
+            shipping_method: selectedShippingMethod,
+          } : {}),
+          ...(selectedShippingMethod === 'dac_agency' && selectedAgency ? {
+            dac_office_id: selectedAgency.id,
+            dac_k_oficina_destino: selectedAgency.k_oficina,
+            dac_office_name: selectedAgency.office_name,
+            dac_office_address: selectedAgency.address || selectedAgency.office_name,
+          } : {}),
         },
         customer_email: form.email,
         customer_phone: form.phone || undefined,
@@ -692,18 +768,151 @@ export default function Checkout() {
                     </div>
                   </label>
                 ) : (
+                  <>
                   <label className={`flex items-start gap-4 p-4 border-2 cursor-pointer transition-all ${shippingMethod === 'delivery' ? 'border-primary-500 bg-primary-500/10' : 'border-white/10 hover:border-white/10 bg-white/5'}`}>
                     <input type="radio" checked={shippingMethod === 'delivery'} onChange={() => setShippingMethod('delivery')} className="sr-only" />
                     <div className={`p-2 ${shippingMethod === 'delivery' ? 'bg-primary-500/100 text-white' : 'glass text-slate-400 shadow-sm'}`}>
                       <Truck className="w-5 h-5" />
                     </div>
                     <div className="flex-1">
-                      <div className="font-bold text-white">Envío DAC al interior</div>
+                      <div className="font-bold text-white">Envío por DAC al interior</div>
                       <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                        Retiramos tu pedido desde Collectibles y DAC lo entrega en tu localidad.
+                        Elegí cómo querés recibir tu pedido por DAC.
                       </p>
-                      
-                      <div className="mt-3 space-y-1">
+                    </div>
+                  </label>
+
+                  {/* DAC Multimodal Selection — only when delivery is selected and NOT Montevideo */}
+                  {shippingMethod === 'delivery' && (
+                    <div className="sm:col-span-2 space-y-4">
+                      <div className="px-1">
+                        <p className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">Elegí cómo querés recibir por DAC</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          {/* Card A: Home Delivery */}
+                          <button
+                            type="button"
+                            onClick={() => { setDacDeliveryMode('dac_home'); setSelectedAgency(null); }}
+                            className={`text-left p-4 rounded-xl border-2 transition-all duration-200 ${
+                              dacDeliveryMode === 'dac_home'
+                                ? 'border-primary-500 bg-primary-500/10 shadow-lg shadow-primary-500/10'
+                                : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/[0.07]'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 mb-2">
+                              <div className={`p-1.5 rounded-lg ${dacDeliveryMode === 'dac_home' ? 'bg-primary-500 text-white' : 'bg-white/10 text-slate-400'}`}>
+                                <Truck className="w-4 h-4" />
+                              </div>
+                              <span className="font-bold text-sm text-white">Entrega en domicilio</span>
+                            </div>
+                            <p className="text-[11px] text-slate-400 leading-relaxed">
+                              DAC entrega el pedido en la dirección que ingresaste.
+                            </p>
+                          </button>
+
+                          {/* Card B: Agency Pickup */}
+                          <button
+                            type="button"
+                            onClick={() => setDacDeliveryMode('dac_agency')}
+                            className={`text-left p-4 rounded-xl border-2 transition-all duration-200 ${
+                              dacDeliveryMode === 'dac_agency'
+                                ? 'border-amber-500 bg-amber-500/10 shadow-lg shadow-amber-500/10'
+                                : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/[0.07]'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 mb-2">
+                              <div className={`p-1.5 rounded-lg ${dacDeliveryMode === 'dac_agency' ? 'bg-amber-500 text-white' : 'bg-white/10 text-slate-400'}`}>
+                                <Building2 className="w-4 h-4" />
+                              </div>
+                              <span className="font-bold text-sm text-white">Retiro en agencia DAC</span>
+                            </div>
+                            <p className="text-[11px] text-slate-400 leading-relaxed">
+                              Enviamos tu pedido a una agencia DAC y lo retirás allí con tu documento.
+                            </p>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Agency Selector (visible only in agency mode) */}
+                      {dacDeliveryMode === 'dac_agency' && (
+                        <div className="px-1 space-y-3">
+                          <label className="form-label text-xs flex items-center gap-1.5">
+                            <MapPin className="w-3.5 h-3.5 text-amber-500" />
+                            Seleccioná una agencia DAC en {form.department || 'tu departamento'}
+                          </label>
+                          {dacAgencies.length > 0 ? (
+                            <>
+                              {dacAgencies.length > 4 && (
+                                <div className="relative">
+                                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                                  <input
+                                    type="text"
+                                    placeholder="Buscar agencia..."
+                                    className="form-input pl-9 text-xs"
+                                    value={agencySearchTerm}
+                                    onChange={e => setAgencySearchTerm(e.target.value)}
+                                  />
+                                </div>
+                              )}
+                              <div className="max-h-48 overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+                                {dacAgencies
+                                  .filter(a => {
+                                    if (!agencySearchTerm.trim()) return true;
+                                    const term = agencySearchTerm.toLowerCase();
+                                    return (
+                                      a.office_name?.toLowerCase().includes(term) ||
+                                      a.city?.toLowerCase().includes(term) ||
+                                      a.locality?.toLowerCase().includes(term) ||
+                                      a.address?.toLowerCase().includes(term)
+                                    );
+                                  })
+                                  .map((agency) => (
+                                  <button
+                                    key={agency.id}
+                                    type="button"
+                                    onClick={() => setSelectedAgency(agency)}
+                                    className={`w-full text-left p-3 rounded-lg border-2 transition-all ${
+                                      selectedAgency?.id === agency.id
+                                        ? 'border-amber-500 bg-amber-500/10'
+                                        : 'border-white/10 bg-white/5 hover:border-amber-500/30 hover:bg-white/[0.07]'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <div className="font-bold text-sm text-white">{agency.office_name}</div>
+                                        {agency.address && (
+                                          <div className="text-[11px] text-slate-400 mt-0.5">{agency.address}</div>
+                                        )}
+                                        {agency.city && (
+                                          <div className="text-[11px] text-slate-500 mt-0.5">
+                                            {agency.city}{agency.locality ? `, ${agency.locality}` : ''}
+                                          </div>
+                                        )}
+                                        {agency.phone && (
+                                          <div className="text-[10px] text-slate-500 mt-0.5">Tel: {agency.phone}</div>
+                                        )}
+                                      </div>
+                                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                        selectedAgency?.id === agency.id 
+                                          ? 'bg-amber-500 text-white' 
+                                          : 'bg-white/10 text-slate-500'
+                                      }`}>
+                                        K_{agency.k_oficina}
+                                      </span>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="text-xs text-slate-500 p-3 bg-white/5 rounded-lg border border-white/10 text-center">
+                              {form.department ? `No hay agencias DAC activas para retiro en ${form.department}.` : 'Seleccioná un departamento para ver agencias disponibles.'}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* DAC Cost/Status Display */}
+                      <div className="px-1 space-y-2">
                         {dacShippingLoading && (
                           <div className="text-amber-400 text-xs font-semibold flex items-center gap-1.5">
                             <span className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin inline-block" />
@@ -712,7 +921,7 @@ export default function Checkout() {
                         )}
                         {!dacShippingLoading && dacShippingCost !== null && (
                           <div className="text-emerald-400 text-sm font-black">
-                            Costo DAC: ${dacShippingCost} UYU
+                            {dacDeliveryMode === 'dac_agency' ? 'Costo retiro en agencia' : 'Costo envío DAC'}: ${dacShippingCost} UYU
                           </div>
                         )}
                         {!dacShippingLoading && dacShippingError && (
@@ -725,9 +934,24 @@ export default function Checkout() {
                             Oficina DAC destino detectada: {detectedKOficina}
                           </div>
                         )}
+
+                        {/* Context notice */}
+                        {dacDeliveryMode === 'dac_home' && dacShippingCost !== null && !dacShippingLoading && (
+                          <div className="p-3 rounded-lg bg-primary-500/5 border border-primary-500/20 text-xs text-slate-300">
+                            <strong className="text-primary-400">📦 </strong>
+                            DAC entregará en la dirección que ingresaste. Tiempo estimado: 24-48 hs hábiles.
+                          </div>
+                        )}
+                        {dacDeliveryMode === 'dac_agency' && selectedAgency && dacShippingCost !== null && !dacShippingLoading && (
+                          <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 text-xs text-slate-300">
+                            <strong className="text-amber-400">🏢 </strong>
+                            Te avisaremos cuando esté listo en la agencia <strong className="text-white">{selectedAgency.office_name}</strong>. Recordá llevar tu documento.
+                          </div>
+                        )}
                       </div>
                     </div>
-                  </label>
+                  )}
+                  </>
                 )}
                 <label className={`flex items-start gap-4 p-4 border-2 cursor-pointer transition-all ${shippingMethod === 'pickup' ? 'border-primary-500 bg-primary-500/10' : 'border-white/10 hover:border-white/10 bg-white/5'}`}>
                   <input type="radio" checked={shippingMethod === 'pickup'} onChange={() => setShippingMethod('pickup')} className="sr-only" />
@@ -1164,7 +1388,7 @@ export default function Checkout() {
                 <div className="flex justify-between text-sm"><span className="text-slate-400">Subtotal</span><span className="font-bold">{formatCurrencyPrice(total)}</span></div>
                  <div className="flex justify-between text-sm">
                   <span className="text-slate-400">
-                    {selectedShippingMethod === 'dac' ? 'Envío DAC al interior' : 'Envío'}
+                    {selectedShippingMethod === 'dac_home' ? 'Envío DAC a domicilio' : selectedShippingMethod === 'dac_agency' ? (selectedAgency ? `Retiro en agencia - ${selectedAgency.office_name}` : 'Retiro en agencia DAC') : selectedShippingMethod === 'dac' ? 'Envío DAC al interior' : 'Envío'}
                   </span>
                   <span className="font-bold flex items-center gap-1.5">
                     {dacShippingLoading ? (
@@ -1218,21 +1442,22 @@ export default function Checkout() {
               )}
               <button
                 type="submit"
-                disabled={isSubmitting || isPaymentBlocked() || (selectedShippingMethod === 'dac' && dacShippingLoading)}
-                className={`btn-primary w-full mt-6 py-3.5 text-base ${(isPaymentBlocked() || (selectedShippingMethod === 'dac' && dacShippingLoading)) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={isSubmitting || isPaymentBlocked() || ((selectedShippingMethod === 'dac' || selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') && dacShippingLoading)}
+                className={`btn-primary w-full mt-6 py-3.5 text-base ${(isPaymentBlocked() || ((selectedShippingMethod === 'dac' || selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') && dacShippingLoading)) ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {isSubmitting ? 'Procesando...' : 'Finalizar compra'}
               </button>
 
               {/* Blocking reason alerts */}
-              {selectedShippingMethod === 'dac' && (
+              {(selectedShippingMethod === 'dac' || selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') && (
                 <div className="mt-3 space-y-1">
                   {!form.phone && <p className="text-[11px] text-orange-400 font-semibold">• Se requiere Teléfono para despacho por DAC.</p>}
-                  {!form.street && <p className="text-[11px] text-orange-400 font-semibold">• Se requiere Dirección para despacho por DAC.</p>}
+                  {selectedShippingMethod !== 'dac_agency' && !form.street && <p className="text-[11px] text-orange-400 font-semibold">• Se requiere Dirección para despacho por DAC.</p>}
                   {!form.department && <p className="text-[11px] text-orange-400 font-semibold">• Se requiere Departamento.</p>}
-                  {!form.city && <p className="text-[11px] text-orange-400 font-semibold">• Se requiere Localidad.</p>}
+                  {selectedShippingMethod !== 'dac_agency' && !form.city && <p className="text-[11px] text-orange-400 font-semibold">• Se requiere Localidad.</p>}
+                  {selectedShippingMethod === 'dac_agency' && !selectedAgency && <p className="text-[11px] text-orange-400 font-semibold">• Seleccioná una agencia DAC para retiro.</p>}
                   {dacShippingError && <p className="text-[11px] text-red-400 font-semibold">• Error en cálculo de envío DAC. Por favor use WhatsApp.</p>}
-                  {dacShippingCost === null && !dacShippingError && !dacShippingLoading && (form.phone && form.street && form.department && form.city) && (
+                  {dacShippingCost === null && !dacShippingError && !dacShippingLoading && (
                     <p className="text-[11px] text-orange-400 font-semibold">• Esperando cálculo de envío de DAC...</p>
                   )}
                 </div>
