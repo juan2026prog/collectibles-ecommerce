@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ArrowRight, Truck, Shield, Package } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { useProducts, useCategories, useBrands, useBanners, useProductGroups } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
 import { useLocale } from '../contexts/LocaleContext';
@@ -10,6 +10,120 @@ import { ProductGridCard } from '../components/ProductGridCard';
 import { getProductImage } from '../lib/imageUtils';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import HeroSlider from '../components/HeroSlider';
+
+// Lazy load heavy module components
+const MiniBannerCard = lazy(() => import('../components/home/MiniBannerCard'));
+const CampaignBanner = lazy(() => import('../components/home/CampaignBanner'));
+
+/* ━━━ Types for CMS module configs ━━━ */
+interface MiniBannerConfig {
+  enabled: boolean;
+  image_url: string;
+  mobile_image_url?: string;
+  title: string;
+  subtitle?: string;
+  badge_text?: string;
+  button_text?: string;
+  link_url?: string;
+  overlay_opacity?: number;
+  text_align?: 'left' | 'center';
+  sort_order?: number;
+}
+
+interface TrendingConfig {
+  enabled: boolean;
+  title: string;
+  subtitle?: string;
+  source: 'featured' | 'newest' | 'manual';
+  manual_product_ids?: string[];
+  max_items: number;
+  display_mode: 'grid' | 'carousel';
+  cta_text: string;
+  cta_link: string;
+}
+
+interface CampaignSlide {
+  image_url: string;
+  mobile_image_url?: string;
+}
+
+interface CampaignConfig {
+  enabled: boolean;
+  campaign_tag?: string;
+  title: string;
+  subtitle?: string;
+  cta_text?: string;
+  cta_link?: string;
+  background_mode?: 'gradient' | 'image';
+  overlay_opacity?: number;
+  text_align?: 'left' | 'center';
+  slides: CampaignSlide[];
+  autoplay?: boolean;
+  autoplay_interval?: number;
+}
+
+/* ━━━ Default configs ━━━ */
+const DEFAULT_TRENDING: TrendingConfig = {
+  enabled: true,
+  title: 'Tendencias',
+  subtitle: 'Lo más buscado',
+  source: 'featured',
+  max_items: 10,
+  display_mode: 'grid',
+  cta_text: 'Ver todo',
+  cta_link: '/shop',
+};
+
+const DEFAULT_CAMPAIGN: CampaignConfig = {
+  enabled: true,
+  campaign_tag: 'Edición especial',
+  title: 'Especial Mundial',
+  subtitle: 'Álbum, figuritas y mascotas. Armá tu colección con productos disponibles, promos reales y atención directa de Collectibles.',
+  cta_text: 'Ver especial Mundial',
+  cta_link: '/shop?q=mundial',
+  background_mode: 'gradient',
+  overlay_opacity: 0.04,
+  text_align: 'left',
+  slides: [],
+  autoplay: true,
+  autoplay_interval: 5000,
+};
+
+/* ━━━ JSON parse helpers ━━━ */
+function parseMiniBanners(json?: string): MiniBannerConfig[] {
+  try {
+    if (!json) return [];
+    const parsed = JSON.parse(json);
+    if (Array.isArray(parsed)) return parsed.filter((b: any) => b.enabled !== false);
+    return [];
+  } catch { return []; }
+}
+
+function parseTrendingConfig(json?: string): TrendingConfig {
+  try {
+    if (!json) return DEFAULT_TRENDING;
+    return { ...DEFAULT_TRENDING, ...JSON.parse(json) };
+  } catch { return DEFAULT_TRENDING; }
+}
+
+function parseCampaignConfig(json?: string, settings?: Record<string, string>): CampaignConfig {
+  try {
+    if (json) {
+      return { ...DEFAULT_CAMPAIGN, ...JSON.parse(json) };
+    }
+    // Backward compat: use old settings keys if no campaign JSON exists
+    if (settings) {
+      return {
+        ...DEFAULT_CAMPAIGN,
+        campaign_tag: settings['home_mundial_subtitle'] || DEFAULT_CAMPAIGN.campaign_tag,
+        title: settings['home_mundial_title'] || DEFAULT_CAMPAIGN.title,
+        subtitle: settings['home_mundial_desc'] || DEFAULT_CAMPAIGN.subtitle,
+        cta_text: settings['home_mundial_btn'] || DEFAULT_CAMPAIGN.cta_text,
+      };
+    }
+    return DEFAULT_CAMPAIGN;
+  } catch { return DEFAULT_CAMPAIGN; }
+}
 
 export default function Home() {
   const { settings } = useSiteSettings();
@@ -29,12 +143,12 @@ export default function Home() {
     { id: 'bento', visible: true },
     { id: 'collections', visible: true },
     { id: 'trending', visible: true },
-    { id: 'mundial', visible: true },
+    { id: 'campaign', visible: true },
     { id: 'brands', visible: true },
     { id: 'cta', visible: true }
   ]);
 
-  const DEFAULT_BLOCK_IDS = ['hero','trust','banners','bento','collections','trending','mundial','brands','cta'];
+  const DEFAULT_BLOCK_IDS = ['hero','trust','banners','bento','collections','trending','campaign','brands','cta'];
 
   useEffect(() => {
     import('../lib/supabase').then(({ supabase }) => {
@@ -44,10 +158,12 @@ export default function Home() {
             try {
               const parsed = JSON.parse(data.value);
               if (Array.isArray(parsed) && parsed.length > 0) {
+                // Backward compat: rename 'mundial' → 'campaign'
+                const migrated = parsed.map((b: any) => b.id === 'mundial' ? { ...b, id: 'campaign' } : b);
                 // Merge any new blocks not in saved data
-                const savedIds = new Set(parsed.map((b: any) => b.id));
+                const savedIds = new Set(migrated.map((b: any) => b.id));
                 const missing = DEFAULT_BLOCK_IDS.filter(id => !savedIds.has(id)).map(id => ({ id, visible: true }));
-                setLayoutBlocks([...parsed, ...missing]);
+                setLayoutBlocks([...migrated, ...missing]);
               }
             } catch {}
           }
@@ -55,7 +171,30 @@ export default function Home() {
     });
   }, []);
 
-  // getProductImage imported from lib/imageUtils
+  /* ━━━ Parse CMS module configs from settings ━━━ */
+  const miniBanners = useMemo(() =>
+    parseMiniBanners(settings['home_mini_banners_json']),
+    [settings['home_mini_banners_json']]
+  );
+
+  const trendingConfig = useMemo(() =>
+    parseTrendingConfig(settings['home_trending_config_json']),
+    [settings['home_trending_config_json']]
+  );
+
+  const campaignConfig = useMemo(() =>
+    parseCampaignConfig(settings['home_campaign_banner_json'], settings),
+    [settings['home_campaign_banner_json'], settings['home_mundial_subtitle'], settings['home_mundial_title'], settings['home_mundial_desc'], settings['home_mundial_btn']]
+  );
+
+  /* ━━━ Determine trending products based on config ━━━ */
+  const trendingProducts = useMemo(() => {
+    if (!trendingConfig.enabled) return [];
+    switch (trendingConfig.source) {
+      case 'newest': return newArrivals.slice(0, trendingConfig.max_items);
+      case 'featured': default: return featured.slice(0, trendingConfig.max_items);
+    }
+  }, [trendingConfig, featured, newArrivals]);
 
   function handleAddToCart(p: any) {
     const variant = p.variants?.[0];
@@ -105,35 +244,38 @@ export default function Home() {
           </section>
         );
 
-      /* ━━━━━━━━━━━ BANNERS CINEMATOGRÁFICOS ━━━━━━━━━━━ */
-      case 'banners':
-        if (!banners.length) return null;
+      /* ━━━━━━━━━━━ MINI BANNERS DINÁMICOS ━━━━━━━━━━━ */
+      case 'banners': {
+        // Use CMS mini banners if configured, fallback to hero banners for backward compat
+        const activeMinis = miniBanners.length > 0
+          ? miniBanners.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+          : banners.slice(0, 2).map((b: any) => ({
+              enabled: true,
+              image_url: b.image_url,
+              mobile_image_url: b.mobile_image_url,
+              title: b.title,
+              subtitle: b.subtitle,
+              badge_text: b.badge_text,
+              button_text: b.button_text || 'Ver más',
+              link_url: b.link_url || '/shop',
+              overlay_opacity: b.overlay_opacity ?? 0.4,
+              text_align: (b.content_align || 'left') as 'left' | 'center',
+            }));
+
+        if (!activeMinis.length) return null;
+
         return (
           <section className="max-w-[1500px] mx-auto px-6 py-16">
-            <div className={`grid gap-6 ${banners.length === 1 ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`}>
-              {banners.slice(0, 2).map((banner: any, i: number) => (
-                <Link
-                  key={banner.id || i}
-                  to={banner.link_url || '/shop'}
-                  className="group relative rounded-2xl overflow-hidden aspect-[16/7] border border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02]"
-                >
-                  <img
-                    src={banner.image_url}
-                    alt={banner.title || 'Banner'}
-                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/5 to-transparent" />
-                  {banner.title && (
-                    <div className="absolute bottom-6 left-6 right-6 z-10">
-                      <h3 className="text-white font-black text-xl md:text-2xl drop-shadow-lg">{banner.title}</h3>
-                      {banner.subtitle && <p className="text-slate-200 text-sm mt-1 drop-shadow">{banner.subtitle}</p>}
-                    </div>
-                  )}
-                </Link>
-              ))}
+            <div className={`grid gap-6 ${activeMinis.length === 1 ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`}>
+              <Suspense fallback={<div className="aspect-[16/7] rounded-2xl bg-white/5 animate-pulse" />}>
+                {activeMinis.map((banner, i) => (
+                  <MiniBannerCard key={`mini-${i}`} {...banner} />
+                ))}
+              </Suspense>
             </div>
           </section>
         );
+      }
 
       /* ━━━━━━━━━━━ CATEGORÍAS (BENTO) ━━━━━━━━━━━ */
       case 'bento':
@@ -164,6 +306,7 @@ export default function Home() {
                     <img
                       src={c.image_url}
                       alt={c.name}
+                      loading="lazy"
                       className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-60 group-hover:scale-110 transition-all duration-700"
                     />
                   )}
@@ -205,28 +348,34 @@ export default function Home() {
           </>
         );
 
-      /* ━━━━━━━━━━━ TENDENCIAS ━━━━━━━━━━━ */
-      case 'trending':
+      /* ━━━━━━━━━━━ TENDENCIAS (DINÁMICO) ━━━━━━━━━━━ */
+      case 'trending': {
+        if (!trendingConfig.enabled || trendingProducts.length === 0) return null;
         return (
           <section className="py-20 bg-white/[0.02] border-y border-white/5">
             <div className="max-w-[1500px] mx-auto px-6">
               <div className="flex items-end justify-between mb-10">
                 <div>
-                  <div className="text-[10px] text-[#f00856] font-black tracking-[0.3em] uppercase mb-2">Lo más buscado</div>
-                  <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight">Tendencias</h2>
+                  <div className="text-[10px] text-[#f00856] font-black tracking-[0.3em] uppercase mb-2">
+                    {trendingConfig.subtitle}
+                  </div>
+                  <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight">
+                    {trendingConfig.title}
+                  </h2>
                 </div>
-                <Link to="/shop" className="hidden md:inline-flex items-center gap-2 text-sm font-black text-slate-400 hover:text-white transition-colors uppercase tracking-wider">
-                  Ver todo <ArrowRight className="w-4 h-4" />
+                <Link to={trendingConfig.cta_link} className="hidden md:inline-flex items-center gap-2 text-sm font-black text-slate-400 hover:text-white transition-colors uppercase tracking-wider">
+                  {trendingConfig.cta_text} <ArrowRight className="w-4 h-4" />
                 </Link>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-7 gap-y-12">
-                {featured.map(p => (
+                {trendingProducts.map(p => (
                   <ProductGridCard key={p.id} product={p} onAddToCart={handleAddToCart} formatPrice={formatCurrencyPrice} />
                 ))}
               </div>
             </div>
           </section>
         );
+      }
 
       /* ━━━━━━━━━━━ MARCAS DESTACADAS ━━━━━━━━━━━ */
       case 'brands':
@@ -241,7 +390,7 @@ export default function Home() {
               {[...brands, ...brands].map((b, i) => (
                 <Link key={`${b.id}-${i}`} to={`/shop?brand=${b.slug}`} className="shrink-0 grayscale hover:grayscale-0 transition-all duration-500">
                   {b.logo_url ? (
-                    <img src={b.logo_url} alt={b.name} className="h-12 w-auto object-contain" />
+                    <img src={b.logo_url} alt={b.name} loading="lazy" className="h-12 w-auto object-contain" />
                   ) : (
                     <span className="text-2xl font-black text-slate-500 uppercase tracking-widest">{b.name}</span>
                   )}
@@ -251,39 +400,40 @@ export default function Home() {
           </section>
         );
 
-      /* ━━━━━━━━━━━ ESPECIAL MUNDIAL ━━━━━━━━━━━ */
+      /* ━━━━━━━━━━━ CAMPAIGN BANNER (DINÁMICO) ━━━━━━━━━━━ */
+      case 'campaign':
       case 'mundial': {
-        const mundialImg = banners.find((b: any) => /mundial|album|mascota|figurita/i.test(b.title || ''))?.image_url
-          || (newArrivals[0] ? getProductImage(newArrivals[0]) : (featured[1] ? getProductImage(featured[1]) : ''));
+        if (!campaignConfig.enabled) return null;
+
+        // Fallback image from products if no slides configured
+        const fallbackImg = campaignConfig.slides.length === 0
+          ? (newArrivals[0] ? getProductImage(newArrivals[0]) : (featured[1] ? getProductImage(featured[1]) : ''))
+          : '';
+
+        const campaignSlides = campaignConfig.slides.length > 0
+          ? campaignConfig.slides
+          : fallbackImg ? [{ image_url: fallbackImg }] : [];
+
         return (
-          <section className="py-20 border-t border-white/5">
-            <div className="max-w-[1500px] mx-auto px-6">
-              <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-gradient-to-r from-[#05070f] to-[#1a0510]">
-                <div className="absolute inset-0 bg-[#f00856]/[.04] blur-[100px] rounded-full w-[600px] h-[600px] -right-40 -top-40" />
-                <div className="grid lg:grid-cols-2 gap-8 items-center p-8 md:p-12 lg:p-16 relative z-10">
-                  <div>
-                    <div className="text-[10px] text-[#f00856] font-black tracking-[0.3em] uppercase mb-3">
-                      {settings['home_mundial_subtitle'] || 'Edición especial'}
-                    </div>
-                    <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight leading-[0.9]">
-                      {settings['home_mundial_title'] || 'Especial Mundial'}
-                    </h2>
-                    <p className="text-slate-400 text-base md:text-lg mt-4 leading-relaxed max-w-md">
-                      {settings['home_mundial_desc'] || 'Álbum, figuritas y mascotas. Armá tu colección con productos disponibles, promos reales y atención directa de Collectibles.'}
-                    </p>
-                    <Link to="/shop?q=mundial" className="btn-primary px-8 py-4 text-sm rounded-full inline-flex items-center gap-2 mt-8">
-                      {settings['home_mundial_btn'] || 'Ver especial Mundial'} <ArrowRight className="w-4 h-4" />
-                    </Link>
-                  </div>
-                  {mundialImg && (
-                    <div className="hidden lg:block rounded-xl overflow-hidden aspect-[4/3] border border-white/10">
-                      <img src={mundialImg} alt="Especial Mundial" className="w-full h-full object-cover" />
-                    </div>
-                  )}
-                </div>
+          <Suspense fallback={<div className="py-20"><div className="max-w-[1500px] mx-auto px-6"><div className="h-[400px] rounded-2xl bg-white/5 animate-pulse" /></div></div>}>
+            <section className="py-20 border-t border-white/5">
+              <div className="max-w-[1500px] mx-auto px-6">
+                <CampaignBanner
+                  campaign_tag={campaignConfig.campaign_tag}
+                  title={campaignConfig.title}
+                  subtitle={campaignConfig.subtitle}
+                  cta_text={campaignConfig.cta_text}
+                  cta_link={campaignConfig.cta_link}
+                  background_mode={campaignConfig.background_mode}
+                  overlay_opacity={campaignConfig.overlay_opacity}
+                  text_align={campaignConfig.text_align}
+                  slides={campaignSlides}
+                  autoplay={campaignConfig.autoplay}
+                  autoplay_interval={campaignConfig.autoplay_interval}
+                />
               </div>
-            </div>
-          </section>
+            </section>
+          </Suspense>
         );
       }
 

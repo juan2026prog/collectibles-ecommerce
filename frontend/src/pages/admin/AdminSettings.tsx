@@ -228,14 +228,14 @@ function MenuEditor({ title, description, initialJson, onSave }: any) {
 
 function HomeLayoutEditor({ title, description, initialJson, onSave }: any) {
   const defaultBlocks = [
-    { id: 'hero', label: 'Hero Banner Principal', visible: true },
+    { id: 'hero', label: 'Hero Cinemático (Slider Principal)', visible: true },
     { id: 'trust', label: 'Barra de Confianza (Envíos, Seguridad)', visible: true },
-    { id: 'banners', label: 'Banners Promocionales (2 tarjetas)', visible: true },
+    { id: 'banners', label: 'Mini Banners Promocionales', visible: true },
     { id: 'bento', label: 'Categorías Destacadas (Bento)', visible: true },
-    { id: 'collections', label: 'Grupos/Colecciones', visible: true },
+    { id: 'collections', label: 'Grupos/Colecciones Curadas', visible: true },
     { id: 'trending', label: 'Tendencias (Productos Destacados)', visible: true },
-    { id: 'mundial', label: 'Especial Mundial / Edición Especial', visible: true },
-    { id: 'brands', label: 'Carrusel de Marcas', visible: true },
+    { id: 'campaign', label: 'Campaign Banner (Especiales/Eventos)', visible: true },
+    { id: 'brands', label: 'Carrusel de Marcas Oficiales', visible: true },
     { id: 'cta', label: 'Llamada a la Acción Final (CTA)', visible: true }
   ];
   const [blocks, setBlocks] = useState<any[]>([]);
@@ -244,10 +244,17 @@ function HomeLayoutEditor({ title, description, initialJson, onSave }: any) {
     try {
       const parsed = JSON.parse(initialJson);
       if (Array.isArray(parsed) && parsed.length > 0) {
+        // Backward compat: rename 'mundial' → 'campaign'
+        const migrated = parsed.map((b: any) => {
+          if (b.id === 'mundial') return { ...b, id: 'campaign', label: 'Campaign Banner (Especiales/Eventos)' };
+          // Update labels from defaults if they exist
+          const def = defaultBlocks.find(d => d.id === b.id);
+          return def ? { ...b, label: def.label } : b;
+        });
         // Merge any new default blocks that aren't in the saved data
-        const savedIds = new Set(parsed.map((b: any) => b.id));
+        const savedIds = new Set(migrated.map((b: any) => b.id));
         const missing = defaultBlocks.filter(b => !savedIds.has(b.id));
-        setBlocks([...parsed, ...missing]);
+        setBlocks([...migrated, ...missing]);
       } else {
         setBlocks(defaultBlocks);
       }
