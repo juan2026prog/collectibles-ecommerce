@@ -365,3 +365,170 @@
   text-decoration: underline !important;
 }
 
+/* ═══ CHECKOUT WIZARD STEPPER ═══ */
+.checkout-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 0 1rem;
+  margin-bottom: 2.5rem;
+}
+
+.checkout-step {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  cursor: default;
+  user-select: none;
+}
+
+.checkout-step-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 900;
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.checkout-step--active .checkout-step-circle {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+  box-shadow: 0 0 24px rgba(240, 8, 86, 0.45);
+}
+
+.checkout-step--completed .checkout-step-circle {
+  background: #10b981;
+  border-color: #10b981;
+  color: #fff;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.3);
+}
+
+.checkout-step-label {
+  margin-left: 0.5rem;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.25);
+  transition: color 0.3s ease;
+  white-space: nowrap;
+}
+
+.checkout-step--active .checkout-step-label {
+  color: #fff;
+}
+
+.checkout-step--completed .checkout-step-label {
+  color: #10b981;
+}
+
+.checkout-step-line {
+  width: 40px;
+  height: 2px;
+  margin: 0 0.5rem;
+  background: rgba(255, 255, 255, 0.08);
+  transition: background 0.35s ease;
+  flex-shrink: 0;
+}
+
+.checkout-step-line--completed {
+  background: linear-gradient(90deg, #10b981, #10b981);
+}
+
+/* Step content transition */
+.checkout-step-content {
+  animation: checkoutStepIn 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes checkoutStepIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Step nav buttons */
+.checkout-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1.5rem;
+  gap: 1rem;
+}
+
+.checkout-btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+.checkout-btn-back:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.checkout-btn-next {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 2rem;
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #fff;
+  background: var(--red);
+  border: none;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: 0 0 30px rgba(240, 8, 86, 0.3);
+}
+.checkout-btn-next:hover {
+  background: var(--red2);
+  box-shadow: 0 0 40px rgba(240, 8, 86, 0.45);
+}
+.checkout-btn-next:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Responsive stepper */
+@media (max-width: 768px) {
+  .checkout-step-label {
+    display: none;
+  }
+  .checkout-step-line {
+    width: 24px;
+    margin: 0 0.25rem;
+  }
+  .checkout-step-circle {
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+  }
+}
+

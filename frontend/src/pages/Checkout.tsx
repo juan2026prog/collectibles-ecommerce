@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRight, Truck, Store, Tag, Sparkles, X, Home, Ticket, Share2, Clock, AlertCircle, MapPin, Building2, Search } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Truck, Store, Tag, Sparkles, X, Home, Ticket, Share2, Clock, AlertCircle, MapPin, Building2, Search, Check } from 'lucide-react';
 import { useCartContext } from '../contexts/CartContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -17,6 +17,24 @@ function normalizeLocation(value?: string | null) {
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
 }
+
+export function validateUruguayanCI(ci: string): boolean {
+  if (!ci) return false;
+  const cleanCI = ci.replace(/[^\d]/g, '');
+  if (cleanCI.length < 7 || cleanCI.length > 8) {
+    return false;
+  }
+  const padded = cleanCI.padStart(8, '0');
+  const factors = [2, 9, 8, 7, 6, 3, 4];
+  let sum = 0;
+  for (let i = 0; i < 7; i++) {
+    sum += parseInt(padded[i], 10) * factors[i];
+  }
+  const remainder = sum % 10;
+  const checkDigit = (10 - remainder) % 10;
+  return checkDigit === parseInt(padded[7], 10);
+}
+
 
 function findClosestLocation(locationName: string, list: string[]): string {
   if (!locationName) return '';
@@ -73,6 +91,7 @@ interface BankPromo {
 export default function Checkout() {
   const { items, total } = useCartContext();
   const { settings, loaded: settingsLoaded } = useSiteSettings();
+  const freeShippingThreshold = Number(settings['free_shipping_threshold'] || 4000);
   const { formatCurrencyPrice, selectedCurrency } = useCurrency();
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -87,6 +106,7 @@ export default function Checkout() {
   const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<number>(-1);
   const [showPaymentMethodsModal, setShowPaymentMethodsModal] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
   const submitLockRef = useRef(false);
   const [form, setForm] = useState({
     email: user?.email || '',
@@ -101,6 +121,7 @@ export default function Checkout() {
     reference: '',
     postal_code: '',
     country: 'Uruguay',
+    ci: '',
   });
 
   const [dacShippingCost, setDacShippingCost] = useState<number | null>(null);
@@ -165,6 +186,13 @@ export default function Checkout() {
     console.log("[Checkout Debug] Shipping method detectado (selectedShippingMethod):", selectedShippingMethod);
   }, [selectedShippingMethod]);
 
+  // Reset DAC cost/error when changing delivery mode or shipping method
+  useEffect(() => {
+    setDacShippingCost(null);
+    setDacShippingError(null);
+    setDetectedKOficina(null);
+  }, [dacDeliveryMode, selectedShippingMethod]);
+
   useEffect(() => {
     const isMontevideo = form.department === 'Montevideo';
     
@@ -189,12 +217,9 @@ export default function Checkout() {
       return;
     }
 
-    if (total >= 4000) {
-      setDacShippingCost(0);
-      setDacShippingError(null);
-      setDetectedKOficina(null);
-      return;
-    }
+    // Even with free shipping, we still need to resolve the office code
+    // for shipment creation. The cost will be overridden to $0 below.
+    const isFreeShipping = total >= freeShippingThreshold;
 
     let active = true;
     async function fetchDacCost() {
@@ -204,8 +229,8 @@ export default function Checkout() {
         const bodyPayload: any = {
           mode: dacDeliveryMode === 'dac_agency' ? 'agency' : 'home',
           department: form.department,
-          city: form.city,
-          locality: form.barrio || "",
+          city: dacDeliveryMode === 'dac_agency' ? (selectedAgency?.city || form.city || selectedAgency?.office_name) : form.city,
+          locality: dacDeliveryMode === 'dac_agency' ? (selectedAgency?.locality || form.barrio || "") : (form.barrio || ""),
           phone: form.phone,
           package_quantity: 1,
           package_type: 1,
@@ -240,8 +265,9 @@ export default function Checkout() {
         console.log("[Checkout Debug] Respuesta dac-get-cost:", data);
 
         if (data && data.success) {
-          setDacShippingCost(data.cost);
-          setDetectedKOficina(data.raw_response?.k_oficina || null);
+          // If free shipping applies, override cost to 0 but keep the office code
+          setDacShippingCost(isFreeShipping ? 0 : data.cost);
+          setDetectedKOficina(data.raw_response?.k_oficina || data.finalKOficina || null);
         } else {
           throw new Error(data?.error || "Error al calcular costo DAC.");
         }
@@ -267,20 +293,43 @@ export default function Checkout() {
       active = false;
       clearTimeout(timer);
     };
-  }, [shippingMethod, form.department, form.city, form.street, total, dacDeliveryMode, selectedAgency]);
+  }, [
+    shippingMethod,
+    selectedShippingMethod,
+    dacDeliveryMode,
+    form.department,
+    form.city,
+    form.barrio,
+    form.street,
+    selectedAgency?.id,
+    selectedAgency?.k_oficina,
+    items.length,
+    total
+  ]);
 
   const resolvedCityForShipping = form.department === 'Montevideo' ? form.barrio : form.city;
   const isMontevideo = form.department === 'Montevideo';
+
+  const isLocationSelected = 
+    shippingMethod === 'pickup' || 
+    (shippingMethod === 'delivery' && (
+      (isMontevideo && form.barrio !== '') || 
+      (!isMontevideo && dacShippingCost !== null)
+    ));
   
   let shipping = 0;
   if (shippingMethod === 'delivery') {
     if (isMontevideo) {
-      shipping = calculateShipping(resolvedCityForShipping, form.department, total);
+      if (form.barrio !== '') {
+        shipping = calculateShipping(resolvedCityForShipping, form.department, total, freeShippingThreshold);
+      } else {
+        shipping = 0;
+      }
     } else {
       if (dacShippingCost !== null) {
         shipping = dacShippingCost;
       } else {
-        shipping = total >= 4000 ? 0 : 350;
+        shipping = 0;
       }
     }
   }
@@ -516,6 +565,7 @@ export default function Checkout() {
         reference: address.reference || current.reference || '',
         postal_code: address.postal_code || current.postal_code,
         country: address.country || current.country,
+        ci: address.ci || '',
       }));
     }
 
@@ -629,12 +679,14 @@ export default function Checkout() {
       if (dacShippingCost === null) return true;
       if (dacShippingError !== null) return true;
       if (!form.department || !form.city || !form.street || !form.phone) return true;
+      if (!form.ci || !validateUruguayanCI(form.ci)) return true;
     }
     if (selectedShippingMethod === 'dac_agency') {
       if (dacShippingCost === null) return true;
       if (dacShippingError !== null) return true;
       if (!form.department || !form.phone) return true;
       if (!selectedAgency) return true;
+      if (!form.ci || !validateUruguayanCI(form.ci)) return true;
     }
     return false;
   };
@@ -672,6 +724,7 @@ export default function Checkout() {
           country: form.country,
           barrio: selectedShippingMethod === 'pickup' ? undefined : form.barrio,
           reference: selectedShippingMethod === 'pickup' ? undefined : form.reference,
+          ci: (selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') ? form.ci : undefined,
           ...(selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency' ? {
             dac_delivery_mode: dacDeliveryMode,
             shipping_provider: 'DAC',
@@ -725,20 +778,74 @@ export default function Checkout() {
     );
   }
 
+  const CHECKOUT_STEPS = [
+    { id: 1, label: 'Facturación' },
+    { id: 2, label: 'Envío' },
+    { id: 3, label: 'Cupones' },
+    { id: 4, label: 'Revisión' },
+    { id: 5, label: 'Pago' },
+  ];
+
+  const canAdvanceStep = (step: number): boolean => {
+    if (step === 1) {
+      return !!(form.email && form.first_name && form.last_name);
+    }
+    if (step === 2) {
+      if (shippingMethod === 'pickup') return true;
+      if (shippingMethod === 'delivery') {
+        if (isMontevideo) return !!(form.street && form.department && form.barrio);
+        return !!(form.street && form.department && form.city);
+      }
+    }
+    return true;
+  };
+
+  const goNext = () => {
+    if (currentStep < 5 && canAdvanceStep(currentStep)) {
+      setCurrentStep(currentStep + 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const goBack = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-6 py-6">
       <nav className="flex items-center text-sm text-slate-400 mb-6">
         <Link to="/" className="hover:text-primary-600">Home</Link>
         <ChevronRight className="w-4 h-4 mx-1" />
+        <Link to="/cart" className="hover:text-primary-600">Carrito</Link>
+        <ChevronRight className="w-4 h-4 mx-1" />
         <span className="text-primary-600 font-medium">Checkout</span>
       </nav>
 
-      <div className="flex items-center justify-center gap-4 mb-10 text-sm">
-        <Link to="/cart" className="text-slate-500 font-medium">CARRITO</Link>
-        <div className="w-12 h-px bg-white/20" />
-        <span className="font-bold text-white">PAGO</span>
-        <div className="w-12 h-px bg-gray-200" />
-        <span className="text-slate-500">CONFIRMACIÓN</span>
+      {/* ═══ STEPPER ═══ */}
+      <div className="checkout-stepper">
+        {CHECKOUT_STEPS.map((step, idx) => (
+          <div key={step.id} className="checkout-step">
+            <div
+              className={`checkout-step ${
+                currentStep === step.id ? 'checkout-step--active' :
+                currentStep > step.id ? 'checkout-step--completed' : ''
+              }`}
+              style={{ cursor: currentStep > step.id ? 'pointer' : 'default' }}
+              onClick={() => { if (currentStep > step.id) setCurrentStep(step.id); }}
+            >
+              <div className="checkout-step-circle">
+                {currentStep > step.id ? <Check className="w-4 h-4" /> : step.id}
+              </div>
+              <span className="checkout-step-label">{step.label}</span>
+            </div>
+            {idx < CHECKOUT_STEPS.length - 1 && (
+              <div className={`checkout-step-line ${currentStep > step.id ? 'checkout-step-line--completed' : ''}`} />
+            )}
+          </div>
+        ))}
       </div>
 
       {checkoutError && (
@@ -753,8 +860,952 @@ export default function Checkout() {
       <form onSubmit={handlePlaceOrder}>
         <div className="grid lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
-            <div className="glass p-6">
-              <h2 className="font-bold text-lg mb-4">Método de envío</h2>
+
+            {/* ═══════════════════════════════════════════════════════════ */}
+            {/* STEP 1: DATOS DE FACTURACIÓN                              */}
+            {/* ═══════════════════════════════════════════════════════════ */}
+            {currentStep === 1 && (
+              <div className="checkout-step-content" key="step-1">
+                <div className="glass p-6">
+                  <h2 className="font-bold text-lg mb-1">Datos de facturación</h2>
+                  <p className="text-xs text-slate-400 mb-6">Completá tus datos personales para continuar.</p>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="form-label">Correo electrónico *</label>
+                      <input type="email" required className="form-input" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div><label className="form-label">Nombre *</label><input required className="form-input" value={form.first_name} onChange={e => setForm({ ...form, first_name: e.target.value })} /></div>
+                      <div><label className="form-label">Apellido *</label><input required className="form-input" value={form.last_name} onChange={e => setForm({ ...form, last_name: e.target.value })} /></div>
+                    </div>
+                    <div><label className="form-label">Teléfono</label><input className="form-input" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
+
+                    {(selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') && (
+                      <div className="space-y-1">
+                        <label className="form-label flex items-center justify-between">
+                          <span>Cédula de Identidad (CI) *</span>
+                          {form.ci && !validateUruguayanCI(form.ci) && (
+                            <span className="text-[11px] text-red-400 font-semibold animate-pulse">CI Inválida</span>
+                          )}
+                          {form.ci && validateUruguayanCI(form.ci) && (
+                            <span className="text-[11px] text-green-400 font-semibold">✓ CI Válida</span>
+                          )}
+                        </label>
+                        <input
+                          required
+                          placeholder="Ej: 1.234.567-8"
+                          className={`form-input transition-all ${
+                            form.ci
+                              ? validateUruguayanCI(form.ci)
+                                ? 'border-green-500/50 focus:border-green-500 bg-green-500/5'
+                                : 'border-red-500/50 focus:border-red-500 bg-red-500/5'
+                              : 'border-white/10 focus:border-primary-500 bg-white/5'
+                          }`}
+                          value={form.ci}
+                          onChange={e => setForm({ ...form, ci: e.target.value })}
+                        />
+                        <p className="text-[10px] text-slate-400">Requerido para la facturación y el despacho de la guía por DAC.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Step 1 Nav */}
+                  <div className="checkout-nav">
+                    <Link to="/cart" className="checkout-btn-back">
+                      <ChevronLeft className="w-4 h-4" /> Volver al carrito
+                    </Link>
+                    <button type="button" onClick={goNext} disabled={!canAdvanceStep(1)} className="checkout-btn-next">
+                      Continuar <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ═══════════════════════════════════════════════════════════ */}
+            {/* STEP 2: DATOS DE ENVÍO                                    */}
+            {/* ═══════════════════════════════════════════════════════════ */}
+            {currentStep === 2 && (
+              <div className="checkout-step-content" key="step-2">
+                <div className="glass p-6">
+                  <h2 className="font-bold text-lg mb-1">Datos de envío</h2>
+                  <p className="text-xs text-slate-400 mb-6">Elegí cómo querés recibir tu pedido.</p>
+
+                  {/* Shipping method selection */}
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    {form.department === 'Montevideo' ? (
+                      <label className={`flex items-start gap-4 p-4 border-2 cursor-pointer transition-all ${shippingMethod === 'delivery' ? 'border-primary-500 bg-primary-500/10' : 'border-white/10 hover:border-white/10 bg-white/5'}`}>
+                        <input type="radio" checked={shippingMethod === 'delivery'} onChange={() => setShippingMethod('delivery')} className="sr-only" />
+                        <div className={`p-2 ${shippingMethod === 'delivery' ? 'bg-primary-500/100 text-white' : 'glass text-slate-400 shadow-sm'}`}>
+                          <Truck className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="font-bold text-white">Envío a domicilio</div>
+                          <div className="text-sm text-slate-400 mt-1">Recibilo en tu puerta</div>
+                        </div>
+                      </label>
+                    ) : (
+                      <label className={`flex items-start gap-4 p-4 border-2 cursor-pointer transition-all ${shippingMethod === 'delivery' ? 'border-primary-500 bg-primary-500/10' : 'border-white/10 hover:border-white/10 bg-white/5'}`}>
+                        <input type="radio" checked={shippingMethod === 'delivery'} onChange={() => setShippingMethod('delivery')} className="sr-only" />
+                        <div className={`p-2 ${shippingMethod === 'delivery' ? 'bg-primary-500/100 text-white' : 'glass text-slate-400 shadow-sm'}`}>
+                          <Truck className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-bold text-white">Envío por DAC al interior</div>
+                          <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                            Elegí cómo querés recibir tu pedido por DAC.
+                          </p>
+                        </div>
+                      </label>
+                    )}
+                    <label className={`flex items-start gap-4 p-4 border-2 cursor-pointer transition-all ${shippingMethod === 'pickup' ? 'border-primary-500 bg-primary-500/10' : 'border-white/10 hover:border-white/10 bg-white/5'}`}>
+                      <input type="radio" checked={shippingMethod === 'pickup'} onChange={() => setShippingMethod('pickup')} className="sr-only" />
+                      <div className={`p-2 ${shippingMethod === 'pickup' ? 'bg-primary-500/100 text-white' : 'glass text-slate-400 shadow-sm'}`}>
+                        <Store className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-white">Retiro en local</div>
+                        <div className="text-sm text-green-600 font-medium mt-1">GRATIS</div>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* DAC Multimodal Selection — only when delivery is selected and NOT Montevideo */}
+                  {form.department !== 'Montevideo' && shippingMethod === 'delivery' && (
+                    <div className="mt-6 pt-6 border-t border-white/10 space-y-4">
+                      <div className="px-1">
+                        <p className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">Elegí cómo querés recibir por DAC</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          {/* Card A: Home Delivery */}
+                          <button
+                            type="button"
+                            onClick={() => { setDacDeliveryMode('dac_home'); setSelectedAgency(null); }}
+                            className={`text-left p-4 rounded-xl border-2 transition-all duration-200 ${
+                              dacDeliveryMode === 'dac_home'
+                                ? 'border-primary-500 bg-primary-500/10 shadow-lg shadow-primary-500/10'
+                                : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/[0.07]'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 mb-2">
+                              <div className={`p-1.5 rounded-lg ${dacDeliveryMode === 'dac_home' ? 'bg-primary-500 text-white' : 'bg-white/10 text-slate-400'}`}>
+                                <Truck className="w-4 h-4" />
+                              </div>
+                              <span className="font-bold text-sm text-white">Entrega en domicilio</span>
+                            </div>
+                            <p className="text-[11px] text-slate-400 leading-relaxed">
+                              DAC entrega el pedido en la dirección que ingresaste.
+                            </p>
+                          </button>
+
+                          {/* Card B: Agency Pickup */}
+                          <button
+                            type="button"
+                            onClick={() => setDacDeliveryMode('dac_agency')}
+                            className={`text-left p-4 rounded-xl border-2 transition-all duration-200 ${
+                              dacDeliveryMode === 'dac_agency'
+                                ? 'border-amber-500 bg-amber-500/10 shadow-lg shadow-amber-500/10'
+                                : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/[0.07]'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 mb-2">
+                              <div className={`p-1.5 rounded-lg ${dacDeliveryMode === 'dac_agency' ? 'bg-amber-500 text-white' : 'bg-white/10 text-slate-400'}`}>
+                                <Building2 className="w-4 h-4" />
+                              </div>
+                              <span className="font-bold text-sm text-white">Retiro en agencia DAC</span>
+                            </div>
+                            <p className="text-[11px] text-slate-400 leading-relaxed">
+                              Enviamos tu pedido a una agencia DAC y lo retirás allí con tu documento.
+                            </p>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Agency Selector (visible only in agency mode) */}
+                      {dacDeliveryMode === 'dac_agency' && (
+                        <div className="px-1 space-y-3">
+                          <label className="form-label text-xs flex items-center gap-1.5">
+                            <MapPin className="w-3.5 h-3.5 text-amber-500" />
+                            Seleccioná una agencia DAC en {form.department || 'tu departamento'}
+                          </label>
+                          {dacAgencies.length > 0 ? (
+                            <>
+                              {dacAgencies.length > 4 && (
+                                <div className="relative">
+                                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                                  <input
+                                    type="text"
+                                    placeholder="Buscar agencia..."
+                                    className="form-input pl-9 text-xs"
+                                    value={agencySearchTerm}
+                                    onChange={e => setAgencySearchTerm(e.target.value)}
+                                  />
+                                </div>
+                              )}
+                              <div className="max-h-48 overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+                                {dacAgencies
+                                  .filter(a => {
+                                    if (!agencySearchTerm.trim()) return true;
+                                    const term = agencySearchTerm.toLowerCase();
+                                    return (
+                                      a.office_name?.toLowerCase().includes(term) ||
+                                      a.city?.toLowerCase().includes(term) ||
+                                      a.locality?.toLowerCase().includes(term) ||
+                                      a.address?.toLowerCase().includes(term)
+                                    );
+                                  })
+                                  .map((agency) => (
+                                  <button
+                                    key={agency.id}
+                                    type="button"
+                                    onClick={() => setSelectedAgency(agency)}
+                                    className={`w-full text-left p-3 rounded-lg border-2 transition-all ${
+                                      selectedAgency?.id === agency.id
+                                        ? 'border-amber-500 bg-amber-500/10'
+                                        : 'border-white/10 bg-white/5 hover:border-amber-500/30 hover:bg-white/[0.07]'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <div className="font-bold text-sm text-white">{agency.office_name}</div>
+                                        {agency.address && (
+                                          <div className="text-[11px] text-slate-400 mt-0.5">{agency.address}</div>
+                                        )}
+                                        {agency.city && (
+                                          <div className="text-[11px] text-slate-500 mt-0.5">
+                                            {agency.city}{agency.locality ? `, ${agency.locality}` : ''}
+                                          </div>
+                                        )}
+                                        {agency.phone && (
+                                          <div className="text-[10px] text-slate-500 mt-0.5">Tel: {agency.phone}</div>
+                                        )}
+                                      </div>
+                                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                        selectedAgency?.id === agency.id
+                                          ? 'bg-amber-500 text-white'
+                                          : 'bg-white/10 text-slate-500'
+                                      }`}>
+                                        K_{agency.k_oficina}
+                                      </span>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="text-xs text-slate-500 p-3 bg-white/5 rounded-lg border border-white/10 text-center">
+                              {form.department ? `No hay agencias DAC activas para retiro en ${form.department}.` : 'Seleccioná un departamento para ver agencias disponibles.'}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* DAC Cost/Status Display */}
+                      <div className="px-1 space-y-2">
+                        {dacDeliveryMode === 'dac_agency' && !selectedAgency && (
+                          <div className="text-amber-400 text-xs font-semibold">
+                            Seleccioná una agencia DAC para calcular el costo.
+                          </div>
+                        )}
+                        {dacShippingLoading && (
+                          <div className="text-amber-400 text-xs font-semibold flex items-center gap-1.5">
+                            <span className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin inline-block" />
+                            <span>Calculando costo DAC...</span>
+                          </div>
+                        )}
+                        {!dacShippingLoading && dacShippingCost !== null && (
+                          <div className="text-emerald-400 text-sm font-black">
+                            {dacDeliveryMode === 'dac_agency'
+                              ? `Retiro en agencia DAC: $${dacShippingCost} UYU`
+                              : `Costo envío DAC: $${dacShippingCost} UYU`}
+                          </div>
+                        )}
+                        {!dacShippingLoading && dacShippingError && (
+                          <div className="text-red-400 text-xs font-semibold leading-relaxed">
+                            {dacDeliveryMode === 'dac_agency'
+                              ? "No pudimos calcular el costo para esta agencia. Elegí otra o consultanos por WhatsApp."
+                              : "No pudimos calcular DAC para esta localidad. Consultanos por WhatsApp."}
+                          </div>
+                        )}
+                        {isAdmin && detectedKOficina !== null && (
+                          <div className="text-amber-500 text-[11px] font-mono mt-1">
+                            Oficina DAC destino detectada: {detectedKOficina}
+                          </div>
+                        )}
+
+                        {/* Context notice */}
+                        {dacDeliveryMode === 'dac_home' && dacShippingCost !== null && !dacShippingLoading && (
+                          <div className="p-3 rounded-lg bg-primary-500/5 border border-primary-500/20 text-xs text-slate-300">
+                            <strong className="text-primary-400">📦 </strong>
+                            DAC entregará en la dirección que ingresaste. Tiempo estimado: 24-48 hs hábiles.
+                          </div>
+                        )}
+                        {dacDeliveryMode === 'dac_agency' && selectedAgency && dacShippingCost !== null && !dacShippingLoading && (
+                          <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 text-xs text-slate-300">
+                            <strong className="text-amber-400">🏢 </strong>
+                            Te avisaremos cuando esté listo en la agencia <strong className="text-white">{selectedAgency.office_name}</strong>. Recordá llevar tu documento.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Address fields — only for delivery */}
+                  {shippingMethod === 'delivery' && (
+                    <div className="pt-4 mt-4 border-t border-white/10 space-y-4">
+                      <h3 className="font-semibold text-sm text-slate-400 mb-2">Dirección de entrega</h3>
+
+                      {savedAddresses.length > 0 && (
+                        <div className="space-y-2 mb-4">
+                          <label className="form-label text-xs">Elegir dirección guardada</label>
+                          <div className="grid gap-2">
+                            {savedAddresses.map((address: any, index: number) => (
+                              <label key={index} className={`flex items-center gap-3 p-3  border-2 cursor-pointer transition-all ${selectedAddress === index ? 'border-primary-500 bg-primary-500/10' : 'border-white/10 hover:border-white/10'}`}>
+                                <input
+                                  type="radio"
+                                  name="savedAddr"
+                                  className="sr-only"
+                                  checked={selectedAddress === index}
+                                  onChange={() => {
+                                    setSelectedAddress(index);
+                                    setForm((current) => ({
+                                      ...current,
+                                      street: address.street || '',
+                                      apartment: address.apartment || '',
+                                      city: address.city || '',
+                                      department: address.department || '',
+                                      barrio: address.barrio || '',
+                                      reference: address.reference || '',
+                                      postal_code: address.postal_code || '',
+                                      country: address.country || 'Uruguay',
+                                      ci: address.ci || '',
+                                    }));
+                                  }}
+                                />
+                                <div className={`p-1.5  ${selectedAddress === index ? 'bg-primary-500/100 text-white' : 'bg-white/10 text-slate-500'}`}>
+                                  <Home className="w-4 h-4" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <span className="font-bold text-sm block">{address.label || `Dirección ${index + 1}`}</span>
+                                  <span className="text-xs text-slate-400 block truncate">{address.street}{address.apartment ? `, ${address.apartment}` : ''} - {address.city}, {address.department}</span>
+                                </div>
+                              </label>
+                            ))}
+                            <label className={`flex items-center gap-3 p-3  border-2 cursor-pointer transition-all ${selectedAddress === -2 ? 'border-primary-500 bg-primary-500/100/10' : 'border-white/10 border-dashed hover:border-white/10'}`}>
+                              <input
+                                type="radio"
+                                name="savedAddr"
+                                className="sr-only"
+                                checked={selectedAddress === -2}
+                                onChange={() => {
+                                  setSelectedAddress(-2);
+                                  setForm((current) => ({ ...current, street: '', apartment: '', city: '', department: '', barrio: '', reference: '', postal_code: '' }));
+                                }}
+                              />
+                              <div className={`p-1.5  ${selectedAddress === -2 ? 'bg-primary-500/100 text-white' : 'bg-white/10 text-slate-500'}`}>
+                                <Home className="w-4 h-4" />
+                              </div>
+                              <span className="font-bold text-sm text-slate-400">Usar otra dirección</span>
+                            </label>
+                          </div>
+                        </div>
+                      )}
+
+                      {(savedAddresses.length === 0 || selectedAddress === -2) && (
+                        <>
+                          <div>
+                            <label className="form-label">Dirección (calle y número) *</label>
+                            <AddressAutocomplete
+                              value={form.street}
+                              onChange={value => setForm({ ...form, street: value })}
+                              onSelect={handleAddressSelect}
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="form-label">Departamento *</label>
+                              <select
+                                required={shippingMethod === 'delivery'}
+                                className="form-input"
+                                value={form.department}
+                                onChange={e => handleDepartmentChange(e.target.value)}
+                              >
+                                <option value="">Selecciona un departamento...</option>
+                                {DEPARTAMENTOS.map((department) => (
+                                  <option key={department} value={department}>{department}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="form-label">Ciudad / Localidad *</label>
+                              {form.department === 'Montevideo' ? (
+                                <input
+                                  type="text"
+                                  className="form-input opacity-80 cursor-not-allowed"
+                                  value="Montevideo"
+                                  readOnly
+                                />
+                              ) : (
+                                <select
+                                  required={shippingMethod === 'delivery'}
+                                  className="form-input"
+                                  value={form.city}
+                                  onChange={e => setForm({ ...form, city: e.target.value })}
+                                  disabled={!form.department}
+                                >
+                                  <option value="">Selecciona una localidad...</option>
+                                  {form.department && URUGUAY_LOCATIONS[form.department]?.map((location) => (
+                                    <option key={location} value={location}>{location}</option>
+                                  ))}
+                                </select>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 gap-4">
+                            <div>
+                              <label className="form-label">Barrio {form.department === 'Montevideo' ? '*' : '(Opcional)'}</label>
+                              {form.department === 'Montevideo' ? (
+                                <select
+                                  required={shippingMethod === 'delivery'}
+                                  className="form-input"
+                                  value={form.barrio}
+                                  onChange={e => setForm({ ...form, barrio: e.target.value })}
+                                >
+                                  <option value="">Selecciona un barrio...</option>
+                                  {URUGUAY_LOCATIONS['Montevideo']?.map((barrioName) => (
+                                    <option key={barrioName} value={barrioName}>{barrioName}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <input
+                                  type="text"
+                                  className="form-input"
+                                  placeholder="Ej: Centro, La Floresta, etc."
+                                  value={form.barrio}
+                                  onChange={e => setForm({ ...form, barrio: e.target.value })}
+                                />
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="form-label">Apartamento / Timbre</label>
+                              <input
+                                className="form-input"
+                                placeholder="Ej: Apto 302, Timbre 4"
+                                value={form.apartment}
+                                onChange={e => setForm({ ...form, apartment: e.target.value })}
+                              />
+                            </div>
+                            <div>
+                              <label className="form-label">Referencia / Indicaciones</label>
+                              <input
+                                className="form-input"
+                                placeholder="Ej: Portón de madera, reja negra"
+                                value={form.reference}
+                                onChange={e => setForm({ ...form, reference: e.target.value })}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="form-label">Código postal</label>
+                              <input
+                                className="form-input"
+                                placeholder="Ej: 11300"
+                                value={form.postal_code}
+                                onChange={e => setForm({ ...form, postal_code: e.target.value })}
+                              />
+                            </div>
+                            <div>
+                              <label className="form-label">País</label>
+                              <select
+                                className="form-input"
+                                value={form.country}
+                                onChange={e => setForm({ ...form, country: e.target.value })}
+                              >
+                                <option value="Uruguay">Uruguay</option>
+                              </select>
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                        {shippingMethod === 'delivery' && isLocationSelected && form.department && logistics.providerName && (
+                         <div className="space-y-3 mt-4">
+                          <div className="p-4 rounded-xl border border-primary-500/30 bg-primary-500/5 flex items-start gap-3 shadow-lg">
+                            <Clock className="w-5 h-5 text-primary-500 shrink-0 mt-0.5 animate-pulse" />
+                            <div>
+                              <h4 className="text-xs font-bold uppercase tracking-wider text-primary-400">
+                                Información de entrega ({logistics.providerName})
+                              </h4>
+                              <p className="text-sm font-semibold text-white mt-1">
+                                {logistics.message}
+                              </p>
+                            </div>
+                          </div>
+
+                          {dacShippingLoading && (
+                            <div className="p-3 rounded-lg bg-white/5 border border-white/10 flex items-center gap-3">
+                              <div className="w-4 h-4 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+                              <span className="text-xs text-slate-300">Calculando costo de envío en tiempo real con DAC...</span>
+                            </div>
+                          )}
+
+                          {dacShippingError && (
+                            <div className="p-4 rounded-lg bg-orange-950/20 border border-orange-500/30 space-y-3">
+                              <div className="flex items-start gap-2.5">
+                                <AlertCircle className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+                                <div className="text-xs text-orange-200 leading-relaxed">
+                                  <strong className="block font-bold text-orange-300 mb-0.5">No fue posible calcular el costo automáticamente</strong>
+                                  {dacShippingError}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const productsList = items.map(item => `- ${item.title} x${item.quantity}`).join('%0A');
+                                  const waNum = settings['whatsapp'] || '59899000000';
+                                  const formattedNum = waNum.replace(/[^0-9]/g, '');
+                                  const msg = `¡Hola! Quería realizar una compra desde la web pero no pudimos calcular el costo de envío automáticamente para ${form.city}, ${form.department}.%0A%0A*Productos:*%0A${productsList}%0A%0A*Dirección de envío:*%0A${form.street}%0A%0A¿Me podrían ayudar a coordinarlo?`;
+                                  window.open(`https://wa.me/${formattedNum}?text=${msg}`, '_blank');
+                                }}
+                                className="w-full py-2 px-3 rounded bg-green-600 hover:bg-green-700 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md"
+                              >
+                                <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                                  <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.963C16.588 2.016 14.12 1 11.487 1 6.052 1 1.628 5.372 1.624 10.8c-.001 1.73.46 3.42 1.336 4.927L1.983 20.89l5.326-1.396zM17.91 14.3c-.336-.169-1.991-.983-2.299-1.096-.309-.113-.534-.169-.758.169-.224.338-.868 1.096-1.064 1.322-.196.225-.392.253-.729.084-.336-.168-1.42-.523-2.705-1.67-.999-.89-1.673-1.99-1.869-2.327-.196-.338-.021-.52.148-.687.151-.15.336-.394.504-.59.168-.198.224-.338.336-.563.112-.225.056-.422-.028-.59-.084-.169-.758-1.83-1.038-2.505-.272-.656-.547-.567-.758-.578-.196-.01-.42-.01-.645-.01-.224 0-.589.084-.897.422-.309.337-1.179 1.153-1.179 2.812 0 1.66 1.207 3.262 1.375 3.487.168.225 2.376 3.628 5.756 5.087.804.347 1.433.555 1.922.712.808.257 1.543.221 2.124.135.647-.096 1.992-.816 2.272-1.605.28-.79.28-1.464.196-1.605-.084-.14-.309-.225-.645-.394z"/>
+                                </svg>
+                                Coordinar y comprar por WhatsApp
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Step 2 Nav */}
+                <div className="checkout-nav">
+                  <button type="button" onClick={goBack} className="checkout-btn-back">
+                    <ChevronLeft className="w-4 h-4" /> Volver
+                  </button>
+                  <button type="button" onClick={goNext} className="checkout-btn-next">
+                    Continuar <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ═══════════════════════════════════════════════════════════ */}
+            {/* STEP 3: CUPONES Y PROMOCIONES                             */}
+            {/* ═══════════════════════════════════════════════════════════ */}
+            {currentStep === 3 && (
+              <div className="checkout-step-content" key="step-3">
+                <div className="glass p-6">
+                  <h2 className="font-bold text-lg mb-1">Cupones y referidos</h2>
+                  <p className="text-xs text-slate-400 mb-6">Si tenés un código de descuento o fuiste referido, ingresalo aquí.</p>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="form-label flex items-center gap-2"><Ticket className="w-4 h-4" /> Cupón</label>
+                      <input className="form-input" placeholder="Ej: LANZAMIENTO10" value={couponCode} onChange={e => setCouponCode(e.target.value.toUpperCase())} />
+                    </div>
+                    <div>
+                      <label className="form-label flex items-center gap-2"><Share2 className="w-4 h-4" /> Código de referido</label>
+                      <input className="form-input" placeholder="Se completa automáticamente si llegaste desde un afiliado" value={affiliateCode} onChange={e => setAffiliateCode(e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bank promotions (same conditions as before) */}
+                {(paymentMethod === 'dlocalgo' || paymentMethod === 'mercadopago') && bankPromos.length > 0 && (
+                  <div className="glass p-6 mt-6">
+                    <h2 className="font-bold text-lg mb-1 flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-amber-500" />
+                      Promociones bancarias
+                    </h2>
+                    <p className="text-xs text-slate-400 mb-4">Seleccioná tu tarjeta para aplicar el descuento automáticamente.</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {bankPromos.map((promo) => {
+                        const colors = CARD_COLORS[promo.bank_name] || { bg: '#6B7280', text: '#fff' };
+                        const isSelected = selectedPromo?.id === promo.id;
+                        const meetsMinimum = subtotalWithShipping >= (promo.min_purchase || 0);
+                        let promoDiscount = 0;
+                        if (meetsMinimum) {
+                          promoDiscount = Math.round(subtotalWithShipping * promo.discount_value / 100);
+                          if (promo.max_discount > 0) promoDiscount = Math.min(promoDiscount, promo.max_discount);
+                        }
+
+                        return (
+                          <button
+                            key={promo.id}
+                            type="button"
+                            onClick={() => setSelectedPromo(isSelected ? null : promo)}
+                            disabled={!meetsMinimum}
+                            className={`relative text-left p-4  border-2 transition-all duration-200 ${isSelected ? 'border-green-500 bg-green-50/50 shadow-lg shadow-green-100 ring-2 ring-green-200' : !meetsMinimum ? 'border-white/10 bg-white/5/30 opacity-50 cursor-not-allowed' : 'border-white/10 hover:border-white/10 hover:shadow-sm cursor-pointer'}`}
+                          >
+                            {isSelected && (
+                              <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center shadow-md z-10">
+                                <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                              </div>
+                            )}
+                            <div className="flex items-start gap-3">
+                              <div className="w-11 h-11  flex items-center justify-center text-[10px] font-black shrink-0 shadow-sm" style={{ backgroundColor: colors.bg, color: colors.text }}>
+                                {promo.bank_name.substring(0, 3).toUpperCase()}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-0.5">
+                                  <span className="font-bold text-white text-sm">{promo.bank_name}</span>
+                                  <span className="text-[10px] font-black px-1.5 py-0.5 " style={{ backgroundColor: `${colors.bg}15`, color: colors.bg }}>
+                                    {promo.discount_value}% OFF
+                                  </span>
+                                </div>
+                                <p className="text-xs text-slate-400 leading-snug">{promo.promo_label || `${promo.discount_value}% OFF pagando con ${promo.bank_name}`}</p>
+                                {meetsMinimum ? (
+                                  <p className="text-xs font-bold text-green-600 mt-1.5">Ahorras {formatCurrencyPrice(promoDiscount)}</p>
+                                ) : (
+                                  <p className="text-[10px] text-slate-500 mt-1.5">Mínimo {formatCurrencyPrice(promo.min_purchase)} para aplicar</p>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {selectedPromo && (
+                      <div className="mt-4 flex items-center justify-between bg-green-50 border border-green-200  px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <Tag className="w-4 h-4 text-green-600" />
+                          <span className="text-sm font-bold text-green-700">Promo {selectedPromo.bank_name} aplicada: -{selectedPromo.discount_value}% {bankDiscount > 0 && <span className="ml-1 text-green-600">(-{formatCurrencyPrice(bankDiscount)})</span>}</span>
+                        </div>
+                        <button type="button" onClick={() => setSelectedPromo(null)} className="p-1 hover:bg-green-100 rounded-full transition-colors">
+                          <X className="w-4 h-4 text-green-500" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Step 3 Nav */}
+                <div className="checkout-nav mt-6">
+                  <button type="button" onClick={goBack} className="checkout-btn-back">
+                    <ChevronLeft className="w-4 h-4" /> Volver
+                  </button>
+                  <button type="button" onClick={goNext} className="checkout-btn-next">
+                    Continuar <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ═══════════════════════════════════════════════════════════ */}
+            {/* STEP 4: REVISIÓN                                          */}
+            {/* ═══════════════════════════════════════════════════════════ */}
+            {currentStep === 4 && (
+              <div className="checkout-step-content" key="step-4">
+                <div className="glass p-6">
+                  <h2 className="font-bold text-lg mb-1">Revisión del pedido</h2>
+                  <p className="text-xs text-slate-400 mb-6">Verificá que toda la información sea correcta antes de pagar.</p>
+
+                  <div className="space-y-5">
+                    {/* Billing summary */}
+                    <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Datos de facturación</h3>
+                        <button type="button" onClick={() => setCurrentStep(1)} className="text-[11px] text-primary-400 hover:text-primary-300 hover:underline font-semibold">Editar</button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-y-2 text-sm">
+                        <span className="text-slate-500">Nombre:</span>
+                        <span className="text-white font-medium">{form.first_name} {form.last_name}</span>
+                        <span className="text-slate-500">Email:</span>
+                        <span className="text-white font-medium truncate">{form.email}</span>
+                        {form.phone && <><span className="text-slate-500">Teléfono:</span><span className="text-white font-medium">{form.phone}</span></>}
+                        {form.ci && <><span className="text-slate-500">CI:</span><span className="text-white font-medium">{form.ci}</span></>}
+                      </div>
+                    </div>
+
+                    {/* Shipping summary */}
+                    <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Datos de envío</h3>
+                        <button type="button" onClick={() => setCurrentStep(2)} className="text-[11px] text-primary-400 hover:text-primary-300 hover:underline font-semibold">Editar</button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-y-2 text-sm">
+                        <span className="text-slate-500">Método:</span>
+                        <span className="text-white font-medium">
+                          {shippingMethod === 'pickup' ? 'Retiro en local' :
+                           selectedShippingMethod === 'dac_agency' ? 'Retiro en agencia DAC' :
+                           selectedShippingMethod === 'dac_home' ? 'Envío DAC a domicilio' :
+                           'Envío a domicilio'}
+                        </span>
+                        {shippingMethod === 'delivery' && (
+                          <>
+                            <span className="text-slate-500">Dirección:</span>
+                            <span className="text-white font-medium">{selectedShippingMethod === 'dac_agency' ? (selectedAgency?.office_name || '-') : form.street}</span>
+                            <span className="text-slate-500">Ubicación:</span>
+                            <span className="text-white font-medium">{form.barrio ? `${form.barrio}, ` : ''}{form.city}, {form.department}</span>
+                          </>
+                        )}
+                        <span className="text-slate-500">Costo envío:</span>
+                        <span className="text-white font-bold">{shipping === 0 ? 'GRATIS' : formatCurrencyPrice(shipping)}</span>
+                      </div>
+                      {shippingMethod === 'delivery' && isLocationSelected && form.department && logistics.providerName && (
+                        <div className="mt-3 pt-3 border-t border-white/10 flex items-center gap-2 text-xs">
+                          <Clock className="w-3.5 h-3.5 text-green-500" />
+                          <span className="text-green-500 font-bold">{logistics.message}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Coupons/promos summary */}
+                    {(couponCode || affiliateCode || selectedPromo) && (
+                      <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Descuentos</h3>
+                          <button type="button" onClick={() => setCurrentStep(3)} className="text-[11px] text-primary-400 hover:text-primary-300 hover:underline font-semibold">Editar</button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-y-2 text-sm">
+                          {couponCode && <><span className="text-slate-500">Cupón:</span><span className="text-white font-medium">{couponCode}</span></>}
+                          {affiliateCode && <><span className="text-slate-500">Referido:</span><span className="text-white font-medium">{affiliateCode}</span></>}
+                          {selectedPromo && <><span className="text-slate-500">Promo bancaria:</span><span className="text-green-400 font-bold">{selectedPromo.bank_name} -{selectedPromo.discount_value}%</span></>}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Items list */}
+                    <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Productos ({items.length})</h3>
+                      <div className="space-y-3">
+                        {items.map((item) => (
+                          <div key={item.variant_id} className="flex items-center gap-3">
+                            <div className="relative">
+                              <img src={item.image || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect fill="%23f3f4f6" width="48" height="48" rx="8"/></svg>'} alt="" className="w-12 h-12  object-contain bg-white/5 p-0.5" />
+                              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-primary-500/100 text-white text-[10px] font-bold rounded-full flex items-center justify-center">{item.quantity}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-white line-clamp-1">{item.title}</p>
+                            </div>
+                            <span className="text-sm font-bold">{formatCurrencyPrice(item.price * item.quantity)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Step 4 Nav */}
+                  <div className="checkout-nav">
+                    <button type="button" onClick={goBack} className="checkout-btn-back">
+                      <ChevronLeft className="w-4 h-4" /> Volver
+                    </button>
+                    <button type="button" onClick={goNext} className="checkout-btn-next">
+                      Ir al pago <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ═══════════════════════════════════════════════════════════ */}
+            {/* STEP 5: FORMA DE PAGO                                     */}
+            {/* ═══════════════════════════════════════════════════════════ */}
+            {currentStep === 5 && (
+              <div className="checkout-step-content" key="step-5">
+                <div className="glass p-6">
+                  <h2 className="font-bold text-lg mb-1">Forma de pago</h2>
+                  <p className="text-xs text-slate-400 mb-6">Elegí cómo querés pagar tu pedido.</p>
+                  <div className="space-y-3">
+                    {mercadopagoEnabled && (
+                      <label className={`flex items-center gap-4 p-4  border-2 cursor-pointer transition-all ${paymentMethod === 'mercadopago' ? 'border-blue-500 bg-blue-50/50 shadow-sm' : 'border-white/10 hover:border-white/10'}`}>
+                        <input type="radio" name="payment" value="mercadopago" checked={paymentMethod === 'mercadopago'} onChange={() => setPaymentMethod('mercadopago')} className="text-primary-600 shrink-0" />
+                        <img src="/logos/Mercado_Pago.png" alt="Mercado Pago" className="h-6 object-contain" />
+                      </label>
+                    )}
+                    {dlocalgoEnabled && (
+                      <label className={`flex items-center gap-4 p-4  border-2 cursor-pointer transition-all ${paymentMethod === 'dlocalgo' ? 'border-blue-500 bg-blue-50/50 shadow-sm' : 'border-white/10 hover:border-white/10'}`}>
+                        <input type="radio" name="payment" value="dlocalgo" checked={paymentMethod === 'dlocalgo'} onChange={() => setPaymentMethod('dlocalgo')} className="text-primary-600 shrink-0" />
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <img src="/logos/visa-mastercard.png" alt="Visa / Mastercard" className="h-6 object-contain rounded" />
+                          <img src="/logos/OCA_LOGO.png" alt="OCA" className="h-6 object-contain" />
+                          <img src="/logos/DINERS.png" alt="Diners Club" className="h-6 object-contain" />
+                          <img src="/logos/lider.png" alt="Lider" className="h-6 object-contain" />
+                          <div className="w-px h-6 bg-gray-200 mx-1" />
+                          <img src="/logos/Red_Pagos_Logos.png" alt="RedPagos" className="h-6 object-contain" />
+                        </div>
+                      </label>
+                    )}
+                    {paypalEnabled && (
+                      <label className={`flex items-center gap-4 p-4  border-2 cursor-pointer transition-all ${paymentMethod === 'paypal' ? 'border-blue-500 bg-blue-50/50 shadow-sm' : 'border-white/10 hover:border-white/10'}`}>
+                        <input type="radio" name="payment" value="paypal" checked={paymentMethod === 'paypal'} onChange={() => setPaymentMethod('paypal')} className="text-primary-600 shrink-0" />
+                        <img src="/logos/paypal.png" alt="PayPal" className="h-6 object-contain" />
+                      </label>
+                    )}
+                    {handyEnabled && (
+                      <label className={`flex items-center gap-4 p-4 border-2 cursor-pointer transition-all ${paymentMethod === 'handy' ? 'border-emerald-500 bg-emerald-50/50 shadow-sm' : 'border-white/10 hover:border-white/10'}`}>
+                        <input type="radio" name="payment" value="handy" checked={paymentMethod === 'handy'} onChange={() => setPaymentMethod('handy')} className="text-primary-600 shrink-0" />
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between flex-wrap gap-4">
+                            <div>
+                              <div className="font-bold text-white">Tarjetas y redes de cobranza</div>
+                              <div className="text-xs text-slate-400 mt-0.5">
+                                Botón de pago externo ({handyProvider?.environment === 'production' ? 'Producción' : 'Pruebas'})
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <img src="/logos/visa-mastercard.png" alt="Visa / Mastercard" className="h-6 object-contain rounded" />
+                                <img src="/logos/OCA_LOGO.png" alt="OCA" className="h-6 object-contain" />
+                                <img src="/logos/lider.png" alt="Lider" className="h-6 object-contain" />
+                                <div className="w-px h-6 bg-white/20 mx-1" />
+                                <img src="/logos/Red_Pagos_Logos.png" alt="RedPagos" className="h-6 object-contain" />
+                              </div>
+                              <button
+                                type="button"
+                                className="text-[11px] text-primary-400 hover:text-primary-300 hover:underline font-medium mt-1 bg-transparent border-none p-0 cursor-pointer outline-none"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setShowPaymentMethodsModal(true);
+                                }}
+                              >
+                                Ver más medios de pago
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </label>
+                    )}
+                  </div>
+                </div>
+
+                {/* Step 5 Nav + Submit */}
+                <div className="checkout-nav mt-6">
+                  <button type="button" onClick={goBack} className="checkout-btn-back">
+                    <ChevronLeft className="w-4 h-4" /> Volver
+                  </button>
+                </div>
+              </div>
+            )}
+
+          </div>
+
+          {/* ═══════════════════════════════════════════════════════════ */}
+          {/* SIDEBAR: ORDER SUMMARY (always visible)                   */}
+          {/* ═══════════════════════════════════════════════════════════ */}
+          <div>
+            <div className="glass p-6 sticky top-24">
+              <h2 className="font-bold text-lg mb-4">Resumen de orden</h2>
+              <div className="space-y-3 mb-4">
+                {items.map((item) => (
+                  <div key={item.variant_id} className="flex items-center gap-3">
+                    <div className="relative">
+                      <img src={item.image || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect fill="%23f3f4f6" width="48" height="48" rx="8"/></svg>'} alt="" className="w-12 h-12  object-contain bg-white/5 p-0.5" />
+                      <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-primary-500/100 text-white text-[10px] font-bold rounded-full flex items-center justify-center">{item.quantity}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white line-clamp-1">{item.title}</p>
+                    </div>
+                    <span className="text-sm font-bold">{formatCurrencyPrice(item.price * item.quantity)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="border-t pt-4 space-y-2">
+                <div className="flex justify-between text-sm"><span className="text-slate-400">Subtotal</span><span className="font-bold">{formatCurrencyPrice(total)}</span></div>
+                 <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">
+                    {selectedShippingMethod === 'dac_home' ? 'Envío DAC a domicilio' : selectedShippingMethod === 'dac_agency' ? (selectedAgency ? `Retiro en agencia - ${selectedAgency.office_name}` : 'Retiro en agencia DAC') : selectedShippingMethod === 'dac' ? 'Envío DAC al interior' : 'Envío'}
+                  </span>
+                  <span className="font-bold flex items-center gap-1.5">
+                    {dacShippingLoading ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-primary-500 border-t-transparent rounded-full animate-spin inline-block" />
+                        <span className="text-xs text-slate-400 font-normal">Calculando...</span>
+                      </>
+                    ) : (
+                      !isLocationSelected && total < freeShippingThreshold ? (
+                        <span className="text-xs text-slate-400 font-normal">-</span>
+                      ) : (
+                        shipping === 0 ? 'GRATIS' : formatCurrencyPrice(shipping)
+                      )
+                    )}
+                  </span>
+                </div>
+                {bankDiscount > 0 && selectedPromo && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-green-600 flex items-center gap-1"><Tag className="w-3 h-3" />Promo {selectedPromo.bank_name}</span>
+                    <span className="font-bold text-green-600">-{formatCurrencyPrice(bankDiscount)}</span>
+                  </div>
+                )}
+                {shippingMethod === 'delivery' && isLocationSelected && form.department && logistics.providerName && (
+                  <div className="border-t border-white/5 pt-3 mt-3 space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-400">Logística por</span>
+                      <span className="font-semibold text-slate-200">{logistics.providerName}</span>
+                    </div>
+                    <div className="flex items-start gap-1.5 text-xs mt-1">
+                      <Clock className="w-3.5 h-3.5 mt-0.5 shrink-0 text-green-500" />
+                      <span className="font-bold text-green-500">{logistics.message}</span>
+                    </div>
+                  </div>
+                )}
+                <div className="border-t pt-2 mt-2 flex justify-between">
+                  <span className="font-bold text-lg">Total</span>
+                  <div className="text-right">
+                    {bankDiscount > 0 && <span className="text-sm text-slate-500 line-through mr-2">{formatCurrencyPrice(subtotalWithShipping)}</span>}
+                    <span className="text-2xl font-black text-[#f00856]">{formatCurrencyPrice(grandTotal)}</span>
+                    {selectedCurrency !== 'UYU' && (
+                      <p className="text-[10px] text-slate-500 mt-1">
+                        Conversión estimada. El cobro final se realiza en pesos uruguayos.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {checkoutError && (
+                <div className="mt-4 p-3 bg-red-900/30 border border-red-500/30 text-xs text-red-400 rounded-lg flex items-start justify-between">
+                  <span className="flex-1 pr-2">{checkoutError}</span>
+                  <button type="button" onClick={() => setCheckoutError('')} className="text-red-400 hover:text-red-300 shrink-0">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {/* Submit button — only visible on step 5 */}
+              {currentStep === 5 && (
+                <>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || isPaymentBlocked() || ((selectedShippingMethod === 'dac' || selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') && dacShippingLoading)}
+                    className={`btn-primary w-full mt-6 py-3.5 text-base ${(isPaymentBlocked() || ((selectedShippingMethod === 'dac' || selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') && dacShippingLoading)) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    {isSubmitting ? 'Procesando...' : 'Finalizar compra'}
+                  </button>
+
+                  {/* Blocking reason alerts */}
+                  {(selectedShippingMethod === 'dac' || selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') && (
+                    <div className="mt-3 space-y-1">
+                      {!form.phone && <p className="text-[11px] text-orange-400 font-semibold">• Se requiere Teléfono para despacho por DAC.</p>}
+                      {selectedShippingMethod !== 'dac_agency' && !form.street && <p className="text-[11px] text-orange-400 font-semibold">• Se requiere Dirección para despacho por DAC.</p>}
+                      {!form.department && <p className="text-[11px] text-orange-400 font-semibold">• Se requiere Departamento.</p>}
+                      {selectedShippingMethod !== 'dac_agency' && !form.city && <p className="text-[11px] text-orange-400 font-semibold">• Se requiere Localidad.</p>}
+                      {selectedShippingMethod === 'dac_agency' && !selectedAgency && <p className="text-[11px] text-orange-400 font-semibold">• Seleccioná una agencia DAC para retiro.</p>}
+                      {!form.ci && <p className="text-[11px] text-orange-400 font-semibold">• Se requiere Cédula de Identidad (CI) para despacho por DAC.</p>}
+                      {form.ci && !validateUruguayanCI(form.ci) && <p className="text-[11px] text-red-400 font-semibold">• Cédula de Identidad (CI) inválida.</p>}
+                      {dacShippingError && <p className="text-[11px] text-red-400 font-semibold">• Error en cálculo de envío DAC. Por favor use WhatsApp.</p>}
+                      {dacShippingCost === null && !dacShippingError && !dacShippingLoading && (
+                        <p className="text-[11px] text-orange-400 font-semibold">• Esperando cálculo de envío de DAC...</p>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </form>
               <div className="grid sm:grid-cols-2 gap-4">
                 {form.department === 'Montevideo' ? (
                   <label className={`flex items-start gap-4 p-4 border-2 cursor-pointer transition-all ${shippingMethod === 'delivery' ? 'border-primary-500 bg-primary-500/10' : 'border-white/10 hover:border-white/10 bg-white/5'}`}>
@@ -924,20 +1975,29 @@ export default function Checkout() {
 
                   {/* DAC Cost/Status Display */}
                   <div className="px-1 space-y-2">
+                    {dacDeliveryMode === 'dac_agency' && !selectedAgency && (
+                      <div className="text-amber-400 text-xs font-semibold">
+                        Seleccioná una agencia DAC para calcular el costo.
+                      </div>
+                    )}
                     {dacShippingLoading && (
                       <div className="text-amber-400 text-xs font-semibold flex items-center gap-1.5">
                         <span className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin inline-block" />
-                        <span>Calculando envío DAC...</span>
+                        <span>Calculando costo DAC...</span>
                       </div>
                     )}
                     {!dacShippingLoading && dacShippingCost !== null && (
                       <div className="text-emerald-400 text-sm font-black">
-                        {dacDeliveryMode === 'dac_agency' ? 'Costo retiro en agencia' : 'Costo envío DAC'}: ${dacShippingCost} UYU
+                        {dacDeliveryMode === 'dac_agency'
+                          ? `Retiro en agencia DAC: $${dacShippingCost} UYU`
+                          : `Costo envío DAC: $${dacShippingCost} UYU`}
                       </div>
                     )}
                     {!dacShippingLoading && dacShippingError && (
                       <div className="text-red-400 text-xs font-semibold leading-relaxed">
-                        No pudimos calcular DAC para esta localidad. Consultanos por WhatsApp.
+                        {dacDeliveryMode === 'dac_agency'
+                          ? "No pudimos calcular el costo para esta agencia. Elegí otra o consultanos por WhatsApp."
+                          : "No pudimos calcular DAC para esta localidad. Consultanos por WhatsApp."}
                       </div>
                     )}
                     {isAdmin && detectedKOficina !== null && (
@@ -977,6 +2037,34 @@ export default function Checkout() {
                 </div>
                 <div><label className="form-label">Teléfono</label><input className="form-input" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
 
+                {(selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') && (
+                  <div className="space-y-1">
+                    <label className="form-label flex items-center justify-between">
+                      <span>Cédula de Identidad (CI) *</span>
+                      {form.ci && !validateUruguayanCI(form.ci) && (
+                        <span className="text-[11px] text-red-400 font-semibold animate-pulse">CI Inválida</span>
+                      )}
+                      {form.ci && validateUruguayanCI(form.ci) && (
+                        <span className="text-[11px] text-green-400 font-semibold">✓ CI Válida</span>
+                      )}
+                    </label>
+                    <input
+                      required
+                      placeholder="Ej: 1.234.567-8"
+                      className={`form-input transition-all ${
+                        form.ci 
+                          ? validateUruguayanCI(form.ci)
+                            ? 'border-green-500/50 focus:border-green-500 bg-green-500/5'
+                            : 'border-red-500/50 focus:border-red-500 bg-red-500/5'
+                          : 'border-white/10 focus:border-primary-500 bg-white/5'
+                      }`}
+                      value={form.ci}
+                      onChange={e => setForm({ ...form, ci: e.target.value })}
+                    />
+                    <p className="text-[10px] text-slate-400">Requerido para la facturación y el despacho de la guía por DAC.</p>
+                  </div>
+                )}
+
                 {shippingMethod === 'delivery' && (
                   <div className="pt-4 mt-4 border-t border-white/10 space-y-4">
                     <h3 className="font-semibold text-sm text-slate-400 mb-2">Dirección de entrega</h3>
@@ -1004,6 +2092,7 @@ export default function Checkout() {
                                     reference: address.reference || '',
                                     postal_code: address.postal_code || '',
                                     country: address.country || 'Uruguay',
+                                    ci: address.ci || '',
                                   }));
                                 }}
                               />
@@ -1161,8 +2250,8 @@ export default function Checkout() {
                       </>
                     )}
 
-                     {shippingMethod === 'delivery' && form.department && logistics.providerName && (
-                      <div className="space-y-3 mt-4">
+                      {shippingMethod === 'delivery' && isLocationSelected && form.department && logistics.providerName && (
+                       <div className="space-y-3 mt-4">
                         <div className="p-4 rounded-xl border border-primary-500/30 bg-primary-500/5 flex items-start gap-3 shadow-lg">
                           <Clock className="w-5 h-5 text-primary-500 shrink-0 mt-0.5 animate-pulse" />
                           <div>
@@ -1395,7 +2484,11 @@ export default function Checkout() {
                         <span className="text-xs text-slate-400 font-normal">Calculando...</span>
                       </>
                     ) : (
-                      shipping === 0 ? 'GRATIS' : formatCurrencyPrice(shipping)
+                      !isLocationSelected && total < freeShippingThreshold ? (
+                        <span className="text-xs text-slate-400 font-normal">-</span>
+                      ) : (
+                        shipping === 0 ? 'GRATIS' : formatCurrencyPrice(shipping)
+                      )
                     )}
                   </span>
                 </div>
@@ -1405,7 +2498,7 @@ export default function Checkout() {
                     <span className="font-bold text-green-600">-{formatCurrencyPrice(bankDiscount)}</span>
                   </div>
                 )}
-                {shippingMethod === 'delivery' && form.department && logistics.providerName && (
+                {shippingMethod === 'delivery' && isLocationSelected && form.department && logistics.providerName && (
                   <div className="border-t border-white/5 pt-3 mt-3 space-y-1">
                     <div className="flex justify-between text-xs">
                       <span className="text-slate-400">Logística por</span>
@@ -1454,6 +2547,8 @@ export default function Checkout() {
                   {!form.department && <p className="text-[11px] text-orange-400 font-semibold">• Se requiere Departamento.</p>}
                   {selectedShippingMethod !== 'dac_agency' && !form.city && <p className="text-[11px] text-orange-400 font-semibold">• Se requiere Localidad.</p>}
                   {selectedShippingMethod === 'dac_agency' && !selectedAgency && <p className="text-[11px] text-orange-400 font-semibold">• Seleccioná una agencia DAC para retiro.</p>}
+                  {!form.ci && <p className="text-[11px] text-orange-400 font-semibold">• Se requiere Cédula de Identidad (CI) para despacho por DAC.</p>}
+                  {form.ci && !validateUruguayanCI(form.ci) && <p className="text-[11px] text-red-400 font-semibold">• Cédula de Identidad (CI) inválida.</p>}
                   {dacShippingError && <p className="text-[11px] text-red-400 font-semibold">• Error en cálculo de envío DAC. Por favor use WhatsApp.</p>}
                   {dacShippingCost === null && !dacShippingError && !dacShippingLoading && (
                     <p className="text-[11px] text-orange-400 font-semibold">• Esperando cálculo de envío de DAC...</p>
