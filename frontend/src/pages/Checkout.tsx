@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRight, ChevronLeft, Truck, Store, Tag, Sparkles, X, Home, Ticket, Share2, Clock, AlertCircle, MapPin, Building2, Search, Check } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Truck, Store, Tag, Sparkles, X, Home, Ticket, Share2, Clock, AlertCircle, MapPin, Building2, Search, Check, Trash2, Plus, Minus } from 'lucide-react';
 import { useCartContext } from '../contexts/CartContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,6 +10,7 @@ import { analytics } from '../lib/analytics';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import { createCheckoutOrder, getPublicPaymentProviders, startCheckoutPayment, type PublicPaymentProvider } from '../lib/payments';
 import { URUGUAY_LOCATIONS, DEPARTAMENTOS, calculateShipping } from '../utils/uruguayLocations';
+import { getProductImage, resolveImage } from '../lib/imageUtils';
 
 function normalizeLocation(value?: string | null) {
   return (value || "")
@@ -89,7 +90,7 @@ interface BankPromo {
 }
 
 export default function Checkout() {
-  const { items, total } = useCartContext();
+  const { items, total, addItem, updateQuantity, removeItem } = useCartContext();
   const { settings, loaded: settingsLoaded } = useSiteSettings();
   const freeShippingThreshold = Number(settings['free_shipping_threshold'] || 4000);
   const { formatCurrencyPrice, selectedCurrency } = useCurrency();
@@ -164,6 +165,9 @@ export default function Checkout() {
   const [showPaymentMethodsModal, setShowPaymentMethodsModal] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const submitLockRef = useRef(false);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(true);
+  const carouselRef = useRef<HTMLDivElement>(null);
   const [form, setForm] = useState({
     email: user?.email || '',
     first_name: '',
@@ -637,6 +641,128 @@ export default function Checkout() {
   }, [user]);
 
   useEffect(() => {
+    if (items.length === 0) {
+      setSuggestions([]);
+      setSuggestionsLoading(false);
+      return;
+    }
+
+    async function fetchSuggestions() {
+      setSuggestionsLoading(true);
+      try {
+        const cartProductIds = items.map(item => item.product_id);
+        
+        // 1. Fetch categories for cart items
+        const { data: cartProducts } = await supabase
+          .from('products')
+          .select('id, category_id')
+          .in('id', cartProductIds);
+          
+        const categoryIds = Array.from(
+          new Set(cartProducts?.map(p => p.category_id).filter(Boolean) || [])
+        );
+
+        let allSuggested: any[] = [];
+
+        // 2. Fetch products in same categories
+        if (categoryIds.length > 0) {
+          const { data: categorySuggested } = await supabase
+            .from('products')
+            .select(`
+              id,
+              title,
+              base_price,
+              category_id,
+              is_featured,
+              images:product_images(id, url, alt_text, sort_order, is_primary),
+              variants:product_variants(id, sku, name, price_adjustment, inventory_count)
+            `)
+            .eq('status', 'published')
+            .in('category_id', categoryIds)
+            .limit(20);
+
+          if (categorySuggested) {
+            allSuggested = categorySuggested.filter(p => !cartProductIds.includes(p.id));
+          }
+        }
+
+        // 3. Fallback/Supplement with featured products if we have less than 10
+        if (allSuggested.length < 10) {
+          const { data: featuredProducts } = await supabase
+            .from('products')
+            .select(`
+              id,
+              title,
+              base_price,
+              category_id,
+              is_featured,
+              images:product_images(id, url, alt_text, sort_order, is_primary),
+              variants:product_variants(id, sku, name, price_adjustment, inventory_count)
+            `)
+            .eq('status', 'published')
+            .eq('is_featured', true)
+            .limit(20);
+
+          if (featuredProducts) {
+            const filteredFeatured = featuredProducts.filter(
+              p => !cartProductIds.includes(p.id) && !allSuggested.some(s => s.id === p.id)
+            );
+            allSuggested = [...allSuggested, ...filteredFeatured];
+          }
+        }
+
+        // 4. Final fallback with general published products if still short
+        if (allSuggested.length < 5) {
+          const { data: generalProducts } = await supabase
+            .from('products')
+            .select(`
+              id,
+              title,
+              base_price,
+              category_id,
+              is_featured,
+              images:product_images(id, url, alt_text, sort_order, is_primary),
+              variants:product_variants(id, sku, name, price_adjustment, inventory_count)
+            `)
+            .eq('status', 'published')
+            .limit(20);
+
+          if (generalProducts) {
+            const filteredGeneral = generalProducts.filter(
+              p => !cartProductIds.includes(p.id) && !allSuggested.some(s => s.id === p.id)
+            );
+            allSuggested = [...allSuggested, ...filteredGeneral];
+          }
+        }
+
+        // Limit suggestions to 10 items
+        setSuggestions(allSuggested.slice(0, 10));
+      } catch (err) {
+        console.error('Error fetching suggestions:', err);
+      } finally {
+        setSuggestionsLoading(false);
+      }
+    }
+
+    fetchSuggestions();
+  }, [items.map(item => item.product_id).join(',')]);
+
+  const handleAddSuggestion = (p: any) => {
+    const variant = p.variants?.[0];
+    if (!variant) return;
+    
+    addItem({
+      product_id: p.id,
+      variant_id: variant.id,
+      quantity: 1,
+      title: p.title,
+      price: p.base_price + (variant.price_adjustment || 0),
+      image: getProductImage(p),
+      variant_name: variant.name || ''
+    });
+  };
+
+  useEffect(() => {
     async function fetchBankPromos() {
       const now = new Date().toISOString();
       const { data } = await supabase
@@ -757,6 +883,10 @@ export default function Checkout() {
 
   async function handlePlaceOrder(e: React.FormEvent) {
     e.preventDefault();
+    if (currentStep < 3) {
+      goNext();
+      return;
+    }
     if (submitLockRef.current || isSubmitting) return;
 
     submitLockRef.current = true;
@@ -845,9 +975,7 @@ export default function Checkout() {
   const CHECKOUT_STEPS = [
     { id: 1, label: 'Facturación' },
     { id: 2, label: 'Envío' },
-    { id: 3, label: 'Cupones' },
-    { id: 4, label: 'Revisión' },
-    { id: 5, label: 'Pago' },
+    { id: 3, label: 'Pago' },
   ];
 
   const canAdvanceStep = (step: number): boolean => {
@@ -865,7 +993,7 @@ export default function Checkout() {
   };
 
   const goNext = () => {
-    if (currentStep < 5 && canAdvanceStep(currentStep)) {
+    if (currentStep < 3 && canAdvanceStep(currentStep)) {
       setCurrentStep(currentStep + 1);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -918,6 +1046,94 @@ export default function Checkout() {
           <button onClick={() => setCheckoutError('')} className="text-red-400 hover:text-red-300 ml-4">
             <X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {/* ═══ SUGGESTIONS GALLERY ═══ */}
+      {suggestions.length > 0 && (
+        <div className="mb-8 relative group">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300 mb-4 px-1 flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-primary-500 animate-pulse" />
+            Sugerencias para tu compra
+          </h3>
+          
+          <div className="relative flex items-center">
+            {/* Left navigation arrow */}
+            <button
+              type="button"
+              onClick={() => {
+                if (carouselRef.current) {
+                  carouselRef.current.scrollBy({ left: -240, behavior: 'smooth' });
+                }
+              }}
+              className="absolute left-0 z-10 p-2 rounded-full bg-black/60 hover:bg-black/80 border border-white/10 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 shadow-lg -translate-x-1/2 flex items-center justify-center cursor-pointer"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+
+            {/* Scrollable container */}
+            <div
+              ref={carouselRef}
+              className="flex gap-4 overflow-x-auto pb-3 scroll-smooth no-scrollbar w-full"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+              {suggestions.map((p) => {
+                const primaryImage = getProductImage(p);
+                const hasVariants = p.variants && p.variants.length > 0;
+                
+                return (
+                  <div
+                    key={p.id}
+                    className="w-[200px] shrink-0 glass rounded-xl p-3 border border-white/10 hover:border-white/20 transition-all flex flex-col justify-between"
+                  >
+                    <div className="h-28 flex items-center justify-center bg-white/5 rounded-lg p-2 mb-3">
+                      <img
+                        src={primaryImage}
+                        alt={p.title}
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    </div>
+                    <div className="flex-1 flex flex-col justify-between">
+                      <div>
+                        <h4 className="text-xs font-bold text-white line-clamp-2 min-h-[32px] leading-snug">
+                          {p.title}
+                        </h4>
+                        <p className="text-sm font-black text-[#f00856] mt-1.5">
+                          {formatCurrencyPrice(p.base_price)}
+                        </p>
+                      </div>
+                      
+                      <button
+                        type="button"
+                        disabled={!hasVariants}
+                        onClick={() => handleAddSuggestion(p)}
+                        className={`w-full mt-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 ${
+                          hasVariants
+                            ? 'bg-[#f00856] hover:bg-[#d00749] text-white shadow-md shadow-primary-500/20 cursor-pointer'
+                            : 'bg-white/5 text-slate-500 cursor-not-allowed'
+                        }`}
+                      >
+                        {hasVariants ? 'AGREGAR' : 'SIN STOCK'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Right navigation arrow */}
+            <button
+              type="button"
+              onClick={() => {
+                if (carouselRef.current) {
+                  carouselRef.current.scrollBy({ left: 240, behavior: 'smooth' });
+                }
+              }}
+              className="absolute right-0 z-10 p-2 rounded-full bg-black/60 hover:bg-black/80 border border-white/10 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 shadow-lg translate-x-1/2 flex items-center justify-center cursor-pointer"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -1466,20 +1682,78 @@ export default function Checkout() {
             )}
 
             {/* ═══════════════════════════════════════════════════════════ */}
-            {/* STEP 3: REFERIDO Y PROMOCIONES                             */}
+            {/* STEP 3: FORMA DE PAGO                                      */}
             {/* ═══════════════════════════════════════════════════════════ */}
             {currentStep === 3 && (
               <div className="checkout-step-content" key="step-3">
                 <div className="glass p-6">
-                  <h2 className="font-bold text-lg mb-1">Código de referido</h2>
-                  <p className="text-xs text-slate-400 mb-6">Si fuiste referido por un afiliado, ingresá su código aquí.</p>
-                  <div>
-                    <label className="form-label flex items-center gap-2"><Share2 className="w-4 h-4" /> Código de referido</label>
-                    <input className="form-input max-w-md" placeholder="Se completa automáticamente si llegaste desde un afiliado" value={affiliateCode} onChange={e => setAffiliateCode(e.target.value)} />
+                  <h2 className="font-bold text-lg mb-1">Forma de pago</h2>
+                  <p className="text-xs text-slate-400 mb-6">Elegí cómo querés pagar tu pedido.</p>
+                  <div className="space-y-3">
+                    {mercadopagoEnabled && (
+                      <label className={`flex items-center gap-4 p-4  border-2 cursor-pointer transition-all ${paymentMethod === 'mercadopago' ? 'border-blue-500 bg-blue-50/50 shadow-sm' : 'border-white/10 hover:border-white/10'}`}>
+                        <input type="radio" name="payment" value="mercadopago" checked={paymentMethod === 'mercadopago'} onChange={() => setPaymentMethod('mercadopago')} className="text-primary-600 shrink-0" />
+                        <img src="/logos/Mercado_Pago.png" alt="Mercado Pago" className="h-6 object-contain" />
+                      </label>
+                    )}
+                    {dlocalgoEnabled && (
+                      <label className={`flex items-center gap-4 p-4  border-2 cursor-pointer transition-all ${paymentMethod === 'dlocalgo' ? 'border-blue-500 bg-blue-50/50 shadow-sm' : 'border-white/10 hover:border-white/10'}`}>
+                        <input type="radio" name="payment" value="dlocalgo" checked={paymentMethod === 'dlocalgo'} onChange={() => setPaymentMethod('dlocalgo')} className="text-primary-600 shrink-0" />
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <img src="/logos/visa-mastercard.png" alt="Visa / Mastercard" className="h-6 object-contain rounded" />
+                          <img src="/logos/OCA_LOGO.png" alt="OCA" className="h-6 object-contain" />
+                          <img src="/logos/DINERS.png" alt="Diners Club" className="h-6 object-contain" />
+                          <img src="/logos/lider.png" alt="Lider" className="h-6 object-contain" />
+                          <div className="w-px h-6 bg-gray-200 mx-1" />
+                          <img src="/logos/Red_Pagos_Logos.png" alt="RedPagos" className="h-6 object-contain" />
+                        </div>
+                      </label>
+                    )}
+                    {paypalEnabled && (
+                      <label className={`flex items-center gap-4 p-4  border-2 cursor-pointer transition-all ${paymentMethod === 'paypal' ? 'border-blue-500 bg-blue-50/50 shadow-sm' : 'border-white/10 hover:border-white/10'}`}>
+                        <input type="radio" name="payment" value="paypal" checked={paymentMethod === 'paypal'} onChange={() => setPaymentMethod('paypal')} className="text-primary-600 shrink-0" />
+                        <img src="/logos/paypal.png" alt="PayPal" className="h-6 object-contain" />
+                      </label>
+                    )}
+                    {handyEnabled && (
+                      <label className={`flex items-center gap-4 p-4 border-2 cursor-pointer transition-all ${paymentMethod === 'handy' ? 'border-emerald-500 bg-emerald-50/50 shadow-sm' : 'border-white/10 hover:border-white/10'}`}>
+                        <input type="radio" name="payment" value="handy" checked={paymentMethod === 'handy'} onChange={() => setPaymentMethod('handy')} className="text-primary-600 shrink-0" />
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between flex-wrap gap-4">
+                            <div>
+                              <div className="font-bold text-white">Tarjetas y redes de cobranza</div>
+                              <div className="text-xs text-slate-400 mt-0.5">
+                                Botón de pago externo ({handyProvider?.environment === 'production' ? 'Producción' : 'Pruebas'})
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <img src="/logos/visa-mastercard.png" alt="Visa / Mastercard" className="h-6 object-contain rounded" />
+                                <img src="/logos/OCA_LOGO.png" alt="OCA" className="h-6 object-contain" />
+                                <img src="/logos/lider.png" alt="Lider" className="h-6 object-contain" />
+                                <div className="w-px h-6 bg-white/20 mx-1" />
+                                <img src="/logos/Red_Pagos_Logos.png" alt="RedPagos" className="h-6 object-contain" />
+                              </div>
+                              <button
+                                type="button"
+                                className="text-[11px] text-primary-400 hover:text-primary-300 hover:underline font-medium mt-1 bg-transparent border-none p-0 cursor-pointer outline-none"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setShowPaymentMethodsModal(true);
+                                }}
+                              >
+                                Ver más medios de pago
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </label>
+                    )}
                   </div>
                 </div>
 
-                {/* Bank promotions (same conditions as before) */}
+                {/* Bank promotions (relocated here under payment options) */}
                 {(paymentMethod === 'dlocalgo' || paymentMethod === 'mercadopago') && bankPromos.length > 0 && (
                   <div className="glass p-6 mt-6">
                     <h2 className="font-bold text-lg mb-1 flex items-center gap-2">
@@ -1548,198 +1822,19 @@ export default function Checkout() {
                   </div>
                 )}
 
+                {/* Código de referido */}
+                <div className="glass p-6 mt-6">
+                  <h2 className="font-bold text-lg mb-1 flex items-center gap-2">
+                    <Share2 className="w-5 h-5 text-primary-500" />
+                    Código de referido
+                  </h2>
+                  <p className="text-xs text-slate-400 mb-4">Si fuiste referido por un afiliado, ingresá su código aquí.</p>
+                  <div>
+                    <input className="form-input max-w-md" placeholder="Se completa automáticamente si llegaste desde un afiliado" value={affiliateCode} onChange={e => setAffiliateCode(e.target.value)} />
+                  </div>
+                </div>
+
                 {/* Step 3 Nav */}
-                <div className="checkout-nav mt-6">
-                  <button type="button" onClick={goBack} className="checkout-btn-back">
-                    <ChevronLeft className="w-4 h-4" /> Volver
-                  </button>
-                  <button type="button" onClick={goNext} className="checkout-btn-next">
-                    Continuar <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* ═══════════════════════════════════════════════════════════ */}
-            {/* STEP 4: REVISIÓN                                          */}
-            {/* ═══════════════════════════════════════════════════════════ */}
-            {currentStep === 4 && (
-              <div className="checkout-step-content" key="step-4">
-                <div className="glass p-6">
-                  <h2 className="font-bold text-lg mb-1">Revisión del pedido</h2>
-                  <p className="text-xs text-slate-400 mb-6">Verificá que toda la información sea correcta antes de pagar.</p>
-
-                  <div className="space-y-5">
-                    {/* Billing summary */}
-                    <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10">
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Datos de facturación</h3>
-                        <button type="button" onClick={() => setCurrentStep(1)} className="text-[11px] text-primary-400 hover:text-primary-300 hover:underline font-semibold">Editar</button>
-                      </div>
-                      <div className="grid grid-cols-2 gap-y-2 text-sm">
-                        <span className="text-slate-500">Nombre:</span>
-                        <span className="text-white font-medium">{form.first_name} {form.last_name}</span>
-                        <span className="text-slate-500">Email:</span>
-                        <span className="text-white font-medium truncate">{form.email}</span>
-                        {form.phone && <><span className="text-slate-500">Teléfono:</span><span className="text-white font-medium">{form.phone}</span></>}
-                        {form.ci && <><span className="text-slate-500">CI:</span><span className="text-white font-medium">{form.ci}</span></>}
-                      </div>
-                    </div>
-
-                    {/* Shipping summary */}
-                    <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10">
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Datos de envío</h3>
-                        <button type="button" onClick={() => setCurrentStep(2)} className="text-[11px] text-primary-400 hover:text-primary-300 hover:underline font-semibold">Editar</button>
-                      </div>
-                      <div className="grid grid-cols-2 gap-y-2 text-sm">
-                        <span className="text-slate-500">Método:</span>
-                        <span className="text-white font-medium">
-                          {shippingMethod === 'pickup' ? 'Retiro en local' :
-                           selectedShippingMethod === 'dac_agency' ? 'Retiro en agencia DAC' :
-                           selectedShippingMethod === 'dac_home' ? 'Envío DAC a domicilio' :
-                           'Envío a domicilio'}
-                        </span>
-                        {shippingMethod === 'delivery' && (
-                          <>
-                            <span className="text-slate-500">Dirección:</span>
-                            <span className="text-white font-medium">{selectedShippingMethod === 'dac_agency' ? (selectedAgency?.office_name || '-') : form.street}</span>
-                            <span className="text-slate-500">Ubicación:</span>
-                            <span className="text-white font-medium">{form.barrio ? `${form.barrio}, ` : ''}{form.city}, {form.department}</span>
-                          </>
-                        )}
-                        <span className="text-slate-500">Costo envío:</span>
-                        <span className="text-white font-bold">{shipping === 0 ? 'GRATIS' : formatCurrencyPrice(shipping)}</span>
-                      </div>
-                      {shippingMethod === 'delivery' && isLocationSelected && form.department && logistics.providerName && (
-                        <div className="mt-3 pt-3 border-t border-white/10 flex items-center gap-2 text-xs">
-                          <Clock className="w-3.5 h-3.5 text-green-500" />
-                          <span className="text-green-500 font-bold">{logistics.message}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Coupons/promos summary */}
-                    {(couponCode || affiliateCode || selectedPromo) && (
-                      <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10">
-                        <div className="flex items-center justify-between mb-3">
-                          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Descuentos</h3>
-                          <button type="button" onClick={() => setCurrentStep(3)} className="text-[11px] text-primary-400 hover:text-primary-300 hover:underline font-semibold">Editar</button>
-                        </div>
-                        <div className="grid grid-cols-2 gap-y-2 text-sm">
-                          {couponCode && <><span className="text-slate-500">Cupón:</span><span className="text-white font-medium">{couponCode}</span></>}
-                          {affiliateCode && <><span className="text-slate-500">Referido:</span><span className="text-white font-medium">{affiliateCode}</span></>}
-                          {selectedPromo && <><span className="text-slate-500">Promo bancaria:</span><span className="text-green-400 font-bold">{selectedPromo.bank_name} -{selectedPromo.discount_value}%</span></>}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Items list */}
-                    <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10">
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Productos ({items.length})</h3>
-                      <div className="space-y-3">
-                        {items.map((item) => (
-                          <div key={item.variant_id} className="flex items-center gap-3">
-                            <div className="relative">
-                              <img src={item.image || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect fill="%23f3f4f6" width="48" height="48" rx="8"/></svg>'} alt="" className="w-12 h-12  object-contain bg-white/5 p-0.5" />
-                              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-primary-500/100 text-white text-[10px] font-bold rounded-full flex items-center justify-center">{item.quantity}</span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-white line-clamp-1">{item.title}</p>
-                            </div>
-                            <span className="text-sm font-bold">{formatCurrencyPrice(item.price * item.quantity)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Step 4 Nav */}
-                  <div className="checkout-nav">
-                    <button type="button" onClick={goBack} className="checkout-btn-back">
-                      <ChevronLeft className="w-4 h-4" /> Volver
-                    </button>
-                    <button type="button" onClick={goNext} className="checkout-btn-next">
-                      Ir al pago <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ═══════════════════════════════════════════════════════════ */}
-            {/* STEP 5: FORMA DE PAGO                                     */}
-            {/* ═══════════════════════════════════════════════════════════ */}
-            {currentStep === 5 && (
-              <div className="checkout-step-content" key="step-5">
-                <div className="glass p-6">
-                  <h2 className="font-bold text-lg mb-1">Forma de pago</h2>
-                  <p className="text-xs text-slate-400 mb-6">Elegí cómo querés pagar tu pedido.</p>
-                  <div className="space-y-3">
-                    {mercadopagoEnabled && (
-                      <label className={`flex items-center gap-4 p-4  border-2 cursor-pointer transition-all ${paymentMethod === 'mercadopago' ? 'border-blue-500 bg-blue-50/50 shadow-sm' : 'border-white/10 hover:border-white/10'}`}>
-                        <input type="radio" name="payment" value="mercadopago" checked={paymentMethod === 'mercadopago'} onChange={() => setPaymentMethod('mercadopago')} className="text-primary-600 shrink-0" />
-                        <img src="/logos/Mercado_Pago.png" alt="Mercado Pago" className="h-6 object-contain" />
-                      </label>
-                    )}
-                    {dlocalgoEnabled && (
-                      <label className={`flex items-center gap-4 p-4  border-2 cursor-pointer transition-all ${paymentMethod === 'dlocalgo' ? 'border-blue-500 bg-blue-50/50 shadow-sm' : 'border-white/10 hover:border-white/10'}`}>
-                        <input type="radio" name="payment" value="dlocalgo" checked={paymentMethod === 'dlocalgo'} onChange={() => setPaymentMethod('dlocalgo')} className="text-primary-600 shrink-0" />
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <img src="/logos/visa-mastercard.png" alt="Visa / Mastercard" className="h-6 object-contain rounded" />
-                          <img src="/logos/OCA_LOGO.png" alt="OCA" className="h-6 object-contain" />
-                          <img src="/logos/DINERS.png" alt="Diners Club" className="h-6 object-contain" />
-                          <img src="/logos/lider.png" alt="Lider" className="h-6 object-contain" />
-                          <div className="w-px h-6 bg-gray-200 mx-1" />
-                          <img src="/logos/Red_Pagos_Logos.png" alt="RedPagos" className="h-6 object-contain" />
-                        </div>
-                      </label>
-                    )}
-                    {paypalEnabled && (
-                      <label className={`flex items-center gap-4 p-4  border-2 cursor-pointer transition-all ${paymentMethod === 'paypal' ? 'border-blue-500 bg-blue-50/50 shadow-sm' : 'border-white/10 hover:border-white/10'}`}>
-                        <input type="radio" name="payment" value="paypal" checked={paymentMethod === 'paypal'} onChange={() => setPaymentMethod('paypal')} className="text-primary-600 shrink-0" />
-                        <img src="/logos/paypal.png" alt="PayPal" className="h-6 object-contain" />
-                      </label>
-                    )}
-                    {handyEnabled && (
-                      <label className={`flex items-center gap-4 p-4 border-2 cursor-pointer transition-all ${paymentMethod === 'handy' ? 'border-emerald-500 bg-emerald-50/50 shadow-sm' : 'border-white/10 hover:border-white/10'}`}>
-                        <input type="radio" name="payment" value="handy" checked={paymentMethod === 'handy'} onChange={() => setPaymentMethod('handy')} className="text-primary-600 shrink-0" />
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between flex-wrap gap-4">
-                            <div>
-                              <div className="font-bold text-white">Tarjetas y redes de cobranza</div>
-                              <div className="text-xs text-slate-400 mt-0.5">
-                                Botón de pago externo ({handyProvider?.environment === 'production' ? 'Producción' : 'Pruebas'})
-                              </div>
-                            </div>
-                            <div className="flex flex-col items-end gap-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <img src="/logos/visa-mastercard.png" alt="Visa / Mastercard" className="h-6 object-contain rounded" />
-                                <img src="/logos/OCA_LOGO.png" alt="OCA" className="h-6 object-contain" />
-                                <img src="/logos/lider.png" alt="Lider" className="h-6 object-contain" />
-                                <div className="w-px h-6 bg-white/20 mx-1" />
-                                <img src="/logos/Red_Pagos_Logos.png" alt="RedPagos" className="h-6 object-contain" />
-                              </div>
-                              <button
-                                type="button"
-                                className="text-[11px] text-primary-400 hover:text-primary-300 hover:underline font-medium mt-1 bg-transparent border-none p-0 cursor-pointer outline-none"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setShowPaymentMethodsModal(true);
-                                }}
-                              >
-                                Ver más medios de pago
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </label>
-                    )}
-                  </div>
-                </div>
-
-                {/* Step 5 Nav + Submit */}
                 <div className="checkout-nav mt-6">
                   <button type="button" onClick={goBack} className="checkout-btn-back">
                     <ChevronLeft className="w-4 h-4" /> Volver
@@ -1756,17 +1851,58 @@ export default function Checkout() {
           <div>
             <div className="glass p-6 sticky top-24">
               <h2 className="font-bold text-lg mb-4">Resumen de orden</h2>
-              <div className="space-y-3 mb-4">
+              <div className="space-y-3 mb-6">
                 {items.map((item) => (
-                  <div key={item.variant_id} className="flex items-center gap-3">
-                    <div className="relative">
-                      <img src={item.image || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect fill="%23f3f4f6" width="48" height="48" rx="8"/></svg>'} alt="" className="w-12 h-12  object-contain bg-white/5 p-0.5" />
-                      <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-primary-500/100 text-white text-[10px] font-bold rounded-full flex items-center justify-center">{item.quantity}</span>
+                  <div key={item.variant_id} className="flex items-center gap-2.5 p-2 rounded-xl bg-white/[0.02] border border-white/5 justify-between animate-fade-in">
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <img
+                        src={resolveImage(item.image) || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect fill="%23f3f4f6" width="48" height="48" rx="8"/></svg>'}
+                        alt=""
+                        className="w-12 h-12 object-contain bg-white/5 p-0.5 rounded-lg shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-white line-clamp-1 leading-snug" title={item.title}>
+                          {item.title}
+                        </p>
+                        {item.variant_name && (
+                          <p className="text-[10px] text-slate-500 truncate leading-none mt-1">{item.variant_name}</p>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-white line-clamp-1">{item.title}</p>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className="flex items-center border border-white/10 rounded bg-white/5 overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => updateQuantity(item.variant_id, item.quantity - 1)}
+                          className="p-1 px-1.5 hover:bg-white/5 text-slate-400 hover:text-white transition-colors border-r border-white/10"
+                        >
+                          <Minus className="w-2.5 h-2.5" />
+                        </button>
+                        <span className="px-2 text-[10px] font-bold text-white min-w-[14px] text-center">
+                          {item.quantity}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => updateQuantity(item.variant_id, item.quantity + 1)}
+                          className="p-1 px-1.5 hover:bg-white/5 text-slate-400 hover:text-white transition-colors border-l border-white/10"
+                        >
+                          <Plus className="w-2.5 h-2.5" />
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-white whitespace-nowrap">
+                          {formatCurrencyPrice(item.price * item.quantity)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeItem(item.variant_id)}
+                          className="text-slate-500 hover:text-red-500 transition-colors p-1"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
-                    <span className="text-sm font-bold">{formatCurrencyPrice(item.price * item.quantity)}</span>
                   </div>
                 ))}
               </div>
@@ -1897,8 +2033,8 @@ export default function Checkout() {
                 </div>
               )}
 
-              {/* Submit button — only visible on step 5 */}
-              {currentStep === 5 && (
+              {/* Submit button — only visible on step 3 */}
+              {currentStep === 3 && (
                 <>
                   <button
                     type="submit"

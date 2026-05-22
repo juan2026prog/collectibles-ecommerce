@@ -30,6 +30,7 @@ const checkoutSchema = z.object({
     reference: z.string().optional(),
     postal_code: z.string().optional(),
     country: z.string().default('Uruguay'),
+    ci: z.string().optional(),
   }),
   customer_email: z.string().email(),
   customer_phone: z.string().optional(),
@@ -54,8 +55,8 @@ const FLEX_FAR = new Set([
   'Ciudad de Canelones','Canelones'
 ]);
 
-function calculateShipping(city: string, department: string, subtotal: number): number {
-  if (subtotal >= 4000) return 0;
+function calculateShipping(city: string, department: string, subtotal: number, freeShippingThreshold = 4000): number {
+  if (subtotal >= freeShippingThreshold) return 0;
   if (!city || !department) return 350;
   const c = city.trim();
   if (FLEX_NEAR.has(c)) return 169;
@@ -176,12 +177,21 @@ Deno.serve(async (req: any) => {
     // 5. Calculate totals with SERVER-VERIFIED prices
     const subtotal = verifiedItems.reduce((s: number, i: any) => s + i.price * i.quantity, 0);
 
+    // Fetch free shipping threshold setting from DB
+    const { data: thresholdSetting } = await supabase
+      .from('site_settings')
+      .select('value')
+      .eq('key', 'free_shipping_threshold')
+      .maybeSingle();
+
+    const freeShippingThreshold = thresholdSetting?.value ? Number(thresholdSetting.value) : 4000;
+
     // ═══ FUNC-HIGH-04: Use location-based shipping (matches frontend) ═══
     const shippingCity = payload.shipping_address.department === 'Montevideo'
       ? (payload.shipping_address.barrio || '')
       : (payload.shipping_address.city || '');
     const shippingDept = payload.shipping_address.department || '';
-    const shippingRate = calculateShipping(shippingCity, shippingDept, subtotal);
+    const shippingRate = calculateShipping(shippingCity, shippingDept, subtotal, freeShippingThreshold);
 
     const totalAmount = Math.max(subtotal - discountAmount + shippingRate, 0);
 

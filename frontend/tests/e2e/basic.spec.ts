@@ -17,8 +17,9 @@ test.describe('Basic E2E Tests', () => {
     await expect(page.locator('input[type="email"]')).toBeVisible();
   });
 
-  test('Cart page loads', async ({ page }) => {
+  test('Cart page redirects to shop and opens drawer', async ({ page }) => {
     await page.goto('http://localhost:5173/cart');
-    await expect(page.locator('text=CARRITO')).toBeVisible();
+    await expect(page).toHaveURL(/.*shop/);
+    await expect(page.locator('text=Carrito')).toBeVisible();
   });
 });

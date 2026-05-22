@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Eye, ChevronDown, Package, Truck, PhoneCall, X, Save, Ban, AlertTriangle, UserX, Gift, RefreshCw, FileText } from 'lucide-react';
+import { Eye, ChevronDown, Package, Truck, PhoneCall, X, Save, Ban, AlertTriangle, UserX, Gift, RefreshCw, FileText, Clock } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
 import { createDacShipment, getDacLabel, trackDacShipment } from '../../lib/dac';
@@ -187,6 +187,44 @@ export default function AdminOrders() {
     } catch (e: any) {
       console.error("Create DAC Shipment error:", e);
       toast.error(`Error al crear envío DAC: ${e.message || e}`);
+    } finally {
+      setIsCreatingDac(false);
+    }
+  }
+
+  async function handleRetryDacShipment() {
+    if (isCreatingDac) return;
+    if (!selectedOrder) return;
+    
+    setIsCreatingDac(true);
+    try {
+      const { success, shipment, error } = await createDacShipment({
+        order_id: selectedOrder.id,
+        customer_name: '',
+        customer_phone: '',
+        customer_address: '',
+        customer_city: '',
+        customer_department: '',
+        package_weight: 1.0,
+        package_quantity: 1
+      });
+
+      if (!success) throw new Error(error || "Fallo al reintentar la creación de la guía DAC");
+
+      toast.success("¡Guía y etiqueta DAC reintentadas correctamente!");
+      setDacShipment(shipment || null);
+      fetchOrders();
+      if (shipment) {
+        setSelectedOrder({
+          ...selectedOrder,
+          tracking_number: shipment.tracking_code,
+          tracking_provider: 'DAC'
+        });
+      }
+    } catch (e: any) {
+      console.error("Retry DAC Shipment error:", e);
+      toast.error(`Error al reintentar envío DAC: ${e.message || e}`);
+      loadDacShipmentForOrder(selectedOrder.id);
     } finally {
       setIsCreatingDac(false);
     }
@@ -635,211 +673,311 @@ export default function AdminOrders() {
               </div>
 
               {/* DAC / GRUPO AGENCIA SHIPPING MODULE */}
-              {isDacActive && (
-                <div className="space-y-4 bg-white p-4 rounded-xl border border-orange-200 shadow-sm bg-orange-50/10">
-                  <div className="flex items-center justify-between border-b border-orange-100 pb-2 mb-2">
-                    <h4 className="text-xs font-black text-orange-800 uppercase tracking-wider flex items-center gap-2">
-                      <Truck className="w-4 h-4" /> Envíos DAC (Grupo Agencia)
-                    </h4>
-                    {dacShipment && (
-                      <span className="text-[9px] font-bold text-orange-600 bg-orange-50 border border-orange-150 px-2 py-0.5 rounded-full">
-                        DAC Activo
-                      </span>
-                    )}
-                  </div>
+              {(isDacActive || selectedOrder.shipping_method === 'dac_home' || selectedOrder.shipping_method === 'dac_agency') && (() => {
+                const isDacOrder = selectedOrder.shipping_method === 'dac_home' || selectedOrder.shipping_method === 'dac_agency';
+                const isOrderPaid = selectedOrder.status === 'paid' || selectedOrder.payment_status === 'approved';
+                const hasNoTracking = !selectedOrder.tracking_number;
+                const isDacError = dacShipment?.shipping_status === 'error';
+                const isDacPending = !dacShipment && isDacOrder && isOrderPaid && hasNoTracking;
 
-                  {loadingDac ? (
-                    <p className="text-xs text-gray-400 text-center py-4">Cargando datos de envío DAC...</p>
-                  ) : !dacShipment ? (
-                    // DAC Create Shipment Form
-                    <div className="space-y-3 text-xs">
-                      <div className="bg-orange-50/50 p-2.5 rounded-lg border border-orange-100 leading-relaxed text-[10px] text-orange-900 font-medium">
-                        Genera la guía y etiqueta de envío a través del contrato DAC integrado de forma automatizada.
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Nombre Destinatario</label>
-                          <input 
-                            type="text" 
-                            className="form-input text-xs py-1"
-                            value={dacCustomerName}
-                            onChange={e => setDacCustomerName(e.target.value)}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Teléfono Destinatario</label>
-                          <input 
-                            type="text" 
-                            className="form-input text-xs py-1"
-                            value={dacCustomerPhone}
-                            onChange={e => setDacCustomerPhone(e.target.value)}
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Dirección de Entrega</label>
-                        <input 
-                          type="text" 
-                          className="form-input text-xs py-1"
-                          value={dacCustomerAddress}
-                          onChange={e => setDacCustomerAddress(e.target.value)}
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Localidad/Ciudad</label>
-                          <input 
-                            type="text" 
-                            className="form-input text-xs py-1"
-                            value={dacCustomerCity}
-                            onChange={e => setDacCustomerCity(e.target.value)}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Departamento</label>
-                          <input 
-                            type="text" 
-                            className="form-input text-xs py-1"
-                            value={dacCustomerDepartment}
-                            onChange={e => setDacCustomerDepartment(e.target.value)}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Peso Paquetes (kg)</label>
-                          <input 
-                            type="number" 
-                            step="0.1"
-                            min="0.1"
-                            className="form-input text-xs py-1"
-                            value={dacWeight}
-                            onChange={e => setDacWeight(e.target.value)}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Cantidad de Bultos</label>
-                          <input 
-                            type="number" 
-                            min="1"
-                            step="1"
-                            className="form-input text-xs py-1"
-                            value={dacQuantity}
-                            onChange={e => setDacQuantity(e.target.value)}
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Observaciones</label>
-                        <input 
-                          type="text" 
-                          placeholder="Ej. Entregar por la tarde" 
-                          className="form-input text-xs py-1"
-                          value={dacObs}
-                          onChange={e => setDacObs(e.target.value)}
-                        />
-                      </div>
-
-                      <button
-                        onClick={handleCreateDacShipment}
-                        disabled={isCreatingDac}
-                        className="w-full py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 transition-colors"
-                      >
-                        {isCreatingDac ? (
-                          <>
-                            <RefreshCw className="w-4 h-4 animate-spin" />
-                            <span>Generando Guía DAC...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Truck className="w-4 h-4" />
-                            <span>Crear Guía y Etiqueta DAC</span>
-                          </>
-                        )}
-                      </button>
+                return (
+                  <div className="space-y-4 bg-white p-4 rounded-xl border border-orange-200 shadow-sm bg-orange-50/10">
+                    <div className="flex items-center justify-between border-b border-orange-100 pb-2 mb-2">
+                      <h4 className="text-xs font-black text-orange-850 uppercase tracking-wider flex items-center gap-2">
+                        <Truck className="w-4 h-4 text-orange-600" /> Envíos DAC (Grupo Agencia)
+                      </h4>
+                      {dacShipment && !isDacError && (
+                        <span className="text-[9px] font-bold text-orange-600 bg-orange-50 border border-orange-150 px-2 py-0.5 rounded-full">
+                          DAC Activo
+                        </span>
+                      )}
+                      {isDacError && (
+                        <span className="text-[9px] font-bold text-red-650 bg-red-50 border border-red-150 px-2 py-0.5 rounded-full">
+                          Fallo de Conexión
+                        </span>
+                      )}
+                      {isDacPending && (
+                        <span className="text-[9px] font-bold text-amber-600 bg-amber-50 border border-amber-150 px-2 py-0.5 rounded-full animate-pulse">
+                          Pendiente de Generación
+                        </span>
+                      )}
                     </div>
-                  ) : (
-                    // DAC Shipment Stats and Action View
-                    <div className="space-y-4 text-xs">
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 bg-gray-50 p-3 rounded-lg border border-gray-150 font-medium">
-                        <div>
-                          <span className="text-[9px] font-bold text-gray-400 uppercase block">Código Rastreo</span>
-                          <span className="font-mono text-gray-900 font-bold select-all">{dacShipment.tracking_code || 'N/A'}</span>
-                        </div>
-                        <div>
-                          <span className="text-[9px] font-bold text-gray-400 uppercase block">Estado Envío</span>
-                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold mt-0.5 ${
-                            dacShipment.shipping_status === 'delivered' ? 'bg-green-100 text-green-800' :
-                            dacShipment.shipping_status === 'out_for_delivery' ? 'bg-indigo-100 text-indigo-800' :
-                            dacShipment.shipping_status === 'in_transit' ? 'bg-purple-100 text-purple-800' :
-                            dacShipment.shipping_status === 'rejected' ? 'bg-red-100 text-red-800' :
-                            'bg-blue-100 text-blue-800' // documented
-                          }`}>
-                            {dacShipment.shipping_status === 'delivered' ? 'Entregado' :
-                             dacShipment.shipping_status === 'out_for_delivery' ? 'En reparto' :
-                             dacShipment.shipping_status === 'in_transit' ? 'En tránsito' :
-                             dacShipment.shipping_status === 'rejected' ? 'Rechazado' : 'Documentado'}
-                          </span>
-                        </div>
-                        <div className="col-span-2 border-t border-gray-250 pt-2 mt-1">
-                          <span className="text-[9px] font-bold text-gray-400 uppercase block">Dirección de Destino</span>
-                          <span className="text-gray-700 text-[10px]">
-                            {dacShipment.customer_address}, {dacShipment.customer_city}, {dacShipment.customer_department}
-                          </span>
-                        </div>
-                      </div>
 
-                      <div className="flex flex-col gap-2">
-                        {dacShipment.shipping_label_url ? (
-                          <div className="flex flex-col gap-2 w-full">
-                            <a
-                              href={dacShipment.shipping_label_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-center flex items-center justify-center gap-1.5 shadow-sm transition-colors text-xs"
-                            >
-                              <FileText className="w-4 h-4" />
-                              Descargar / Imprimir etiqueta DAC
-                            </a>
+                    {loadingDac ? (
+                      <p className="text-xs text-gray-400 text-center py-4">Cargando datos de envío DAC...</p>
+                    ) : (
+                      <>
+                        {/* BANNERS FOR AUTOMATED FLOW */}
+                        {isDacPending && (
+                          <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-lg flex flex-col gap-2 text-xs">
+                            <div className="flex items-start gap-2">
+                              <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                              <div>
+                                <p className="font-bold">DAC pendiente de generar</p>
+                                <p className="text-amber-705 text-[11px] mt-0.5">El pago está aprobado, pero la guía DAC aún no ha sido creada de manera automática.</p>
+                              </div>
+                            </div>
                             <button
-                              onClick={handleRegenerateLabel}
-                              disabled={isRegeneratingLabel}
-                              className="w-full py-2.5 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg flex items-center justify-center gap-1.5 shadow-sm transition-colors disabled:opacity-50 text-xs"
+                              onClick={handleRetryDacShipment}
+                              disabled={isCreatingDac}
+                              className="self-start px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-[11px] flex items-center gap-1.5 transition-colors disabled:opacity-50"
                             >
-                              <RefreshCw className={`w-4 h-4 ${isRegeneratingLabel ? 'animate-spin' : ''}`} />
-                              {isRegeneratingLabel ? 'Regenerando etiqueta...' : 'Regenerar etiqueta DAC'}
+                              {isCreatingDac ? (
+                                <>
+                                  <RefreshCw className="w-3 h-3 animate-spin" />
+                                  <span>Generando Guía...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Truck className="w-3 h-3" />
+                                  <span>Generar Guía DAC ahora</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        )}
+
+                        {isDacError && (
+                          <div className="bg-red-50 border border-red-200 text-red-800 p-3 rounded-lg flex flex-col gap-2 text-xs">
+                            <div className="flex items-start gap-2">
+                              <AlertTriangle className="w-4 h-4 text-red-650 shrink-0 mt-0.5" />
+                              <div className="flex-1">
+                                <p className="font-bold">Error DAC - Reintentar</p>
+                                <p className="text-red-750 text-[11px] mt-0.5">Pago aprobado, pero DAC no pudo crear la guía. Reintentar.</p>
+                                {dacShipment.provider_response?.error && (
+                                  <div className="mt-2 bg-red-100/50 p-2 rounded border border-red-200/50 font-mono text-[10px] break-words text-red-900 select-all">
+                                    Detalle Técnico: {dacShipment.provider_response.error}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              onClick={handleRetryDacShipment}
+                              disabled={isCreatingDac}
+                              className="self-start px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg text-[11px] flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                            >
+                              {isCreatingDac ? (
+                                <>
+                                  <RefreshCw className="w-3 h-3 animate-spin" />
+                                  <span>Reintentando...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <RefreshCw className="w-3 h-3" />
+                                  <span>Reintentar crear guía DAC</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        )}
+
+                        {/* MANUAL FORM OR SUCCESS STATE */}
+                        {(!dacShipment || isDacError) ? (
+                          // DAC Create Shipment / Retry Override Form
+                          <div className="space-y-3 text-xs">
+                            <div className="bg-orange-50/50 p-2.5 rounded-lg border border-orange-100 leading-relaxed text-[10px] text-orange-900 font-medium">
+                              Puedes realizar modificaciones manuales abajo y forzar la generación de la guía en caso de que existan errores en la dirección original.
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Nombre Destinatario</label>
+                                <input 
+                                  type="text" 
+                                  className="form-input text-xs py-1"
+                                  value={dacCustomerName}
+                                  onChange={e => setDacCustomerName(e.target.value)}
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Teléfono Destinatario</label>
+                                <input 
+                                  type="text" 
+                                  className="form-input text-xs py-1"
+                                  value={dacCustomerPhone}
+                                  onChange={e => setDacCustomerPhone(e.target.value)}
+                                />
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Dirección de Entrega</label>
+                              <input 
+                                type="text" 
+                                className="form-input text-xs py-1"
+                                value={dacCustomerAddress}
+                                onChange={e => setDacCustomerAddress(e.target.value)}
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Localidad/Ciudad</label>
+                                <input 
+                                  type="text" 
+                                  className="form-input text-xs py-1"
+                                  value={dacCustomerCity}
+                                  onChange={e => setDacCustomerCity(e.target.value)}
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Departamento</label>
+                                <input 
+                                  type="text" 
+                                  className="form-input text-xs py-1"
+                                  value={dacCustomerDepartment}
+                                  onChange={e => setDacCustomerDepartment(e.target.value)}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Peso Paquetes (kg)</label>
+                                <input 
+                                  type="number" 
+                                  step="0.1"
+                                  min="0.1"
+                                  className="form-input text-xs py-1"
+                                  value={dacWeight}
+                                  onChange={e => setDacWeight(e.target.value)}
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Cantidad de Bultos</label>
+                                <input 
+                                  type="number" 
+                                  min="1"
+                                  step="1"
+                                  className="form-input text-xs py-1"
+                                  value={dacQuantity}
+                                  onChange={e => setDacQuantity(e.target.value)}
+                                />
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Observaciones</label>
+                              <input 
+                                type="text" 
+                                placeholder="Ej. Entregar por la tarde" 
+                                className="form-input text-xs py-1"
+                                value={dacObs}
+                                onChange={e => setDacObs(e.target.value)}
+                              />
+                            </div>
+
+                            <button
+                              onClick={handleCreateDacShipment}
+                              disabled={isCreatingDac}
+                              className="w-full py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 transition-colors"
+                            >
+                              {isCreatingDac ? (
+                                <>
+                                  <RefreshCw className="w-4 h-4 animate-spin" />
+                                  <span>Generando Guía DAC...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Truck className="w-4 h-4" />
+                                  <span>Crear Guía y Etiqueta DAC</span>
+                                </>
+                              )}
                             </button>
                           </div>
                         ) : (
-                          <button
-                            onClick={handleRegenerateLabel}
-                            disabled={isRegeneratingLabel}
-                            className="w-full py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg flex items-center justify-center gap-1.5 shadow-sm transition-colors disabled:opacity-50 text-xs"
-                          >
-                            <RefreshCw className={`w-4 h-4 ${isRegeneratingLabel ? 'animate-spin' : ''}`} />
-                            {isRegeneratingLabel ? 'Regenerando etiqueta...' : 'Regenerar etiqueta DAC'}
-                          </button>
-                        )}
+                          // DAC Shipment Stats and Action View
+                          <div className="space-y-4 text-xs">
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-2 bg-gray-50 p-3 rounded-lg border border-gray-150 font-medium">
+                              <div>
+                                <span className="text-[9px] font-bold text-gray-400 uppercase block">Código Rastreo</span>
+                                <span className="font-mono text-gray-900 font-bold select-all">{dacShipment.tracking_code || 'N/A'}</span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] font-bold text-gray-400 uppercase block">Estado Envío</span>
+                                <div className="flex flex-col gap-1 mt-0.5">
+                                  <span className={`inline-block text-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    dacShipment.shipping_status === 'delivered' ? 'bg-green-100 text-green-800' :
+                                    dacShipment.shipping_status === 'out_for_delivery' ? 'bg-indigo-100 text-indigo-800' :
+                                    dacShipment.shipping_status === 'in_transit' ? 'bg-purple-100 text-purple-800' :
+                                    dacShipment.shipping_status === 'rejected' ? 'bg-red-100 text-red-800' :
+                                    'bg-blue-100 text-blue-800' // documented
+                                  }`}>
+                                    {dacShipment.shipping_status === 'delivered' ? 'Entregado' :
+                                     dacShipment.shipping_status === 'out_for_delivery' ? 'En reparto' :
+                                     dacShipment.shipping_status === 'in_transit' ? 'En tránsito' :
+                                     dacShipment.shipping_status === 'rejected' ? 'Rechazado' : 'Documentado'}
+                                  </span>
+                                  
+                                  {/* SUCCESS STAGE BADGES REQUESTED BY CHECKLIST */}
+                                  {dacShipment.shipping_label_url ? (
+                                    <span className="inline-block text-center px-2 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-250 rounded-full text-[9px] font-extrabold">
+                                      Etiqueta lista para imprimir
+                                    </span>
+                                  ) : dacShipment.shipping_status === 'documented' ? (
+                                    <span className="inline-block text-center px-2 py-0.5 bg-blue-100 text-blue-800 border border-blue-250 rounded-full text-[9px] font-extrabold">
+                                      Guía DAC generada
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </div>
+                              <div className="col-span-2 border-t border-gray-250 pt-2 mt-1">
+                                <span className="text-[9px] font-bold text-gray-400 uppercase block">Dirección de Destino</span>
+                                <span className="text-gray-700 text-[10px]">
+                                  {dacShipment.customer_address}, {dacShipment.customer_city}, {dacShipment.customer_department}
+                                </span>
+                              </div>
+                            </div>
 
-                        <button
-                          onClick={handleSyncTracking}
-                          disabled={isSyncingTracking}
-                          className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 border border-gray-300 text-gray-850 font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 text-xs"
-                          title="Sincronizar tracking con DAC"
-                        >
-                          <RefreshCw className={`w-4 h-4 ${isSyncingTracking ? 'animate-spin' : ''}`} />
-                          Sincronizar Estado Tracking
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                            <div className="flex flex-col gap-2">
+                              {dacShipment.shipping_label_url ? (
+                                <div className="flex flex-col gap-2 w-full">
+                                  <a
+                                    href={dacShipment.shipping_label_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-center flex items-center justify-center gap-1.5 shadow-sm transition-colors text-xs"
+                                  >
+                                    <FileText className="w-4 h-4" />
+                                    Descargar / Imprimir etiqueta DAC
+                                  </a>
+                                  <button
+                                    onClick={handleRegenerateLabel}
+                                    disabled={isRegeneratingLabel}
+                                    className="w-full py-2.5 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg flex items-center justify-center gap-1.5 shadow-sm transition-colors disabled:opacity-50 text-xs"
+                                  >
+                                    <RefreshCw className={`w-4 h-4 ${isRegeneratingLabel ? 'animate-spin' : ''}`} />
+                                    {isRegeneratingLabel ? 'Regenerando etiqueta...' : 'Regenerar etiqueta DAC'}
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={handleRegenerateLabel}
+                                  disabled={isRegeneratingLabel}
+                                  className="w-full py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg flex items-center justify-center gap-1.5 shadow-sm transition-colors disabled:opacity-50 text-xs"
+                                >
+                                  <RefreshCw className={`w-4 h-4 ${isRegeneratingLabel ? 'animate-spin' : ''}`} />
+                                  {isRegeneratingLabel ? 'Regenerando etiqueta...' : 'Regenerar etiqueta DAC'}
+                                </button>
+                              )}
+
+                              <button
+                                onClick={handleSyncTracking}
+                                disabled={isSyncingTracking}
+                                className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 border border-gray-300 text-gray-850 font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 text-xs"
+                                title="Sincronizar tracking con DAC"
+                              >
+                                <RefreshCw className={`w-4 h-4 ${isSyncingTracking ? 'animate-spin' : ''}`} />
+                                Sincronizar Estado Tracking
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
 
 
             </div>

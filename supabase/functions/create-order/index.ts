@@ -40,6 +40,7 @@ const checkoutSchema = z.object({
     dac_k_oficina_destino: z.number().int().nullable().optional(),
     dac_office_name: z.string().optional(),
     dac_office_address: z.string().optional(),
+    ci: z.string().optional(),
   }).passthrough(),
   customer_email: z.string().email(),
   customer_phone: z.string().trim().optional(),
@@ -75,8 +76,8 @@ function normalizeLocation(value?: string | null) {
     .trim();
 }
 
-function calculateShipping(city: string, department: string, subtotal: number) {
-  if (subtotal >= 4000) return 0;
+function calculateShipping(city: string, department: string, subtotal: number, freeShippingThreshold = 4000) {
+  if (subtotal >= freeShippingThreshold) return 0;
   if (!city || !department) return 350;
 
   const normalizedCity = normalizeLocation(city);
@@ -413,56 +414,64 @@ Deno.serve(async (req) => {
       ? (payload.shipping_address.barrio || "")
       : (payload.shipping_address.city || "");
 
+    // Fetch free shipping threshold setting from DB
+    const { data: thresholdSetting } = await supabase
+      .from('site_settings')
+      .select('value')
+      .eq('key', 'free_shipping_threshold')
+      .maybeSingle();
+
+    const freeShippingThreshold = thresholdSetting?.value ? Number(thresholdSetting.value) : 4000;
+
     let shippingRate = 0;
     if (payload.shipping_method === "delivery" || payload.shipping_method === "dac" || payload.shipping_method === "dac_home" || payload.shipping_method === "dac_agency") {
       const isMontevideo = payload.shipping_address.department === "Montevideo";
       if (isMontevideo) {
-        shippingRate = calculateShipping(shippingCity, "Montevideo", subtotal);
+        shippingRate = calculateShipping(shippingCity, "Montevideo", subtotal, freeShippingThreshold);
       } else {
-        if (subtotal >= 4000) {
+        if (subtotal >= freeShippingThreshold) {
           shippingRate = 0;
         } else {
-          try {
-            const { data: provider } = await supabase
-              .from('delivery_providers')
-              .select('is_active')
-              .eq('provider_key', 'dac')
-              .single();
+          // DAC shipping cost — NO FALLBACKS. If this fails, order creation is blocked.
+          const { data: provider } = await supabase
+            .from('delivery_providers')
+            .select('is_active')
+            .eq('provider_key', 'dac')
+            .single();
 
-            if (provider && provider.is_active) {
-              const dacCostResponse = await fetch(`${supabaseUrl}/functions/v1/dac-get-cost`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${supabaseServiceKey}`
-                },
-                body: JSON.stringify({
-                  mode: payload.shipping_method === "dac_agency" ? "agency" : "home",
-                  department: payload.shipping_address.department,
-                  city: payload.shipping_address.city,
-                  address: payload.shipping_address.street || '',
-                  dac_office_id: payload.shipping_address.dac_office_id,
-                  k_oficina_destino: payload.shipping_address.dac_k_oficina_destino,
-                  package_quantity: 1,
-                  package_type: 1,
-                  cart_total: subtotal,
-                  items: verifiedItems
-                })
-              });
-              const dacCostResult = await dacCostResponse.json();
-              if (dacCostResult && dacCostResult.success) {
-                shippingRate = dacCostResult.cost;
-              } else {
-                console.warn("[Create Order] DAC cost function returned failure, fallback to 350:", dacCostResult?.error);
-                shippingRate = 350;
-              }
-            } else {
-              shippingRate = 350;
-            }
-          } catch (err) {
-            console.error("[Create Order] Error calculating DAC cost server-side, fallback to 350:", err);
-            shippingRate = 350;
+          if (!provider || !provider.is_active) {
+            throw new Error("El servicio de envío DAC no está disponible. Consultanos por WhatsApp.");
           }
+
+          const dacCostResponse = await fetch(`${supabaseUrl}/functions/v1/dac-get-cost`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseServiceKey}`
+            },
+            body: JSON.stringify({
+              mode: payload.shipping_method === "dac_agency" ? "agency" : "home",
+              department: payload.shipping_address.department,
+              city: payload.shipping_address.city,
+              address: payload.shipping_address.street || '',
+              dac_office_id: payload.shipping_address.dac_office_id,
+              k_oficina_destino: payload.shipping_address.dac_k_oficina_destino,
+              package_quantity: 1,
+              package_type: 1,
+              cart_total: subtotal,
+              items: verifiedItems
+            })
+          });
+          const dacCostResult = await dacCostResponse.json();
+          
+          if (!dacCostResult || !dacCostResult.success) {
+            const dacError = dacCostResult?.error || "No pudimos calcular el costo de envío DAC.";
+            console.error("[Create Order] DAC cost failed, BLOCKING order:", dacError);
+            throw new Error(dacError);
+          }
+          
+          shippingRate = dacCostResult.cost;
+          console.log("[Create Order] DAC cost calculated successfully:", shippingRate);
         }
       }
     }

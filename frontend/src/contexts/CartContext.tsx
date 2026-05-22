@@ -1,4 +1,4 @@
-import { createContext, useContext, ReactNode, useMemo } from 'react';
+import { createContext, useContext, ReactNode, useMemo, useState, useCallback } from 'react';
 import { useCart as useCartHook } from '../hooks/useData';
 import type { CartItem } from '../hooks/useData';
 
@@ -10,13 +10,28 @@ interface CartContextType {
   clearCart: () => void;
   total: number;
   count: number;
+  isDrawerOpen: boolean;
+  setIsDrawerOpen: (open: boolean) => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const cart = useCartHook();
-  const value = useMemo(() => cart, [cart.items, cart.total, cart.count]);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+  const addItem = useCallback((item: CartItem) => {
+    cart.addItem(item);
+    setIsDrawerOpen(true);
+  }, [cart]);
+
+  const value = useMemo(() => ({
+    ...cart,
+    addItem,
+    isDrawerOpen,
+    setIsDrawerOpen
+  }), [cart, addItem, isDrawerOpen]);
+
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
 

@@ -14,6 +14,7 @@ import LocaleSwitcher from '../components/LocaleSwitcher';
 import WhatsAppFAB from '../components/WhatsAppFAB';
 import { supabase } from '../lib/supabase';
 import CookieConsent from '../components/CookieConsent';
+import CartDrawer from '../components/CartDrawer';
 import { generateTailwindPalette } from '../lib/colorUtils';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { STORE_ISOLOGO_URL } from '../lib/brand';
@@ -83,7 +84,7 @@ export default function StorefrontLayout() {
   const userMenuRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
-  const { count: cartCount } = useCartContext();
+  const { count: cartCount, setIsDrawerOpen } = useCartContext();
   const { user, profile, signOut } = useAuth();
   const { language, currency, t, formatPrice } = useLocale();
   const { categories: allCategories } = useCategories();
@@ -508,9 +509,10 @@ export default function StorefrontLayout() {
                 </div>
               )}
             </div>
-            <Link 
-              to="/cart" 
+            <button 
+              onClick={() => setIsDrawerOpen(true)}
               className="w-11 h-11 flex items-center justify-center rounded-full bg-[#f00856] text-white shadow-lg shadow-[#f00856]/30 relative group transition-transform hover:scale-105 active:scale-95"
+              title="Ver Carrito"
             >
               <ShoppingCart className="w-4 h-4" />
               {cartCount > 0 && (
@@ -518,7 +520,7 @@ export default function StorefrontLayout() {
                   {cartCount}
                 </span>
               )}
-            </Link>
+            </button>
             <button 
               onClick={() => setMobileMenuOpen(true)}
               className="xl:hidden w-11 h-11 flex items-center justify-center rounded-full bg-white/5 border border-white/10"
@@ -733,6 +735,7 @@ export default function StorefrontLayout() {
 
       <WhatsAppFAB />
       <CookieConsent />
+      <CartDrawer />
 
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes marquee-header {

@@ -56,10 +56,11 @@ serve(async (req) => {
       throw new Error("Credenciales de DAC incompletas en delivery_providers.");
     }
 
-    // 2. Resolve destination office (K_Oficina_Destino) from dac_offices or override
+    // 2. Resolve destination office (K_Oficina_Destino) — NO FALLBACKS
     let selectedOffice = null;
 
     if (mode === "agency") {
+      // AGENCY MODE: Must have a specific office selected
       if (dac_office_id) {
         const { data: office, error: officeErr } = await supabase
           .from('dac_offices')
@@ -80,71 +81,76 @@ serve(async (req) => {
           .select('*')
           .eq('k_oficina', Number(k_oficina_destino))
           .maybeSingle();
+        if (!office) {
+          throw new Error(`No se encontró la oficina DAC con código ${k_oficina_destino}`);
+        }
         selectedOffice = {
           k_oficina: Number(k_oficina_destino),
-          office_name: office?.office_name || `Agencia DAC (${k_oficina_destino})`,
-          address: office?.address || office?.office_name || `Agencia DAC (${k_oficina_destino})`
+          office_name: office.office_name || `Agencia DAC (${k_oficina_destino})`,
+          address: office.address || office.office_name || `Agencia DAC (${k_oficina_destino})`
         };
       } else {
         throw new Error("Para retiro en agencia DAC, debe seleccionar una agencia.");
       }
     } else {
-      // mode === 'home'
+      // HOME MODE: Resolve office from department/city
       if (!address) {
         throw new Error("Para entrega a domicilio, la dirección es obligatoria.");
       }
+
       if (k_oficina_destino !== undefined && k_oficina_destino !== null && k_oficina_destino !== "") {
+        // Admin test override: use the provided k_oficina directly
         selectedOffice = {
           k_oficina: Number(k_oficina_destino),
-          office_name: `Oficina de Prueba (${k_oficina_destino})`,
+          office_name: `Oficina Manual (${k_oficina_destino})`,
           address: address
         };
       } else {
-        if (!department) throw new Error("Falta el departamento para cotizar");
-        if (!city) throw new Error("Falta la localidad/ciudad para cotizar");
+        if (!department) throw new Error("Falta el departamento para cotizar envío DAC.");
+        if (!city) throw new Error("Falta la localidad/ciudad para cotizar envío DAC.");
 
-        // Try exact department match
-        let officeQuery = supabase
+        // Look up offices for this department
+        const { data: offices, error: officeErr } = await supabase
           .from('dac_offices')
-          .select('k_oficina, office_name, address')
+          .select('k_oficina, office_name, address, city')
           .eq('is_active', true)
           .ilike('department', department.trim());
-          
-        const { data: offices, error: officeErr } = await officeQuery;
+
         if (officeErr) {
-          throw new Error(`Error buscando oficinas de DAC: ${officeErr.message}`);
+          throw new Error(`Error buscando oficinas DAC: ${officeErr.message}`);
         }
 
-        if (offices && offices.length > 0) {
-          const normalizedCity = city.trim().toLowerCase();
-          const found = offices.find(o => 
-            o.office_name.toLowerCase().includes(normalizedCity) || 
-            normalizedCity.includes(o.office_name.toLowerCase())
-          );
-          
-          if (found) {
-            selectedOffice = {
-              k_oficina: Number(found.k_oficina),
-              office_name: found.office_name,
-              address: address
-            };
-          } else {
-            selectedOffice = {
-              k_oficina: Number(offices[0].k_oficina),
-              office_name: offices[0].office_name,
-              address: address
-            }; // fallback to first office in that department
-          }
+        if (!offices || offices.length === 0) {
+          throw new Error(`No pudimos identificar la oficina DAC para el departamento "${department}". Consultanos por WhatsApp.`);
         }
 
-        // If still no office is found, fallback to settings.k_oficina_destino_default or 601
-        if (!selectedOffice) {
-          const defaultOfficeK = settings.k_oficina_destino_default !== undefined && settings.k_oficina_destino_default !== null
-            ? Number(settings.k_oficina_destino_default)
-            : 601;
+        // Try to match by city name
+        const normalizedCity = city.trim().toLowerCase();
+        const exactMatch = offices.find(o =>
+          o.city && o.city.toLowerCase() === normalizedCity
+        );
+        const partialMatch = offices.find(o =>
+          o.office_name.toLowerCase().includes(normalizedCity) ||
+          normalizedCity.includes(o.office_name.toLowerCase().replace('dac ', ''))
+        );
+
+        if (exactMatch) {
           selectedOffice = {
-            k_oficina: defaultOfficeK,
-            office_name: `Oficina Predeterminada (${defaultOfficeK})`,
+            k_oficina: Number(exactMatch.k_oficina),
+            office_name: exactMatch.office_name,
+            address: address
+          };
+        } else if (partialMatch) {
+          selectedOffice = {
+            k_oficina: Number(partialMatch.k_oficina),
+            office_name: partialMatch.office_name,
+            address: address
+          };
+        } else {
+          // Use the first (main) office for the department — this is the department capital
+          selectedOffice = {
+            k_oficina: Number(offices[0].k_oficina),
+            office_name: offices[0].office_name,
             address: address
           };
         }
@@ -192,7 +198,7 @@ serve(async (req) => {
       rut: sessionObj.rut
     };
 
-    // 4. Calculate cost calling JSON wsObtieneCosto_Nuevo
+    // 4. Calculate cost calling JSON wsObtieneCosto_Nuevo — ALL NUMERIC PARAMS
     const kClienteRemitente = sessionParam.k_cliente ? parseInt(sessionParam.k_cliente) : 99090;
     
     // Read parameters from settings with default fallbacks
@@ -204,11 +210,11 @@ serve(async (req) => {
     const entregaAgencia = settings.entrega_agencia !== undefined ? Number(settings.entrega_agencia) : 2;
     const entrega = mode === "agency" ? entregaAgencia : entregaDomicilio;
 
-    const esRecoleccion = settings.es_recoleccion !== undefined ? Number(settings.es_recoleccion) : 1;
-    const usaBolsa = settings.usa_bolsa !== undefined ? Number(settings.usa_bolsa) : 0;
+    const esRecoleccion = settings.es_recoleccion !== undefined ? Number(settings.es_recoleccion) : 0;
 
     const dacAddress = mode === "agency" ? (selectedOffice.address || selectedOffice.office_name) : address;
 
+    // ALL values as numbers (not strings) — this is what DAC's JSON endpoint expects
     const costInput = {
       ID_Sesion: sessionParam.id_session,
       K_Tipo_Guia: kTipoGuia,
@@ -218,23 +224,72 @@ serve(async (req) => {
       Direccion_Destinatario: dacAddress,
       K_Oficina_Destino: selectedOffice.k_oficina,
       Entrega: entrega,
-      Paquetes_Ampara: packages,
-      Detalle_Paquetes: JSON.stringify([{ Cantidad: packages, Tipo: 1 }]),
+      Paquetes_Ampara: Number(packages),
+      Detalle_Paquetes: JSON.stringify([{ Cantidad: Number(packages), Tipo: 1 }]),
       esRecoleccion: esRecoleccion,
-      usaBolsa: usaBolsa
+      usaBolsa: 0
     };
 
-    const cost = await wsObtieneCostoNuevo(api_url, costInput);
+    console.log("[DAC Get Cost] Cost request params (safe):", {
+      ...costInput,
+      ID_Sesion: costInput.ID_Sesion.substring(0, 10) + '...',
+      K_Oficina_Destino: costInput.K_Oficina_Destino,
+      Entrega: costInput.Entrega,
+      mode
+    });
+
+    // NO FALLBACK: If DAC can't calculate, we throw. Payment must be blocked.
+    let cost: number;
+    try {
+      cost = await wsObtieneCostoNuevo(api_url, costInput);
+    } catch (costErr: any) {
+      console.error("[DAC Get Cost] Cost calculation FAILED (no fallback):", costErr.message);
+      
+      const userMsg = mode === "agency"
+        ? "No pudimos cotizar esta agencia DAC. Elegí otra agencia o consultanos por WhatsApp."
+        : `No pudimos calcular el envío DAC para ${city || department}. Consultanos por WhatsApp.`;
+      
+      return new Response(JSON.stringify({
+        success: false,
+        error: userMsg,
+        technical_error: costErr.message,
+        debug: {
+          mode,
+          department,
+          city,
+          k_oficina_used: selectedOffice.k_oficina,
+          office_name: selectedOffice.office_name,
+          entrega
+        }
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    console.log("[DAC COST RESULT]", {
+      mode,
+      department,
+      city,
+      k_oficina: selectedOffice.k_oficina,
+      office_name: selectedOffice.office_name,
+      entrega,
+      cost
+    });
 
     return new Response(JSON.stringify({
       success: true,
       provider: "dac",
       cost: cost,
       currency: "UYU",
+      finalKOficina: selectedOffice.k_oficina,
+      officeName: selectedOffice.office_name,
       raw_response: {
         costo: cost,
         oficina: selectedOffice.office_name,
         k_oficina: selectedOffice.k_oficina,
+        entrega: entrega,
+        modo: mode,
         tiempo_estimado: "24-48 hs hábiles"
       }
     }), {
@@ -246,7 +301,7 @@ serve(async (req) => {
     console.error("[DAC Get Cost Error]:", error.message);
     return new Response(JSON.stringify({ 
       success: false, 
-      error: "No pudimos calcular DAC para esta localidad. Consultanos por WhatsApp.", 
+      error: error.message || "No pudimos calcular DAC para esta localidad. Consultanos por WhatsApp.", 
       technical_error: error.message 
     }), {
       status: 200,

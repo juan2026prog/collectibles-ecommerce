@@ -24,6 +24,7 @@ interface CreateOrderParams {
     country: string;
     barrio?: string;
     reference?: string;
+    ci?: string;
   };
   customer_email: string;
   customer_phone?: string;

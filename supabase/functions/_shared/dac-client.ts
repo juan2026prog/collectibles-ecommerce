@@ -374,24 +374,26 @@ function escapeXml(unsafe: string): string {
 
 export interface DacCostInput {
   ID_Sesion: string;
-  K_Tipo_Guia: number;
-  K_Tipo_Envio: number;
-  K_Cliente_Remitente: number;
-  K_Cliente_Destinatario: number;
+  K_Tipo_Guia: string | number;
+  K_Tipo_Envio: string | number;
+  K_Cliente_Remitente: string | number;
+  K_Cliente_Destinatario: string | number;
   Direccion_Destinatario: string;
-  K_Oficina_Destino: number;
+  K_Oficina_Destino: string | number;
   Entrega: number;
   Paquetes_Ampara: number;
   Detalle_Paquetes: string; // JSON stringified array of packages
-  esRecoleccion: number;
-  usaBolsa: number;
+  esRecoleccion: string | number;
 }
 
 export async function wsObtieneCostoNuevo(
   apiUrl: string,
   input: DacCostInput
 ): Promise<number> {
-  const url = apiUrl.endsWith('/wsObtieneCosto_Nuevo') ? apiUrl : `${apiUrl.replace(/\/$/, '')}/wsObtieneCosto_Nuevo`;
+  let url = apiUrl.endsWith('/wsObtieneCosto_Nuevo') ? apiUrl : `${apiUrl.replace(/\/$/, '')}/wsObtieneCosto_Nuevo`;
+  if (url.includes('/GAgencia/GAgencia.asmx')) {
+    url = url.replace('/GAgencia/GAgencia.asmx', '/JAgencia/JAgencia.asmx');
+  }
 
   // Safe request logging (hide ID_Sesion completely or partially)
   const safeInput = { 
@@ -419,19 +421,32 @@ export async function wsObtieneCostoNuevo(
   }
 
   const data = await res.json();
-  console.log(`[DAC API Response] Response Text: ${JSON.stringify(data)}`);
+  console.log(`[DAC API Response] Response JSON: ${JSON.stringify(data)}`);
 
-  const dVal = data.d;
-  if (!dVal) {
-    throw new Error("Empty response from wsObtieneCostoNuevo JSON service");
+  // CHECK DAC-LEVEL ERRORS FIRST: result !== 0 means DAC returned an error
+  if (data.result !== undefined && data.result !== 0) {
+    const errMsg = typeof data.data === 'string'
+      ? data.data
+      : (data.ErrorMessage || data.Message || `DAC error code ${data.result}`);
+    console.error(`[DAC API Error] result=${data.result}, message: ${errMsg}`);
+    throw new Error(`DAC API error: ${errMsg}`);
   }
 
-  let resultObj = dVal;
-  if (typeof dVal === 'string') {
+  // Try to find the result object from either .d or .data or directly
+  let resultObj = data.d;
+  if (resultObj === undefined) {
+    if (data.data !== undefined) {
+      resultObj = data.data;
+    } else {
+      resultObj = data;
+    }
+  }
+
+  if (typeof resultObj === 'string') {
     try {
-      resultObj = JSON.parse(dVal);
+      resultObj = JSON.parse(resultObj);
     } catch {
-      throw new Error(`Failed to parse stringified 'd' response: ${dVal}`);
+      throw new Error(`Failed to parse stringified response: ${resultObj}`);
     }
   }
 
@@ -440,12 +455,15 @@ export async function wsObtieneCostoNuevo(
     return resultObj;
   }
 
-  const cost = resultObj.Costo ?? resultObj.costo ?? resultObj.CostoTotal ?? resultObj.costo_total ?? resultObj.wsObtieneCosto_NuevoResult ?? resultObj.Valor ?? resultObj.valor;
+  // Look for the cost field
+  const cost = resultObj.Total_Guia ?? resultObj.TotalGuia ?? resultObj.Costo ?? resultObj.costo ?? resultObj.CostoTotal ?? resultObj.costo_total ?? resultObj.wsObtieneCosto_NuevoResult ?? resultObj.Valor ?? resultObj.valor;
+  
   if (cost === undefined) {
-    if (resultObj.ErrorMessage || resultObj.Message) {
-      throw new Error(`DAC API error: ${resultObj.ErrorMessage || resultObj.Message}`);
+    const errMsg = resultObj.ErrorMessage || resultObj.Message || data.ErrorMessage || data.Message;
+    if (errMsg) {
+      throw new Error(`DAC API error: ${errMsg}`);
     }
-    throw new Error(`Could not find cost field in response: ${JSON.stringify(resultObj)}`);
+    throw new Error(`Could not find cost field in response: ${JSON.stringify(data)}`);
   }
 
   console.log(`[DAC API Response] Costo Parseado: ${cost}`);

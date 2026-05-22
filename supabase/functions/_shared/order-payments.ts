@@ -65,6 +65,34 @@ export async function triggerPostPaymentActions(
     console.error("Soy Delivery provider validation error:", err);
   }
 
+  // Trigger DAC post-payment shipment automation
+  try {
+    const { data: orderData } = await supabaseClient
+      .from("orders")
+      .select("shipping_method")
+      .eq("id", orderId)
+      .single();
+
+    if (orderData && (orderData.shipping_method === "dac_home" || orderData.shipping_method === "dac_agency")) {
+      console.log(`[Post-Payment] Triggering DAC shipment creation for order ${orderId}`);
+      const dacResponse = await fetch(`${supabaseUrl}/functions/v1/dac-create-shipment`, {
+        method: "POST",
+        headers: functionHeaders,
+        body: JSON.stringify({ order_id: orderId }),
+      });
+
+      if (!dacResponse.ok) {
+        const errorText = await dacResponse.text();
+        console.error(`[Post-Payment] DAC shipment creation failed (Status: ${dacResponse.status}):`, errorText);
+      } else {
+        const resJson = await dacResponse.json();
+        console.log(`[Post-Payment] DAC shipment creation result:`, resJson);
+      }
+    }
+  } catch (err: any) {
+    console.error("[Post-Payment] DAC post-payment trigger failed:", err);
+  }
+
   const { data: fullOrder } = await supabaseClient
     .from("orders")
     .select("*")

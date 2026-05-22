@@ -41,7 +41,7 @@ export const URUGUAY_LOCATIONS: Record<string, string[]> = {
 
 export const DEPARTAMENTOS = Object.keys(URUGUAY_LOCATIONS).sort();
 
-export function calculateShipping(city: string, department: string, total: number): number {
+export function calculateShipping(city: string, department: string, total: number, freeShippingThreshold = 4000): number {
   if (!city || !department) return 350; // default unknown
 
   const c = city.trim();
@@ -80,7 +80,7 @@ export function calculateShipping(city: string, department: string, total: numbe
   }
 
   // Free shipping logic
-  if (total >= 4000) {
+  if (total >= freeShippingThreshold) {
     return 0;
   }
 

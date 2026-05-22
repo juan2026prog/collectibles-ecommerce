@@ -197,6 +197,29 @@ Deno.serve(async (req: Request) => {
             body: JSON.stringify({ order_id: orderId })
           }).catch((err: any) => console.error("Error triggering soydelivery:", err));
 
+          // Trigger DAC Creation
+          try {
+            const { data: orderCheck } = await supabaseAdmin
+              .from('orders')
+              .select('shipping_method')
+              .eq('id', orderId)
+              .single();
+
+            if (orderCheck && (orderCheck.shipping_method === "dac_home" || orderCheck.shipping_method === "dac_agency")) {
+              console.log(`[MP Webhook] Triggering DAC shipment creation for order ${orderId}`);
+              await fetch(`${supabaseUrl}/functions/v1/dac-create-shipment`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${supabaseServiceKey}`
+                },
+                body: JSON.stringify({ order_id: orderId })
+              }).catch((err: any) => console.error("Error triggering DAC create shipment from MP Webhook:", err));
+            }
+          } catch (err: any) {
+            console.error("Error checking DAC shipping method in MP Webhook:", err);
+          }
+
           // Trigger transactional email
           const { data: fullOrder } = await supabaseAdmin
             .from('orders')
