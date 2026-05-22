@@ -10,7 +10,7 @@ export default function AdminCategories() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
-  const [form, setForm] = useState({ name: '', slug: '', image_url: '', sort_order: 0, ml_category_id: '', parent_id: '' });
+  const [form, setForm] = useState({ name: '', slug: '', image_url: '', sort_order: 0, ml_category_id: '', parent_id: '', is_active: true });
 
   const { toast } = useToast();
   const { confirm } = useConfirmModal();
@@ -54,8 +54,8 @@ export default function AdminCategories() {
     return flattened;
   }
 
-  function openCreate() { setEditing(null); setForm({ name: '', slug: '', image_url: '', sort_order: 0, ml_category_id: '', parent_id: '' }); setShowForm(true); }
-  function openEdit(c: any) { setEditing(c); setForm({ name: c.name, slug: c.slug, image_url: c.image_url || '', sort_order: c.sort_order, ml_category_id: c.metadata?.ml_category_id || '', parent_id: c.parent_id || '' }); setShowForm(true); }
+  function openCreate() { setEditing(null); setForm({ name: '', slug: '', image_url: '', sort_order: 0, ml_category_id: '', parent_id: '', is_active: true }); setShowForm(true); }
+  function openEdit(c: any) { setEditing(c); setForm({ name: c.name, slug: c.slug, image_url: c.image_url || '', sort_order: c.sort_order, ml_category_id: c.metadata?.ml_category_id || '', parent_id: c.parent_id || '', is_active: c.is_active ?? true }); setShowForm(true); }
 
   async function handleSave() {
     const payload = { 
@@ -64,6 +64,7 @@ export default function AdminCategories() {
       image_url: form.image_url || null, 
       sort_order: form.sort_order,
       parent_id: form.parent_id || null,
+      is_active: form.is_active,
       metadata: { ml_category_id: form.ml_category_id || null }
     };
     if (editing) await supabase.from('categories').update(payload).eq('id', editing.id);
@@ -109,6 +110,7 @@ export default function AdminCategories() {
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Nombre</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Productos</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Slug</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Estado</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Mercado Libre</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Orden</th>
                 <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">Acciones</th>
@@ -134,6 +136,13 @@ export default function AdminCategories() {
                   </td>
                   <td className="px-6 py-4 text-gray-500"><span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">{c.product_categories?.[0]?.count || 0}</span></td>
                   <td className="px-6 py-4 font-mono text-sm text-gray-500">/{c.slug}</td>
+                  <td className="px-6 py-4">
+                    {c.is_active !== false ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Visible</span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">Oculta</span>
+                    )}
+                  </td>
                   <td className="px-6 py-4">
                     {c.metadata?.ml_category_id ? (
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
@@ -173,6 +182,7 @@ export default function AdminCategories() {
               
               <h3 className="font-bold text-gray-900 border-b pb-2 mb-2">{c.name}</h3>
               <div className="flex-1 space-y-1 mb-4">
+                 <p className="text-xs text-gray-500 flex justify-between items-center"><span className="font-medium text-gray-400">Estado:</span> {c.is_active !== false ? <span className="text-[10px] bg-green-100 text-green-800 px-1 rounded">Visible</span> : <span className="text-[10px] bg-red-100 text-red-800 px-1 rounded">Oculta</span>}</p>
                  <p className="text-xs text-gray-500 flex justify-between"><span className="font-medium text-gray-400">URL / Slug:</span> <span className="font-mono text-[10px] bg-gray-100 px-1 rounded truncate ml-2">/{c.slug}</span></p>
                  <p className="text-xs text-gray-500 flex justify-between items-center">
                     <span className="font-medium text-gray-400">ML ID:</span> 
@@ -225,6 +235,13 @@ export default function AdminCategories() {
                  <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1.5">Orden de Visualización</label>
                  <input type="number" className="form-input w-full" value={form.sort_order} onChange={e => setForm({...form, sort_order: parseInt(e.target.value) || 0})} />
                  <p className="text-[10px] text-gray-400 mt-1">Números menores se muestran primero en el listado visual.</p>
+              </div>
+              <div className="flex items-center gap-2 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                <input type="checkbox" id="is_active" className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500" checked={form.is_active} onChange={e => setForm({...form, is_active: e.target.checked})} />
+                <div>
+                  <label htmlFor="is_active" className="block text-sm font-bold text-gray-900">Categoría Visible</label>
+                  <p className="text-xs text-gray-500">Si desmarcas esta opción, la categoría no se mostrará a los clientes.</p>
+                </div>
               </div>
               <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
                  <label className="block text-xs font-black text-yellow-800 uppercase tracking-widest mb-1.5">Categoría Padre</label>

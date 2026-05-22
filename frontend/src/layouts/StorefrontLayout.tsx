@@ -30,7 +30,7 @@ const DesktopMegaMenu = React.memo(({ isVisible, megaType, menuColumns, allBrand
   if (!isVisible) return null;
   return (
     <div className="absolute top-full left-1/2 -translate-x-1/2 pt-4 w-[600px] animate-fade-in pointer-events-auto z-50">
-      <div className="glass rounded-[2rem] p-8 grid grid-cols-3 gap-8 shadow-2xl border-white/10">
+      <div className="bg-[#0e1525] rounded-[2rem] p-8 grid grid-cols-3 gap-8 shadow-2xl border border-white/10">
         {megaType === 'categories' ? (
           menuColumns?.slice(0, 3).map((col: any) => (
             <div key={col.title}>
@@ -431,7 +431,7 @@ export default function StorefrontLayout() {
                 ) : (
                   link.subItems && link.subItems.length > 0 && (
                     <div className="absolute top-full left-0 pt-4 w-48 hidden group-hover:block hover:block z-50">
-                      <div className="glass rounded-xl p-4 flex flex-col gap-2.5 shadow-xl border border-white/10">
+                      <div className="bg-[#0e1525] rounded-xl p-4 flex flex-col gap-2.5 shadow-xl border border-white/10">
                         {link.subItems.map((sub: any) => (
                           <Link 
                             key={sub.label} 
@@ -477,7 +477,7 @@ export default function StorefrontLayout() {
                 <User className="w-4 h-4" />
               </button>
               {userMenuOpen && (
-                <div className="absolute top-full right-0 mt-4 w-64 glass rounded-[2rem] p-4 shadow-2xl z-50 animate-fade-in border-white/10">
+                <div className="absolute top-full right-0 mt-4 w-64 bg-[#0e1525] rounded-[2rem] p-4 shadow-2xl z-50 animate-fade-in border border-white/10">
                    {user ? (
                      <div className="space-y-1">
                         <div className="px-4 py-3 mb-2 border-b border-white/10">

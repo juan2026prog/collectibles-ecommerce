@@ -33,6 +33,7 @@ export function useProducts(filters: ProductFilters = {}) {
         .from('categories')
         .select('id')
         .eq('slug', filters.category)
+        .eq('is_active', true)
         .single();
       categoryId = data?.id ?? null;
       // If slug not found → no results
