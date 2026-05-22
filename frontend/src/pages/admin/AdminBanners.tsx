@@ -136,17 +136,31 @@ export default function AdminBanners() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-bold">Home Banners</h2>
-        <button onClick={openCreate} className="btn-primary gap-2"><Plus className="w-4 h-4" /> Add Banner</button>
+        <button onClick={openCreate} className="btn-primary gap-2"><Plus className="w-4 h-4" /> Crear Banner</button>
+      </div>
+
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 text-sm text-blue-800">
+        <p className="font-bold mb-1">💡 ¿Cómo funcionan los banners?</p>
+        <ul className="text-xs space-y-1 text-blue-700">
+          <li>• <strong>Hero Slider:</strong> Todos los banners activos se muestran como slides del carrusel principal.</li>
+          <li>• <strong>Tarjetas promocionales:</strong> Los <strong>primeros 2 banners</strong> (por orden) también se muestran como tarjetas con título y subtítulo debajo del hero.</li>
+          <li>• <strong>Textos editables:</strong> El título, subtítulo e imagen de cada banner se muestran en ambas secciones.</li>
+          <li>• Podés activar/desactivar la sección "Tendencias", "Especial Mundial" y los propios banners desde <strong>Configuración → Theme Builder</strong>.</li>
+        </ul>
       </div>
 
       <div className="space-y-4">
         {loading ? <p className="text-gray-400 text-center py-12">Loading...</p> :
         banners.map((b, i) => (
           <div key={b.id} className={`bg-white rounded-xl border ${b.is_active ? 'border-gray-200' : 'border-gray-100 opacity-60'} overflow-hidden flex`}>
-            <div className="w-48 h-28 flex-shrink-0 bg-gray-100">
+            <div className="w-48 h-28 flex-shrink-0 bg-gray-100 relative">
               <img src={b.image_url} alt={b.title} className="w-full h-full object-cover" />
+              <div className="absolute top-1.5 left-1.5 flex flex-col gap-1">
+                <span className="bg-indigo-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">Hero Slide</span>
+                {i < 2 && b.is_active && <span className="bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">Tarjeta Promo</span>}
+              </div>
             </div>
             <div className="flex-1 p-4 flex items-center justify-between">
               <div>
@@ -163,7 +177,7 @@ export default function AdminBanners() {
               <div className="flex items-center gap-2">
                 <button onClick={() => toggleActive(b.id, b.is_active)}
                   className={`px-3 py-1 text-xs font-bold rounded-full ${b.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                  {b.is_active ? 'Active' : 'Inactive'}
+                  {b.is_active ? 'Activo' : 'Inactivo'}
                 </button>
                 <button onClick={() => openEdit(b)} className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg"><Pencil className="w-4 h-4" /></button>
                 <button onClick={() => handleDelete(b.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>

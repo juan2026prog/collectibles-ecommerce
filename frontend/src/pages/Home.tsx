@@ -34,6 +34,8 @@ export default function Home() {
     { id: 'cta', visible: true }
   ]);
 
+  const DEFAULT_BLOCK_IDS = ['hero','trust','banners','bento','collections','trending','mundial','brands','cta'];
+
   useEffect(() => {
     import('../lib/supabase').then(({ supabase }) => {
       supabase.from('public_site_config').select('value').eq('key', 'appearance_home_layout_json').maybeSingle()
@@ -42,7 +44,10 @@ export default function Home() {
             try {
               const parsed = JSON.parse(data.value);
               if (Array.isArray(parsed) && parsed.length > 0) {
-                setLayoutBlocks(parsed);
+                // Merge any new blocks not in saved data
+                const savedIds = new Set(parsed.map((b: any) => b.id));
+                const missing = DEFAULT_BLOCK_IDS.filter(id => !savedIds.has(id)).map(id => ({ id, visible: true }));
+                setLayoutBlocks([...parsed, ...missing]);
               }
             } catch {}
           }
@@ -109,7 +114,7 @@ export default function Home() {
               {banners.slice(0, 2).map((banner: any, i: number) => (
                 <Link
                   key={banner.id || i}
-                  to={banner.link || '/shop'}
+                  to={banner.link_url || '/shop'}
                   className="group relative rounded-2xl overflow-hidden aspect-[16/7] border border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02]"
                 >
                   <img

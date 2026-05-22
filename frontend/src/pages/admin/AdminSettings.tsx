@@ -229,18 +229,28 @@ function MenuEditor({ title, description, initialJson, onSave }: any) {
 function HomeLayoutEditor({ title, description, initialJson, onSave }: any) {
   const defaultBlocks = [
     { id: 'hero', label: 'Hero Banner Principal', visible: true },
+    { id: 'trust', label: 'Barra de Confianza (Envíos, Seguridad)', visible: true },
+    { id: 'banners', label: 'Banners Promocionales (2 tarjetas)', visible: true },
     { id: 'bento', label: 'Categorías Destacadas (Bento)', visible: true },
     { id: 'collections', label: 'Grupos/Colecciones', visible: true },
-    { id: 'trending', label: 'Novedades y Más Vendidos', visible: true },
-    { id: 'brands', label: 'Carrusel de Marcas', visible: true }
+    { id: 'trending', label: 'Tendencias (Productos Destacados)', visible: true },
+    { id: 'mundial', label: 'Especial Mundial / Edición Especial', visible: true },
+    { id: 'brands', label: 'Carrusel de Marcas', visible: true },
+    { id: 'cta', label: 'Llamada a la Acción Final (CTA)', visible: true }
   ];
   const [blocks, setBlocks] = useState<any[]>([]);
 
   useEffect(() => {
     try {
       const parsed = JSON.parse(initialJson);
-      if (Array.isArray(parsed) && parsed.length > 0) setBlocks(parsed);
-      else setBlocks(defaultBlocks);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // Merge any new default blocks that aren't in the saved data
+        const savedIds = new Set(parsed.map((b: any) => b.id));
+        const missing = defaultBlocks.filter(b => !savedIds.has(b.id));
+        setBlocks([...parsed, ...missing]);
+      } else {
+        setBlocks(defaultBlocks);
+      }
     } catch {
       setBlocks(defaultBlocks);
     }
