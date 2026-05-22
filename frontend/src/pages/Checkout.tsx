@@ -102,6 +102,62 @@ export default function Checkout() {
   const [bankPromos, setBankPromos] = useState<BankPromo[]>([]);
   const [selectedPromo, setSelectedPromo] = useState<BankPromo | null>(null);
   const [couponCode, setCouponCode] = useState('');
+  const [activeCoupon, setActiveCoupon] = useState<any>(null);
+  const [couponInput, setCouponInput] = useState('');
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponSuccess, setCouponSuccess] = useState<string | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+
+  const handleApplyCoupon = async () => {
+    if (!couponInput.trim()) {
+      setCouponError('Ingresá un código de cupón');
+      setCouponSuccess(null);
+      return;
+    }
+
+    setCouponLoading(true);
+    setCouponError(null);
+    setCouponSuccess(null);
+
+    try {
+      const { data: coupon, error } = await supabase
+        .from('coupons')
+        .select('*')
+        .eq('code', couponInput.trim().toUpperCase())
+        .single();
+
+      if (error || !coupon) {
+        setCouponError('Cupón inválido');
+        setCouponCode('');
+        setActiveCoupon(null);
+        return;
+      }
+
+      if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
+        setCouponError('El cupón ha expirado');
+        setCouponCode('');
+        setActiveCoupon(null);
+        return;
+      }
+
+      setCouponCode(coupon.code);
+      setActiveCoupon(coupon);
+      setCouponSuccess(`Cupón '${coupon.code}' aplicado correctamente`);
+    } catch (err) {
+      console.error(err);
+      setCouponError('Error al aplicar el cupón');
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setCouponCode('');
+    setCouponInput('');
+    setActiveCoupon(null);
+    setCouponError(null);
+    setCouponSuccess(null);
+  };
   const [affiliateCode, setAffiliateCode] = useState('');
   const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<number>(-1);
@@ -519,7 +575,15 @@ export default function Checkout() {
       bankDiscount = Math.min(bankDiscount, selectedPromo.max_discount);
     }
   }
-  const grandTotal = Math.max(subtotalWithShipping - bankDiscount, 0);
+
+  let couponDiscount = 0;
+  if (activeCoupon) {
+    couponDiscount = activeCoupon.discount_type === 'percentage'
+      ? Math.round(total * Number(activeCoupon.discount_value) / 100)
+      : Number(activeCoupon.discount_value);
+  }
+
+  const grandTotal = Math.max(subtotalWithShipping - bankDiscount - couponDiscount, 0);
 
   // Synchronize finalTotal and log it
   useEffect(() => {
@@ -1402,22 +1466,16 @@ export default function Checkout() {
             )}
 
             {/* ═══════════════════════════════════════════════════════════ */}
-            {/* STEP 3: CUPONES Y PROMOCIONES                             */}
+            {/* STEP 3: REFERIDO Y PROMOCIONES                             */}
             {/* ═══════════════════════════════════════════════════════════ */}
             {currentStep === 3 && (
               <div className="checkout-step-content" key="step-3">
                 <div className="glass p-6">
-                  <h2 className="font-bold text-lg mb-1">Cupones y referidos</h2>
-                  <p className="text-xs text-slate-400 mb-6">Si tenés un código de descuento o fuiste referido, ingresalo aquí.</p>
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="form-label flex items-center gap-2"><Ticket className="w-4 h-4" /> Cupón</label>
-                      <input className="form-input" placeholder="Ej: LANZAMIENTO10" value={couponCode} onChange={e => setCouponCode(e.target.value.toUpperCase())} />
-                    </div>
-                    <div>
-                      <label className="form-label flex items-center gap-2"><Share2 className="w-4 h-4" /> Código de referido</label>
-                      <input className="form-input" placeholder="Se completa automáticamente si llegaste desde un afiliado" value={affiliateCode} onChange={e => setAffiliateCode(e.target.value)} />
-                    </div>
+                  <h2 className="font-bold text-lg mb-1">Código de referido</h2>
+                  <p className="text-xs text-slate-400 mb-6">Si fuiste referido por un afiliado, ingresá su código aquí.</p>
+                  <div>
+                    <label className="form-label flex items-center gap-2"><Share2 className="w-4 h-4" /> Código de referido</label>
+                    <input className="form-input max-w-md" placeholder="Se completa automáticamente si llegaste desde un afiliado" value={affiliateCode} onChange={e => setAffiliateCode(e.target.value)} />
                   </div>
                 </div>
 
@@ -1739,6 +1797,18 @@ export default function Checkout() {
                     <span className="font-bold text-green-600">-{formatCurrencyPrice(bankDiscount)}</span>
                   </div>
                 )}
+                {activeCoupon && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-green-600 flex items-center gap-1">
+                      <Ticket className="w-3.5 h-3.5" />
+                      Cupón {couponCode}
+                      <span className="text-[10px] font-bold bg-green-500/10 text-green-500 px-1.5 py-0.5 rounded ml-1">
+                        {activeCoupon.discount_type === 'percentage' ? `-${activeCoupon.discount_value}%` : `-$${activeCoupon.discount_value}`}
+                      </span>
+                    </span>
+                    <span className="font-bold text-green-600">-{formatCurrencyPrice(couponDiscount)}</span>
+                  </div>
+                )}
                 {shippingMethod === 'delivery' && isLocationSelected && form.department && logistics.providerName && (
                   <div className="border-t border-white/5 pt-3 mt-3 space-y-1">
                     <div className="flex justify-between text-xs">
@@ -1754,7 +1824,11 @@ export default function Checkout() {
                 <div className="border-t pt-2 mt-2 flex justify-between">
                   <span className="font-bold text-lg">Total</span>
                   <div className="text-right">
-                    {bankDiscount > 0 && <span className="text-sm text-slate-500 line-through mr-2">{formatCurrencyPrice(subtotalWithShipping)}</span>}
+                    {(bankDiscount > 0 || couponDiscount > 0) && (
+                      <span className="text-sm text-slate-500 line-through mr-2">
+                        {formatCurrencyPrice(subtotalWithShipping)}
+                      </span>
+                    )}
                     <span className="text-2xl font-black text-[#f00856]">{formatCurrencyPrice(grandTotal)}</span>
                     {selectedCurrency !== 'UYU' && (
                       <p className="text-[10px] text-slate-500 mt-1">
@@ -1763,6 +1837,56 @@ export default function Checkout() {
                     )}
                   </div>
                 </div>
+              </div>
+
+              {/* Sección de Cupón de Descuento */}
+              <div className="border-t border-white/10 pt-4 mt-4">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-2">
+                  ¿Tenés un cupón de descuento?
+                </label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Ticket className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <input
+                      type="text"
+                      className="form-input pl-9 py-2 text-sm uppercase"
+                      placeholder="Ingresá tu cupón"
+                      value={couponInput}
+                      onChange={(e) => setCouponInput(e.target.value)}
+                      disabled={!!couponCode}
+                    />
+                  </div>
+                  {couponCode ? (
+                    <button
+                      type="button"
+                      onClick={handleRemoveCoupon}
+                      className="px-4 py-2 text-sm font-semibold border-2 border-red-500/30 hover:border-red-500/50 bg-red-950/20 text-red-400 hover:text-red-300 transition-all duration-200"
+                    >
+                      Quitar
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleApplyCoupon}
+                      disabled={couponLoading}
+                      className="px-4 py-2 text-sm font-semibold btn-primary shrink-0 transition-all duration-200"
+                    >
+                      {couponLoading ? 'Aplicando...' : 'Aplicar'}
+                    </button>
+                  )}
+                </div>
+                {couponError && (
+                  <p className="text-xs text-red-400 mt-1.5 flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    {couponError}
+                  </p>
+                )}
+                {couponSuccess && (
+                  <p className="text-xs text-green-400 mt-1.5 flex items-center gap-1">
+                    <Check className="w-3.5 h-3.5" />
+                    {couponSuccess}
+                  </p>
+                )}
               </div>
               {checkoutError && (
                 <div className="mt-4 p-3 bg-red-900/30 border border-red-500/30 text-xs text-red-400 rounded-lg flex items-start justify-between">
