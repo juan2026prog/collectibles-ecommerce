@@ -16,7 +16,7 @@ const _listeners = new Set<(s: Record<string, string>) => void>();
 function fetchSettings(): Promise<Record<string, string>> {
   if (_promise) return _promise;
   _promise = supabase
-    .from('site_settings')
+    .from('public_site_config')
     .select('*')
     .then(({ data }) => {
       const s: Record<string, string> = {};

@@ -10,9 +10,25 @@ export default function AdminBanners() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
-  const [form, setForm] = useState({ title: '', subtitle: '', image_url: '', link_url: '', button_text: 'SHOP NOW', is_active: true, sort_order: 0 });
+  const [form, setForm] = useState({
+    title: '',
+    subtitle: '',
+    badge_text: '',
+    image_url: '',
+    mobile_image_url: '',
+    link_url: '',
+    button_text: 'SHOP NOW',
+    secondary_button_text: '',
+    secondary_button_url: '',
+    content_position: 'center',
+    content_align: 'left',
+    overlay_opacity: 0.4,
+    is_active: true,
+    sort_order: 0
+  });
   const [uploadingImage, setUploadingImage] = useState(false);
   const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [activeMediaField, setActiveMediaField] = useState<'image_url' | 'mobile_image_url' | null>(null);
 
   const { toast } = useToast();
   const { confirm } = useConfirmModal();
@@ -26,10 +42,51 @@ export default function AdminBanners() {
     setLoading(false);
   }
 
-  function openCreate() { setEditing(null); setForm({ title: '', subtitle: '', image_url: '', link_url: '', button_text: 'SHOP NOW', is_active: true, sort_order: 0 }); setShowForm(true); }
-  function openEdit(b: any) { setEditing(b); setForm({ title: b.title || '', subtitle: b.subtitle || '', image_url: b.image_url, link_url: b.link_url || '', button_text: b.button_text || 'SHOP NOW', is_active: b.is_active, sort_order: b.sort_order }); setShowForm(true); }
+  function openCreate() {
+    setEditing(null);
+    setForm({
+      title: '',
+      subtitle: '',
+      badge_text: '',
+      image_url: '',
+      mobile_image_url: '',
+      link_url: '',
+      button_text: 'SHOP NOW',
+      secondary_button_text: '',
+      secondary_button_url: '',
+      content_position: 'center',
+      content_align: 'left',
+      overlay_opacity: 0.4,
+      is_active: true,
+      sort_order: 0
+    });
+    setActiveMediaField(null);
+    setShowForm(true);
+  }
 
-  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  function openEdit(b: any) {
+    setEditing(b);
+    setForm({
+      title: b.title || '',
+      subtitle: b.subtitle || '',
+      badge_text: b.badge_text || '',
+      image_url: b.image_url || '',
+      mobile_image_url: b.mobile_image_url || '',
+      link_url: b.link_url || '',
+      button_text: b.button_text || '',
+      secondary_button_text: b.secondary_button_text || '',
+      secondary_button_url: b.secondary_button_url || '',
+      content_position: b.content_position || 'center',
+      content_align: b.content_align || 'left',
+      overlay_opacity: b.overlay_opacity !== null && b.overlay_opacity !== undefined ? Number(b.overlay_opacity) : 0.4,
+      is_active: b.is_active,
+      sort_order: b.sort_order || 0
+    });
+    setActiveMediaField(null);
+    setShowForm(true);
+  }
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>, field: 'image_url' | 'mobile_image_url') {
     if (!e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
     
@@ -47,7 +104,8 @@ export default function AdminBanners() {
       if (uploadError) throw uploadError;
       
       const { data } = supabase.storage.from('public-assets').getPublicUrl(fileName);
-      setForm({...form, image_url: data.publicUrl});
+      setForm(prev => ({ ...prev, [field]: data.publicUrl }));
+      toast.success('Imagen subida correctamente.');
     } catch (err: any) {
       console.error(err);
       toast.error('Error al subir imagen a la biblioteca de medios.');
@@ -94,7 +152,13 @@ export default function AdminBanners() {
               <div>
                 <h3 className="font-bold text-gray-900">{b.title || `Banner ${i + 1}`}</h3>
                 <p className="text-sm text-gray-500 mt-1 line-clamp-1">{b.subtitle}</p>
-                <p className="text-xs text-gray-400 mt-1">Link: {b.link_url || '—'} • Order: {b.sort_order}</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Link: {b.link_url || '—'} • Orden: {b.sort_order}
+                  {b.mobile_image_url && ' • 📱 Móvil configurado'}
+                  {b.content_align && ` • 📐 ${b.content_align}`}
+                  {b.content_position && ` • ↕️ ${b.content_position}`}
+                  {b.overlay_opacity !== null && ` • 🖤 Opacidad: ${Math.round(Number(b.overlay_opacity) * 100)}%`}
+                </p>
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => toggleActive(b.id, b.is_active)}
@@ -112,52 +176,182 @@ export default function AdminBanners() {
       {showForm && (
         <>
           <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setShowForm(false)} />
-          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white z-50 rounded-2xl shadow-2xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold">{editing ? 'Edit Banner' : 'New Banner'}</h3>
-              <button onClick={() => setShowForm(false)}><X className="w-5 h-5" /></button>
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-3xl bg-white z-50 rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
+              <h3 className="font-bold text-gray-900 text-lg">{editing ? 'Editar Slide Cinematográfico' : 'Nuevo Slide Cinematográfico'}</h3>
+              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
             </div>
-            <div className="space-y-3">
-              <div><label className="form-label">Title</label><input className="form-input" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
-              <div><label className="form-label">Subtitle</label><input className="form-input" value={form.subtitle} onChange={e => setForm({...form, subtitle: e.target.value})} /></div>
-              <div>
-                <label className="form-label">Image URL *</label>
-                <div className="flex gap-2">
-                  <input className="form-input flex-1 border-gray-300 shadow-sm" value={form.image_url} onChange={e => setForm({...form, image_url: e.target.value})} placeholder="https://..." />
-                  
-                  {/* Select from media library */}
-                  <button type="button" onClick={() => setShowMediaPicker(true)} className="btn-secondary flex-shrink-0 px-3 cursor-pointer flex items-center justify-center bg-gray-50 border border-gray-300 hover:bg-gray-100" title="Seleccionar de galería">
-                     <ImageIcon className="w-4 h-4" />
-                  </button>
-
-                  <label className={`btn-secondary flex-shrink-0 cursor-pointer flex items-center justify-center px-4 bg-gray-50 border border-gray-300 hover:bg-gray-100 ${uploadingImage ? 'opacity-50 pointer-events-none' : ''}`} title="Subir desde PC">
-                    <Upload className="w-4 h-4" />
-                    <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
-                  </label>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Columna Izquierda: Textos y Acciones */}
+              <div className="space-y-4">
+                <div>
+                  <label className="form-label font-bold text-gray-700">Título Principal</label>
+                  <input className="form-input w-full border-gray-300 rounded-lg shadow-sm" value={form.title} onChange={e => setForm({...form, title: e.target.value})} placeholder="Ej: Tu colección comienza acá" />
                 </div>
-                {form.image_url && <img src={form.image_url} alt="Preview" className="h-16 mt-2 rounded object-cover" />}
+                <div>
+                  <label className="form-label font-bold text-gray-700">Subtítulo</label>
+                  <textarea className="form-input w-full min-h-[70px] resize-none border-gray-300 rounded-lg shadow-sm" value={form.subtitle} onChange={e => setForm({...form, subtitle: e.target.value})} placeholder="Descripción del slide..." />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="form-label font-bold text-gray-700">Badge Superior</label>
+                    <input className="form-input w-full border-gray-300 rounded-lg shadow-sm" value={form.badge_text} onChange={e => setForm({...form, badge_text: e.target.value})} placeholder="Ej: PREMIUM" />
+                  </div>
+                  <div>
+                    <label className="form-label font-bold text-gray-700">Orden (Sort)</label>
+                    <input type="number" className="form-input w-full border-gray-300 rounded-lg shadow-sm" value={form.sort_order} onChange={e => setForm({...form, sort_order: parseInt(e.target.value) || 0})} />
+                  </div>
+                </div>
+
+                {/* CTA Principal */}
+                <div className="border-t border-gray-100 pt-3">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">CTA Principal</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="form-label text-gray-600 text-xs">Texto Botón</label>
+                      <input className="form-input w-full border-gray-300 rounded-lg shadow-sm" value={form.button_text} onChange={e => setForm({...form, button_text: e.target.value})} placeholder="SHOP NOW" />
+                    </div>
+                    <div>
+                      <label className="form-label text-gray-600 text-xs">URL Destino</label>
+                      <input className="form-input w-full border-gray-300 rounded-lg shadow-sm" value={form.link_url} onChange={e => setForm({...form, link_url: e.target.value})} placeholder="/shop" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* CTA Secundario */}
+                <div className="border-t border-gray-100 pt-3">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">CTA Secundario (Opcional)</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="form-label text-gray-600 text-xs">Texto Botón</label>
+                      <input className="form-input w-full border-gray-300 rounded-lg shadow-sm" value={form.secondary_button_text} onChange={e => setForm({...form, secondary_button_text: e.target.value})} placeholder="Ej: VER DETALLES" />
+                    </div>
+                    <div>
+                      <label className="form-label text-gray-600 text-xs">URL Destino</label>
+                      <input className="form-input w-full border-gray-300 rounded-lg shadow-sm" value={form.secondary_button_url} onChange={e => setForm({...form, secondary_button_url: e.target.value})} placeholder="/ver-mas" />
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="form-label">Link URL</label><input className="form-input" value={form.link_url} onChange={e => setForm({...form, link_url: e.target.value})} /></div>
-                <div><label className="form-label">Button Text</label><input className="form-input" value={form.button_text} onChange={e => setForm({...form, button_text: e.target.value})} /></div>
+
+              {/* Columna Derecha: Imágenes y Diseño */}
+              <div className="space-y-4">
+                {/* Imagen Desktop */}
+                <div>
+                  <label className="form-label font-bold text-gray-700">Imagen Desktop *</label>
+                  <div className="flex gap-2">
+                    <input className="form-input flex-1 border-gray-300 rounded-lg shadow-sm text-xs" value={form.image_url} onChange={e => setForm({...form, image_url: e.target.value})} placeholder="https://..." />
+                    
+                    <button type="button" onClick={() => { setActiveMediaField('image_url'); setShowMediaPicker(true); }} className="btn-secondary flex-shrink-0 px-3 cursor-pointer flex items-center justify-center bg-gray-50 border border-gray-300 hover:bg-gray-100 rounded-lg" title="Seleccionar de galería">
+                      <ImageIcon className="w-4 h-4" />
+                    </button>
+
+                    <label className={`btn-secondary flex-shrink-0 cursor-pointer flex items-center justify-center px-3 bg-gray-50 border border-gray-300 hover:bg-gray-100 rounded-lg ${uploadingImage ? 'opacity-50 pointer-events-none' : ''}`} title="Subir desde PC">
+                      <Upload className="w-4 h-4" />
+                      <input type="file" className="hidden" accept="image/*" onChange={e => handleImageUpload(e, 'image_url')} />
+                    </label>
+                  </div>
+                  {form.image_url && <img src={form.image_url} alt="Preview Desktop" className="h-14 mt-2 rounded object-cover border border-gray-200" />}
+                </div>
+
+                {/* Imagen Mobile */}
+                <div>
+                  <label className="form-label font-bold text-gray-700">Imagen Mobile (Opcional)</label>
+                  <div className="flex gap-2">
+                    <input className="form-input flex-1 border-gray-300 rounded-lg shadow-sm text-xs" value={form.mobile_image_url} onChange={e => setForm({...form, mobile_image_url: e.target.value})} placeholder="https://..." />
+                    
+                    <button type="button" onClick={() => { setActiveMediaField('mobile_image_url'); setShowMediaPicker(true); }} className="btn-secondary flex-shrink-0 px-3 cursor-pointer flex items-center justify-center bg-gray-50 border border-gray-300 hover:bg-gray-100 rounded-lg" title="Seleccionar de galería">
+                      <ImageIcon className="w-4 h-4" />
+                    </button>
+
+                    <label className={`btn-secondary flex-shrink-0 cursor-pointer flex items-center justify-center px-3 bg-gray-50 border border-gray-300 hover:bg-gray-100 rounded-lg ${uploadingImage ? 'opacity-50 pointer-events-none' : ''}`} title="Subir desde PC">
+                      <Upload className="w-4 h-4" />
+                      <input type="file" className="hidden" accept="image/*" onChange={e => handleImageUpload(e, 'mobile_image_url')} />
+                    </label>
+                  </div>
+                  {form.mobile_image_url && <img src={form.mobile_image_url} alt="Preview Mobile" className="h-14 mt-2 rounded object-cover border border-gray-200" />}
+                </div>
+
+                {/* Disposición & Opacidad */}
+                <div className="border-t border-gray-100 pt-3 space-y-3">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Diseño & Composición</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="form-label text-gray-600 text-xs">Alineación Contenido</label>
+                      <select className="form-input w-full border-gray-300 rounded-lg shadow-sm" value={form.content_align} onChange={e => setForm({...form, content_align: e.target.value})}>
+                        <option value="left">Izquierda</option>
+                        <option value="center">Centro</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="form-label text-gray-600 text-xs">Posición Contenido</label>
+                      <select className="form-input w-full border-gray-300 rounded-lg shadow-sm" value={form.content_position} onChange={e => setForm({...form, content_position: e.target.value})}>
+                        <option value="top">Arriba</option>
+                        <option value="center">Centro</option>
+                        <option value="bottom">Abajo</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="form-label text-gray-600 text-xs mb-0">Opacidad de Capa Oscura (Overlay)</label>
+                      <span className="text-xs font-bold text-primary-600">{Math.round(form.overlay_opacity * 100)}%</span>
+                    </div>
+                    <input type="range" min="0" max="1" step="0.05" className="w-full accent-primary-600 cursor-pointer" value={form.overlay_opacity} onChange={e => setForm({...form, overlay_opacity: parseFloat(e.target.value)})} />
+                  </div>
+                </div>
+
+                {/* Helper Card */}
+                <div className="bg-slate-900/[0.03] border border-slate-200/60 rounded-xl p-3.5 space-y-2 text-[11px] leading-relaxed">
+                  <h4 className="font-bold text-slate-800 flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
+                    💡 Guía de Formato & Dimensiones
+                  </h4>
+                  <div className="grid grid-cols-2 gap-3 text-slate-600 font-medium">
+                    <div>
+                      <span className="font-bold text-slate-700 block">🖥️ Desktop:</span>
+                      • Recomendado: 2560x1440 px<br />
+                      • Mínimo: 1920x1080 px<br />
+                      • Evitar texto en la imagen.<br />
+                      • Mantener lado izquierdo limpio.
+                    </div>
+                    <div>
+                      <span className="font-bold text-slate-700 block">📱 Mobile:</span>
+                      • Recomendado: 1080x1920 px<br />
+                      • Zona segura: Mantener personajes en el centro.
+                    </div>
+                  </div>
+                  <div className="text-[10px] text-slate-500 pt-1.5 border-t border-slate-200/50">
+                    Formato: <span className="font-bold text-slate-700">WebP</span> o JPG de alta calidad optimizado. El slider ajustará la imagen usando object-cover.
+                  </div>
+                </div>
               </div>
-              <div><label className="form-label">Sort Order</label><input type="number" className="form-input" value={form.sort_order} onChange={e => setForm({...form, sort_order: parseInt(e.target.value) || 0})} /></div>
-              <label className="flex items-center gap-2"><input type="checkbox" checked={form.is_active} onChange={e => setForm({...form, is_active: e.target.checked})} className="w-4 h-4 rounded text-primary-600" /><span className="text-sm">Active</span></label>
             </div>
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setShowForm(false)} className="btn-secondary flex-1">Cancel</button>
-              <button onClick={handleSave} className="btn-primary flex-1 gap-2"><Save className="w-4 h-4" /> Save</button>
+
+            <div className="border-t border-gray-100 pt-4 mt-6 flex justify-between items-center">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.is_active} onChange={e => setForm({...form, is_active: e.target.checked})} className="w-4 h-4 rounded text-primary-600 border-gray-300 focus:ring-primary-500" />
+                <span className="text-sm font-bold text-gray-700">Slide Activo</span>
+              </label>
+              <div className="flex gap-3">
+                <button onClick={() => setShowForm(false)} className="btn-secondary px-5 py-2 rounded-lg cursor-pointer">Cancelar</button>
+                <button onClick={handleSave} className="btn-primary px-5 py-2 rounded-lg gap-2 cursor-pointer"><Save className="w-4 h-4" /> Guardar</button>
+              </div>
             </div>
           </div>
         </>
       )}
+
       <MediaPickerModal 
         isOpen={showMediaPicker} 
-        onClose={() => setShowMediaPicker(false)} 
+        onClose={() => { setShowMediaPicker(false); setActiveMediaField(null); }} 
         multiple={false}
         onSelect={(url) => {
-           setForm(prev => ({ ...prev, image_url: url }));
+           if (activeMediaField) {
+             setForm(prev => ({ ...prev, [activeMediaField]: url }));
+           }
            setShowMediaPicker(false);
+           setActiveMediaField(null);
         }}
       />
     </div>

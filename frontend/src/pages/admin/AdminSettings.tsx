@@ -429,13 +429,15 @@ export default function AdminSettings() {
 
   async function fetchData() {
     setLoading(true);
-    const [{ data: s }, { data: t }, { data: handy }] = await Promise.all([
+    const [{ data: pubConfig }, { data: secrets }, { data: t }, { data: handy }] = await Promise.all([
+      supabase.from('public_site_config').select('*'),
       supabase.from('site_settings').select('*'),
       supabase.from('feature_toggles').select('*').order('id'),
       supabase.from('payment_providers').select('*').eq('provider_key', 'handy').maybeSingle(),
     ]);
     const settingsMap: Record<string, string> = {};
-    (s || []).forEach(item => { settingsMap[item.key] = item.value || ''; });
+    (pubConfig || []).forEach(item => { settingsMap[item.key] = item.value || ''; });
+    (secrets || []).forEach(item => { settingsMap[item.key] = item.value || ''; });
     setSettings(settingsMap);
     setToggles(t || []);
     setHandyProvider(normalizeHandyProvider(handy || undefined));
@@ -443,10 +445,27 @@ export default function AdminSettings() {
     setLoading(false);
   }
 
+  const SECRET_KEYS = new Set([
+    'payments_mercadopago_access_token',
+    'payments_dlocal_go_api_key', 'payments_dlocal_go_secret_key', 'payments_dlocal_go_smartfields_key',
+    'payments_paypal_client_id', 'payments_paypal_client_secret', 'payments_paypal_secret_key',
+    'mercadolibre_access_token', 'mercadolibre_client_id',
+    'shipping_soydelivery_api_key', 'shipping_soydelivery_api_id',
+    'shipping_soydelivery_negocio_clave', 'shipping_soydelivery_negocio_id',
+  ]);
+
   async function saveSetting(key: string, value: string) {
-    if (!key) return; // Prevent empty keys
-    await supabase.from('site_settings').upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
-    updateCachedSetting(key, value);
+    if (!key) return;
+    const isSecret = SECRET_KEYS.has(key);
+    if (isSecret) {
+      await supabase.from('site_settings').upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    } else {
+      await Promise.all([
+        supabase.from('site_settings').upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' }),
+        supabase.from('public_site_config').upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+      ]);
+      updateCachedSetting(key, value);
+    }
     setSettings(prev => ({ ...prev, [key]: value }));
     toast.success('Configuración guardada');
   }

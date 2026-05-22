@@ -122,6 +122,8 @@ export default function AdminProducts() {
   const [currentPage, setCurrentPage] = useState(1);
   const [sortField, setSortField] = useState<string>('created_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [filterCategory, setFilterCategory] = useState<string>('');
+  const [filterBrand, setFilterBrand] = useState<string>('');
   
   const [categories, setCategories] = useState<any[]>([]);
   const [brands, setBrands] = useState<any[]>([]);
@@ -413,6 +415,15 @@ export default function AdminProducts() {
     } catch (err: any) { toast.error(err.message); }
   };
 
+  const handleDelete = async (id: string) => {
+    if (!(await confirm(`¿Eliminar producto permanentemente?`, { danger: true }))) return;
+    try {
+       await supabase.from('products').delete().eq('id', id);
+       fetchProducts();
+       toast.success(`Producto eliminado`);
+    } catch (err: any) { toast.error(err.message); }
+  };
+
   const toggleSort = (field: string) => {
     if (sortField === field) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -479,6 +490,15 @@ export default function AdminProducts() {
   const addToGallery = (url: string) => setForm({ ...form, gallery: [...form.gallery, { url }] });
   const removeFromGallery = (idx: number) => setForm({ ...form, gallery: form.gallery.filter((_, i) => i !== idx) });
 
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => {
+      const matchesSearch = p.title.toLowerCase().includes(search.toLowerCase());
+      const matchesCategory = filterCategory === '' || p.category_id === filterCategory || p.product_categories?.[0]?.categories?.id === filterCategory || p.category?.id === filterCategory;
+      const matchesBrand = filterBrand === '' || p.brand?.id === filterBrand || p.brand_id === filterBrand;
+      return matchesSearch && matchesCategory && matchesBrand;
+    });
+  }, [products, search, filterCategory, filterBrand]);
+
   return (
     <div className="max-w-full">
       {/* Header */}
@@ -503,7 +523,7 @@ export default function AdminProducts() {
                 className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer" 
                 checked={products.length > 0 && products.slice(0, itemsPerPage === 'Todos' ? products.length : itemsPerPage).every(p => selectedProducts.includes(p.id)) && selectedProducts.length !== products.length}
                 onChange={(e) => {
-                  const filtered = getSortedProducts(products.filter(p => p.title.toLowerCase().includes(search.toLowerCase())));
+                  const filtered = getSortedProducts(filteredProducts);
                   const currentSubset = itemsPerPage === 'Todos' ? filtered : filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
                   if (e.target.checked) {
                     const uniqueIds = Array.from(new Set([...selectedProducts, ...currentSubset.map((p: any) => p.id)]));
@@ -557,9 +577,14 @@ export default function AdminProducts() {
                   </select>
                </div>
                <div className="flex gap-2 text-xs font-bold text-gray-500">
-                  <button className="px-3 py-1.5 hover:bg-white rounded-md border border-transparent hover:border-gray-200 transition-all">Todos</button>
-                  <button className="px-3 py-1.5 hover:bg-white rounded-md border border-transparent hover:border-gray-200 transition-all">Publicados</button>
-                  <button className="px-3 py-1.5 hover:bg-white rounded-md border border-transparent hover:border-gray-200 transition-all">Borradores</button>
+                  <select className="border-gray-200 border rounded px-2 py-1 text-xs outline-none bg-white" value={filterCategory} onChange={e => { setFilterCategory(e.target.value); setCurrentPage(1); }}>
+                    <option value="">Todas las categorías</option>
+                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  <select className="border-gray-200 border rounded px-2 py-1 text-xs outline-none bg-white" value={filterBrand} onChange={e => { setFilterBrand(e.target.value); setCurrentPage(1); }}>
+                    <option value="">Todas las marcas</option>
+                    {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  </select>
                </div>
             </div>
          </div>
@@ -586,7 +611,7 @@ export default function AdminProducts() {
                  <tr className="text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">
                    <th className="px-6 py-4 w-12">
                      {(() => {
-                        const filtered = getSortedProducts(products.filter(p => p.title.toLowerCase().includes(search.toLowerCase())));
+                        const filtered = getSortedProducts(filteredProducts);
                         const currentSubset = itemsPerPage === 'Todos' ? filtered : filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
                         return (
                           <input 
@@ -624,7 +649,7 @@ export default function AdminProducts() {
                  {loading ? (
                     <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-400 animate-pulse">Cargando catálogo...</td></tr>
                  ) : (() => {
-                    const filtered = getSortedProducts(products.filter(p => p.title.toLowerCase().includes(search.toLowerCase())));
+                    const filtered = getSortedProducts(filteredProducts);
                     const currentSubset = itemsPerPage === 'Todos' ? filtered : filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
                     return currentSubset.map((p: any) => {
                     const primaryCat = p.product_categories?.[0]?.categories;
@@ -726,7 +751,12 @@ export default function AdminProducts() {
                         )}
                       </td>
                       <td className="px-6 py-4 text-right text-xs font-medium text-gray-400">
-                        <button onClick={(e) => { e.stopPropagation(); openEdit(p); }} className="text-blue-500 hover:underline mr-3 text-xs font-bold">Detalles</button>
+                        <div className="flex justify-end gap-3 items-center mb-1">
+                          <button onClick={(e) => { e.stopPropagation(); openEdit(p); }} className="text-blue-500 hover:underline text-xs font-bold">Detalles</button>
+                          <button onClick={(e) => { e.stopPropagation(); handleDelete(p.id); }} className="text-red-400 hover:text-red-600 transition-colors" title="Eliminar producto">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                         {new Date(p.created_at).toLocaleDateString()}
                       </td>
                     </tr>
@@ -741,13 +771,13 @@ export default function AdminProducts() {
                <span>Página {currentPage}</span>
                <div className="flex items-center gap-2">
                  <button disabled={currentPage <= 1} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50">Anterior</button>
-                 <button disabled={products.filter(p => p.title.toLowerCase().includes(search.toLowerCase())).length <= currentPage * itemsPerPage} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50">Siguiente</button>
+                 <button disabled={filteredProducts.length <= (currentPage * (typeof itemsPerPage === 'number' ? itemsPerPage : 0))} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50">Siguiente</button>
                </div>
             </div>
          )}
       </div>
 
-      {/* �"��"��"� MODERN PRODUCT EDITOR (WORDPRESS INSPIRED) �"��"��"� */}
+      {/* 🚀 MODERN PRODUCT EDITOR (WORDPRESS INSPIRED) 🚀 */}
       {showForm && (
         <div className="fixed inset-0 z-[100] flex animate-fade-in">
            <div className="absolute inset-0 bg-dark-900/60 backdrop-blur-sm" onClick={() => setShowForm(false)} />

@@ -116,7 +116,7 @@ function App() {
 
                 {/* Isolated Portals with Lateral Navigation */}
                 <Route path="/vendor" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requireVendor>
                     <PortalLayout type="vendor" />
                   </ProtectedRoute>
                 }>

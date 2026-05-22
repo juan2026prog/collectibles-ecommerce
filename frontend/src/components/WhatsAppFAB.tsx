@@ -17,7 +17,7 @@ export default function WhatsAppFAB() {
 
   useEffect(() => {
     supabase
-      .from('site_settings')
+      .from('public_site_config')
       .select('key, value')
       .in('key', ['social_whatsapp_enabled', 'social_whatsapp_url'])
       .then(({ data }) => {

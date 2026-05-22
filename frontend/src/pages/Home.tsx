@@ -9,6 +9,7 @@ import { ProductSkeleton } from '../components/Skeletons';
 import { ProductGridCard } from '../components/ProductGridCard';
 import { getProductImage } from '../lib/imageUtils';
 import { useSiteSettings } from '../hooks/useSiteSettings';
+import HeroSlider from '../components/HeroSlider';
 
 export default function Home() {
   const { settings } = useSiteSettings();
@@ -21,7 +22,6 @@ export default function Home() {
   const cart = useCartContext();
   const { t } = useLocale();
   const { formatCurrencyPrice } = useCurrency();
-  const [heroIdx, setHeroIdx] = useState(0);
   const [layoutBlocks, setLayoutBlocks] = useState<any[]>([
     { id: 'hero', visible: true },
     { id: 'trust', visible: true },
@@ -35,14 +35,8 @@ export default function Home() {
   ]);
 
   useEffect(() => {
-    if (banners.length <= 1) return;
-    const timer = setInterval(() => setHeroIdx(i => (i + 1) % banners.length), 6000);
-    return () => clearInterval(timer);
-  }, [banners.length]);
-
-  useEffect(() => {
     import('../lib/supabase').then(({ supabase }) => {
-      supabase.from('site_settings').select('value').eq('key', 'appearance_home_layout_json').maybeSingle()
+      supabase.from('public_site_config').select('value').eq('key', 'appearance_home_layout_json').maybeSingle()
         .then(({ data }) => {
           if (data?.value) {
             try {
@@ -77,61 +71,8 @@ export default function Home() {
 
       /* ━━━━━━━━━━━ HERO CINEMATOGRÁFICO ━━━━━━━━━━━ */
       case 'hero': {
-        const heroBanner = banners[heroIdx];
-        const heroImg = heroBanner?.image_url || (featured[0] ? getProductImage(featured[0]) : '');
         return (
-          <section className="relative overflow-hidden min-h-[85vh] flex items-center">
-            <div className="absolute inset-0 bg-[#05070f]" />
-            <div className="absolute -right-40 -top-40 w-[800px] h-[800px] bg-[#f00856]/[.07] blur-[180px] rounded-full" />
-            <div className="absolute -left-60 bottom-0 w-[500px] h-[500px] bg-[#f00856]/[.04] blur-[140px] rounded-full" />
-            <div className="absolute inset-0 opacity-[0.025]" style={{
-              backgroundImage: 'linear-gradient(rgba(255,255,255,.15) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.15) 1px, transparent 1px)',
-              backgroundSize: '60px 60px'
-            }} />
-
-            <div className="max-w-[1500px] mx-auto px-6 w-full relative z-10 py-20">
-              <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-                <div className="animate-fade-in-up">
-                  <div className="inline-block px-4 py-1.5 rounded-full border border-[#f00856]/30 bg-[#f00856]/10 text-[#f00856] text-[10px] font-black uppercase tracking-[0.25em] mb-6">
-                    {settings['home_hero_subtitle'] || 'Collectibles Uruguay'}
-                  </div>
-                  <h1 className="text-5xl md:text-7xl lg:text-[5.5rem] font-black leading-[0.88] tracking-tighter text-white">
-                    {settings['home_hero_title'] ? (
-                      <span dangerouslySetInnerHTML={{ __html: settings['home_hero_title'] }} />
-                    ) : (
-                      <>La colección<br /><span className="text-[#f00856]">empieza</span> acá.</>
-                    )}
-                  </h1>
-                  <p className="text-slate-400 text-lg md:text-xl mt-6 max-w-lg leading-relaxed font-medium">
-                    {settings['home_hero_desc'] || 'Figuras, juguetes, licencias icónicas y coleccionables seleccionados por Collectibles Uruguay.'}
-                  </p>
-                  <div className="flex flex-wrap gap-4 mt-10">
-                    <Link to="/shop" className="btn-primary px-10 py-5 text-base rounded-full group inline-flex items-center">
-                      {settings['home_hero_btn_primary'] || 'Ver catálogo'} <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-                    </Link>
-                    <Link to="/shop?badge=sale" className="px-10 py-5 text-base rounded-full border border-white/15 text-white font-black hover:bg-white/5 transition-colors inline-flex items-center">
-                      {settings['home_hero_btn_secondary'] || 'Ver promociones'}
-                    </Link>
-                  </div>
-                </div>
-
-                <div className="hidden lg:block relative">
-                  <div className="relative rounded-2xl overflow-hidden aspect-[4/3] border border-white/10 shadow-2xl shadow-black/50">
-                    {heroImg ? (
-                      <img src={heroImg} alt="Hero" className="w-full h-full object-cover transition-transform duration-700 hover:scale-105" />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-[#f00856]/20 to-[#05070f] flex items-center justify-center text-8xl opacity-40">🧸</div>
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-                    <div className="absolute bottom-5 left-5 right-5 z-10">
-                      <div className="text-[10px] font-black text-[#f00856] uppercase tracking-[0.25em] mb-1">Slide destacado</div>
-                      <div className="text-white font-black text-lg">{heroBanner?.title || 'Beyblade · Mortal Kombat · Figuras'}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
+          <HeroSlider banners={banners} loading={bannersLoading} />
         );
       }
 

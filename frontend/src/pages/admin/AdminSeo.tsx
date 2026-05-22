@@ -29,7 +29,10 @@ export default function AdminSeo() {
   }
 
   async function saveSetting(key: string, value: string) {
-    await supabase.from('site_settings').upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    await Promise.all([
+      supabase.from('site_settings').upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' }),
+      supabase.from('public_site_config').upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+    ]);
     updateCachedSetting(key, value);
     setSettings(prev => ({ ...prev, [key]: value }));
     setSaved(true); setTimeout(() => setSaved(false), 2000);

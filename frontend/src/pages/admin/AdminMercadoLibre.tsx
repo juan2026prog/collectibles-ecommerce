@@ -76,11 +76,15 @@ export default function AdminMercadoLibre() {
 
   async function saveSettings() {
     setSavingSettings(true);
-    await supabase.from('site_settings').upsert([
+    const rows = [
        { key: 'ml_price_markup_type', value: markupType, updated_at: new Date().toISOString() },
        { key: 'ml_price_markup_value', value: markupValue, updated_at: new Date().toISOString() },
        { key: 'ml_price_rules_enabled', value: rulesEnabled ? 'true' : 'false', updated_at: new Date().toISOString() }
-    ], { onConflict: 'key' });
+    ];
+    await Promise.all([
+      supabase.from('site_settings').upsert(rows, { onConflict: 'key' }),
+      supabase.from('public_site_config').upsert(rows, { onConflict: 'key' })
+    ]);
     updateCachedSettings({
        'ml_price_markup_type': markupType,
        'ml_price_markup_value': markupValue,

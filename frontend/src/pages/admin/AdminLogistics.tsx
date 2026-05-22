@@ -387,15 +387,38 @@ export default function AdminLogistics() {
       settings['shipping_soydelivery_cutoff_time'] = weekdayCutoff;
       settings['shipping_dac_cutoff_time'] = dacCutoff;
 
+      const SECRET_KEYS = new Set([
+        'shipping_soydelivery_api_key', 
+        'shipping_soydelivery_api_id',
+        'shipping_soydelivery_negocio_clave', 
+        'shipping_soydelivery_negocio_id'
+      ]);
+
       const settingsMap: Record<string, string> = {};
       for (const key of keysToSave) {
         const val = settings[key] || '';
-        await supabase.from('site_settings').upsert({ 
-          key, 
-          value: val, 
-          updated_at: new Date().toISOString() 
-        }, { onConflict: 'key' });
-        settingsMap[key] = val;
+        const isSecret = SECRET_KEYS.has(key);
+        if (isSecret) {
+          await supabase.from('site_settings').upsert({ 
+            key, 
+            value: val, 
+            updated_at: new Date().toISOString() 
+          }, { onConflict: 'key' });
+        } else {
+          await Promise.all([
+            supabase.from('site_settings').upsert({ 
+              key, 
+              value: val, 
+              updated_at: new Date().toISOString() 
+            }, { onConflict: 'key' }),
+            supabase.from('public_site_config').upsert({ 
+              key, 
+              value: val, 
+              updated_at: new Date().toISOString() 
+            }, { onConflict: 'key' })
+          ]);
+          settingsMap[key] = val;
+        }
       }
       updateCachedSettings(settingsMap);
 

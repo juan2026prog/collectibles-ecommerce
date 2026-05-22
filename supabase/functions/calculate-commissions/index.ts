@@ -106,13 +106,20 @@ serve(async (req) => {
         .from('vendor_payouts')
         .select('id')
         .eq('vendor_id', vendorId)
+        .eq('order_id', order_id)
         .maybeSingle();
+
+      if (existingPayout) {
+        results.push({ type: 'vendor_payout', skipped: true, reason: 'already exists' });
+        continue;
+      }
 
       // We check if there's a payout for this specific period (simplified: one per order)
       const { error: payoutErr } = await supabase
         .from('vendor_payouts')
         .insert({
           vendor_id: vendorId,
+          order_id: order_id,
           amount: vendorPayout,
           status: 'pending'
         });
