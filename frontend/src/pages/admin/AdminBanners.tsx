@@ -266,6 +266,35 @@ function HeroTab() {
 // ═══════════════════════════════════════════════════════════════
 const MINI_BANNER_DEFAULT = { enabled: true, image_url: '', mobile_image_url: '', title: '', subtitle: '', badge_text: '', button_text: 'Ver más', link_url: '/shop', overlay_opacity: 0.4, text_align: 'left', sort_order: 0 };
 
+const DEFAULT_MINI_BANNERS = [
+  {
+    enabled: true,
+    badge_text: 'COLLECTIBLES URUGUAY',
+    title: 'FIGURAS QUE CUENTAN HISTORIAS.',
+    subtitle: 'No vendemos solo productos. Vendemos recuerdos, nostalgia y personajes que siguen viviendo con vos.',
+    button_text: 'VER CATÁLOGO',
+    link_url: '/shop',
+    overlay_opacity: 0.4,
+    text_align: 'left',
+    image_url: '/images/banners/vitrina_desktop.png',
+    mobile_image_url: '/images/banners/vitrina_mobile.png',
+    sort_order: 0
+  },
+  {
+    enabled: true,
+    badge_text: '',
+    title: 'LA PASIÓN SE COLECCIONA.',
+    subtitle: 'Álbum, figuritas, mascotas oficiales. Para vivir el Mundial 2026 desde el primer sobre.',
+    button_text: 'VER COLECCIÓN',
+    link_url: '/shop?q=mundial',
+    overlay_opacity: 0.4,
+    text_align: 'left',
+    image_url: '/images/banners/mundial_desktop.png',
+    mobile_image_url: '/images/banners/mundial_mobile.png',
+    sort_order: 1
+  }
+];
+
 function MiniBannersTab() {
   const [banners, setBanners] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -274,7 +303,16 @@ function MiniBannersTab() {
   const { toast } = useToast();
   const { confirm } = useConfirmModal();
 
-  useEffect(() => { loadConfigJson('home_mini_banners_json').then(d => { setBanners(d || []); setLoading(false); }).catch(() => setLoading(false)); }, []);
+  useEffect(() => {
+    loadConfigJson('home_mini_banners_json').then(d => {
+      if (d && d.length > 0) {
+        setBanners(d);
+      } else {
+        setBanners(DEFAULT_MINI_BANNERS);
+      }
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
 
   const updateBanner = (i: number, field: string, val: any) => { const n = [...banners]; n[i] = { ...n[i], [field]: val }; setBanners(n); };
 
@@ -454,7 +492,25 @@ function TrendingTab() {
 // ═══════════════════════════════════════════════════════════════
 // TAB 4: CAMPAIGN BANNER
 // ═══════════════════════════════════════════════════════════════
-const CAMPAIGN_DEFAULTS = { enabled: true, campaign_tag: 'EDICIÓN ESPECIAL', title: 'Especial Mundial', subtitle: '', cta_text: 'Ver especial', cta_link: '/shop', background_mode: 'gradient', overlay_opacity: 0.04, text_align: 'left', slides: [] as any[], autoplay: true, autoplay_interval: 5000 };
+const CAMPAIGN_DEFAULTS = {
+  enabled: true,
+  campaign_tag: 'EDICIÓN ESPECIAL',
+  title: 'Especial Mundial',
+  subtitle: 'Álbum, figuritas y mascotas. Armá tu colección con productos disponibles, promos reales y atención directa de Collectibles.',
+  cta_text: 'Ver especial Mundial',
+  cta_link: '/shop?q=mundial',
+  background_mode: 'image',
+  overlay_opacity: 0.04,
+  text_align: 'left',
+  slides: [
+    {
+      image_url: '/images/banners/mundial_desktop.png',
+      mobile_image_url: '/images/banners/mundial_mobile.png'
+    }
+  ] as any[],
+  autoplay: true,
+  autoplay_interval: 5000
+};
 
 function CampaignTab() {
   const [config, setConfig] = useState<any>(CAMPAIGN_DEFAULTS);

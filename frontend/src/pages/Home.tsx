@@ -81,13 +81,47 @@ const DEFAULT_CAMPAIGN: CampaignConfig = {
   subtitle: 'Álbum, figuritas y mascotas. Armá tu colección con productos disponibles, promos reales y atención directa de Collectibles.',
   cta_text: 'Ver especial Mundial',
   cta_link: '/shop?q=mundial',
-  background_mode: 'gradient',
+  background_mode: 'image',
   overlay_opacity: 0.04,
   text_align: 'left',
-  slides: [],
+  slides: [
+    {
+      image_url: '/images/banners/mundial_desktop.png',
+      mobile_image_url: '/images/banners/mundial_mobile.png',
+    }
+  ],
   autoplay: true,
   autoplay_interval: 5000,
 };
+
+const DEFAULT_MINI_BANNERS: MiniBannerConfig[] = [
+  {
+    enabled: true,
+    badge_text: 'COLLECTIBLES URUGUAY',
+    title: 'FIGURAS QUE CUENTAN HISTORIAS.',
+    subtitle: 'No vendemos solo productos. Vendemos recuerdos, nostalgia y personajes que siguen viviendo con vos.',
+    button_text: 'VER CATÁLOGO',
+    link_url: '/shop',
+    overlay_opacity: 0.4,
+    text_align: 'left',
+    image_url: '/images/banners/vitrina_desktop.png',
+    mobile_image_url: '/images/banners/vitrina_mobile.png',
+    sort_order: 0,
+  },
+  {
+    enabled: true,
+    badge_text: '',
+    title: 'LA PASIÓN SE COLECCIONA.',
+    subtitle: 'Álbum, figuritas, mascotas oficiales. Para vivir el Mundial 2026 desde el primer sobre.',
+    button_text: 'VER COLECCIÓN',
+    link_url: '/shop?q=mundial',
+    overlay_opacity: 0.4,
+    text_align: 'left',
+    image_url: '/images/banners/mundial_desktop.png',
+    mobile_image_url: '/images/banners/mundial_mobile.png',
+    sort_order: 1,
+  }
+];
 
 /* ━━━ JSON parse helpers ━━━ */
 function parseMiniBanners(json?: string): MiniBannerConfig[] {
@@ -246,21 +280,10 @@ export default function Home() {
 
       /* ━━━━━━━━━━━ MINI BANNERS DINÁMICOS ━━━━━━━━━━━ */
       case 'banners': {
-        // Use CMS mini banners if configured, fallback to hero banners for backward compat
+        // Use CMS mini banners if configured, fallback to default premium examples
         const activeMinis = miniBanners.length > 0
           ? miniBanners.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
-          : banners.slice(0, 2).map((b: any) => ({
-              enabled: true,
-              image_url: b.image_url,
-              mobile_image_url: b.mobile_image_url,
-              title: b.title,
-              subtitle: b.subtitle,
-              badge_text: b.badge_text,
-              button_text: b.button_text || 'Ver más',
-              link_url: b.link_url || '/shop',
-              overlay_opacity: b.overlay_opacity ?? 0.4,
-              text_align: (b.content_align || 'left') as 'left' | 'center',
-            }));
+          : DEFAULT_MINI_BANNERS;
 
         if (!activeMinis.length) return null;
 
