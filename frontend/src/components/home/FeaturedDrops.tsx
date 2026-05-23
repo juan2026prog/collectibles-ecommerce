@@ -100,7 +100,7 @@ export default function FeaturedDrops({ drops }: FeaturedDropsProps) {
       {/* Slider Container */}
       <div
         ref={containerRef}
-        className="flex gap-6 overflow-x-auto scrollbar-none pb-4 snap-x snap-mandatory scroll-smooth -mx-6 px-6 md:mx-0 md:px-0"
+        className="flex gap-6 overflow-x-auto no-scrollbar pb-4 snap-x snap-mandatory scroll-smooth -mx-6 px-6 md:mx-0 md:px-0"
       >
         {activeDrops.map((drop, i) => (
           <Link
