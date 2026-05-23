@@ -250,12 +250,42 @@
 }
 
 /* ═══ SCROLLBAR ═══ */
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+/* For Webkit browsers (Chrome, Edge, Safari) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
+
+::-webkit-scrollbar-track {
+  background: #05070f;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+  border: 2px solid #05070f;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #f00856;
+}
+
+/* For Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) #05070f;
+}
+
+/* ═══ SCROLLBAR HIDING UTILITIES ═══ */
+.scrollbar-hide,
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+.scrollbar-hide::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
 }
 
 /* ═══ GAMGER GRID TEXTURE ═══ */
@@ -286,15 +316,6 @@
   background-size: 16px 16px;
   opacity: 0.05;
   pointer-events: none;
-}
-
-/* ═══ NO SCROLLBAR ═══ */
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
 }
 
 /* ═══ PROSE STYLING FOR DYNAMIC PAGES (TAILWIND TYPOGRAPHY FALLBACK) ═══ */
