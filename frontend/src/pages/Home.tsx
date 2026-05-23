@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, Truck, Shield, Package, ShoppingCart } from 'lucide-react';
-import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import { ArrowLeft, ArrowRight, Truck, Shield, Package, ShoppingCart } from 'lucide-react';
+import { useState, useEffect, useMemo, lazy, Suspense, useRef } from 'react';
 import { useProducts, useCategories, useBrands, useBanners, useProductGroups } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
 import { useLocale } from '../contexts/LocaleContext';
@@ -198,6 +198,36 @@ export default function Home() {
   const cart = useCartContext();
   const { t } = useLocale();
   const { formatCurrencyPrice } = useCurrency();
+
+  const categoriesContainerRef = useRef<HTMLDivElement>(null);
+  const [showLeftCats, setShowLeftCats] = useState(false);
+  const [showRightCats, setShowRightCats] = useState(true);
+
+  const updateCatsArrows = () => {
+    if (!categoriesContainerRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = categoriesContainerRef.current;
+    setShowLeftCats(scrollLeft > 10);
+    setShowRightCats(scrollLeft < scrollWidth - clientWidth - 10);
+  };
+
+  useEffect(() => {
+    const el = categoriesContainerRef.current;
+    if (el) {
+      el.addEventListener('scroll', updateCatsArrows);
+      updateCatsArrows();
+    }
+    return () => el?.removeEventListener('scroll', updateCatsArrows);
+  }, [categories.length]);
+
+  const scrollCategories = (direction: 'left' | 'right') => {
+    if (!categoriesContainerRef.current) return;
+    const scrollAmount = 384; // Card width (360) + gap (24)
+    categoriesContainerRef.current.scrollBy({
+      left: direction === 'left' ? -scrollAmount : scrollAmount,
+      behavior: 'smooth',
+    });
+  };
+
   const [layoutBlocks, setLayoutBlocks] = useState<any[]>([
     { id: 'hero', visible: true },
     { id: 'trust', visible: true },
@@ -455,23 +485,55 @@ export default function Home() {
                   {settings['home_bento_subtitle'] || 'Mundos coleccionables'}
                 </div>
                 <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight uppercase">
-                  {settings['home_bento_title'] || 'Explorá Universos'}
+                  {settings['home_bento_title'] || 'Explora Categorías'}
                 </h2>
               </div>
-              <Link to="/shop" className="hidden md:inline-flex items-center gap-2 text-sm font-black text-slate-400 hover:text-white transition-colors uppercase tracking-wider">
-                Ver catálogo completo <ArrowRight className="w-4 h-4" />
-              </Link>
+              <div className="flex flex-col items-end gap-3 shrink-0">
+                <Link to="/shop" className="hidden md:inline-flex items-center gap-2 text-sm font-black text-slate-400 hover:text-white transition-colors uppercase tracking-wider">
+                  Ver catálogo completo <ArrowRight className="w-4 h-4" />
+                </Link>
+                {/* Desktop Navigation Arrows */}
+                <div className="hidden md:flex gap-2">
+                  <button
+                    onClick={() => scrollCategories('left')}
+                    disabled={!showLeftCats}
+                    className={`w-10 h-10 rounded-full border flex items-center justify-center transition-all ${
+                      showLeftCats
+                        ? 'border-white/20 bg-white/5 text-white hover:bg-[#f00856] hover:border-[#f00856] cursor-pointer'
+                        : 'border-white/5 text-white/20 cursor-not-allowed'
+                    }`}
+                    aria-label="Anterior categoría"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => scrollCategories('right')}
+                    disabled={!showRightCats}
+                    className={`w-10 h-10 rounded-full border flex items-center justify-center transition-all ${
+                      showRightCats
+                        ? 'border-white/20 bg-white/5 text-white hover:bg-[#f00856] hover:border-[#f00856] cursor-pointer'
+                        : 'border-white/5 text-white/20 cursor-not-allowed'
+                    }`}
+                    aria-label="Siguiente categoría"
+                  >
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {categories.slice(0, 3).map((c) => {
+            <div
+              ref={categoriesContainerRef}
+              className="flex gap-6 overflow-x-auto no-scrollbar pb-4 snap-x snap-mandatory scroll-smooth -mx-6 px-6 md:mx-0 md:px-0"
+            >
+              {categories.slice(0, 5).map((c) => {
                 const mobileImg = c.metadata?.mobile_image_url || c.image_url;
                 const desktopImg = c.image_url;
                 return (
                   <Link
                     key={c.id}
                     to={`/shop?category=${c.slug}`}
-                    className="relative rounded-2xl overflow-hidden group border border-white/10 transition-all hover:border-[#f00856]/30 hover:-translate-y-1 flex flex-col justify-end aspect-[9/12] md:aspect-[3/4] min-h-[420px] shadow-[0_10px_30px_rgba(0,0,0,0.4)]"
+                    className="relative rounded-2xl overflow-hidden group border border-white/10 transition-all hover:border-[#f00856]/30 hover:-translate-y-1 flex flex-col justify-end aspect-[9/12] md:aspect-[3/4] w-[78vw] md:w-[360px] shrink-0 shadow-[0_10px_30px_rgba(0,0,0,0.4)] snap-start select-none"
                   >
                     <picture className="absolute inset-0 w-full h-full">
                       {mobileImg && <source media="(max-width: 767px)" srcSet={mobileImg} />}
