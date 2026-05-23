@@ -231,10 +231,14 @@ function HomeLayoutEditor({ title, description, initialJson, onSave }: any) {
     { id: 'hero', label: 'Hero Cinemático (Slider Principal)', visible: true },
     { id: 'trust', label: 'Barra de Confianza (Envíos, Seguridad)', visible: true },
     { id: 'banners', label: 'Mini Banners Promocionales', visible: true },
-    { id: 'bento', label: 'Categorías Destacadas (Bento)', visible: true },
+    { id: 'featured_drops', label: 'Featured Drops / Universos Destacados', visible: true },
+    { id: 'bento', label: 'Explorá Universos (Categorías Bento)', visible: true },
+    { id: 'new_arrivals', label: 'Nuevo en Collectibles (Novedades)', visible: true },
+    { id: 'preorders', label: 'Preventas Activas', visible: true },
+    { id: 'upcoming_drops', label: 'Próximos Drops (Teasers)', visible: true },
     { id: 'collections', label: 'Grupos/Colecciones Curadas', visible: true },
-    { id: 'trending', label: 'Tendencias (Productos Destacados)', visible: true },
-    { id: 'campaign', label: 'Campaign Banner (Especiales/Eventos)', visible: true },
+    { id: 'trending', label: 'Tendencias (Productos Destacados)', visible: false },
+    { id: 'campaign', label: 'Campaign Banner (Especiales/Eventos)', visible: false },
     { id: 'brands', label: 'Carrusel de Marcas Oficiales', visible: true },
     { id: 'cta', label: 'Llamada a la Acción Final (CTA)', visible: true }
   ];

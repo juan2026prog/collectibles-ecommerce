@@ -10,7 +10,7 @@ export default function AdminCategories() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
-  const [form, setForm] = useState({ name: '', slug: '', image_url: '', sort_order: 0, ml_category_id: '', parent_id: '', is_active: true });
+  const [form, setForm] = useState({ name: '', slug: '', image_url: '', sort_order: 0, ml_category_id: '', parent_id: '', is_active: true, subtitle: '', badge: '', mobile_image_url: '' });
 
   const { toast } = useToast();
   const { confirm } = useConfirmModal();
@@ -54,8 +54,8 @@ export default function AdminCategories() {
     return flattened;
   }
 
-  function openCreate() { setEditing(null); setForm({ name: '', slug: '', image_url: '', sort_order: 0, ml_category_id: '', parent_id: '', is_active: true }); setShowForm(true); }
-  function openEdit(c: any) { setEditing(c); setForm({ name: c.name, slug: c.slug, image_url: c.image_url || '', sort_order: c.sort_order, ml_category_id: c.metadata?.ml_category_id || '', parent_id: c.parent_id || '', is_active: c.is_active ?? true }); setShowForm(true); }
+  function openCreate() { setEditing(null); setForm({ name: '', slug: '', image_url: '', sort_order: 0, ml_category_id: '', parent_id: '', is_active: true, subtitle: '', badge: '', mobile_image_url: '' }); setShowForm(true); }
+  function openEdit(c: any) { setEditing(c); setForm({ name: c.name, slug: c.slug, image_url: c.image_url || '', sort_order: c.sort_order, ml_category_id: c.metadata?.ml_category_id || '', parent_id: c.parent_id || '', is_active: c.is_active ?? true, subtitle: c.metadata?.subtitle || '', badge: c.metadata?.badge || '', mobile_image_url: c.metadata?.mobile_image_url || '' }); setShowForm(true); }
 
   async function handleSave() {
     const payload = { 
@@ -65,7 +65,12 @@ export default function AdminCategories() {
       sort_order: form.sort_order,
       parent_id: form.parent_id || null,
       is_active: form.is_active,
-      metadata: { ml_category_id: form.ml_category_id || null }
+      metadata: { 
+        ml_category_id: form.ml_category_id || null,
+        subtitle: form.subtitle || null,
+        badge: form.badge || null,
+        mobile_image_url: form.mobile_image_url || null
+      }
     };
     if (editing) await supabase.from('categories').update(payload).eq('id', editing.id);
     else await supabase.from('categories').insert(payload);
@@ -225,11 +230,26 @@ export default function AdminCategories() {
                  </div>
               </div>
               <div>
-                 <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1.5">Logo / Archivo Adjunto (URL URL)</label>
+                 <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1.5">Imagen Desktop (URL)</label>
                  <div className="flex gap-2">
                     <input className="form-input flex-1 text-sm" placeholder="https://..." value={form.image_url} onChange={e => setForm({...form, image_url: e.target.value})} />
                     {form.image_url && <img src={form.image_url} className="w-10 h-10 object-cover rounded border border-gray-200" />}
                  </div>
+              </div>
+              <div>
+                 <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1.5">Imagen Mobile (Opcional - URL)</label>
+                 <div className="flex gap-2">
+                    <input className="form-input flex-1 text-sm" placeholder="https://..." value={form.mobile_image_url} onChange={e => setForm({...form, mobile_image_url: e.target.value})} />
+                    {form.mobile_image_url && <img src={form.mobile_image_url} className="w-10 h-10 object-cover rounded border border-gray-200" />}
+                 </div>
+              </div>
+              <div>
+                 <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1.5">Subtítulo / Micro Storytelling</label>
+                 <input className="form-input w-full" value={form.subtitle} onChange={e => setForm({...form, subtitle: e.target.value})} placeholder="Ej: Marvel, Anime y Ediciones Especiales" />
+              </div>
+              <div>
+                 <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1.5">Badge Opcional</label>
+                 <input className="form-input w-full" value={form.badge} onChange={e => setForm({...form, badge: e.target.value})} placeholder="Ej: NUEVO, EXCLUSIVO" />
               </div>
               <div>
                  <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1.5">Orden de Visualización</label>

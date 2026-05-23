@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Plus, Pencil, Trash2, Save, X, Image as ImageIcon, Upload, ToggleLeft, ToggleRight, TrendingUp, Megaphone, Film } from 'lucide-react';
+import { Plus, Pencil, Trash2, Save, X, Image as ImageIcon, Upload, ToggleLeft, ToggleRight, TrendingUp, Megaphone, Film, Sparkles, Clock, Eye } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
@@ -35,13 +35,16 @@ async function saveConfigJson(key: string, value: any) {
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════
 export default function AdminBanners() {
-  const [activeTab, setActiveTab] = useState<'hero' | 'mini' | 'trending' | 'campaign'>('hero');
+  const [activeTab, setActiveTab] = useState<'hero' | 'mini' | 'trending' | 'campaign' | 'drops' | 'preorders' | 'upcoming'>('hero');
   const { toast } = useToast();
   const { confirm } = useConfirmModal();
 
   const tabs = [
     { key: 'hero' as const, label: '🎬 Hero Cinemático', icon: Film },
     { key: 'mini' as const, label: '🖼️ Mini Banners', icon: ImageIcon },
+    { key: 'drops' as const, label: '🚀 Featured Drops', icon: Sparkles },
+    { key: 'preorders' as const, label: '⏳ Preventas', icon: Clock },
+    { key: 'upcoming' as const, label: '🔮 Próximos Drops', icon: Eye },
     { key: 'trending' as const, label: '📈 Tendencias', icon: TrendingUp },
     { key: 'campaign' as const, label: '🎯 Campaign Banner', icon: Megaphone },
   ];
@@ -66,6 +69,9 @@ export default function AdminBanners() {
 
       {activeTab === 'hero' && <HeroTab />}
       {activeTab === 'mini' && <MiniBannersTab />}
+      {activeTab === 'drops' && <DropsTab />}
+      {activeTab === 'preorders' && <PreordersTab />}
+      {activeTab === 'upcoming' && <UpcomingTab />}
       {activeTab === 'trending' && <TrendingTab />}
       {activeTab === 'campaign' && <CampaignTab />}
     </div>
@@ -656,5 +662,455 @@ function ImageField({ label, value, onChange, onUpload, onPickMedia, uploading }
       </div>
       {value && <img src={value} alt="Preview" className="h-12 mt-2 rounded object-cover border border-gray-200" />}
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TAB 5: FEATURED DROPS
+// ═══════════════════════════════════════════════════════════════
+const DROP_DEFAULT = { enabled: true, title: '', subtitle: '', badge_text: '', button_text: 'Ver universo', link_url: '/shop', image_url: '', mobile_image_url: '', sort_order: 0 };
+
+const DEFAULT_FEATURED_DROPS = [
+  {
+    enabled: true,
+    badge_text: 'PREMIUM DROP',
+    title: 'Demon Hunters',
+    subtitle: 'Figuras exclusivas de la orden cazadora de demonios, detalles y poses épicas.',
+    button_text: 'Ver colección',
+    link_url: '/shop?q=hunters',
+    image_url: '/images/drops/demon_hunters.png',
+    mobile_image_url: '',
+    sort_order: 0
+  },
+  {
+    enabled: true,
+    badge_text: 'EXCLUSIVO',
+    title: 'Sonic x DC',
+    subtitle: 'El crossover definitivo entre el erizo azul y los héroes legendarios de DC Comics.',
+    button_text: 'Ver universo',
+    link_url: '/shop?q=sonic',
+    image_url: '/images/drops/sonic_dc.png',
+    mobile_image_url: '',
+    sort_order: 1
+  },
+  {
+    enabled: true,
+    badge_text: 'NUEVO UNIVERSO',
+    title: 'FIGGYZ',
+    subtitle: 'Mini figuras de vinilo estilizadas, el coleccionable urbano del momento.',
+    button_text: 'Explorar FIGGYZ',
+    link_url: '/shop?q=figgyz',
+    image_url: '/images/drops/figgyz.png',
+    mobile_image_url: '',
+    sort_order: 2
+  }
+];
+
+function DropsTab() {
+  const [drops, setDrops] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [mediaTarget, setMediaTarget] = useState<{ idx: number; field: string } | null>(null);
+  const { toast } = useToast();
+  const { confirm } = useConfirmModal();
+
+  useEffect(() => {
+    loadConfigJson('home_featured_drops_json').then(d => {
+      if (d && d.length > 0) {
+        setDrops(d);
+      } else {
+        setDrops(DEFAULT_FEATURED_DROPS);
+      }
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  const updateDrop = (i: number, field: string, val: any) => {
+    const n = [...drops];
+    n[i] = { ...n[i], [field]: val };
+    setDrops(n);
+  };
+
+  const addDrop = () => {
+    if (drops.length >= 10) return;
+    setDrops([...drops, { ...DROP_DEFAULT, sort_order: drops.length }]);
+  };
+
+  const removeDrop = async (i: number) => {
+    if (!(await confirm('¿Eliminar este Drop destacado?', { danger: true }))) return;
+    setDrops(drops.filter((_, idx) => idx !== i));
+  };
+
+  const handleSave = async () => {
+    try {
+      await saveConfigJson('home_featured_drops_json', drops);
+      toast.success('Drops destacados guardados');
+    } catch { toast.error('Error al guardar'); }
+  };
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>, idx: number, field: string) {
+    if (!e.target.files?.[0]) return;
+    try {
+      const url = await uploadBannerImage(e.target.files[0]);
+      updateDrop(idx, field, url);
+      toast.success('Imagen subida');
+    } catch { toast.error('Error al subir'); }
+  }
+
+  if (loading) return <p className="text-gray-400 text-center py-12">Cargando...</p>;
+
+  return (
+    <>
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 text-sm text-blue-800">
+        <p className="font-bold mb-1">🚀 featured Drops / Universos Destacados</p>
+        <p className="text-xs text-blue-700">Sección deslizante horizontal ubicada debajo del hero para mostrar colecciones curadas con una estética editorial.</p>
+        <p className="text-xs text-blue-600 mt-1">📐 Desktop recomendada: 1600×700 • Mobile: 900×1200</p>
+      </div>
+
+      <div className="flex justify-end mb-4">
+        <button onClick={addDrop} className="btn-primary gap-2"><Plus className="w-4 h-4" /> Agregar Drop</button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {drops.map((d, i) => (
+          <div key={i} className={`bg-white rounded-xl border ${d.enabled ? 'border-gray-200' : 'border-gray-100 opacity-60'} p-5 space-y-4`}>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-gray-400"># {i + 1} — Drop destacado</span>
+              <div className="flex items-center gap-2">
+                <button onClick={() => updateDrop(i, 'enabled', !d.enabled)} className="flex items-center">
+                  {d.enabled ? <ToggleRight className="w-7 h-7 text-primary-500" /> : <ToggleLeft className="w-7 h-7 text-gray-300" />}
+                </button>
+                <button onClick={() => removeDrop(i)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div><label className="form-label text-xs font-bold">Título</label><input className="form-input w-full" value={d.title} onChange={e => updateDrop(i, 'title', e.target.value)} placeholder="Demon Hunters" /></div>
+              <div><label className="form-label text-xs font-bold">Subtítulo</label><input className="form-input w-full" value={d.subtitle} onChange={e => updateDrop(i, 'subtitle', e.target.value)} placeholder="Figuras premium" /></div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div><label className="form-label text-xs font-bold">Badge Opcional</label><input className="form-input w-full" value={d.badge_text || ''} onChange={e => updateDrop(i, 'badge_text', e.target.value)} placeholder="EXCLUSIVO" /></div>
+              <div><label className="form-label text-xs font-bold">Texto Botón</label><input className="form-input w-full" value={d.button_text} onChange={e => updateDrop(i, 'button_text', e.target.value)} placeholder="Ver colección" /></div>
+            </div>
+
+            <div><label className="form-label text-xs font-bold">Link de Destino</label><input className="form-input w-full font-mono text-sm" value={d.link_url} onChange={e => updateDrop(i, 'link_url', e.target.value)} placeholder="/shop?category=..." /></div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t">
+              <ImageField label="Imagen Desktop" value={d.image_url} onChange={val => updateDrop(i, 'image_url', val)} onUpload={e => handleUpload(e, i, 'image_url')} onPickMedia={() => { setMediaTarget({ idx: i, field: 'image_url' }); setShowMediaPicker(true); }} />
+              <ImageField label="Imagen Mobile (Opcional)" value={d.mobile_image_url || ''} onChange={val => updateDrop(i, 'mobile_image_url', val)} onUpload={e => handleUpload(e, i, 'mobile_image_url')} onPickMedia={() => { setMediaTarget({ idx: i, field: 'mobile_image_url' }); setShowMediaPicker(true); }} />
+            </div>
+
+            <div>
+              <label className="form-label text-xs font-bold">Orden</label>
+              <input type="number" className="form-input w-24" value={d.sort_order} onChange={e => updateDrop(i, 'sort_order', parseInt(e.target.value) || 0)} />
+            </div>
+          </div>
+        ))}
+        {drops.length === 0 && (
+          <div className="col-span-2 text-center py-12 bg-gray-50 border border-dashed border-gray-300 rounded-xl">
+            <p className="text-gray-500 text-sm">No hay drops configurados</p>
+          </div>
+        )}
+      </div>
+
+      {drops.length > 0 && (
+        <button onClick={handleSave} className="btn-primary py-2.5 px-8 gap-2"><Save className="w-4 h-4" /> Guardar Drops destacados</button>
+      )}
+
+      <MediaPickerModal isOpen={showMediaPicker} onClose={() => { setShowMediaPicker(false); setMediaTarget(null); }} multiple={false}
+        onSelect={(url) => { if (mediaTarget) updateDrop(mediaTarget.idx, mediaTarget.field, url); setShowMediaPicker(false); setMediaTarget(null); }} />
+    </>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TAB 6: PREVENTAS ACTIVAS
+// ═══════════════════════════════════════════════════════════════
+const PREORDER_DEFAULT = { enabled: true, title: '', subtitle: '', badge_text: 'PREVENTA', button_text: 'Reservar ahora', link_url: '/shop', image_url: '', mobile_image_url: '', countdown_date: '', sort_order: 0 };
+
+const DEFAULT_PREORDERS = [
+  {
+    enabled: true,
+    badge_text: 'PREVENTA',
+    title: 'Batman 1:4 Statue',
+    subtitle: 'Escultura premium numerada por Iron Studios, detalles realistas y base temática.',
+    button_text: 'Reservar ahora',
+    link_url: '/shop?q=batman',
+    image_url: '/images/preorders/iron_studios.png',
+    mobile_image_url: '',
+    countdown_date: '2026-09-01',
+    sort_order: 0
+  },
+  {
+    enabled: true,
+    badge_text: 'PREVENTA EXCLUSIVA',
+    title: 'Scorpion 1:6 Scale',
+    subtitle: 'Figura coleccionable articulada con accesorios de fuego y detalles de tela real.',
+    button_text: 'Reservar figura',
+    link_url: '/shop?q=scorpion',
+    image_url: '/images/preorders/mortal_kombat.png',
+    mobile_image_url: '',
+    countdown_date: '2026-10-15',
+    sort_order: 1
+  }
+];
+
+function PreordersTab() {
+  const [preorders, setPreorders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [mediaTarget, setMediaTarget] = useState<{ idx: number; field: string } | null>(null);
+  const { toast } = useToast();
+  const { confirm } = useConfirmModal();
+
+  useEffect(() => {
+    loadConfigJson('home_preorders_json').then(d => {
+      if (d && d.length > 0) {
+        setPreorders(d);
+      } else {
+        setPreorders(DEFAULT_PREORDERS);
+      }
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  const updatePreorder = (i: number, field: string, val: any) => {
+    const n = [...preorders];
+    n[i] = { ...n[i], [field]: val };
+    setPreorders(n);
+  };
+
+  const addPreorder = () => {
+    if (preorders.length >= 5) return;
+    setPreorders([...preorders, { ...PREORDER_DEFAULT, sort_order: preorders.length }]);
+  };
+
+  const removePreorder = async (i: number) => {
+    if (!(await confirm('¿Eliminar esta preventa?', { danger: true }))) return;
+    setPreorders(preorders.filter((_, idx) => idx !== i));
+  };
+
+  const handleSave = async () => {
+    try {
+      await saveConfigJson('home_preorders_json', preorders);
+      toast.success('Preventas guardadas');
+    } catch { toast.error('Error al guardar'); }
+  };
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>, idx: number, field: string) {
+    if (!e.target.files?.[0]) return;
+    try {
+      const url = await uploadBannerImage(e.target.files[0]);
+      updatePreorder(idx, field, url);
+      toast.success('Imagen subida');
+    } catch { toast.error('Error al subir'); }
+  }
+
+  if (loading) return <p className="text-gray-400 text-center py-12">Cargando...</p>;
+
+  return (
+    <>
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 text-sm text-amber-800">
+        <p className="font-bold mb-1">⏳ Preventas Activas</p>
+        <p className="text-xs text-amber-700">Módulo con 2 o 3 bloques gigantes cinematográficos para destacar reservas activas. Soporta contador regresivo opcional.</p>
+        <p className="text-xs text-amber-600 mt-1">📐 Desktop recomendada: 1600×700 • Mobile: 900×1200</p>
+      </div>
+
+      <div className="flex justify-end mb-4">
+        <button onClick={addPreorder} className="btn-primary gap-2"><Plus className="w-4 h-4" /> Agregar Preventa</button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {preorders.map((p, i) => (
+          <div key={i} className={`bg-white rounded-xl border ${p.enabled ? 'border-gray-200' : 'border-gray-100 opacity-60'} p-5 space-y-4`}>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-gray-400"># {i + 1} — Preventa</span>
+              <div className="flex items-center gap-2">
+                <button onClick={() => updatePreorder(i, 'enabled', !p.enabled)} className="flex items-center">
+                  {p.enabled ? <ToggleRight className="w-7 h-7 text-primary-500" /> : <ToggleLeft className="w-7 h-7 text-gray-300" />}
+                </button>
+                <button onClick={() => removePreorder(i)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div><label className="form-label text-xs font-bold">Título</label><input className="form-input w-full" value={p.title} onChange={e => updatePreorder(i, 'title', e.target.value)} placeholder="Batman Statue" /></div>
+              <div><label className="form-label text-xs font-bold">Subtítulo</label><input className="form-input w-full" value={p.subtitle} onChange={e => updatePreorder(i, 'subtitle', e.target.value)} placeholder="Escala 1:4" /></div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div><label className="form-label text-xs font-bold">Badge</label><input className="form-input w-full" value={p.badge_text || ''} onChange={e => updatePreorder(i, 'badge_text', e.target.value)} placeholder="PREVENTA" /></div>
+              <div><label className="form-label text-xs font-bold">Texto Botón</label><input className="form-input w-full" value={p.button_text} onChange={e => updatePreorder(i, 'button_text', e.target.value)} placeholder="Reservar ahora" /></div>
+              <div><label className="form-label text-xs font-bold">Fecha Límite (AAAA-MM-DD)</label><input className="form-input w-full font-mono" value={p.countdown_date || ''} onChange={e => updatePreorder(i, 'countdown_date', e.target.value)} placeholder="2026-09-30" /></div>
+            </div>
+
+            <div><label className="form-label text-xs font-bold">Link de Reserva</label><input className="form-input w-full font-mono text-sm" value={p.link_url} onChange={e => updatePreorder(i, 'link_url', e.target.value)} placeholder="/shop?category=..." /></div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t">
+              <ImageField label="Imagen Desktop" value={p.image_url} onChange={val => updatePreorder(i, 'image_url', val)} onUpload={e => handleUpload(e, i, 'image_url')} onPickMedia={() => { setMediaTarget({ idx: i, field: 'image_url' }); setShowMediaPicker(true); }} />
+              <ImageField label="Imagen Mobile (Opcional)" value={p.mobile_image_url || ''} onChange={val => updatePreorder(i, 'mobile_image_url', val)} onUpload={e => handleUpload(e, i, 'mobile_image_url')} onPickMedia={() => { setMediaTarget({ idx: i, field: 'mobile_image_url' }); setShowMediaPicker(true); }} />
+            </div>
+
+            <div>
+              <label className="form-label text-xs font-bold">Orden</label>
+              <input type="number" className="form-input w-24" value={p.sort_order} onChange={e => updatePreorder(i, 'sort_order', parseInt(e.target.value) || 0)} />
+            </div>
+          </div>
+        ))}
+        {preorders.length === 0 && (
+          <div className="col-span-2 text-center py-12 bg-gray-50 border border-dashed border-gray-300 rounded-xl">
+            <p className="text-gray-500 text-sm">No hay preventas configuradas</p>
+          </div>
+        )}
+      </div>
+
+      {preorders.length > 0 && (
+        <button onClick={handleSave} className="btn-primary py-2.5 px-8 gap-2"><Save className="w-4 h-4" /> Guardar Preventas</button>
+      )}
+
+      <MediaPickerModal isOpen={showMediaPicker} onClose={() => { setShowMediaPicker(false); setMediaTarget(null); }} multiple={false}
+        onSelect={(url) => { if (mediaTarget) updatePreorder(mediaTarget.idx, mediaTarget.field, url); setShowMediaPicker(false); setMediaTarget(null); }} />
+    </>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TAB 7: PRÓXIMOS DROPS (TEASERS)
+// ═══════════════════════════════════════════════════════════════
+const TEASER_DEFAULT = { enabled: true, title: '', date: '', image_url: '' };
+
+const DEFAULT_UPCOMING_CONFIG = {
+  enabled: true,
+  teasers: [
+    {
+      enabled: true,
+      title: 'Transformers Legacy',
+      date: 'Primavera 2026',
+      image_url: '/images/upcoming/transformers.png'
+    },
+    {
+      enabled: true,
+      title: 'Anime Hero Figure',
+      date: 'Invierno 2026',
+      image_url: '/images/upcoming/anime.png'
+    }
+  ]
+};
+
+function UpcomingTab() {
+  const [config, setConfig] = useState<any>({ enabled: true, teasers: [] });
+  const [loading, setLoading] = useState(true);
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [mediaTarget, setMediaTarget] = useState<{ idx: number } | null>(null);
+  const { toast } = useToast();
+  const { confirm } = useConfirmModal();
+
+  useEffect(() => {
+    loadConfigJson('home_upcoming_drops_json').then(d => {
+      if (d) {
+        setConfig(d);
+      } else {
+        setConfig(DEFAULT_UPCOMING_CONFIG);
+      }
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  const updateConfig = (field: string, val: any) => {
+    setConfig((c: any) => ({ ...c, [field]: val }));
+  };
+
+  const updateTeaser = (idx: number, field: string, val: any) => {
+    const t = [...config.teasers];
+    t[idx] = { ...t[idx], [field]: val };
+    updateConfig('teasers', t);
+  };
+
+  const addTeaser = () => {
+    if (config.teasers.length >= 6) return;
+    updateConfig('teasers', [...config.teasers, { ...TEASER_DEFAULT }]);
+  };
+
+  const removeTeaser = async (idx: number) => {
+    if (!(await confirm('¿Eliminar este teaser?', { danger: true }))) return;
+    updateConfig('teasers', config.teasers.filter((_: any, i: number) => i !== idx));
+  };
+
+  const handleSave = async () => {
+    try {
+      await saveConfigJson('home_upcoming_drops_json', config);
+      toast.success('Próximos drops guardados');
+    } catch { toast.error('Error al guardar'); }
+  };
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>, idx: number) {
+    if (!e.target.files?.[0]) return;
+    try {
+      const url = await uploadBannerImage(e.target.files[0]);
+      updateTeaser(idx, 'image_url', url);
+      toast.success('Imagen subida');
+    } catch { toast.error('Error al subir'); }
+  }
+
+  if (loading) return <p className="text-gray-400 text-center py-12">Cargando...</p>;
+
+  return (
+    <>
+      <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 mb-6 text-sm text-purple-800">
+        <p className="font-bold mb-1">🔮 Próximos Drops (Teasers)</p>
+        <p className="text-xs text-purple-700">Sección opcional para generar expectación de futuros lanzamientos mediante siluetas o teasers y botón de notificación.</p>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6 mb-6">
+        <div className="flex items-center justify-between pb-4 border-b">
+          <div>
+            <h4 className="font-bold text-gray-900">Estado del Módulo</h4>
+            <p className="text-xs text-gray-500">Activa o desactiva la sección completa en la home.</p>
+          </div>
+          <button onClick={() => updateConfig('enabled', !config.enabled)} className="flex items-center gap-2">
+            {config.enabled ? <ToggleRight className="w-8 h-8 text-primary-500" /> : <ToggleLeft className="w-8 h-8 text-gray-300" />}
+            <span className={`text-sm font-bold ${config.enabled ? 'text-green-600' : 'text-gray-400'}`}>{config.enabled ? 'Activo' : 'Inactivo'}</span>
+          </button>
+        </div>
+
+        {config.enabled && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h5 className="font-bold text-gray-800 text-sm">Lista de Teasers (Siluetas/Imágenes misteriosas)</h5>
+              <button onClick={addTeaser} className="btn-secondary py-1.5 px-3 text-xs gap-1 border-gray-200 text-gray-700 hover:bg-gray-100"><Plus className="w-3.5 h-3.5" /> Agregar Teaser</button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {config.teasers.map((t: any, idx: number) => (
+                <div key={idx} className="bg-gray-50 rounded-xl border border-gray-200 p-4 space-y-4 relative">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-gray-500">Teaser #{idx + 1}</span>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => updateTeaser(idx, 'enabled', !t.enabled)} className="p-1">
+                        {t.enabled ? <ToggleRight className="w-6 h-6 text-primary-500" /> : <ToggleLeft className="w-6 h-6 text-gray-300" />}
+                      </button>
+                      <button onClick={() => removeTeaser(idx)} className="p-1 text-gray-400 hover:text-red-500 rounded"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><label className="form-label text-xs font-bold">Título / Serie</label><input className="form-input w-full bg-white" value={t.title} onChange={e => updateTeaser(idx, 'title', e.target.value)} placeholder="Transformers Legacy" /></div>
+                    <div><label className="form-label text-xs font-bold">Fecha / Época</label><input className="form-input w-full bg-white" value={t.date} onChange={e => updateTeaser(idx, 'date', e.target.value)} placeholder="Primavera 2026" /></div>
+                  </div>
+
+                  <ImageField label="Imagen Teaser / Silueta" value={t.image_url} onChange={val => updateTeaser(idx, 'image_url', val)} onUpload={e => handleUpload(e, idx)} onPickMedia={() => { setMediaTarget({ idx }); setShowMediaPicker(true); }} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <button onClick={handleSave} className="btn-primary py-2.5 px-8 gap-2 w-full"><Save className="w-4 h-4" /> Guardar Próximos Drops</button>
+
+      <MediaPickerModal isOpen={showMediaPicker} onClose={() => { setShowMediaPicker(false); setMediaTarget(null); }} multiple={false}
+        onSelect={(url) => { if (mediaTarget) updateTeaser(mediaTarget.idx, 'image_url', url); setShowMediaPicker(false); setMediaTarget(null); }} />
+    </>
   );
 }

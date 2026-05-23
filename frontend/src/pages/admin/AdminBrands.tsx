@@ -10,7 +10,7 @@ export default function AdminBrands() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
-  const [form, setForm] = useState({ name: '', slug: '', description: '', logo_url: '' });
+  const [form, setForm] = useState({ name: '', slug: '', description: '', logo_url: '', is_active: true, sort_order: 0 });
 
   const { toast } = useToast();
   const { confirm } = useConfirmModal();
@@ -19,20 +19,22 @@ export default function AdminBrands() {
 
   async function fetch() {
     setLoading(true);
-    const { data } = await supabase.from('brands').select('*').order('name', { ascending: true });
+    const { data } = await supabase.from('brands').select('*').order('sort_order', { ascending: true }).order('name', { ascending: true });
     setBrands(data || []);
     setLoading(false);
   }
 
-  function openCreate() { setEditing(null); setForm({ name: '', slug: '', description: '', logo_url: '' }); setShowForm(true); }
-  function openEdit(b: any) { setEditing(b); setForm({ name: b.name, slug: b.slug, description: b.description || '', logo_url: b.logo_url || '' }); setShowForm(true); }
+  function openCreate() { setEditing(null); setForm({ name: '', slug: '', description: '', logo_url: '', is_active: true, sort_order: 0 }); setShowForm(true); }
+  function openEdit(b: any) { setEditing(b); setForm({ name: b.name, slug: b.slug, description: b.description || '', logo_url: b.logo_url || '', is_active: b.is_active ?? true, sort_order: b.sort_order || 0 }); setShowForm(true); }
 
   async function handleSave() {
     const payload = { 
       name: form.name, 
       slug: form.slug || form.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''), 
       description: form.description || null,
-      logo_url: form.logo_url || null
+      logo_url: form.logo_url || null,
+      is_active: form.is_active,
+      sort_order: form.sort_order
     };
     if (editing) await supabase.from('brands').update(payload).eq('id', editing.id);
     else await supabase.from('brands').insert(payload);
@@ -76,15 +78,17 @@ export default function AdminBrands() {
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Logo</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Nombre</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Slug</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Estado</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Orden</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Descripción</th>
                 <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr><td colSpan={5} className="px-6 py-12 text-center text-gray-400">Cargando...</td></tr>
+                <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400">Cargando...</td></tr>
               ) : brands.length === 0 ? (
-                <tr><td colSpan={5} className="px-6 py-12 text-center text-gray-400">No hay marcas</td></tr>
+                <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400">No hay marcas</td></tr>
               ) : brands.map(b => (
                 <tr key={b.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4">
@@ -94,6 +98,14 @@ export default function AdminBrands() {
                   </td>
                   <td className="px-6 py-4 font-semibold text-gray-900">{b.name}</td>
                   <td className="px-6 py-4 font-mono text-sm text-gray-500">/{b.slug}</td>
+                  <td className="px-6 py-4">
+                    {b.is_active !== false ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Visible</span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">Oculta</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-gray-500">{b.sort_order || 0}</td>
                   <td className="px-6 py-4 text-gray-500 text-sm max-w-xs truncate">{b.description || '-'}</td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end gap-1">
@@ -121,6 +133,8 @@ export default function AdminBrands() {
               
               <h3 className="font-bold text-gray-900 border-b pb-2 mb-2">{b.name}</h3>
               <div className="flex-1 space-y-1 mb-4">
+                 <p className="text-xs text-gray-500 flex justify-between"><span className="font-medium text-gray-400">Estado:</span> {b.is_active !== false ? <span className="text-[10px] bg-green-100 text-green-800 px-1 rounded">Visible</span> : <span className="text-[10px] bg-red-100 text-red-800 px-1 rounded">Oculta</span>}</p>
+                 <p className="text-xs text-gray-500 flex justify-between"><span className="font-medium text-gray-400">Orden:</span> <span>{b.sort_order || 0}</span></p>
                  <p className="text-xs text-gray-500 flex justify-between"><span className="font-medium text-gray-400">Slug:</span> <span className="font-mono text-[10px] bg-gray-100 px-1 rounded truncate ml-2">/{b.slug}</span></p>
                  {b.description && <p className="text-xs text-gray-500 mt-2 line-clamp-2">{b.description}</p>}
               </div>
@@ -171,7 +185,18 @@ export default function AdminBrands() {
               </div>
               <div>
                  <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1.5">Descripción Corta</label>
-                 <textarea rows={3} className="form-input w-full text-sm resize-none" value={form.description} onChange={e => setForm({...form, description: e.target.value})} placeholder="Breve biografía de la marca para SEO..." />
+                 <textarea rows={3} className="form-input w-full text-sm resize-none" value={form.description || ''} onChange={e => setForm({...form, description: e.target.value})} placeholder="Breve biografía de la marca para SEO..." />
+              </div>
+              <div>
+                 <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1.5">Orden de Visualización</label>
+                 <input type="number" className="form-input w-full" value={form.sort_order} onChange={e => setForm({...form, sort_order: parseInt(e.target.value) || 0})} />
+              </div>
+              <div className="flex items-center gap-2 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                <input type="checkbox" id="is_active" className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500" checked={form.is_active} onChange={e => setForm({...form, is_active: e.target.checked})} />
+                <div>
+                  <label htmlFor="is_active" className="block text-sm font-bold text-gray-900">Marca Activa</label>
+                  <p className="text-xs text-gray-500">Si desmarcas esta opción, la marca no se mostrará a los clientes ni en el carrusel.</p>
+                </div>
               </div>
             </div>
             <div className="flex gap-3 mt-8 pt-4 border-t">
