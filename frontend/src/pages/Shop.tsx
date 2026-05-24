@@ -38,7 +38,7 @@ export default function Shop() {
   const [priceMin, setPriceMin] = useState('');
   const [priceMax, setPriceMax] = useState('');
   const [searchInput, setSearchInput] = useState(searchQ);
-  const limit = 12;
+  const limit = gridCols === 5 ? 15 : 12;
 
   const { categories, loading: catsLoading } = useCategories();
   const { brands, loading: brandsLoading } = useBrands();
@@ -318,7 +318,7 @@ export default function Shop() {
                 {[3, 4, 5].map(n => (
                   <button
                     key={n}
-                    onClick={() => setGridCols(n)}
+                    onClick={() => { setGridCols(n); setPage(0); }}
                     className={`w-8 h-8 rounded font-black text-sm transition-all ${
                       gridCols === n
                         ? 'bg-[#f00856] text-white shadow-lg shadow-[#f00856]/30'
