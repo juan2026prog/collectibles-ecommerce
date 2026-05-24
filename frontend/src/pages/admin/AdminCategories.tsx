@@ -1,8 +1,19 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Plus, Pencil, Trash2, Save, X, Image as ImageIcon, List, Grid3X3 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Save, X, Image as ImageIcon, Upload, List, Grid3X3 } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
+import { MediaPickerModal } from '../../components/MediaPickerModal';
+
+async function uploadCategoryImage(file: File): Promise<string> {
+  const ext = file.name.split('.').pop();
+  const sanitized = file.name.replace(`.${ext}`, '').toLowerCase().replace(/[^a-z0-9]/g, '-');
+  const path = `categories/${Date.now()}-${sanitized}.${ext}`;
+  const { error } = await supabase.storage.from('public-assets').upload(path, file, { cacheControl: '3600', upsert: false });
+  if (error) throw error;
+  const { data } = supabase.storage.from('public-assets').getPublicUrl(path);
+  return data.publicUrl;
+}
 
 export default function AdminCategories() {
   const [categories, setCategories] = useState<any[]>([]);
@@ -12,8 +23,23 @@ export default function AdminCategories() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [form, setForm] = useState({ name: '', slug: '', image_url: '', sort_order: 0, ml_category_id: '', parent_id: '', is_active: true, subtitle: '', badge: '', mobile_image_url: '' });
 
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [activeMediaField, setActiveMediaField] = useState<'image_url' | 'mobile_image_url' | null>(null);
+
   const { toast } = useToast();
   const { confirm } = useConfirmModal();
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>, field: 'image_url' | 'mobile_image_url') {
+    if (!e.target.files?.[0]) return;
+    setUploadingImage(true);
+    try {
+      const url = await uploadCategoryImage(e.target.files[0]);
+      setForm(prev => ({ ...prev, [field]: url }));
+      toast.success('Imagen subida');
+    } catch { toast.error('Error al subir imagen'); }
+    setUploadingImage(false);
+  }
 
   useEffect(() => { fetch(); }, []);
 
@@ -229,20 +255,22 @@ export default function AdminCategories() {
                     <input className="form-input flex-1 rounded-l-none font-mono text-sm" value={form.slug} onChange={e => setForm({...form, slug: e.target.value})} placeholder="coleccionables" />
                  </div>
               </div>
-              <div>
-                 <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1.5">Imagen Desktop (URL)</label>
-                 <div className="flex gap-2">
-                    <input className="form-input flex-1 text-sm" placeholder="https://..." value={form.image_url} onChange={e => setForm({...form, image_url: e.target.value})} />
-                    {form.image_url && <img src={form.image_url} className="w-10 h-10 object-cover rounded border border-gray-200" />}
-                 </div>
-              </div>
-              <div>
-                 <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1.5">Imagen Mobile (Opcional - URL)</label>
-                 <div className="flex gap-2">
-                    <input className="form-input flex-1 text-sm" placeholder="https://..." value={form.mobile_image_url} onChange={e => setForm({...form, mobile_image_url: e.target.value})} />
-                    {form.mobile_image_url && <img src={form.mobile_image_url} className="w-10 h-10 object-cover rounded border border-gray-200" />}
-                 </div>
-              </div>
+              <ImageField 
+                label="Imagen Desktop" 
+                value={form.image_url} 
+                onChange={v => setForm({...form, image_url: v})} 
+                onUpload={e => handleImageUpload(e, 'image_url')} 
+                onPickMedia={() => { setActiveMediaField('image_url'); setShowMediaPicker(true); }} 
+                uploading={uploadingImage} 
+              />
+              <ImageField 
+                label="Imagen Mobile (Opcional)" 
+                value={form.mobile_image_url} 
+                onChange={v => setForm({...form, mobile_image_url: v})} 
+                onUpload={e => handleImageUpload(e, 'mobile_image_url')} 
+                onPickMedia={() => { setActiveMediaField('mobile_image_url'); setShowMediaPicker(true); }} 
+                uploading={uploadingImage} 
+              />
               <div>
                  <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1.5">Subtítulo / Micro Storytelling</label>
                  <input className="form-input w-full" value={form.subtitle} onChange={e => setForm({...form, subtitle: e.target.value})} placeholder="Ej: Marvel, Anime y Ediciones Especiales" />
@@ -288,6 +316,39 @@ export default function AdminCategories() {
           </div>
         </>
       )}
+      <MediaPickerModal 
+        isOpen={showMediaPicker} 
+        onClose={() => { setShowMediaPicker(false); setActiveMediaField(null); }} 
+        multiple={false}
+        onSelect={(url) => { 
+          if (activeMediaField) setForm(prev => ({ ...prev, [activeMediaField]: url })); 
+          setShowMediaPicker(false); 
+          setActiveMediaField(null); 
+        }} 
+      />
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SHARED: Image Field Component
+// ═══════════════════════════════════════════════════════════════
+function ImageField({ label, value, onChange, onUpload, onPickMedia, uploading }: {
+  label: string; value: string; onChange: (v: string) => void;
+  onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; onPickMedia: () => void; uploading?: boolean;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1.5">{label}</label>
+      <div className="flex gap-2">
+        <input className="form-input flex-1 text-sm font-mono" value={value} onChange={e => onChange(e.target.value)} placeholder="https://..." />
+        <button type="button" onClick={onPickMedia} className="btn-secondary flex-shrink-0 px-3 bg-gray-50 border border-gray-300 hover:bg-gray-100 rounded-lg shadow-none" title="Galería"><ImageIcon className="w-4 h-4 text-gray-500" /></button>
+        <label className={`btn-secondary flex-shrink-0 cursor-pointer px-3 bg-gray-50 border border-gray-300 hover:bg-gray-100 rounded-lg shadow-none ${uploading ? 'opacity-50 pointer-events-none' : ''}`} title="Subir">
+          <Upload className="w-4 h-4 text-gray-500" />
+          <input type="file" className="hidden" accept="image/*" onChange={onUpload} />
+        </label>
+      </div>
+      {value && <img src={value} alt="Preview" className="w-10 h-10 mt-2 object-cover rounded border border-gray-200" />}
     </div>
   );
 }
