@@ -242,6 +242,11 @@ export default function Home() {
   const { t } = useLocale();
   const { formatCurrencyPrice } = useCurrency();
 
+  const displayedCategories = useMemo(() =>
+    parseHomeCategories(settings['home_categories_config_json'], categories),
+    [settings['home_categories_config_json'], categories]
+  );
+
   const categoriesContainerRef = useRef<HTMLDivElement>(null);
   const [showLeftCats, setShowLeftCats] = useState(false);
   const [showRightCats, setShowRightCats] = useState(true);
@@ -343,10 +348,7 @@ export default function Home() {
     [settings['home_preorders_json']]
   );
 
-  const displayedCategories = useMemo(() =>
-    parseHomeCategories(settings['home_categories_config_json'], categories),
-    [settings['home_categories_config_json'], categories]
-  );
+
 
   const upcomingConfig = useMemo(() =>
     parseUpcomingConfig(settings['home_upcoming_drops_json']),
