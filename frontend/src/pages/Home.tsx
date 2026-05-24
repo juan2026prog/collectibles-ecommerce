@@ -187,6 +187,49 @@ function parseCampaignConfig(json?: string, settings?: Record<string, string>): 
   } catch { return DEFAULT_CAMPAIGN; }
 }
 
+function parseHomeCategories(json?: string, allCategories: any[] = []): any[] {
+  try {
+    if (!json) {
+      return allCategories
+        .filter(c => c.is_active !== false)
+        .slice(0, 5);
+    }
+    const parsed = JSON.parse(json);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      return allCategories
+        .filter(c => c.is_active !== false)
+        .slice(0, 5);
+    }
+    const activeConfigs = parsed
+      .filter((cfg: any) => cfg.enabled !== false)
+      .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+
+    const categoryMap = new Map(allCategories.map(c => [c.id, c]));
+    
+    return activeConfigs
+      .map((cfg: any) => {
+        const cat = categoryMap.get(cfg.category_id);
+        if (!cat) return null;
+        return {
+          ...cat,
+          name: cfg.name_override || cat.name,
+          image_url: cfg.image_url || cat.image_url,
+          metadata: {
+            ...cat.metadata,
+            badge: cfg.badge_text !== undefined && cfg.badge_text !== '' ? cfg.badge_text : cat.metadata?.badge,
+            subtitle: cfg.subtitle !== undefined && cfg.subtitle !== '' ? cfg.subtitle : cat.metadata?.subtitle,
+            mobile_image_url: cfg.mobile_image_url !== undefined && cfg.mobile_image_url !== '' ? cfg.mobile_image_url : cat.metadata?.mobile_image_url,
+          }
+        };
+      })
+      .filter(Boolean);
+  } catch {
+    return allCategories
+      .filter(c => c.is_active !== false)
+      .slice(0, 5);
+  }
+}
+
 export default function Home() {
   const { settings } = useSiteSettings();
   const { banners, loading: bannersLoading } = useBanners();
@@ -217,7 +260,7 @@ export default function Home() {
       updateCatsArrows();
     }
     return () => el?.removeEventListener('scroll', updateCatsArrows);
-  }, [categories.length]);
+  }, [displayedCategories.length]);
 
   const scrollCategories = (direction: 'left' | 'right') => {
     if (!categoriesContainerRef.current) return;
@@ -298,6 +341,11 @@ export default function Home() {
   const preorders = useMemo(() =>
     parsePreorders(settings['home_preorders_json']),
     [settings['home_preorders_json']]
+  );
+
+  const displayedCategories = useMemo(() =>
+    parseHomeCategories(settings['home_categories_config_json'], categories),
+    [settings['home_categories_config_json'], categories]
   );
 
   const upcomingConfig = useMemo(() =>
@@ -526,7 +574,7 @@ export default function Home() {
               ref={categoriesContainerRef}
               className="flex gap-6 overflow-x-auto no-scrollbar pb-4 snap-x snap-mandatory scroll-smooth -mx-6 px-6 md:mx-0 md:px-0"
             >
-              {categories.slice(0, 5).map((c) => {
+              {displayedCategories.map((c) => {
                 const mobileImg = c.metadata?.mobile_image_url || c.image_url;
                 const desktopImg = c.image_url;
                 return (

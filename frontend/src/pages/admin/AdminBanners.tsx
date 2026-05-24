@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Plus, Pencil, Trash2, Save, X, Image as ImageIcon, Upload, ToggleLeft, ToggleRight, TrendingUp, Megaphone, Film, Sparkles, Clock, Eye } from 'lucide-react';
+import { Plus, Pencil, Trash2, Save, X, Image as ImageIcon, Upload, ToggleLeft, ToggleRight, TrendingUp, Megaphone, Film, Sparkles, Clock, Eye, Folder, ArrowUp, ArrowDown } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
@@ -35,13 +35,14 @@ async function saveConfigJson(key: string, value: any) {
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════
 export default function AdminBanners() {
-  const [activeTab, setActiveTab] = useState<'hero' | 'mini' | 'trending' | 'campaign' | 'drops' | 'preorders' | 'upcoming'>('hero');
+  const [activeTab, setActiveTab] = useState<'hero' | 'mini' | 'trending' | 'campaign' | 'drops' | 'preorders' | 'upcoming' | 'bento'>('hero');
   const { toast } = useToast();
   const { confirm } = useConfirmModal();
 
   const tabs = [
     { key: 'hero' as const, label: '🎬 Hero Cinemático', icon: Film },
     { key: 'mini' as const, label: '🖼️ Mini Banners', icon: ImageIcon },
+    { key: 'bento' as const, label: '📁 Categorías Home', icon: Folder },
     { key: 'drops' as const, label: '🚀 Featured Drops', icon: Sparkles },
     { key: 'preorders' as const, label: '⏳ Preventas', icon: Clock },
     { key: 'upcoming' as const, label: '🔮 Próximos Drops', icon: Eye },
@@ -69,6 +70,7 @@ export default function AdminBanners() {
 
       {activeTab === 'hero' && <HeroTab />}
       {activeTab === 'mini' && <MiniBannersTab />}
+      {activeTab === 'bento' && <BentoCategoriesTab />}
       {activeTab === 'drops' && <DropsTab />}
       {activeTab === 'preorders' && <PreordersTab />}
       {activeTab === 'upcoming' && <UpcomingTab />}
@@ -1111,6 +1113,206 @@ function UpcomingTab() {
 
       <MediaPickerModal isOpen={showMediaPicker} onClose={() => { setShowMediaPicker(false); setMediaTarget(null); }} multiple={false}
         onSelect={(url) => { if (mediaTarget) updateTeaser(mediaTarget.idx, 'image_url', url); setShowMediaPicker(false); setMediaTarget(null); }} />
+    </>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TAB 8: CATEGORÍAS HOME (BENTO)
+// ═══════════════════════════════════════════════════════════════
+function BentoCategoriesTab() {
+  const [items, setItems] = useState<any[]>([]);
+  const [allCategories, setAllCategories] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [mediaTarget, setMediaTarget] = useState<{ idx: number; field: string } | null>(null);
+  const { toast } = useToast();
+  const { confirm } = useConfirmModal();
+
+  useEffect(() => {
+    // Load categories first
+    supabase.from('categories').select('*').order('name')
+      .then(({ data: catData }) => {
+        setAllCategories(catData || []);
+        
+        // Then load config
+        loadConfigJson('home_categories_config_json').then(d => {
+          if (d && Array.isArray(d)) {
+            setItems(d.sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0)));
+          } else {
+            setItems([]);
+          }
+          setLoading(false);
+        }).catch(() => setLoading(false));
+      });
+  }, []);
+
+  const updateItem = (idx: number, field: string, val: any) => {
+    const n = [...items];
+    n[idx] = { ...n[idx], [field]: val };
+    setItems(n);
+  };
+
+  const addItem = () => {
+    const defaultCatId = allCategories[0]?.id || '';
+    const newItem = {
+      category_id: defaultCatId,
+      enabled: true,
+      sort_order: items.length,
+      name_override: '',
+      subtitle: '',
+      badge_text: '',
+      image_url: '',
+      mobile_image_url: ''
+    };
+    setItems([...items, newItem]);
+  };
+
+  const removeItem = async (idx: number) => {
+    if (!(await confirm('¿Eliminar esta categoría del home?', { danger: true }))) return;
+    const filtered = items.filter((_, i) => i !== idx);
+    // Recalculate sort_order
+    const updated = filtered.map((item, index) => ({ ...item, sort_order: index }));
+    setItems(updated);
+  };
+
+  const moveUp = (idx: number) => {
+    if (idx === 0) return;
+    const newItems = [...items];
+    const temp = newItems[idx];
+    newItems[idx] = newItems[idx - 1];
+    newItems[idx - 1] = temp;
+    // Recalculate sort_order
+    newItems.forEach((item, index) => {
+      item.sort_order = index;
+    });
+    setItems(newItems);
+  };
+
+  const moveDown = (idx: number) => {
+    if (idx === items.length - 1) return;
+    const newItems = [...items];
+    const temp = newItems[idx];
+    newItems[idx] = newItems[idx + 1];
+    newItems[idx + 1] = temp;
+    // Recalculate sort_order
+    newItems.forEach((item, index) => {
+      item.sort_order = index;
+    });
+    setItems(newItems);
+  };
+
+  const handleSave = async () => {
+    try {
+      await saveConfigJson('home_categories_config_json', items);
+      toast.success('Categorías del home guardadas');
+    } catch {
+      toast.error('Error al guardar las categorías');
+    }
+  };
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>, idx: number, field: string) {
+    if (!e.target.files?.[0]) return;
+    try {
+      const url = await uploadBannerImage(e.target.files[0]);
+      updateItem(idx, field, url);
+      toast.success('Imagen subida con éxito');
+    } catch {
+      toast.error('Error al subir la imagen');
+    }
+  }
+
+  if (loading) return <p className="text-gray-400 text-center py-12">Cargando...</p>;
+
+  return (
+    <>
+      <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 mb-6 text-sm text-indigo-800">
+        <p className="font-bold mb-1">📁 Categorías de la Home ("Explora Categorías")</p>
+        <p className="text-xs text-indigo-700">
+          Configura y ordena las categorías que se muestran en la sección del carrusel de la página de inicio.
+          Puedes añadir títulos personalizados, badges, subtítulos e imágenes que solo afectarán a la home.
+        </p>
+      </div>
+
+      <div className="flex justify-end mb-4">
+        <button onClick={addItem} className="btn-primary gap-2">
+          <Plus className="w-4 h-4" /> Agregar Categoría
+        </button>
+      </div>
+
+      <div className="space-y-4 mb-6">
+        {items.map((item, i) => {
+          const matchedCat = allCategories.find(c => c.id === item.category_id);
+          return (
+            <div key={i} className={`bg-white rounded-xl border ${item.enabled ? 'border-gray-200' : 'border-gray-100 opacity-60'} p-5`}>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-gray-100 mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex flex-col gap-1">
+                    <button onClick={() => moveUp(i)} disabled={i === 0} className={`p-1 rounded hover:bg-gray-100 ${i === 0 ? 'text-gray-300 pointer-events-none' : 'text-gray-500'}`} title="Subir orden">
+                      <ArrowUp className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => moveDown(i)} disabled={i === items.length - 1} className={`p-1 rounded hover:bg-gray-100 ${i === items.length - 1 ? 'text-gray-300 pointer-events-none' : 'text-gray-500'}`} title="Bajar orden">
+                      <ArrowDown className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Categoría Asociada</label>
+                    <select value={item.category_id} onChange={e => updateItem(i, 'category_id', e.target.value)} className="form-input text-sm font-bold min-w-[200px]">
+                      {allCategories.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <button onClick={() => updateItem(i, 'enabled', !item.enabled)} className="flex items-center gap-1.5 text-sm">
+                    {item.enabled ? <ToggleRight className="w-7 h-7 text-primary-500" /> : <ToggleLeft className="w-7 h-7 text-gray-300" />}
+                    <span className={`text-xs font-bold ${item.enabled ? 'text-green-600' : 'text-gray-400'}`}>{item.enabled ? 'Activo' : 'Inactivo'}</span>
+                  </button>
+                  <button onClick={() => removeItem(i)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded" title="Eliminar del home">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                  <label className="form-label text-xs font-bold">Nombre Personalizado (Opcional)</label>
+                  <input className="form-input w-full" value={item.name_override || ''} onChange={e => updateItem(i, 'name_override', e.target.value)} placeholder={matchedCat?.name || "Ej: Funko Pop Premium"} />
+                </div>
+                <div>
+                  <label className="form-label text-xs font-bold">Subtítulo (Opcional)</label>
+                  <input className="form-input w-full" value={item.subtitle || ''} onChange={e => updateItem(i, 'subtitle', e.target.value)} placeholder="Ej: Marvel, Anime y más" />
+                </div>
+                <div>
+                  <label className="form-label text-xs font-bold">Etiqueta/Badge (Opcional)</label>
+                  <input className="form-input w-full" value={item.badge_text || ''} onChange={e => updateItem(i, 'badge_text', e.target.value)} placeholder="Ej: HOT, TENDENCIA, EXCLUSIVO" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <ImageField label="Imagen Desktop (Opcional)" value={item.image_url || ''} onChange={val => updateItem(i, 'image_url', val)} onUpload={e => handleUpload(e, i, 'image_url')} onPickMedia={() => { setMediaTarget({ idx: i, field: 'image_url' }); setShowMediaPicker(true); }} />
+                <ImageField label="Imagen Mobile (Opcional)" value={item.mobile_image_url || ''} onChange={val => updateItem(i, 'mobile_image_url', val)} onUpload={e => handleUpload(e, i, 'mobile_image_url')} onPickMedia={() => { setMediaTarget({ idx: i, field: 'mobile_image_url' }); setShowMediaPicker(true); }} />
+              </div>
+            </div>
+          );
+        })}
+
+        {items.length === 0 && (
+          <div className="text-center py-12 bg-gray-50 border border-dashed border-gray-300 rounded-xl">
+            <p className="text-gray-500 text-sm mb-2">No hay categorías configuradas para la home</p>
+            <button onClick={addItem} className="text-primary-600 font-bold text-sm hover:underline">Agregar la primera categoría</button>
+          </div>
+        )}
+      </div>
+
+      {items.length > 0 && (
+        <button onClick={handleSave} className="btn-primary py-2.5 px-8 gap-2"><Save className="w-4 h-4" /> Guardar Categorías de la Home</button>
+      )}
+
+      <MediaPickerModal isOpen={showMediaPicker} onClose={() => { setShowMediaPicker(false); setMediaTarget(null); }} multiple={false}
+        onSelect={(url) => { if (mediaTarget) updateItem(mediaTarget.idx, mediaTarget.field, url); setShowMediaPicker(false); setMediaTarget(null); }} />
     </>
   );
 }
