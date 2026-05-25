@@ -95,7 +95,7 @@ function PreorderCard({ item }: { item: PreorderItem }) {
           src={item.image_url}
           alt={item.title}
           loading="lazy"
-          className="w-full h-full object-cover object-center opacity-40 group-hover:opacity-55 group-hover:scale-[1.02] transition-all duration-700 ease-out"
+          className="w-full h-full object-cover object-center opacity-100 group-hover:scale-[1.02] transition-all duration-700 ease-out"
         />
       </picture>
 

@@ -121,7 +121,7 @@ export default function FeaturedDrops({ drops }: FeaturedDropsProps) {
                 src={drop.image_url}
                 alt={drop.title}
                 loading="lazy"
-                className="w-full h-full object-cover object-center opacity-60 group-hover:opacity-80 group-hover:scale-[1.03] transition-all duration-700 ease-out"
+                className="w-full h-full object-cover object-center opacity-100 group-hover:scale-[1.03] transition-all duration-700 ease-out"
               />
             </picture>
 
