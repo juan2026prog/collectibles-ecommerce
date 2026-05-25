@@ -219,6 +219,7 @@ function parseHomeCategories(json?: string, allCategories: any[] = []): any[] {
             badge: cfg.badge_text !== undefined && cfg.badge_text !== '' ? cfg.badge_text : cat.metadata?.badge,
             subtitle: cfg.subtitle !== undefined && cfg.subtitle !== '' ? cfg.subtitle : cat.metadata?.subtitle,
             mobile_image_url: cfg.mobile_image_url !== undefined && cfg.mobile_image_url !== '' ? cfg.mobile_image_url : cat.metadata?.mobile_image_url,
+            overlay_opacity: cfg.overlay_opacity !== undefined && cfg.overlay_opacity !== null ? cfg.overlay_opacity : undefined,
           }
         };
       })
@@ -592,14 +593,17 @@ export default function Home() {
                           src={desktopImg}
                           alt={c.name}
                           loading="lazy"
-                          className="w-full h-full object-cover opacity-35 group-hover:opacity-55 group-hover:scale-[1.05] transition-all duration-700 ease-out"
+                          className="w-full h-full object-cover object-center opacity-100 group-hover:scale-[1.03] transition-all duration-700 ease-out"
                         />
                       )}
                     </picture>
 
                     {/* Dark cinematic gradient and colored glow overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#05070f] via-black/45 to-transparent opacity-95" />
-                    <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-[#f00856]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
+                    <div 
+                      className="absolute inset-0 bg-gradient-to-t from-[#05070f] via-black/20 to-transparent" 
+                      style={{ opacity: c.metadata?.overlay_opacity !== undefined && c.metadata?.overlay_opacity !== null ? c.metadata.overlay_opacity : 0.90 }}
+                    />
+                    <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-[#f00856]/15 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
 
                     <div className="relative z-10 p-6 md:p-8 flex flex-col items-start w-full">
                       {c.metadata?.badge && (

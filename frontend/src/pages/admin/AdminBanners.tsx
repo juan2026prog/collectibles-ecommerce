@@ -1175,7 +1175,8 @@ function BentoCategoriesTab() {
       subtitle: '',
       badge_text: '',
       image_url: '',
-      mobile_image_url: ''
+      mobile_image_url: '',
+      overlay_opacity: 0.90
     };
     setItems([...items, newItem]);
   };
@@ -1288,7 +1289,7 @@ function BentoCategoriesTab() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                 <div>
                   <label className="form-label text-xs font-bold">Nombre Personalizado (Opcional)</label>
                   <input className="form-input w-full" value={item.name_override || ''} onChange={e => updateItem(i, 'name_override', e.target.value)} placeholder={matchedCat?.name || "Ej: Funko Pop Premium"} />
@@ -1300,6 +1301,13 @@ function BentoCategoriesTab() {
                 <div>
                   <label className="form-label text-xs font-bold">Etiqueta/Badge (Opcional)</label>
                   <input className="form-input w-full" value={item.badge_text || ''} onChange={e => updateItem(i, 'badge_text', e.target.value)} placeholder="Ej: HOT, TENDENCIA, EXCLUSIVO" />
+                </div>
+                <div>
+                  <div className="flex justify-between">
+                    <label className="form-label text-xs font-bold mb-0">Overlay</label>
+                    <span className="text-xs text-primary-600 font-bold">{Math.round((item.overlay_opacity !== undefined ? item.overlay_opacity : 0.90) * 100)}%</span>
+                  </div>
+                  <input type="range" min="0" max="1" step="0.05" className="w-full accent-primary-600 mt-1" value={item.overlay_opacity !== undefined ? item.overlay_opacity : 0.90} onChange={e => updateItem(i, 'overlay_opacity', parseFloat(e.target.value))} />
                 </div>
               </div>
 
