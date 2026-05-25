@@ -142,7 +142,7 @@ export default function FeaturedDrops({ drops }: FeaturedDropsProps) {
               <h3 className="text-xl md:text-2xl font-black text-white leading-tight uppercase mb-1 tracking-tight">
                 {drop.title}
               </h3>
-              <p className="text-slate-300 text-xs md:text-sm font-semibold max-w-sm mb-4 leading-normal">
+              <p className="text-white text-xs md:text-sm font-semibold max-w-sm mb-4 leading-normal">
                 {drop.subtitle}
               </p>
               <span className="inline-flex items-center gap-1 text-xs font-black text-white group-hover:text-[#f00856] transition-colors uppercase tracking-wider">

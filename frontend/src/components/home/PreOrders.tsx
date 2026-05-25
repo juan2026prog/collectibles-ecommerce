@@ -117,7 +117,7 @@ function PreorderCard({ item }: { item: PreorderItem }) {
         <h3 className="text-xl md:text-2xl font-black text-white leading-tight uppercase mb-1 tracking-tight">
           {item.title}
         </h3>
-        <p className="text-slate-400 text-xs md:text-sm font-semibold max-w-sm mb-4 leading-normal">
+        <p className="text-white text-xs md:text-sm font-semibold max-w-sm mb-4 leading-normal">
           {item.subtitle}
         </p>
 
