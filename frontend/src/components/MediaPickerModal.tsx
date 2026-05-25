@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { RefreshCw, ImageIcon, FileIcon, X, Folder, ChevronRight, Upload, Check, Square, FolderPlus } from 'lucide-react';
+import { RefreshCw, ImageIcon, FileIcon, X, Folder, ChevronRight, Upload, Check, Square, FolderPlus, Edit, Move, Trash2, Search } from 'lucide-react';
+import { useToast } from './admin/Toast';
+import { useConfirmModal } from './admin/ConfirmModal';
 
 interface MediaPickerModalProps {
   isOpen: boolean;
@@ -18,9 +20,14 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
   const [lastSelected, setLastSelected] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  
+  const { toast } = useToast();
+  const { confirm, prompt } = useConfirmModal();
   
   const BUCKET_NAME = 'public-assets';
 
@@ -28,6 +35,7 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
     if (isOpen) {
       fetchMedia(currentPath);
       setSelectedFiles(new Set());
+      setSearchQuery('');
     }
   }, [isOpen, currentPath]);
 
@@ -35,7 +43,7 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
     setLoading(true);
     try {
       const { data, error } = await supabase.storage.from(BUCKET_NAME).list(path, {
-        limit: 100,
+        limit: 500,
         offset: 0,
         sortBy: { column: 'name', order: 'asc' }
       });
@@ -87,28 +95,182 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
     setUploading(true);
     try {
       for (const file of filesToUpload) {
-        const filePath = currentPath + file.name;
-        const { error } = await supabase.storage.from(BUCKET_NAME).upload(filePath, file, { upsert: true });
+        const fileExt = file.name.split('.').pop();
+        const rawName = file.name.replace(`.${fileExt}`, '');
+        const sanitizedName = rawName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+        const fileName = `${Date.now()}-${sanitizedName}.${fileExt}`;
+        const filePath = currentPath + fileName;
+        
+        const { error } = await supabase.storage.from(BUCKET_NAME).upload(filePath, file, { cacheControl: '3600', upsert: false });
         if (error) throw error;
       }
       fetchMedia(currentPath);
+      toast.success('Carga completada');
     } catch (err: any) {
       console.error('Upload error:', err);
-      alert('Error uploading files: ' + err.message);
+      toast.error('Error al subir archivos: ' + err.message);
     } finally {
       setUploading(false);
     }
   }
 
   async function handleCreateFolder() {
-    const folderName = prompt('Nombre de la nueva carpeta:');
+    const folderName = await prompt('Nombre de la nueva carpeta (sin espacios ni caracteres raros):');
     if (!folderName) return;
     
+    const sanitized = folderName.toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+    const folderPath = currentPath ? `${currentPath}${sanitized}` : sanitized;
+    const placeholderPath = `${folderPath}/.emptyFolderPlaceholder`;
+
+    setUploading(true);
     try {
-      await supabase.storage.from(BUCKET_NAME).upload(currentPath + folderName + '/.emptyFolderPlaceholder', new Blob([]));
+      const emptyFile = new File([''], '.emptyFolderPlaceholder', { type: 'text/plain' });
+      const { error } = await supabase.storage.from(BUCKET_NAME).upload(placeholderPath, emptyFile);
+      if (error) throw error;
+      toast.success('Carpeta creada');
       fetchMedia(currentPath);
     } catch (err: any) {
       console.error(err);
+      toast.error('Error al crear carpeta: ' + err.message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleDelete(fileName: string, isFolder: boolean) {
+    const targetPath = currentPath ? `${currentPath}${fileName}` : fileName;
+    
+    const msg = isFolder 
+      ? `¿Eliminar la carpeta "${fileName}" y todo su contenido?` 
+      : `¿Eliminar permanentemente el archivo "${fileName}"?`;
+    
+    if (!(await confirm(msg, { danger: true }))) return;
+    
+    setLoading(true);
+    try {
+      if (isFolder) {
+        await deleteFolderRecursive(targetPath + '/');
+      } else {
+        const { error } = await supabase.storage.from(BUCKET_NAME).remove([targetPath]);
+        if (error) throw error;
+      }
+      fetchMedia(currentPath);
+      toast.success(isFolder ? 'Carpeta eliminada' : 'Archivo eliminado');
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Error al eliminar: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function deleteFolderRecursive(folderPath: string) {
+    const { data: filesList, error } = await supabase.storage.from(BUCKET_NAME).list(folderPath, { limit: 1000 });
+    if (error) throw error;
+    
+    if (filesList && filesList.length > 0) {
+      const filesToDelete: string[] = [];
+      const subFolders: string[] = [];
+      
+      for (const item of filesList) {
+        if (!item.id) {
+          subFolders.push(folderPath + item.name + '/');
+        } else {
+          filesToDelete.push(folderPath + item.name);
+        }
+      }
+      
+      for (const sub of subFolders) {
+        await deleteFolderRecursive(sub);
+      }
+      
+      if (filesToDelete.length > 0) {
+        const { error: removeError } = await supabase.storage.from(BUCKET_NAME).remove(filesToDelete);
+        if (removeError) throw removeError;
+      }
+    }
+    await supabase.storage.from(BUCKET_NAME).remove([folderPath + '.emptyFolderPlaceholder']).catch(() => {});
+  }
+
+  async function handleRename(fileName: string, isFolder: boolean) {
+    const oldName = fileName;
+    const newName = await prompt(`Cambiar nombre de ${isFolder ? 'la carpeta' : 'el archivo'}:`, oldName);
+    if (!newName || newName === oldName) return;
+    
+    const fileExt = isFolder ? '' : '.' + oldName.split('.').pop();
+    const cleanNewName = isFolder 
+      ? newName.toLowerCase().replace(/[^a-z0-9_-]/g, '-')
+      : newName.replace(fileExt, '').toLowerCase().replace(/[^a-z0-9]/g, '-') + fileExt;
+
+    const fromPath = currentPath ? `${currentPath}${oldName}` : oldName;
+    const toPath = currentPath ? `${currentPath}${cleanNewName}` : cleanNewName;
+    
+    setLoading(true);
+    try {
+      if (isFolder) {
+        await moveFolderRecursive(fromPath + '/', toPath + '/');
+      } else {
+        const { error } = await supabase.storage.from(BUCKET_NAME).move(fromPath, toPath);
+        if (error) throw error;
+      }
+      toast.success(isFolder ? 'Carpeta renombrada' : 'Archivo renombrado');
+      fetchMedia(currentPath);
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Error al renombrar: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function moveFolderRecursive(fromFolder: string, toFolder: string) {
+    const { data: filesList, error } = await supabase.storage.from(BUCKET_NAME).list(fromFolder, { limit: 1000 });
+    if (error) throw error;
+    
+    if (filesList) {
+      for (const item of filesList) {
+        if (!item.id) {
+          await moveFolderRecursive(fromFolder + item.name + '/', toFolder + item.name + '/');
+        } else {
+          await supabase.storage.from(BUCKET_NAME).move(fromFolder + item.name, toFolder + item.name);
+        }
+      }
+    }
+    await supabase.storage.from(BUCKET_NAME).move(fromFolder + '.emptyFolderPlaceholder', toFolder + '.emptyFolderPlaceholder').catch(() => {});
+  }
+
+  async function handleMove(fileName: string, isFolder: boolean) {
+    const targetFolder = await prompt(
+      `Mover ${isFolder ? 'la carpeta' : 'el archivo'} a la carpeta de destino (ej: banners, o dejar vacío para la raíz):`,
+      currentPath
+    );
+    if (targetFolder === null) return;
+    
+    let cleanTarget = targetFolder.trim().replace(/^\//, '');
+    if (cleanTarget && !cleanTarget.endsWith('/')) {
+      cleanTarget += '/';
+    }
+    
+    if (cleanTarget === currentPath) return;
+    
+    const fromPath = currentPath ? `${currentPath}${fileName}` : fileName;
+    const toPath = cleanTarget ? `${cleanTarget}${fileName}` : fileName;
+    
+    setLoading(true);
+    try {
+      if (isFolder) {
+        await moveFolderRecursive(fromPath + '/', toPath + '/');
+      } else {
+        const { error } = await supabase.storage.from(BUCKET_NAME).move(fromPath, toPath);
+        if (error) throw error;
+      }
+      toast.success(isFolder ? 'Carpeta movida con éxito' : 'Archivo movido con éxito');
+      fetchMedia(currentPath);
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Error al mover: ' + err.message);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -230,6 +392,28 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
             )}
           </div>
 
+          {/* Search Bar */}
+          <div className="mb-4 bg-gray-50 border border-gray-200 p-3 rounded-xl">
+            <div className="relative max-w-md bg-white rounded-lg">
+              <input
+                type="text"
+                placeholder="Buscar por nombre..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="form-input w-full pl-9 pr-9 py-1.5 border-gray-300 rounded-lg text-xs focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+              />
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+
           {loading ? (
             <div className="flex flex-col items-center justify-center h-48 text-slate-500">
               <RefreshCw className="w-8 h-8 animate-spin mb-4" />
@@ -242,54 +426,97 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
             </div>
           ) : (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
-              {files.map(file => {
-                const isFolder = !file.id;
-                
-                if (isFolder) {
+              {(() => {
+                const filtered = files.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
+                if (filtered.length === 0 && searchQuery) {
                   return (
-                    <button 
-                      key={file.name} 
-                      onClick={() => setCurrentPath(currentPath + file.name + '/')}
-                      className="group glass  p-4 flex flex-col items-center justify-center hover:border-primary-400 hover:shadow-md transition-all aspect-square"
-                    >
-                      <Folder className="w-12 h-12 text-blue-400 mb-2 group-hover:scale-110 transition-transform" />
-                      <span className="text-xs font-bold text-gray-700 truncate w-full text-center">{file.name}</span>
-                    </button>
+                    <div className="col-span-full py-12 text-center text-gray-400 text-sm">
+                      Ningún archivo o carpeta coincide con "{searchQuery}"
+                    </div>
                   );
                 }
-
-                const url = getFileUrl(file.name);
-                const img = isImage(file.name);
-                const isSelected = selectedFiles.has(url);
-                
-                return (
-                  <button 
-                    key={file.id} 
-                    onClick={(e) => handleFileClick(file, e)}
-                    className={`group bg-white border-2  overflow-hidden transition-all shadow-sm aspect-square relative ${
-                      isSelected ? 'border-primary-500 ring-2 ring-primary-500 ring-offset-2' : 'border-white/10 hover:border-primary-400 hover:shadow-md'
-                    }`}
-                  >
-                    {multiple && (
-                      <div className={`absolute top-2 left-2 z-10 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
-                        isSelected ? 'bg-primary-500/100 border-primary-500' : 'bg-white border-gray-300'
-                      }`}>
-                        {isSelected && <Check className="w-4 h-4 text-white" />}
+                return filtered.map(file => {
+                  const isFolder = !file.id;
+                  
+                  if (isFolder) {
+                    return (
+                      <div 
+                        key={file.name} 
+                        className="group relative border border-gray-200 rounded-xl flex flex-col items-center justify-center p-4 hover:border-primary-400 hover:shadow-md transition-all bg-white aspect-square"
+                      >
+                        <button 
+                          onClick={() => setCurrentPath(currentPath + file.name + '/')}
+                          className="w-full h-full flex flex-col items-center justify-center"
+                        >
+                          <Folder className="w-10 h-10 text-blue-400 mb-2 group-hover:scale-110 transition-transform" />
+                          <span className="text-xs font-bold text-gray-700 truncate w-full text-center">{file.name}</span>
+                        </button>
+                        <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all bg-white/80 p-0.5 rounded shadow">
+                          <button onClick={(e) => { e.stopPropagation(); handleRename(file.name, true); }} className="p-1 text-gray-400 hover:text-blue-600 rounded hover:bg-gray-100" title="Renombrar">
+                            <Edit className="w-3 h-3" />
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); handleMove(file.name, true); }} className="p-1 text-gray-400 hover:text-green-600 rounded hover:bg-gray-100" title="Mover">
+                            <Move className="w-3 h-3" />
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); handleDelete(file.name, true); }} className="p-1 text-gray-400 hover:text-red-500 rounded hover:bg-gray-100" title="Eliminar">
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
-                    )}
-                    <div className="w-full h-full flex items-center justify-center bg-white/5 p-2">
-                       {img ? (
-                          <img src={url} alt={file.name} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform" />
-                       ) : (
-                          <FileIcon className="w-10 h-10 text-slate-500" />
-                       )}
+                    );
+                  }
+
+                  const url = getFileUrl(file.name);
+                  const img = isImage(file.name);
+                  const isSelected = selectedFiles.has(url);
+                  
+                  return (
+                    <div 
+                      key={file.id} 
+                      className={`group relative bg-white border-2 overflow-hidden transition-all shadow-sm aspect-square ${
+                        isSelected ? 'border-primary-500 ring-2 ring-primary-500 ring-offset-2' : 'border-gray-200 hover:border-primary-400 hover:shadow-md'
+                      }`}
+                    >
+                      <button 
+                        onClick={(e) => handleFileClick(file, e)}
+                        className="w-full h-full flex items-center justify-center p-2 pb-6 bg-gray-50/50"
+                      >
+                         {img ? (
+                            <img src={url} alt={file.name} className="max-w-full max-h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform" />
+                         ) : (
+                            <FileIcon className="w-8 h-8 text-slate-400" />
+                         )}
+                      </button>
+                      
+                      {multiple && (
+                        <div 
+                          onClick={(e) => { e.stopPropagation(); handleFileClick(file, e); }}
+                          className={`absolute top-2 left-2 z-10 w-5 h-5 rounded-full border flex items-center justify-center cursor-pointer transition-colors ${
+                            isSelected ? 'bg-primary-500 border-primary-500' : 'bg-white border-gray-300'
+                          }`}
+                        >
+                          {isSelected && <Check className="w-3 h-3 text-white" />}
+                        </div>
+                      )}
+                      
+                      <div className="absolute inset-x-0 bottom-0 bg-white/95 border-t border-gray-100 px-1.5 py-0.5 flex items-center justify-between">
+                        <p className="text-[9px] font-bold text-gray-500 truncate mr-1" title={file.name}>{file.name}</p>
+                        <div className="flex gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity bg-white">
+                          <button onClick={(e) => { e.stopPropagation(); handleRename(file.name, false); }} className="p-0.5 text-gray-400 hover:text-blue-600 rounded hover:bg-gray-100" title="Renombrar">
+                            <Edit className="w-2.5 h-2.5" />
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); handleMove(file.name, false); }} className="p-0.5 text-gray-400 hover:text-green-600 rounded hover:bg-gray-100" title="Mover">
+                            <Move className="w-2.5 h-2.5" />
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); handleDelete(file.name, false); }} className="p-0.5 text-gray-400 hover:text-red-500 rounded hover:bg-gray-100" title="Eliminar">
+                            <Trash2 className="w-2.5 h-2.5" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <div className="absolute inset-x-0 bottom-0 bg-[#05070f]/90 backdrop-blur-sm px-2 py-1 border-t border-white/10">
-                      <p className="text-[10px] font-bold text-slate-400 truncate text-left">{file.name}</p>
-                    </div>
-                  </button>
-                );
-              })}
+                  );
+                });
+              })()}
             </div>
           )}
         </div>
