@@ -11,6 +11,7 @@ export interface FeaturedDrop {
   badge_text?: string;
   button_text: string;
   link_url: string;
+  overlay_opacity?: number;
   sort_order: number;
 }
 
@@ -125,7 +126,10 @@ export default function FeaturedDrops({ drops }: FeaturedDropsProps) {
             </picture>
 
             {/* Cinematic dark gradients & glowing highlights */}
-            <div className="absolute inset-0 bg-gradient-to-t from-[#05070f] via-black/20 to-transparent opacity-90" />
+            <div 
+              className="absolute inset-0 bg-gradient-to-t from-[#05070f] via-black/20 to-transparent" 
+              style={{ opacity: drop.overlay_opacity !== undefined && drop.overlay_opacity !== null ? drop.overlay_opacity : 0.90 }}
+            />
             <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-[#f00856]/15 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
 
             {/* Content Area */}

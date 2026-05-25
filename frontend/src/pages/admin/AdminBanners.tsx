@@ -796,7 +796,13 @@ function DropsTab() {
               <div><label className="form-label text-xs font-bold">Texto Botón</label><input className="form-input w-full" value={d.button_text} onChange={e => updateDrop(i, 'button_text', e.target.value)} placeholder="Ver colección" /></div>
             </div>
 
-            <div><label className="form-label text-xs font-bold">Link de Destino</label><input className="form-input w-full font-mono text-sm" value={d.link_url} onChange={e => updateDrop(i, 'link_url', e.target.value)} placeholder="/shop?category=..." /></div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="col-span-2 md:col-span-3"><label className="form-label text-xs font-bold">Link de Destino</label><input className="form-input w-full font-mono text-sm" value={d.link_url} onChange={e => updateDrop(i, 'link_url', e.target.value)} placeholder="/shop?category=..." /></div>
+              <div className="col-span-2 md:col-span-1">
+                <div className="flex justify-between"><label className="form-label text-xs font-bold mb-0">Overlay</label><span className="text-xs text-primary-600 font-bold">{Math.round((d.overlay_opacity !== undefined ? d.overlay_opacity : 0.90) * 100)}%</span></div>
+                <input type="range" min="0" max="1" step="0.05" className="w-full accent-primary-600 mt-1" value={d.overlay_opacity !== undefined ? d.overlay_opacity : 0.90} onChange={e => updateDrop(i, 'overlay_opacity', parseFloat(e.target.value))} />
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t">
               <ImageField label="Imagen Desktop" value={d.image_url} onChange={val => updateDrop(i, 'image_url', val)} onUpload={e => handleUpload(e, i, 'image_url')} onPickMedia={() => { setMediaTarget({ idx: i, field: 'image_url' }); setShowMediaPicker(true); }} />
@@ -829,7 +835,7 @@ function DropsTab() {
 // ═══════════════════════════════════════════════════════════════
 // TAB 6: PREVENTAS ACTIVAS
 // ═══════════════════════════════════════════════════════════════
-const PREORDER_DEFAULT = { enabled: true, title: '', subtitle: '', badge_text: 'PREVENTA', button_text: 'Reservar ahora', link_url: '/shop', image_url: '', mobile_image_url: '', countdown_date: '', sort_order: 0 };
+const PREORDER_DEFAULT = { enabled: true, title: '', subtitle: '', badge_text: 'PREVENTA', button_text: 'Reservar ahora', link_url: '/shop', image_url: '', mobile_image_url: '', countdown_date: '', overlay_opacity: 0.95, sort_order: 0 };
 
 const DEFAULT_PREORDERS = [
   {
@@ -842,6 +848,7 @@ const DEFAULT_PREORDERS = [
     image_url: '/images/preorders/iron_studios.png',
     mobile_image_url: '',
     countdown_date: '2026-09-01',
+    overlay_opacity: 0.95,
     sort_order: 0
   },
   {
@@ -854,6 +861,7 @@ const DEFAULT_PREORDERS = [
     image_url: '/images/preorders/mortal_kombat.png',
     mobile_image_url: '',
     countdown_date: '2026-10-15',
+    overlay_opacity: 0.95,
     sort_order: 1
   }
 ];
@@ -941,10 +949,14 @@ function PreordersTab() {
               <div><label className="form-label text-xs font-bold">Subtítulo</label><input className="form-input w-full" value={p.subtitle} onChange={e => updatePreorder(i, 'subtitle', e.target.value)} placeholder="Escala 1:4" /></div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div><label className="form-label text-xs font-bold">Badge</label><input className="form-input w-full" value={p.badge_text || ''} onChange={e => updatePreorder(i, 'badge_text', e.target.value)} placeholder="PREVENTA" /></div>
               <div><label className="form-label text-xs font-bold">Texto Botón</label><input className="form-input w-full" value={p.button_text} onChange={e => updatePreorder(i, 'button_text', e.target.value)} placeholder="Reservar ahora" /></div>
               <div><label className="form-label text-xs font-bold">Fecha Límite (AAAA-MM-DD)</label><input className="form-input w-full font-mono" value={p.countdown_date || ''} onChange={e => updatePreorder(i, 'countdown_date', e.target.value)} placeholder="2026-09-30" /></div>
+              <div>
+                <div className="flex justify-between"><label className="form-label text-xs font-bold mb-0">Overlay</label><span className="text-xs text-primary-600 font-bold">{Math.round((p.overlay_opacity !== undefined ? p.overlay_opacity : 0.95) * 100)}%</span></div>
+                <input type="range" min="0" max="1" step="0.05" className="w-full accent-primary-600 mt-1" value={p.overlay_opacity !== undefined ? p.overlay_opacity : 0.95} onChange={e => updatePreorder(i, 'overlay_opacity', parseFloat(e.target.value))} />
+              </div>
             </div>
 
             <div><label className="form-label text-xs font-bold">Link de Reserva</label><input className="form-input w-full font-mono text-sm" value={p.link_url} onChange={e => updatePreorder(i, 'link_url', e.target.value)} placeholder="/shop?category=..." /></div>

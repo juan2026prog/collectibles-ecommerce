@@ -12,6 +12,7 @@ export interface PreorderItem {
   button_text: string;
   link_url: string;
   countdown_date?: string;
+  overlay_opacity?: number;
   sort_order: number;
 }
 
@@ -99,7 +100,10 @@ function PreorderCard({ item }: { item: PreorderItem }) {
       </picture>
 
       {/* Overlay gradient */}
-      <div className="absolute inset-0 bg-gradient-to-t from-[#05070f] via-[#05070f]/60 to-transparent opacity-95" />
+      <div 
+        className="absolute inset-0 bg-gradient-to-t from-[#05070f] via-[#05070f]/60 to-transparent" 
+        style={{ opacity: item.overlay_opacity !== undefined && item.overlay_opacity !== null ? item.overlay_opacity : 0.95 }}
+      />
 
       {/* Card Content */}
       <div className="relative z-10 p-6 md:p-8 flex flex-col items-start w-full">
