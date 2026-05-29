@@ -2,7 +2,8 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, ShoppingBag, FolderTree, Users, Settings, LogOut, Package, 
   Tag, Image, CreditCard, LayoutTemplate, Star, Percent, Megaphone,
-  Mail, ShoppingCart, BarChart3, Search, ShieldCheck, Store, Share2, ExternalLink, Library, FileText
+  Mail, ShoppingCart, BarChart3, Search, ShieldCheck, Store, Share2, ExternalLink, Library, FileText,
+  Activity
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LocaleSwitcher from '../components/LocaleSwitcher';
@@ -39,6 +40,8 @@ export default function AdminLayout() {
     { name: 'Clientes & CRM', path: '/admin/customers', icon: Users },
     { name: 'Mailing', path: '/admin/mailing', icon: Mail },
     { name: 'Mercado Libre', path: '/admin/mercadolibre', icon: ShoppingCart },
+    { name: 'Curación Mercado Libre', path: '/admin/mercadolibre-curation', icon: ShoppingCart },
+    { name: 'Operaciones Mercado Libre', path: '/admin/mercadolibre-operations', icon: Activity },
     { name: 'Finanzas & Facturas', path: '/admin/finances', icon: CreditCard },
     { name: 'Logistica & Envios', path: '/admin/logistics', icon: Package },
     { name: 'Artistas & Cameo', path: '/admin/artists', icon: Star },

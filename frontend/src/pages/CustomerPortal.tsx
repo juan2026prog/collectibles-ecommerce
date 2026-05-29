@@ -353,7 +353,7 @@ export default function CustomerPortal() {
                           {editingAddr === idx ? (
                             <input className="font-bold text-sm glass border rounded px-2 py-1 w-32" value={addr.label} onChange={e => updateAddress(idx, 'label', e.target.value)} placeholder="Nombre..." />
                           ) : (
-                            <span className="font-bold text-sm text-gray-800">{addr.label || `Dirección ${idx + 1}`}</span>
+                            <span className="font-bold text-sm text-slate-200">{addr.label || `Dirección ${idx + 1}`}</span>
                           )}
                           {idx === 0 && <span className="text-[10px] font-bold uppercase bg-primary-500/15 text-primary-600 px-2 py-0.5 rounded-full">Principal</span>}
                         </div>

@@ -45,79 +45,105 @@ export async function parseProductsFile(file: File): Promise<ParsedProduct[]> {
     reader.onload = (e) => {
       try {
         const data = e.target?.result;
-        if (!data) throw new Error("No data found in file");
+        if (!data) throw new Error("No se encontraron datos en el archivo");
 
-        const workbook = XLSX.read(data, { type: 'binary' });
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
+        const workbook = XLSX.read(data, { type: 'array' });
         
-        // Convert to JSON
-        const rawRows: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+        let worksheet = null;
+        let rawRows: any[] = [];
         
-        if (!rawRows || rawRows.length === 0) {
+        // Find the first sheet that actually has data
+        for (const sheetName of workbook.SheetNames) {
+          const sheet = workbook.Sheets[sheetName];
+          const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+          if (rows && rows.length > 0) {
+            worksheet = sheet;
+            rawRows = rows;
+            break;
+          }
+        }
+
+        console.log('[BulkImport] Archivo cargado:', file.name, 'Hojas:', workbook.SheetNames, 'Filas leídas:', rawRows.length);
+        
+        if (rawRows.length === 0) {
           resolve([]);
           return;
         }
 
-        // Determine format based on keys (MercadoLibre vs Plantilla Propia)
-        const sampleKeys = Object.keys(rawRows[0]).map(k => k.toLowerCase().trim());
-        const isMercadoLibre = sampleKeys.some(k => k.includes('título') || k.includes('sku') || k.includes('precio') || k.includes('stock'));
-
         const parsedProducts: ParsedProduct[] = [];
+
+        // Helper to search for values using synonyms
+        const findValue = (processedRow: any, synonyms: string[]): any => {
+          for (const syn of synonyms) {
+            if (processedRow[syn] !== undefined && processedRow[syn] !== null && processedRow[syn] !== '') {
+              return processedRow[syn];
+            }
+          }
+          return undefined;
+        };
 
         for (const row of rawRows) {
           const processedRow: any = {};
-          // Normalize keys: lowercased and trimmed
+          // Normalize keys: lowercase and trim whitespace
           for (const key in row) {
-             processedRow[key.toLowerCase().trim()] = row[key];
+            processedRow[key.toLowerCase().trim()] = row[key];
           }
 
-          if (isMercadoLibre) {
-            // Mapping Mercado Libre template
-            // Columns usually look like: 'título', 'precio', 'sku', 'stock', 'condición', etc.
-            const title = processedRow['título'] || processedRow['titulo'] || '';
-            const priceStr = processedRow['precio'] || '0';
-            const sku = processedRow['sku'] || '';
-            const stockStr = processedRow['stock'] || processedRow['cantidad'] || '0';
+          // Resolve title (essential field)
+          const title = findValue(processedRow, ['title', 'título', 'titulo', 'nombre', 'producto', 'product', 'name', 'articulo', 'artículo']);
+          if (!title) continue;
 
-            if (!title) continue;
+          // Resolve base price
+          const basePriceVal = findValue(processedRow, ['base_price', 'precio', 'price', 'base price', 'venta', 'precio de venta', 'precio base', 'unit price', 'precio unitario']);
+          const base_price = basePriceVal ? parseFloat(basePriceVal.toString().replace(/[^0-9.]/g, '')) || 0 : 0;
 
-            parsedProducts.push({
-              title: title.toString(),
-              base_price: parseFloat(priceStr.toString().replace(/,/g, '')) || 0,
-              sku: sku.toString(),
-              stock: parseInt(stockStr.toString(), 10) || 0,
-              raw_row: row
-            });
-          } else {
-            // Mapping Standard Template
-            const title = processedRow['title'] || '';
-            if (!title) continue;
+          // Resolve compare at price (optional)
+          const comparePriceVal = findValue(processedRow, ['compare_at_price', 'precio_comparacion', 'precio anterior', 'precio original', 'compare price', 'regular_price', 'precio lista', 'precio_lista']);
+          const compare_at_price = comparePriceVal ? parseFloat(comparePriceVal.toString().replace(/[^0-9.]/g, '')) || undefined : undefined;
 
-            parsedProducts.push({
-              title: title.toString(),
-              base_price: parseFloat(processedRow['base_price']) || 0,
-              compare_at_price: parseFloat(processedRow['compare_at_price']) || undefined,
-              sku: (processedRow['sku'] || '').toString(),
-              stock: parseInt(processedRow['stock'], 10) || 0,
-              category_name: (processedRow['category_name'] || '').toString(),
-              brand_name: (processedRow['brand_name'] || '').toString(),
-              image_url: (processedRow['image_url'] || '').toString(),
-              description: (processedRow['description'] || '').toString(),
-              raw_row: row
-            });
-          }
+          // Resolve SKU
+          const sku = (findValue(processedRow, ['sku', 'referencia', 'código', 'codigo', 'cod', 'ref', 'código de barras', 'barcode']) || '').toString().trim();
+
+          // Resolve Stock
+          const stockVal = findValue(processedRow, ['stock', 'cantidad', 'inventario', 'inventory', 'qty', 'quantity', 'unidades']);
+          const stock = stockVal !== undefined ? parseInt(stockVal.toString(), 10) || 0 : 0;
+
+          // Resolve Category
+          const category_name = (findValue(processedRow, ['category_name', 'category', 'categoría', 'categoria', 'rubro', 'grupo']) || '').toString().trim();
+
+          // Resolve Brand
+          const brand_name = (findValue(processedRow, ['brand_name', 'brand', 'marca']) || '').toString().trim();
+
+          // Resolve Image URL
+          const image_url = (findValue(processedRow, ['image_url', 'image', 'imagen', 'foto', 'url imagen', 'url_imagen', 'img']) || '').toString().trim();
+
+          // Resolve Description
+          const description = (findValue(processedRow, ['description', 'descripción', 'descripcion', 'detalle', 'observaciones']) || '').toString().trim();
+
+          parsedProducts.push({
+            title: title.toString(),
+            base_price,
+            compare_at_price,
+            sku,
+            stock,
+            category_name,
+            brand_name,
+            image_url,
+            description,
+            raw_row: row
+          });
         }
 
+        console.log('[BulkImport] Productos parseados exitosamente:', parsedProducts.length);
         resolve(parsedProducts);
       } catch (error) {
+        console.error('[BulkImport] Error parseando archivo:', error);
         reject(error);
       }
     };
 
     reader.onerror = (error) => reject(error);
 
-    // Use readAsBinaryString for xlsx support with FileReader
-    reader.readAsBinaryString(file);
+    reader.readAsArrayBuffer(file);
   });
 }

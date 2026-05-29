@@ -27,7 +27,7 @@ export default function MiniBannerCard({
   const alignCenter = text_align === 'center';
 
   const content = (
-    <div className="group relative aspect-[4/3] md:aspect-[16/7] w-full rounded-2xl overflow-hidden border border-white/10 bg-[#05070f]">
+    <div className="group relative aspect-[4/3] md:aspect-[16/7] min-h-[250px] sm:min-h-0 w-full rounded-2xl overflow-hidden border border-white/10 bg-[#05070f]">
       {/* Background image with hover scale */}
       <picture>
         {mobile_image_url && (

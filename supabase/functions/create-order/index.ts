@@ -47,6 +47,11 @@ const checkoutSchema = z.object({
   bank_promo: z.object({
     promo_id: z.string().uuid(),
   }).optional(),
+  terms_accepted: z.boolean().refine(val => val === true, {
+    message: "Debe aceptar los Términos y Condiciones",
+  }),
+  terms_accepted_at: z.string(),
+  accepted_terms_version: z.string(),
 });
 
 const FLEX_NEAR = new Set([
@@ -510,6 +515,9 @@ Deno.serve(async (req) => {
       p_affiliate_id: affiliateId,
       p_coupon_id: couponId,
       p_items: orderItems,
+      p_terms_accepted: payload.terms_accepted,
+      p_terms_accepted_at: payload.terms_accepted_at,
+      p_accepted_terms_version: payload.accepted_terms_version,
     });
 
     if (rpcError) {

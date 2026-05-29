@@ -107,7 +107,7 @@ export default function FeaturedDrops({ drops }: FeaturedDropsProps) {
           <Link
             key={i}
             to={drop.link_url || '/shop'}
-            className="relative flex flex-col justify-end aspect-[16/8] w-[88vw] md:w-[600px] shrink-0 rounded-2xl overflow-hidden border border-white/10 bg-black/40 group hover:border-[#f00856]/40 transition-all duration-500 snap-start select-none shadow-[0_4px_30px_rgba(0,0,0,0.4)]"
+            className="relative flex flex-col justify-end aspect-[16/8] min-h-[220px] sm:min-h-0 w-[88vw] md:w-[600px] shrink-0 rounded-2xl overflow-hidden border border-white/10 bg-black/40 group hover:border-[#f00856]/40 transition-all duration-500 snap-start select-none shadow-[0_4px_30px_rgba(0,0,0,0.4)]"
           >
             {/* Background Image with mobile picture support */}
             <picture className="absolute inset-0 w-full h-full">

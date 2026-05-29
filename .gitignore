@@ -94,6 +94,7 @@ vercel_status.txt
 # Local Agent & WSDL / Scrap Files
 # ══════════════════════════════════════════════════════════
 .gemini/
+scratch/
 *.wsdl
 download_*.js
 list_asmx_operations.js
@@ -101,3 +102,4 @@ frontend/query-order*.ts
 frontend/test-*.cjs
 frontend/test-results/
 recursos/
+

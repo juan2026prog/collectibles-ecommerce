@@ -10,7 +10,8 @@ export function useFilterMappings() {
       const { data } = await supabase
         .from('products')
         .select('brand_id, product_categories!inner(category_id)')
-        .eq('status', 'published');
+        .eq('status', 'published')
+        .eq('is_active', true);
         
       if (data) {
         const pairs: { category_id: string; brand_id: string }[] = [];

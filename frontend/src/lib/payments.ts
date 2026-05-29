@@ -12,7 +12,7 @@ interface CreateOrderParams {
   affiliate_code?: string;
   payment_method: 'dlocalgo' | 'paypal' | 'mercadopago' | 'handy';
   currency: string;
-  shipping_method: 'delivery' | 'pickup';
+  shipping_method: 'delivery' | 'pickup' | 'dac' | 'dac_home' | 'dac_agency';
   shipping_address: {
     first_name: string;
     last_name: string;
@@ -31,6 +31,9 @@ interface CreateOrderParams {
   bank_promo?: {
     promo_id: string;
   };
+  terms_accepted: boolean;
+  terms_accepted_at: string;
+  accepted_terms_version: string;
 }
 
 interface StartPaymentParams {

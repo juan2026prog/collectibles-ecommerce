@@ -14,6 +14,7 @@ interface ProductFilters {
   featured?: boolean;
   limit?: number;
   offset?: number;
+  group?: string;
 }
 
 export function useProducts(filters: ProductFilters = {}) {
@@ -27,6 +28,37 @@ export function useProducts(filters: ProductFilters = {}) {
     // ── Step 1: resolve slug → id (Supabase can't filter on join paths) ──
     let categoryId: string | null = null;
     let brandId: string | null = null;
+    let productIds: string[] | null = null;
+
+    if (filters.group) {
+      const { data: groupData } = await supabase
+        .from('product_groups')
+        .select('id')
+        .eq('slug', filters.group)
+        .eq('is_active', true)
+        .single();
+
+      if (groupData) {
+        const { data: items } = await supabase
+          .from('product_group_items')
+          .select('product_id')
+          .eq('group_id', groupData.id);
+        
+        if (items && items.length > 0) {
+          productIds = items.map(x => x.product_id);
+        } else {
+          setProducts([]);
+          setCount(0);
+          setLoading(false);
+          return;
+        }
+      } else {
+        setProducts([]);
+        setCount(0);
+        setLoading(false);
+        return;
+      }
+    }
 
     if (filters.category) {
       const { data } = await supabase
@@ -63,10 +95,12 @@ export function useProducts(filters: ProductFilters = {}) {
     let query = supabase
       .from('products')
       .select(selectStr, { count: 'exact' })
-      .eq('status', 'published');
+      .eq('status', 'published')
+      .eq('is_active', true);
 
     if (categoryId) query = query.eq('product_categories.category_id', categoryId);
     if (brandId) query = query.eq('brand_id', brandId);
+    if (productIds) query = query.in('id', productIds);
     if (filters.badge) query = query.eq('badge', filters.badge);
     if (filters.featured) query = query.eq('is_featured', true);
     if (filters.minPrice) query = query.gte('base_price', filters.minPrice);
@@ -306,7 +340,7 @@ export function useProductGroups() {
       const { data } = await supabase
         .from('product_groups')
         .select(`
-          id, name, slug, description, type, rules_json,
+          id, name, slug, description, type, rules_json, show_on_home,
           product_group_items (
             product:products (
               *,
@@ -318,6 +352,7 @@ export function useProductGroups() {
           )
         `)
         .eq('is_active', true)
+        .eq('show_on_home', true)
         .order('sort_order', { ascending: true });
         
       setGroups(data || []);
@@ -329,6 +364,81 @@ export function useProductGroups() {
   return { groups, loading };
 }
 
+// ═══ useProductGroup (single) ═══
+export function useProductGroup(slug: string | undefined) {
+  const [group, setGroup] = useState<any>(null);
+  const [products, setProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!slug) return;
+    async function fetch() {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('product_groups')
+        .select(`
+          id, name, slug, description, type, rules_json, is_active, show_on_home,
+          product_group_items (
+            product:products (
+              *,
+              category:categories(id, name, slug),
+              brand:brands(id, name, slug),
+              images:product_images(id, url, alt_text, sort_order, is_primary),
+              variants:product_variants(id, sku, name, price_adjustment, inventory_count)
+            )
+          )
+        `)
+        .eq('slug', slug)
+        .eq('is_active', true)
+        .single();
+
+      if (!error && data) {
+        setGroup(data);
+        const mappedProducts = (data.product_group_items || [])
+          .map((item: any) => item.product)
+          .filter((p: any) => p && p.status === 'published' && p.is_active !== false);
+        setProducts(mappedProducts);
+      } else {
+        setGroup(null);
+        setProducts([]);
+      }
+      setLoading(false);
+    }
+    fetch();
+  }, [slug]);
+
+  return { group, products, loading };
+}
+
+// ═══ useProductGroupMetadata (single) ═══
+export function useProductGroupMetadata(slug: string | undefined) {
+  const [group, setGroup] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!slug) {
+      setGroup(null);
+      setLoading(false);
+      return;
+    }
+    async function fetch() {
+      setLoading(true);
+      const { data } = await supabase
+        .from('product_groups')
+        .select('id, name, slug, description, is_active, show_on_home')
+        .eq('slug', slug)
+        .eq('is_active', true)
+        .single();
+      setGroup(data || null);
+      setLoading(false);
+    }
+    fetch();
+  }, [slug]);
+
+
+  return { group, loading };
+}
+
 // ═══ useFilterMappings ═══
 export function useFilterMappings() {
   const [mappings, setMappings] = useState<{ category_id: string; brand_id: string }[]>([]);
@@ -338,7 +448,8 @@ export function useFilterMappings() {
       const { data } = await supabase
         .from('products')
         .select('brand_id, product_categories!inner(category_id)')
-        .eq('status', 'published');
+        .eq('status', 'published')
+        .eq('is_active', true);
         
       if (data) {
         const pairs: { category_id: string; brand_id: string }[] = [];

@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, handleOptions } from "../_shared/cors.ts";
-import { verifyAdmin } from "../_shared/auth.ts";
+import { verifyAdmin, verifyVendor } from "../_shared/auth.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -16,9 +16,21 @@ Deno.serve(async (req) => {
   if (options) return options;
 
   try {
-    await verifyAdmin(req);
+    let user;
+    let isVendor = false;
+    let isAdmin = false;
 
-    const { code, redirect_uri } = await req.json();
+    // Check if caller is admin or vendor
+    try {
+      user = await verifyAdmin(req);
+      isAdmin = true;
+    } catch (_e) {
+      user = await verifyVendor(req);
+      isVendor = true;
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const { code, redirect_uri, vendor_id } = body;
 
     if (!code) {
       return new Response(
@@ -53,10 +65,35 @@ Deno.serve(async (req) => {
 
     const expiresAt = new Date(Date.now() + (data.expires_in * 1000)).toISOString();
     
-    // Clear old credentials
-    await supabase.from("ml_credentials").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    // Fetch MeLi User Profile
+    const meRes = await fetch("https://api.mercadolibre.com/users/me", {
+      headers: { "Authorization": `Bearer ${data.access_token}` }
+    });
+    const meData = await meRes.json();
+    if (!meRes.ok) {
+      return new Response(
+        JSON.stringify({ error: meData.message || "Failed to fetch user profile from Mercado Libre" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+      );
+    }
 
-    await supabase.from("ml_credentials").insert({
+    const sellerId = meData.id.toString();
+    const nickname = meData.nickname;
+
+    const targetVendorId = isVendor ? user.id : (vendor_id || null);
+
+    // Clear old accounts for this vendor / platform
+    if (targetVendorId === null) {
+      await supabase.from("ml_seller_accounts").delete().is("vendor_id", null);
+    } else {
+      await supabase.from("ml_seller_accounts").delete().eq("vendor_id", targetVendorId);
+    }
+
+    // Insert new seller account details
+    await supabase.from("ml_seller_accounts").insert({
+      vendor_id: targetVendorId,
+      seller_id: sellerId,
+      nickname: nickname,
       access_token: data.access_token,
       refresh_token: data.refresh_token || null,
       expires_at: expiresAt,

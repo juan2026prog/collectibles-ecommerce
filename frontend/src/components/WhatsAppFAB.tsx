@@ -24,7 +24,17 @@ export default function WhatsAppFAB() {
         const settings: Record<string, string> = {};
         data?.forEach(d => (settings[d.key] = d.value));
         if (settings['social_whatsapp_enabled'] === 'true' && settings['social_whatsapp_url']) {
-          setUrl(settings['social_whatsapp_url']);
+          const rawUrl = settings['social_whatsapp_url'].trim();
+          let formattedUrl = rawUrl;
+          if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
+            if (formattedUrl.includes('wa.me') || formattedUrl.includes('whatsapp.com')) {
+              formattedUrl = `https://${formattedUrl.replace(/^(https?:\/\/)?/, '')}`;
+            } else {
+              const cleanNumber = formattedUrl.replace(/[\s\-\(\)\+]/g, '');
+              formattedUrl = `https://wa.me/${cleanNumber}`;
+            }
+          }
+          setUrl(formattedUrl);
         }
       });
 

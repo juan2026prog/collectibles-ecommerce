@@ -404,7 +404,7 @@ export default function DynamicPage({ forcedSlug }: { forcedSlug?: string }) {
     if (s === 'contact') {
       return 'Ponte en contacto con nuestro equipo de soporte para cualquier consulta o inconveniente.';
     }
-    if (s === 'about') {
+    if (s === 'nosotros' || s === 'about') {
       return 'Conoce nuestra historia, misión y nuestro compromiso con los coleccionistas de Uruguay.';
     }
     return 'Información institucional y pautas oficiales de Collectibles Uruguay.';
@@ -416,7 +416,7 @@ export default function DynamicPage({ forcedSlug }: { forcedSlug?: string }) {
     { name: 'Términos', slug: 'terminos', href: '/page/terminos' },
     { name: 'Condiciones', slug: 'condiciones-de-compra', href: '/page/condiciones-de-compra' },
     { name: 'Devoluciones', slug: 'envios-devoluciones', href: '/page/envios-devoluciones' },
-    { name: 'Nosotros', slug: 'about', href: '/about' },
+    { name: 'Nosotros', slug: 'nosotros', href: '/page/nosotros' },
     { name: 'Contacto', slug: 'contact', href: '/contact' },
   ], []);
 

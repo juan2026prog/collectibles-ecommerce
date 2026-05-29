@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { CheckCircle, AlertCircle, Loader2, ArrowRight } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 export default function MLCallback() {
   const [searchParams] = useSearchParams();
@@ -29,10 +30,17 @@ export default function MLCallback() {
 
   async function exchangeCodeForToken(code: string) {
     try {
-      const redirectUri = import.meta.env.VITE_ML_REDIRECT_URI || `${window.location.origin}/callback`;
+      const redirectUri = import.meta.env.VITE_ML_REDIRECT_URI || `${window.location.origin}/auth/callback`;
+      
+      const session = (await supabase.auth.getSession()).data.session;
+      const token = session?.access_token || '';
+
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mercadolibre-auth`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ 
           code,
           redirect_uri: redirectUri
@@ -41,12 +49,29 @@ export default function MLCallback() {
 
       const data = await response.json();
 
-      if (data.access_token) {
+      if (response.ok && data.success) {
         setStatus('success');
         setMessage('¡Autorización exitosa! Redireccionando...');
-        setTimeout(() => navigate('/admin/mercadolibre'), 2000);
+        
+        // Fetch current user role to redirect dynamically
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('is_admin')
+            .eq('id', user.id)
+            .maybeSingle();
+
+          if (profile?.is_admin) {
+            setTimeout(() => navigate('/admin/mercadolibre'), 2000);
+          } else {
+            setTimeout(() => navigate('/vendor?tab=mercadolibre'), 2000);
+          }
+        } else {
+          setTimeout(() => navigate('/vendor?tab=mercadolibre'), 2000);
+        }
       } else {
-        throw new Error(data.error || 'Error al intercambiar código');
+        throw new Error(data.error || 'Error al conectar la cuenta');
       }
     } catch (err: any) {
       setStatus('error');

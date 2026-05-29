@@ -78,9 +78,8 @@ function MenuEditor({ title, description, initialJson, onSave }: any) {
             { label: 'INICIO', url: '/', subItems: [] },
             { label: 'CATEGORÍAS', url: '/shop', subItems: [] },
             { label: 'MARCAS', url: '/shop', subItems: [] },
-            { label: 'NOSOTROS', url: '/about', subItems: [] },
-            { label: 'CONTACTO', url: '/contact', subItems: [] },
-            { label: 'BLOG', url: '/blog', subItems: [] }
+            { label: 'NOSOTROS', url: '/page/nosotros', subItems: [] },
+            { label: 'CONTACTO', url: '/contact', subItems: [] }
           ]);
           return;
         } else if (title.includes('Footer') || title.toLowerCase().includes('footer')) {
@@ -140,9 +139,8 @@ function MenuEditor({ title, description, initialJson, onSave }: any) {
           { label: 'INICIO', url: '/', subItems: [] },
           { label: 'CATEGORÍAS', url: '/shop', subItems: [] },
           { label: 'MARCAS', url: '/shop', subItems: [] },
-          { label: 'NOSOTROS', url: '/about', subItems: [] },
-          { label: 'CONTACTO', url: '/contact', subItems: [] },
-          { label: 'BLOG', url: '/blog', subItems: [] }
+          { label: 'NOSOTROS', url: '/page/nosotros', subItems: [] },
+          { label: 'CONTACTO', url: '/contact', subItems: [] }
         ]);
       } else {
         setItems([

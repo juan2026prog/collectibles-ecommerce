@@ -246,7 +246,7 @@ export default function PortalLayout({ type }: { type: 'vendor' | 'artist' | 'af
               <div className="flex flex-col gap-5 text-[11px] font-black text-slate-500 uppercase tracking-widest">
                 <Link to="/shop" className="hover:text-[#f00856] transition-colors">Catálogo Global</Link>
                 <Link to="/drops" className="hover:text-[#f00856] transition-colors">Drops Exclusivos</Link>
-                <Link to="/about" className="hover:text-[#f00856] transition-colors">Sobre Nosotros</Link>
+                <Link to="/page/nosotros" className="hover:text-[#f00856] transition-colors">Sobre Nosotros</Link>
                 <Link to="/contact" className="hover:text-[#f00856] transition-colors">Contacto</Link>
               </div>
             </div>

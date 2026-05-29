@@ -24,6 +24,7 @@ export default function AdminOrders() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [channelFilter, setChannelFilter] = useState('all');
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [isBlocking, setIsBlocking] = useState(false);
@@ -52,7 +53,7 @@ export default function AdminOrders() {
   const { toast } = useToast();
   const { confirm, prompt } = useConfirmModal();
 
-  useEffect(() => { fetchOrders(); }, [statusFilter]);
+  useEffect(() => { fetchOrders(); }, [statusFilter, channelFilter]);
 
   useEffect(() => {
     async function checkDacActive() {
@@ -274,6 +275,11 @@ export default function AdminOrders() {
     setLoading(true);
     let query = supabase.from('orders').select('*, customer:profiles(email, first_name, last_name)').order('created_at', { ascending: false });
     if (statusFilter !== 'all') query = query.eq('status', statusFilter);
+    if (channelFilter === 'web') {
+      query = query.is('ml_order_id', null);
+    } else if (channelFilter === 'mercadolibre') {
+      query = query.not('ml_order_id', 'is', null);
+    }
     const { data } = await query;
     setOrders(data || []);
     setLoading(false);
@@ -439,15 +445,37 @@ export default function AdminOrders() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
           <h2 className="text-xl font-bold text-gray-900">Órdenes de Venta</h2>
           <p className="text-sm text-gray-500 mt-1">Gestión de logística y seguimiento</p>
         </div>
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="form-input w-48 text-sm font-medium">
-          <option value="all">Ver Todos los Estados</option>
-          {ORDER_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-        </select>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex bg-gray-100 p-1 rounded-xl border border-gray-200">
+            <button 
+              onClick={() => setChannelFilter('all')} 
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${channelFilter === 'all' ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-550 hover:text-gray-900'}`}
+            >
+              Todas
+            </button>
+            <button 
+              onClick={() => setChannelFilter('web')} 
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${channelFilter === 'web' ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-550 hover:text-gray-900'}`}
+            >
+              Web
+            </button>
+            <button 
+              onClick={() => setChannelFilter('mercadolibre')} 
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${channelFilter === 'mercadolibre' ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-550 hover:text-gray-900'}`}
+            >
+              Mercado Libre
+            </button>
+          </div>
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="form-input w-48 text-sm font-medium">
+            <option value="all">Ver Todos los Estados</option>
+            {ORDER_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -473,8 +501,18 @@ export default function AdminOrders() {
                 return (
                   <tr key={o.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4">
-                      <p className="text-sm font-mono font-bold text-primary-600">#{o.id.slice(0,8).toUpperCase()}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-mono font-bold text-primary-600">#{o.id.slice(0,8).toUpperCase()}</p>
+                        {o.ml_order_id && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] uppercase font-black bg-yellow-100 text-yellow-800 border border-yellow-250 flex items-center gap-0.5" title={`Mercado Libre ID: ${o.ml_order_id}`}>
+                            ML 🛒
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm text-gray-600">{o.customer?.email || o.customer_email || 'Sin usuario asociado'}</p>
+                      {o.ml_order_id && (
+                        <p className="text-[10px] text-gray-400 font-mono mt-0.5">ML ID: {o.ml_order_id}</p>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-sm font-bold text-gray-900">${o.total_amount}</span>
@@ -530,6 +568,11 @@ export default function AdminOrders() {
                 <h3 className="font-bold text-lg flex items-center gap-2">
                   <Package className="w-5 h-5 text-gray-400" />
                   Orden #{selectedOrder.id.slice(0,8).toUpperCase()}
+                  {selectedOrder.ml_order_id && (
+                    <span className="px-2 py-0.5 rounded text-[10px] uppercase font-black bg-yellow-100 text-yellow-800 border border-yellow-250 flex items-center gap-0.5">
+                      ML 🛒
+                    </span>
+                  )}
                 </h3>
                 <p className="text-sm text-gray-500 mt-1">{new Date(selectedOrder.created_at).toLocaleString()}</p>
               </div>
@@ -537,6 +580,17 @@ export default function AdminOrders() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              
+              {/* MERCADO LIBRE ALERT BOX */}
+              {selectedOrder.ml_order_id && (
+                <div className="p-3.5 bg-yellow-50 border border-yellow-200 rounded-xl text-xs text-yellow-800 leading-relaxed">
+                  <p className="font-bold flex items-center gap-1">
+                    <span>🛒 Pedido de Mercado Libre</span>
+                  </p>
+                  <p className="mt-1 text-yellow-750">Este pedido fue importado automáticamente desde Mercado Libre en tiempo real.</p>
+                  <p className="mt-1 font-mono text-[10px] text-yellow-600">ID de Mercado Libre: {selectedOrder.ml_order_id}</p>
+                </div>
+              )}
               
               {/* STATUS & COMPRA ASISTIDA */}
               <div className="space-y-4 bg-white p-4 rounded-xl border border-gray-100">

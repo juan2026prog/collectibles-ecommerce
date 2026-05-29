@@ -17,6 +17,9 @@ export default function AdminMedia() {
   const { confirm, prompt } = useConfirmModal();
 
   const BUCKET_NAME = 'public-assets';
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchMedia(currentPath);
@@ -26,6 +29,7 @@ export default function AdminMedia() {
   async function fetchMedia(path: string) {
     setLoading(true);
     setError(null);
+    setFiles([]); // Clear list to prevent double clicks on stale cards
     try {
       const { data, error } = await supabase.storage.from(BUCKET_NAME).list(path, {
         limit: 500,
@@ -65,12 +69,11 @@ export default function AdminMedia() {
     }
   }
 
-  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    if (!e.target.files || e.target.files.length === 0) return;
-    
+  async function uploadFiles(filesArray: File[], destPath?: string) {
     setUploading(true);
     setError(null);
-    const filesArray = Array.from(e.target.files);
+    
+    const targetPath = destPath !== undefined ? destPath : currentPath;
     
     for (const file of filesArray) {
       try {
@@ -78,7 +81,7 @@ export default function AdminMedia() {
         const rawName = file.name.replace(`.${fileExt}`, '');
         const sanitizedName = rawName.toLowerCase().replace(/[^a-z0-9]/g, '-');
         const fileName = `${Date.now()}-${sanitizedName}.${fileExt}`;
-        const fullPath = currentPath ? `${currentPath}${fileName}` : fileName;
+        const fullPath = targetPath ? `${targetPath}${fileName}` : fileName;
 
         const { error: uploadError } = await supabase.storage
           .from(BUCKET_NAME)
@@ -96,6 +99,82 @@ export default function AdminMedia() {
     fetchMedia(currentPath);
     toast.success('Carga completada');
   }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!e.target.files || e.target.files.length === 0) return;
+    await uploadFiles(Array.from(e.target.files));
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDragging(true);
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDragging(false);
+  }
+
+  async function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDragging(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      await uploadFiles(Array.from(e.dataTransfer.files));
+    }
+  }
+
+  function handleDragStart(e: React.DragEvent, itemName: string, isFolder: boolean) {
+    e.dataTransfer.setData('itemName', itemName);
+    e.dataTransfer.setData('isFolder', isFolder ? 'true' : 'false');
+    e.dataTransfer.effectAllowed = 'move';
+  }
+
+  async function handleFolderDrop(e: React.DragEvent, targetFolderName: string) {
+    e.preventDefault();
+    setDragOverFolder(null);
+    
+    // Check if dropping local files from computer into a folder card
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const targetFolder = currentPath ? `${currentPath}${targetFolderName}/` : `${targetFolderName}/`;
+      await uploadFiles(Array.from(e.dataTransfer.files), targetFolder);
+      return;
+    }
+
+    const itemName = e.dataTransfer.getData('itemName');
+    const isFolderStr = e.dataTransfer.getData('isFolder');
+    if (!itemName) return;
+    
+    const isFolder = isFolderStr === 'true';
+    if (isFolder && itemName === targetFolderName) {
+      toast.error('No puedes mover una carpeta dentro de sí misma');
+      return;
+    }
+    
+    const cleanTarget = currentPath ? `${currentPath}${targetFolderName}/` : `${targetFolderName}/`;
+    const fromPath = currentPath ? `${currentPath}${itemName}` : itemName;
+    const toPath = cleanTarget + itemName;
+    
+    setLoading(true);
+    try {
+      if (isFolder) {
+        await moveFolderRecursive(fromPath + '/', toPath + '/');
+      } else {
+        const { error } = await supabase.storage.from(BUCKET_NAME).move(fromPath, toPath);
+        if (error) throw error;
+        await updateDbReferences(fromPath, toPath);
+      }
+      toast.success(isFolder ? 'Carpeta movida con éxito' : 'Archivo movido con éxito');
+      fetchMedia(currentPath);
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Error al mover: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+
 
   async function handleDelete(fileName: string, isFolder: boolean) {
     const targetPath = currentPath ? `${currentPath}${fileName}` : fileName;
@@ -152,6 +231,29 @@ export default function AdminMedia() {
     await supabase.storage.from(BUCKET_NAME).remove([folderPath + '.emptyFolderPlaceholder']).catch(() => {});
   }
 
+  async function updateDbReferences(fromPath: string, toPath: string) {
+    const oldUrl = supabase.storage.from(BUCKET_NAME).getPublicUrl(fromPath).data.publicUrl;
+    const newUrl = supabase.storage.from(BUCKET_NAME).getPublicUrl(toPath).data.publicUrl;
+    
+    if (oldUrl === newUrl) return;
+
+    try {
+      await Promise.all([
+        supabase.from('product_images').update({ url: newUrl }).eq('url', oldUrl),
+        supabase.from('banners').update({ image_url: newUrl }).eq('image_url', oldUrl),
+        supabase.from('banners').update({ mobile_image_url: newUrl }).eq('mobile_image_url', oldUrl),
+        supabase.from('categories').update({ image_url: newUrl }).eq('image_url', oldUrl),
+        supabase.from('brands').update({ logo_url: newUrl }).eq('logo_url', oldUrl),
+        supabase.from('badges').update({ custom_image: newUrl }).eq('custom_image', oldUrl),
+        supabase.from('promo_materials').update({ image_url: newUrl }).eq('image_url', oldUrl),
+        supabase.from('products').update({ print_file_url: newUrl }).eq('print_file_url', oldUrl),
+        supabase.from('products').update({ mockup_file_url: newUrl }).eq('mockup_file_url', oldUrl)
+      ]);
+    } catch (err) {
+      console.error('Error updating DB references for move:', err);
+    }
+  }
+
   async function handleRename(fileName: string, isFolder: boolean) {
     const oldName = fileName;
     const newName = await prompt(`Cambiar nombre de ${isFolder ? 'la carpeta' : 'el archivo'}:`, oldName);
@@ -172,6 +274,7 @@ export default function AdminMedia() {
       } else {
         const { error } = await supabase.storage.from(BUCKET_NAME).move(fromPath, toPath);
         if (error) throw error;
+        await updateDbReferences(fromPath, toPath);
       }
       toast.success(isFolder ? 'Carpeta renombrada' : 'Archivo renombrado');
       fetchMedia(currentPath);
@@ -192,7 +295,11 @@ export default function AdminMedia() {
         if (!item.id) {
           await moveFolderRecursive(fromFolder + item.name + '/', toFolder + item.name + '/');
         } else {
-          await supabase.storage.from(BUCKET_NAME).move(fromFolder + item.name, toFolder + item.name);
+          const fromFile = fromFolder + item.name;
+          const toFile = toFolder + item.name;
+          const { error: moveError } = await supabase.storage.from(BUCKET_NAME).move(fromFile, toFile);
+          if (moveError) throw moveError;
+          await updateDbReferences(fromFile, toFile);
         }
       }
     }
@@ -223,6 +330,7 @@ export default function AdminMedia() {
       } else {
         const { error } = await supabase.storage.from(BUCKET_NAME).move(fromPath, toPath);
         if (error) throw error;
+        await updateDbReferences(fromPath, toPath);
       }
       toast.success(isFolder ? 'Carpeta movida con éxito' : 'Archivo movido con éxito');
       fetchMedia(currentPath);
@@ -233,6 +341,7 @@ export default function AdminMedia() {
       setLoading(false);
     }
   }
+
 
   function getFileUrl(fileName: string) {
     const fullPath = currentPath ? `${currentPath}${fileName}` : fileName;
@@ -255,13 +364,23 @@ export default function AdminMedia() {
           </h2>
           {/* Breadcrumbs */}
           <div className="flex items-center text-sm font-medium text-gray-500 mt-2">
-             <button onClick={() => setCurrentPath('')} className="hover:text-primary-600 transition-colors">Inicio</button>
+             <button 
+               disabled={loading}
+               onClick={() => !loading && setCurrentPath('')} 
+               className="hover:text-primary-600 transition-colors disabled:opacity-50"
+             >
+               Inicio
+             </button>
              {currentPath.split('/').filter(Boolean).map((part, i, arr) => {
                 const targetPath = arr.slice(0, i + 1).join('/') + '/';
                 return (
                   <div key={i} className="flex items-center">
                     <ChevronRight className="w-3 h-3 mx-1" />
-                    <button onClick={() => setCurrentPath(targetPath)} className="hover:text-primary-600 transition-colors">
+                    <button 
+                      disabled={loading}
+                      onClick={() => !loading && setCurrentPath(targetPath)} 
+                      className="hover:text-primary-600 transition-colors disabled:opacity-50"
+                    >
                       {part}
                     </button>
                   </div>
@@ -327,6 +446,29 @@ export default function AdminMedia() {
         </div>
       )}
 
+      {/* Drag & Drop Zone */}
+      <div 
+        ref={dropZoneRef}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={`border-2 border-dashed p-6 text-center transition-all rounded-xl shadow-sm ${
+          isDragging ? 'border-primary-500 bg-primary-50/50 scale-[1.01]' : 'border-gray-200 bg-white hover:border-primary-400'
+        }`}
+      >
+        {uploading ? (
+          <div className="flex items-center justify-center gap-2 text-primary-600 font-medium">
+            <RefreshCw className="w-5 h-5 animate-spin" />
+            <span>Subiendo archivos...</span>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500">
+            <span className="font-semibold text-primary-600">Arrastra y suelta</span> archivos aquí, o 
+            <button onClick={() => fileInputRef.current?.click()} className="text-primary-600 hover:underline ml-1 font-semibold">selecciona desde tu equipo</button>
+          </p>
+        )}
+      </div>
+
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm min-h-[400px] p-4">
         {loading && files.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-gray-400">
@@ -356,9 +498,26 @@ export default function AdminMedia() {
                 const isFolder = !file.id;
                 
                 if (isFolder) {
+                   const isDragTarget = dragOverFolder === file.name;
                    return (
-                      <div key={file.name} className="group relative border border-gray-200 rounded-xl flex flex-col items-center justify-center p-4 hover:border-primary-400 hover:shadow-md transition-all bg-white aspect-square">
-                         <button onClick={() => setCurrentPath(currentPath + file.name + '/')} className="w-full h-full flex flex-col items-center justify-center">
+                      <div 
+                         key={file.name} 
+                         draggable={true}
+                         onDragStart={(e) => handleDragStart(e, file.name, true)}
+                         onDragOver={(e) => { e.preventDefault(); setDragOverFolder(file.name); }}
+                         onDragLeave={() => setDragOverFolder(null)}
+                         onDrop={(e) => handleFolderDrop(e, file.name)}
+                         className={`group relative border rounded-xl flex flex-col items-center justify-center p-4 transition-all bg-white aspect-square cursor-grab active:cursor-grabbing ${
+                            isDragTarget 
+                              ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-500 shadow-md' 
+                              : 'border-gray-200 hover:border-primary-400 hover:shadow-md'
+                         }`}
+                      >
+                         <button 
+                           disabled={loading}
+                           onClick={() => !loading && setCurrentPath(currentPath + file.name + '/')} 
+                           className="w-full h-full flex flex-col items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                         >
                             <Folder className="w-12 h-12 text-blue-400 mb-2 group-hover:scale-110 transition-transform" />
                             <span className="text-xs font-bold text-gray-700 truncate w-full text-center">{file.name}</span>
                          </button>
@@ -381,7 +540,12 @@ export default function AdminMedia() {
                 const img = isImage(file.name);
                 
                 return (
-                  <div key={file.id} className="group relative border border-gray-200 rounded-xl flex flex-col items-center justify-center p-2 hover:border-primary-400 hover:shadow-md transition-all bg-white aspect-square overflow-hidden">
+                  <div 
+                    key={file.id} 
+                    draggable={true}
+                    onDragStart={(e) => handleDragStart(e, file.name, false)}
+                    className="group relative border border-gray-200 rounded-xl flex flex-col items-center justify-center p-2 hover:border-primary-400 hover:shadow-md transition-all bg-white aspect-square overflow-hidden cursor-grab active:cursor-grabbing"
+                  >
                     
                     {/* Vista Previa */}
                     <div className="w-full h-full flex items-center justify-center p-2 mb-6 bg-gray-50/50 rounded-lg">

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Layers, Plus, Trash2, Save, X, Package, Search, GripVertical } from 'lucide-react';
+import { Layers, Plus, Trash2, Save, X, Package, Search, GripVertical, Link2, Copy, Check } from 'lucide-react';
 
 interface ProductGroup {
   id?: string;
@@ -10,6 +10,7 @@ interface ProductGroup {
   type: 'manual' | 'auto';
   rules_json: string;
   is_active: boolean;
+  show_on_home: boolean;
   sort_order: number;
 }
 
@@ -21,6 +22,14 @@ export default function AdminGroups() {
   const [search, setSearch] = useState('');
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopyLink = (slug: string, id: string) => {
+    const url = `${window.location.origin}/collection/${slug}`;
+    navigator.clipboard.writeText(url);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   useEffect(() => { fetchGroups(); fetchProducts(); }, []);
 
@@ -37,12 +46,15 @@ export default function AdminGroups() {
   }
 
   function startNew() {
-    setEditing({ name: '', slug: '', description: '', type: 'manual', rules_json: '{}', is_active: true, sort_order: groups.length });
+    setEditing({ name: '', slug: '', description: '', type: 'manual', rules_json: '{}', is_active: true, show_on_home: true, sort_order: groups.length });
     setSelectedProducts([]);
   }
 
   function startEdit(g: any) {
-    setEditing({ ...g });
+    setEditing({
+      ...g,
+      show_on_home: g.show_on_home !== false
+    });
     setSelectedProducts((g.product_group_items || []).map((pi: any) => pi.product_id));
   }
 
@@ -113,6 +125,11 @@ export default function AdminGroups() {
             <div>
               <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Slug</label>
               <input className="form-input w-full font-mono text-blue-600" value={editing.slug} onChange={e => setEditing({ ...editing, slug: e.target.value })} placeholder="ofertas-verano" />
+              {editing.slug && (
+                <p className="text-[11px] text-gray-400 mt-1 font-mono flex items-center gap-1">
+                  <Link2 className="w-3 h-3 text-slate-400" /> Link: <span className="text-gray-600 font-semibold">{window.location.origin}/collection/{editing.slug}</span>
+                </p>
+              )}
             </div>
           </div>
 
@@ -121,7 +138,7 @@ export default function AdminGroups() {
             <textarea rows={2} className="form-input w-full" value={editing.description} onChange={e => setEditing({ ...editing, description: e.target.value })} placeholder="Descripción de la colección..." />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <div>
               <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Tipo</label>
               <select className="form-input w-full" value={editing.type} onChange={e => setEditing({ ...editing, type: e.target.value as any })}>
@@ -129,10 +146,16 @@ export default function AdminGroups() {
                 <option value="auto">Automático (reglas)</option>
               </select>
             </div>
-            <div className="flex items-end">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input type="checkbox" checked={editing.is_active} onChange={e => setEditing({ ...editing, is_active: e.target.checked })} className="w-5 h-5 rounded" />
-                <span className="text-sm font-bold">Colección Activa</span>
+            <div className="flex items-center pb-2.5">
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <input type="checkbox" checked={editing.is_active} onChange={e => setEditing({ ...editing, is_active: e.target.checked })} className="w-5 h-5 rounded text-primary-600 focus:ring-primary-500 border-gray-300" />
+                <span className="text-sm font-bold text-gray-700">Colección Activa</span>
+              </label>
+            </div>
+            <div className="flex items-center pb-2.5">
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <input type="checkbox" checked={editing.show_on_home} onChange={e => setEditing({ ...editing, show_on_home: e.target.checked })} className="w-5 h-5 rounded text-primary-600 focus:ring-primary-500 border-gray-300" />
+                <span className="text-sm font-bold text-gray-700">Mostrar en la Home</span>
               </label>
             </div>
           </div>
@@ -185,16 +208,49 @@ export default function AdminGroups() {
               <div className="flex items-center gap-4">
                 <GripVertical className="w-5 h-5 text-gray-300 group-hover:text-gray-400 cursor-grab" />
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <h4 className="font-bold text-gray-900">{g.name}</h4>
                     <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest border ${g.is_active ? 'bg-green-100 text-green-700 border-green-200' : 'bg-gray-100 text-gray-400 border-gray-200'}`}>
                       {g.is_active ? 'Activa' : 'Inactiva'}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest border ${g.show_on_home ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
+                      {g.show_on_home ? 'En Home' : 'Oculta en Home'}
                     </span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest bg-blue-50 text-blue-600 border border-blue-100">
                       {g.type === 'manual' ? 'Manual' : 'Auto'}
                     </span>
                   </div>
                   <p className="text-sm text-gray-500 mt-0.5">{g.description || 'Sin descripción'} · <span className="font-bold">{g.product_group_items?.length || 0} productos</span></p>
+                  {g.is_active && (
+                    <div className="mt-2.5 flex items-center gap-2 text-xs bg-slate-50 border border-slate-100 rounded-lg px-2.5 py-1.5 w-fit">
+                      <span className="text-slate-400 font-mono">Enlace público:</span>
+                      <a
+                        href={`/collection/${g.slug}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary-600 hover:text-primary-700 font-bold flex items-center gap-0.5"
+                      >
+                        /collection/{g.slug} <Link2 className="w-3 h-3" />
+                      </a>
+                      <span className="text-slate-200">|</span>
+                      <button
+                        onClick={() => handleCopyLink(g.slug, g.id)}
+                        className="text-slate-500 hover:text-slate-700 font-bold flex items-center gap-1 transition-colors"
+                      >
+                        {copiedId === g.id ? (
+                          <>
+                            <Check className="w-3 h-3 text-green-600" />
+                            <span className="text-green-600">¡Copiado!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3" />
+                            <span>Copiar enlace</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex gap-2">

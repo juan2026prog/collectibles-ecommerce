@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRight, ChevronLeft, Truck, Store, Tag, Sparkles, X, Home, Ticket, Share2, Clock, AlertCircle, MapPin, Building2, Search, Check, Trash2, Plus, Minus } from 'lucide-react';
+import { ChevronRight, ChevronLeft, ChevronDown, Truck, Store, Tag, Sparkles, X, Home, Ticket, Share2, Clock, AlertCircle, MapPin, Building2, Search, Check, Trash2, Plus, Minus } from 'lucide-react';
 import { useCartContext } from '../contexts/CartContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -97,6 +97,7 @@ export default function Checkout() {
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [checkoutError, setCheckoutError] = useState('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'mercadopago' | 'dlocalgo' | 'paypal' | 'handy'>('mercadopago');
   const [shippingMethod, setShippingMethod] = useState<'delivery' | 'pickup'>('delivery');
   const [publicPaymentProviders, setPublicPaymentProviders] = useState<PublicPaymentProvider[]>([]);
@@ -167,6 +168,7 @@ export default function Checkout() {
   const submitLockRef = useRef(false);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(true);
+  const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
   const carouselRef = useRef<HTMLDivElement>(null);
   const [form, setForm] = useState({
     email: user?.email || '',
@@ -678,6 +680,7 @@ export default function Checkout() {
               variants:product_variants(id, sku, name, price_adjustment, inventory_count)
             `)
             .eq('status', 'published')
+            .eq('is_active', true)
             .in('category_id', categoryIds)
             .limit(20);
 
@@ -700,6 +703,7 @@ export default function Checkout() {
               variants:product_variants(id, sku, name, price_adjustment, inventory_count)
             `)
             .eq('status', 'published')
+            .eq('is_active', true)
             .eq('is_featured', true)
             .limit(20);
 
@@ -725,6 +729,7 @@ export default function Checkout() {
               variants:product_variants(id, sku, name, price_adjustment, inventory_count)
             `)
             .eq('status', 'published')
+            .eq('is_active', true)
             .limit(20);
 
           if (generalProducts) {
@@ -889,6 +894,11 @@ export default function Checkout() {
     }
     if (submitLockRef.current || isSubmitting) return;
 
+    if (!termsAccepted) {
+      setCheckoutError('Debe aceptar los Términos y Condiciones para continuar.');
+      return;
+    }
+
     submitLockRef.current = true;
     setIsSubmitting(true);
     setCheckoutError('');
@@ -934,6 +944,9 @@ export default function Checkout() {
         customer_email: form.email,
         customer_phone: form.phone || undefined,
         bank_promo: selectedPromo ? { promo_id: selectedPromo.id } : undefined,
+        terms_accepted: true,
+        terms_accepted_at: new Date().toISOString(),
+        accepted_terms_version: "2026-05-27",
       });
 
       console.log("create-order success:", order);
@@ -1849,9 +1862,26 @@ export default function Checkout() {
           {/* SIDEBAR: ORDER SUMMARY (always visible)                   */}
           {/* ═══════════════════════════════════════════════════════════ */}
           <div>
-            <div className="glass p-6 sticky top-24">
-              <h2 className="font-bold text-lg mb-4">Resumen de orden</h2>
-              <div className="space-y-3 mb-6">
+            <div className="glass p-4 sm:p-6 sticky top-24">
+              <button
+                type="button"
+                onClick={() => setIsSummaryExpanded(!isSummaryExpanded)}
+                className="w-full flex justify-between items-center text-left lg:pointer-events-none"
+              >
+                <div>
+                  <h2 className="font-bold text-lg text-white">Resumen de orden</h2>
+                  <p className="text-xs text-slate-400 lg:hidden mt-0.5">
+                    {items.length} {items.length === 1 ? 'producto' : 'productos'} · <span className="text-[#f00856] font-black">{formatCurrencyPrice(grandTotal)}</span>
+                  </p>
+                </div>
+                <div className="lg:hidden flex items-center gap-1.5 text-xs font-bold text-[#f00856]">
+                  <span>{isSummaryExpanded ? 'Ocultar' : 'Ver detalle'}</span>
+                  <ChevronDown className={`w-4 h-4 transition-transform ${isSummaryExpanded ? 'rotate-180' : ''}`} />
+                </div>
+              </button>
+
+              <div className={`mt-6 lg:block ${isSummaryExpanded ? 'block animate-fade-in' : 'hidden'}`}>
+                <div className="space-y-3 mb-6">
                 {items.map((item) => (
                   <div key={item.variant_id} className="flex items-center gap-2.5 p-2 rounded-xl bg-white/[0.02] border border-white/5 justify-between animate-fade-in">
                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -2036,10 +2066,36 @@ export default function Checkout() {
               {/* Submit button — only visible on step 3 */}
               {currentStep === 3 && (
                 <>
+                  <div className="mt-6 p-4 rounded-xl border border-white/5 bg-white/[0.01] flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      id="terms-checkbox"
+                      checked={termsAccepted}
+                      onChange={(e) => setTermsAccepted(e.target.checked)}
+                      className="mt-0.5 rounded border-white/10 bg-white/5 text-primary-600 focus:ring-primary-500 focus:ring-offset-0 focus:ring-1 cursor-pointer shrink-0"
+                    />
+                    <label htmlFor="terms-checkbox" className="text-xs text-slate-300 cursor-pointer select-none leading-relaxed">
+                      He leído y acepto los{" "}
+                      <a
+                        href="https://collectibles-ecommerce.vercel.app/page/terminos"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary-400 hover:text-primary-300 underline font-semibold transition-colors"
+                      >
+                        Términos y Condiciones
+                      </a>
+                      , incluyendo las condiciones de compra y preventa.
+                    </label>
+                  </div>
+
+                  {!termsAccepted && (
+                    <p className="text-[11px] text-orange-400 font-semibold mt-2">• Debes aceptar los Términos y Condiciones para continuar al pago.</p>
+                  )}
+
                   <button
                     type="submit"
-                    disabled={isSubmitting || isPaymentBlocked() || ((selectedShippingMethod === 'dac' || selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') && dacShippingLoading)}
-                    className={`btn-primary w-full mt-6 py-3.5 text-base ${(isPaymentBlocked() || ((selectedShippingMethod === 'dac' || selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') && dacShippingLoading)) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    disabled={isSubmitting || isPaymentBlocked() || !termsAccepted || ((selectedShippingMethod === 'dac' || selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') && dacShippingLoading)}
+                    className={`btn-primary w-full mt-4 py-3.5 text-base ${(isSubmitting || isPaymentBlocked() || !termsAccepted || ((selectedShippingMethod === 'dac' || selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') && dacShippingLoading)) ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     {isSubmitting ? 'Procesando...' : 'Finalizar compra'}
                   </button>
@@ -2062,6 +2118,7 @@ export default function Checkout() {
                   )}
                 </>
               )}
+              </div>
             </div>
           </div>
         </div>

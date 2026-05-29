@@ -85,7 +85,7 @@ function PreorderCard({ item }: { item: PreorderItem }) {
   }, [item.countdown_date]);
 
   return (
-    <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-[#05070f] aspect-[16/10] md:aspect-[16/11] flex flex-col justify-end group hover:border-[#f00856]/40 transition-all duration-500 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
+    <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-[#05070f] aspect-[16/10] md:aspect-[16/11] min-h-[300px] sm:min-h-0 flex flex-col justify-end group hover:border-[#f00856]/40 transition-all duration-500 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
       {/* Background Image */}
       <picture className="absolute inset-0 w-full h-full">
         {item.mobile_image_url && (

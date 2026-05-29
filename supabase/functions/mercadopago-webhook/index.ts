@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { enqueueMlSyncEvent } from "../_shared/mercadolibre.ts";
 
 // SEC-HIGH-01: Webhooks do NOT need CORS headers — they are server-to-server calls.
 // We include minimal headers only for the response format.
@@ -169,10 +170,16 @@ Deno.serve(async (req: Request) => {
           if (orderItems) {
             for (const item of orderItems) {
               if (item.variant_id) {
-                await supabaseAdmin.rpc("decrement_inventory", { 
+                const { error: invErr } = await supabaseAdmin.rpc("decrement_inventory", { 
                   p_variant_id: item.variant_id, 
                   p_quantity: item.quantity 
-                }).catch((err: any) => console.error("Inventory error:", err));
+                });
+                if (invErr) {
+                  console.error("Inventory error:", invErr);
+                } else {
+                  // Enqueue ML stock sync event
+                  await enqueueMlSyncEvent(supabaseAdmin, item.variant_id);
+                }
               }
             }
           }

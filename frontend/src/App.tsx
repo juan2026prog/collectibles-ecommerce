@@ -9,10 +9,12 @@ import { LocaleProvider } from './contexts/LocaleContext';
 import { CurrencyProvider } from './contexts/CurrencyContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import { PageSkeleton } from './components/Skeletons';
+import ScrollToTop from './components/ScrollToTop';
 
 import StorefrontLayout from './layouts/StorefrontLayout';
-import AdminLayout from './layouts/AdminLayout';
-import PortalLayout from './layouts/PortalLayout';
+
+const AdminLayout = lazy(() => import('./layouts/AdminLayout'));
+const PortalLayout = lazy(() => import('./layouts/PortalLayout'));
 
 // Public Storefront (Lazy)
 const Home = lazy(() => import('./pages/Home'));
@@ -24,6 +26,7 @@ const CheckoutSuccess = lazy(() => import('./pages/CheckoutSuccess'));
 const MLCallback = lazy(() => import('./pages/MLCallback'));
 const Callback = lazy(() => import('./pages/Callback'));
 const DynamicPage = lazy(() => import('./pages/DynamicPage'));
+const Contact = lazy(() => import('./pages/Contact'));
 
 // Auth (Lazy)
 const Login = lazy(() => import('./pages/Login'));
@@ -54,6 +57,8 @@ const AdminPromotions = lazy(() => import('./pages/admin/AdminPromotions'));
 const AdminAffiliates = lazy(() => import('./pages/admin/AdminAffiliates'));
 const AdminMailing = lazy(() => import('./pages/admin/AdminMailing'));
 const AdminMercadoLibre = lazy(() => import('./pages/admin/AdminMercadoLibre'));
+const AdminMLCuration = lazy(() => import('./pages/admin/AdminMLCuration'));
+const AdminMLOperations = lazy(() => import('./pages/admin/AdminMLOperations'));
 const AdminReports = lazy(() => import('./pages/admin/AdminReports'));
 const AdminSeo = lazy(() => import('./pages/admin/AdminSeo'));
 const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
@@ -74,6 +79,7 @@ function App() {
   return (
     <ErrorBoundary>
     <BrowserRouter>
+      <ScrollToTop />
       <AnalyticsProvider>
         <ReferralTracker />
         <AuthProvider>
@@ -81,7 +87,7 @@ function App() {
             <FeatureToggleProvider>
               <LocaleProvider>
                 <CurrencyProvider>
-                  <Suspense fallback={<PageSkeleton />}>
+                  <Suspense fallback={null}>
                   <Routes>
                   {/* Public Storefront */}
                   <Route element={<StorefrontLayout />}>
@@ -89,9 +95,9 @@ function App() {
                     <Route path="/shop" element={<Shop />} />
                     <Route path="/p/:slug" element={<ProductDetail />} />
                     <Route path="/page/:slug" element={<DynamicPage />} />
-                    <Route path="/about" element={<DynamicPage forcedSlug="about" />} />
-                    <Route path="/contact" element={<DynamicPage forcedSlug="contact" />} />
-                    <Route path="/blog" element={<DynamicPage forcedSlug="blog" />} />
+                    <Route path="/collection/:slug" element={<Shop />} />
+                    <Route path="/about" element={<Navigate to="/page/nosotros" replace />} />
+                    <Route path="/contact" element={<Contact />} />
                     <Route path="/terms" element={<Navigate to="/page/terminos" replace />} />
                     <Route path="/privacy" element={<Navigate to="/page/pol-ticas-de-privacidad" replace />} />
                     <Route path="/help" element={<Navigate to="/page/condiciones-de-compra" replace />} />
@@ -117,7 +123,9 @@ function App() {
                 {/* Isolated Portals with Lateral Navigation */}
                 <Route path="/vendor" element={
                   <ProtectedRoute requireVendor>
-                    <PortalLayout type="vendor" />
+                    <Suspense fallback={<PageSkeleton />}>
+                      <PortalLayout type="vendor" />
+                    </Suspense>
                   </ProtectedRoute>
                 }>
                   <Route index element={<VendorDashboard />} />
@@ -125,7 +133,9 @@ function App() {
                 
                 <Route path="/artist" element={
                   <ProtectedRoute>
-                    <PortalLayout type="artist" />
+                    <Suspense fallback={<PageSkeleton />}>
+                      <PortalLayout type="artist" />
+                    </Suspense>
                   </ProtectedRoute>
                 }>
                   <Route index element={<ArtistDashboard />} />
@@ -133,7 +143,9 @@ function App() {
                 
                 <Route path="/affiliate" element={
                   <ProtectedRoute>
-                    <PortalLayout type="affiliate" />
+                    <Suspense fallback={<PageSkeleton />}>
+                      <PortalLayout type="affiliate" />
+                    </Suspense>
                   </ProtectedRoute>
                 }>
                   <Route index element={<AffiliateDashboard />} />
@@ -141,7 +153,9 @@ function App() {
 
                 <Route path="/star2fan" element={
                   <ProtectedRoute>
-                    <PortalLayout type="star2fan" />
+                    <Suspense fallback={<PageSkeleton />}>
+                      <PortalLayout type="star2fan" />
+                    </Suspense>
                   </ProtectedRoute>
                 }>
                   <Route index element={<Star2FanDashboard />} />
@@ -154,7 +168,9 @@ function App() {
                 {/* Admin */}
                 <Route path="/admin" element={
                   <ProtectedRoute requireAdmin>
-                    <AdminLayout />
+                    <Suspense fallback={<PageSkeleton />}>
+                      <AdminLayout />
+                    </Suspense>
                   </ProtectedRoute>
                 }>
                   <Route index element={<AdminDashboard />} />
@@ -172,6 +188,8 @@ function App() {
                   <Route path="affiliates" element={<AdminAffiliates />} />
                   <Route path="mailing" element={<AdminMailing />} />
                   <Route path="mercadolibre" element={<AdminMercadoLibre />} />
+                  <Route path="mercadolibre-curation" element={<AdminMLCuration />} />
+                  <Route path="mercadolibre-operations" element={<AdminMLOperations />} />
                   <Route path="reports" element={<AdminReports />} />
                   <Route path="seo" element={<AdminSeo />} />
                   <Route path="media" element={<AdminMedia />} />

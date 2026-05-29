@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Plus, Pencil, Trash2, Search, Eye, X, Upload, Save, AlertCircle, Check, Loader2, ImageIcon, ChevronUp, ChevronDown, Trash } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Eye, X, Upload, Save, AlertCircle, Check, Loader2, ImageIcon, ChevronUp, ChevronDown, Trash, Copy } from 'lucide-react';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
 import ImportModal from '../../components/admin/ImportModal';
 import type { ParsedProduct } from '../../lib/bulkImportUtils';
@@ -89,6 +89,7 @@ interface Product {
   base_price: number;
   compare_at_price: number | null;
   status: string;
+  is_active: boolean;
   badge: string | null;
   is_featured: boolean;
   category: { id?: string, name: string } | null;
@@ -132,7 +133,7 @@ export default function AdminProducts() {
   const [form, setForm] = useState({
     title: '', slug: '', description: '', short_description: '',
     base_price: '', compare_at_price: '', sku: '', stock: '10', status: 'published',
-    badge: '', is_featured: false, category_id: '', brand_id: '',
+    badge: '', is_featured: false, is_active: true, category_id: '', brand_id: '',
     image_url: '', video_url: '',
     // Many-to-many
     categories: [] as string[],
@@ -170,7 +171,7 @@ export default function AdminProducts() {
 
   function openCreate() {
     setEditing(null);
-    setForm({ title: '', slug: '', description: '', short_description: '', base_price: '', compare_at_price: '', sku: `${Date.now()}`, stock: '10', status: 'published', badge: '', is_featured: false, category_id: '', brand_id: '', image_url: '', video_url: '', categories: [], tags: [], brands: [], gallery: [] });
+    setForm({ title: '', slug: '', description: '', short_description: '', base_price: '', compare_at_price: '', sku: `${Date.now()}`, stock: '10', status: 'published', badge: '', is_featured: false, is_active: true, category_id: '', brand_id: '', image_url: '', video_url: '', categories: [], tags: [], brands: [], gallery: [] });
     setShowForm(true);
   }
 
@@ -195,6 +196,7 @@ export default function AdminProducts() {
       status: product.status, 
       badge: product.badge || '', 
       is_featured: product.is_featured,
+      is_active: product.is_active !== false,
       category_id: product.category?.id || '', 
       brand_id: product.brand?.id || '',
       image_url: product.images?.[0]?.url || '', 
@@ -215,7 +217,7 @@ export default function AdminProducts() {
       const payload = {
         title: form.title, slug: titleSlug, description: form.description, short_description: form.short_description,
         base_price: parseFloat(form.base_price) || 0, compare_at_price: form.compare_at_price ? parseFloat(form.compare_at_price) : null,
-        status: form.status, badge: form.badge || null, is_featured: form.is_featured,
+        status: form.status, badge: form.badge || null, is_featured: form.is_featured, is_active: form.is_active,
         brand_id: form.brands[0] || null, category_id: form.categories[0] || null
       };
 
@@ -424,6 +426,221 @@ export default function AdminProducts() {
     } catch (err: any) { toast.error(err.message); }
   };
 
+  const handleDuplicate = async (product: Product, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!(await confirm(`¿Duplicar el producto "${product.title}"?`))) return;
+    
+    setLoading(true);
+    try {
+      // 1. Fetch junctions (categories, tags) of the original product
+      const [{ data: pCats }, { data: pTags }] = await Promise.all([
+         supabase.from('product_categories').select('category_id').eq('product_id', product.id),
+         supabase.from('product_tags').select('tag_id').eq('product_id', product.id)
+      ]);
+
+      // 2. Insert new product
+      const newTitle = `${product.title} (Copia)`;
+      const baseSlug = product.slug ? `${product.slug}-copia` : newTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      // Ensure slug is unique by appending a random suffix
+      const newSlug = `${baseSlug.replace(/-+$/, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+      const payload = {
+        title: newTitle,
+        slug: newSlug,
+        description: product.description,
+        short_description: product.short_description,
+        base_price: product.base_price,
+        compare_at_price: product.compare_at_price,
+        status: 'draft', // Set to draft so they can review/edit
+        is_active: product.is_active !== false,
+        badge: product.badge,
+        is_featured: product.is_featured,
+        brand_id: product.brand?.id || product.brand_id || null,
+        category_id: product.category?.id || product.category_id || null
+      };
+
+      const { data: newProd, error: insertError } = await supabase.from('products').insert(payload).select().single();
+      if (insertError) throw insertError;
+
+      const newProductId = newProd.id;
+
+      // 3. Duplicate Images
+      if (product.images && product.images.length > 0) {
+        const imagesPayload = product.images.map((img, i) => ({
+          product_id: newProductId,
+          url: img.url,
+          is_primary: (img as any).is_primary ?? (i === 0),
+          sort_order: (img as any).sort_order ?? i
+        }));
+        const { error: insImgErr } = await supabase.from('product_images').insert(imagesPayload);
+        if (insImgErr) throw insImgErr;
+      }
+
+      // 4. Duplicate Variants (generate new SKU to avoid unique constraint conflict)
+      const originalSku = product.variants?.[0]?.sku || '';
+      const newSku = originalSku ? `${originalSku}-COPY` : `${Date.now()}`;
+      const originalStock = product.variants?.[0]?.inventory_count || 0;
+      
+      const { error: varErr } = await supabase.from('product_variants').insert({
+        product_id: newProductId,
+        sku: newSku,
+        name: 'Standard',
+        inventory_count: originalStock
+      });
+      if (varErr) throw varErr;
+
+      // 5. Duplicate junctions
+      const insertPromises = [];
+      if (pCats && pCats.length > 0) {
+        insertPromises.push(
+          supabase.from('product_categories').insert(pCats.map(c => ({ product_id: newProductId, category_id: c.category_id })))
+        );
+      }
+      if (pTags && pTags.length > 0) {
+        insertPromises.push(
+          supabase.from('product_tags').insert(pTags.map(t => ({ product_id: newProductId, tag_id: t.tag_id })))
+        );
+      }
+
+      if (insertPromises.length > 0) {
+        const results = await Promise.all(insertPromises);
+        const errorResult = results.find(r => r.error);
+        if (errorResult) throw errorResult.error;
+      }
+
+      toast.success('Producto duplicado correctamente (guardado como Borrador)');
+      fetchProducts();
+    } catch (err: any) {
+      toast.error(`Error al duplicar: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleImportConfirm = async (docs: ParsedProduct[]) => {
+    setLoading(true);
+    try {
+      let currentCats = [...categories];
+      let currentBrands = [...brands];
+
+      for (const p of docs) {
+        if (!p.title) continue;
+
+        // Resolve Category
+        let categoryId: string | null = null;
+        if (p.category_name) {
+          const normCat = p.category_name.trim().toLowerCase();
+          let matchedCat = currentCats.find(c => c.name.trim().toLowerCase() === normCat);
+          if (!matchedCat) {
+            const catSlug = p.category_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
+            const { data: newCat, error: catErr } = await supabase
+              .from('categories')
+              .insert({ name: p.category_name.trim(), slug: catSlug || `cat-${Date.now()}` })
+              .select()
+              .single();
+            if (!catErr && newCat) {
+              matchedCat = newCat;
+              currentCats.push(newCat);
+            }
+          }
+          categoryId = matchedCat?.id || null;
+        }
+
+        // Resolve Brand
+        let brandId: string | null = null;
+        if (p.brand_name) {
+          const normBrand = p.brand_name.trim().toLowerCase();
+          let matchedBrand = currentBrands.find(b => b.name.trim().toLowerCase() === normBrand);
+          if (!matchedBrand) {
+            const brandSlug = p.brand_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
+            const { data: newBrand, error: brandErr } = await supabase
+              .from('brands')
+              .insert({ name: p.brand_name.trim(), slug: brandSlug || `brand-${Date.now()}` })
+              .select()
+              .single();
+            if (!brandErr && newBrand) {
+              matchedBrand = newBrand;
+              currentBrands.push(newBrand);
+            }
+          }
+          brandId = matchedBrand?.id || null;
+        }
+
+        // Generate dynamic unique slug
+        let baseSlug = p.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
+        if (!baseSlug) baseSlug = 'producto';
+        const uniqueSlug = `${baseSlug}-${Math.random().toString(36).substring(2, 7)}`;
+
+        // Insert Product
+        const { data: newProd, error: prodErr } = await supabase
+          .from('products')
+          .insert({
+            title: p.title.trim(),
+            slug: uniqueSlug,
+            description: p.description || null,
+            base_price: p.base_price,
+            compare_at_price: p.compare_at_price || null,
+            status: 'published',
+            is_active: true,
+            category_id: categoryId,
+            brand_id: brandId,
+            is_featured: false
+          })
+          .select()
+          .single();
+
+        if (prodErr) {
+          console.error("Error importing product:", p.title, prodErr);
+          continue;
+        }
+
+        const productId = newProd.id;
+
+        // Insert category junction
+        if (categoryId) {
+          await supabase.from('product_categories').insert({ product_id: productId, category_id: categoryId });
+        }
+
+        // Insert images if provided (supports multiple comma-separated URLs)
+        if (p.image_url) {
+          const imageUrls = p.image_url.split(',')
+            .map(url => url.trim())
+            .filter(url => url.startsWith('http'));
+
+          if (imageUrls.length > 0) {
+            const imagesPayload = imageUrls.map((url, idx) => ({
+              product_id: productId,
+              url,
+              is_primary: idx === 0,
+              sort_order: idx
+            }));
+            const { error: imgErr } = await supabase.from('product_images').insert(imagesPayload);
+            if (imgErr) console.error("Error inserting product images:", imgErr);
+          }
+        }
+
+        // Insert variant
+        const skuVal = p.sku?.trim() || `sku-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        await supabase.from('product_variants').insert({
+          product_id: productId,
+          sku: skuVal,
+          name: 'Standard',
+          inventory_count: p.stock
+        });
+      }
+
+      toast.success(`¡Se importaron ${docs.length} productos correctamente!`);
+      setShowImport(false);
+      fetchProducts();
+      fetchMeta();
+    } catch (err: any) {
+      console.error("Bulk import failed:", err);
+      toast.error(`Error en la importación: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const toggleSort = (field: string) => {
     if (sortField === field) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -456,6 +673,10 @@ export default function AdminProducts() {
         case 'status':
           valA = a.status || '';
           valB = b.status || '';
+          break;
+        case 'is_active':
+          valA = a.is_active !== false ? 1 : 0;
+          valB = b.is_active !== false ? 1 : 0;
           break;
         default:
           valA = a[sortField] || '';
@@ -637,9 +858,12 @@ export default function AdminProducts() {
                    <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('stock')}>
                      Stock {sortField === 'stock' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
                    </th>
-                   <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('status')}>
-                     Estado {sortField === 'status' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
-                   </th>
+                    <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('is_active')}>
+                      Visible (ON/OFF) {sortField === 'is_active' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+                    </th>
+                    <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('status')}>
+                      Estado {sortField === 'status' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+                    </th>
                    <th className="px-6 py-4 text-right cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('created_at')}>
                      Fecha {sortField === 'created_at' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
                    </th>
@@ -647,7 +871,7 @@ export default function AdminProducts() {
                </thead>
                <tbody className="divide-y divide-gray-100">
                  {loading ? (
-                    <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-400 animate-pulse">Cargando catálogo...</td></tr>
+                    <tr><td colSpan={9} className="px-6 py-12 text-center text-gray-400 animate-pulse">Cargando catálogo...</td></tr>
                  ) : (() => {
                     const filtered = getSortedProducts(filteredProducts);
                     const currentSubset = itemsPerPage === 'Todos' ? filtered : filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -737,6 +961,29 @@ export default function AdminProducts() {
                             </span>
                          )}
                       </td>
+                      <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
+                        <button
+                          onClick={async () => {
+                            const newActive = p.is_active !== false ? false : true;
+                            try {
+                              const { error } = await supabase
+                                .from('products')
+                                .update({ is_active: newActive })
+                                .eq('id', p.id);
+                              if (error) throw error;
+                              setProducts(prev => prev.map(prod => prod.id === p.id ? { ...prod, is_active: newActive } : prod));
+                              toast.success(newActive ? 'Producto visible en la tienda' : 'Producto oculto en la tienda');
+                            } catch (err: any) {
+                              toast.error(`Error al cambiar estado: ${err.message}`);
+                            }
+                          }}
+                          className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${p.is_active !== false ? 'bg-green-500' : 'bg-gray-300'}`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${p.is_active !== false ? 'translate-x-5' : 'translate-x-0'}`}
+                          />
+                        </button>
+                      </td>
                       <td className="px-6 py-4 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'status'}); setInlineValue(p.status); }}>
                         {inlineEdit?.id === p.id && inlineEdit.field === 'status' ? (
                            <select autoFocus className="bg-white border rounded text-[10px] p-1 font-bold outline-none" value={inlineValue} onChange={e => { setInlineValue(e.target.value); handleInlineUpdate(p.id, 'status', e.target.value); }} onBlur={() => setInlineEdit(null)} onClick={e => e.stopPropagation()}>
@@ -753,6 +1000,9 @@ export default function AdminProducts() {
                       <td className="px-6 py-4 text-right text-xs font-medium text-gray-400">
                         <div className="flex justify-end gap-3 items-center mb-1">
                           <button onClick={(e) => { e.stopPropagation(); openEdit(p); }} className="text-blue-500 hover:underline text-xs font-bold">Detalles</button>
+                          <button onClick={(e) => handleDuplicate(p, e)} className="text-gray-500 hover:text-blue-600 transition-colors" title="Duplicar producto">
+                             <Copy className="w-4 h-4" />
+                          </button>
                           <button onClick={(e) => { e.stopPropagation(); handleDelete(p.id); }} className="text-red-400 hover:text-red-600 transition-colors" title="Eliminar producto">
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -826,7 +1076,7 @@ export default function AdminProducts() {
                                   disabled={loadingAI}
                                   className="text-[10px] font-black uppercase tracking-tight bg-purple-50 text-purple-600 px-3 py-1 rounded hover:bg-purple-100 flex items-center gap-1.5 transition-all disabled:opacity-50"
                                 >
-                                   {loadingAI ? <Loader2 className="w-3 h-3 animate-spin"/> : <span className="text-purple-400">�S�</span>} 
+                                   {loadingAI ? <Loader2 className="w-3 h-3 animate-spin"/> : <span className="text-purple-400">✨</span>} 
                                    Mejorar con IA
                                 </button>
                              </div>
@@ -901,9 +1151,13 @@ export default function AdminProducts() {
                                 <span className="text-gray-500 font-bold">Visibilidad:</span>
                                 <span className="text-blue-600 font-bold">Público</span>
                              </div>
-                             <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer">
-                                <input type="checkbox" checked={form.is_featured} onChange={e => setForm({...form, is_featured: e.target.checked})} className="rounded text-blue-600" />
+                             <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer select-none">
+                                <input type="checkbox" checked={form.is_featured} onChange={e => setForm({...form, is_featured: e.target.checked})} className="rounded text-blue-600 w-4 h-4 cursor-pointer" />
                                 ¿Destacar en portada?
+                             </label>
+                             <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer select-none">
+                                <input type="checkbox" checked={form.is_active} onChange={e => setForm({...form, is_active: e.target.checked})} className="rounded text-blue-600 w-4 h-4 cursor-pointer" />
+                                ¿Producto activo (visible)?
                              </label>
                              <div className="pt-3 border-t flex justify-end">
                                 <button className="text-[10px] font-bold text-red-500 hover:underline">Mover a la papelera</button>
@@ -1044,7 +1298,7 @@ export default function AdminProducts() {
       />
 
       {showImport && (
-        <ImportModal onClose={() => setShowImport(false)} onConfirm={ (docs) => { /* Reuse current bulk logic */ fetchProducts(); } } />
+        <ImportModal onClose={() => setShowImport(false)} onConfirm={handleImportConfirm} />
       )}
     </div>
   );

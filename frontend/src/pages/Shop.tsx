@@ -1,7 +1,7 @@
-import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate, useParams } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { ChevronRight, ChevronLeft, SlidersHorizontal, X, Search } from 'lucide-react';
-import { useProducts, useCategories, useBrands, useFilterMappings } from '../hooks/useData';
+import { useProducts, useCategories, useBrands, useFilterMappings, useProductGroupMetadata } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
 import { useLocale } from '../contexts/LocaleContext';
 import { useCurrency } from '../contexts/CurrencyContext';
@@ -54,6 +54,9 @@ export default function Shop() {
   const visibleBrands = currentCategory && mappings.length > 0
     ? brands.filter(b => mappings.some(m => m.brand_id === b.id && m.category_id === currentCategory.id) || b.id === currentBrand?.id)
     : brands;
+  
+  const { slug: groupSlug } = useParams<{ slug: string }>();
+  const { group, loading: groupLoading } = useProductGroupMetadata(groupSlug);
   const cart = useCartContext();
   const { t } = useLocale();
   const { formatCurrencyPrice } = useCurrency();
@@ -65,6 +68,7 @@ export default function Shop() {
     brand: brandSlug || undefined,
     badge: badge || undefined,
     search: searchQ || undefined,
+    group: groupSlug || undefined,
     minPrice: priceMin ? Number(priceMin) : undefined,
     maxPrice: priceMax ? Number(priceMax) : undefined,
     sortBy,
@@ -95,11 +99,15 @@ export default function Shop() {
   }
 
   function clearAllFilters() {
-    setSearchParams({});
-    setPriceMin('');
-    setPriceMax('');
-    setSearchInput('');
-    setPage(0);
+    if (groupSlug) {
+      navigate('/shop');
+    } else {
+      setSearchParams({});
+      setPriceMin('');
+      setPriceMax('');
+      setSearchInput('');
+      setPage(0);
+    }
   }
 
   function applyPriceFilter() {
@@ -201,7 +209,7 @@ export default function Shop() {
       </div>
 
       {/* Clear filters */}
-      {(categorySlug || brandSlug || searchQ || priceMin || priceMax) && (
+      {(categorySlug || brandSlug || searchQ || priceMin || priceMax || groupSlug) && (
         <button
           onClick={clearAllFilters}
           className="w-full py-2 text-xs font-bold text-red-400 border border-red-500/30 rounded-xl hover:bg-red-500/10 transition-colors"
@@ -212,25 +220,25 @@ export default function Shop() {
     </div>
   );
 
-  const pageTitle = currentCategory?.name || currentBrand?.name || (searchQ ? `"${searchQ}"` : t('shop.title'));
+  const pageTitle = group?.name || currentCategory?.name || currentBrand?.name || (searchQ ? `"${searchQ}"` : t('shop.title'));
 
   return (
     <div className="bg-[#05070f] text-white">
       <SEO
-        title="Catálogo — Collectibles"
-        description="Explora nuestro catálogo unificado de figuras, coleccionables y productos oficiales de las mejores marcas."
+        title={group ? `${group.name} — Collectibles` : "Catálogo — Collectibles"}
+        description={group?.description || "Explora nuestro catálogo unificado de figuras, coleccionables y productos oficiales de las mejores marcas."}
       />
 
       {/* EDITORIAL HERO SECTION */}
       <section className="relative hero-noise overflow-hidden border-b border-white/10">
         <div className="absolute -right-40 top-0 w-[560px] h-[560px] bg-[#f00856]/20 blur-3xl rounded-full"></div>
         <div className="relative max-w-7xl mx-auto px-6 py-10 md:py-14">
-          <div className="label-tag">Catálogo unificado</div>
+          <div className="label-tag">{group ? "Colección" : "Catálogo unificado"}</div>
           <h1 className="text-5xl md:text-7xl font-black leading-[.9] mt-3 tracking-tighter">
-            Productos de tienda <br className="hidden md:block" /> + sellers oficiales.
+            {group ? group.name : "Productos"}
           </h1>
           <p className="text-slate-300 text-lg mt-5 max-w-3xl leading-relaxed">
-            Un catálogo premium donde conviven stock propio, distribuidores oficiales y oportunidades curadas.
+            {group ? group.description || "Explora esta colección exclusiva de productos curados." : "Un catálogo premium donde conviven stock propio, distribuidores oficiales y oportunidades curadas."}
           </p>
         </div>
       </section>
@@ -294,7 +302,7 @@ export default function Shop() {
         <aside className="hidden lg:block glass rounded-[2rem] p-6 h-fit sticky top-24 z-10">
           <div className="flex items-center justify-between mb-6">
             <h2 className="font-black text-2xl tracking-tight">Filtros</h2>
-            {(categorySlug || brandSlug || searchQ) && (
+            {(categorySlug || brandSlug || searchQ || groupSlug) && (
               <button onClick={() => navigate('/shop')} className="text-xs font-black text-[#f00856] uppercase hover:underline">Limpiar</button>
             )}
           </div>
@@ -307,9 +315,9 @@ export default function Shop() {
           <div className="mb-8">
             <div className="flex items-end justify-between gap-4 flex-wrap">
               <div>
-                <div className="label-tag">Marketplace integrado</div>
+                <div className="label-tag">{group ? "Colección" : "Marketplace integrado"}</div>
                 <h2 className="text-3xl font-black mt-1 text-white tracking-tight">
-                  {searchQ ? `Resultados para "${searchQ}"` : "Resultados destacados"}
+                  {searchQ ? `Resultados para "${searchQ}"` : group ? group.name : "Resultados destacados"}
                 </h2>
               </div>
               {/* Column selector — siempre visible en desktop */}

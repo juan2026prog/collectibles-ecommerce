@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import { corsHeaders } from "../_shared/cors.ts";
+import { enqueueMlSyncEvent } from "../_shared/mercadolibre.ts";
 
 async function createSignature(secretKey: string, xLogin: string, xDate: string, rawBody: string) {
   const encoder = new TextEncoder();
@@ -99,10 +100,16 @@ serve(async (req) => {
       if (orderItems) {
         for (const item of orderItems) {
           if (item.variant_id) {
-            await supabase.rpc("decrement_inventory", {
+            const { error: invErr } = await supabase.rpc("decrement_inventory", {
               p_variant_id: item.variant_id,
               p_quantity: item.quantity,
-            }).catch((err) => console.error("Inventory error:", err));
+            });
+            if (invErr) {
+              console.error("Inventory error:", invErr);
+            } else {
+              // Enqueue ML stock sync event
+              await enqueueMlSyncEvent(supabase, item.variant_id);
+            }
           }
         }
       }

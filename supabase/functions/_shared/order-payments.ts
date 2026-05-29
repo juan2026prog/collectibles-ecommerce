@@ -1,3 +1,5 @@
+import { enqueueMlSyncEvent } from "./mercadolibre.ts";
+
 export function orderSummary(order: any) {
   if (!order) return null;
   return {
@@ -34,6 +36,9 @@ export async function triggerPostPaymentActions(
         });
         if (invError) {
           console.error("Inventory error:", invError);
+        } else {
+          // Enqueue ML stock sync event without blocking
+          await enqueueMlSyncEvent(supabaseClient, item.variant_id);
         }
       }
     }

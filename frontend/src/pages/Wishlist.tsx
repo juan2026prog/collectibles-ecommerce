@@ -37,7 +37,8 @@ export default function Wishlist() {
           reviews:product_reviews(*)
         `)
         .in('id', wishlist)
-        .eq('status', 'published');
+        .eq('status', 'published')
+        .eq('is_active', true);
 
       setProducts(data || []);
       setLoading(false);

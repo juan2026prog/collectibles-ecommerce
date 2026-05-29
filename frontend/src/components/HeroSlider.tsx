@@ -25,12 +25,36 @@ interface HeroSliderProps {
 
 export default function HeroSlider({ banners, loading = false }: HeroSliderProps) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [prevActiveIndex, setPrevActiveIndex] = useState<number | null>(null);
+  const activeIndexRef = useRef(activeIndex);
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
   const autoplayTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Filter active banners
   const activeBanners = banners.filter(b => b.image_url);
+
+  // Programmatic image preloading to prevent flickers/flashes during slide transitions
+  useEffect(() => {
+    if (activeBanners.length === 0) return;
+    activeBanners.forEach(banner => {
+      const img = new Image();
+      img.src = banner.image_url;
+      if (banner.mobile_image_url) {
+        const mobImg = new Image();
+        mobImg.src = banner.mobile_image_url;
+      }
+    });
+  }, [activeBanners]);
+
+  // Track prev index for smooth crossfade blending
+  useEffect(() => {
+    const prev = activeIndexRef.current;
+    if (prev !== activeIndex) {
+      setPrevActiveIndex(prev);
+      activeIndexRef.current = activeIndex;
+    }
+  }, [activeIndex]);
 
   // Reset autoplay timer when index changes
   const startAutoplay = () => {
@@ -95,12 +119,15 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
   };
 
   if (loading) {
+    // Render a stable dark cinematic background container of exactly the same size without any fake text/buttons
     return (
-      <section className="relative h-[80vh] md:h-screen w-full bg-[#05070f] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-4 border-[#f00856] border-t-transparent rounded-full animate-spin" />
-          <p className="text-slate-400 font-medium text-sm tracking-wider uppercase">Cargando Universo...</p>
-        </div>
+      <section className="relative h-[80vh] md:h-screen w-full bg-[#05070f] overflow-hidden">
+        <div className="absolute inset-0 bg-[#05070f]" />
+        <div className="absolute -right-40 -top-40 w-[800px] h-[800px] bg-[#f00856]/[.05] blur-[180px] rounded-full pointer-events-none" />
+        <div className="absolute inset-0 opacity-[0.025] pointer-events-none" style={{
+          backgroundImage: 'linear-gradient(rgba(255,255,255,.15) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.15) 1px, transparent 1px)',
+          backgroundSize: '60px 60px'
+        }} />
       </section>
     );
   }
@@ -147,16 +174,22 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
         backgroundSize: '60px 60px'
       }} />
 
+      {/* 1. BACKGROUND IMAGES CROSSFADE */}
       {activeBanners.map((banner, index) => {
         const isCurrent = index === activeIndex;
+        const isPrev = index === prevActiveIndex;
         const opacityVal = banner.overlay_opacity !== null ? Number(banner.overlay_opacity) : 0.4;
         const alignCenter = banner.content_align === 'center';
         
         return (
           <div
-            key={banner.id}
-            className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
-              isCurrent ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+            key={`bg-${banner.id}`}
+            className={`absolute inset-0 ${
+              isCurrent 
+                ? 'opacity-100 z-10 transition-opacity duration-1000 ease-in-out' 
+                : isPrev 
+                ? 'opacity-100 z-0' 
+                : 'opacity-0 z-0 pointer-events-none'
             }`}
           >
             {/* Fullscreen Image with intelligent crop using object-cover */}
@@ -171,8 +204,10 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
                 style={{
                   transform: isCurrent ? 'scale(1.05)' : 'scale(1.00)'
                 }}
-                loading={index === 0 ? 'eager' : 'lazy'}
-                {...(index === 0 ? { fetchpriority: 'high' } : {})}
+                loading="eager"
+                fetchPriority={index === activeIndex ? 'high' : 'low'}
+                {...((index === activeIndex) ? { fetchpriority: 'high' } : { fetchpriority: 'low' })}
+                decoding="async"
               />
             </picture>
 
@@ -190,10 +225,27 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
                   : 'bg-gradient-to-r from-black/90 via-black/40 to-transparent'
               }`}
             />
+          </div>
+        );
+      })}
 
-            {/* Content placement based on content_position & content_align */}
+      {/* 2. TEXT & CONTENT OVERLAY LAYER (crossfades smoothly without layout recalculation or flickering slide-up text animations) */}
+      {activeBanners.map((banner, index) => {
+        const isCurrent = index === activeIndex;
+        const isPrev = index === prevActiveIndex;
+        const alignCenter = banner.content_align === 'center';
+
+        if (!isCurrent && !isPrev) return null;
+
+        return (
+          <div
+            key={`content-${banner.id}`}
+            className={`absolute inset-0 pointer-events-none transition-opacity duration-500 ease-in-out ${
+              isCurrent ? 'opacity-100 z-20' : 'opacity-0 z-10'
+            }`}
+          >
             <div 
-              className={`max-w-[1500px] mx-auto px-6 w-full h-full relative z-20 flex ${
+              className={`max-w-[1500px] mx-auto px-6 w-full h-full flex ${
                 banner.content_position === 'top' 
                   ? 'items-start pt-28 md:pt-36' 
                   : banner.content_position === 'bottom' 
@@ -202,7 +254,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
               }`}
             >
               <div 
-                className={`w-full max-w-4xl ${
+                className={`w-full max-w-4xl pointer-events-auto ${
                   alignCenter 
                     ? 'text-center mx-auto flex flex-col items-center' 
                     : 'text-left'
@@ -211,9 +263,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
                 {/* Upper Badge */}
                 {banner.badge_text && (
                   <div 
-                    className={`inline-block px-4 py-1.5 rounded-full border border-primary-500/30 bg-primary-500/10 text-primary-500 text-[10px] font-black uppercase tracking-[0.25em] mb-6 shadow-[0_0_15px_rgba(240,8,86,0.15)] ${
-                      isCurrent ? 'animate-slide-up-fade-1' : 'opacity-0'
-                    }`}
+                    className="inline-block px-4 py-1.5 rounded-full border border-primary-500/30 bg-primary-500/10 text-primary-500 text-[10px] font-black uppercase tracking-[0.25em] mb-6 shadow-[0_0_15px_rgba(240,8,86,0.15)]"
                   >
                     {banner.badge_text}
                   </div>
@@ -222,9 +272,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
                 {/* Main Title */}
                 {banner.title && (
                   <h1 
-                    className={`text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-black leading-[0.9] tracking-tighter text-white uppercase drop-shadow-md select-text ${
-                      isCurrent ? 'animate-slide-up-fade-2' : 'opacity-0'
-                    }`}
+                    className="text-3xl sm:text-6xl md:text-7xl lg:text-8xl font-black leading-[0.9] tracking-tighter text-white uppercase drop-shadow-md select-text break-words"
                   >
                     {banner.title}
                   </h1>
@@ -233,9 +281,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
                 {/* Subtitle */}
                 {banner.subtitle && (
                   <p 
-                    className={`text-slate-300 text-sm sm:text-base md:text-lg lg:text-xl mt-6 max-w-2xl font-bold leading-relaxed drop-shadow select-text ${
-                      isCurrent ? 'animate-slide-up-fade-3' : 'opacity-0'
-                    }`}
+                    className="text-slate-300 text-xs sm:text-base md:text-lg lg:text-xl mt-4 sm:mt-6 max-w-2xl font-bold leading-relaxed drop-shadow select-text"
                   >
                     {banner.subtitle}
                   </p>
@@ -243,9 +289,9 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
 
                 {/* Buttons (CTAs) */}
                 <div 
-                  className={`flex flex-wrap gap-4 mt-10 ${
+                  className={`flex flex-wrap gap-3 sm:gap-4 mt-6 sm:mt-10 ${
                     alignCenter ? 'justify-center' : 'justify-start'
-                  } ${isCurrent ? 'animate-slide-up-fade-4' : 'opacity-0'}`}
+                  }`}
                 >
                   {/* Primary CTA */}
                   {banner.button_text && (

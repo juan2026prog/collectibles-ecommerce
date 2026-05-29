@@ -411,6 +411,7 @@ export default function Home() {
           variants:product_variants(id, sku, name, price_adjustment, inventory_count)
         `)
         .eq('status', 'published')
+        .eq('is_active', true)
         .in('id', ids)
         .then(({ data, error }) => {
           if (!isMounted) return;
@@ -882,8 +883,13 @@ export default function Home() {
                   <div className="flex items-end justify-between mb-10">
                     <div>
                       <div className="text-[10px] text-[#f00856] font-black tracking-[0.3em] uppercase mb-2">Colección curada</div>
-                      <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight">{g.name}</h2>
+                      <Link to={`/collection/${g.slug}`} className="hover:opacity-85 transition-opacity">
+                        <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight">{g.name}</h2>
+                      </Link>
                     </div>
+                    <Link to={`/collection/${g.slug}`} className="inline-flex items-center gap-2 text-sm font-black text-slate-400 hover:text-white transition-colors uppercase tracking-wider">
+                      Ver Colección <ArrowRight className="w-4 h-4" />
+                    </Link>
                   </div>
 
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-7 gap-y-12">

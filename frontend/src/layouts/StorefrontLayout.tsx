@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, Suspense } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import {
@@ -26,47 +26,20 @@ import React from 'react';
 // NAV_LINKS and MEGA_MENU are built dynamically inside the component
 // using t() for translations and useCategories() for live DB data.
 
-const DesktopMegaMenu = React.memo(({ isVisible, megaType, menuColumns, allBrands, onClose }: { isVisible: boolean | undefined, megaType: 'categories' | 'brands', menuColumns: any, allBrands: any[], onClose: () => void }) => {
-  if (!isVisible) return null;
+const DesktopDropdownMenu = React.memo(({ items }: { items: Array<{ label: string; url: string }> }) => {
+  if (items.length === 0) return null;
   return (
-    <div className="absolute top-full left-1/2 -translate-x-1/2 pt-4 w-[600px] animate-fade-in pointer-events-auto z-50">
-      <div className="bg-[#0e1525] rounded-[2rem] p-8 grid grid-cols-3 gap-8 shadow-2xl border border-white/10">
-        {megaType === 'categories' ? (
-          menuColumns?.slice(0, 3).map((col: any) => (
-            <div key={col.title}>
-              <div className="text-[10px] text-[#f00856] font-black tracking-widest mb-4 uppercase">{col.title}</div>
-              <div className="flex flex-col gap-2.5">
-                {col.items.map((item: any) => (
-                  <Link 
-                    key={item.name} 
-                    to={item.href} 
-                    className="text-sm font-bold text-slate-300 hover:text-white transition-colors"
-                    onClick={onClose}
-                  >
-                    {item.name}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ))
-        ) : (
-           <div className="col-span-3 grid grid-cols-4 gap-4">
-              {allBrands.slice(0, 8).map(b => (
-                <Link 
-                  key={b.id} 
-                  to={`/shop?brand=${b.slug}`}
-                  className="soft rounded-2xl p-4 flex flex-col items-center justify-center gap-2 hover:border-[#f00856]/40 transition-all"
-                  onClick={onClose}
-                >
-                  {b.logo_url ? (
-                    <img src={b.logo_url} className="h-8 object-contain opacity-60 group-hover:opacity-100" />
-                  ) : (
-                    <span className="text-xs font-black">{b.name}</span>
-                  )}
-                </Link>
-              ))}
-           </div>
-        )}
+    <div className="absolute top-full left-0 w-64 pt-0 pointer-events-none group-hover:pointer-events-auto z-[110] opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 transition-all duration-200 ease-out">
+      <div className="bg-[#05070f] border-l border-r border-b border-white/10 rounded-b-2xl shadow-2xl shadow-black/80 overflow-hidden flex flex-col py-2 max-h-[400px] overflow-y-auto no-scrollbar">
+        {items.map((item) => (
+          <Link
+            key={item.label + item.url}
+            to={item.url}
+            className="px-5 py-2.5 text-slate-400 hover:text-[#f00856] hover:bg-[#f00856]/5 flex items-center transition-all duration-150 text-[11px] font-black tracking-widest border-l-2 border-transparent hover:border-[#f00856]"
+          >
+            {item.label}
+          </Link>
+        ))}
       </div>
     </div>
   );
@@ -74,13 +47,11 @@ const DesktopMegaMenu = React.memo(({ isVisible, megaType, menuColumns, allBrand
 
 export default function StorefrontLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [megaMenuState, setMegaMenuState] = useState<'categories' | 'brands' | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [announcementVisible, setAnnouncementVisible] = useState(true);
   const [expandedMobileGroup, setExpandedMobileGroup] = useState<string | null>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const megaMenuTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
@@ -93,18 +64,25 @@ export default function StorefrontLayout() {
 
   const getSocialUrl = (key: string, value: string) => {
     if (!value) return '#';
-    if (value.startsWith('http://') || value.startsWith('https://')) {
-      return value;
+    const trimmed = value.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+    if (key === 'whatsapp') {
+      if (trimmed.includes('wa.me') || trimmed.includes('whatsapp.com')) {
+        return `https://${trimmed.replace(/^(https?:\/\/)?/, '')}`;
+      }
+      const cleanNumber = trimmed.replace(/[\s\-\(\)\+]/g, '');
+      return `https://wa.me/${cleanNumber}`;
     }
     const prefixMap: Record<string, string> = {
       instagram: 'instagram.com/',
       facebook: 'facebook.com/',
       tiktok: 'tiktok.com/@',
-      whatsapp: 'wa.me/',
       youtube: 'youtube.com/c/',
       x: 'x.com/'
     };
-    return `https://${prefixMap[key] || ''}${value}`;
+    return `https://${prefixMap[key] || ''}${trimmed}`;
   };
 
   const activeSocials = useMemo(() => [
@@ -164,9 +142,8 @@ export default function StorefrontLayout() {
       { name: settings['header_menu_home'] || t('nav.home'), href: '/' },
       { name: settings['header_menu_categories'] || t('nav.categories'), href: '/shop', hasMega: true, megaType: 'categories' },
       { name: settings['header_menu_brands'] || t('nav.brands'), href: '/shop', hasMega: true, megaType: 'brands' },
-      { name: settings['header_menu_about'] || t('nav.about'), href: '/about' },
+      { name: settings['header_menu_about'] || t('nav.about'), href: '/page/nosotros' },
       { name: settings['header_menu_contact'] || t('nav.contact'), href: '/contact' },
-      { name: settings['header_menu_blog'] || t('nav.blog'), href: '/blog' },
     ];
   }, [t, settings]);
 
@@ -196,41 +173,7 @@ export default function StorefrontLayout() {
 
 
 
-  // Dynamic mega menu columns from DB categories (group by parent)
-  // Top-level categories become columns, children become items
   const topLevel = useMemo(() => allCategories.filter(c => !c.parent_id), [allCategories]);
-  
-  const MEGA_MENU_COLUMNS = useMemo(() => topLevel.slice(0, 5).map(parent => ({
-    title: parent.name,
-    slug: parent.slug,
-    items: allCategories
-      .filter(c => c.parent_id === parent.id)
-      .map(c => ({ name: c.name, href: `/shop?category=${c.slug}` }))
-      // If no children, use parent itself as a link
-      .concat(allCategories.filter(c => c.parent_id === parent.id).length === 0
-        ? [{ name: `Ver todo: ${parent.name}`, href: `/shop?category=${parent.slug}` }]
-        : []),
-  })), [topLevel, allCategories]);
-
-  // If all categories are flat (no parent_id hierarchy), split them into columns of ~4
-  const FLAT_COLUMNS = useMemo(() => allCategories.length > 0 && topLevel.length === allCategories.length
-    ? Array.from({ length: Math.ceil(allCategories.length / 4) }, (_, i) => ({
-      title: '',
-      slug: '',
-      items: allCategories.slice(i * 4, (i + 1) * 4).map(c => ({ name: c.name, href: `/shop?category=${c.slug}` }))
-    }))
-    : null, [allCategories, topLevel]);
-
-  const MENU_COLUMNS = FLAT_COLUMNS || MEGA_MENU_COLUMNS;
-  const MOBILE_CATEGORIES = useMemo(() => allCategories.map(c => ({ name: c.name, href: `/shop?category=${c.slug}`, group: allCategories.find(p => p.id === c.parent_id)?.name || t('nav.categories') })), [allCategories, t]);
-
-  const MEGA_MENU_BRANDS_COLUMNS = useMemo(() => allBrands.length > 0
-    ? Array.from({ length: Math.ceil(allBrands.length / 5) }, (_, i) => ({
-      title: '',
-      slug: '',
-      items: allBrands.slice(i * 5, (i + 1) * 5).map(b => ({ name: b.name, href: `/shop?brand=${b.slug}` }))
-    }))
-    : [], [allBrands]);
 
   // Inyector de Pixels/Head Code respetando privacidad
   useEffect(() => {
@@ -274,7 +217,6 @@ export default function StorefrontLayout() {
   // Close menus on route change
   useEffect(() => {
     setMobileMenuOpen(false);
-    setMegaMenuState(null);
     setSearchOpen(false);
     setUserMenuOpen(false);
     
@@ -294,14 +236,6 @@ export default function StorefrontLayout() {
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
-
-  const handleMegaEnter = (type: string) => {
-    if (megaMenuTimeout.current) clearTimeout(megaMenuTimeout.current);
-    setMegaMenuState(type as any);
-  };
-  const handleMegaLeave = () => {
-    megaMenuTimeout.current = setTimeout(() => setMegaMenuState(null), 200);
-  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -368,7 +302,7 @@ export default function StorefrontLayout() {
           }}
         >
           <div 
-            className={`max-w-7xl mx-auto px-6 flex items-center justify-center gap-8 ${settings['appearance_announcement_marquee'] !== 'false' ? 'animate-marquee-header' : ''} whitespace-nowrap`}
+            className={`max-w-7xl mx-auto px-6 flex items-center justify-center gap-8 ${settings['appearance_announcement_marquee'] !== 'false' ? 'animate-marquee-header whitespace-nowrap' : 'flex-wrap'}`}
             style={settings['appearance_announcement_speed'] ? { animationDuration: `${settings['appearance_announcement_speed']}s` } : undefined}
           >
             {announcementItems.map((item, index) => (
@@ -409,41 +343,25 @@ export default function StorefrontLayout() {
               <div 
                 key={link.name}
                 className="relative h-full flex items-center group"
-                onMouseEnter={() => link.hasMega && setMegaMenuState(link.megaType as any)}
-                onMouseLeave={() => setMegaMenuState(null)}
               >
                 <Link 
                   to={link.href} 
                   className={`hover:text-white transition-colors flex items-center gap-1.5 ${location.pathname === link.href ? 'text-white' : ''}`}
                 >
                   {link.name}
-                  {(link.hasMega || (link.subItems && link.subItems.length > 0)) && <ChevronDown className="w-3.5 h-3.5 opacity-50" />}
+                  {(link.hasMega || (link.subItems && link.subItems.length > 0)) && <ChevronDown className="w-3.5 h-3.5 opacity-50 transition-transform group-hover:rotate-180" />}
                 </Link>
 
-                {link.hasMega ? (
-                  <DesktopMegaMenu 
-                     isVisible={megaMenuState === link.megaType && link.hasMega} 
-                     megaType={link.megaType as 'categories' | 'brands'} 
-                     menuColumns={MENU_COLUMNS} 
-                     allBrands={allBrands} 
-                     onClose={() => setMegaMenuState(null)} 
+                {(link.hasMega || (link.subItems && link.subItems.length > 0)) && (
+                  <DesktopDropdownMenu 
+                    items={
+                      link.hasMega && link.megaType === 'categories'
+                        ? topLevel.map(c => ({ label: c.name, url: `/shop?category=${c.slug}` }))
+                        : link.hasMega && link.megaType === 'brands'
+                          ? allBrands.slice(0, 15).map(b => ({ label: b.name, url: `/shop?brand=${b.slug}` }))
+                          : link.subItems || []
+                    }
                   />
-                ) : (
-                  link.subItems && link.subItems.length > 0 && (
-                    <div className="absolute top-full left-0 pt-4 w-48 hidden group-hover:block hover:block z-50">
-                      <div className="bg-[#0e1525] rounded-xl p-4 flex flex-col gap-2.5 shadow-xl border border-white/10">
-                        {link.subItems.map((sub: any) => (
-                          <Link 
-                            key={sub.label} 
-                            to={sub.url} 
-                            className="text-[10px] font-black text-slate-300 hover:text-white transition-colors tracking-wider"
-                          >
-                            {sub.label}
-                          </Link>
-                        ))}
-                      </div>
-                    </div>
-                  )
                 )}
               </div>
             ))}
@@ -540,8 +458,85 @@ export default function StorefrontLayout() {
                  <button onClick={() => setMobileMenuOpen(false)}><X className="w-6 h-6 text-white" /></button>
               </div>
               
-              <div className="mb-6">
+              <div className="mb-6 flex flex-col gap-4">
                  <CurrencySelector />
+                 
+                 {/* Mobile Menu Search */}
+                 <div className="relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <input 
+                      type="text" 
+                      placeholder="Buscar figuras, brands, drops..."
+                      className="w-full bg-white/5 border border-white/10 rounded-full pl-11 pr-5 py-2.5 text-sm font-medium focus:border-[#f00856] focus:ring-1 focus:ring-[#f00856] transition-all outline-none text-white"
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          runSearch(searchQuery);
+                        }
+                      }}
+                    />
+                 </div>
+              </div>
+
+              {/* Mobile Menu User Status */}
+              <div className="mb-6 border-b border-white/5 pb-6">
+                {user ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-[#f00856] flex items-center justify-center font-black text-white text-sm shadow-md shrink-0">
+                        {profile?.first_name ? profile.first_name[0].toUpperCase() : user.email?.[0].toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[9px] font-black text-[#f00856] uppercase tracking-wider">Collector</div>
+                        <div className="text-xs font-black text-white truncate">
+                          {profile?.first_name ? `${profile.first_name} ${profile.last_name || ''}`.trim() : user.email}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <Link 
+                        to="/account" 
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/5 border border-white/5 text-[10px] font-black uppercase text-slate-300 hover:text-white transition-colors"
+                      >
+                        <Package className="w-3.5 h-3.5" /> Mis Pedidos
+                      </Link>
+                      {profile?.is_admin && (
+                        <Link 
+                          to="/admin" 
+                          onClick={() => setMobileMenuOpen(false)}
+                          className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/5 border border-white/5 text-[10px] font-black uppercase text-slate-300 hover:text-white transition-colors"
+                        >
+                          <LayoutDashboard className="w-3.5 h-3.5" /> Admin
+                        </Link>
+                      )}
+                      <button 
+                        onClick={() => { handleSignOut(); setMobileMenuOpen(false); }}
+                        className="col-span-2 flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-[10px] font-black uppercase text-red-500 transition-colors"
+                      >
+                        <LogOut className="w-3.5 h-3.5" /> Cerrar sesión
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <Link 
+                      to="/login" 
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="btn-primary py-2.5 rounded-xl flex items-center justify-center gap-2 text-xs font-black uppercase tracking-wider"
+                    >
+                      <LogIn className="w-4 h-4" /> Iniciar Sesión
+                    </Link>
+                    <Link 
+                      to="/login?signup=true" 
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="btn-secondary py-2.5 rounded-xl flex items-center justify-center gap-2 text-xs font-black uppercase tracking-wider"
+                    >
+                      Crear Cuenta
+                    </Link>
+                  </div>
+                )}
               </div>
               
               <nav className="flex flex-col gap-4 overflow-y-auto flex-1 no-scrollbar">
@@ -638,7 +633,9 @@ export default function StorefrontLayout() {
 
       {/* ═══ MAIN CONTENT ═══ */}
       <main className="flex-grow">
-        <Outlet />
+        <Suspense fallback={null}>
+          <Outlet />
+        </Suspense>
       </main>
 
       {/* ═══ FOOTER ═══ */}
@@ -685,8 +682,7 @@ export default function StorefrontLayout() {
                 {[
                   { label: 'Catálogo completo', href: '/shop' },
                   { label: 'Novedades', href: '/shop?badge=new' },
-                  { label: 'Sobre nosotros', href: '/about' },
-                  { label: 'Blog', href: '/blog' },
+                  { label: 'Sobre nosotros', href: '/page/nosotros' },
                   { label: 'Contacto', href: '/contact' },
                 ].map(link => (
                   <li key={link.label}>

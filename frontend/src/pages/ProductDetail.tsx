@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { ShoppingCart, Minus, Plus, Truck, ShieldCheck, Star } from 'lucide-react';
+import { ShoppingCart, Minus, Plus, Truck, ShieldCheck, Star, ChevronDown } from 'lucide-react';
 import { useProduct } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -26,6 +26,43 @@ export default function ProductDetail() {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [isHovering, setIsHovering] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
+  const [openMobileTab, setOpenMobileTab] = useState<'description' | 'specs' | null>('description');
+  const [showStickyBar, setShowStickyBar] = useState(false);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [touchEndX, setTouchEndX] = useState<number | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStartX(e.targetTouches[0].clientX);
+  };
+  const handleTouchMove = (e: React.TouchEvent) => {
+    setTouchEndX(e.targetTouches[0].clientX);
+  };
+  const handleTouchEnd = () => {
+    if (touchStartX === null || touchEndX === null || !images.length) return;
+    const diff = touchStartX - touchEndX;
+    if (diff > 50) {
+      // Swipe left -> next image
+      setSelectedImage(prev => (prev + 1) % images.length);
+    }
+    if (diff < -50) {
+      // Swipe right -> prev image
+      setSelectedImage(prev => (prev - 1 + images.length) % images.length);
+    }
+    setTouchStartX(null);
+    setTouchEndX(null);
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const mainBtn = document.getElementById('main-add-to-cart');
+      if (mainBtn) {
+        const rect = mainBtn.getBoundingClientRect();
+        setShowStickyBar(rect.bottom < 0);
+      }
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   useEffect(() => {
     if (product) {
@@ -56,9 +93,9 @@ export default function ProductDetail() {
     </div>
   );
 
-  if (!product) return (
+  if (!product || product.is_active === false) return (
     <div className="max-w-7xl mx-auto px-6 py-20 text-center">
-      <h1 className="text-2xl font-bold text-slate-500">Producto no encontrado</h1>
+      <h1 className="text-2xl font-bold text-slate-500">Este producto no está disponible actualmente</h1>
       <Link to="/shop" className="btn-primary mt-4">Volver a la tienda</Link>
     </div>
   );
@@ -174,6 +211,9 @@ export default function ProductDetail() {
             onMouseMove={handleMouseMove}
             onMouseEnter={() => setIsHovering(true)}
             onMouseLeave={() => setIsHovering(false)}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
           >
             <img
               src={displayImage}
@@ -184,7 +224,7 @@ export default function ProductDetail() {
             {/* Magnifier Lens */}
             {isHovering && (
               <div
-                className="absolute pointer-events-none border border-slate-200 shadow-xl bg-no-repeat z-20 rounded-full bg-white"
+                className="absolute pointer-events-none border border-slate-200 shadow-xl bg-no-repeat z-20 rounded-full bg-white hidden lg:block"
                 style={{
                   left: `${mousePos.x}%`,
                   top: `${mousePos.y}%`,
@@ -298,6 +338,7 @@ export default function ProductDetail() {
                   </button>
                 </div>
                 <button
+                  id="main-add-to-cart"
                   onClick={addToCart}
                   disabled={stock <= 0}
                   className={`btn-primary rounded-full px-8 py-4 sm:py-0 sm:h-12 flex-1 sm:flex-none flex items-center justify-center gap-3 text-sm uppercase tracking-widest font-black transition-all shadow-lg shadow-[#f00856]/20 hover:shadow-[#f00856]/40 ${
@@ -348,7 +389,8 @@ export default function ProductDetail() {
         </section>
       </div>
 
-      <section className="grid lg:grid-cols-[1fr_.8fr] gap-6 mt-10">
+      {/* DESKTOP TABS / DETAILS */}
+      <section className="hidden lg:grid grid-cols-[1fr_.8fr] gap-6 mt-10">
         <div className="glass rounded-[2.5rem] p-8 md:p-12">
           <div className="label-tag">Historia del producto</div>
           <h2 className="text-3xl md:text-4xl font-black mt-3 text-white tracking-tight">{settings['product_history_title'] || '¿Por qué importa?'}</h2>
@@ -386,6 +428,70 @@ export default function ProductDetail() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* MOBILE ACCORDIONS (lg:hidden) */}
+      <section className="lg:hidden mt-10 space-y-4">
+        {/* Accordion 1: Description */}
+        <div className="glass rounded-[2rem] overflow-hidden border border-white/10">
+          <button
+            type="button"
+            onClick={() => setOpenMobileTab(openMobileTab === 'description' ? null : 'description')}
+            className="w-full p-6 flex justify-between items-center text-left"
+          >
+            <div>
+              <div className="label-tag">Historia del producto</div>
+              <h3 className="text-lg font-black text-white mt-1 uppercase tracking-tight">{settings['product_history_title'] || '¿Por qué importa?'}</h3>
+            </div>
+            <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${openMobileTab === 'description' ? 'rotate-180 text-[#f00856]' : ''}`} />
+          </button>
+          {openMobileTab === 'description' && (
+            <div className="px-6 pb-6 pt-2 prose prose-invert text-slate-300 text-sm leading-relaxed border-t border-white/5 animate-fade-in">
+              {product.description ? (
+                <p>{product.description}</p>
+              ) : (
+                <p>{settings['product_history_default_text'] || 'Cada detalle ha sido verificado para garantizar su autenticidad y estado. Contexto del personaje, rareza, franquicia y valor para coleccionistas.'}</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Accordion 2: Specs */}
+        <div className="glass rounded-[2rem] overflow-hidden border border-white/10">
+          <button
+            type="button"
+            onClick={() => setOpenMobileTab(openMobileTab === 'specs' ? null : 'specs')}
+            className="w-full p-6 flex justify-between items-center text-left"
+          >
+            <div>
+              <div className="label-tag">Especificaciones</div>
+              <h3 className="text-lg font-black text-white mt-1 uppercase tracking-tight">{settings['product_specs_title'] || 'Detalles técnicos'}</h3>
+            </div>
+            <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${openMobileTab === 'specs' ? 'rotate-180 text-[#f00856]' : ''}`} />
+          </button>
+          {openMobileTab === 'specs' && (
+            <div className="px-6 pb-6 pt-2 space-y-3 border-t border-white/5 animate-fade-in">
+              <div className="soft rounded-xl p-4 flex justify-between items-center text-xs">
+                <span className="text-slate-400 font-bold uppercase tracking-wider">Categoría</span>
+                <b className="text-white">{product.category?.name || 'N/A'}</b>
+              </div>
+              <div className="soft rounded-xl p-4 flex justify-between items-center text-xs">
+                <span className="text-slate-400 font-bold uppercase tracking-wider">Marca</span>
+                <b className="text-white">{product.brand?.name || 'N/A'}</b>
+              </div>
+              {selectedVariant?.sku && !selectedVariant.sku.startsWith('COL-ML') && (
+                <div className="soft rounded-xl p-4 flex justify-between items-center text-xs">
+                  <span className="text-slate-400 font-bold uppercase tracking-wider">SKU</span>
+                  <b className="text-white font-mono">{selectedVariant.sku}</b>
+                </div>
+              )}
+              <div className="soft rounded-xl p-4 flex justify-between items-center text-xs">
+                <span className="text-slate-400 font-bold uppercase tracking-wider">Disponibilidad</span>
+                <b className={stockInfo.className}>{stockInfo.text}</b>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
@@ -427,6 +533,34 @@ export default function ProductDetail() {
           )}
         </div>
       </section>
+
+      {/* MOBILE STICKY BUY BAR */}
+      {showStickyBar && stock > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#05070f]/95 backdrop-blur-md border-t border-white/10 p-4 animate-slide-up lg:hidden">
+          <div className="flex items-center justify-between gap-4 max-w-7xl mx-auto">
+            <div className="flex items-center gap-3 overflow-hidden">
+              <img
+                src={displayImage}
+                alt={product.title}
+                className="w-12 h-12 rounded-lg object-contain bg-white p-1 flex-shrink-0"
+              />
+              <div className="overflow-hidden">
+                <p className="text-white font-black text-sm truncate uppercase tracking-tight">{product.title}</p>
+                <p className="text-[#f00856] font-black text-sm">{formatCurrencyPrice(finalPrice)}</p>
+              </div>
+            </div>
+            <button
+              onClick={addToCart}
+              className={`btn-primary rounded-full px-6 py-3 flex items-center justify-center gap-2 text-xs uppercase tracking-widest font-black transition-all shadow-lg shadow-[#f00856]/20 hover:shadow-[#f00856]/40 ${
+                addedToCart ? 'bg-green-500 border-green-500 hover:bg-green-600 shadow-green-500/20' : ''
+              }`}
+            >
+              <ShoppingCart className="w-4 h-4" />
+              {addedToCart ? 'Agregado' : 'Comprar'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
