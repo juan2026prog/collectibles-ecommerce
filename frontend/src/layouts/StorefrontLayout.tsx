@@ -714,7 +714,7 @@ export default function StorefrontLayout() {
                 </div>
                 <div className="flex items-center gap-3">
                    <Phone className="w-4 h-4 text-[#f00856] shrink-0" />
-                   <span>+598 9000 0000</span>
+                   <span>+598 96 889 596</span>
                 </div>
                 <div className="flex items-center gap-3">
                    <Mail className="w-4 h-4 text-[#f00856] shrink-0" />
