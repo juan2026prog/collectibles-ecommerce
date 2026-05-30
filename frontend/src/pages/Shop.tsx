@@ -226,19 +226,19 @@ export default function Shop() {
     <div className="bg-[#05070f] text-white">
       <SEO
         title={group ? `${group.name} — Collectibles` : "Catálogo — Collectibles"}
-        description={group?.description || "Explora nuestro catálogo unificado de figuras, coleccionables y productos oficiales de las mejores marcas."}
+        description={group?.description || "Explora nuestro catálogo de figuras, coleccionables y productos oficiales de las mejores marcas."}
       />
 
       {/* EDITORIAL HERO SECTION */}
       <section className="relative hero-noise overflow-hidden border-b border-white/10">
         <div className="absolute -right-40 top-0 w-[560px] h-[560px] bg-[#f00856]/20 blur-3xl rounded-full"></div>
         <div className="relative max-w-7xl mx-auto px-6 py-10 md:py-14">
-          <div className="label-tag">{group ? "Colección" : "Catálogo unificado"}</div>
+          <div className="label-tag">{group ? "Colección" : "Catálogo"}</div>
           <h1 className="text-5xl md:text-7xl font-black leading-[.9] mt-3 tracking-tighter">
             {group ? group.name : "Productos"}
           </h1>
           <p className="text-slate-300 text-lg mt-5 max-w-3xl leading-relaxed">
-            {group ? group.description || "Explora esta colección exclusiva de productos curados." : "Un catálogo premium donde conviven stock propio, distribuidores oficiales y oportunidades curadas."}
+            {group ? group.description || "Explora esta colección exclusiva de productos curados." : ""}
           </p>
         </div>
       </section>
