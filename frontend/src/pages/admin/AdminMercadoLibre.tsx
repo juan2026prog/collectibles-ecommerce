@@ -65,6 +65,7 @@ export default function AdminMercadoLibre() {
   const [rulesEnabled, setRulesEnabled] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
   const [webhooksEnabled, setWebhooksEnabled] = useState(true);
+  const [dbClientId, setDbClientId] = useState('');
 
   // Global counts and stats
   const [stats, setStats] = useState({
@@ -179,7 +180,7 @@ export default function AdminMercadoLibre() {
       const { data: wsSetting } = await supabase
         .from('site_settings')
         .select('key, value')
-        .in('key', ['ml_webhooks_enabled', 'ml_price_markup_type', 'ml_price_markup_value', 'ml_price_rules_enabled']);
+        .in('key', ['ml_webhooks_enabled', 'ml_price_markup_type', 'ml_price_markup_value', 'ml_price_rules_enabled', 'mercadolibre_client_id']);
       
       const enabledKey = wsSetting?.find(s => s.key === 'ml_webhooks_enabled')?.value;
       const type = wsSetting?.find(s => s.key === 'ml_price_markup_type')?.value;
@@ -190,6 +191,8 @@ export default function AdminMercadoLibre() {
       if (type) setMarkupType(type);
       if (val) setMarkupValue(val);
       if (rules !== undefined) setRulesEnabled(rules === 'true');
+      const dbCid = wsSetting?.find(s => s.key === 'mercadolibre_client_id')?.value;
+      if (dbCid) setDbClientId(dbCid);
 
       // 2. Fetch connected sellers count
       const { data: dbSellers } = await supabase.from('ml_seller_accounts').select('*');
@@ -386,11 +389,12 @@ export default function AdminMercadoLibre() {
 
   // Connect account
   function handleConnectAccount() {
-    const clientId = import.meta.env.VITE_ML_CLIENT_ID || (sellers.length > 0 ? sellers[0].seller_id : '');
+    // Priority: .env > database
+    const clientId = import.meta.env.VITE_ML_CLIENT_ID || dbClientId;
     const redirectUri = import.meta.env.VITE_ML_REDIRECT_URI || `${window.location.origin}/callback`;
     
     if (!clientId) {
-      toast.error('Error: No se encontró CLIENT_ID de Mercado Libre. Configúralo en las variables de entorno.');
+      toast.error('Error: No se encontró ML_CLIENT_ID en el sistema. Asegúrate de que esté configurado.');
       return;
     }
 
