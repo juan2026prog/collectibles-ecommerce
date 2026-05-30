@@ -1810,6 +1810,7 @@ export default function AdminMercadoLibre() {
                             <tr>
                               <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Vendedor (Nickname)</th>
                               <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Seller ID ML</th>
+                              <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Client ID (App)</th>
                               <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Expiración Token</th>
                               <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Estado</th>
                               <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">UUID Vendedor</th>
@@ -1827,6 +1828,7 @@ export default function AdminMercadoLibre() {
                                     {s.nickname || 'Plataforma / Tienda Oficial'}
                                   </td>
                                   <td className="px-6 py-4 font-mono text-gray-600">{s.seller_id}</td>
+                                  <td className="px-6 py-4 font-mono text-blue-600">{dbClientId || '—'}</td>
                                   <td className="px-6 py-4 text-gray-500">
                                     {s.expires_at ? new Date(s.expires_at).toLocaleString() : 'N/A'}
                                     {s.expires_at && (
