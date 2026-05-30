@@ -57,8 +57,6 @@ const AdminPromotions = lazy(() => import('./pages/admin/AdminPromotions'));
 const AdminAffiliates = lazy(() => import('./pages/admin/AdminAffiliates'));
 const AdminMailing = lazy(() => import('./pages/admin/AdminMailing'));
 const AdminMercadoLibre = lazy(() => import('./pages/admin/AdminMercadoLibre'));
-const AdminMLCuration = lazy(() => import('./pages/admin/AdminMLCuration'));
-const AdminMLOperations = lazy(() => import('./pages/admin/AdminMLOperations'));
 const AdminReports = lazy(() => import('./pages/admin/AdminReports'));
 const AdminSeo = lazy(() => import('./pages/admin/AdminSeo'));
 const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
@@ -93,6 +91,8 @@ function App() {
                   <Route element={<StorefrontLayout />}>
                     <Route path="/" element={<Home />} />
                     <Route path="/shop" element={<Shop />} />
+                    <Route path="/categoria/:categorySlug" element={<Shop />} />
+                    <Route path="/marca/:brandSlug" element={<Shop />} />
                     <Route path="/p/:slug" element={<ProductDetail />} />
                     <Route path="/page/:slug" element={<DynamicPage />} />
                     <Route path="/collection/:slug" element={<Shop />} />
@@ -188,8 +188,6 @@ function App() {
                   <Route path="affiliates" element={<AdminAffiliates />} />
                   <Route path="mailing" element={<AdminMailing />} />
                   <Route path="mercadolibre" element={<AdminMercadoLibre />} />
-                  <Route path="mercadolibre-curation" element={<AdminMLCuration />} />
-                  <Route path="mercadolibre-operations" element={<AdminMLOperations />} />
                   <Route path="reports" element={<AdminReports />} />
                   <Route path="seo" element={<AdminSeo />} />
                   <Route path="media" element={<AdminMedia />} />

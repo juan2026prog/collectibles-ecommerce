@@ -356,9 +356,9 @@ export default function StorefrontLayout() {
                   <DesktopDropdownMenu 
                     items={
                       link.hasMega && link.megaType === 'categories'
-                        ? topLevel.map(c => ({ label: c.name, url: `/shop?category=${c.slug}` }))
+                        ? topLevel.map(c => ({ label: c.name, url: `/categoria/${c.slug}` }))
                         : link.hasMega && link.megaType === 'brands'
-                          ? allBrands.slice(0, 15).map(b => ({ label: b.name, url: `/shop?brand=${b.slug}` }))
+                          ? allBrands.slice(0, 15).map(b => ({ label: b.name, url: `/marca/${b.slug}` }))
                           : link.subItems || []
                     }
                   />
@@ -578,7 +578,7 @@ export default function StorefrontLayout() {
                         {link.hasMega && link.megaType === 'categories' && topLevel.map((cat: any) => (
                           <Link 
                             key={cat.id} 
-                            to={`/shop?category=${cat.slug}`} 
+                            to={`/categoria/${cat.slug}`} 
                             className="text-lg font-bold text-slate-400 hover:text-white transition-colors py-0.5"
                             onClick={() => setMobileMenuOpen(false)}
                           >
@@ -588,7 +588,7 @@ export default function StorefrontLayout() {
                         {link.hasMega && link.megaType === 'brands' && allBrands.slice(0, 8).map((b: any) => (
                           <Link 
                             key={b.id} 
-                            to={`/shop?brand=${b.slug}`} 
+                            to={`/marca/${b.slug}`} 
                             className="text-lg font-bold text-slate-400 hover:text-white transition-colors py-0.5"
                             onClick={() => setMobileMenuOpen(false)}
                           >

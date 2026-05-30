@@ -40,8 +40,6 @@ export default function AdminLayout() {
     { name: 'Clientes & CRM', path: '/admin/customers', icon: Users },
     { name: 'Mailing', path: '/admin/mailing', icon: Mail },
     { name: 'Mercado Libre', path: '/admin/mercadolibre', icon: ShoppingCart },
-    { name: 'Curación Mercado Libre', path: '/admin/mercadolibre-curation', icon: ShoppingCart },
-    { name: 'Operaciones Mercado Libre', path: '/admin/mercadolibre-operations', icon: Activity },
     { name: 'Finanzas & Facturas', path: '/admin/finances', icon: CreditCard },
     { name: 'Logistica & Envios', path: '/admin/logistics', icon: Package },
     { name: 'Artistas & Cameo', path: '/admin/artists', icon: Star },

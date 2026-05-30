@@ -584,7 +584,7 @@ export default function Home() {
                 return (
                   <Link
                     key={c.id}
-                    to={`/shop?category=${c.slug}`}
+                    to={`/categoria/${c.slug}`}
                     className="relative rounded-2xl overflow-hidden group border border-white/10 transition-all hover:border-[#f00856]/30 hover:-translate-y-1 flex flex-col justify-end aspect-[9/12] md:aspect-[3/4] w-[78vw] md:w-[360px] shrink-0 shadow-[0_10px_30px_rgba(0,0,0,0.4)] snap-start select-none"
                   >
                     <picture className="absolute inset-0 w-full h-full">
@@ -960,7 +960,7 @@ export default function Home() {
                 {marqueeBrands.map((b, i) => (
                   <Link
                     key={`${b.id}-${i}`}
-                    to={`/shop?brand=${b.slug}`}
+                    to={`/marca/${b.slug}`}
                     className="shrink-0 grayscale hover:grayscale-0 hover:scale-[1.05] transition-all duration-500 ease-out"
                   >
                     {b.logo_url ? (

@@ -196,7 +196,7 @@ export default function ProductDetail() {
         <span className="opacity-30">/</span>
         {product.category && (
           <>
-            <Link to={`/shop?category=${product.category.slug}`} className="hover:text-primary-500 transition-colors">{product.category.name}</Link>
+            <Link to={`/categoria/${product.category.slug}`} className="hover:text-primary-500 transition-colors">{product.category.name}</Link>
             <span className="opacity-30">/</span>
           </>
         )}

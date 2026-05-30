@@ -1,4 +1,4 @@
-import { Link, useSearchParams, useNavigate, useParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { ChevronRight, ChevronLeft, SlidersHorizontal, X, Search } from 'lucide-react';
 import { useProducts, useCategories, useBrands, useFilterMappings, useProductGroupMetadata } from '../hooks/useData';
@@ -21,8 +21,13 @@ function getVisiblePages(currentPage: number, total: number) {
 
 export default function Shop() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const categorySlug = searchParams.get('category') || '';
-  const brandSlug = searchParams.get('brand') || '';
+  const { categorySlug: catParam, brandSlug: brandParam, slug: groupSlug } = useParams<{ categorySlug?: string; brandSlug?: string; slug?: string }>();
+  const location = useLocation();
+  const isCategoryRoute = location.pathname.startsWith('/categoria');
+  const isBrandRoute = location.pathname.startsWith('/marca');
+
+  const categorySlug = isCategoryRoute ? catParam : (searchParams.get('category') || '');
+  const brandSlug = isBrandRoute ? brandParam : (searchParams.get('brand') || '');
   const badge = searchParams.get('badge') || '';
   const searchQ = searchParams.get('q') || '';
   const [sortBy, setSortBy] = useState('default');
@@ -55,7 +60,6 @@ export default function Shop() {
     ? brands.filter(b => mappings.some(m => m.brand_id === b.id && m.category_id === currentCategory.id) || b.id === currentBrand?.id)
     : brands;
   
-  const { slug: groupSlug } = useParams<{ slug: string }>();
   const { group, loading: groupLoading } = useProductGroupMetadata(groupSlug);
   const cart = useCartContext();
   const { t } = useLocale();
@@ -98,8 +102,32 @@ export default function Shop() {
     setFilter('q', searchInput);
   }
 
+  function handleCategorySelect(slug: string) {
+    const params = new URLSearchParams(searchParams);
+    params.delete('category');
+    params.delete('brand');
+    setPage(0);
+    if (slug) {
+      navigate(`/categoria/${slug}?${params.toString()}`);
+    } else {
+      navigate(`/shop?${params.toString()}`);
+    }
+  }
+
+  function handleBrandSelect(slug: string) {
+    const params = new URLSearchParams(searchParams);
+    params.delete('category');
+    params.delete('brand');
+    setPage(0);
+    if (slug) {
+      navigate(`/marca/${slug}?${params.toString()}`);
+    } else {
+      navigate(`/shop?${params.toString()}`);
+    }
+  }
+
   function clearAllFilters() {
-    if (groupSlug) {
+    if (groupSlug || isCategoryRoute || isBrandRoute) {
       navigate('/shop');
     } else {
       setSearchParams({});
@@ -136,7 +164,7 @@ export default function Shop() {
         <h3 className="font-bold text-white uppercase text-xs tracking-widest mb-3">Categoría</h3>
         <div className="grid gap-2">
           <button
-            onClick={() => setFilter('category', '')}
+            onClick={() => handleCategorySelect('')}
             className={`soft rounded-xl p-3 text-left text-sm font-bold transition-all ${!categorySlug ? 'border-[#f00856] bg-[#f00856]/10 text-white' : 'text-slate-400 hover:text-white'}`}
           >
             Todos los productos
@@ -146,7 +174,7 @@ export default function Shop() {
             : visibleCategories.map(c => (
               <button
                 key={c.id}
-                onClick={() => setFilter('category', c.slug)}
+                onClick={() => handleCategorySelect(c.slug)}
                 className={`soft rounded-xl p-3 text-left text-sm font-bold transition-all ${categorySlug === c.slug ? 'border-[#f00856] bg-[#f00856]/10 text-white' : 'text-slate-400 hover:text-white'}`}
               >
                 {c.name}
@@ -161,7 +189,7 @@ export default function Shop() {
         <h3 className="font-bold text-white uppercase text-xs tracking-widest mb-3">Marca</h3>
         <div className="grid gap-2">
           <button
-            onClick={() => setFilter('brand', '')}
+            onClick={() => handleBrandSelect('')}
             className={`soft rounded-xl p-3 text-left text-sm font-bold transition-all ${!brandSlug ? 'border-[#f00856] bg-[#f00856]/10 text-white' : 'text-slate-400 hover:text-white'}`}
           >
             Todas las marcas
@@ -171,7 +199,7 @@ export default function Shop() {
             : visibleBrands.map(b => (
               <button
                 key={b.id}
-                onClick={() => setFilter('brand', b.slug)}
+                onClick={() => handleBrandSelect(b.slug)}
                 className={`soft rounded-xl p-3 text-left text-sm font-bold transition-all ${brandSlug === b.slug ? 'border-[#f00856] bg-[#f00856]/10 text-white' : 'text-slate-400 hover:text-white'}`}
               >
                 {b.name}
@@ -225,17 +253,44 @@ export default function Shop() {
   return (
     <div className="bg-[#05070f] text-white">
       <SEO
-        title={group ? `${group.name} — Collectibles` : "Catálogo — Collectibles"}
-        description={group?.description || "Explora nuestro catálogo de figuras, coleccionables y productos oficiales de las mejores marcas."}
+        title={group ? `${group.name} — Collectibles` : isCategoryRoute && currentCategory ? `${currentCategory.name} — Collectibles` : isBrandRoute && currentBrand ? `${currentBrand.name} — Collectibles` : "Catálogo — Collectibles"}
+        description={group?.description || currentCategory?.description || currentBrand?.description || "Explora nuestro catálogo de figuras, coleccionables y productos oficiales de las mejores marcas."}
       />
+
+      {/* BREADCRUMB */}
+      <div className="max-w-7xl mx-auto px-6 pt-6 pb-2 text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+        <Link to="/" className="hover:text-white transition-colors">Inicio</Link>
+        <ChevronRight className="w-3 h-3" />
+        {isCategoryRoute && currentCategory ? (
+          <>
+            <span className="text-slate-500">Categorías</span>
+            <ChevronRight className="w-3 h-3" />
+            <span className="text-[#f00856]">{currentCategory.name}</span>
+          </>
+        ) : isBrandRoute && currentBrand ? (
+          <>
+            <span className="text-slate-500">Marcas</span>
+            <ChevronRight className="w-3 h-3" />
+            <span className="text-[#f00856]">{currentBrand.name}</span>
+          </>
+        ) : group ? (
+          <>
+            <span className="text-slate-500">Colecciones</span>
+            <ChevronRight className="w-3 h-3" />
+            <span className="text-[#f00856]">{group.name}</span>
+          </>
+        ) : (
+          <span className="text-[#f00856]">Catálogo</span>
+        )}
+      </div>
 
       {/* EDITORIAL HERO SECTION */}
       <section className="relative hero-noise overflow-hidden border-b border-white/10">
         <div className="absolute -right-40 top-0 w-[560px] h-[560px] bg-[#f00856]/20 blur-3xl rounded-full"></div>
-        <div className="relative max-w-7xl mx-auto px-6 py-10 md:py-14">
-          <div className="label-tag">{group ? "Colección" : "Catálogo"}</div>
+        <div className="relative max-w-7xl mx-auto px-6 py-6 md:py-10">
+          <div className="label-tag">{group ? "Colección" : isCategoryRoute ? "Categoría" : isBrandRoute ? "Marca" : "Catálogo"}</div>
           <h1 className="text-5xl md:text-7xl font-black leading-[.9] mt-3 tracking-tighter">
-            {group ? group.name : "Productos"}
+            {group ? group.name : isCategoryRoute && currentCategory ? currentCategory.name : isBrandRoute && currentBrand ? currentBrand.name : "Productos"}
           </h1>
           <p className="text-slate-300 text-lg mt-5 max-w-3xl leading-relaxed">
             {group ? group.description || "Explora esta colección exclusiva de productos curados." : ""}
