@@ -7,6 +7,7 @@ import { useCartContext } from '../contexts/CartContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { resolveImage } from '../lib/imageUtils';
+import { usePromotions, evaluateItemDiscount } from '../hooks/usePromotions';
 
 export default function CartDrawer() {
   const navigate = useNavigate();
@@ -88,9 +89,16 @@ export default function CartDrawer() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const shipping = total >= freeShippingThreshold ? 0 : 350;
-  const grandTotal = total + shipping;
-  const freeShippingProgress = Math.min(100, (total / freeShippingThreshold) * 100);
+  const { promotions } = usePromotions();
+  
+  let autoDiscountAmount = 0;
+  items.forEach(item => {
+    autoDiscountAmount += evaluateItemDiscount(item as any, promotions);
+  });
+
+  const shipping = total - autoDiscountAmount >= freeShippingThreshold ? 0 : 350;
+  const grandTotal = total - autoDiscountAmount + shipping;
+  const freeShippingProgress = Math.min(100, ((total - autoDiscountAmount) / freeShippingThreshold) * 100);
 
   // Close drawer on navigate to checkout
   const handleCheckoutRedirect = () => {
@@ -184,7 +192,7 @@ export default function CartDrawer() {
                     />
                   </div>
                   <div className="text-[10px] flex justify-between">
-                    {total >= freeShippingThreshold ? (
+                    {total - autoDiscountAmount >= freeShippingThreshold ? (
                       <span className="text-emerald-400 font-bold flex items-center gap-1">
                         <Sparkles className="w-3 h-3" /> ¡Tenés envío GRATIS!
                       </span>
@@ -192,7 +200,7 @@ export default function CartDrawer() {
                       <span className="text-slate-400">
                         Te faltan{' '}
                         <span className="text-blue-400 font-bold">
-                          {formatCurrencyPrice(freeShippingThreshold - total)}
+                          {formatCurrencyPrice(freeShippingThreshold - (total - autoDiscountAmount))}
                         </span>{' '}
                         para el envío gratis.
                       </span>
@@ -353,6 +361,12 @@ export default function CartDrawer() {
                 <span>Subtotal</span>
                 <span className="font-bold text-white">{formatCurrencyPrice(total)}</span>
               </div>
+              {autoDiscountAmount > 0 && (
+                <div className="flex justify-between items-center text-[#f00856]">
+                  <span className="flex items-center gap-1"><Tag className="w-3.5 h-3.5" /> Descuentos automáticos</span>
+                  <span className="font-bold">-{formatCurrencyPrice(autoDiscountAmount)}</span>
+                </div>
+              )}
               <div className="flex justify-between items-center text-slate-400">
                 <span>Envío estimado</span>
                 <span className="font-bold text-white">

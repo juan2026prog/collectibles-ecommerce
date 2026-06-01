@@ -192,7 +192,7 @@ Deno.serve(async (req) => {
     // 3. Consulta segura y correcta a la tabla real 'products' (columna 'base_price')
     const { data: products, error: productError } = await supabase
       .from("products")
-      .select("id, base_price")
+      .select("id, base_price, category_id, brand_id, vendor_id, product_tags(tag_id)")
       .in("id", productIds);
 
     if (productError) {
@@ -373,6 +373,118 @@ Deno.serve(async (req) => {
       }
     }
 
+    // --- AUTO PROMOTIONS ENGINE ---
+    let autoDiscountAmount = 0;
+    const autoPromosApplied = [];
+    try {
+      const now = new Date().toISOString();
+      const { data: autoPromotions, error: autoPromosError } = await supabase
+        .from("promotions")
+        .select("id, name, discount_type, discount_value, min_quantity, is_stackable, priority")
+        .neq("discount_type", "bank_discount")
+        .eq("is_active", true)
+        .or(`starts_at.is.null,starts_at.lte.${now}`)
+        .or(`ends_at.is.null,ends_at.gte.${now}`)
+        .order("priority", { ascending: false });
+
+      if (!autoPromosError && autoPromotions && autoPromotions.length > 0) {
+        const promoIds = autoPromotions.map(p => p.id);
+        const { data: allTargets } = await supabase.from("promotion_targets").select("*").in("promotion_id", promoIds);
+        const { data: allExclusions } = await supabase.from("promotion_exclusions").select("*").in("promotion_id", promoIds);
+        const { data: allTiers } = await supabase.from("promotion_tiers").select("*").in("promotion_id", promoIds);
+
+        for (const item of verifiedItems) {
+          const product = products?.find(p => p.id === item.product_id);
+          if (!product) continue;
+
+          let itemDiscount = 0;
+
+          for (const promo of autoPromotions) {
+            // Check exclusions
+            let isExcluded = false;
+            const promoExclusions = (allExclusions || []).filter(e => e.promotion_id === promo.id);
+            for (const exc of promoExclusions) {
+              if (exc.target_type === 'product' && exc.target_id === item.product_id) isExcluded = true;
+              if (exc.target_type === 'category' && product.category_id === exc.target_id) isExcluded = true;
+              if (exc.target_type === 'brand' && product.brand_id === exc.target_id) isExcluded = true;
+              if (exc.target_type === 'vendor' && product.vendor_id === exc.target_id) isExcluded = true;
+              if (exc.target_type === 'tag' && product.product_tags?.some((pt: any) => pt.tag_id === exc.target_id)) isExcluded = true;
+            }
+            if (isExcluded) continue;
+
+            // Check inclusions
+            let isIncluded = false;
+            const promoTargets = (allTargets || []).filter(t => t.promotion_id === promo.id);
+            if (promoTargets.length === 0) {
+              isIncluded = true;
+            } else {
+              for (const tgt of promoTargets) {
+                if (tgt.target_type === 'product' && tgt.target_id === item.product_id) isIncluded = true;
+                if (tgt.target_type === 'category' && product.category_id === tgt.target_id) isIncluded = true;
+                if (tgt.target_type === 'brand' && product.brand_id === tgt.target_id) isIncluded = true;
+                if (tgt.target_type === 'vendor' && product.vendor_id === tgt.target_id) isIncluded = true;
+                if (tgt.target_type === 'tag' && product.product_tags?.some((pt: any) => pt.tag_id === tgt.target_id)) isIncluded = true;
+              }
+            }
+            if (!isIncluded) continue;
+
+            // Min quantity
+            if (promo.min_quantity && item.quantity < promo.min_quantity) continue;
+
+            let currentDiscount = 0;
+            if (promo.discount_type === 'percentage') {
+               currentDiscount = (item.price * item.quantity) * (Number(promo.discount_value) / 100);
+            } else if (promo.discount_type === 'fixed') {
+               currentDiscount = Number(promo.discount_value) * item.quantity;
+            } else if (promo.discount_type === '2x1') {
+               const freeItems = Math.floor(item.quantity / 2);
+               currentDiscount = freeItems * item.price;
+            } else if (promo.discount_type === 'buy_x_get_y') {
+               const freeItems = Math.floor(item.quantity / (promo.min_quantity || 2));
+               currentDiscount = freeItems * item.price;
+            } else if (promo.discount_type === 'tiered') {
+               const promoTiers = (allTiers || []).filter(t => t.promotion_id === promo.id).sort((a,b) => b.min_quantity - a.min_quantity);
+               const activeTier = promoTiers.find(t => item.quantity >= t.min_quantity);
+               if (activeTier) {
+                 if (activeTier.discount_type === 'percentage') {
+                   currentDiscount = (item.price * item.quantity) * (Number(activeTier.discount_value) / 100);
+                 } else if (activeTier.discount_type === 'fixed') {
+                   currentDiscount = Number(activeTier.discount_value) * item.quantity;
+                 }
+               }
+            }
+
+            if (currentDiscount > 0) {
+               // Bugfix Acumulación: Si esta promo no es acumulable y ya hay descuentos previos (de mayor prioridad), no puede aplicar
+               if (!promo.is_stackable && itemDiscount > 0) {
+                 continue;
+               }
+
+               itemDiscount += currentDiscount;
+               autoPromosApplied.push({ 
+                 id: promo.id, 
+                 name: promo.name, 
+                 discount: currentDiscount, 
+                 product_id: item.product_id,
+                 vendor_id: product.vendor_id,
+                 quantity: item.quantity,
+                 original_unit_price: item.price,
+                 final_unit_price: item.price - (currentDiscount / item.quantity),
+                 is_stackable: promo.is_stackable
+               });
+               if (!promo.is_stackable) break; // Stop evaluating further promos for this item
+            }
+          }
+          
+          itemDiscount = Math.min(itemDiscount, item.price * item.quantity);
+          autoDiscountAmount += itemDiscount;
+        }
+      }
+    } catch (e) {
+      console.warn("[Promotions Engine] Auto-promotions eval failed (tables may not exist):", e);
+    }
+
+
     let bankDiscount = 0;
     let bankPromoSummary: Record<string, unknown> | null = null;
     if (payload.bank_promo?.promo_id) {
@@ -397,11 +509,51 @@ Deno.serve(async (req) => {
       }
 
       const minPurchase = Number(promotion.min_purchase || 0);
-      if (subtotal < minPurchase) {
-        throw new Error(`La promocion requiere una compra minima de ${minPurchase}.`);
+
+      // Safe exclusions check without breaking if table doesn't exist yet
+      const { data: exclusions, error: excError } = await supabase
+        .from("promotion_exclusions")
+        .select("target_type, target_id")
+        .eq("promotion_id", promotion.id);
+
+      if (excError) {
+        console.warn("[Promotions Engine] Could not fetch exclusions (table might not exist yet):", excError.message);
       }
 
-      bankDiscount = Math.round(subtotal * (Number(promotion.discount_value) / 100));
+      let eligibleSubtotal = 0;
+      
+      for (const item of verifiedItems) {
+        const product = products?.find(p => p.id === item.product_id);
+        let isExcluded = false;
+        
+        if (exclusions && exclusions.length > 0) {
+           for (const exc of exclusions) {
+              if (exc.target_type === 'product' && exc.target_id === item.product_id) isExcluded = true;
+              if (exc.target_type === 'category' && product?.category_id === exc.target_id) isExcluded = true;
+              if (exc.target_type === 'brand' && product?.brand_id === exc.target_id) isExcluded = true;
+              if (exc.target_type === 'vendor' && product?.vendor_id === exc.target_id) isExcluded = true;
+              if (exc.target_type === 'tag' && product?.product_tags?.some((pt: any) => pt.tag_id === exc.target_id)) isExcluded = true;
+           }
+        }
+        
+        // Regla de Acumulación: si el item ya tiene una promoción no acumulable, el banco NO aplica sobre él
+        const appliedNonStackable = autoPromosApplied.find((ap: any) => ap.product_id === item.product_id && ap.is_stackable === false);
+        if (appliedNonStackable) isExcluded = true;
+        
+        if (!isExcluded) {
+           eligibleSubtotal += item.price * item.quantity;
+        }
+      }
+
+      // Usar un "subtotal residual" que descuente los auto-discounts para compras bancarias mínimas
+      const adjustedSubtotal = Math.max(subtotal - autoDiscountAmount, 0);
+      if (eligibleSubtotal > adjustedSubtotal) eligibleSubtotal = adjustedSubtotal;
+
+      if (eligibleSubtotal < minPurchase) {
+        throw new Error(`La promocion requiere una compra minima de ${minPurchase} en productos elegibles.`);
+      }
+
+      bankDiscount = Math.round(eligibleSubtotal * (Number(promotion.discount_value) / 100));
       if (Number(promotion.max_discount || 0) > 0) {
         bankDiscount = Math.min(bankDiscount, Number(promotion.max_discount));
       }
@@ -481,7 +633,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    const totalAmount = Math.max(subtotal - discountAmount - bankDiscount + shippingRate, 0);
+    const totalAmount = Math.max(subtotal - autoDiscountAmount - discountAmount - bankDiscount + shippingRate, 0);
     const orderItems = verifiedItems.map((item) => ({
       product_id: item.product_id,
       variant_id: item.variant_id || "",
@@ -523,6 +675,40 @@ Deno.serve(async (req) => {
     if (rpcError) {
       console.error("Atomic order creation failed:", rpcError);
       throw new Error(rpcError.message || "No se pudo crear la orden.");
+    }
+
+    // Analytics (Phase 4C): Register granular promotion usage (fail-safe)
+    try {
+      const usageRecords: any[] = [];
+      if (autoPromosApplied.length > 0) {
+        for (const ap of autoPromosApplied) {
+           usageRecords.push({ 
+             promotion_id: ap.id, 
+             order_id: orderResult.order_id, 
+             product_id: ap.product_id,
+             vendor_id: ap.vendor_id || null,
+             discount_amount: ap.discount,
+             quantity: ap.quantity,
+             original_unit_price: ap.original_unit_price,
+             final_unit_price: ap.final_unit_price
+           });
+        }
+      }
+      if (bankPromoSummary?.id) {
+         // Bank discounts apply generically to the order total, we log a single record
+         usageRecords.push({ 
+             promotion_id: bankPromoSummary.id, 
+             order_id: orderResult.order_id, 
+             discount_amount: bankPromoSummary.discount_amount 
+         });
+      }
+      if (usageRecords.length > 0) {
+         // Bugfix Analytics: Esperar asíncronamente para que la Edge Function no mate la promesa en Deno
+         const { error } = await supabase.from('promotion_usage').insert(usageRecords);
+         if (error) console.warn('[Promotions Analytics] Failed to insert granular usage data:', error.message);
+      }
+    } catch (e) {
+      console.warn('[Promotions Analytics] Unhandled error preparing granular usage stats:', e);
     }
 
     return new Response(JSON.stringify({

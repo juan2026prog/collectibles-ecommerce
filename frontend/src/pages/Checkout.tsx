@@ -11,6 +11,7 @@ import AddressAutocomplete from '../components/AddressAutocomplete';
 import { createCheckoutOrder, getPublicPaymentProviders, startCheckoutPayment, type PublicPaymentProvider } from '../lib/payments';
 import { URUGUAY_LOCATIONS, DEPARTAMENTOS, calculateShipping } from '../utils/uruguayLocations';
 import { getProductImage, resolveImage } from '../lib/imageUtils';
+import { usePromotions, evaluateItemDiscountDetailed } from '../hooks/usePromotions';
 
 function normalizeLocation(value?: string | null) {
   return (value || "")
@@ -109,6 +110,21 @@ export default function Checkout() {
   const [couponError, setCouponError] = useState<string | null>(null);
   const [couponSuccess, setCouponSuccess] = useState<string | null>(null);
   const [couponLoading, setCouponLoading] = useState(false);
+
+  const { promotions } = usePromotions();
+  
+  let autoDiscountAmount = 0;
+  let eligibleBankSubtotal = 0;
+  items.forEach(item => {
+    const detail = evaluateItemDiscountDetailed(item as any, promotions);
+    autoDiscountAmount += detail.discount;
+    
+    // Check if the item is eligible for bank promos (not strictly excluded here because we'll check exclusions later,
+    // but we CAN check if a non-stackable auto promo applied)
+    if (!detail.nonStackableApplied) {
+       eligibleBankSubtotal += (item.price * item.quantity);
+    }
+  });
 
   const handleApplyCoupon = async () => {
     if (!couponInput.trim()) {
@@ -401,7 +417,7 @@ export default function Checkout() {
     console.log("[Checkout Debug] Shipping cost final:", shipping);
   }, [shipping]);
 
-  const subtotalWithShipping = total + shipping;
+  const subtotalWithShipping = total - autoDiscountAmount + shipping;
 
   const getUruguayDateTime = () => {
     const now = new Date();
@@ -575,17 +591,48 @@ export default function Checkout() {
   };
 
   let bankDiscount = 0;
-  if (selectedPromo && subtotalWithShipping >= (selectedPromo.min_purchase || 0)) {
-    bankDiscount = Math.round(subtotalWithShipping * selectedPromo.discount_value / 100);
-    if (selectedPromo.max_discount > 0) {
-      bankDiscount = Math.min(bankDiscount, selectedPromo.max_discount);
+  if (selectedPromo) {
+    let finalEligible = 0;
+    
+    // Recalcular el subtotal elegible verificando exclusiones del banco y las no acumulables
+    items.forEach(item => {
+      let isExcluded = false;
+      if (selectedPromo.exclusions) {
+         for (const exc of selectedPromo.exclusions) {
+           if (exc.target_type === 'product' && exc.target_id === item.product_id) isExcluded = true;
+           if (exc.target_type === 'category' && item.category_id === exc.target_id) isExcluded = true;
+           if (exc.target_type === 'brand' && item.brand_id === exc.target_id) isExcluded = true;
+           if (exc.target_type === 'vendor' && item.vendor_id === exc.target_id) isExcluded = true;
+           if (exc.target_type === 'tag' && item.tag_ids?.includes(exc.target_id)) isExcluded = true;
+         }
+      }
+      // Verificar si ya aplicó una promoción no acumulable
+      const detail = evaluateItemDiscountDetailed(item as any, promotions);
+      if (detail.nonStackableApplied) isExcluded = true;
+
+      if (!isExcluded) {
+         finalEligible += (item.price * item.quantity);
+      }
+    });
+
+    // Descontar la proporción de auto-descuentos que afectaron a los items elegibles para validar el mínimo de compra
+    // Para simplificar y mantener concordancia con el backend, ajustamos la validación del mínimo de compra
+    const adjustedSubtotal = Math.max(subtotal - autoDiscountAmount, 0);
+    if (finalEligible > adjustedSubtotal) finalEligible = adjustedSubtotal;
+
+    if (finalEligible >= (selectedPromo.min_purchase || 0)) {
+      bankDiscount = Math.round(finalEligible * selectedPromo.discount_value / 100);
+      if (selectedPromo.max_discount > 0) {
+        bankDiscount = Math.min(bankDiscount, selectedPromo.max_discount);
+      }
     }
   }
 
   let couponDiscount = 0;
   if (activeCoupon) {
+    const baseForCoupon = Math.max(total - autoDiscountAmount, 0);
     couponDiscount = activeCoupon.discount_type === 'percentage'
-      ? Math.round(total * Number(activeCoupon.discount_value) / 100)
+      ? Math.round(baseForCoupon * Number(activeCoupon.discount_value) / 100)
       : Number(activeCoupon.discount_value);
   }
 
@@ -675,9 +722,12 @@ export default function Checkout() {
               title,
               base_price,
               category_id,
+              brand_id,
+              vendor_id,
               is_featured,
               images:product_images(id, url, alt_text, sort_order, is_primary),
-              variants:product_variants(id, sku, name, price_adjustment, inventory_count)
+              variants:product_variants(id, sku, name, price_adjustment, inventory_count),
+              product_tags:product_tags(tag_id)
             `)
             .eq('status', 'published')
             .eq('is_active', true)
@@ -698,9 +748,12 @@ export default function Checkout() {
               title,
               base_price,
               category_id,
+              brand_id,
+              vendor_id,
               is_featured,
               images:product_images(id, url, alt_text, sort_order, is_primary),
-              variants:product_variants(id, sku, name, price_adjustment, inventory_count)
+              variants:product_variants(id, sku, name, price_adjustment, inventory_count),
+              product_tags:product_tags(tag_id)
             `)
             .eq('status', 'published')
             .eq('is_active', true)
@@ -724,9 +777,12 @@ export default function Checkout() {
               title,
               base_price,
               category_id,
+              brand_id,
+              vendor_id,
               is_featured,
               images:product_images(id, url, alt_text, sort_order, is_primary),
-              variants:product_variants(id, sku, name, price_adjustment, inventory_count)
+              variants:product_variants(id, sku, name, price_adjustment, inventory_count),
+              product_tags:product_tags(tag_id)
             `)
             .eq('status', 'published')
             .eq('is_active', true)
@@ -763,7 +819,11 @@ export default function Checkout() {
       title: p.title,
       price: p.base_price + (variant.price_adjustment || 0),
       image: getProductImage(p),
-      variant_name: variant.name || ''
+      variant_name: variant.name || '',
+      category_id: p.category_id,
+      brand_id: p.brand_id,
+      vendor_id: p.vendor_id,
+      tag_ids: p.product_tags?.map((pt: any) => pt.tag_id) || []
     });
   };
 
@@ -1938,6 +1998,14 @@ export default function Checkout() {
               </div>
               <div className="border-t pt-4 space-y-2">
                 <div className="flex justify-between text-sm"><span className="text-slate-400">Subtotal</span><span className="font-bold">{formatCurrencyPrice(total)}</span></div>
+                {autoDiscountAmount > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[#f00856] flex items-center gap-1">
+                      <Tag className="w-3.5 h-3.5" /> Descuentos automáticos
+                    </span>
+                    <span className="font-bold text-[#f00856]">-{formatCurrencyPrice(autoDiscountAmount)}</span>
+                  </div>
+                )}
                  <div className="flex justify-between text-sm">
                   <span className="text-slate-400">
                     {selectedShippingMethod === 'dac_home' ? 'Envío DAC a domicilio' : selectedShippingMethod === 'dac_agency' ? (selectedAgency ? `Retiro en agencia - ${selectedAgency.office_name}` : 'Retiro en agencia DAC') : selectedShippingMethod === 'dac' ? 'Envío DAC al interior' : 'Envío'}

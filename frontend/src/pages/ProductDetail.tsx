@@ -138,6 +138,10 @@ export default function ProductDetail() {
       price: finalPrice,
       image: productImage,
       variant_name: selectedVariant.name,
+      category_id: product.category?.id,
+      brand_id: product.brand?.id,
+      vendor_id: product.vendor_id,
+      tag_ids: product.product_tags?.map((pt: any) => pt.tag_id) || [],
     });
 
     setAddedToCart(true);
