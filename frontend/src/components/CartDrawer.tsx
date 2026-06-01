@@ -227,7 +227,11 @@ export default function CartDrawer() {
 
               {/* Items Card List */}
               <div className="space-y-3.5">
-                {items.map(item => (
+                {items.map(item => {
+                  const itemDiscount = evaluateItemDiscount(item as any, promotions);
+                  const displayPrice = (item.price * item.quantity) - itemDiscount;
+
+                  return (
                   <div 
                     key={item.variant_id} 
                     className="glass border border-white/5 p-4 rounded-2xl flex gap-3.5 hover:border-white/10 transition-all group"
@@ -280,13 +284,20 @@ export default function CartDrawer() {
                         </div>
 
                         {/* Price */}
-                        <span className="text-sm font-black text-emerald-400">
-                          {formatCurrencyPrice(item.price * item.quantity)}
-                        </span>
+                        <div className="flex flex-col items-end">
+                          <span className="text-sm font-black text-emerald-400">
+                            {formatCurrencyPrice(displayPrice)}
+                          </span>
+                          {itemDiscount > 0 && (
+                            <span className="text-[10px] text-slate-500 line-through">
+                              {formatCurrencyPrice(item.price * item.quantity)}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
 
               {/* Interaction widgets */}

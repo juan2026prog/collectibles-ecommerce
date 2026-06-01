@@ -1942,7 +1942,11 @@ export default function Checkout() {
 
               <div className={`mt-6 lg:block ${isSummaryExpanded ? 'block animate-fade-in' : 'hidden'}`}>
                 <div className="space-y-3 mb-6">
-                {items.map((item) => (
+                {items.map((item) => {
+                  const itemDiscount = evaluateItemDiscount(item as any, promotions);
+                  const displayPrice = (item.price * item.quantity) - itemDiscount;
+
+                  return (
                   <div key={item.variant_id} className="flex items-center gap-2.5 p-2 rounded-xl bg-white/[0.02] border border-white/5 justify-between animate-fade-in">
                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
                       <img
@@ -1979,10 +1983,17 @@ export default function Checkout() {
                           <Plus className="w-2.5 h-2.5" />
                         </button>
                       </div>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex flex-col items-end gap-0.5">
                         <span className="text-xs font-bold text-white whitespace-nowrap">
-                          {formatCurrencyPrice(item.price * item.quantity)}
+                          {formatCurrencyPrice(displayPrice)}
                         </span>
+                        {itemDiscount > 0 && (
+                          <span className="text-[10px] text-slate-500 line-through whitespace-nowrap">
+                            {formatCurrencyPrice(item.price * item.quantity)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center">
                         <button
                           type="button"
                           onClick={() => removeItem(item.variant_id)}
@@ -1994,7 +2005,7 @@ export default function Checkout() {
                       </div>
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
               <div className="border-t pt-4 space-y-2">
                 <div className="flex justify-between text-sm"><span className="text-slate-400">Subtotal</span><span className="font-bold">{formatCurrencyPrice(total)}</span></div>
