@@ -4,6 +4,7 @@ import { ShoppingCart, Minus, Plus, Truck, ShieldCheck, Star, ChevronDown } from
 import { useProduct } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
+import { usePromotions, getApplicablePromotions } from '../hooks/usePromotions';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { ProductBadge } from '../components/ProductBadge';
 import { getProductImage, resolveImage, FALLBACK_IMAGE } from '../lib/imageUtils';
@@ -18,6 +19,7 @@ export default function ProductDetail() {
   const cart = useCartContext();
   const { user } = useAuth();
   const { formatCurrencyPrice } = useCurrency();
+  const { promotions } = usePromotions();
   
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -108,6 +110,14 @@ export default function ProductDetail() {
   const avgRating = reviews.length > 0 ? reviews.reduce((s: number, r: any) => s + r.rating, 0) / reviews.length : 0;
   const currentImage = images[selectedImage]?.url;
   const displayImage = currentImage ? resolveImage(currentImage) : productImage;
+
+  const applicablePromos = product ? getApplicablePromotions({
+    product_id: product.id,
+    category_id: product.category?.id,
+    brand_id: product.brand?.id,
+    vendor_id: product.vendor_id,
+    tag_ids: product.product_tags?.map((pt: any) => pt.tag_id) || []
+  }, promotions) : [];
 
   /** Commercial stock display: don't show exact count publicly */
   function getStockLabel(count: number): { text: string; className: string } {
@@ -263,6 +273,24 @@ export default function ProductDetail() {
         {/* INFO SECTION */}
         <section>
           <div className="label-tag">{settings['product_tag_label'] || 'Ficha de producto'}</div>
+          
+          {applicablePromos.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-3 mb-2">
+              {applicablePromos.map(promo => promo.badge_text && (
+                <span 
+                  key={promo.id}
+                  className="px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-md text-white shadow-lg shadow-black/20"
+                  style={{ 
+                    backgroundColor: promo.badge_bg || '#f00856', 
+                    color: promo.badge_color || '#ffffff' 
+                  }}
+                >
+                  {promo.badge_text}
+                </span>
+              ))}
+            </div>
+          )}
+
           <h1 className="text-4xl md:text-6xl font-black leading-[1.1] mt-3 tracking-tight text-white">
             {product.title}
           </h1>

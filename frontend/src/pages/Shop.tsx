@@ -2,6 +2,7 @@ import { Link, useSearchParams, useNavigate, useParams, useLocation } from 'reac
 import { useState, useEffect } from 'react';
 import { ChevronRight, ChevronLeft, SlidersHorizontal, X, Search } from 'lucide-react';
 import { useProducts, useCategories, useBrands, useFilterMappings, useProductGroupMetadata } from '../hooks/useData';
+import { usePromotions, getApplicablePromotions } from '../hooks/usePromotions';
 import { useCartContext } from '../contexts/CartContext';
 import { useLocale } from '../contexts/LocaleContext';
 import { useCurrency } from '../contexts/CurrencyContext';
@@ -62,6 +63,7 @@ export default function Shop() {
   
   const { group, loading: groupLoading } = useProductGroupMetadata(groupSlug);
   const cart = useCartContext();
+  const { promotions } = usePromotions();
   const { t } = useLocale();
   const { formatCurrencyPrice } = useCurrency();
   const navigate = useNavigate();
@@ -451,9 +453,25 @@ export default function Shop() {
               gridCols === 4 ? 'md:grid-cols-3 lg:grid-cols-4' :
               'md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
             }`}>
-              {products.map(p => (
-                <ProductGridCard key={p.id} product={p} onAddToCart={handleAddToCart} formatPrice={formatCurrencyPrice} />
-              ))}
+              {products.map(p => {
+                const applicablePromos = getApplicablePromotions({
+                  product_id: p.id,
+                  category_id: p.category_id,
+                  brand_id: p.brand_id,
+                  vendor_id: p.vendor_id,
+                  tag_ids: p.product_tags?.map((pt: any) => pt.tag_id) || []
+                }, promotions);
+                
+                return (
+                  <ProductGridCard 
+                    key={p.id} 
+                    product={p} 
+                    onAddToCart={handleAddToCart} 
+                    formatPrice={formatCurrencyPrice} 
+                    applicablePromos={applicablePromos} 
+                  />
+                );
+              })}
             </div>
           )}
 

@@ -198,3 +198,37 @@ export function evaluateItemDiscountDetailed(item: { product_id: string, categor
     nonStackableApplied
   };
 }
+
+export function getApplicablePromotions(item: { product_id: string, category_id?: string, brand_id?: string, vendor_id?: string, tag_ids?: string[] }, promotions: AutoPromo[]): AutoPromo[] {
+  const applicable: AutoPromo[] = [];
+  
+  for (const promo of promotions) {
+    let isExcluded = false;
+    for (const exc of promo.exclusions) {
+      if (exc.target_type === 'product' && exc.target_id === item.product_id) isExcluded = true;
+      if (exc.target_type === 'category' && item.category_id === exc.target_id) isExcluded = true;
+      if (exc.target_type === 'brand' && item.brand_id === exc.target_id) isExcluded = true;
+      if (exc.target_type === 'vendor' && item.vendor_id === exc.target_id) isExcluded = true;
+      if (exc.target_type === 'tag' && item.tag_ids?.includes(exc.target_id)) isExcluded = true;
+    }
+    if (isExcluded) continue;
+
+    let isIncluded = false;
+    if (promo.targets.length === 0) {
+      isIncluded = true;
+    } else {
+      for (const tgt of promo.targets) {
+        if (tgt.target_type === 'product' && tgt.target_id === item.product_id) isIncluded = true;
+        if (tgt.target_type === 'category' && item.category_id === tgt.target_id) isIncluded = true;
+        if (tgt.target_type === 'brand' && item.brand_id === tgt.target_id) isIncluded = true;
+        if (tgt.target_type === 'vendor' && item.vendor_id === tgt.target_id) isIncluded = true;
+        if (tgt.target_type === 'tag' && item.tag_ids?.includes(tgt.target_id)) isIncluded = true;
+      }
+    }
+    if (!isIncluded) continue;
+
+    applicable.push(promo);
+  }
+  
+  return applicable;
+}

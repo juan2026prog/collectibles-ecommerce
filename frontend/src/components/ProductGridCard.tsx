@@ -7,13 +7,14 @@ interface ProductGridCardProps {
   product: any;
   onAddToCart: (product: any) => void;
   formatPrice: (price: number) => string;
+  applicablePromos?: any[];
 }
 
 /**
  * COMPONENTE ÚNICO DE PRODUCTO PARA TODO EL MARKETPLACE
  * Estilo Catálogo Premium: Imagen blanca + info limpia debajo.
  */
-export function ProductGridCard({ product, onAddToCart, formatPrice }: ProductGridCardProps) {
+export function ProductGridCard({ product, onAddToCart, formatPrice, applicablePromos = [] }: ProductGridCardProps) {
   const img = getProductImage(product);
   const finalPrice = product.base_price + (product.variants?.[0]?.price_adjustment || 0);
   const hasDiscount = product.compare_at_price > product.base_price;
@@ -38,6 +39,19 @@ export function ProductGridCard({ product, onAddToCart, formatPrice }: ProductGr
              compareAtPrice={product.compare_at_price}
              basePrice={product.base_price}
            />
+           {applicablePromos.map(promo => promo.badge_text && (
+             <div key={promo.id} className="mt-1 flex justify-end">
+               <span 
+                 className="px-2 py-1 text-[9px] font-black uppercase tracking-wider rounded-md text-white shadow-lg shadow-black/20"
+                 style={{ 
+                   backgroundColor: promo.badge_bg || '#f00856', 
+                   color: promo.badge_color || '#ffffff' 
+                 }}
+               >
+                 {promo.badge_text}
+               </span>
+             </div>
+           ))}
         </div>
 
         {/* CTA COMPACTO */}
