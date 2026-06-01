@@ -4,7 +4,7 @@ import { ShoppingCart, Minus, Plus, Truck, ShieldCheck, Star, ChevronDown } from
 import { useProduct } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
-import { usePromotions, getApplicablePromotions } from '../hooks/usePromotions';
+import { usePromotions, getApplicablePromotions, evaluateItemDiscountDetailed } from '../hooks/usePromotions';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { ProductBadge } from '../components/ProductBadge';
 import { getProductImage, resolveImage, FALLBACK_IMAGE } from '../lib/imageUtils';
@@ -118,6 +118,25 @@ export default function ProductDetail() {
     vendor_id: product.vendor_id,
     tag_ids: product.product_tags?.map((pt: any) => pt.tag_id) || []
   }, promotions) : [];
+
+  let promoDiscount = 0;
+  if (applicablePromos.length > 0 && product) {
+    const item = {
+      product_id: product.id,
+      category_id: product.category?.id,
+      brand_id: product.brand?.id,
+      vendor_id: product.vendor_id,
+      tag_ids: product.product_tags?.map((pt: any) => pt.tag_id) || [],
+      price: finalPrice,
+      quantity: 1
+    };
+    const result = evaluateItemDiscountDetailed(item, applicablePromos);
+    promoDiscount = result.discount;
+  }
+
+  const displayPrice = finalPrice - promoDiscount;
+  const hasDiscount = (product?.compare_at_price || 0) > product?.base_price || promoDiscount > 0;
+  const displayOldPrice = promoDiscount > 0 ? finalPrice : product?.compare_at_price;
 
   /** Commercial stock display: don't show exact count publicly */
   function getStockLabel(count: number): { text: string; className: string } {
@@ -338,8 +357,13 @@ export default function ProductDetail() {
             <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
               <div>
                 <div className="text-[10px] uppercase text-slate-500 font-black tracking-[0.2em] mb-1">Precio actual</div>
-                <div className="text-4xl sm:text-5xl font-black text-white flex items-start gap-1">
-                  {formatCurrencyPrice(finalPrice)}
+                <div className="text-4xl sm:text-5xl font-black text-white flex items-end gap-3 flex-wrap">
+                  <span>{formatCurrencyPrice(displayPrice)}</span>
+                  {hasDiscount && (
+                    <span className="text-xl sm:text-2xl text-slate-500 line-through font-bold mb-1">
+                      {formatCurrencyPrice(displayOldPrice)}
+                    </span>
+                  )}
                 </div>
                 <div className="text-sm text-slate-400 mt-2 flex items-center gap-2 font-medium">
                    <Truck className="w-4 h-4 text-[#f00856]" /> {settings['product_shipping_calc_label'] || 'Envío calculado al finalizar'}

@@ -2,6 +2,7 @@ import { Star, ShoppingCart } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ProductBadge } from './ProductBadge';
 import { getProductImage } from '../lib/imageUtils';
+import { evaluateItemDiscountDetailed } from '../hooks/usePromotions';
 
 interface ProductGridCardProps {
   product: any;
@@ -17,7 +18,26 @@ interface ProductGridCardProps {
 export function ProductGridCard({ product, onAddToCart, formatPrice, applicablePromos = [] }: ProductGridCardProps) {
   const img = getProductImage(product);
   const finalPrice = product.base_price + (product.variants?.[0]?.price_adjustment || 0);
-  const hasDiscount = product.compare_at_price > product.base_price;
+  
+  let promoDiscount = 0;
+  if (applicablePromos && applicablePromos.length > 0) {
+    const item = {
+      product_id: product.id,
+      category_id: product.category_id,
+      brand_id: product.brand_id,
+      vendor_id: product.vendor_id,
+      tag_ids: product.product_tags?.map((pt: any) => pt.tag_id) || [],
+      price: finalPrice,
+      quantity: 1
+    };
+    const result = evaluateItemDiscountDetailed(item, applicablePromos);
+    promoDiscount = result.discount;
+  }
+
+  const displayPrice = finalPrice - promoDiscount;
+  const hasDiscount = product.compare_at_price > product.base_price || promoDiscount > 0;
+  const displayOldPrice = promoDiscount > 0 ? finalPrice : product.compare_at_price;
+  
   const reviewsCount = product.reviews?.length || 0;
 
   return (
@@ -88,11 +108,11 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
         
         <div className="mt-2 flex flex-wrap items-baseline gap-2">
           <span className="text-[#f00856] font-black text-base md:text-lg leading-none">
-            {formatPrice(finalPrice)}
+            {formatPrice(displayPrice)}
           </span>
           {hasDiscount && (
             <span className="text-[10px] text-slate-500 line-through leading-none">
-              {formatPrice(product.compare_at_price)}
+              {formatPrice(displayOldPrice)}
             </span>
           )}
         </div>
