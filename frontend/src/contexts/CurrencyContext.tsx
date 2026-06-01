@@ -105,15 +105,15 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
     
     switch (selectedCurrency) {
       case 'UYU':
-        return `$ ${formattedNumber}`;
+        return `$${'\u00A0'}${formattedNumber}`;
       case 'USD':
-        return `USD ${formattedNumber}`;
+        return `USD${'\u00A0'}${formattedNumber}`;
       case 'ARS':
-        return `ARS ${formattedNumber}`;
+        return `ARS${'\u00A0'}${formattedNumber}`;
       case 'BRL':
-        return `BRL ${formattedNumber}`;
+        return `BRL${'\u00A0'}${formattedNumber}`;
       default:
-        return `$ ${formattedNumber}`;
+        return `$${'\u00A0'}${formattedNumber}`;
     }
   }, [convertFromUYU, selectedCurrency]);
 
