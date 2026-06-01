@@ -2008,13 +2008,11 @@ export default function Checkout() {
                 )})}
               </div>
               <div className="border-t pt-4 space-y-2">
-                <div className="flex justify-between text-sm"><span className="text-slate-400">Subtotal</span><span className="font-bold">{formatCurrencyPrice(total)}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-slate-400">Subtotal ({items.reduce((s, i) => s + i.quantity, 0)} {items.reduce((s, i) => s + i.quantity, 0) === 1 ? 'item' : 'items'})</span><span className="font-bold">{formatCurrencyPrice(total - autoDiscountAmount)}</span></div>
                 {autoDiscountAmount > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-[#f00856] flex items-center gap-1">
-                      <Tag className="w-3.5 h-3.5" /> Descuentos automáticos
-                    </span>
-                    <span className="font-bold text-[#f00856]">-{formatCurrencyPrice(autoDiscountAmount)}</span>
+                  <div className="flex justify-between items-center text-emerald-400 text-xs mt-1">
+                    <span className="flex items-center gap-1"><Tag className="w-3.5 h-3.5" /> Ahorro en promociones</span>
+                    <span className="font-bold">{formatCurrencyPrice(autoDiscountAmount)}</span>
                   </div>
                 )}
                  <div className="flex justify-between text-sm">

@@ -369,15 +369,15 @@ export default function CartDrawer() {
           <div className="p-5 border-t border-white/10 bg-[#0e1424]">
             <div className="space-y-2.5 mb-5 text-sm">
               <div className="flex justify-between items-center text-slate-400">
-                <span>Subtotal</span>
-                <span className="font-bold text-white">{formatCurrencyPrice(total)}</span>
+                <span>Subtotal ({count} {count === 1 ? 'item' : 'items'})</span>
+                <span className="font-bold text-white">{formatCurrencyPrice(total - autoDiscountAmount)}</span>
               </div>
-              {autoDiscountAmount > 0 && (
-                <div className="flex justify-between items-center text-[#f00856]">
-                  <span className="flex items-center gap-1"><Tag className="w-3.5 h-3.5" /> Descuentos automáticos</span>
-                  <span className="font-bold">-{formatCurrencyPrice(autoDiscountAmount)}</span>
-                </div>
-              )}
+                {autoDiscountAmount > 0 && (
+                  <div className="flex justify-between items-center text-emerald-400 text-xs mt-1">
+                    <span className="flex items-center gap-1"><Tag className="w-3.5 h-3.5" /> Ahorro en promociones</span>
+                    <span className="font-bold">{formatCurrencyPrice(autoDiscountAmount)}</span>
+                  </div>
+                )}
               <div className="flex justify-between items-center text-slate-400">
                 <span>Envío estimado</span>
                 <span className="font-bold text-white">
