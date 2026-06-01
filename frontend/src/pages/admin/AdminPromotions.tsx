@@ -70,6 +70,33 @@ const emptyPromo: Promo = {
   tiers: []
 };
 
+const MultiSelectCheckbox = ({ title, items, selectedIds, onChange, className = '' }: any) => {
+  return (
+    <div className={className}>
+      <label className="block text-xs font-bold text-gray-600 mb-1">{title}</label>
+      <div className="border border-gray-200 rounded-lg max-h-32 overflow-y-auto p-2 bg-white space-y-1">
+        {items.map((item: any) => (
+          <label key={item.id} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-gray-50 p-1 rounded">
+            <input 
+              type="checkbox" 
+              className="w-3.5 h-3.5 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
+              checked={selectedIds.includes(item.id)}
+              onChange={(e) => {
+                const newIds = e.target.checked
+                  ? [...selectedIds, item.id]
+                  : selectedIds.filter((id: string) => id !== item.id);
+                onChange(newIds);
+              }}
+            />
+            <span className="truncate">{item.name}</span>
+          </label>
+        ))}
+        {items.length === 0 && <span className="text-xs text-gray-400 italic">No hay opciones disponibles</span>}
+      </div>
+    </div>
+  );
+};
+
 export default function AdminPromotions() {
   const [promos, setPromos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -486,36 +513,11 @@ export default function AdminPromotions() {
               <h4 className="text-sm font-bold text-green-800 mb-3">✅ Aplica a (Inclusiones)</h4>
               <p className="text-xs text-green-600 mb-3">Si dejas vacío, aplica a TODO el catálogo.</p>
               <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">Marcas</label>
-                  <select multiple className="form-input w-full h-24 text-sm" value={editing.inclusions_brand_ids} onChange={e => setEditing({ ...editing, inclusions_brand_ids: Array.from(e.target.selectedOptions, option => option.value) })}>
-                    {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">Categorías</label>
-                  <select multiple className="form-input w-full h-24 text-sm" value={editing.inclusions_category_ids} onChange={e => setEditing({ ...editing, inclusions_category_ids: Array.from(e.target.selectedOptions, option => option.value) })}>
-                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">Vendors (Tiendas)</label>
-                  <select multiple className="form-input w-full h-24 text-sm" value={editing.inclusions_vendor_ids} onChange={e => setEditing({ ...editing, inclusions_vendor_ids: Array.from(e.target.selectedOptions, option => option.value) })}>
-                    {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">Tags (Etiquetas)</label>
-                  <select multiple className="form-input w-full h-24 text-sm" value={editing.inclusions_tag_ids} onChange={e => setEditing({ ...editing, inclusions_tag_ids: Array.from(e.target.selectedOptions, option => option.value) })}>
-                    {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">Grupos de Productos</label>
-                  <select multiple className="form-input w-full h-24 text-sm" value={editing.inclusions_group_ids} onChange={e => setEditing({ ...editing, inclusions_group_ids: Array.from(e.target.selectedOptions, option => option.value) })}>
-                    {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                  </select>
-                </div>
+                <MultiSelectCheckbox title="Marcas" items={brands} selectedIds={editing.inclusions_brand_ids} onChange={(ids: string[]) => setEditing({ ...editing, inclusions_brand_ids: ids })} />
+                <MultiSelectCheckbox title="Categorías" items={categories} selectedIds={editing.inclusions_category_ids} onChange={(ids: string[]) => setEditing({ ...editing, inclusions_category_ids: ids })} />
+                <MultiSelectCheckbox title="Vendors (Tiendas)" items={vendors} selectedIds={editing.inclusions_vendor_ids} onChange={(ids: string[]) => setEditing({ ...editing, inclusions_vendor_ids: ids })} />
+                <MultiSelectCheckbox title="Tags (Etiquetas)" items={tags} selectedIds={editing.inclusions_tag_ids} onChange={(ids: string[]) => setEditing({ ...editing, inclusions_tag_ids: ids })} />
+                <MultiSelectCheckbox title="Grupos de Productos" items={groups} selectedIds={editing.inclusions_group_ids} onChange={(ids: string[]) => setEditing({ ...editing, inclusions_group_ids: ids })} />
                 <div>
                   <label className="block text-xs font-bold text-gray-600 mb-1">IDs de Productos específicos (separados por coma)</label>
                   <textarea className="form-input w-full text-xs" rows={2} value={editing.inclusions_product_ids} onChange={e => setEditing({ ...editing, inclusions_product_ids: e.target.value })} placeholder="uuid-1, uuid-2..."></textarea>
@@ -527,36 +529,11 @@ export default function AdminPromotions() {
               <h4 className="text-sm font-bold text-red-800 mb-3">❌ NO aplica a (Exclusiones)</h4>
               <p className="text-xs text-red-600 mb-3">Prioridad sobre las inclusiones.</p>
               <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">Excluir Marcas</label>
-                  <select multiple className="form-input w-full h-24 text-sm" value={editing.exclusions_brand_ids} onChange={e => setEditing({ ...editing, exclusions_brand_ids: Array.from(e.target.selectedOptions, option => option.value) })}>
-                    {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">Excluir Categorías</label>
-                  <select multiple className="form-input w-full h-24 text-sm" value={editing.exclusions_category_ids} onChange={e => setEditing({ ...editing, exclusions_category_ids: Array.from(e.target.selectedOptions, option => option.value) })}>
-                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">Excluir Vendors (Tiendas)</label>
-                  <select multiple className="form-input w-full h-24 text-sm" value={editing.exclusions_vendor_ids} onChange={e => setEditing({ ...editing, exclusions_vendor_ids: Array.from(e.target.selectedOptions, option => option.value) })}>
-                    {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">Excluir Tags (Etiquetas)</label>
-                  <select multiple className="form-input w-full h-24 text-sm" value={editing.exclusions_tag_ids} onChange={e => setEditing({ ...editing, exclusions_tag_ids: Array.from(e.target.selectedOptions, option => option.value) })}>
-                    {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">Excluir Grupos de Productos</label>
-                  <select multiple className="form-input w-full h-24 text-sm" value={editing.exclusions_group_ids} onChange={e => setEditing({ ...editing, exclusions_group_ids: Array.from(e.target.selectedOptions, option => option.value) })}>
-                    {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                  </select>
-                </div>
+                <MultiSelectCheckbox title="Excluir Marcas" items={brands} selectedIds={editing.exclusions_brand_ids} onChange={(ids: string[]) => setEditing({ ...editing, exclusions_brand_ids: ids })} />
+                <MultiSelectCheckbox title="Excluir Categorías" items={categories} selectedIds={editing.exclusions_category_ids} onChange={(ids: string[]) => setEditing({ ...editing, exclusions_category_ids: ids })} />
+                <MultiSelectCheckbox title="Excluir Vendors (Tiendas)" items={vendors} selectedIds={editing.exclusions_vendor_ids} onChange={(ids: string[]) => setEditing({ ...editing, exclusions_vendor_ids: ids })} />
+                <MultiSelectCheckbox title="Excluir Tags (Etiquetas)" items={tags} selectedIds={editing.exclusions_tag_ids} onChange={(ids: string[]) => setEditing({ ...editing, exclusions_tag_ids: ids })} />
+                <MultiSelectCheckbox title="Excluir Grupos de Productos" items={groups} selectedIds={editing.exclusions_group_ids} onChange={(ids: string[]) => setEditing({ ...editing, exclusions_group_ids: ids })} />
                 <div>
                   <label className="block text-xs font-bold text-gray-600 mb-1">Excluir IDs de Productos específicos</label>
                   <textarea className="form-input w-full text-xs" rows={2} value={editing.exclusions_product_ids} onChange={e => setEditing({ ...editing, exclusions_product_ids: e.target.value })} placeholder="uuid-1, uuid-2..."></textarea>
