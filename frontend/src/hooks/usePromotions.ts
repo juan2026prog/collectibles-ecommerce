@@ -47,12 +47,32 @@ export function usePromotions() {
           supabase.from('promotion_tiers').select('*').in('promotion_id', promoIds)
         ]);
 
-        const fullPromos = promos.map(p => ({
-          ...p,
-          targets: (targets || []).filter(t => t.promotion_id === p.id),
-          exclusions: (exclusions || []).filter(e => e.promotion_id === p.id),
-          tiers: (tiers || []).filter(t => t.promotion_id === p.id).sort((a,b) => b.min_quantity - a.min_quantity),
-        }));
+        const groupIds = new Set<string>();
+        (targets || []).filter(t => t.target_type === 'group').forEach(t => groupIds.add(t.target_id));
+        (exclusions || []).filter(e => e.target_type === 'group').forEach(e => groupIds.add(e.target_id));
+
+        let groupItems: any[] = [];
+        if (groupIds.size > 0) {
+          const { data } = await supabase.from('product_group_items').select('product_group_id, product_id').in('product_group_id', Array.from(groupIds));
+          groupItems = data || [];
+        }
+
+        const fullPromos = promos.map(p => {
+          const pTargets = (targets || []).filter(t => t.promotion_id === p.id).map(t => ({
+            ...t,
+            group_product_ids: t.target_type === 'group' ? groupItems.filter(gi => gi.product_group_id === t.target_id).map(gi => gi.product_id) : []
+          }));
+          const pExclusions = (exclusions || []).filter(e => e.promotion_id === p.id).map(e => ({
+            ...e,
+            group_product_ids: e.target_type === 'group' ? groupItems.filter(gi => gi.product_group_id === e.target_id).map(gi => gi.product_id) : []
+          }));
+          return {
+            ...p,
+            targets: pTargets,
+            exclusions: pExclusions,
+            tiers: (tiers || []).filter(t => t.promotion_id === p.id).sort((a,b) => b.min_quantity - a.min_quantity),
+          };
+        });
 
         setPromotions(fullPromos);
       } catch (e) {
@@ -77,6 +97,7 @@ export function evaluateItemDiscount(item: { product_id: string, category_id?: s
       if (exc.target_type === 'brand' && item.brand_id === exc.target_id) isExcluded = true;
       if (exc.target_type === 'vendor' && item.vendor_id === exc.target_id) isExcluded = true;
       if (exc.target_type === 'tag' && item.tag_ids?.includes(exc.target_id)) isExcluded = true;
+      if (exc.target_type === 'group' && exc.group_product_ids?.includes(item.product_id)) isExcluded = true;
     }
     if (isExcluded) continue;
 
@@ -90,6 +111,7 @@ export function evaluateItemDiscount(item: { product_id: string, category_id?: s
         if (tgt.target_type === 'brand' && item.brand_id === tgt.target_id) isIncluded = true;
         if (tgt.target_type === 'vendor' && item.vendor_id === tgt.target_id) isIncluded = true;
         if (tgt.target_type === 'tag' && item.tag_ids?.includes(tgt.target_id)) isIncluded = true;
+        if (tgt.target_type === 'group' && tgt.group_product_ids?.includes(item.product_id)) isIncluded = true;
       }
     }
     if (!isIncluded) continue;
@@ -141,6 +163,7 @@ export function evaluateItemDiscountDetailed(item: { product_id: string, categor
       if (exc.target_type === 'brand' && item.brand_id === exc.target_id) isExcluded = true;
       if (exc.target_type === 'vendor' && item.vendor_id === exc.target_id) isExcluded = true;
       if (exc.target_type === 'tag' && item.tag_ids?.includes(exc.target_id)) isExcluded = true;
+      if (exc.target_type === 'group' && exc.group_product_ids?.includes(item.product_id)) isExcluded = true;
     }
     if (isExcluded) continue;
 
@@ -154,6 +177,7 @@ export function evaluateItemDiscountDetailed(item: { product_id: string, categor
         if (tgt.target_type === 'brand' && item.brand_id === tgt.target_id) isIncluded = true;
         if (tgt.target_type === 'vendor' && item.vendor_id === tgt.target_id) isIncluded = true;
         if (tgt.target_type === 'tag' && item.tag_ids?.includes(tgt.target_id)) isIncluded = true;
+        if (tgt.target_type === 'group' && tgt.group_product_ids?.includes(item.product_id)) isIncluded = true;
       }
     }
     if (!isIncluded) continue;

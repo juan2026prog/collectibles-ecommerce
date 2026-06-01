@@ -47,11 +47,13 @@ interface Promo {
   // Nuevos campos para Phase 2
   inclusions_brand_ids: string[];
   inclusions_category_ids: string[];
+  inclusions_group_ids: string[];
   inclusions_product_ids: string;
   inclusions_vendor_ids: string[];
   inclusions_tag_ids: string[];
   exclusions_brand_ids: string[];
   exclusions_category_ids: string[];
+  exclusions_group_ids: string[];
   exclusions_product_ids: string;
   exclusions_vendor_ids: string[];
   exclusions_tag_ids: string[];
@@ -63,8 +65,8 @@ const emptyPromo: Promo = {
   min_quantity: null, is_stackable: false, is_active: true, starts_at: '', ends_at: '',
   bank_name: '', card_bins: [], min_purchase: 0, max_discount: 0, promo_label: '',
   priority: 0, badge_text: '', badge_color: '#ffffff', badge_bg: '#E31937',
-  inclusions_brand_ids: [], inclusions_category_ids: [], inclusions_product_ids: '', inclusions_vendor_ids: [], inclusions_tag_ids: [],
-  exclusions_brand_ids: [], exclusions_category_ids: [], exclusions_product_ids: '', exclusions_vendor_ids: [], exclusions_tag_ids: [],
+  inclusions_brand_ids: [], inclusions_category_ids: [], inclusions_group_ids: [], inclusions_product_ids: '', inclusions_vendor_ids: [], inclusions_tag_ids: [],
+  exclusions_brand_ids: [], exclusions_category_ids: [], exclusions_group_ids: [], exclusions_product_ids: '', exclusions_vendor_ids: [], exclusions_tag_ids: [],
   tiers: []
 };
 
@@ -79,6 +81,7 @@ export default function AdminPromotions() {
   const [categories, setCategories] = useState<any[]>([]);
   const [vendors, setVendors] = useState<any[]>([]);
   const [tags, setTags] = useState<any[]>([]);
+  const [groups, setGroups] = useState<any[]>([]);
 
   useEffect(() => { 
     fetchPromos();
@@ -87,16 +90,18 @@ export default function AdminPromotions() {
 
   async function fetchMetadata() {
     try {
-      const [{ data: b }, { data: c }, { data: v }, { data: t }] = await Promise.all([
+      const [{ data: b }, { data: c }, { data: v }, { data: t }, { data: g }] = await Promise.all([
         supabase.from('brands').select('id, name'),
         supabase.from('categories').select('id, name'),
         supabase.from('vendors').select('id, name'),
-        supabase.from('tags').select('id, name')
+        supabase.from('tags').select('id, name'),
+        supabase.from('product_groups').select('id, name')
       ]);
       setBrands(b || []);
       setCategories(c || []);
       setVendors(v || []);
       setTags(t || []);
+      setGroups(g || []);
     } catch(e) {
       console.warn("Could not fetch metadata", e);
     }
@@ -105,7 +110,40 @@ export default function AdminPromotions() {
   async function fetchPromos() {
     setLoading(true);
     const { data } = await supabase.from('promotions').select('*').order('created_at', { ascending: false });
-    setPromos(data || []);
+    
+    if (data && data.length > 0) {
+      const promoIds = data.map(p => p.id);
+      const [{ data: targets }, { data: exclusions }, { data: tiers }] = await Promise.all([
+        supabase.from('promotion_targets').select('*').in('promotion_id', promoIds),
+        supabase.from('promotion_exclusions').select('*').in('promotion_id', promoIds),
+        supabase.from('promotion_tiers').select('*').in('promotion_id', promoIds)
+      ]);
+
+      const fullPromos = data.map(p => {
+        const pTargets = (targets || []).filter(t => t.promotion_id === p.id);
+        const pExclusions = (exclusions || []).filter(e => e.promotion_id === p.id);
+        const pTiers = (tiers || []).filter(t => t.promotion_id === p.id).sort((a,b) => b.min_quantity - a.min_quantity);
+        return {
+          ...p,
+          inclusions_brand_ids: pTargets.filter(t => t.target_type === 'brand').map(t => t.target_id),
+          inclusions_category_ids: pTargets.filter(t => t.target_type === 'category').map(t => t.target_id),
+          inclusions_vendor_ids: pTargets.filter(t => t.target_type === 'vendor').map(t => t.target_id),
+          inclusions_tag_ids: pTargets.filter(t => t.target_type === 'tag').map(t => t.target_id),
+          inclusions_group_ids: pTargets.filter(t => t.target_type === 'group').map(t => t.target_id),
+          inclusions_product_ids: pTargets.filter(t => t.target_type === 'product').map(t => t.target_id).join(', '),
+          exclusions_brand_ids: pExclusions.filter(t => t.target_type === 'brand').map(t => t.target_id),
+          exclusions_category_ids: pExclusions.filter(t => t.target_type === 'category').map(t => t.target_id),
+          exclusions_vendor_ids: pExclusions.filter(t => t.target_type === 'vendor').map(t => t.target_id),
+          exclusions_tag_ids: pExclusions.filter(t => t.target_type === 'tag').map(t => t.target_id),
+          exclusions_group_ids: pExclusions.filter(t => t.target_type === 'group').map(t => t.target_id),
+          exclusions_product_ids: pExclusions.filter(t => t.target_type === 'product').map(t => t.target_id).join(', '),
+          tiers: pTiers
+        };
+      });
+      setPromos(fullPromos);
+    } else {
+      setPromos([]);
+    }
     setLoading(false);
   }
 
@@ -170,6 +208,7 @@ export default function AdminPromotions() {
           editing.inclusions_category_ids.forEach(id => targets.push({ promotion_id: promoId, target_type: 'category', target_id: id }));
           editing.inclusions_vendor_ids.forEach(id => targets.push({ promotion_id: promoId, target_type: 'vendor', target_id: id }));
           editing.inclusions_tag_ids.forEach(id => targets.push({ promotion_id: promoId, target_type: 'tag', target_id: id }));
+          editing.inclusions_group_ids.forEach(id => targets.push({ promotion_id: promoId, target_type: 'group', target_id: id }));
           if (editing.inclusions_product_ids) {
             editing.inclusions_product_ids.split(',').map(s=>s.trim()).filter(Boolean).forEach(id => targets.push({ promotion_id: promoId, target_type: 'product', target_id: id }));
           }
@@ -179,6 +218,7 @@ export default function AdminPromotions() {
           editing.exclusions_category_ids.forEach(id => exclusions.push({ promotion_id: promoId, target_type: 'category', target_id: id }));
           editing.exclusions_vendor_ids.forEach(id => exclusions.push({ promotion_id: promoId, target_type: 'vendor', target_id: id }));
           editing.exclusions_tag_ids.forEach(id => exclusions.push({ promotion_id: promoId, target_type: 'tag', target_id: id }));
+          editing.exclusions_group_ids.forEach(id => exclusions.push({ promotion_id: promoId, target_type: 'group', target_id: id }));
           if (editing.exclusions_product_ids) {
             editing.exclusions_product_ids.split(',').map(s=>s.trim()).filter(Boolean).forEach(id => exclusions.push({ promotion_id: promoId, target_type: 'product', target_id: id }));
           }
@@ -471,6 +511,12 @@ export default function AdminPromotions() {
                   </select>
                 </div>
                 <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1">Grupos de Productos</label>
+                  <select multiple className="form-input w-full h-24 text-sm" value={editing.inclusions_group_ids} onChange={e => setEditing({ ...editing, inclusions_group_ids: Array.from(e.target.selectedOptions, option => option.value) })}>
+                    {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                  </select>
+                </div>
+                <div>
                   <label className="block text-xs font-bold text-gray-600 mb-1">IDs de Productos específicos (separados por coma)</label>
                   <textarea className="form-input w-full text-xs" rows={2} value={editing.inclusions_product_ids} onChange={e => setEditing({ ...editing, inclusions_product_ids: e.target.value })} placeholder="uuid-1, uuid-2..."></textarea>
                 </div>
@@ -503,6 +549,12 @@ export default function AdminPromotions() {
                   <label className="block text-xs font-bold text-gray-600 mb-1">Excluir Tags (Etiquetas)</label>
                   <select multiple className="form-input w-full h-24 text-sm" value={editing.exclusions_tag_ids} onChange={e => setEditing({ ...editing, exclusions_tag_ids: Array.from(e.target.selectedOptions, option => option.value) })}>
                     {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 mb-1">Excluir Grupos de Productos</label>
+                  <select multiple className="form-input w-full h-24 text-sm" value={editing.exclusions_group_ids} onChange={e => setEditing({ ...editing, exclusions_group_ids: Array.from(e.target.selectedOptions, option => option.value) })}>
+                    {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                   </select>
                 </div>
                 <div>

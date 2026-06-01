@@ -393,6 +393,16 @@ Deno.serve(async (req) => {
         const { data: allExclusions } = await supabase.from("promotion_exclusions").select("*").in("promotion_id", promoIds);
         const { data: allTiers } = await supabase.from("promotion_tiers").select("*").in("promotion_id", promoIds);
 
+        const groupIds = new Set<string>();
+        (allTargets || []).filter((t: any) => t.target_type === 'group').forEach((t: any) => groupIds.add(t.target_id));
+        (allExclusions || []).filter((e: any) => e.target_type === 'group').forEach((e: any) => groupIds.add(e.target_id));
+
+        let groupItems: any[] = [];
+        if (groupIds.size > 0) {
+          const { data } = await supabase.from('product_group_items').select('product_group_id, product_id').in('product_group_id', Array.from(groupIds));
+          groupItems = data || [];
+        }
+
         for (const item of verifiedItems) {
           const product = products?.find(p => p.id === item.product_id);
           if (!product) continue;
@@ -409,6 +419,7 @@ Deno.serve(async (req) => {
               if (exc.target_type === 'brand' && product.brand_id === exc.target_id) isExcluded = true;
               if (exc.target_type === 'vendor' && product.vendor_id === exc.target_id) isExcluded = true;
               if (exc.target_type === 'tag' && product.product_tags?.some((pt: any) => pt.tag_id === exc.target_id)) isExcluded = true;
+              if (exc.target_type === 'group' && groupItems.some(gi => gi.product_group_id === exc.target_id && gi.product_id === item.product_id)) isExcluded = true;
             }
             if (isExcluded) continue;
 
@@ -424,6 +435,7 @@ Deno.serve(async (req) => {
                 if (tgt.target_type === 'brand' && product.brand_id === tgt.target_id) isIncluded = true;
                 if (tgt.target_type === 'vendor' && product.vendor_id === tgt.target_id) isIncluded = true;
                 if (tgt.target_type === 'tag' && product.product_tags?.some((pt: any) => pt.tag_id === tgt.target_id)) isIncluded = true;
+                if (tgt.target_type === 'group' && groupItems.some(gi => gi.product_group_id === tgt.target_id && gi.product_id === item.product_id)) isIncluded = true;
               }
             }
             if (!isIncluded) continue;
