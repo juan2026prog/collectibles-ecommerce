@@ -53,18 +53,18 @@ export function usePromotions() {
 
         let groupItems: any[] = [];
         if (groupIds.size > 0) {
-          const { data } = await supabase.from('product_group_items').select('product_group_id, product_id').in('product_group_id', Array.from(groupIds));
+          const { data } = await supabase.from('product_group_items').select('group_id, product_id').in('group_id', Array.from(groupIds));
           groupItems = data || [];
         }
 
         const fullPromos = promos.map(p => {
           const pTargets = (targets || []).filter(t => t.promotion_id === p.id).map(t => ({
             ...t,
-            group_product_ids: t.target_type === 'group' ? groupItems.filter(gi => gi.product_group_id === t.target_id).map(gi => gi.product_id) : []
+            group_product_ids: t.target_type === 'group' ? groupItems.filter(gi => gi.group_id === t.target_id).map(gi => gi.product_id) : []
           }));
           const pExclusions = (exclusions || []).filter(e => e.promotion_id === p.id).map(e => ({
             ...e,
-            group_product_ids: e.target_type === 'group' ? groupItems.filter(gi => gi.product_group_id === e.target_id).map(gi => gi.product_id) : []
+            group_product_ids: e.target_type === 'group' ? groupItems.filter(gi => gi.group_id === e.target_id).map(gi => gi.product_id) : []
           }));
           return {
             ...p,
