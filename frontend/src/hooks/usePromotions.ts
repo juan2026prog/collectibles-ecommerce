@@ -234,6 +234,7 @@ export function getApplicablePromotions(item: { product_id: string, category_id?
       if (exc.target_type === 'brand' && item.brand_id === exc.target_id) isExcluded = true;
       if (exc.target_type === 'vendor' && item.vendor_id === exc.target_id) isExcluded = true;
       if (exc.target_type === 'tag' && item.tag_ids?.includes(exc.target_id)) isExcluded = true;
+      if (exc.target_type === 'group' && exc.group_product_ids?.includes(item.product_id)) isExcluded = true;
     }
     if (isExcluded) continue;
 
@@ -247,6 +248,7 @@ export function getApplicablePromotions(item: { product_id: string, category_id?
         if (tgt.target_type === 'brand' && item.brand_id === tgt.target_id) isIncluded = true;
         if (tgt.target_type === 'vendor' && item.vendor_id === tgt.target_id) isIncluded = true;
         if (tgt.target_type === 'tag' && item.tag_ids?.includes(tgt.target_id)) isIncluded = true;
+        if (tgt.target_type === 'group' && tgt.group_product_ids?.includes(item.product_id)) isIncluded = true;
       }
     }
     if (!isIncluded) continue;
