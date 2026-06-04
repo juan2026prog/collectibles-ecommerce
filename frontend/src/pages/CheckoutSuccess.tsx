@@ -88,7 +88,8 @@ export default function CheckoutSuccess() {
       })),
       content_ids: items.map((item) => item.product_id),
       num_items: items.reduce((sum, item) => sum + item.quantity, 0),
-      order_id: orderId
+      order_id: orderId,
+      user_email: order?.customer_email || undefined
     });
 
     clearCart();

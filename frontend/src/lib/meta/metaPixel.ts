@@ -68,6 +68,7 @@ export function initPixel() {
 export function generateMetaEventId(eventName: string, entityId?: string): string {
   const prefix = `meta_${eventName.toLowerCase()}`;
   if (entityId) {
+    if (eventName === 'Purchase') return `${prefix}_${entityId}`;
     return `${prefix}_${entityId}_${Math.random().toString(36).slice(2, 7)}`;
   }
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -203,11 +204,18 @@ export function trackPurchase(
     content_ids: string[];
     num_items: number;
     order_id: string; // Crucial for deduplication
+    user_email?: string;
   }
 ) {
-  trackEvent('Purchase', {
+  const customData = {
     ...data,
     currency: data.currency || 'UYU',
     content_type: 'product'
-  }, eventId);
+  };
+  
+  // Remove user_email from customData to keep it clean, but pass it to CAPI user_data
+  const { user_email, ...pixelData } = customData;
+  
+  trackEvent('Purchase', pixelData, eventId);
+  sendMetaCapiEvent(eventId, 'Purchase', pixelData, { email: user_email });
 }
