@@ -41,6 +41,3 @@ test_upsert.js
 playwright-report/
 run-tests.bat
 run-tests.ps1
-
-.vercel
-.env*.local

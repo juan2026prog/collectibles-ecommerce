@@ -103,3 +103,9 @@ frontend/test-*.cjs
 frontend/test-results/
 recursos/
 
+# ══════════════════════════════════════════════════════════
+# Supabase Temporales
+# ══════════════════════════════════════════════════════════
+supabase/.temp/
+supabase/.branches/
+supabase/.cache/

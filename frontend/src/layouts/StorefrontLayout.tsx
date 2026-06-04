@@ -22,6 +22,7 @@ import { sanitizeHeadMarkup, sanitizeRichHtml } from '../lib/sanitize';
 import { FacebookIcon, InstagramIcon, TwitterIcon, YoutubeIcon, TiktokIcon, WhatsappIcon } from '../components/SocialIcons';
 import { CurrencySelector } from '../components/CurrencySelector';
 import React from 'react';
+import { useMetaPageTracking } from '../hooks/useMetaPageTracking';
 
 // NAV_LINKS and MEGA_MENU are built dynamically inside the component
 // using t() for translations and useCategories() for live DB data.
@@ -61,6 +62,8 @@ export default function StorefrontLayout() {
   const { categories: allCategories } = useCategories();
   const { brands: allBrands } = useBrands();
   const { settings, loaded: settingsLoaded } = useSiteSettings();
+  
+  useMetaPageTracking();
 
   const getSocialUrl = (key: string, value: string) => {
     if (!value) return '#';
@@ -265,24 +268,6 @@ export default function StorefrontLayout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#05070f] text-[#f8fafc] gamger-grid">
-      {settings['meta_pixel_id'] && localStorage.getItem('cookieSettings') === 'accepted' && (
-        <Helmet>
-          <script id="meta-pixel-script">
-            {`
-              !function(f,b,e,v,n,t,s)
-              {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-              n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-              if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-              n.queue=[];t=b.createElement(e);t.async=!0;
-              t.src=v;s=b.getElementsByTagName(e)[0];
-              s.parentNode.insertBefore(t,s)}(window, document,'script',
-              'https://connect.facebook.net/en_US/fbevents.js');
-              fbq('init', '${settings['meta_pixel_id']}');
-              fbq('track', 'PageView');
-            `}
-          </script>
-        </Helmet>
-      )}
       {settings['theme_color_primary'] && (
         <style dangerouslySetInnerHTML={{
           __html: `:root {
