@@ -12,6 +12,7 @@ import { createCheckoutOrder, getPublicPaymentProviders, startCheckoutPayment, t
 import { URUGUAY_LOCATIONS, DEPARTAMENTOS, calculateShipping } from '../utils/uruguayLocations';
 import { getProductImage, resolveImage } from '../lib/imageUtils';
 import { usePromotions, evaluateItemDiscountDetailed } from '../hooks/usePromotions';
+import { generateMetaEventId, trackInitiateCheckout, trackAddPaymentInfo } from '../lib/meta/metaPixel';
 
 function normalizeLocation(value?: string | null) {
   return (value || "")
@@ -98,6 +99,7 @@ export default function Checkout() {
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [checkoutError, setCheckoutError] = useState('');
+  const initiateCheckoutTrackedRef = useRef(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'mercadopago' | 'dlocalgo' | 'paypal' | 'handy'>('mercadopago');
   const [shippingMethod, setShippingMethod] = useState<'delivery' | 'pickup'>('delivery');
@@ -889,7 +891,9 @@ export default function Checkout() {
   }, [settingsLoaded, mercadopagoEnabled, dlocalgoEnabled, paypalEnabled, handyEnabled, paymentMethod]);
 
   useEffect(() => {
-    if (!items.length) return;
+    if (!items.length || initiateCheckoutTrackedRef.current) return;
+    initiateCheckoutTrackedRef.current = true;
+    
     analytics.track({
       eventName: 'InitiateCheckout',
       eventData: {
@@ -900,7 +904,32 @@ export default function Checkout() {
       },
       user: { email: user?.email || undefined },
     });
+
+    // Meta Pixel: InitiateCheckout
+    const metaEventId = generateMetaEventId('InitiateCheckout');
+    trackInitiateCheckout(metaEventId, {
+      value: total,
+      contents: items.map((item) => ({
+        id: item.product_id,
+        quantity: item.quantity,
+        item_price: item.price
+      })),
+      num_items: items.length,
+      currency: 'UYU'
+    });
   }, [items, total, user?.email]);
+
+  useEffect(() => {
+    if (currentStep === 3 && items.length > 0) {
+      // Meta Pixel: AddPaymentInfo
+      const metaEventId = generateMetaEventId('AddPaymentInfo');
+      trackAddPaymentInfo(metaEventId, {
+        value: grandTotal || total,
+        payment_method: paymentMethod,
+        currency: 'UYU'
+      });
+    }
+  }, [currentStep, paymentMethod, grandTotal, total, items.length]);
 
   async function processPaymentFlow(orderId: string, provider: string, email: string) {
     console.log("create-order processPaymentFlow started:", orderId, provider, email);

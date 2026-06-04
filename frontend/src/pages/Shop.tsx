@@ -11,6 +11,7 @@ import { ProductBadge } from '../components/ProductBadge';
 import { ProductGridCard } from '../components/ProductGridCard';
 import { getProductImage } from '../lib/imageUtils';
 import { supabase } from '../lib/supabase';
+import { trackSearch, generateMetaEventId } from '../lib/meta/metaPixel';
 import SEO from '../components/SEO';
 
 function getVisiblePages(currentPage: number, total: number) {
@@ -83,6 +84,17 @@ export default function Shop() {
   });
 
   const totalPages = Math.ceil(count / limit);
+
+  useEffect(() => {
+    if (searchQ) {
+      try {
+        const eventId = generateMetaEventId('Search');
+        trackSearch(eventId, searchQ);
+      } catch (e) {
+        console.warn('Meta tracking error', e);
+      }
+    }
+  }, [searchQ]);
 
   // getProductImage imported from lib/imageUtils
 

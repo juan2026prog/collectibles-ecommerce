@@ -9,9 +9,9 @@ import { useCurrency } from '../contexts/CurrencyContext';
 import { ProductBadge } from '../components/ProductBadge';
 import { getProductImage, resolveImage, FALLBACK_IMAGE } from '../lib/imageUtils';
 import { analytics } from '../lib/analytics';
+import { trackViewContent, trackAddToCart, generateMetaEventId } from '../lib/meta/metaPixel';
 import SEO from '../components/SEO';
 import { useSiteSettings } from '../hooks/useSiteSettings';
-
 export default function ProductDetail() {
   const { settings } = useSiteSettings();
   const { slug } = useParams();
@@ -79,6 +79,20 @@ export default function ProductDetail() {
         },
         user: { email: user?.email || undefined }
       });
+      
+      try {
+        const eventId = generateMetaEventId('ViewContent', product.id);
+        trackViewContent(eventId, {
+          content_ids: [product.id],
+          content_name: product.title,
+          category: product.category?.name,
+          brand: product.brand?.name,
+          value: product.base_price,
+          currency: 'UYU'
+        });
+      } catch (e) {
+        console.warn("Meta tracking error", e);
+      }
     }
   }, [product, user]);
 
@@ -187,6 +201,18 @@ export default function ProductDetail() {
       },
       user: { email: user?.email || undefined }
     });
+    
+    try {
+      const eventId = generateMetaEventId('AddToCart', product.id);
+      trackAddToCart(eventId, {
+        content_ids: [product.id],
+        contents: [{ id: product.id, quantity: quantity }],
+        value: finalPrice * quantity,
+        currency: 'UYU'
+      });
+    } catch (e) {
+      console.warn("Meta tracking error", e);
+    }
   }
 
   const seoTitle = product.seo_title || `${product.title} - Comprar Online`;

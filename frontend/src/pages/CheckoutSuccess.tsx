@@ -4,6 +4,7 @@ import { CheckCircle, Clock, Package, ArrowRight, Copy, Check, RefreshCcw } from
 import { supabase } from '../lib/supabase';
 import { useCartContext } from '../contexts/CartContext';
 import { analytics } from '../lib/analytics';
+import { generateMetaEventId, trackPurchase } from '../lib/meta/metaPixel';
 
 export default function CheckoutSuccess() {
   const [searchParams] = useSearchParams();
@@ -73,6 +74,21 @@ export default function CheckoutSuccess() {
         num_items: items.reduce((sum, item) => sum + item.quantity, 0),
       },
       user: { email: order?.customer_email || undefined },
+    });
+
+    // Meta Pixel: Purchase
+    const metaEventId = generateMetaEventId('Purchase', orderId);
+    trackPurchase(metaEventId, {
+      value: order?.total_amount || total,
+      currency: order?.currency || 'UYU',
+      contents: items.map((item) => ({
+        id: item.product_id,
+        quantity: item.quantity,
+        item_price: item.price
+      })),
+      content_ids: items.map((item) => item.product_id),
+      num_items: items.reduce((sum, item) => sum + item.quantity, 0),
+      order_id: orderId
     });
 
     clearCart();

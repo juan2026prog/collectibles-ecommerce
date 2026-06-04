@@ -1,7 +1,7 @@
 import { createContext, useContext, ReactNode, useMemo, useState, useCallback } from 'react';
 import { useCart as useCartHook } from '../hooks/useData';
 import type { CartItem } from '../hooks/useData';
-
+import { trackAddToCart, generateMetaEventId } from '../lib/meta/metaPixel';
 interface CartContextType {
   items: CartItem[];
   addItem: (item: CartItem) => void;
@@ -23,6 +23,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const addItem = useCallback((item: CartItem) => {
     cart.addItem(item);
     setIsDrawerOpen(true);
+
+    try {
+      const eventId = generateMetaEventId('AddToCart', item.product_id);
+      trackAddToCart(eventId, {
+        content_ids: [item.product_id],
+        contents: [{ id: item.product_id, quantity: item.quantity }],
+        value: (item.price || 0) * (item.quantity || 1)
+      });
+    } catch (e) {
+      console.warn("Meta tracking error", e);
+    }
   }, [cart]);
 
   const value = useMemo(() => ({
