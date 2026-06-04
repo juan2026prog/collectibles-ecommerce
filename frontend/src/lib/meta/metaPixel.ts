@@ -7,6 +7,7 @@
 // Debug flag from env or window
 const IS_DEBUG = import.meta.env.VITE_META_DEBUG === 'true' || (window as any).metaDebug === true;
 const PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID;
+import { sendMetaCapiEvent } from './metaCapi';
 
 // Define custom window properties
 declare global {
@@ -114,11 +115,13 @@ export function trackViewContent(
     currency?: string;
   }
 ) {
-  trackEvent('ViewContent', {
+  const customData = {
     ...data,
     currency: data.currency || 'UYU',
     content_type: 'product'
-  }, eventId);
+  };
+  trackEvent('ViewContent', customData, eventId);
+  sendMetaCapiEvent(eventId, 'ViewContent', customData);
 }
 
 export function trackSearch(eventId: string, search_string: string) {
@@ -134,11 +137,13 @@ export function trackAddToCart(
     currency?: string;
   }
 ) {
-  trackEvent('AddToCart', {
+  const customData = {
     ...data,
     currency: data.currency || 'UYU',
     content_type: 'product'
-  }, eventId);
+  };
+  trackEvent('AddToCart', customData, eventId);
+  sendMetaCapiEvent(eventId, 'AddToCart', customData);
 }
 
 export function trackAddToWishlist(
@@ -165,10 +170,12 @@ export function trackInitiateCheckout(
     currency?: string;
   }
 ) {
-  trackEvent('InitiateCheckout', {
+  const customData = {
     ...data,
     currency: data.currency || 'UYU'
-  }, eventId);
+  };
+  trackEvent('InitiateCheckout', customData, eventId);
+  sendMetaCapiEvent(eventId, 'InitiateCheckout', customData);
 }
 
 export function trackAddPaymentInfo(
@@ -179,10 +186,12 @@ export function trackAddPaymentInfo(
     currency?: string;
   }
 ) {
-  trackEvent('AddPaymentInfo', {
+  const customData = {
     ...data,
     currency: data.currency || 'UYU'
-  }, eventId);
+  };
+  trackEvent('AddPaymentInfo', customData, eventId);
+  sendMetaCapiEvent(eventId, 'AddPaymentInfo', customData);
 }
 
 export function trackPurchase(
