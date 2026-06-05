@@ -9,7 +9,7 @@ interface SEOProps {
   image?: string;
   url?: string;
   type?: 'website' | 'article' | 'product';
-  schema?: Record<string, any>;
+  schema?: Record<string, any> | Record<string, any>[];
 }
 
 export default function SEO({
@@ -17,7 +17,7 @@ export default function SEO({
   description,
   keywords,
   image,
-  url = typeof window !== 'undefined' ? window.location.href : '',
+  url = typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '',
   type = 'website',
   schema,
 }: SEOProps) {
@@ -25,6 +25,27 @@ export default function SEO({
   const siteName = settings['store_name'] || settings['seo_site_title'] || 'Collectibles';
   const ogImage = image || settings['seo_og_image'] || '';
   const fullTitle = `${title} | ${siteName}`;
+
+  const organizationSchema = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "Collectibles Uruguay",
+    "url": "https://collectibles.uy",
+    "logo": "https://cobtsgkwcftvexaarwmo.supabase.co/storage/v1/object/public/public-assets/1775828705619-isologocolle.jpg",
+    "sameAs": [
+      settings['social_instagram'] || "https://instagram.com/collectibles.uy",
+      settings['social_facebook'] || "https://facebook.com/collectibles.uy"
+    ]
+  };
+
+  const schemas = [organizationSchema];
+  if (schema) {
+    if (Array.isArray(schema)) {
+      schemas.push(...schema);
+    } else {
+      schemas.push(schema);
+    }
+  }
 
   return (
     <Helmet>
@@ -50,10 +71,10 @@ export default function SEO({
       {/* Canonical Link */}
       <link rel="canonical" href={url} />
 
-      {/* JSON-LD Schema */}
-      {schema && (
+      {/* JSON-LD Schemas */}
+      {schemas.length > 0 && (
         <script type="application/ld+json">
-          {JSON.stringify(schema)}
+          {JSON.stringify(schemas)}
         </script>
       )}
     </Helmet>

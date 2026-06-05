@@ -219,7 +219,8 @@ export default function ProductDetail() {
 
   const seoTitle = product.seo_title || `${product.title} - Comprar Online`;
   const seoDescription = product.seo_description || product.short_description || product.title;
-  const productSchema = {
+  const productUrl = typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '';
+  const productSchema: any = {
     "@context": "https://schema.org/",
     "@type": "Product",
     "name": seoTitle,
@@ -227,19 +228,70 @@ export default function ProductDetail() {
       displayImage
      ],
     "description": seoDescription,
-    "sku": selectedVariant?.sku,
+    "sku": selectedVariant?.sku || product.id,
     "brand": {
       "@type": "Brand",
       "name": product.brand?.name || "Generic"
     },
+    "url": productUrl,
     "offers": {
       "@type": "Offer",
-      "url": window.location.href,
+      "url": productUrl,
       "priceCurrency": "UYU",
       "price": finalPrice,
       "availability": stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
-      "itemCondition": "https://schema.org/NewCondition"
+      "itemCondition": "https://schema.org/NewCondition",
+      "seller": {
+        "@type": "Organization",
+        "name": "Collectibles Uruguay"
+      }
     }
+  };
+
+  if (reviews && reviews.length > 0) {
+    productSchema.aggregateRating = {
+      "@type": "AggregateRating",
+      "ratingValue": avgRating.toFixed(1),
+      "reviewCount": reviews.length
+    };
+    productSchema.review = reviews.slice(0, 5).map((r: any) => ({
+      "@type": "Review",
+      "author": { "@type": "Person", "name": r.user_name || "Anónimo" },
+      "datePublished": new Date(r.created_at).toISOString().split('T')[0],
+      "reviewBody": r.body,
+      "reviewRating": { "@type": "Rating", "bestRating": "5", "ratingValue": r.rating, "worstRating": "1" }
+    }));
+  }
+
+  const breadcrumbElements = [
+    { "@type": "ListItem", "position": 1, "name": "Inicio", "item": "https://collectibles.uy/" }
+  ];
+  if (product.category) {
+    breadcrumbElements.push({
+      "@type": "ListItem",
+      "position": 2,
+      "name": product.category.name,
+      "item": `https://collectibles.uy/categoria/${product.category.slug}`
+    });
+    breadcrumbElements.push({
+      "@type": "ListItem",
+      "position": 3,
+      "name": product.title,
+      "item": productUrl
+    });
+  } else {
+    breadcrumbElements.push({
+      "@type": "ListItem",
+      "position": 2,
+      "name": product.title,
+      "item": productUrl
+    });
+  }
+
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": breadcrumbElements
   };
 
   return (
@@ -249,7 +301,7 @@ export default function ProductDetail() {
         description={seoDescription}
         image={displayImage}
         type="product"
-        schema={productSchema}
+        schema={[productSchema, breadcrumbSchema]}
       />
 
       <nav className="flex items-center text-[11px] font-black uppercase tracking-[0.2em] text-slate-500 mb-8 flex-wrap gap-2">

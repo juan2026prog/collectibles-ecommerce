@@ -264,11 +264,66 @@ export default function Shop() {
 
   const pageTitle = group?.name || currentCategory?.name || currentBrand?.name || (searchQ ? `"${searchQ}"` : t('shop.title'));
 
+  const breadcrumbElements = [
+    { "@type": "ListItem", "position": 1, "name": "Inicio", "item": "https://collectibles.uy/" }
+  ];
+  if (isCategoryRoute && currentCategory) {
+    breadcrumbElements.push({
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Categorías"
+    });
+    breadcrumbElements.push({
+      "@type": "ListItem",
+      "position": 3,
+      "name": currentCategory.name,
+      "item": `https://collectibles.uy/categoria/${currentCategory.slug}`
+    });
+  } else if (isBrandRoute && currentBrand) {
+    breadcrumbElements.push({
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Marcas"
+    });
+    breadcrumbElements.push({
+      "@type": "ListItem",
+      "position": 3,
+      "name": currentBrand.name,
+      "item": `https://collectibles.uy/marca/${currentBrand.slug}`
+    });
+  } else if (group) {
+    breadcrumbElements.push({
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Colecciones"
+    });
+    breadcrumbElements.push({
+      "@type": "ListItem",
+      "position": 3,
+      "name": group.name,
+      "item": `https://collectibles.uy/shop/${group.slug}` // Assumed URL format
+    });
+  } else {
+    breadcrumbElements.push({
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Catálogo",
+      "item": "https://collectibles.uy/shop"
+    });
+  }
+
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": breadcrumbElements
+  };
+
   return (
     <div className="bg-[#05070f] text-white">
       <SEO
         title={group ? `${group.name} — Collectibles` : isCategoryRoute && currentCategory ? `${currentCategory.name} — Collectibles` : isBrandRoute && currentBrand ? `${currentBrand.name} — Collectibles` : "Catálogo — Collectibles"}
         description={group?.description || currentCategory?.description || currentBrand?.description || "Explora nuestro catálogo de figuras, coleccionables y productos oficiales de las mejores marcas."}
+        schema={[breadcrumbSchema]}
       />
 
       {/* BREADCRUMB */}
