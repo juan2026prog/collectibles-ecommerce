@@ -61,33 +61,59 @@ Deno.serve(async (req: any) => {
         continue;
       }
 
-      // Find users matching segment constraints and consent
-      // We will do a generic fetch for now, simulating complex segment extraction
-      // In production, you would translate segment.query_rules (JSON array) into a Supabase Query Builder chain.
+      // Find users matching segment constraints via RPC
+      const { data: segmentEmails, error: rpcError } = await supabase
+        .rpc('get_segment_emails', { p_segment_id: campaign.segment_id });
+
+      if (rpcError || !segmentEmails || segmentEmails.length === 0) {
+        await supabase.from('campaigns').update({ status: 'completed', stats: { ...campaign.stats, debug: 'rpc_empty', rpcError } }).eq('id', campaign.id);
+        continue;
+      }
+
+      const emailsToFetch = segmentEmails.map((row: any) => row.email).filter(Boolean);
+
+      if (emailsToFetch.length === 0) {
+        await supabase.from('campaigns').update({ status: 'completed', stats: { ...campaign.stats, debug: 'emailsToFetch_empty' } }).eq('id', campaign.id);
+        continue;
+      }
+
+      // Find user consents for these emails
       const { data: consents } = await supabase
         .from('customer_consents')
-        .select('customer_id, email, whatsapp_opt_in, email_marketing_opt_in')
+        .select('email, whatsapp_opt_in, email_marketing_opt_in')
+        .in('email', emailsToFetch)
         .limit(1000); // safety limit for full batch pool
 
       if (!consents || consents.length === 0) {
-        await supabase.from('campaigns').update({ status: 'completed' }).eq('id', campaign.id);
+        await supabase.from('campaigns').update({ status: 'completed', stats: { ...campaign.stats, debug: 'consents_empty', emailsToFetch } }).eq('id', campaign.id);
         continue;
       }
+
+      // Merge consents with segmentEmails to get customer_id
+      const mergedUsers = segmentEmails.map((se: any) => {
+        const consent = consents.find(c => c.email === se.email);
+        return {
+          customer_id: se.customer_id,
+          email: se.email,
+          whatsapp_opt_in: consent?.whatsapp_opt_in || false,
+          email_marketing_opt_in: consent?.email_marketing_opt_in || false,
+        };
+      }).filter(u => consents.find(c => c.email === u.email));
 
       // Get users who ALREADY got this campaign so we don't duplicate
       const { data: existingLogs } = await supabase
         .from('communication_logs')
-        .select('email, phone')
+        .select('customer_id')
         .eq('campaign_id', campaign.id);
       
-      const alreadySentEmails = new Set(existingLogs?.filter(l => l.email).map(l => l.email) || []);
+      const alreadySentCustomerIds = new Set(existingLogs?.map(l => l.customer_id) || []);
       
       // Filter the remaining users for THIS batch (Batch size = 50)
-      const remainingUsers = consents.filter(c => !alreadySentEmails.has(c.email)).slice(0, 50);
+      const remainingUsers = mergedUsers.filter(u => !alreadySentCustomerIds.has(u.customer_id)).slice(0, 50);
 
       // If no remaining users, campaign is done
       if (remainingUsers.length === 0) {
-        await supabase.from('campaigns').update({ status: 'completed' }).eq('id', campaign.id);
+        await supabase.from('campaigns').update({ status: 'completed', stats: { ...campaign.stats, debug: 'remainingUsers_empty', alreadySent: Array.from(alreadySentCustomerIds), mergedUsers: mergedUsers.map(u=>u.customer_id) } }).eq('id', campaign.id);
         continue;
       }
 
@@ -135,9 +161,9 @@ Deno.serve(async (req: any) => {
         // Log result
         await supabase.from('communication_logs').insert({
           customer_id: consent.customer_id,
-          email: consent.email,
           campaign_id: campaign.id,
           template_id: template.id,
+          segment_id: campaign.segment_id,
           channel: channelUsed,
           status: msgStatus
         });
