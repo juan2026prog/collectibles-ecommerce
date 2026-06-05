@@ -7,6 +7,7 @@ import {
   LayoutDashboard, Store, Star, Share2, Package, LogOut, Video
 } from 'lucide-react';
 import { useCartContext } from '../contexts/CartContext';
+import { useWishlistContext } from '../contexts/WishlistContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocale } from '../contexts/LocaleContext';
 import { useCategories, useBrands } from '../hooks/useData';
@@ -57,6 +58,7 @@ export default function StorefrontLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { count: cartCount, setIsDrawerOpen } = useCartContext();
+  const { wishlist } = useWishlistContext();
   const { user, profile, signOut } = useAuth();
   const { language, currency, t, formatPrice } = useLocale();
   const { categories: allCategories } = useCategories();
@@ -369,9 +371,18 @@ export default function StorefrontLayout() {
             <div className="hidden xl:block">
               <CurrencySelector />
             </div>
-            <button className="w-11 h-11 hidden md:flex items-center justify-center rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors">
-              <Heart className="w-4 h-4" />
-            </button>
+            <Link 
+              to="/wishlist" 
+              className="w-11 h-11 hidden md:flex items-center justify-center rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors relative group"
+              title="Favoritos"
+            >
+              <Heart className={`w-4 h-4 transition-colors ${wishlist.length > 0 ? 'text-[#f00856] fill-[#f00856]' : 'text-slate-300 group-hover:text-white'}`} />
+              {wishlist.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-[#f00856] text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-md shadow-[#f00856]/40">
+                  {wishlist.length}
+                </span>
+              )}
+            </Link>
             <div className="relative" ref={userMenuRef}>
               <button 
                 onClick={() => setUserMenuOpen(!userMenuOpen)}

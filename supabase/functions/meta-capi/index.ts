@@ -1,6 +1,24 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { corsHeaders, handleOptions } from "../_shared/cors.ts";
+
+const allowedOrigins = [
+  'https://collectibles.uy',
+  'https://www.collectibles.uy',
+  'https://collectibles-ecommerce.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000'
+];
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get('origin') || '';
+  const allowOrigin = allowedOrigins.includes(origin) ? origin : 'https://collectibles.uy';
+  
+  return {
+    'Access-Control-Allow-Origin': allowOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS'
+  };
+}
 
 async function hashSHA256(value: string | undefined): Promise<string | undefined> {
   if (!value) return undefined;
@@ -16,8 +34,11 @@ async function hashSHA256(value: string | undefined): Promise<string | undefined
 }
 
 serve(async (req) => {
-  const options = handleOptions(req);
-  if (options) return options;
+  const corsHeaders = getCorsHeaders(req);
+
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
 
   try {
     const payload = await req.json();

@@ -1,9 +1,10 @@
 import { useParams, Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { ShoppingCart, Minus, Plus, Truck, ShieldCheck, Star, ChevronDown } from 'lucide-react';
+import { ShoppingCart, Minus, Plus, Truck, ShieldCheck, Star, ChevronDown, Heart } from 'lucide-react';
 import { useProduct } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useWishlistContext } from '../contexts/WishlistContext';
 import { usePromotions, getApplicablePromotions, evaluateItemDiscountDetailed } from '../hooks/usePromotions';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { ProductBadge } from '../components/ProductBadge';
@@ -20,6 +21,7 @@ export default function ProductDetail() {
   const { user } = useAuth();
   const { formatCurrencyPrice } = useCurrency();
   const { promotions } = usePromotions();
+  const { toggleWishlist, isInWishlist } = useWishlistContext();
   
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -429,6 +431,13 @@ export default function ProductDetail() {
                 >
                   <ShoppingCart className="w-5 h-5" />
                   {addedToCart ? 'Agregado' : stock <= 0 ? 'Agotado' : 'Comprar Ahora'}
+                </button>
+                <button
+                  onClick={() => toggleWishlist(product)}
+                  className={`w-12 h-12 sm:w-12 sm:h-12 shrink-0 flex items-center justify-center rounded-full border transition-all ${isInWishlist(product.id) ? 'bg-[#f00856]/10 border-[#f00856]' : 'border-white/10 hover:border-white/30 bg-white/5'}`}
+                  title={isInWishlist(product.id) ? 'Quitar de favoritos' : 'Agregar a favoritos'}
+                >
+                  <Heart className={`w-5 h-5 transition-colors ${isInWishlist(product.id) ? 'fill-[#f00856] text-[#f00856]' : 'text-slate-300'}`} />
                 </button>
               </div>
             </div>

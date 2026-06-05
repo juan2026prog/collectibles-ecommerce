@@ -34,6 +34,8 @@ interface CreateOrderParams {
   terms_accepted: boolean;
   terms_accepted_at: string;
   accepted_terms_version: string;
+  email_opt_in?: boolean;
+  whatsapp_opt_in?: boolean;
 }
 
 interface StartPaymentParams {

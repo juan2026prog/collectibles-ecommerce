@@ -3,7 +3,7 @@ import {
   LayoutDashboard, ShoppingBag, FolderTree, Users, Settings, LogOut, Package, 
   Tag, Image, CreditCard, LayoutTemplate, Star, Percent, Megaphone,
   Mail, ShoppingCart, BarChart3, Search, ShieldCheck, Store, Share2, ExternalLink, Library, FileText,
-  Activity
+  Activity, Bot, Clock
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LocaleSwitcher from '../components/LocaleSwitcher';
@@ -38,6 +38,7 @@ export default function AdminLayout() {
     { name: 'Pasarelas de Pago', path: '/admin/settings?tab=payments', icon: CreditCard },
     { name: 'Configuracion', path: '/admin/settings', icon: Settings },
     { name: 'Clientes & CRM', path: '/admin/customers', icon: Users },
+    { name: 'Automatizaciones', path: '/admin/automations', icon: Bot },
     { name: 'Mailing', path: '/admin/mailing', icon: Mail },
     { name: 'Mercado Libre', path: '/admin/mercadolibre', icon: ShoppingCart },
     { name: 'Finanzas & Facturas', path: '/admin/finances', icon: CreditCard },

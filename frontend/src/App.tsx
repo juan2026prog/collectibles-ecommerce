@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { CartProvider } from './contexts/CartContext';
+import { WishlistProvider } from './contexts/WishlistContext';
 import { FeatureToggleProvider } from './contexts/FeatureToggleContext';
 import AnalyticsProvider from './contexts/AnalyticsContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -64,6 +65,7 @@ const AdminFinances = lazy(() => import('./pages/admin/AdminFinances'));
 const AdminLogistics = lazy(() => import('./pages/admin/AdminLogistics'));
 const AdminArtists = lazy(() => import('./pages/admin/AdminArtists'));
 const AdminTags = lazy(() => import('./pages/admin/AdminTags'));
+const AdminAutomations = lazy(() => import('./pages/admin/AdminAutomations'));
 
 // GodMode removed from production — SEC-CRIT-01 (hardcoded credentials)
 import { useReferralTracking } from './hooks/useReferralTracking';
@@ -81,8 +83,9 @@ function App() {
       <AnalyticsProvider>
         <ReferralTracker />
         <AuthProvider>
-          <CartProvider>
-            <FeatureToggleProvider>
+          <WishlistProvider>
+            <CartProvider>
+              <FeatureToggleProvider>
               <LocaleProvider>
                 <CurrencyProvider>
                   <Suspense fallback={null}>
@@ -197,13 +200,15 @@ function App() {
                   <Route path="logistics" element={<AdminLogistics />} />
                   <Route path="artists" element={<AdminArtists />} />
                   <Route path="tags" element={<AdminTags />} />
+                  <Route path="automations" element={<AdminAutomations />} />
                 </Route>
                   </Routes>
                 </Suspense>
                 </CurrencyProvider>
               </LocaleProvider>
-            </FeatureToggleProvider>
-          </CartProvider>
+              </FeatureToggleProvider>
+            </CartProvider>
+          </WishlistProvider>
         </AuthProvider>
       </AnalyticsProvider>
     </BrowserRouter>

@@ -304,37 +304,6 @@ export function useCart() {
   return { items, addItem, updateQuantity, removeItem, clearCart, total, count };
 }
 
-// ═══ useWishlist ═══
-export function useWishlist(userId: string | undefined) {
-  const [wishlist, setWishlist] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (!userId) return;
-    async function fetch() {
-      const { data } = await supabase
-        .from('wishlists')
-        .select('product_id')
-        .eq('user_id', userId);
-      setWishlist((data || []).map(w => w.product_id));
-    }
-    fetch();
-  }, [userId]);
-
-  const toggleWishlist = async (productId: string) => {
-    if (!userId) return;
-    if (wishlist.includes(productId)) {
-      await supabase.from('wishlists').delete().eq('user_id', userId).eq('product_id', productId);
-      setWishlist(prev => prev.filter(id => id !== productId));
-    } else {
-      await supabase.from('wishlists').insert({ user_id: userId, product_id: productId });
-      setWishlist(prev => [...prev, productId]);
-    }
-  };
-
-  const isInWishlist = (productId: string) => wishlist.includes(productId);
-
-  return { wishlist, toggleWishlist, isInWishlist };
-}
 
 // ═══ useProductGroups ═══
 export function useProductGroups() {

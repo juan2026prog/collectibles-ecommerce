@@ -1,8 +1,9 @@
-import { Star, ShoppingCart } from 'lucide-react';
+import { Star, ShoppingCart, Heart } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ProductBadge } from './ProductBadge';
 import { getProductImage } from '../lib/imageUtils';
 import { evaluateItemDiscountDetailed } from '../hooks/usePromotions';
+import { useWishlistContext } from '../contexts/WishlistContext';
 
 interface ProductGridCardProps {
   product: any;
@@ -16,6 +17,7 @@ interface ProductGridCardProps {
  * Estilo Catálogo Premium: Imagen blanca + info limpia debajo.
  */
 export function ProductGridCard({ product, onAddToCart, formatPrice, applicablePromos = [] }: ProductGridCardProps) {
+  const { toggleWishlist, isInWishlist } = useWishlistContext();
   const img = getProductImage(product);
   const finalPrice = product.base_price + (product.variants?.[0]?.price_adjustment || 0);
   
@@ -51,6 +53,19 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
             className="max-w-full max-h-full object-contain transition-transform duration-300 group-hover:scale-105"
           />
         </Link>
+
+        {/* Wishlist Button */}
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleWishlist(product);
+          }}
+          className="absolute top-2 left-2 w-8 h-8 flex items-center justify-center rounded-full bg-[#05070f]/50 backdrop-blur-md border border-white/10 hover:bg-[#05070f]/80 transition-all z-30 group"
+          title={isInWishlist(product.id) ? "Quitar de favoritos" : "Agregar a favoritos"}
+        >
+          <Heart className={`w-4 h-4 transition-colors ${isInWishlist(product.id) ? 'fill-[#f00856] text-[#f00856]' : 'text-white/70 group-hover:text-white'}`} />
+        </button>
 
         {/* Badge superior opcional */}
         <div className="absolute top-2 right-2 z-20 scale-75 md:scale-90 origin-top-right pointer-events-none">

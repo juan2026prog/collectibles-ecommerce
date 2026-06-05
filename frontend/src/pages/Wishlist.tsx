@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Heart, ShoppingBag } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { useWishlist } from '../hooks/useData';
+import { useWishlistContext } from '../contexts/WishlistContext';
 import { supabase } from '../lib/supabase';
 import { ProductGridCard } from '../components/ProductGridCard';
 import { useCurrency } from '../contexts/CurrencyContext';
@@ -11,7 +11,7 @@ import { getProductImage } from '../lib/imageUtils';
 
 export default function Wishlist() {
   const { user } = useAuth();
-  const { wishlist } = useWishlist(user?.id);
+  const { wishlist } = useWishlistContext();
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { formatCurrencyPrice } = useCurrency();

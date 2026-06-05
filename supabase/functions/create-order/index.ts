@@ -52,6 +52,8 @@ const checkoutSchema = z.object({
   }),
   terms_accepted_at: z.string(),
   accepted_terms_version: z.string(),
+  email_opt_in: z.boolean().optional().default(false),
+  whatsapp_opt_in: z.boolean().optional().default(false),
 });
 
 const FLEX_NEAR = new Set([
@@ -682,6 +684,8 @@ Deno.serve(async (req) => {
       p_terms_accepted: payload.terms_accepted,
       p_terms_accepted_at: payload.terms_accepted_at,
       p_accepted_terms_version: payload.accepted_terms_version,
+      p_email_opt_in: payload.email_opt_in,
+      p_whatsapp_opt_in: payload.whatsapp_opt_in,
     });
 
     if (rpcError) {

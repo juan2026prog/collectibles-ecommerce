@@ -183,6 +183,8 @@ export default function Checkout() {
   const [selectedAddress, setSelectedAddress] = useState<number>(-1);
   const [showPaymentMethodsModal, setShowPaymentMethodsModal] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
+  const [emailOptIn, setEmailOptIn] = useState(false);
+  const [whatsappOptIn, setWhatsappOptIn] = useState(false);
   const submitLockRef = useRef(false);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(true);
@@ -698,6 +700,29 @@ export default function Checkout() {
       return;
     }
 
+    // Heartbeat: Upsert abandoned checkout if email is present
+    if (form.email && items.length > 0) {
+      const saveAbandonedCheckout = async () => {
+        try {
+          const { data: profile } = await supabase.from('profiles').select('id').eq('email', form.email).maybeSingle();
+          
+          await supabase.from('abandoned_checkouts').upsert({
+            email: form.email,
+            customer_id: profile?.id || user?.id || null,
+            cart_data: items,
+            total_amount: total,
+            status: 'abandoned',
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'email' });
+        } catch (e) {
+          console.warn('Silent abandoned checkout log failed', e);
+        }
+      };
+      
+      const timeoutId = setTimeout(saveAbandonedCheckout, 2000); // 2s debounce
+      return () => clearTimeout(timeoutId);
+    }
+
     async function fetchSuggestions() {
       setSuggestionsLoading(true);
       try {
@@ -1036,6 +1061,8 @@ export default function Checkout() {
         terms_accepted: true,
         terms_accepted_at: new Date().toISOString(),
         accepted_terms_version: "2026-05-27",
+        email_opt_in: emailOptIn,
+        whatsapp_opt_in: whatsappOptIn,
       });
 
       console.log("create-order success:", order);
@@ -1289,6 +1316,31 @@ export default function Checkout() {
                         <p className="text-[10px] text-slate-400">Requerido para la facturación y el despacho de la guía por DAC.</p>
                       </div>
                     )}
+
+                    <div className="pt-4 mt-2 border-t border-white/5 space-y-3">
+                      <label className="flex items-center gap-3 cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          checked={emailOptIn}
+                          onChange={(e) => setEmailOptIn(e.target.checked)}
+                          className="w-5 h-5 rounded border-white/20 text-primary-500 focus:ring-primary-500/50 focus:ring-offset-0 bg-transparent"
+                        />
+                        <span className="text-sm text-slate-300 group-hover:text-white transition-colors">
+                          Quiero recibir promociones exclusivas por email
+                        </span>
+                      </label>
+                      <label className="flex items-center gap-3 cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          checked={whatsappOptIn}
+                          onChange={(e) => setWhatsappOptIn(e.target.checked)}
+                          className="w-5 h-5 rounded border-white/20 text-green-500 focus:ring-green-500/50 focus:ring-offset-0 bg-transparent"
+                        />
+                        <span className="text-sm text-slate-300 group-hover:text-white transition-colors">
+                          Quiero recibir promociones exclusivas por WhatsApp
+                        </span>
+                      </label>
+                    </div>
                   </div>
 
                   {/* Step 1 Nav */}

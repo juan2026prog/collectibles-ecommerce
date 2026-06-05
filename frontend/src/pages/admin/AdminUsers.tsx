@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { Shield, ShieldCheck, Store, Star, Share2, Search, RefreshCw, UserCog, Clock, ChevronDown } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
+import CustomerFileModal from '../../components/admin/crm/CustomerFileModal';
 
 export default function AdminUsers() {
   const [users, setUsers] = useState<any[]>([]);
@@ -22,6 +23,7 @@ export default function AdminUsers() {
     email: '', password: '', firstName: '', lastName: '',
     roles: [] as string[]
   });
+  const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
 
   useEffect(() => { fetchUsers(); fetchAuditLogs(); }, []);
 
@@ -175,7 +177,7 @@ export default function AdminUsers() {
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {filtered.map(u => (
-                      <tr key={u.id} className="hover:bg-gray-50/50 transition-colors group">
+                      <tr key={u.id} className="hover:bg-gray-50/50 transition-colors group cursor-pointer" onClick={() => setSelectedCustomer(u.id)}>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <div className="w-9 h-9 bg-gradient-to-br from-primary-400 to-primary-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
@@ -198,7 +200,7 @@ export default function AdminUsers() {
                         <td className="px-6 py-4 text-xs text-gray-400">
                           {u.created_at ? new Date(u.created_at).toLocaleDateString('es') : '-'}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                           <div className="flex justify-center gap-1">
                             {[
                               { role: 'is_admin', icon: ShieldCheck, label: 'Admin', active: u.is_admin, color: 'text-blue-600 bg-blue-50 hover:bg-blue-100' },
@@ -336,6 +338,11 @@ export default function AdminUsers() {
                </form>
             </div>
          </div>
+      )}
+
+      {/* CUSTOMER CRM FILE MODAL */}
+      {selectedCustomer && (
+        <CustomerFileModal userId={selectedCustomer} onClose={() => setSelectedCustomer(null)} />
       )}
     </div>
   );
