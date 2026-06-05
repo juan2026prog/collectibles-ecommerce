@@ -315,17 +315,17 @@ END $$;
 -- 14. Seed official categories (ensure they exist in catalog)
 INSERT INTO public.categories (name, slug, is_active) VALUES
   ('Funko POP', 'funko-pop', true),
-  ('Figuras de Acción', 'figuras-accion', true),
+  ('Figuras de Acción', 'figuras', true),
   ('Cromos / Figuritas', 'cromos-figuritas', true),
   ('Peluches', 'peluches', true),
   ('Vehículos a Escala', 'vehiculos-a-escala', true),
-  ('Esculturas y Estatuas', 'esculturas-estatuas', true),
-  ('Ropa & Accesorios', 'ropa-accesorios', true),
-  ('TCG & Boardgames', 'tcg-boardgames', true),
+  ('Esculturas y Estatuas', 'esculturas', true),
+  ('Ropa & Accesorios', 'ropa', true),
+  ('TCG & Boardgames', 'tcg', true),
   ('Llaveros', 'llaveros', true),
   ('Papelería', 'papeleria', true),
-  ('Home & Decor', 'home-decor', true),
-  ('Juegos y Juguetes', 'juegos-juguetes', true)
+  ('Home & Decor', 'home-and-decor', true),
+  ('Juegos y Juguetes', 'juguetes', true)
 ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, is_active = true;
 
 -- 15. Seed keyword matching rules (category_keyword_rules)
@@ -338,25 +338,25 @@ BEGIN
   FOR v_rules IN (
     SELECT 'funko-pop' AS slug, ARRAY['funko', 'pop!'] AS kws, 100 AS priority
     UNION ALL
-    SELECT 'figuras-accion' AS slug, ARRAY['neca', 'marvel legends', 'mcfarlane', 'bandai anime heroes', 'dragon stars'] AS kws, 90 AS priority
+    SELECT 'figuras' AS slug, ARRAY['neca', 'marvel legends', 'mcfarlane', 'bandai anime heroes', 'dragon stars'] AS kws, 90 AS priority
     UNION ALL
     SELECT 'cromos-figuritas' AS slug, ARRAY['panini', 'album', 'álbum', 'figuritas', 'sticker', 'cromos'] AS kws, 80 AS priority
     UNION ALL
     SELECT 'vehiculos-a-escala' AS slug, ARRAY['majorette', '1:64', 'die cast', 'autos de metal', 'escala'] AS kws, 70 AS priority
     UNION ALL
-    SELECT 'esculturas-estatuas' AS slug, ARRAY['iron studios', 'minico', 'art scale', 'bds', 'estatua', 'escultura'] AS kws, 75 AS priority
+    SELECT 'esculturas' AS slug, ARRAY['iron studios', 'minico', 'art scale', 'bds', 'estatua', 'escultura'] AS kws, 75 AS priority
     UNION ALL
     SELECT 'peluches' AS slug, ARRAY['plush', 'peluche'] AS kws, 60 AS priority
     UNION ALL
-    SELECT 'tcg-boardgames' AS slug, ARRAY['heroclix', 'dice masters', 'card game', 'puzzle', 'tcg', 'yugioh', 'pokemon tcg'] AS kws, 85 AS priority
+    SELECT 'tcg' AS slug, ARRAY['heroclix', 'dice masters', 'card game', 'puzzle', 'tcg', 'yugioh', 'pokemon tcg'] AS kws, 85 AS priority
     UNION ALL
-    SELECT 'ropa-accesorios' AS slug, ARRAY['body', 'camiseta', 'remera', 'gorro', 'guantes', 'medias', 'túnica'] AS kws, 50 AS priority
+    SELECT 'ropa' AS slug, ARRAY['body', 'camiseta', 'remera', 'gorro', 'guantes', 'medias', 'túnica'] AS kws, 50 AS priority
     UNION ALL
     SELECT 'papeleria' AS slug, ARRAY['cuaderno', 'set escolar', 'gomas'] AS kws, 40 AS priority
     UNION ALL
     SELECT 'llaveros' AS slug, ARRAY['llavero', 'keychain'] AS kws, 45 AS priority
     UNION ALL
-    SELECT 'juegos-juguetes' AS slug, ARRAY['beyblade', 'estadio', 'lanzador', 'juguete', 'juego'] AS kws, 65 AS priority
+    SELECT 'juguetes' AS slug, ARRAY['beyblade', 'estadio', 'lanzador', 'juguete', 'juego'] AS kws, 65 AS priority
   )
   LOOP
     SELECT id INTO v_cat_id FROM public.categories WHERE slug = v_rules.slug;
