@@ -83,8 +83,8 @@ function App() {
       <ScrollToTop />
       <AnalyticsProvider>
         <ReferralTracker />
-        <MetaPixelTracker />
         <AuthProvider>
+          <MetaPixelTracker />
           <WishlistProvider>
             <CartProvider>
               <FeatureToggleProvider>
