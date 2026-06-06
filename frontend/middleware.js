@@ -1,3 +1,5 @@
+import { rewrite } from '@vercel/edge';
+
 export const config = {
   matcher: [
     '/p/:slug*',
@@ -19,9 +21,8 @@ export default function middleware(request) {
     url.pathname = '/api/social';
     // Pass the original path so the serverless function knows what to fetch
     url.searchParams.set('originalPath', request.url);
-    return Response.rewrite(url);
+    return rewrite(url);
   }
 
   // Normal users bypass to index.html natively
-  // No response means continue to the matching rewrite in vercel.json
 }
