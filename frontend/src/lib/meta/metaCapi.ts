@@ -27,6 +27,7 @@ export async function sendMetaCapiEvent(
       event_source_url,
       action_source: 'website',
       user_data: {
+        ...((window as any)._metaUserData || {}),
         ...userData,
         fbp,
         fbc,

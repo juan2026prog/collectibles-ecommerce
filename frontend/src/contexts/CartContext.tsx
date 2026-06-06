@@ -29,7 +29,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
       trackAddToCart(eventId, {
         content_ids: [item.product_id],
         contents: [{ id: item.product_id, quantity: item.quantity }],
-        value: (item.price || 0) * (item.quantity || 1)
+        value: (item.price || 0) * (item.quantity || 1),
+        currency: 'UYU'
       });
     } catch (e) {
       console.warn("Meta tracking error", e);

@@ -34,32 +34,12 @@ export function canTrackMeta(): boolean {
 /**
  * Initializes the Meta Pixel script
  */
-export function initPixel() {
+export function initPixel(userData?: any) {
   if (!canTrackMeta()) return;
-  if (window.fbq) return; // Already initialized
+  if (!window.fbq) return;
 
-  if (IS_DEBUG) console.log(`[Meta] Initializing Pixel ID: ${PIXEL_ID}`);
-
-  (function (f: any, b, e, v, n, t, s) {
-    if (f.fbq) return;
-    n = f.fbq = function () {
-      n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments);
-    };
-    if (!f._fbq) f._fbq = n;
-    n.push = n;
-    n.loaded = !0;
-    n.version = '2.0';
-    n.queue = [];
-    t = b.createElement(e);
-    t.async = !0;
-    t.src = v;
-    s = b.getElementsByTagName(e)[0];
-    if (s && s.parentNode) {
-      s.parentNode.insertBefore(t, s);
-    }
-  })(window, document, 'script', 'https://connect.facebook.net/en_US/fbevents.js');
-
-  window.fbq('init', PIXEL_ID);
+  if (IS_DEBUG) console.log(`[Meta] Initializing Pixel ID: ${PIXEL_ID} with EMQ`, userData);
+  window.fbq('init', PIXEL_ID, userData);
 }
 
 /**
@@ -93,11 +73,12 @@ function trackEvent(eventName: string, data: any = {}, eventId?: string) {
 /**
  * Dispara el evento PageView (Evita doble disparo por montaje)
  */
-export function trackPageView(eventId?: string) {
+export function trackPageView(eventId?: string, userData?: any) {
   if (window._metaPageViewTracked) return; // Basic dedup for strict mode / re-renders
   window._metaPageViewTracked = true;
   
   trackEvent('PageView', undefined, eventId);
+  sendMetaCapiEvent(eventId || '', 'PageView', undefined, userData);
   
   // Reset after a short delay in case we navigated (SPA)
   setTimeout(() => {

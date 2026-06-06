@@ -69,6 +69,7 @@ const AdminAutomations = lazy(() => import('./pages/admin/AdminAutomations'));
 
 // GodMode removed from production — SEC-CRIT-01 (hardcoded credentials)
 import { useReferralTracking } from './hooks/useReferralTracking';
+import MetaPixelTracker from './components/MetaPixelTracker';
 
 function ReferralTracker() {
   useReferralTracking();
@@ -82,6 +83,7 @@ function App() {
       <ScrollToTop />
       <AnalyticsProvider>
         <ReferralTracker />
+        <MetaPixelTracker />
         <AuthProvider>
           <WishlistProvider>
             <CartProvider>

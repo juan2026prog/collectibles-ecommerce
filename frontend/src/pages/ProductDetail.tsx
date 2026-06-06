@@ -203,18 +203,7 @@ export default function ProductDetail() {
       },
       user: { email: user?.email || undefined }
     });
-    
-    try {
-      const eventId = generateMetaEventId('AddToCart', product.id);
-      trackAddToCart(eventId, {
-        content_ids: [product.id],
-        contents: [{ id: product.id, quantity: quantity }],
-        value: finalPrice * quantity,
-        currency: 'UYU'
-      });
-    } catch (e) {
-      console.warn("Meta tracking error", e);
-    }
+
   }
 
   const seoTitle = product.seo_title || `${product.title} - Comprar Online`;

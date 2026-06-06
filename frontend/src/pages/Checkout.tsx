@@ -706,14 +706,28 @@ export default function Checkout() {
         try {
           const { data: profile } = await supabase.from('profiles').select('id').eq('email', form.email).maybeSingle();
           
-          await supabase.from('abandoned_checkouts').upsert({
+          const payload = {
             email: form.email,
             customer_id: profile?.id || user?.id || null,
             cart_data: items,
             total_amount: total,
             status: 'abandoned',
             updated_at: new Date().toISOString()
-          }, { onConflict: 'email' });
+          };
+
+          const { data: existing } = await supabase
+            .from('abandoned_checkouts')
+            .select('id')
+            .eq('email', form.email)
+            .eq('status', 'abandoned')
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+          if (existing && existing.length > 0) {
+            await supabase.from('abandoned_checkouts').update(payload).eq('id', existing[0].id);
+          } else {
+            await supabase.from('abandoned_checkouts').insert(payload);
+          }
         } catch (e) {
           console.warn('Silent abandoned checkout log failed', e);
         }
