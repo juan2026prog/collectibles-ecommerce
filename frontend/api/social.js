@@ -38,16 +38,22 @@ export default async function handler(req, res) {
     if ((type === 'p' || type === 'producto') && slug) {
       const { data: product } = await supabase
         .from('products')
-        .select(`id, title, seo_title, description, seo_description, short_description, price, promotional_price, stock, image_url, brand:brands(name), category:categories(name)`)
+        .select(`id, title, seo_title, description, seo_description, short_description, base_price, compare_at_price, product_images(url, is_primary), brand:brands(name), category:categories(name)`)
         .eq('slug', slug)
         .single();
 
       if (product) {
         title = product.seo_title || `${product.title} | Collectibles Uruguay`;
         description = product.seo_description || product.short_description || product.title;
-        image = product.image_url ? (product.image_url.startsWith('http') ? product.image_url : `${supabaseUrl}/storage/v1/object/public/products/${product.image_url}`) : image;
         
-        const finalPrice = product.promotional_price > 0 ? product.promotional_price : product.price;
+        let foundImage = image;
+        if (product.product_images && product.product_images.length > 0) {
+          const primary = product.product_images.find(img => img.is_primary);
+          foundImage = primary ? primary.url : product.product_images[0].url;
+        }
+        image = foundImage.startsWith('http') ? foundImage : `${supabaseUrl}/storage/v1/object/public/products/${foundImage}`;
+        
+        const finalPrice = product.compare_at_price > 0 ? product.compare_at_price : product.base_price;
 
         const productSchema = {
           "@context": "https://schema.org/",
@@ -62,8 +68,8 @@ export default async function handler(req, res) {
             "@type": "Offer",
             "url": urlCanonical,
             "priceCurrency": "UYU",
-            "price": finalPrice,
-            "availability": product.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+            "price": finalPrice || 0,
+            "availability": "https://schema.org/InStock",
             "itemCondition": "https://schema.org/NewCondition",
             "seller": { "@type": "Organization", "name": "Collectibles Uruguay" }
           }
