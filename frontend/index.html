@@ -54,12 +54,16 @@
       s.parentNode.insertBefore(t,s)}(window, document,'script',
       'https://connect.facebook.net/en_US/fbevents.js');
       fbq('init', '1623445247816011');
-      // fbq('track', 'PageView'); // Deferido a MetaPixelTracker en App.tsx para control con event_id
+      var initialEventId = 'meta_pageview_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+      window._metaInitialEventId = initialEventId;
+      fbq('track', 'PageView', {}, { eventID: initialEventId });
     </script>
+    <noscript><img height="1" width="1" style="display:none"
+      src="https://www.facebook.com/tr?id=1623445247816011&ev=PageView&noscript=1"
+    /></noscript>
     <!-- End Meta Pixel Code -->
   </head>
   <body>
-    <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=1623445247816011&ev=PageView&noscript=1" /></noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -1,15 +1,16 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { trackPageView, generateMetaEventId, initPixel } from '../lib/meta/metaPixel';
+import { sendMetaCapiEvent } from '../lib/meta/metaCapi';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 
 export default function MetaPixelTracker() {
   const location = useLocation();
   const { user } = useAuth();
+  const lastPathname = useRef('');
 
   useEffect(() => {
-    // If we have a user, fetch their profile to send enhanced matching data
     const fetchAndInit = async () => {
       let userData = {};
       if (user?.email) {
@@ -27,6 +28,21 @@ export default function MetaPixelTracker() {
       }
       (window as any)._metaUserData = userData;
       initPixel(userData);
+
+      const currentPath = location.pathname + location.search;
+      
+      // Primera carga: El browser ya mandó el evento vía index.html, solo disparamos CAPI
+      if ((window as any)._metaInitialEventId) {
+        const initialId = (window as any)._metaInitialEventId;
+        delete (window as any)._metaInitialEventId;
+        lastPathname.current = currentPath;
+        sendMetaCapiEvent(initialId, 'PageView', undefined, userData);
+        return;
+      }
+
+      // Evitar disparar dos veces si solo cambia el usuario
+      if (lastPathname.current === currentPath) return;
+      lastPathname.current = currentPath;
       
       const eventId = generateMetaEventId('pageview');
       trackPageView(eventId, userData);
