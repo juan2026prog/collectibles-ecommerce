@@ -11,7 +11,7 @@ import AddressAutocomplete from '../components/AddressAutocomplete';
 import { createCheckoutOrder, getPublicPaymentProviders, startCheckoutPayment, type PublicPaymentProvider } from '../lib/payments';
 import { URUGUAY_LOCATIONS, DEPARTAMENTOS, calculateShipping } from '../utils/uruguayLocations';
 import { getProductImage, resolveImage } from '../lib/imageUtils';
-import { usePromotions, evaluateItemDiscountDetailed } from '../hooks/usePromotions';
+import { usePromotions, evaluateItemDiscount, evaluateItemDiscountDetailed } from '../hooks/usePromotions';
 import { generateMetaEventId, trackInitiateCheckout, trackAddPaymentInfo } from '../lib/meta/metaPixel';
 
 function normalizeLocation(value?: string | null) {
