@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Mail, MapPin, Phone, Send, CheckCircle, Clock, MessageCircle } from 'lucide-react';
 import { useSiteSettings } from '../hooks/useSiteSettings';
+import { trackLead, trackContact, trackFindLocation, generateMetaEventId } from '../lib/meta/metaPixel';
 
 export default function Contact() {
   const { settings } = useSiteSettings();
@@ -50,6 +51,10 @@ export default function Contact() {
 
       if (!res.ok) throw new Error('Error al enviar');
       setSent(true);
+      
+      // Meta Pixel Track Lead
+      trackLead(generateMetaEventId(), { content_name: 'contact_form', user_email: form.email });
+      
       setForm({ name: '', email: '', subject: '', message: '' });
     } catch {
       setError('No se pudo enviar el mensaje. Intentá de nuevo o escribinos por WhatsApp.');
@@ -57,6 +62,7 @@ export default function Contact() {
       setSending(false);
     }
   };
+
 
   return (
     <div className="min-h-screen text-white font-sans bg-[#05070f]">
@@ -211,7 +217,11 @@ export default function Contact() {
                 </div>
                 <div>
                   <div className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Email</div>
-                  <a href="mailto:collectiblesuy@gmail.com" className="text-sm font-bold text-white hover:text-[#f00856] transition-colors">
+                  <a 
+                    href="mailto:collectiblesuy@gmail.com" 
+                    className="text-sm font-bold text-white hover:text-[#f00856] transition-colors"
+                    onClick={() => trackContact(generateMetaEventId(), { contact_method: 'email' })}
+                  >
                     collectiblesuy@gmail.com
                   </a>
                 </div>
@@ -223,7 +233,12 @@ export default function Contact() {
                 </div>
                 <div>
                   <div className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Dirección</div>
-                  <div className="text-sm font-bold text-slate-300">Vázquez 1418, Montevideo, Uruguay</div>
+                  <div 
+                    className="text-sm font-bold text-slate-300 cursor-pointer hover:text-white"
+                    onClick={() => trackFindLocation(generateMetaEventId(), { content_name: 'Vázquez 1418', location: 'Montevideo' })}
+                  >
+                    Vázquez 1418, Montevideo, Uruguay
+                  </div>
                 </div>
               </div>
 
@@ -245,6 +260,7 @@ export default function Contact() {
             href={whatsappUrl}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() => trackContact(generateMetaEventId(), { contact_method: 'whatsapp' })}
             className="block rounded-3xl border border-[#25D366]/20 bg-[#25D366]/5 p-6 shadow-xl hover:bg-[#25D366]/10 transition-all group"
           >
             <div className="flex items-center gap-3 mb-3">

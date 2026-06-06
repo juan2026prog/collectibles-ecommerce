@@ -199,3 +199,49 @@ export function trackPurchase(
   trackEvent('Purchase', pixelData, eventId);
   sendMetaCapiEvent(eventId, 'Purchase', pixelData, { email: user_email });
 }
+
+export function trackCompleteRegistration(
+  eventId: string,
+  data: {
+    status?: boolean;
+    user_email?: string;
+  }
+) {
+  const { user_email, ...pixelData } = data;
+  trackEvent('CompleteRegistration', pixelData, eventId);
+  sendMetaCapiEvent(eventId, 'CompleteRegistration', pixelData, { email: user_email });
+}
+
+export function trackLead(
+  eventId: string,
+  data: {
+    content_name?: string;
+    content_category?: string;
+    user_email?: string;
+  }
+) {
+  const { user_email, ...pixelData } = data;
+  trackEvent('Lead', pixelData, eventId);
+  sendMetaCapiEvent(eventId, 'Lead', pixelData, { email: user_email });
+}
+
+export function trackContact(
+  eventId: string,
+  data: {
+    contact_method?: string; // e.g. whatsapp, email, instagram
+  }
+) {
+  trackEvent('Contact', data, eventId);
+  sendMetaCapiEvent(eventId, 'Contact', data);
+}
+
+export function trackFindLocation(
+  eventId: string,
+  data: {
+    content_name?: string; // e.g. 'Dirección Local'
+    location?: string;
+  }
+) {
+  trackEvent('FindLocation', data, eventId);
+  sendMetaCapiEvent(eventId, 'FindLocation', data);
+}

@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { STORE_ISOLOGO_URL } from '../lib/brand';
+import { trackCompleteRegistration, generateMetaEventId } from '../lib/meta/metaPixel';
 
 export default function Login() {
   const { signIn, signUp, signInWithGoogle, signInWithOtp } = useAuth();
@@ -35,7 +36,10 @@ export default function Login() {
     } else {
       const { error } = await signUp(email, password);
       if (error) setError(error.message);
-      else setSuccess('¡Cuenta creada! Revisá tu email para confirmar.');
+      else {
+        setSuccess('¡Cuenta creada! Revisá tu email para confirmar.');
+        trackCompleteRegistration(generateMetaEventId(), { status: true, user_email: email });
+      }
     }
     setLoading(false);
   }

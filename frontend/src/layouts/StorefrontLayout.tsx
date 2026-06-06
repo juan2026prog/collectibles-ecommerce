@@ -24,6 +24,7 @@ import { FacebookIcon, InstagramIcon, TwitterIcon, YoutubeIcon, TiktokIcon, What
 import { CurrencySelector } from '../components/CurrencySelector';
 import React from 'react';
 import { useMetaPageTracking } from '../hooks/useMetaPageTracking';
+import { trackContact, trackFindLocation, generateMetaEventId } from '../lib/meta/metaPixel';
 
 // NAV_LINKS and MEGA_MENU are built dynamically inside the component
 // using t() for translations and useCategories() for live DB data.
@@ -614,6 +615,7 @@ export default function StorefrontLayout() {
                             href={url} 
                             target="_blank" 
                             rel="noopener noreferrer" 
+                            onClick={() => trackContact(generateMetaEventId(), { contact_method: social.key })}
                             className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white hover:bg-[#f00856] transition-all"
                           >
                             <Icon />
@@ -658,6 +660,7 @@ export default function StorefrontLayout() {
                         href={url} 
                         target="_blank" 
                         rel="noopener noreferrer" 
+                        onClick={() => trackContact(generateMetaEventId(), { contact_method: social.key })}
                         className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-[#f00856] hover:border-[#f00856] transition-all hover:-translate-y-1 text-white"
                       >
                         <Icon />
@@ -704,18 +707,29 @@ export default function StorefrontLayout() {
           <div>
              <h4 className="text-white font-black uppercase text-[11px] tracking-[0.2em] mb-6">Contacto</h4>
              <div className="space-y-4 text-sm font-bold text-slate-400">
-                <div className="flex items-start gap-3">
+                <div 
+                  className="flex items-start gap-3 cursor-pointer hover:text-white transition-colors"
+                  onClick={() => trackFindLocation(generateMetaEventId(), { content_name: 'Vázquez 1418', location: 'Montevideo' })}
+                >
                    <MapPin className="w-4 h-4 text-[#f00856] shrink-0 mt-0.5" />
                    <span>Vázquez 1418, Montevideo, Uruguay.</span>
                 </div>
-                <div className="flex items-center gap-3">
+                <a 
+                  href="tel:+59896889596"
+                  className="flex items-center gap-3 hover:text-white transition-colors"
+                  onClick={() => trackContact(generateMetaEventId(), { contact_method: 'phone' })}
+                >
                    <Phone className="w-4 h-4 text-[#f00856] shrink-0" />
                    <span>+598 96 889 596</span>
-                </div>
-                <div className="flex items-center gap-3">
+                </a>
+                <a 
+                  href="mailto:soporte@collectibles.com.uy"
+                  className="flex items-center gap-3 hover:text-white transition-colors"
+                  onClick={() => trackContact(generateMetaEventId(), { contact_method: 'email' })}
+                >
                    <Mail className="w-4 h-4 text-[#f00856] shrink-0" />
                    <span>soporte@collectibles.com.uy</span>
-                </div>
+                </a>
              </div>
              <div className="mt-6 pt-6 border-t border-white/5">
                 <div className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Horarios</div>
