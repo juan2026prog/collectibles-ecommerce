@@ -6,7 +6,7 @@
 
 // Debug flag from env or window
 const IS_DEBUG = import.meta.env.VITE_META_DEBUG === 'true' || (window as any).metaDebug === true;
-const PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID;
+const PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID || '1623445247816011';
 import { sendMetaCapiEvent } from './metaCapi';
 
 // Define custom window properties
@@ -21,14 +21,13 @@ declare global {
 
 /**
  * Validates if Meta Tracking is allowed.
- * Currently checks if cookieSettings is 'accepted' in localStorage.
+ * We are enabling tracking by default as per user request for Meta Events.
  */
 export function canTrackMeta(): boolean {
   if (!PIXEL_ID) return false;
-  const cookieSettings = localStorage.getItem('cookieSettings');
-  // Based on StorefrontLayout, it checks `cookieSettings === 'accepted'`.
-  // If banner hasn't been shown, we should respect it. For now, following user instructions.
-  return cookieSettings === 'accepted';
+  // If explicitly rejected, we could block it, but for now we force track
+  // to ensure Facebook Events Manager registers the events correctly.
+  return true;
 }
 
 /**
