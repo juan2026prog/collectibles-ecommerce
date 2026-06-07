@@ -13,6 +13,8 @@ import { analytics } from '../lib/analytics';
 import { trackViewContent, trackAddToCart, generateMetaEventId } from '../lib/meta/metaPixel';
 import SEO from '../components/SEO';
 import { useSiteSettings } from '../hooks/useSiteSettings';
+import SoldByCard from '../components/SoldByCard';
+
 export default function ProductDetail() {
   const { settings } = useSiteSettings();
   const { slug } = useParams();
@@ -186,6 +188,9 @@ export default function ProductDetail() {
       category_id: product.category?.id,
       brand_id: product.brand?.id,
       vendor_id: product.vendor_id,
+      vendor_name: product.vendor?.commercial_name,
+      vendor_slug: product.vendor?.slug,
+      vendor_logo: product.vendor?.logo_url,
       tag_ids: product.product_tags?.map((pt: any) => pt.tag_id) || [],
     });
 
@@ -494,7 +499,7 @@ export default function ProductDetail() {
                     {product.brand.name[0]}
                   </div>
                   <div>
-                    <div className="font-black text-xl text-white">{product.brand.name}</div>
+                     <div className="font-black text-xl text-white">{product.brand.name}</div>
                   </div>
                 </div>
                 <span className="badge hidden sm:inline-flex items-center gap-1.5">
@@ -503,6 +508,13 @@ export default function ProductDetail() {
               </div>
             </div>
           )}
+
+          <SoldByCard 
+            vendorId={product.vendor_id} 
+            vendorName={product.vendor?.commercial_name} 
+            vendorLogo={product.vendor?.logo_url ? resolveImage(product.vendor.logo_url) : undefined}
+            vendorSlug={product.vendor?.slug}
+          />
 
           <div className="grid grid-cols-3 gap-3 mt-4">
             <div className="soft rounded-2xl p-4 transition-colors hover:bg-white/5">

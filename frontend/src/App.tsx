@@ -66,6 +66,7 @@ const AdminLogistics = lazy(() => import('./pages/admin/AdminLogistics'));
 const AdminArtists = lazy(() => import('./pages/admin/AdminArtists'));
 const AdminTags = lazy(() => import('./pages/admin/AdminTags'));
 const AdminAutomations = lazy(() => import('./pages/admin/AdminAutomations'));
+const AdminVendors = lazy(() => import('./pages/admin/AdminVendors'));
 
 // GodMode removed from production — SEC-CRIT-01 (hardcoded credentials)
 import { useReferralTracking } from './hooks/useReferralTracking';
@@ -203,6 +204,7 @@ function App() {
                   <Route path="artists" element={<AdminArtists />} />
                   <Route path="tags" element={<AdminTags />} />
                   <Route path="automations" element={<AdminAutomations />} />
+                  <Route path="vendors" element={<AdminVendors />} />
                 </Route>
                   </Routes>
                 </Suspense>

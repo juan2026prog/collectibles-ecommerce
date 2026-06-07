@@ -1,0 +1,6187 @@
+[
+  {
+    "id": "09d46af2-dbc8-4d9e-91bd-52a3b36b81e0",
+    "slug": "mercadolibre-MLU655247339",
+    "title": "Funko Pop! Street Sharks Ripster",
+    "seo_title": null,
+    "seo_description": null,
+    "metadata": {
+      "health": null,
+      "video_id": null,
+      "permalink": "https://articulo.mercadolibre.com.uy/MLU-655247339-funko-pop-street-sharks-ripster-1711-_JM",
+      "attributes": [
+        {
+          "id": "ACTION_FIGURE_GAME_TYPE",
+          "name": "Tipo de juego",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "string"
+        },
+        {
+          "id": "ACTION_FIGURE_NUMBER",
+          "name": "Número de la figura de acción",
+          "values": [
+            {
+              "id": null,
+              "name": "1711",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "1711",
+          "value_type": "number"
+        },
+        {
+          "id": "ARTICULATION_POINTS_NUMBER",
+          "name": "Cantidad de puntos de articulación",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "number"
+        },
+        {
+          "id": "BRAND",
+          "name": "Marca",
+          "values": [
+            {
+              "id": "415856",
+              "name": "Funko",
+              "struct": null
+            }
+          ],
+          "value_id": "415856",
+          "value_name": "Funko",
+          "value_type": "string"
+        },
+        {
+          "id": "CHARACTER",
+          "name": "Personaje",
+          "values": [
+            {
+              "id": "39434635",
+              "name": "Ripster",
+              "struct": null
+            }
+          ],
+          "value_id": "39434635",
+          "value_name": "Ripster",
+          "value_type": "string"
+        },
+        {
+          "id": "COLLECTION",
+          "name": "Colección",
+          "values": [
+            {
+              "id": "39434636",
+              "name": "Street Sharks",
+              "struct": null
+            }
+          ],
+          "value_id": "39434636",
+          "value_name": "Street Sharks",
+          "value_type": "string"
+        },
+        {
+          "id": "DEPTH",
+          "name": "Profundidad",
+          "values": [
+            {
+              "id": null,
+              "name": "6.5 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 6.5
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "6.5 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "GTIN",
+          "name": "Código universal de producto",
+          "values": [
+            {
+              "id": null,
+              "name": "889698838214",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "889698838214",
+          "value_type": "string"
+        },
+        {
+          "id": "HEIGHT",
+          "name": "Altura",
+          "values": [
+            {
+              "id": null,
+              "name": "9.5 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 9.5
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "9.5 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "INCLUDES_ACCESSORIES",
+          "name": "Incluye accesorios",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_ARTICULATED",
+          "name": "Es articulada",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_BOBBLEHEAD",
+          "name": "Es bobblehead",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_COLLECTIBLE",
+          "name": "Es coleccionable",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "ITEM_CONDITION",
+          "name": "Condición del ítem",
+          "values": [
+            {
+              "id": "2230284",
+              "name": "Nuevo",
+              "struct": null
+            }
+          ],
+          "value_id": "2230284",
+          "value_name": "Nuevo",
+          "value_type": "list"
+        },
+        {
+          "id": "LINE",
+          "name": "Línea",
+          "values": [
+            {
+              "id": "7295721",
+              "name": "Pop",
+              "struct": null
+            }
+          ],
+          "value_id": "7295721",
+          "value_name": "Pop",
+          "value_type": "string"
+        },
+        {
+          "id": "MANUFACTURER",
+          "name": "Fabricante",
+          "values": [
+            {
+              "id": "415856",
+              "name": "Funko",
+              "struct": null
+            }
+          ],
+          "value_id": "415856",
+          "value_name": "Funko",
+          "value_type": "string"
+        },
+        {
+          "id": "MATERIALS",
+          "name": "Materiales",
+          "values": [
+            {
+              "id": "2441708",
+              "name": "Vinilo",
+              "struct": null
+            }
+          ],
+          "value_id": "2441708",
+          "value_name": "Vinilo",
+          "value_type": "string"
+        },
+        {
+          "id": "MIN_RECOMMENDED_AGE",
+          "name": "Edad mínima recomendada",
+          "values": [
+            {
+              "id": null,
+              "name": "3 años",
+              "struct": {
+                "unit": "años",
+                "number": 3
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "3 años",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "POWER_SUPPLY_TYPE",
+          "name": "Tipo de alimentación",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "string"
+        },
+        {
+          "id": "SCALE",
+          "name": "Escala",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "string"
+        },
+        {
+          "id": "SELLER_PACKAGE_HEIGHT",
+          "name": "Altura del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "20 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 20
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "20 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_LENGTH",
+          "name": "Largo del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "11 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 11
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "11 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_WEIGHT",
+          "name": "Peso del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "260 g",
+              "struct": {
+                "unit": "g",
+                "number": 260
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "260 g",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_WIDTH",
+          "name": "Ancho del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "16 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 16
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "16 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_SKU",
+          "name": "SKU",
+          "values": [
+            {
+              "id": null,
+              "name": "889698838214",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "889698838214",
+          "value_type": "string"
+        },
+        {
+          "id": "TOY_SAFETY_CERTIFICATE_NUMBER",
+          "name": "Número de certificado de seguridad del juguete",
+          "values": [
+            {
+              "id": null,
+              "name": "889698838214",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "889698838214",
+          "value_type": "string"
+        },
+        {
+          "id": "WEIGHT",
+          "name": "Peso",
+          "values": [
+            {
+              "id": null,
+              "name": "100 g",
+              "struct": {
+                "unit": "g",
+                "number": 100
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "100 g",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "WIDTH",
+          "name": "Ancho",
+          "values": [
+            {
+              "id": null,
+              "name": "6.5 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 6.5
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "6.5 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "WITH_INTERCHANGEABLE_PIECES",
+          "name": "Con piezas intercambiables",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "WITH_LIGHTS",
+          "name": "Con luces",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "WITH_REMOTE_CONTROL",
+          "name": "Con control remoto",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "WITH_SOUND",
+          "name": "Con sonido",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        }
+      ],
+      "sold_quantity": 0,
+      "ml_category_id": "MLU176854",
+      "initial_quantity": 6,
+      "accepts_mercadopago": true
+    },
+    "brand": {
+      "name": "Funko"
+    },
+    "category": null
+  },
+  {
+    "id": "1164097a-7199-40a7-aeaf-cf6d0bc4926c",
+    "slug": "mercadolibre-MLU978086296-copia-8862-copia-5852-copia-2525",
+    "title": "Peluche Bob Esponja - Pirata Holandés",
+    "seo_title": null,
+    "seo_description": null,
+    "metadata": {},
+    "brand": {
+      "name": "Funrise"
+    },
+    "category": {
+      "name": "Peluches"
+    }
+  },
+  {
+    "id": "13af6be0-5138-4acf-b21e-4f5705e334df",
+    "slug": "mercadolibre-MLU630540796",
+    "title": "Figuras Hasbro Dungeons And Dragons Golden Archive - Forge",
+    "seo_title": null,
+    "seo_description": null,
+    "metadata": {
+      "health": 1,
+      "video_id": null,
+      "permalink": "https://articulo.mercadolibre.com.uy/MLU-630540796-figuras-hasbro-dungeons-and-dragons-golden-archive-forge-_JM",
+      "attributes": [
+        {
+          "id": "BATTERY_CAPACITY",
+          "name": "Capacidad de la batería",
+          "values": [
+            {
+              "id": null,
+              "name": "0 mAh",
+              "struct": {
+                "unit": "mAh",
+                "number": 0
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "0 mAh",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "INCLUDES_CELL_BATTERIES",
+          "name": "Incluye pilas",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "ACTION_FIGURE_NUMBER",
+          "name": "Número de la figura de acción",
+          "values": [
+            {
+              "id": null,
+              "name": "2624",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "2624",
+          "value_type": "number"
+        },
+        {
+          "id": "BRAND",
+          "name": "Marca",
+          "values": [
+            {
+              "id": "1006823",
+              "name": "Hasbro",
+              "struct": null
+            }
+          ],
+          "value_id": "1006823",
+          "value_name": "Hasbro",
+          "value_type": "string"
+        },
+        {
+          "id": "CHARACTER",
+          "name": "Personaje",
+          "values": [
+            {
+              "id": "20364672",
+              "name": "Forge",
+              "struct": null
+            }
+          ],
+          "value_id": "20364672",
+          "value_name": "Forge",
+          "value_type": "string"
+        },
+        {
+          "id": "COLLECTION",
+          "name": "Colección",
+          "values": [
+            {
+              "id": "2788097",
+              "name": "Dungeons & Dragons",
+              "struct": null
+            }
+          ],
+          "value_id": "2788097",
+          "value_name": "Dungeons & Dragons",
+          "value_type": "string"
+        },
+        {
+          "id": "DEPTH",
+          "name": "Profundidad",
+          "values": [
+            {
+              "id": null,
+              "name": "3.5 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 3.5
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "3.5 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "GTIN",
+          "name": "Código universal de producto",
+          "values": [
+            {
+              "id": null,
+              "name": "5010993849000",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "5010993849000",
+          "value_type": "string"
+        },
+        {
+          "id": "HEIGHT",
+          "name": "Altura",
+          "values": [
+            {
+              "id": null,
+              "name": "15 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 15
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "15 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "INCLUDES_ACCESSORIES",
+          "name": "Incluye accesorios",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_ARTICULATED",
+          "name": "Es articulada",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_BOBBLEHEAD",
+          "name": "Es bobblehead",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_COLLECTIBLE",
+          "name": "Es coleccionable",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "ITEM_CONDITION",
+          "name": "Condición del ítem",
+          "values": [
+            {
+              "id": "2230284",
+              "name": "Nuevo",
+              "struct": null
+            }
+          ],
+          "value_id": "2230284",
+          "value_name": "Nuevo",
+          "value_type": "list"
+        },
+        {
+          "id": "LINE",
+          "name": "Línea",
+          "values": [
+            {
+              "id": "20373017",
+              "name": "Dungeons & Dragons",
+              "struct": null
+            }
+          ],
+          "value_id": "20373017",
+          "value_name": "Dungeons & Dragons",
+          "value_type": "string"
+        },
+        {
+          "id": "MANUFACTURER",
+          "name": "Fabricante",
+          "values": [
+            {
+              "id": "1006823",
+              "name": "Hasbro",
+              "struct": null
+            }
+          ],
+          "value_id": "1006823",
+          "value_name": "Hasbro",
+          "value_type": "string"
+        },
+        {
+          "id": "MATERIALS",
+          "name": "Materiales",
+          "values": [
+            {
+              "id": "2697958",
+              "name": "PVC",
+              "struct": null
+            }
+          ],
+          "value_id": "2697958",
+          "value_name": "PVC",
+          "value_type": "string"
+        },
+        {
+          "id": "MIN_RECOMMENDED_AGE",
+          "name": "Edad mínima recomendada",
+          "values": [
+            {
+              "id": null,
+              "name": "6 años",
+              "struct": {
+                "unit": "años",
+                "number": 6
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "6 años",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "POWER_SUPPLY_TYPE",
+          "name": "Tipo de alimentación",
+          "values": [
+            {
+              "id": "44430390",
+              "name": "ninguna",
+              "struct": null
+            }
+          ],
+          "value_id": "44430390",
+          "value_name": "ninguna",
+          "value_type": "string"
+        },
+        {
+          "id": "RECOMMENDED_AGE_GROUP",
+          "name": "Edad recomendada",
+          "values": [
+            {
+              "id": null,
+              "name": "0-6 meses",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "0-6 meses",
+          "value_type": "list"
+        },
+        {
+          "id": "SELLER_PACKAGE_HEIGHT",
+          "name": "Altura del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "29 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 29
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "29 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_LENGTH",
+          "name": "Largo del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "10 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 10
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "10 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_WEIGHT",
+          "name": "Peso del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "400 g",
+              "struct": {
+                "unit": "g",
+                "number": 400
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "400 g",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_WIDTH",
+          "name": "Ancho del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "23 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 23
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "23 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_SKU",
+          "name": "SKU",
+          "values": [
+            {
+              "id": null,
+              "name": "5010993849000",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "5010993849000",
+          "value_type": "string"
+        },
+        {
+          "id": "TOY_SAFETY_CERTIFICATE_NUMBER",
+          "name": "Número de certificado de seguridad del juguete",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "string"
+        },
+        {
+          "id": "WEIGHT",
+          "name": "Peso",
+          "values": [
+            {
+              "id": null,
+              "name": "450 g",
+              "struct": {
+                "unit": "g",
+                "number": 450
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "450 g",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "WIDTH",
+          "name": "Ancho",
+          "values": [
+            {
+              "id": null,
+              "name": "5 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 5
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "5 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "WITH_REMOTE_CONTROL",
+          "name": "Con control remoto",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        }
+      ],
+      "sold_quantity": 1,
+      "ml_category_id": "MLU176854",
+      "initial_quantity": 2,
+      "accepts_mercadopago": true
+    },
+    "brand": {
+      "name": "Hasbro"
+    },
+    "category": {
+      "name": "Figuras de Acción"
+    }
+  },
+  {
+    "id": "15632ad5-6aac-45ac-8992-c74de6538b02",
+    "slug": "mercadolibre-MLU478026694",
+    "title": "Peluche Gashouse Infected",
+    "seo_title": null,
+    "seo_description": null,
+    "metadata": {
+      "health": 0.87,
+      "video_id": null,
+      "permalink": "https://articulo.mercadolibre.com.uy/MLU-478026694-peluche-gashouse-infected-_JM",
+      "attributes": [
+        {
+          "id": "ACCESSORIES_INCLUDED",
+          "name": "Accesorios incluidos",
+          "values": [
+            {
+              "id": "20080727",
+              "name": "No tiene",
+              "struct": null
+            }
+          ],
+          "value_id": "20080727",
+          "value_name": "No tiene",
+          "value_type": "string"
+        },
+        {
+          "id": "ANIMAL",
+          "name": "Animal",
+          "values": [
+            {
+              "id": null,
+              "name": "Infec-ted",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "Infec-ted",
+          "value_type": "string"
+        },
+        {
+          "id": "FRANCHISE",
+          "name": "Franquicia",
+          "values": [
+            {
+              "id": "7089091",
+              "name": "Funko",
+              "struct": null
+            }
+          ],
+          "value_id": "7089091",
+          "value_name": "Funko",
+          "value_type": "string"
+        },
+        {
+          "id": "BRAND",
+          "name": "Marca",
+          "values": [
+            {
+              "id": "415856",
+              "name": "Funko",
+              "struct": null
+            }
+          ],
+          "value_id": "415856",
+          "value_name": "Funko",
+          "value_type": "string"
+        },
+        {
+          "id": "CHARACTER",
+          "name": "Personaje",
+          "values": [
+            {
+              "id": "22705774",
+              "name": "Infec-ted",
+              "struct": null
+            }
+          ],
+          "value_id": "22705774",
+          "value_name": "Infec-ted",
+          "value_type": "string"
+        },
+        {
+          "id": "FILLING_MATERIAL",
+          "name": "Material del relleno",
+          "values": [
+            {
+              "id": "5355778",
+              "name": "Fibra siliconada",
+              "struct": null
+            }
+          ],
+          "value_id": "5355778",
+          "value_name": "Fibra siliconada",
+          "value_type": "string"
+        },
+        {
+          "id": "FUNCTIONS",
+          "name": "Funciones",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "string"
+        },
+        {
+          "id": "GTIN",
+          "name": "Código universal de producto",
+          "values": [
+            {
+              "id": null,
+              "name": "889698466578",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "889698466578",
+          "value_type": "string"
+        },
+        {
+          "id": "HEIGHT",
+          "name": "Altura",
+          "values": [
+            {
+              "id": null,
+              "name": "16 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 16
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "16 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "IS_HYPOALLERGENIC_MATERIAL",
+          "name": "Es material hipoalergénico",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_KIT",
+          "name": "Es kit",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "ITEM_CONDITION",
+          "name": "Condición del ítem",
+          "values": [
+            {
+              "id": "2230284",
+              "name": "Nuevo",
+              "struct": null
+            }
+          ],
+          "value_id": "2230284",
+          "value_name": "Nuevo",
+          "value_type": "list"
+        },
+        {
+          "id": "LINE",
+          "name": "Línea",
+          "values": [
+            {
+              "id": "22705750",
+              "name": "Housegang",
+              "struct": null
+            }
+          ],
+          "value_id": "22705750",
+          "value_name": "Housegang",
+          "value_type": "string"
+        },
+        {
+          "id": "MATERIALS",
+          "name": "Materiales",
+          "values": [
+            {
+              "id": "22623789",
+              "name": "Polyester fiber",
+              "struct": null
+            }
+          ],
+          "value_id": "22623789",
+          "value_name": "Polyester fiber",
+          "value_type": "string"
+        },
+        {
+          "id": "MODEL",
+          "name": "Modelo",
+          "values": [
+            {
+              "id": "22705751",
+              "name": "Gross Plushies",
+              "struct": null
+            }
+          ],
+          "value_id": "22705751",
+          "value_name": "Gross Plushies",
+          "value_type": "string"
+        },
+        {
+          "id": "SELLER_SKU",
+          "name": "SKU",
+          "values": [
+            {
+              "id": null,
+              "name": "889698496964",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "889698496964",
+          "value_type": "string"
+        },
+        {
+          "id": "SOUNDS_NUMBER",
+          "name": "Cantidad de sonidos",
+          "values": [
+            {
+              "id": null,
+              "name": "0",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "0",
+          "value_type": "number"
+        },
+        {
+          "id": "STUFFED_TOYS_NUMBER_INCLUDED",
+          "name": "Cantidad de peluches incluídos",
+          "values": [
+            {
+              "id": null,
+              "name": "1",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "1",
+          "value_type": "number"
+        },
+        {
+          "id": "STUFFED_TOYS_SHAPE",
+          "name": "Forma del peluche",
+          "values": [
+            {
+              "id": "22705776",
+              "name": "Bacterias",
+              "struct": null
+            }
+          ],
+          "value_id": "22705776",
+          "value_name": "Bacterias",
+          "value_type": "string"
+        },
+        {
+          "id": "STUFFED_TOY_SIZE",
+          "name": "Tamaño",
+          "values": [
+            {
+              "id": "13709540",
+              "name": "Mediano",
+              "struct": null
+            }
+          ],
+          "value_id": "13709540",
+          "value_name": "Mediano",
+          "value_type": "string"
+        },
+        {
+          "id": "TOY_SAFETY_CERTIFICATE_NUMBER",
+          "name": "Número de certificado de seguridad del juguete",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "string"
+        },
+        {
+          "id": "WEIGHT",
+          "name": "Peso",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "number_unit"
+        },
+        {
+          "id": "WIDTH",
+          "name": "Ancho",
+          "values": [
+            {
+              "id": null,
+              "name": "17 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 17
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "17 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "WITH_LIGHTS",
+          "name": "Con luces",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "WITH_MOVEMENT",
+          "name": "Con movimiento",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "WITH_SOUNDS",
+          "name": "Con sonidos",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        }
+      ],
+      "sold_quantity": 0,
+      "ml_category_id": "MLU1166",
+      "initial_quantity": 6,
+      "accepts_mercadopago": true
+    },
+    "brand": null,
+    "category": null
+  },
+  {
+    "id": "190939e2-9c0a-4b00-983d-0d6d5b7e2cf2",
+    "slug": "mercadolibre-MLU603294256",
+    "title": "Funko Pop! Queen - News Of The World ",
+    "seo_title": null,
+    "seo_description": null,
+    "metadata": {
+      "health": 0.87,
+      "video_id": null,
+      "permalink": "https://articulo.mercadolibre.com.uy/MLU-603294256-funko-pop-queen-news-of-the-world-_JM",
+      "attributes": [
+        {
+          "id": "BATTERY_CAPACITY",
+          "name": "Capacidad de la batería",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "number_unit"
+        },
+        {
+          "id": "MATERIAL",
+          "name": "Material",
+          "values": [
+            {
+              "id": "2441708",
+              "name": "Vinilo",
+              "struct": null
+            }
+          ],
+          "value_id": "2441708",
+          "value_name": "Vinilo",
+          "value_type": "string"
+        },
+        {
+          "id": "ACTION_FIGURE_NUMBER",
+          "name": "Número de la figura de acción",
+          "values": [
+            {
+              "id": null,
+              "name": "06",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "06",
+          "value_type": "number"
+        },
+        {
+          "id": "ALPHANUMERIC_MODEL",
+          "name": "Modelo alfanumérico",
+          "values": [
+            {
+              "id": "13380591",
+              "name": "pop",
+              "struct": null
+            }
+          ],
+          "value_id": "13380591",
+          "value_name": "pop",
+          "value_type": "string"
+        },
+        {
+          "id": "BRAND",
+          "name": "Marca",
+          "values": [
+            {
+              "id": "415856",
+              "name": "Funko",
+              "struct": null
+            }
+          ],
+          "value_id": "415856",
+          "value_name": "Funko",
+          "value_type": "string"
+        },
+        {
+          "id": "CHARACTER",
+          "name": "Personaje",
+          "values": [
+            {
+              "id": "13703953",
+              "name": "Queen",
+              "struct": null
+            }
+          ],
+          "value_id": "13703953",
+          "value_name": "Queen",
+          "value_type": "string"
+        },
+        {
+          "id": "COLLECTION",
+          "name": "Colección",
+          "values": [
+            {
+              "id": "5215990",
+              "name": "Queen",
+              "struct": null
+            }
+          ],
+          "value_id": "5215990",
+          "value_name": "Queen",
+          "value_type": "string"
+        },
+        {
+          "id": "DEPTH",
+          "name": "Profundidad",
+          "values": [
+            {
+              "id": null,
+              "name": "6 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 6
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "6 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "GTIN",
+          "name": "Código universal de producto",
+          "values": [
+            {
+              "id": null,
+              "name": "889698530811",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "889698530811",
+          "value_type": "string"
+        },
+        {
+          "id": "HEIGHT",
+          "name": "Altura",
+          "values": [
+            {
+              "id": null,
+              "name": "11 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 11
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "11 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "INCLUDES_ACCESSORIES",
+          "name": "Incluye accesorios",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_ARTICULATED",
+          "name": "Es articulada",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_BOBBLEHEAD",
+          "name": "Es bobblehead",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_COLLECTIBLE",
+          "name": "Es coleccionable",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "ITEM_CONDITION",
+          "name": "Condición del ítem",
+          "values": [
+            {
+              "id": "2230284",
+              "name": "Nuevo",
+              "struct": null
+            }
+          ],
+          "value_id": "2230284",
+          "value_name": "Nuevo",
+          "value_type": "list"
+        },
+        {
+          "id": "LINE",
+          "name": "Línea",
+          "values": [
+            {
+              "id": "7412074",
+              "name": "Pop! Rocks",
+              "struct": null
+            }
+          ],
+          "value_id": "7412074",
+          "value_name": "Pop! Rocks",
+          "value_type": "string"
+        },
+        {
+          "id": "MANUFACTURER",
+          "name": "Fabricante",
+          "values": [
+            {
+              "id": "415856",
+              "name": "Funko",
+              "struct": null
+            }
+          ],
+          "value_id": "415856",
+          "value_name": "Funko",
+          "value_type": "string"
+        },
+        {
+          "id": "MATERIALS",
+          "name": "Materiales",
+          "values": [
+            {
+              "id": "2441708",
+              "name": "Vinilo",
+              "struct": null
+            }
+          ],
+          "value_id": "2441708",
+          "value_name": "Vinilo",
+          "value_type": "string"
+        },
+        {
+          "id": "MIN_RECOMMENDED_AGE",
+          "name": "Edad mínima recomendada",
+          "values": [
+            {
+              "id": null,
+              "name": "3 años",
+              "struct": {
+                "unit": "años",
+                "number": 3
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "3 años",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "RECOMMENDED_AGE_GROUP",
+          "name": "Edad recomendada",
+          "values": [
+            {
+              "id": "49882296",
+              "name": "3-6 años",
+              "struct": null
+            }
+          ],
+          "value_id": "49882296",
+          "value_name": "3-6 años",
+          "value_type": "list"
+        },
+        {
+          "id": "SELLER_PACKAGE_HEIGHT",
+          "name": "Altura del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "24 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 24
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "24 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_LENGTH",
+          "name": "Largo del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "9 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 9
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "9 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_WEIGHT",
+          "name": "Peso del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "597 g",
+              "struct": {
+                "unit": "g",
+                "number": 597
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "597 g",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_WIDTH",
+          "name": "Ancho del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "24 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 24
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "24 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_SKU",
+          "name": "SKU",
+          "values": [
+            {
+              "id": null,
+              "name": "889698530811",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "889698530811",
+          "value_type": "string"
+        },
+        {
+          "id": "TOY_SAFETY_CERTIFICATE_NUMBER",
+          "name": "Número de certificado de seguridad del juguete",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "string"
+        },
+        {
+          "id": "WEIGHT",
+          "name": "Peso",
+          "values": [
+            {
+              "id": null,
+              "name": "250 g",
+              "struct": {
+                "unit": "g",
+                "number": 250
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "250 g",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "WIDTH",
+          "name": "Ancho",
+          "values": [
+            {
+              "id": null,
+              "name": "5 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 5
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "5 cm",
+          "value_type": "number_unit"
+        }
+      ],
+      "sold_quantity": 0,
+      "ml_category_id": "MLU176854",
+      "initial_quantity": 2,
+      "accepts_mercadopago": true
+    },
+    "brand": {
+      "name": "Funko"
+    },
+    "category": null
+  },
+  {
+    "id": "236bf790-6853-48f4-a55d-000a3ff71445",
+    "slug": "mercadolibre-MLU629728888",
+    "title": "Star Wars! Camiseta Bebé Estampada Luke Skywalker",
+    "seo_title": null,
+    "seo_description": null,
+    "metadata": {
+      "health": 0.66,
+      "video_id": null,
+      "permalink": "https://articulo.mercadolibre.com.uy/MLU-629728888-star-wars-camiseta-bebe-estampada-luke-skywalker-_JM",
+      "attributes": [
+        {
+          "id": "AGE_GROUP",
+          "name": "Edad",
+          "values": [
+            {
+              "id": "371795",
+              "name": "Bebés",
+              "struct": null
+            }
+          ],
+          "value_id": "371795",
+          "value_name": "Bebés",
+          "value_type": "list"
+        },
+        {
+          "id": "BRAND",
+          "name": "Marca",
+          "values": [
+            {
+              "id": "36564111",
+              "name": "CROSSOVER",
+              "struct": null
+            }
+          ],
+          "value_id": "36564111",
+          "value_name": "CROSSOVER",
+          "value_type": "string"
+        },
+        {
+          "id": "COMPOSITION",
+          "name": "Composición",
+          "values": [
+            {
+              "id": "5473009",
+              "name": "50% algodón",
+              "struct": null
+            },
+            {
+              "id": "54024336",
+              "name": "50%polyester",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "50% algodón,50%polyester",
+          "value_type": "string"
+        },
+        {
+          "id": "FABRIC_DESIGN",
+          "name": "Diseño de la tela",
+          "values": [
+            {
+              "id": "24721100",
+              "name": "Liso",
+              "struct": null
+            }
+          ],
+          "value_id": "24721100",
+          "value_name": "Liso",
+          "value_type": "string"
+        },
+        {
+          "id": "FABRIC_TYPE",
+          "name": "Tipo de tela",
+          "values": [
+            {
+              "id": "12039023",
+              "name": "Gabardina",
+              "struct": null
+            }
+          ],
+          "value_id": "12039023",
+          "value_name": "Gabardina",
+          "value_type": "string"
+        },
+        {
+          "id": "FILTRABLE_GENDER",
+          "name": "Género filtrables",
+          "values": [
+            {
+              "id": "18549364",
+              "name": "Bebés",
+              "struct": null
+            }
+          ],
+          "value_id": "18549364",
+          "value_name": "Bebés",
+          "value_type": "list"
+        },
+        {
+          "id": "GARMENT_TYPE",
+          "name": "Tipo de prenda",
+          "values": [
+            {
+              "id": "12038970",
+              "name": "Remera",
+              "struct": null
+            }
+          ],
+          "value_id": "12038970",
+          "value_name": "Remera",
+          "value_type": "list"
+        },
+        {
+          "id": "GENDER",
+          "name": "Género",
+          "values": [
+            {
+              "id": "371795",
+              "name": "Bebés",
+              "struct": null
+            }
+          ],
+          "value_id": "371795",
+          "value_name": "Bebés",
+          "value_type": "list"
+        },
+        {
+          "id": "IS_HIGHLIGHT_BRAND",
+          "name": "Es marca destacada",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_SPORTIVE",
+          "name": " Es deportiva",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_TOM_BRAND",
+          "name": "Es marca TOM",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "ITEM_CONDITION",
+          "name": "Condición del ítem",
+          "values": [
+            {
+              "id": "2230284",
+              "name": "Nuevo",
+              "struct": null
+            }
+          ],
+          "value_id": "2230284",
+          "value_name": "Nuevo",
+          "value_type": "list"
+        },
+        {
+          "id": "MAIN_MATERIAL",
+          "name": "Material principal",
+          "values": [
+            {
+              "id": "466794",
+              "name": "Poliéster",
+              "struct": null
+            }
+          ],
+          "value_id": "466794",
+          "value_name": "Poliéster",
+          "value_type": "string"
+        },
+        {
+          "id": "MODEL",
+          "name": "Modelo",
+          "values": [
+            {
+              "id": null,
+              "name": "Star Wars",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "Star Wars",
+          "value_type": "string"
+        },
+        {
+          "id": "RECOMMENDED_USES",
+          "name": "Usos recomendados",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "string"
+        },
+        {
+          "id": "SALE_FORMAT",
+          "name": "Formato de venta",
+          "values": [
+            {
+              "id": "1359391",
+              "name": "Unidad",
+              "struct": null
+            }
+          ],
+          "value_id": "1359391",
+          "value_name": "Unidad",
+          "value_type": "list"
+        },
+        {
+          "id": "SLEEVE_TYPE",
+          "name": "Tipo de manga",
+          "values": [
+            {
+              "id": "466804",
+              "name": "Corta",
+              "struct": null
+            }
+          ],
+          "value_id": "466804",
+          "value_name": "Corta",
+          "value_type": "list"
+        },
+        {
+          "id": "T_SHIRT_COLLAR_TYPE",
+          "name": "Tipo de cuello",
+          "values": [
+            {
+              "id": null,
+              "name": "Básico",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "Básico",
+          "value_type": "list"
+        },
+        {
+          "id": "UNITS_PER_PACK",
+          "name": "Unidades por pack",
+          "values": [
+            {
+              "id": null,
+              "name": "1",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "1",
+          "value_type": "number"
+        }
+      ],
+      "sold_quantity": 1,
+      "ml_category_id": "MLU185289",
+      "initial_quantity": 2,
+      "accepts_mercadopago": true
+    },
+    "brand": null,
+    "category": null
+  },
+  {
+    "id": "2a67eaad-afe8-4987-9b14-b263a75e2b4f",
+    "slug": "mercadolibre-MLU651267554",
+    "title": "Figura De Acción Marvel Legends Series Star-lord Vol.3",
+    "seo_title": null,
+    "seo_description": null,
+    "metadata": {
+      "health": null,
+      "video_id": null,
+      "permalink": "https://articulo.mercadolibre.com.uy/MLU-651267554-figura-de-accion-marvel-legends-series-star-lord-vol3-_JM",
+      "attributes": [
+        {
+          "id": "BATTERY_CAPACITY",
+          "name": "Capacidad de la batería",
+          "values": [
+            {
+              "id": null,
+              "name": "0 mAh",
+              "struct": {
+                "unit": "mAh",
+                "number": 0
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "0 mAh",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_HEIGHT",
+          "name": "Altura del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "29 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 29
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "29 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_LENGTH",
+          "name": "Largo del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "10 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 10
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "10 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_WEIGHT",
+          "name": "Peso del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "330 g",
+              "struct": {
+                "unit": "g",
+                "number": 330
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "330 g",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_WIDTH",
+          "name": "Ancho del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "18 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 18
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "18 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "ACTION_FIGURE_NUMBER",
+          "name": "Número de la figura de acción",
+          "values": [
+            {
+              "id": "18306247",
+              "name": "1120",
+              "struct": null
+            }
+          ],
+          "value_id": "18306247",
+          "value_name": "1120",
+          "value_type": "number"
+        },
+        {
+          "id": "ALPHANUMERIC_MODEL",
+          "name": "Modelo alfanumérico",
+          "values": [
+            {
+              "id": "20878588",
+              "name": "F6602",
+              "struct": null
+            }
+          ],
+          "value_id": "20878588",
+          "value_name": "F6602",
+          "value_type": "string"
+        },
+        {
+          "id": "ARTICULATION_POINTS_NUMBER",
+          "name": "Cantidad de puntos de articulación",
+          "values": [
+            {
+              "id": "11295802",
+              "name": "5",
+              "struct": null
+            }
+          ],
+          "value_id": "11295802",
+          "value_name": "5",
+          "value_type": "number"
+        },
+        {
+          "id": "BRAND",
+          "name": "Marca",
+          "values": [
+            {
+              "id": "131856",
+              "name": "Marvel",
+              "struct": null
+            }
+          ],
+          "value_id": "131856",
+          "value_name": "Marvel",
+          "value_type": "string"
+        },
+        {
+          "id": "CELL_BATTERY_SIZE",
+          "name": "Tamaño de la pila",
+          "values": [
+            {
+              "id": "13380134",
+              "name": "No usa",
+              "struct": null
+            }
+          ],
+          "value_id": "13380134",
+          "value_name": "No usa",
+          "value_type": "string"
+        },
+        {
+          "id": "CHARACTER",
+          "name": "Personaje",
+          "values": [
+            {
+              "id": "6543722",
+              "name": "Star-Lord",
+              "struct": null
+            }
+          ],
+          "value_id": "6543722",
+          "value_name": "Star-Lord",
+          "value_type": "string"
+        },
+        {
+          "id": "COLLECTION",
+          "name": "Colección",
+          "values": [
+            {
+              "id": "24201179",
+              "name": "Guardians of the Galaxy Vol.3",
+              "struct": null
+            }
+          ],
+          "value_id": "24201179",
+          "value_name": "Guardians of the Galaxy Vol.3",
+          "value_type": "string"
+        },
+        {
+          "id": "DEPTH",
+          "name": "Profundidad",
+          "values": [
+            {
+              "id": "13809446",
+              "name": "6.03 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 6.03
+              }
+            }
+          ],
+          "value_id": "13809446",
+          "value_name": "6.03 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "GTIN",
+          "name": "Código universal de producto",
+          "values": [
+            {
+              "id": null,
+              "name": "5010994179885",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "5010994179885",
+          "value_type": "string"
+        },
+        {
+          "id": "HEIGHT",
+          "name": "Altura",
+          "values": [
+            {
+              "id": "5562821",
+              "name": "15.24 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 15.24
+              }
+            }
+          ],
+          "value_id": "5562821",
+          "value_name": "15.24 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "INCLUDES_ACCESSORIES",
+          "name": "Incluye accesorios",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_ARTICULATED",
+          "name": "Es articulada",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_BOBBLEHEAD",
+          "name": "Es bobblehead",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_COLLECTIBLE",
+          "name": "Es coleccionable",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "ITEM_CONDITION",
+          "name": "Condición del ítem",
+          "values": [
+            {
+              "id": "2230284",
+              "name": "Nuevo",
+              "struct": null
+            }
+          ],
+          "value_id": "2230284",
+          "value_name": "Nuevo",
+          "value_type": "list"
+        },
+        {
+          "id": "LINE",
+          "name": "Línea",
+          "values": [
+            {
+              "id": "7419316",
+              "name": "Legends Series",
+              "struct": null
+            }
+          ],
+          "value_id": "7419316",
+          "value_name": "Legends Series",
+          "value_type": "string"
+        },
+        {
+          "id": "MANUFACTURER",
+          "name": "Fabricante",
+          "values": [
+            {
+              "id": "1006823",
+              "name": "Hasbro",
+              "struct": null
+            }
+          ],
+          "value_id": "1006823",
+          "value_name": "Hasbro",
+          "value_type": "string"
+        },
+        {
+          "id": "MATERIALS",
+          "name": "Materiales",
+          "values": [
+            {
+              "id": "2748302",
+              "name": "Plástico",
+              "struct": null
+            }
+          ],
+          "value_id": "2748302",
+          "value_name": "Plástico",
+          "value_type": "string"
+        },
+        {
+          "id": "MIN_RECOMMENDED_AGE",
+          "name": "Edad mínima recomendada",
+          "values": [
+            {
+              "id": "1259748",
+              "name": "3 años",
+              "struct": {
+                "unit": "años",
+                "number": 3
+              }
+            }
+          ],
+          "value_id": "1259748",
+          "value_name": "3 años",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "RECOMMENDED_AGE_GROUP",
+          "name": "Edad recomendada",
+          "values": [
+            {
+              "id": "49882301",
+              "name": "12+ años",
+              "struct": null
+            }
+          ],
+          "value_id": "49882301",
+          "value_name": "12+ años",
+          "value_type": "list"
+        },
+        {
+          "id": "SCALE",
+          "name": "Escala",
+          "values": [
+            {
+              "id": "19124239",
+              "name": "16.5 cm",
+              "struct": null
+            }
+          ],
+          "value_id": "19124239",
+          "value_name": "16.5 cm",
+          "value_type": "string"
+        },
+        {
+          "id": "SELLER_SKU",
+          "name": "SKU",
+          "values": [
+            {
+              "id": null,
+              "name": "5010994179885",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "5010994179885",
+          "value_type": "string"
+        },
+        {
+          "id": "TOY_SAFETY_CERTIFICATE_NUMBER",
+          "name": "Número de certificado de seguridad del juguete",
+          "values": [
+            {
+              "id": null,
+              "name": "23411",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "23411",
+          "value_type": "string"
+        },
+        {
+          "id": "WEIGHT",
+          "name": "Peso",
+          "values": [
+            {
+              "id": "8037362",
+              "name": "200 g",
+              "struct": {
+                "unit": "g",
+                "number": 200
+              }
+            }
+          ],
+          "value_id": "8037362",
+          "value_name": "200 g",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "WIDTH",
+          "name": "Ancho",
+          "values": [
+            {
+              "id": "11316309",
+              "name": "13.97 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 13.97
+              }
+            }
+          ],
+          "value_id": "11316309",
+          "value_name": "13.97 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "WITH_INTERCHANGEABLE_PIECES",
+          "name": "Con piezas intercambiables",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "WITH_LIGHTS",
+          "name": "Con luces",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "WITH_REMOTE_CONTROL",
+          "name": "Con control remoto",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "WITH_SOUND",
+          "name": "Con sonido",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        }
+      ],
+      "sold_quantity": 2,
+      "ml_category_id": "MLU176854",
+      "initial_quantity": 4,
+      "accepts_mercadopago": true
+    },
+    "brand": {
+      "name": "Hasbro"
+    },
+    "category": {
+      "name": "Figuras de Acción"
+    }
+  },
+  {
+    "id": "3da2bfb1-192b-445a-b406-f26195bedc96",
+    "slug": "mercadolibre-MLU615456398",
+    "title": "Harry Potter! Llaveros Plush - Cedric Diggory Amarillo",
+    "seo_title": "Llavero Plush Cedric Diggory | Generico | Comprar en Uruguay | Collectibles",
+    "seo_description": "Compra Llavero Plush Cedric Diggory original en Uruguay. Envíos a todo el país. Encontralo en Collectibles.",
+    "metadata": {
+      "health": 0.87,
+      "video_id": null,
+      "permalink": "https://articulo.mercadolibre.com.uy/MLU-615456398-harry-potter-llaveros-plush-cedric-diggory-amarillo-_JM",
+      "attributes": [
+        {
+          "id": "SELLER_PACKAGE_HEIGHT",
+          "name": "Altura del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "36 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 36
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "36 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_LENGTH",
+          "name": "Largo del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "8 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 8
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "8 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_WEIGHT",
+          "name": "Peso del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "1125 g",
+              "struct": {
+                "unit": "g",
+                "number": 1125
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "1125 g",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_WIDTH",
+          "name": "Ancho del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "28 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 28
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "28 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "BRAND",
+          "name": "Marca",
+          "values": [
+            {
+              "id": "22313863",
+              "name": "Cinereplicas",
+              "struct": null
+            }
+          ],
+          "value_id": "22313863",
+          "value_name": "Cinereplicas",
+          "value_type": "string"
+        },
+        {
+          "id": "COLOR",
+          "name": "Color",
+          "values": [
+            {
+              "id": "52007",
+              "name": "Amarillo",
+              "struct": null
+            }
+          ],
+          "value_id": "52007",
+          "value_name": "Amarillo",
+          "value_type": "string"
+        },
+        {
+          "id": "GTIN",
+          "name": "Código universal de producto",
+          "values": [
+            {
+              "id": null,
+              "name": "4895205606166",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "4895205606166",
+          "value_type": "string"
+        },
+        {
+          "id": "HEIGHT",
+          "name": "Altura",
+          "values": [
+            {
+              "id": null,
+              "name": "11.8 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 11.8
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "11.8 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "INCLUDES_HOOK",
+          "name": "Incluye gancho",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "INCLUDES_STRAP",
+          "name": "Incluye correa",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "ITEM_CONDITION",
+          "name": "Condición del ítem",
+          "values": [
+            {
+              "id": "2230284",
+              "name": "Nuevo",
+              "struct": null
+            }
+          ],
+          "value_id": "2230284",
+          "value_name": "Nuevo",
+          "value_type": "list"
+        },
+        {
+          "id": "MATERIAL",
+          "name": "Material",
+          "values": [
+            {
+              "id": "466794",
+              "name": "Poliéster",
+              "struct": null
+            }
+          ],
+          "value_id": "466794",
+          "value_name": "Poliéster",
+          "value_type": "string"
+        },
+        {
+          "id": "MIN_RECOMMENDED_AGE",
+          "name": "Edad mínima recomendada",
+          "values": [
+            {
+              "id": null,
+              "name": "10 años",
+              "struct": {
+                "unit": "años",
+                "number": 10
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "10 años",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "MODEL",
+          "name": "Modelo",
+          "values": [
+            {
+              "id": "3116486",
+              "name": "Harry Potter",
+              "struct": null
+            }
+          ],
+          "value_id": "3116486",
+          "value_name": "Harry Potter",
+          "value_type": "string"
+        },
+        {
+          "id": "PATTERN_NAME",
+          "name": "Nombre del diseño",
+          "values": [
+            {
+              "id": "9928692",
+              "name": "Cedric Diggory",
+              "struct": null
+            }
+          ],
+          "value_id": "9928692",
+          "value_name": "Cedric Diggory",
+          "value_type": "string"
+        },
+        {
+          "id": "PIECES_NUMBER",
+          "name": "Cantidad de piezas",
+          "values": [
+            {
+              "id": null,
+              "name": "1",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "1",
+          "value_type": "number"
+        },
+        {
+          "id": "SALE_FORMAT",
+          "name": "Formato de venta",
+          "values": [
+            {
+              "id": "1359391",
+              "name": "Unidad",
+              "struct": null
+            }
+          ],
+          "value_id": "1359391",
+          "value_name": "Unidad",
+          "value_type": "list"
+        },
+        {
+          "id": "SELLER_SKU",
+          "name": "SKU",
+          "values": [
+            {
+              "id": null,
+              "name": "4895205606166",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "4895205606166",
+          "value_type": "string"
+        },
+        {
+          "id": "UNITS_PER_PACK",
+          "name": "Unidades por pack",
+          "values": [
+            {
+              "id": null,
+              "name": "1",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "1",
+          "value_type": "number"
+        },
+        {
+          "id": "WIDTH",
+          "name": "Ancho",
+          "values": [
+            {
+              "id": null,
+              "name": "8 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 8
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "8 cm",
+          "value_type": "number_unit"
+        }
+      ],
+      "sold_quantity": 0,
+      "ml_category_id": "MLU158839",
+      "initial_quantity": 3,
+      "accepts_mercadopago": true
+    },
+    "brand": null,
+    "category": null
+  },
+  {
+    "id": "61733063-4899-49de-8af2-e01e00ec9c6f",
+    "slug": "marvel-xmen-tas-93-rouge-",
+    "title": "MARVEL XMEN TAS´94 - ROUGE",
+    "seo_title": null,
+    "seo_description": null,
+    "metadata": {},
+    "brand": {
+      "name": "Toy Biz"
+    },
+    "category": {
+      "name": "Figuras de Acción"
+    }
+  },
+  {
+    "id": "691979e7-f632-48b2-8885-1e771b8c6add",
+    "slug": "mercadolibre-MLU444484876",
+    "title": "Alajero Wonder Woman DC DIRECT",
+    "seo_title": null,
+    "seo_description": null,
+    "metadata": {
+      "health": 1,
+      "video_id": null,
+      "permalink": "https://articulo.mercadolibre.com.uy/MLU-444484876-alajero-wonder-woman-_JM",
+      "attributes": [
+        {
+          "id": "BATTERY_CAPACITY",
+          "name": "Capacidad de la batería",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "number_unit"
+        },
+        {
+          "id": "MATERIAL",
+          "name": "Material",
+          "values": [
+            {
+              "id": "415878",
+              "name": "Resina",
+              "struct": null
+            }
+          ],
+          "value_id": "415878",
+          "value_name": "Resina",
+          "value_type": "string"
+        },
+        {
+          "id": "ACTION_FIGURE_NUMBER",
+          "name": "Número de la figura de acción",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "number"
+        },
+        {
+          "id": "BRAND",
+          "name": "Marca",
+          "values": [
+            {
+              "id": "2517328",
+              "name": "DC Comics",
+              "struct": null
+            }
+          ],
+          "value_id": "2517328",
+          "value_name": "DC Comics",
+          "value_type": "string"
+        },
+        {
+          "id": "CHARACTER",
+          "name": "Personaje",
+          "values": [
+            {
+              "id": "14644491",
+              "name": "Wonder Girl",
+              "struct": null
+            }
+          ],
+          "value_id": "14644491",
+          "value_name": "Wonder Girl",
+          "value_type": "string"
+        },
+        {
+          "id": "COLLECTION",
+          "name": "Colección",
+          "values": [
+            {
+              "id": "16558674",
+              "name": "Collectibles",
+              "struct": null
+            }
+          ],
+          "value_id": "16558674",
+          "value_name": "Collectibles",
+          "value_type": "string"
+        },
+        {
+          "id": "DEPTH",
+          "name": "Profundidad",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "number_unit"
+        },
+        {
+          "id": "GTIN",
+          "name": "Código universal de producto",
+          "values": [
+            {
+              "id": null,
+              "name": "761941313771",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "761941313771",
+          "value_type": "string"
+        },
+        {
+          "id": "HEIGHT",
+          "name": "Altura",
+          "values": [
+            {
+              "id": null,
+              "name": "20 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 20
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "20 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "INCLUDES_ACCESSORIES",
+          "name": "Incluye accesorios",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_ARTICULATED",
+          "name": "Es articulada",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_BOBBLEHEAD",
+          "name": "Es bobblehead",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_COLLECTIBLE",
+          "name": "Es coleccionable",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "ITEM_CONDITION",
+          "name": "Condición del ítem",
+          "values": [
+            {
+              "id": "2230284",
+              "name": "Nuevo",
+              "struct": null
+            }
+          ],
+          "value_id": "2230284",
+          "value_name": "Nuevo",
+          "value_type": "list"
+        },
+        {
+          "id": "LINE",
+          "name": "Línea",
+          "values": [
+            {
+              "id": "22052789",
+              "name": "Super Best Friends Forever",
+              "struct": null
+            }
+          ],
+          "value_id": "22052789",
+          "value_name": "Super Best Friends Forever",
+          "value_type": "string"
+        },
+        {
+          "id": "MANUFACTURER",
+          "name": "Fabricante",
+          "values": [
+            {
+              "id": "2517328",
+              "name": "DC Comics",
+              "struct": null
+            }
+          ],
+          "value_id": "2517328",
+          "value_name": "DC Comics",
+          "value_type": "string"
+        },
+        {
+          "id": "MATERIALS",
+          "name": "Materiales",
+          "values": [
+            {
+              "id": "2697958",
+              "name": "PVC",
+              "struct": null
+            }
+          ],
+          "value_id": "2697958",
+          "value_name": "PVC",
+          "value_type": "string"
+        },
+        {
+          "id": "MIN_RECOMMENDED_AGE",
+          "name": "Edad mínima recomendada",
+          "values": [
+            {
+              "id": null,
+              "name": "4 años",
+              "struct": {
+                "unit": "años",
+                "number": 4
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "4 años",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "WIDTH",
+          "name": "Ancho",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "number_unit"
+        }
+      ],
+      "sold_quantity": 0,
+      "ml_category_id": "MLU176854",
+      "initial_quantity": 2,
+      "accepts_mercadopago": true
+    },
+    "brand": null,
+    "category": null
+  },
+  {
+    "id": "7244dec1-e849-44f2-aac2-de197ca0dbd2",
+    "slug": "mercadolibre-MLU623000867",
+    "title": "Sudadera Thor Para Bebés Y Niños",
+    "seo_title": null,
+    "seo_description": null,
+    "metadata": {
+      "health": 0.7,
+      "video_id": null,
+      "permalink": "https://articulo.mercadolibre.com.uy/MLU-623000867-sudadera-thor-para-bebes-y-ninos-_JM",
+      "attributes": [
+        {
+          "id": "FABRIC_TYPE",
+          "name": "Tipo de tela",
+          "values": [
+            {
+              "id": "11997294",
+              "name": "Poliéster",
+              "struct": null
+            }
+          ],
+          "value_id": "11997294",
+          "value_name": "Poliéster",
+          "value_type": "string"
+        },
+        {
+          "id": "AGE_GROUP",
+          "name": "Edad",
+          "values": [
+            {
+              "id": "1065183",
+              "name": "Niños",
+              "struct": null
+            }
+          ],
+          "value_id": "1065183",
+          "value_name": "Niños",
+          "value_type": "list"
+        },
+        {
+          "id": "BRAND",
+          "name": "Marca",
+          "values": [
+            {
+              "id": "36564111",
+              "name": "CROSSOVER",
+              "struct": null
+            }
+          ],
+          "value_id": "36564111",
+          "value_name": "CROSSOVER",
+          "value_type": "string"
+        },
+        {
+          "id": "COMPOSITION",
+          "name": "Composición",
+          "values": [
+            {
+              "id": "7202821",
+              "name": "5% algodón",
+              "struct": null
+            },
+            {
+              "id": "4682227",
+              "name": "95% poliéster",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "5% algodón,95% poliéster",
+          "value_type": "string"
+        },
+        {
+          "id": "CUFF_TYPE",
+          "name": "Tipo de puño",
+          "values": [
+            {
+              "id": "11997295",
+              "name": "Acanalado",
+              "struct": null
+            }
+          ],
+          "value_id": "11997295",
+          "value_name": "Acanalado",
+          "value_type": "string"
+        },
+        {
+          "id": "FILTRABLE_GENDER",
+          "name": "Género filtrables",
+          "values": [
+            {
+              "id": "18549363",
+              "name": "Niños",
+              "struct": null
+            }
+          ],
+          "value_id": "18549363",
+          "value_name": "Niños",
+          "value_type": "list"
+        },
+        {
+          "id": "GARMENT_TYPE",
+          "name": "Tipo de prenda",
+          "values": [
+            {
+              "id": "11997291",
+              "name": "Hoodie",
+              "struct": null
+            }
+          ],
+          "value_id": "11997291",
+          "value_name": "Hoodie",
+          "value_type": "list"
+        },
+        {
+          "id": "GENDER",
+          "name": "Género",
+          "values": [
+            {
+              "id": "339667",
+              "name": "Niños",
+              "struct": null
+            }
+          ],
+          "value_id": "339667",
+          "value_name": "Niños",
+          "value_type": "list"
+        },
+        {
+          "id": "IS_HIGHLIGHT_BRAND",
+          "name": "Es marca destacada",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_OVERSIZE",
+          "name": "Es oversize",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_SPORTIVE",
+          "name": "Es deportiva",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_SUITABLE_FOR_LACTANTING_PEOPLE",
+          "name": "Es apto para personas en período de lactancia",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_SUITABLE_FOR_PREGNANCY",
+          "name": "Es apto para embarazo",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_TOM_BRAND",
+          "name": "Es marca TOM",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "ITEM_CONDITION",
+          "name": "Condición del ítem",
+          "values": [
+            {
+              "id": "2230284",
+              "name": "Nuevo",
+              "struct": null
+            }
+          ],
+          "value_id": "2230284",
+          "value_name": "Nuevo",
+          "value_type": "list"
+        },
+        {
+          "id": "MAIN_MATERIAL",
+          "name": "Material principal",
+          "values": [
+            {
+              "id": "466794",
+              "name": "Poliéster",
+              "struct": null
+            }
+          ],
+          "value_id": "466794",
+          "value_name": "Poliéster",
+          "value_type": "string"
+        },
+        {
+          "id": "MODEL",
+          "name": "Modelo",
+          "values": [
+            {
+              "id": null,
+              "name": "Thor",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "Thor",
+          "value_type": "string"
+        },
+        {
+          "id": "RECOMMENDED_USES",
+          "name": "Usos recomendados",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "string"
+        },
+        {
+          "id": "SLEEVE_TYPE",
+          "name": "Tipo de manga",
+          "values": [
+            {
+              "id": "466805",
+              "name": "Larga",
+              "struct": null
+            }
+          ],
+          "value_id": "466805",
+          "value_name": "Larga",
+          "value_type": "string"
+        },
+        {
+          "id": "SWEATSHIRTS_AND_HOODIES_COLLAR_TYPE",
+          "name": "Tipo de cuello",
+          "values": [
+            {
+              "id": "39178107",
+              "name": "Alto",
+              "struct": null
+            }
+          ],
+          "value_id": "39178107",
+          "value_name": "Alto",
+          "value_type": "list"
+        },
+        {
+          "id": "WEDGE_SHAPE",
+          "name": "Forma del calce",
+          "values": [
+            {
+              "id": "12039025",
+              "name": "Recto",
+              "struct": null
+            }
+          ],
+          "value_id": "12039025",
+          "value_name": "Recto",
+          "value_type": "list"
+        },
+        {
+          "id": "WITH_HOOD",
+          "name": "Con capucha",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "WITH_RECYCLED_MATERIALS",
+          "name": "Con materiales reciclados",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "WITH_ZIPPER",
+          "name": "Con cierre",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        }
+      ],
+      "sold_quantity": 1,
+      "ml_category_id": "MLU158312",
+      "initial_quantity": 5,
+      "accepts_mercadopago": true
+    },
+    "brand": null,
+    "category": null
+  },
+  {
+    "id": "743db3b9-5307-4435-b0d0-5378c6979b02",
+    "slug": "mercadolibre-MLU625345616",
+    "title": "Neca! Gremlins Ultimate Flasher Gremlin Action Figure",
+    "seo_title": null,
+    "seo_description": null,
+    "metadata": {
+      "health": 1,
+      "video_id": null,
+      "permalink": "https://articulo.mercadolibre.com.uy/MLU-625345616-neca-gremlins-ultimate-flasher-gremlin-action-figure-_JM",
+      "attributes": [
+        {
+          "id": "BATTERY_CAPACITY",
+          "name": "Capacidad de la batería",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "number_unit"
+        },
+        {
+          "id": "ACTION_FIGURE_GAME_TYPE",
+          "name": "Tipo de juego",
+          "values": [
+            {
+              "id": "68071023",
+              "name": "Colección",
+              "struct": null
+            }
+          ],
+          "value_id": "68071023",
+          "value_name": "Colección",
+          "value_type": "string"
+        },
+        {
+          "id": "ACTION_FIGURE_NUMBER",
+          "name": "Número de la figura de acción",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "number"
+        },
+        {
+          "id": "BRAND",
+          "name": "Marca",
+          "values": [
+            {
+              "id": "415847",
+              "name": "Neca",
+              "struct": null
+            }
+          ],
+          "value_id": "415847",
+          "value_name": "Neca",
+          "value_type": "string"
+        },
+        {
+          "id": "CHARACTER",
+          "name": "Personaje",
+          "values": [
+            {
+              "id": "5261247",
+              "name": "Gremlin",
+              "struct": null
+            }
+          ],
+          "value_id": "5261247",
+          "value_name": "Gremlin",
+          "value_type": "string"
+        },
+        {
+          "id": "COLLECTION",
+          "name": "Colección",
+          "values": [
+            {
+              "id": "4945293",
+              "name": "Gremlins",
+              "struct": null
+            }
+          ],
+          "value_id": "4945293",
+          "value_name": "Gremlins",
+          "value_type": "string"
+        },
+        {
+          "id": "DEPTH",
+          "name": "Profundidad",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "number_unit"
+        },
+        {
+          "id": "GTIN",
+          "name": "Código universal de producto",
+          "values": [
+            {
+              "id": null,
+              "name": "634482306253",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "634482306253",
+          "value_type": "string"
+        },
+        {
+          "id": "HEIGHT",
+          "name": "Altura",
+          "values": [
+            {
+              "id": null,
+              "name": "20.32 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 20.32
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "20.32 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "INCLUDES_ACCESSORIES",
+          "name": "Incluye accesorios",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_ARTICULATED",
+          "name": "Es articulada",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_BOBBLEHEAD",
+          "name": "Es bobblehead",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_COLLECTIBLE",
+          "name": "Es coleccionable",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "ITEM_CONDITION",
+          "name": "Condición del ítem",
+          "values": [
+            {
+              "id": "2230284",
+              "name": "Nuevo",
+              "struct": null
+            }
+          ],
+          "value_id": "2230284",
+          "value_name": "Nuevo",
+          "value_type": "list"
+        },
+        {
+          "id": "LINE",
+          "name": "Línea",
+          "values": [
+            {
+              "id": "14922833",
+              "name": "Gremlins",
+              "struct": null
+            }
+          ],
+          "value_id": "14922833",
+          "value_name": "Gremlins",
+          "value_type": "string"
+        },
+        {
+          "id": "MANUFACTURER",
+          "name": "Fabricante",
+          "values": [
+            {
+              "id": "415847",
+              "name": "Neca",
+              "struct": null
+            }
+          ],
+          "value_id": "415847",
+          "value_name": "Neca",
+          "value_type": "string"
+        },
+        {
+          "id": "MATERIALS",
+          "name": "Materiales",
+          "values": [
+            {
+              "id": "2748302",
+              "name": "Plástico",
+              "struct": null
+            }
+          ],
+          "value_id": "2748302",
+          "value_name": "Plástico",
+          "value_type": "string"
+        },
+        {
+          "id": "MIN_RECOMMENDED_AGE",
+          "name": "Edad mínima recomendada",
+          "values": [
+            {
+              "id": null,
+              "name": "8 años",
+              "struct": {
+                "unit": "años",
+                "number": 8
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "8 años",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_HEIGHT",
+          "name": "Altura del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "33 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 33
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "33 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_LENGTH",
+          "name": "Largo del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "11 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 11
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "11 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_WEIGHT",
+          "name": "Peso del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "650 g",
+              "struct": {
+                "unit": "g",
+                "number": 650
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "650 g",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_WIDTH",
+          "name": "Ancho del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "18 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 18
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "18 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_SKU",
+          "name": "SKU",
+          "values": [
+            {
+              "id": null,
+              "name": "634482306253",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "634482306253",
+          "value_type": "string"
+        },
+        {
+          "id": "TOY_SAFETY_CERTIFICATE_NUMBER",
+          "name": "Número de certificado de seguridad del juguete",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "string"
+        },
+        {
+          "id": "WIDTH",
+          "name": "Ancho",
+          "values": [
+            {
+              "id": null,
+              "name": "10 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 10
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "10 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "WITH_INTERCHANGEABLE_PIECES",
+          "name": "Con piezas intercambiables",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        }
+      ],
+      "sold_quantity": 1,
+      "ml_category_id": "MLU176854",
+      "initial_quantity": 4,
+      "accepts_mercadopago": true
+    },
+    "brand": {
+      "name": "NECA"
+    },
+    "category": {
+      "name": "Figuras de Acción"
+    }
+  },
+  {
+    "id": "a98f59e4-3476-4efc-b05c-5e025dbf5e24",
+    "slug": "mercadolibre-MLU978086296-copia-8862-copia-5852",
+    "title": "Peluche Bob Esponja - Calamardo",
+    "seo_title": null,
+    "seo_description": null,
+    "metadata": {},
+    "brand": {
+      "name": "Funrise"
+    },
+    "category": {
+      "name": "Peluches"
+    }
+  },
+  {
+    "id": "aa81f27b-4780-408d-99ba-f7f552e2566c",
+    "slug": "mercadolibre-MLU978086296-copia-8862",
+    "title": "Peluche Bob Esponja Glow Pals - Patricio",
+    "seo_title": null,
+    "seo_description": null,
+    "metadata": {},
+    "brand": {
+      "name": "Funrise"
+    },
+    "category": {
+      "name": "Peluches"
+    }
+  },
+  {
+    "id": "bea9e5e9-46a0-4b9a-9865-10e4cddcd2fe",
+    "slug": "mercadolibre-MLU629865324",
+    "title": "Star Wars! Camiseta Bebé Estampada Stroomtrooper",
+    "seo_title": null,
+    "seo_description": null,
+    "metadata": {
+      "health": 0.77,
+      "video_id": null,
+      "permalink": "https://articulo.mercadolibre.com.uy/MLU-629865324-star-wars-camiseta-bebe-estampada-stroomtrooper-_JM",
+      "attributes": [
+        {
+          "id": "AGE_GROUP",
+          "name": "Edad",
+          "values": [
+            {
+              "id": "371795",
+              "name": "Bebés",
+              "struct": null
+            }
+          ],
+          "value_id": "371795",
+          "value_name": "Bebés",
+          "value_type": "list"
+        },
+        {
+          "id": "BRAND",
+          "name": "Marca",
+          "values": [
+            {
+              "id": "36564111",
+              "name": "CROSSOVER",
+              "struct": null
+            }
+          ],
+          "value_id": "36564111",
+          "value_name": "CROSSOVER",
+          "value_type": "string"
+        },
+        {
+          "id": "COMPOSITION",
+          "name": "Composición",
+          "values": [
+            {
+              "id": "5473009",
+              "name": "50% algodón",
+              "struct": null
+            },
+            {
+              "id": "54024336",
+              "name": "50%polyester",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "50% algodón,50%polyester",
+          "value_type": "string"
+        },
+        {
+          "id": "FABRIC_TYPE",
+          "name": "Tipo de tela",
+          "values": [
+            {
+              "id": "12039023",
+              "name": "Gabardina",
+              "struct": null
+            }
+          ],
+          "value_id": "12039023",
+          "value_name": "Gabardina",
+          "value_type": "string"
+        },
+        {
+          "id": "FILTRABLE_GENDER",
+          "name": "Género filtrables",
+          "values": [
+            {
+              "id": "18549364",
+              "name": "Bebés",
+              "struct": null
+            }
+          ],
+          "value_id": "18549364",
+          "value_name": "Bebés",
+          "value_type": "list"
+        },
+        {
+          "id": "GARMENT_TYPE",
+          "name": "Tipo de prenda",
+          "values": [
+            {
+              "id": "12038970",
+              "name": "Remera",
+              "struct": null
+            }
+          ],
+          "value_id": "12038970",
+          "value_name": "Remera",
+          "value_type": "list"
+        },
+        {
+          "id": "GENDER",
+          "name": "Género",
+          "values": [
+            {
+              "id": "371795",
+              "name": "Bebés",
+              "struct": null
+            }
+          ],
+          "value_id": "371795",
+          "value_name": "Bebés",
+          "value_type": "list"
+        },
+        {
+          "id": "IS_HIGHLIGHT_BRAND",
+          "name": "Es marca destacada",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_SPORTIVE",
+          "name": " Es deportiva",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_TOM_BRAND",
+          "name": "Es marca TOM",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "ITEM_CONDITION",
+          "name": "Condición del ítem",
+          "values": [
+            {
+              "id": "2230284",
+              "name": "Nuevo",
+              "struct": null
+            }
+          ],
+          "value_id": "2230284",
+          "value_name": "Nuevo",
+          "value_type": "list"
+        },
+        {
+          "id": "MAIN_MATERIAL",
+          "name": "Material principal",
+          "values": [
+            {
+              "id": "466794",
+              "name": "Poliéster",
+              "struct": null
+            }
+          ],
+          "value_id": "466794",
+          "value_name": "Poliéster",
+          "value_type": "string"
+        },
+        {
+          "id": "MODEL",
+          "name": "Modelo",
+          "values": [
+            {
+              "id": null,
+              "name": "Star Wars",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "Star Wars",
+          "value_type": "string"
+        },
+        {
+          "id": "RECOMMENDED_USES",
+          "name": "Usos recomendados",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "string"
+        },
+        {
+          "id": "SIZE_GRID_ID",
+          "name": "ID de la guía de talles",
+          "values": [
+            {
+              "id": null,
+              "name": "3869339",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "3869339",
+          "value_type": "grid_id"
+        },
+        {
+          "id": "SLEEVE_TYPE",
+          "name": "Tipo de manga",
+          "values": [
+            {
+              "id": "466804",
+              "name": "Corta",
+              "struct": null
+            }
+          ],
+          "value_id": "466804",
+          "value_name": "Corta",
+          "value_type": "list"
+        },
+        {
+          "id": "T_SHIRT_COLLAR_TYPE",
+          "name": "Tipo de cuello",
+          "values": [
+            {
+              "id": null,
+              "name": "Básico",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "Básico",
+          "value_type": "list"
+        },
+        {
+          "id": "UNITS_PER_PACK",
+          "name": "Unidades por pack",
+          "values": [
+            {
+              "id": null,
+              "name": "1",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "1",
+          "value_type": "number"
+        }
+      ],
+      "sold_quantity": 0,
+      "ml_category_id": "MLU185289",
+      "initial_quantity": 9,
+      "accepts_mercadopago": true
+    },
+    "brand": null,
+    "category": null
+  },
+  {
+    "id": "c885a8a4-b3e4-4ee8-9c31-c1c0e94253dd",
+    "slug": "mercadolibre-MLU600093438",
+    "title": "Ghostbusters 2021 Plasma Series - Trevor",
+    "seo_title": null,
+    "seo_description": null,
+    "metadata": {
+      "health": 1,
+      "video_id": null,
+      "permalink": "https://articulo.mercadolibre.com.uy/MLU-600093438-ghostbusters-2021-plasma-series-trevor-_JM",
+      "attributes": [
+        {
+          "id": "BATTERY_CAPACITY",
+          "name": "Capacidad de la batería",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "number_unit"
+        },
+        {
+          "id": "MATERIAL",
+          "name": "Material",
+          "values": [
+            {
+              "id": "415876",
+              "name": "PVC/Plástico",
+              "struct": null
+            }
+          ],
+          "value_id": "415876",
+          "value_name": "PVC/Plástico",
+          "value_type": "string"
+        },
+        {
+          "id": "ACTION_FIGURE_NUMBER",
+          "name": "Número de la figura de acción",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "number"
+        },
+        {
+          "id": "BRAND",
+          "name": "Marca",
+          "values": [
+            {
+              "id": "1006823",
+              "name": "Hasbro",
+              "struct": null
+            }
+          ],
+          "value_id": "1006823",
+          "value_name": "Hasbro",
+          "value_type": "string"
+        },
+        {
+          "id": "CHARACTER",
+          "name": "Personaje",
+          "values": [
+            {
+              "id": "13776619",
+              "name": "Variedad",
+              "struct": null
+            }
+          ],
+          "value_id": "13776619",
+          "value_name": "Variedad",
+          "value_type": "string"
+        },
+        {
+          "id": "COLLECTION",
+          "name": "Colección",
+          "values": [
+            {
+              "id": "13067952",
+              "name": "Ghostbusters",
+              "struct": null
+            }
+          ],
+          "value_id": "13067952",
+          "value_name": "Ghostbusters",
+          "value_type": "string"
+        },
+        {
+          "id": "DEPTH",
+          "name": "Profundidad",
+          "values": [
+            {
+              "id": null,
+              "name": "10 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 10
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "10 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "GTIN",
+          "name": "Código universal de producto",
+          "values": [
+            {
+              "id": null,
+              "name": "5010993853250",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "5010993853250",
+          "value_type": "string"
+        },
+        {
+          "id": "HEIGHT",
+          "name": "Altura",
+          "values": [
+            {
+              "id": null,
+              "name": "6 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 6
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "6 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "INCLUDES_ACCESSORIES",
+          "name": "Incluye accesorios",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_ARTICULATED",
+          "name": "Es articulada",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_BOBBLEHEAD",
+          "name": "Es bobblehead",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_COLLECTIBLE",
+          "name": "Es coleccionable",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "ITEM_CONDITION",
+          "name": "Condición del ítem",
+          "values": [
+            {
+              "id": "2230284",
+              "name": "Nuevo",
+              "struct": null
+            }
+          ],
+          "value_id": "2230284",
+          "value_name": "Nuevo",
+          "value_type": "list"
+        },
+        {
+          "id": "LINE",
+          "name": "Línea",
+          "values": [
+            {
+              "id": "13383413",
+              "name": "Plasma Series",
+              "struct": null
+            }
+          ],
+          "value_id": "13383413",
+          "value_name": "Plasma Series",
+          "value_type": "string"
+        },
+        {
+          "id": "MANUFACTURER",
+          "name": "Fabricante",
+          "values": [
+            {
+              "id": "1006823",
+              "name": "Hasbro",
+              "struct": null
+            }
+          ],
+          "value_id": "1006823",
+          "value_name": "Hasbro",
+          "value_type": "string"
+        },
+        {
+          "id": "MATERIALS",
+          "name": "Materiales",
+          "values": [
+            {
+              "id": "2748302",
+              "name": "Plástico",
+              "struct": null
+            }
+          ],
+          "value_id": "2748302",
+          "value_name": "Plástico",
+          "value_type": "string"
+        },
+        {
+          "id": "MIN_RECOMMENDED_AGE",
+          "name": "Edad mínima recomendada",
+          "values": [
+            {
+              "id": null,
+              "name": "4 años",
+              "struct": {
+                "unit": "años",
+                "number": 4
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "4 años",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_SKU",
+          "name": "SKU",
+          "values": [
+            {
+              "id": null,
+              "name": "5010993853250",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "5010993853250",
+          "value_type": "string"
+        },
+        {
+          "id": "TOY_SAFETY_CERTIFICATE_NUMBER",
+          "name": "Número de certificado de seguridad del juguete",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "string"
+        },
+        {
+          "id": "WIDTH",
+          "name": "Ancho",
+          "values": [
+            {
+              "id": null,
+              "name": "10 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 10
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "10 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "WITH_INTERCHANGEABLE_PIECES",
+          "name": "Con piezas intercambiables",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "WITH_LIGHTS",
+          "name": "Con luces",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "WITH_REMOTE_CONTROL",
+          "name": "Con control remoto",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "WITH_SOUND",
+          "name": "Con sonido",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        }
+      ],
+      "sold_quantity": 0,
+      "ml_category_id": "MLU176854",
+      "initial_quantity": 3,
+      "accepts_mercadopago": true
+    },
+    "brand": {
+      "name": "Hasbro"
+    },
+    "category": null
+  },
+  {
+    "id": "c9bcceef-29d7-44ea-816c-bad740ce745a",
+    "slug": "mercadolibre-MLU478614729",
+    "title": "Dc Dice Masters: Justice League 90 Count Gravity Feed",
+    "seo_title": null,
+    "seo_description": null,
+    "metadata": {
+      "health": 1,
+      "video_id": null,
+      "permalink": "https://articulo.mercadolibre.com.uy/MLU-478614729-dc-dice-masters-justice-league-90-count-gravity-feed-_JM",
+      "attributes": [
+        {
+          "id": "BATTERY_CAPACITY",
+          "name": "Capacidad de la batería",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "number_unit"
+        },
+        {
+          "id": "INCLUDES_CELL_BATTERIES",
+          "name": "Incluye pilas",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "MATERIAL",
+          "name": "Material",
+          "values": [
+            {
+              "id": "415876",
+              "name": "PVC/Plástico",
+              "struct": null
+            }
+          ],
+          "value_id": "415876",
+          "value_name": "PVC/Plástico",
+          "value_type": "string"
+        },
+        {
+          "id": "ACTION_FIGURE_NUMBER",
+          "name": "Número de la figura de acción",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "number"
+        },
+        {
+          "id": "BRAND",
+          "name": "Marca",
+          "values": [
+            {
+              "id": "511135",
+              "name": "DC",
+              "struct": null
+            }
+          ],
+          "value_id": "511135",
+          "value_name": "DC",
+          "value_type": "string"
+        },
+        {
+          "id": "CHARACTER",
+          "name": "Personaje",
+          "values": [
+            {
+              "id": "26482169",
+              "name": "DICE MASTERS",
+              "struct": null
+            }
+          ],
+          "value_id": "26482169",
+          "value_name": "DICE MASTERS",
+          "value_type": "string"
+        },
+        {
+          "id": "COLLECTION",
+          "name": "Colección",
+          "values": [
+            {
+              "id": "1258228",
+              "name": "DC Comics",
+              "struct": null
+            }
+          ],
+          "value_id": "1258228",
+          "value_name": "DC Comics",
+          "value_type": "string"
+        },
+        {
+          "id": "DEPTH",
+          "name": "Profundidad",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "number_unit"
+        },
+        {
+          "id": "GTIN",
+          "name": "Código universal de producto",
+          "values": [
+            {
+              "id": null,
+              "name": "818310028771",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "818310028771",
+          "value_type": "string"
+        },
+        {
+          "id": "HEIGHT",
+          "name": "Altura",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "number_unit"
+        },
+        {
+          "id": "INCLUDES_ACCESSORIES",
+          "name": "Incluye accesorios",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_ARTICULATED",
+          "name": "Es articulada",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_BOBBLEHEAD",
+          "name": "Es bobblehead",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_COLLECTIBLE",
+          "name": "Es coleccionable",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "ITEM_CONDITION",
+          "name": "Condición del ítem",
+          "values": [
+            {
+              "id": "2230284",
+              "name": "Nuevo",
+              "struct": null
+            }
+          ],
+          "value_id": "2230284",
+          "value_name": "Nuevo",
+          "value_type": "list"
+        },
+        {
+          "id": "LINE",
+          "name": "Línea",
+          "values": [
+            {
+              "id": "13382419",
+              "name": "Games",
+              "struct": null
+            }
+          ],
+          "value_id": "13382419",
+          "value_name": "Games",
+          "value_type": "string"
+        },
+        {
+          "id": "MANUFACTURER",
+          "name": "Fabricante",
+          "values": [
+            {
+              "id": "415847",
+              "name": "Neca",
+              "struct": null
+            }
+          ],
+          "value_id": "415847",
+          "value_name": "Neca",
+          "value_type": "string"
+        },
+        {
+          "id": "MATERIALS",
+          "name": "Materiales",
+          "values": [
+            {
+              "id": "2697958",
+              "name": "PVC",
+              "struct": null
+            }
+          ],
+          "value_id": "2697958",
+          "value_name": "PVC",
+          "value_type": "string"
+        },
+        {
+          "id": "MIN_RECOMMENDED_AGE",
+          "name": "Edad mínima recomendada",
+          "values": [
+            {
+              "id": null,
+              "name": "14 años",
+              "struct": {
+                "unit": "años",
+                "number": 14
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "14 años",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_SKU",
+          "name": "SKU",
+          "values": [
+            {
+              "id": null,
+              "name": "818310028771",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "818310028771",
+          "value_type": "string"
+        },
+        {
+          "id": "TOY_SAFETY_CERTIFICATE_NUMBER",
+          "name": "Número de certificado de seguridad del juguete",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "string"
+        },
+        {
+          "id": "WIDTH",
+          "name": "Ancho",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "number_unit"
+        },
+        {
+          "id": "WITH_REMOTE_CONTROL",
+          "name": "Con control remoto",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        }
+      ],
+      "sold_quantity": 12,
+      "ml_category_id": "MLU176854",
+      "initial_quantity": 45,
+      "accepts_mercadopago": true
+    },
+    "brand": {
+      "name": "Heroclix"
+    },
+    "category": {
+      "name": "TCG & Boardgames"
+    }
+  },
+  {
+    "id": "ce50c75f-70c7-410a-a2a6-a779b23311ae",
+    "slug": "mercadolibre-MLU444484955",
+    "title": "Batman V Superman Oferta Figures Lex Luthor",
+    "seo_title": null,
+    "seo_description": null,
+    "metadata": {
+      "health": 1,
+      "video_id": null,
+      "permalink": "https://articulo.mercadolibre.com.uy/MLU-444484955-batman-v-superman-oferta-figures-lex-luthor-_JM",
+      "attributes": [
+        {
+          "id": "BATTERY_CAPACITY",
+          "name": "Capacidad de la batería",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "number_unit"
+        },
+        {
+          "id": "INCLUDES_CELL_BATTERIES",
+          "name": "Incluye pilas",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "MATERIAL",
+          "name": "Material",
+          "values": [
+            {
+              "id": "415876",
+              "name": "PVC/Plástico",
+              "struct": null
+            }
+          ],
+          "value_id": "415876",
+          "value_name": "PVC/Plástico",
+          "value_type": "string"
+        },
+        {
+          "id": "ACTION_FIGURE_NUMBER",
+          "name": "Número de la figura de acción",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "number"
+        },
+        {
+          "id": "ALPHANUMERIC_MODEL",
+          "name": "Modelo alfanumérico",
+          "values": [
+            {
+              "id": "17415623",
+              "name": "Batman",
+              "struct": null
+            }
+          ],
+          "value_id": "17415623",
+          "value_name": "Batman",
+          "value_type": "string"
+        },
+        {
+          "id": "ARTICULATION_POINTS_NUMBER",
+          "name": "Cantidad de puntos de articulación",
+          "values": [
+            {
+              "id": "11420223",
+              "name": "22",
+              "struct": null
+            }
+          ],
+          "value_id": "11420223",
+          "value_name": "22",
+          "value_type": "number"
+        },
+        {
+          "id": "BRAND",
+          "name": "Marca",
+          "values": [
+            {
+              "id": "13406319",
+              "name": "Batman",
+              "struct": null
+            }
+          ],
+          "value_id": "13406319",
+          "value_name": "Batman",
+          "value_type": "string"
+        },
+        {
+          "id": "CHARACTER",
+          "name": "Personaje",
+          "values": [
+            {
+              "id": "4963526",
+              "name": "Lex Luthor",
+              "struct": null
+            }
+          ],
+          "value_id": "4963526",
+          "value_name": "Lex Luthor",
+          "value_type": "string"
+        },
+        {
+          "id": "COLLECTION",
+          "name": "Colección",
+          "values": [
+            {
+              "id": "14752763",
+              "name": "Batman vs Superman",
+              "struct": null
+            }
+          ],
+          "value_id": "14752763",
+          "value_name": "Batman vs Superman",
+          "value_type": "string"
+        },
+        {
+          "id": "DEPTH",
+          "name": "Profundidad",
+          "values": [
+            {
+              "id": null,
+              "name": "10 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 10
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "10 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "GTIN",
+          "name": "Código universal de producto",
+          "values": [
+            {
+              "id": null,
+              "name": "887961224962",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "887961224962",
+          "value_type": "string"
+        },
+        {
+          "id": "HEIGHT",
+          "name": "Altura",
+          "values": [
+            {
+              "id": null,
+              "name": "16 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 16
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "16 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "INCLUDES_ACCESSORIES",
+          "name": "Incluye accesorios",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_ARTICULATED",
+          "name": "Es articulada",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_BOBBLEHEAD",
+          "name": "Es bobblehead",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_COLLECTIBLE",
+          "name": "Es coleccionable",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "ITEM_CONDITION",
+          "name": "Condición del ítem",
+          "values": [
+            {
+              "id": "2230284",
+              "name": "Nuevo",
+              "struct": null
+            }
+          ],
+          "value_id": "2230284",
+          "value_name": "Nuevo",
+          "value_type": "list"
+        },
+        {
+          "id": "LINE",
+          "name": "Línea",
+          "values": [
+            {
+              "id": "12059440",
+              "name": "Multiverse",
+              "struct": null
+            }
+          ],
+          "value_id": "12059440",
+          "value_name": "Multiverse",
+          "value_type": "string"
+        },
+        {
+          "id": "MANUFACTURER",
+          "name": "Fabricante",
+          "values": [
+            {
+              "id": "1006861",
+              "name": "Mattel",
+              "struct": null
+            }
+          ],
+          "value_id": "1006861",
+          "value_name": "Mattel",
+          "value_type": "string"
+        },
+        {
+          "id": "MATERIALS",
+          "name": "Materiales",
+          "values": [
+            {
+              "id": "2697958",
+              "name": "PVC",
+              "struct": null
+            }
+          ],
+          "value_id": "2697958",
+          "value_name": "PVC",
+          "value_type": "string"
+        },
+        {
+          "id": "MIN_RECOMMENDED_AGE",
+          "name": "Edad mínima recomendada",
+          "values": [
+            {
+              "id": null,
+              "name": "14 años",
+              "struct": {
+                "unit": "años",
+                "number": 14
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "14 años",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "RECOMMENDED_AGE_GROUP",
+          "name": "Edad recomendada",
+          "values": [
+            {
+              "id": "49882301",
+              "name": "12+ años",
+              "struct": null
+            }
+          ],
+          "value_id": "49882301",
+          "value_name": "12+ años",
+          "value_type": "list"
+        },
+        {
+          "id": "SCALE",
+          "name": "Escala",
+          "values": [
+            {
+              "id": "5344792",
+              "name": "1:12",
+              "struct": null
+            }
+          ],
+          "value_id": "5344792",
+          "value_name": "1:12",
+          "value_type": "string"
+        },
+        {
+          "id": "TOY_SAFETY_CERTIFICATE_NUMBER",
+          "name": "Número de certificado de seguridad del juguete",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "string"
+        },
+        {
+          "id": "WEIGHT",
+          "name": "Peso",
+          "values": [
+            {
+              "id": null,
+              "name": "1.588 kg",
+              "struct": {
+                "unit": "kg",
+                "number": 1.588
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "1.588 kg",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "WIDTH",
+          "name": "Ancho",
+          "values": [
+            {
+              "id": null,
+              "name": "16 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 16
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "16 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "WITH_INTERCHANGEABLE_PIECES",
+          "name": "Con piezas intercambiables",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "WITH_LIGHTS",
+          "name": "Con luces",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "WITH_REMOTE_CONTROL",
+          "name": "Con control remoto",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "WITH_SOUND",
+          "name": "Con sonido",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        }
+      ],
+      "sold_quantity": 1,
+      "ml_category_id": "MLU176854",
+      "initial_quantity": 4,
+      "accepts_mercadopago": true
+    },
+    "brand": {
+      "name": "Mattel"
+    },
+    "category": null
+  },
+  {
+    "id": "d12e0867-78fc-4356-81a0-c6a7451b9c10",
+    "slug": "mercadolibre-MLU601329982",
+    "title": "Masters Of The Universe Origins- Evil-lyn 2",
+    "seo_title": null,
+    "seo_description": null,
+    "metadata": {
+      "health": 1,
+      "video_id": null,
+      "permalink": "https://articulo.mercadolibre.com.uy/MLU-601329982-masters-of-the-universe-origins-evil-lyn-2-_JM",
+      "attributes": [
+        {
+          "id": "BATTERY_CAPACITY",
+          "name": "Capacidad de la batería",
+          "values": [
+            {
+              "id": null,
+              "name": "0 mAh",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "0 mAh",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "INCLUDES_CELL_BATTERIES",
+          "name": "Incluye pilas",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "boolean"
+        },
+        {
+          "id": "MATERIAL",
+          "name": "Material",
+          "values": [
+            {
+              "id": "415876",
+              "name": "PVC/Plástico",
+              "struct": null
+            }
+          ],
+          "value_id": "415876",
+          "value_name": "PVC/Plástico",
+          "value_type": "string"
+        },
+        {
+          "id": "ACTION_FIGURE_NUMBER",
+          "name": "Número de la figura de acción",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "number"
+        },
+        {
+          "id": "BRAND",
+          "name": "Marca",
+          "values": [
+            {
+              "id": "17254078",
+              "name": "Masters of the Universe",
+              "struct": null
+            }
+          ],
+          "value_id": "17254078",
+          "value_name": "Masters of the Universe",
+          "value_type": "string"
+        },
+        {
+          "id": "CHARACTER",
+          "name": "Personaje",
+          "values": [
+            {
+              "id": "3640329",
+              "name": "Evil-Lyn",
+              "struct": null
+            }
+          ],
+          "value_id": "3640329",
+          "value_name": "Evil-Lyn",
+          "value_type": "string"
+        },
+        {
+          "id": "COLLECTION",
+          "name": "Colección",
+          "values": [
+            {
+              "id": "3525950",
+              "name": "Masters of the Universe",
+              "struct": null
+            }
+          ],
+          "value_id": "3525950",
+          "value_name": "Masters of the Universe",
+          "value_type": "string"
+        },
+        {
+          "id": "DEPTH",
+          "name": "Profundidad",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "number_unit"
+        },
+        {
+          "id": "GTIN",
+          "name": "Código universal de producto",
+          "values": [
+            {
+              "id": null,
+              "name": "887961982879",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "887961982879",
+          "value_type": "string"
+        },
+        {
+          "id": "HEIGHT",
+          "name": "Altura",
+          "values": [
+            {
+              "id": null,
+              "name": "15 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 15
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "15 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "INCLUDES_ACCESSORIES",
+          "name": "Incluye accesorios",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_ARTICULATED",
+          "name": "Es articulada",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_BOBBLEHEAD",
+          "name": "Es bobblehead",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_COLLECTIBLE",
+          "name": "Es coleccionable",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "ITEM_CONDITION",
+          "name": "Condición del ítem",
+          "values": [
+            {
+              "id": "2230284",
+              "name": "Nuevo",
+              "struct": null
+            }
+          ],
+          "value_id": "2230284",
+          "value_name": "Nuevo",
+          "value_type": "list"
+        },
+        {
+          "id": "LINE",
+          "name": "Línea",
+          "values": [
+            {
+              "id": "13458833",
+              "name": "Masters of the Universe",
+              "struct": null
+            }
+          ],
+          "value_id": "13458833",
+          "value_name": "Masters of the Universe",
+          "value_type": "string"
+        },
+        {
+          "id": "MANUFACTURER",
+          "name": "Fabricante",
+          "values": [
+            {
+              "id": "1006861",
+              "name": "Mattel",
+              "struct": null
+            }
+          ],
+          "value_id": "1006861",
+          "value_name": "Mattel",
+          "value_type": "string"
+        },
+        {
+          "id": "MATERIALS",
+          "name": "Materiales",
+          "values": [
+            {
+              "id": "2441708",
+              "name": "Vinilo",
+              "struct": null
+            }
+          ],
+          "value_id": "2441708",
+          "value_name": "Vinilo",
+          "value_type": "string"
+        },
+        {
+          "id": "MIN_RECOMMENDED_AGE",
+          "name": "Edad mínima recomendada",
+          "values": [
+            {
+              "id": null,
+              "name": "6 años",
+              "struct": {
+                "unit": "años",
+                "number": 6
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "6 años",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "POWER_SUPPLY_TYPE",
+          "name": "Tipo de alimentación",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "string"
+        },
+        {
+          "id": "RECOMMENDED_AGE_GROUP",
+          "name": "Edad recomendada",
+          "values": [
+            {
+              "id": null,
+              "name": "8-13 años",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "8-13 años",
+          "value_type": "list"
+        },
+        {
+          "id": "SELLER_SKU",
+          "name": "SKU",
+          "values": [
+            {
+              "id": null,
+              "name": "887961982879",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "887961982879",
+          "value_type": "string"
+        },
+        {
+          "id": "TOY_SAFETY_CERTIFICATE_NUMBER",
+          "name": "Número de certificado de seguridad del juguete",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "string"
+        },
+        {
+          "id": "WEIGHT",
+          "name": "Peso",
+          "values": [
+            {
+              "id": null,
+              "name": "35.38 kg",
+              "struct": {
+                "unit": "kg",
+                "number": 35.38
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "35.38 kg",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "WIDTH",
+          "name": "Ancho",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "number_unit"
+        },
+        {
+          "id": "WITH_REMOTE_CONTROL",
+          "name": "Con control remoto",
+          "values": [
+            {
+              "id": "-1",
+              "name": null,
+              "struct": null
+            }
+          ],
+          "value_id": "-1",
+          "value_name": null,
+          "value_type": "boolean"
+        }
+      ],
+      "sold_quantity": 1,
+      "ml_category_id": "MLU176854",
+      "initial_quantity": 3,
+      "accepts_mercadopago": true
+    },
+    "brand": {
+      "name": "Mattel"
+    },
+    "category": null
+  },
+  {
+    "id": "eeaa180d-f11d-48d8-b533-05fb33597dbb",
+    "slug": "mercadolibre-MLU615702297",
+    "title": "Harry Potter! Guantes Screentouch - Gryffindor",
+    "seo_title": null,
+    "seo_description": null,
+    "metadata": {
+      "health": 0.88,
+      "video_id": null,
+      "permalink": "https://articulo.mercadolibre.com.uy/MLU-615702297-harry-potter-guantes-screentouch-gryffindor-_JM",
+      "attributes": [
+        {
+          "id": "SELLER_PACKAGE_HEIGHT",
+          "name": "Altura del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "26 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 26
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "26 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_LENGTH",
+          "name": "Largo del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "6 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 6
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "6 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_WEIGHT",
+          "name": "Peso del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "256 g",
+              "struct": {
+                "unit": "g",
+                "number": 256
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "256 g",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_WIDTH",
+          "name": "Ancho del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "18 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 18
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "18 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "AGE_GROUP",
+          "name": "Edad",
+          "values": [
+            {
+              "id": "6725189",
+              "name": "Adultos",
+              "struct": null
+            }
+          ],
+          "value_id": "6725189",
+          "value_name": "Adultos",
+          "value_type": "list"
+        },
+        {
+          "id": "BRAND",
+          "name": "Marca",
+          "values": [
+            {
+              "id": "22313863",
+              "name": "Cinereplicas",
+              "struct": null
+            }
+          ],
+          "value_id": "22313863",
+          "value_name": "Cinereplicas",
+          "value_type": "string"
+        },
+        {
+          "id": "COMPOSITION",
+          "name": "Composición",
+          "values": [
+            {
+              "id": "466794",
+              "name": "Poliéster",
+              "struct": null
+            }
+          ],
+          "value_id": "466794",
+          "value_name": "Poliéster",
+          "value_type": "string"
+        },
+        {
+          "id": "FILTRABLE_GENDER",
+          "name": "Género filtrables",
+          "values": [
+            {
+              "id": "18549361",
+              "name": "Mujer",
+              "struct": null
+            },
+            {
+              "id": "18549360",
+              "name": "Hombre",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "Mujer,Hombre",
+          "value_type": "list"
+        },
+        {
+          "id": "GENDER",
+          "name": "Género",
+          "values": [
+            {
+              "id": "110461",
+              "name": "Sin género",
+              "struct": null
+            }
+          ],
+          "value_id": "110461",
+          "value_name": "Sin género",
+          "value_type": "list"
+        },
+        {
+          "id": "GLOVES_AND_MITTENS_TYPE",
+          "name": "Tipo de guantes",
+          "values": [
+            {
+              "id": null,
+              "name": "Largos tactiles",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "Largos tactiles",
+          "value_type": "string"
+        },
+        {
+          "id": "GTIN",
+          "name": "Código universal de producto",
+          "values": [
+            {
+              "id": null,
+              "name": "3760166568314",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "3760166568314",
+          "value_type": "string"
+        },
+        {
+          "id": "IS_HIGHLIGHT_BRAND",
+          "name": "Es marca destacada",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "IS_TOM_BRAND",
+          "name": "Es marca TOM",
+          "values": [
+            {
+              "id": "242084",
+              "name": "No",
+              "struct": null
+            }
+          ],
+          "value_id": "242084",
+          "value_name": "No",
+          "value_type": "boolean"
+        },
+        {
+          "id": "ITEM_CONDITION",
+          "name": "Condición del ítem",
+          "values": [
+            {
+              "id": "2230284",
+              "name": "Nuevo",
+              "struct": null
+            }
+          ],
+          "value_id": "2230284",
+          "value_name": "Nuevo",
+          "value_type": "list"
+        },
+        {
+          "id": "MAIN_MATERIAL",
+          "name": "Material principal",
+          "values": [
+            {
+              "id": "466793",
+              "name": "Algodón",
+              "struct": null
+            }
+          ],
+          "value_id": "466793",
+          "value_name": "Algodón",
+          "value_type": "string"
+        },
+        {
+          "id": "MODEL",
+          "name": "Modelo",
+          "values": [
+            {
+              "id": null,
+              "name": "3760166568314",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "3760166568314",
+          "value_type": "string"
+        },
+        {
+          "id": "SELLER_SKU",
+          "name": "SKU",
+          "values": [
+            {
+              "id": null,
+              "name": "3760166568314",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "3760166568314",
+          "value_type": "string"
+        }
+      ],
+      "sold_quantity": 1,
+      "ml_category_id": "MLU158833",
+      "initial_quantity": 10,
+      "accepts_mercadopago": true
+    },
+    "brand": null,
+    "category": null
+  }
+]

@@ -1,0 +1,272 @@
+{
+  "products": {
+    "total": 453,
+    "empty_description": 14,
+    "short_description": 186,
+    "duplicated_description": 46,
+    "auto_generated_description": 144,
+    "short_titles": 4,
+    "short_title_examples": [
+      "Disney! Body Goofy",
+      "PRODUCTO PRUEBA12",
+      "Funko Pop! Megan "
+    ],
+    "duplicated_titles": 4,
+    "dup_title_examples": [
+      "Funko Pop! Hawkeye - Maya Lopez",
+      "Funko Pop! Hawkeye - Hawkeye"
+    ],
+    "no_brand_titles": 256,
+    "no_brand_examples": [
+      "Harry Potter! Llaveros Plush - Cedric Diggory Amarillo",
+      "Peluche Bob Esponja Glow Pals - Patricio",
+      "Star Wars! Camiseta Bebé Estampada Stroomtrooper"
+    ],
+    "seo_title_coverage": "0.00%",
+    "seo_desc_coverage": "0.00%"
+  },
+  "categories": {
+    "total": 12,
+    "empty_categories": 0,
+    "details": [
+      {
+        "name": "Home & Decor",
+        "slug": "home-and-decor",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 19
+      },
+      {
+        "name": "Figuras de Acción",
+        "slug": "figuras",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 75
+      },
+      {
+        "name": "Esculturas y Estatuas",
+        "slug": "esculturas",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 1
+      },
+      {
+        "name": "Ropa & Accesorios",
+        "slug": "ropa",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 33
+      },
+      {
+        "name": "TCG & Boardgames",
+        "slug": "tcg",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 11
+      },
+      {
+        "name": "Funko POP",
+        "slug": "funko-pop",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 9
+      },
+      {
+        "name": "Cromos / Figuritas",
+        "slug": "cromos-figuritas",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 6
+      },
+      {
+        "name": "Peluches",
+        "slug": "peluches",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 48
+      },
+      {
+        "name": "Llaveros",
+        "slug": "llaveros",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 3
+      },
+      {
+        "name": "Juegos y Juguetes",
+        "slug": "juguetes",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 5
+      },
+      {
+        "name": "Vehículos a Escala",
+        "slug": "vehiculos-a-escala",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 7
+      },
+      {
+        "name": "Papelería",
+        "slug": "papeleria",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 13
+      }
+    ]
+  },
+  "brands": {
+    "total": 17,
+    "empty_brands": 0,
+    "details": [
+      {
+        "name": "Mcfarlane",
+        "slug": "mcfarlane",
+        "seo_title": null,
+        "seo_description": null,
+        "description": "McFarlane",
+        "product_count": 7
+      },
+      {
+        "name": "Funko",
+        "slug": "funko",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 123
+      },
+      {
+        "name": "NECA",
+        "slug": "neca",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 23
+      },
+      {
+        "name": "Hasbro",
+        "slug": "hasbro",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 35
+      },
+      {
+        "name": "Mattel",
+        "slug": "mattel",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 14
+      },
+      {
+        "name": "Majorette",
+        "slug": "majorette",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 8
+      },
+      {
+        "name": "Jazwares",
+        "slug": "jazwares",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 17
+      },
+      {
+        "name": "Figgyz",
+        "slug": "figgyz",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 17
+      },
+      {
+        "name": "Panini",
+        "slug": "panini",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 6
+      },
+      {
+        "name": "Cinereplicas",
+        "slug": "cinereplicas",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 13
+      },
+      {
+        "name": "Iron Studios",
+        "slug": "iron-studios",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 11
+      },
+      {
+        "name": "Heroclix",
+        "slug": "heroclix",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 6
+      },
+      {
+        "name": "Toy Biz",
+        "slug": "toy-biz",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 3
+      },
+      {
+        "name": "Playmates Toys",
+        "slug": "playmates-toys",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 3
+      },
+      {
+        "name": "Funrise",
+        "slug": "funrise",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 5
+      },
+      {
+        "name": "Bandai",
+        "slug": "bandai",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 19
+      },
+      {
+        "name": "KONAMI",
+        "slug": "konami",
+        "seo_title": null,
+        "seo_description": null,
+        "description": null,
+        "product_count": 2
+      }
+    ]
+  }
+}

@@ -12,6 +12,7 @@ export interface AutoPromo {
   badge_text: string | null;
   badge_color: string | null;
   badge_bg: string | null;
+  owner_vendor_id: string | null;
   targets: any[];
   exclusions: any[];
   tiers: any[];
@@ -27,7 +28,7 @@ export function usePromotions() {
         const now = new Date().toISOString();
         const { data: promos, error } = await supabase
           .from('promotions')
-          .select('id, name, discount_type, discount_value, min_quantity, is_stackable, priority, badge_text, badge_color, badge_bg')
+          .select('id, name, discount_type, discount_value, min_quantity, is_stackable, priority, badge_text, badge_color, badge_bg, owner_vendor_id')
           .neq('discount_type', 'bank_discount')
           .eq('is_active', true)
           .or(`starts_at.is.null,starts_at.lte.${now}`)
@@ -90,6 +91,8 @@ export function usePromotions() {
 export function evaluateItemDiscount(item: { product_id: string, category_id?: string, brand_id?: string, vendor_id?: string, tag_ids?: string[], price: number, quantity: number }, promotions: AutoPromo[]) {
   let itemDiscount = 0;
   for (const promo of promotions) {
+    if (promo.owner_vendor_id && promo.owner_vendor_id !== item.vendor_id) continue;
+
     let isExcluded = false;
     for (const exc of promo.exclusions) {
       if (exc.target_type === 'product' && exc.target_id === item.product_id) isExcluded = true;
@@ -156,6 +159,8 @@ export function evaluateItemDiscountDetailed(item: { product_id: string, categor
   let nonStackableApplied = false;
   
   for (const promo of promotions) {
+    if (promo.owner_vendor_id && promo.owner_vendor_id !== item.vendor_id) continue;
+
     let isExcluded = false;
     for (const exc of promo.exclusions) {
       if (exc.target_type === 'product' && exc.target_id === item.product_id) isExcluded = true;
@@ -227,6 +232,8 @@ export function getApplicablePromotions(item: { product_id: string, category_id?
   const applicable: AutoPromo[] = [];
   
   for (const promo of promotions) {
+    if (promo.owner_vendor_id && promo.owner_vendor_id !== item.vendor_id) continue;
+
     let isExcluded = false;
     for (const exc of promo.exclusions) {
       if (exc.target_type === 'product' && exc.target_id === item.product_id) isExcluded = true;

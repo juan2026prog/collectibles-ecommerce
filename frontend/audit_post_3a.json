@@ -1,0 +1,323 @@
+[
+  {
+    "id": "3da2bfb1-192b-445a-b406-f26195bedc96",
+    "slug": "mercadolibre-MLU615456398",
+    "title": "Harry Potter! Llaveros Plush - Cedric Diggory Amarillo",
+    "seo_title": "Llavero Plush Cedric Diggory | Generico | Comprar en Uruguay | Collectibles",
+    "seo_description": "Compra Llavero Plush Cedric Diggory original en Uruguay. Envíos a todo el país. Encontralo en Collectibles.",
+    "metadata": {
+      "health": 0.87,
+      "video_id": null,
+      "permalink": "https://articulo.mercadolibre.com.uy/MLU-615456398-harry-potter-llaveros-plush-cedric-diggory-amarillo-_JM",
+      "attributes": [
+        {
+          "id": "SELLER_PACKAGE_HEIGHT",
+          "name": "Altura del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "36 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 36
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "36 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_LENGTH",
+          "name": "Largo del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "8 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 8
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "8 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_WEIGHT",
+          "name": "Peso del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "1125 g",
+              "struct": {
+                "unit": "g",
+                "number": 1125
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "1125 g",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "SELLER_PACKAGE_WIDTH",
+          "name": "Ancho del paquete del seller",
+          "values": [
+            {
+              "id": null,
+              "name": "28 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 28
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "28 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "BRAND",
+          "name": "Marca",
+          "values": [
+            {
+              "id": "22313863",
+              "name": "Cinereplicas",
+              "struct": null
+            }
+          ],
+          "value_id": "22313863",
+          "value_name": "Cinereplicas",
+          "value_type": "string"
+        },
+        {
+          "id": "COLOR",
+          "name": "Color",
+          "values": [
+            {
+              "id": "52007",
+              "name": "Amarillo",
+              "struct": null
+            }
+          ],
+          "value_id": "52007",
+          "value_name": "Amarillo",
+          "value_type": "string"
+        },
+        {
+          "id": "GTIN",
+          "name": "Código universal de producto",
+          "values": [
+            {
+              "id": null,
+              "name": "4895205606166",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "4895205606166",
+          "value_type": "string"
+        },
+        {
+          "id": "HEIGHT",
+          "name": "Altura",
+          "values": [
+            {
+              "id": null,
+              "name": "11.8 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 11.8
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "11.8 cm",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "INCLUDES_HOOK",
+          "name": "Incluye gancho",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "INCLUDES_STRAP",
+          "name": "Incluye correa",
+          "values": [
+            {
+              "id": "242085",
+              "name": "Sí",
+              "struct": null
+            }
+          ],
+          "value_id": "242085",
+          "value_name": "Sí",
+          "value_type": "boolean"
+        },
+        {
+          "id": "ITEM_CONDITION",
+          "name": "Condición del ítem",
+          "values": [
+            {
+              "id": "2230284",
+              "name": "Nuevo",
+              "struct": null
+            }
+          ],
+          "value_id": "2230284",
+          "value_name": "Nuevo",
+          "value_type": "list"
+        },
+        {
+          "id": "MATERIAL",
+          "name": "Material",
+          "values": [
+            {
+              "id": "466794",
+              "name": "Poliéster",
+              "struct": null
+            }
+          ],
+          "value_id": "466794",
+          "value_name": "Poliéster",
+          "value_type": "string"
+        },
+        {
+          "id": "MIN_RECOMMENDED_AGE",
+          "name": "Edad mínima recomendada",
+          "values": [
+            {
+              "id": null,
+              "name": "10 años",
+              "struct": {
+                "unit": "años",
+                "number": 10
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "10 años",
+          "value_type": "number_unit"
+        },
+        {
+          "id": "MODEL",
+          "name": "Modelo",
+          "values": [
+            {
+              "id": "3116486",
+              "name": "Harry Potter",
+              "struct": null
+            }
+          ],
+          "value_id": "3116486",
+          "value_name": "Harry Potter",
+          "value_type": "string"
+        },
+        {
+          "id": "PATTERN_NAME",
+          "name": "Nombre del diseño",
+          "values": [
+            {
+              "id": "9928692",
+              "name": "Cedric Diggory",
+              "struct": null
+            }
+          ],
+          "value_id": "9928692",
+          "value_name": "Cedric Diggory",
+          "value_type": "string"
+        },
+        {
+          "id": "PIECES_NUMBER",
+          "name": "Cantidad de piezas",
+          "values": [
+            {
+              "id": null,
+              "name": "1",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "1",
+          "value_type": "number"
+        },
+        {
+          "id": "SALE_FORMAT",
+          "name": "Formato de venta",
+          "values": [
+            {
+              "id": "1359391",
+              "name": "Unidad",
+              "struct": null
+            }
+          ],
+          "value_id": "1359391",
+          "value_name": "Unidad",
+          "value_type": "list"
+        },
+        {
+          "id": "SELLER_SKU",
+          "name": "SKU",
+          "values": [
+            {
+              "id": null,
+              "name": "4895205606166",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "4895205606166",
+          "value_type": "string"
+        },
+        {
+          "id": "UNITS_PER_PACK",
+          "name": "Unidades por pack",
+          "values": [
+            {
+              "id": null,
+              "name": "1",
+              "struct": null
+            }
+          ],
+          "value_id": null,
+          "value_name": "1",
+          "value_type": "number"
+        },
+        {
+          "id": "WIDTH",
+          "name": "Ancho",
+          "values": [
+            {
+              "id": null,
+              "name": "8 cm",
+              "struct": {
+                "unit": "cm",
+                "number": 8
+              }
+            }
+          ],
+          "value_id": null,
+          "value_name": "8 cm",
+          "value_type": "number_unit"
+        }
+      ],
+      "sold_quantity": 0,
+      "ml_category_id": "MLU158839",
+      "initial_quantity": 3,
+      "accepts_mercadopago": true
+    },
+    "brand": null,
+    "category": null
+  }
+]

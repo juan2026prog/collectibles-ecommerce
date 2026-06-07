@@ -1,0 +1,741 @@
+{
+  "totalProducts": 433,
+  "brands": [
+    [
+      "FUNKO",
+      132
+    ],
+    [
+      "CINEREPLICAS",
+      35
+    ],
+    [
+      "HASBRO",
+      32
+    ],
+    [
+      "NECA",
+      25
+    ],
+    [
+      "BANDAI",
+      21
+    ],
+    [
+      "JAZWARES",
+      17
+    ],
+    [
+      "FIGGYZ",
+      17
+    ],
+    [
+      "MATTEL",
+      13
+    ],
+    [
+      "IRON STUDIOS",
+      12
+    ],
+    [
+      "CROSSOVER",
+      9
+    ],
+    [
+      "MAJORETTE",
+      9
+    ],
+    [
+      "MCFARLANE",
+      7
+    ],
+    [
+      "COLLECTIBLES",
+      7
+    ],
+    [
+      "PANINI",
+      6
+    ],
+    [
+      "PLAYMATES TOYS",
+      6
+    ],
+    [
+      "TOKIDOKI",
+      5
+    ],
+    [
+      "HEROCLIX",
+      5
+    ],
+    [
+      "AURORA",
+      4
+    ],
+    [
+      "JUSTICE LEAGUE",
+      3
+    ],
+    [
+      "DESCONOCIDA",
+      3
+    ]
+  ],
+  "categories": [
+    [
+      "FUNKO POP",
+      114
+    ],
+    [
+      "VARIOS",
+      89
+    ],
+    [
+      "FIGURAS DE ACCIÓN",
+      80
+    ],
+    [
+      "PELUCHES",
+      56
+    ],
+    [
+      "ROPA & ACCESORIOS",
+      33
+    ],
+    [
+      "HOME & DECOR",
+      19
+    ],
+    [
+      "PAPELERÍA",
+      13
+    ],
+    [
+      "TCG & BOARDGAMES",
+      10
+    ],
+    [
+      "VEHÍCULOS A ESCALA",
+      7
+    ],
+    [
+      "CROMOS / FIGURITAS",
+      6
+    ],
+    [
+      "JUEGOS Y JUGUETES",
+      5
+    ],
+    [
+      "ESCULTURAS Y ESTATUAS",
+      1
+    ]
+  ],
+  "franchises": [
+    [
+      "Harry Potter",
+      39
+    ],
+    [
+      "Marvel",
+      34
+    ],
+    [
+      "DRAGON BALL",
+      14
+    ],
+    [
+      "DC Comics",
+      13
+    ],
+    [
+      "ETERNALS",
+      12
+    ],
+    [
+      "Star Wars",
+      9
+    ],
+    [
+      "MORTAL KOMBAT",
+      8
+    ],
+    [
+      "STREET FIGHTER",
+      8
+    ],
+    [
+      "TOKIDOKI",
+      7
+    ],
+    [
+      "GHOSTBUSTERS",
+      7
+    ],
+    [
+      "SONIC",
+      7
+    ],
+    [
+      "DISNEY",
+      6
+    ],
+    [
+      "MASTERS OF THE UNIVERSE",
+      5
+    ],
+    [
+      "ONE PIECE",
+      5
+    ],
+    [
+      "HAWKEYE",
+      4
+    ],
+    [
+      "DUMB AND DUMBER",
+      4
+    ],
+    [
+      "COBRA KAI",
+      4
+    ],
+    [
+      "THUNDERCATS",
+      4
+    ],
+    [
+      "KPOP DEMON HUNTERS",
+      4
+    ],
+    [
+      "DUNGEONS & DRAGONS",
+      3
+    ],
+    [
+      "THE BOYS",
+      3
+    ],
+    [
+      "HEROCLIX!",
+      3
+    ],
+    [
+      "FUNKO",
+      3
+    ],
+    [
+      "DC BLACK LIGHTNING",
+      3
+    ],
+    [
+      "US",
+      3
+    ],
+    [
+      "RICK AND MORTY",
+      3
+    ],
+    [
+      "WANDAVISION",
+      2
+    ],
+    [
+      "X-MEN REGENESIS",
+      2
+    ],
+    [
+      "BACK TO THE FUTURE",
+      2
+    ],
+    [
+      "SQUID GAME",
+      2
+    ],
+    [
+      "JUEGO DEL CALAMAR",
+      2
+    ],
+    [
+      "THE REAL GHOSTBUSTERS",
+      2
+    ],
+    [
+      "SPIDERMAN",
+      2
+    ],
+    [
+      "FANTASTIC FOUR",
+      2
+    ],
+    [
+      "ESCUADRÓN SUICIDA",
+      2
+    ],
+    [
+      "ALIEN ROMULUS",
+      2
+    ],
+    [
+      "BATMAN",
+      2
+    ],
+    [
+      "CHAINSAW MAN",
+      2
+    ],
+    [
+      "BEETLEJUICE",
+      2
+    ],
+    [
+      "FUNKO POP",
+      2
+    ],
+    [
+      "NECA",
+      2
+    ],
+    [
+      "THE BLACK SERIES",
+      2
+    ],
+    [
+      "TERMINATOR 2: JUDGMENT DAY",
+      2
+    ],
+    [
+      "WEDNESDAY",
+      2
+    ],
+    [
+      "SUPER HÉROES",
+      2
+    ],
+    [
+      "SPY X FAMILY",
+      2
+    ],
+    [
+      "MEGA MAN",
+      2
+    ],
+    [
+      "SONIC THE HEDGEHOG",
+      2
+    ],
+    [
+      "WHAT IF...?",
+      2
+    ],
+    [
+      "TORTUGAS NINJA",
+      2
+    ]
+  ],
+  "characters": [
+    [
+      "IRON MAN",
+      5
+    ],
+    [
+      "T-1000",
+      3
+    ],
+    [
+      "GROOT",
+      3
+    ],
+    [
+      "X-MEN",
+      3
+    ],
+    [
+      "AMERICA CHAVEZ",
+      3
+    ],
+    [
+      "DARTH VADER",
+      3
+    ],
+    [
+      "PERSONAJE",
+      3
+    ],
+    [
+      "HULK",
+      3
+    ],
+    [
+      "SUPERGIRL",
+      3
+    ],
+    [
+      "AQUAMAN",
+      3
+    ],
+    [
+      "KEN",
+      3
+    ],
+    [
+      "LIU KANG",
+      2
+    ],
+    [
+      "PIXIE",
+      2
+    ],
+    [
+      "LOGO",
+      2
+    ],
+    [
+      "MONICA RAMBEAU",
+      2
+    ],
+    [
+      "FRANKENSTEIN",
+      2
+    ],
+    [
+      "IKARIS",
+      2
+    ],
+    [
+      "OJO DE HALCÓN",
+      2
+    ],
+    [
+      "STAR WARS",
+      2
+    ],
+    [
+      "LLOYD",
+      2
+    ],
+    [
+      "DOC BROWN",
+      2
+    ],
+    [
+      "STANTZ",
+      2
+    ],
+    [
+      "ZAYU",
+      2
+    ],
+    [
+      "AJAK",
+      2
+    ],
+    [
+      "HAWKEYE",
+      2
+    ],
+    [
+      "CORSICA MERMICORN",
+      2
+    ],
+    [
+      "BUTT-CRACKULA",
+      2
+    ],
+    [
+      "CLUTCH",
+      2
+    ],
+    [
+      "PIXIE UNICORNO",
+      2
+    ],
+    [
+      "LEONARDO VS MIGUEL DIAZ",
+      2
+    ],
+    [
+      "BOOMERANG",
+      2
+    ],
+    [
+      "CATWOMAN",
+      2
+    ],
+    [
+      "BLACK LIGHTNING",
+      2
+    ],
+    [
+      "BEETLEJUICE",
+      2
+    ],
+    [
+      "HARRY POTTER",
+      2
+    ],
+    [
+      "HARLEM BLOBETROTTERS",
+      2
+    ],
+    [
+      "QUASIMODO",
+      2
+    ],
+    [
+      "NECA",
+      2
+    ],
+    [
+      "LUCKY",
+      2
+    ],
+    [
+      "DEADSHOT",
+      2
+    ],
+    [
+      "HOMERO",
+      2
+    ],
+    [
+      "CAPTAIN HAMMERHEAD",
+      2
+    ],
+    [
+      "BATMAN",
+      2
+    ],
+    [
+      "SPIDER-PUNK",
+      2
+    ],
+    [
+      "SPRITE",
+      2
+    ],
+    [
+      "MAPLE",
+      2
+    ],
+    [
+      "BOB ESPONJA",
+      2
+    ],
+    [
+      "LLOYD CHRISTMAS IN TUX",
+      2
+    ],
+    [
+      "MORTY",
+      2
+    ],
+    [
+      "QUEEN GENERAL RAMONDA 971",
+      2
+    ]
+  ],
+  "combinations": [
+    [
+      "HARRY POTTER + CINEREPLICAS",
+      33
+    ],
+    [
+      "MARVEL + FUNKO",
+      20
+    ],
+    [
+      "MARVEL + FUNKO POP",
+      16
+    ],
+    [
+      "DRAGON BALL + BANDAI",
+      14
+    ],
+    [
+      "DRAGON BALL + FIGURAS DE ACCIÓN",
+      14
+    ],
+    [
+      "HARRY POTTER + PAPELERÍA",
+      13
+    ],
+    [
+      "ETERNALS + FUNKO",
+      12
+    ],
+    [
+      "ETERNALS + FUNKO POP",
+      12
+    ],
+    [
+      "MARVEL + FIGURAS DE ACCIÓN",
+      10
+    ],
+    [
+      "STREET FIGHTER + FIGGYZ",
+      8
+    ],
+    [
+      "STREET FIGHTER + HOME & DECOR",
+      8
+    ],
+    [
+      "TOKIDOKI + PELUCHES",
+      7
+    ],
+    [
+      "GHOSTBUSTERS + HASBRO",
+      7
+    ],
+    [
+      "MORTAL KOMBAT + FIGURAS DE ACCIÓN",
+      6
+    ],
+    [
+      "MARVEL + HASBRO",
+      6
+    ],
+    [
+      "MORTAL KOMBAT + MCFARLANE",
+      5
+    ],
+    [
+      "HARRY POTTER + PELUCHES",
+      5
+    ],
+    [
+      "ONE PIECE + BANDAI",
+      5
+    ],
+    [
+      "ONE PIECE + FIGURAS DE ACCIÓN",
+      5
+    ],
+    [
+      "STAR WARS + ROPA & ACCESORIOS",
+      5
+    ],
+    [
+      "TOKIDOKI + AURORA",
+      4
+    ],
+    [
+      "DISNEY + ROPA & ACCESORIOS",
+      4
+    ],
+    [
+      "HAWKEYE + FUNKO",
+      4
+    ],
+    [
+      "HAWKEYE + FUNKO POP",
+      4
+    ],
+    [
+      "DUMB AND DUMBER + FUNKO",
+      4
+    ],
+    [
+      "DUMB AND DUMBER + FUNKO POP",
+      4
+    ],
+    [
+      "COBRA KAI + PLAYMATES TOYS",
+      4
+    ],
+    [
+      "DC COMICS + IRON STUDIOS",
+      4
+    ],
+    [
+      "SONIC + JAZWARES",
+      4
+    ],
+    [
+      "MARVEL + PELUCHES",
+      4
+    ],
+    [
+      "KPOP DEMON HUNTERS + FUNKO",
+      4
+    ],
+    [
+      "KPOP DEMON HUNTERS + FUNKO POP",
+      4
+    ],
+    [
+      "DUNGEONS & DRAGONS + HASBRO",
+      3
+    ],
+    [
+      "DUNGEONS & DRAGONS + FIGURAS DE ACCIÓN",
+      3
+    ],
+    [
+      "MARVEL + NECA",
+      3
+    ],
+    [
+      "TOKIDOKI + TOKIDOKI",
+      3
+    ],
+    [
+      "DC COMICS + ROPA & ACCESORIOS",
+      3
+    ],
+    [
+      "THE BOYS + NECA",
+      3
+    ],
+    [
+      "HEROCLIX! + HEROCLIX",
+      3
+    ],
+    [
+      "HEROCLIX! + TCG & BOARDGAMES",
+      3
+    ],
+    [
+      "FUNKO + FUNKO",
+      3
+    ],
+    [
+      "FUNKO + FUNKO POP",
+      3
+    ],
+    [
+      "MORTAL KOMBAT + FUNKO",
+      3
+    ],
+    [
+      "MASTERS OF THE UNIVERSE + MATTEL",
+      3
+    ],
+    [
+      "DC BLACK LIGHTNING + FUNKO",
+      3
+    ],
+    [
+      "DC BLACK LIGHTNING + FUNKO POP",
+      3
+    ],
+    [
+      "THUNDERCATS + SUPER 7",
+      3
+    ],
+    [
+      "US + FUNKO",
+      3
+    ],
+    [
+      "US + FUNKO POP",
+      3
+    ],
+    [
+      "RICK AND MORTY + FUNKO",
+      3
+    ]
+  ]
+}

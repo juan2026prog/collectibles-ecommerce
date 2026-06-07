@@ -1,0 +1,1615 @@
+{
+  "totalAfectados": 378,
+  "totalTruncadosViejos": 378,
+  "scoreEstimado": 99,
+  "metricas": {
+    "cortadas": 2,
+    "generico": 0,
+    "mayor70": 0,
+    "conEntidad": 378,
+    "porcentajeMayor70": "0.0%",
+    "porcentajeConEntidad": "100.0%"
+  },
+  "preview": [
+    {
+      "id": "c3d180a0-f16c-402c-91da-4da11884e84c",
+      "slug": "mercadolibre-MLU652927158",
+      "titleActual": "Peluche Funko Infec-ted",
+      "seoTitleActual": "Peluche Funko Infec-ted | Funko | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Infec-ted | Collectibles",
+      "longitudActual": 46,
+      "longitudNueva": 34,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Infec-ted",
+        "franquicia": "",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "2c5388f7-6fc5-4f84-8222-7bb78e85162c",
+      "slug": "mercadolibre-MLU617150911",
+      "titleActual": "Funko Pop! Marvel: The Eternals - Sersi",
+      "seoTitleActual": "Funko Pop Marvel: The Eternals - Sersi | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Sersi | Marvel | Collectibles",
+      "longitudActual": 53,
+      "longitudNueva": 39,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Sersi",
+        "franquicia": "Marvel",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "9a62028a-4a13-4986-912a-7083ae7c90b9",
+      "slug": "mercadolibre-MLU629522465",
+      "titleActual": "Figuras Hasbro Dungeons And Dragons Golden Archive- Holga",
+      "seoTitleActual": "Figuras Hasbro Dungeons And Dragons Gold | Collectibles",
+      "seoTitlePropuesto": "Holga Dungeons & Dragons | Hasbro | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 48,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Holga",
+        "franquicia": "Dungeons & Dragons",
+        "marca": "Hasbro"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "92016fe1-8732-4d33-802d-7d9b57d4d4c6",
+      "slug": "mercadolibre-MLU787951132",
+      "titleActual": "Peluche Charlie Brown Amarillo",
+      "seoTitleActual": "Peluche Charlie Brown Amarillo | Kohls Cares | Collectibles",
+      "seoTitlePropuesto": "Peluche Charlie Brown Amarillo | Kohls Cares | Collectibles",
+      "longitudActual": 59,
+      "longitudNueva": 59,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Charlie Brown",
+        "franquicia": "",
+        "marca": "Kohls Cares"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "8dc56c6d-bea5-40ac-bf92-3b2281b6ba3b",
+      "slug": "mercadolibre-MLU631321183",
+      "titleActual": "Marvel Legends! Guardians Of The Galaxy Vol.3 Star-Lord ",
+      "seoTitleActual": "Marvel Legends Guardians Of The Galaxy V | Collectibles",
+      "seoTitlePropuesto": "Marvel Legends Star-Lord | Marvel | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 48,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Star-Lord",
+        "franquicia": "Marvel",
+        "marca": "Marvel"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "8d614e97-8f12-4426-9040-64625558d7b1",
+      "slug": "mercadolibre-MLU1026910794",
+      "titleActual": "Mcfarlane Toys! Mortal Kombat Liu Kang",
+      "seoTitleActual": "Mcfarlane Toys Mortal Kombat Liu Kang | Collectibles",
+      "seoTitlePropuesto": "Liu Kang Mortal Kombat | Mcfarlane | Collectibles",
+      "longitudActual": 52,
+      "longitudNueva": 49,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Liu Kang",
+        "franquicia": "Mortal Kombat",
+        "marca": "Mcfarlane"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "fd633409-bc22-469a-95dd-9e6489ff1dc9",
+      "slug": "mercadolibre-MLU669840982",
+      "titleActual": "Neca Body Knockers Solar Predador Figura Coleccionable Marvel Pvc 15cm",
+      "seoTitleActual": "Neca Body Knockers Solar Predador Figura | Collectibles",
+      "seoTitlePropuesto": "NECA Capitán América | Marvel | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 44,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Capitán América",
+        "franquicia": "Marvel",
+        "marca": "NECA"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "87248cd0-7041-4563-ba93-bbf8118fc0d3",
+      "slug": "mercadolibre-MLU480040948",
+      "titleActual": "Plushies! Toki Doki- Strawberry Milk (small)",
+      "seoTitleActual": "Plushies Toki Doki- Strawberry Milk (sma | Collectibles",
+      "seoTitlePropuesto": "STRAWBERRY MILK Tokidoki | Tokidoki | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 50,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "STRAWBERRY MILK",
+        "franquicia": "Tokidoki",
+        "marca": "Tokidoki"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "23672507-d215-4398-becf-bf475af70d0b",
+      "slug": "mercadolibre-MLU480118818",
+      "titleActual": "Plushies! Toki Doki- Corsica  (medium)",
+      "seoTitleActual": "Plushies Toki Doki- Corsica  (medium) | Collectibles",
+      "seoTitlePropuesto": "Pixie Tokidoki | Aurora | Collectibles",
+      "longitudActual": 52,
+      "longitudNueva": 38,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Pixie",
+        "franquicia": "Tokidoki",
+        "marca": "Aurora"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "bbd5b478-f961-4adf-91bd-ddd2b5f7402b",
+      "slug": "mercadolibre-MLU623579617",
+      "titleActual": "Batman! Body Harley Quinn",
+      "seoTitleActual": "Batman Body Harley Quinn | CROSSOVER | Collectibles",
+      "seoTitlePropuesto": "Batman Body Harley Quinn | CROSSOVER | Collectibles",
+      "longitudActual": 51,
+      "longitudNueva": 51,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Harley Quinn",
+        "franquicia": "",
+        "marca": "CROSSOVER"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "20f785da-9d41-41f7-981d-71da3fb9478e",
+      "slug": "mercadolibre-MLU625404250",
+      "titleActual": "Neca! The Boys Ultimate Starlight Action Figure",
+      "seoTitleActual": "Neca The Boys Ultimate Starlight Action  | Collectibles",
+      "seoTitlePropuesto": "NECA Starlight | The Boys | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 40,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Starlight",
+        "franquicia": "The Boys",
+        "marca": "NECA"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "3988a638-2d6d-48d9-b212-ec372fada700",
+      "slug": "mercadolibre-MLU623292153",
+      "titleActual": "Justice League! Body Sweet But Story",
+      "seoTitleActual": "Justice League Body Sweet But Story | Collectibles",
+      "seoTitlePropuesto": "Justice League Body Sweet But Story | Justice League | Collectibles",
+      "longitudActual": 50,
+      "longitudNueva": 67,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Logo",
+        "franquicia": "",
+        "marca": "Justice League"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "ffe7952f-fab9-442c-9fd8-0a60dae587b5",
+      "slug": "mercadolibre-MLU625321714",
+      "titleActual": "Terminator 2: Judgement Day Ultimate T-1000 (motorcycle Cop)",
+      "seoTitleActual": "Terminator 2: Judgement Day Ultimate T-1 | Collectibles",
+      "seoTitlePropuesto": "T-1000 Terminator 2 | Terminator | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 47,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "T-1000",
+        "franquicia": "Terminator 2",
+        "marca": "Terminator"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "6748589c-86fa-4329-bbf8-fe9f553bdbb9",
+      "slug": "mercadolibre-MLU625264107",
+      "titleActual": "Freddy Krueger Action Figure 8  Scale, Nightmare Part 3 ",
+      "seoTitleActual": "Freddy Krueger Action Figure 8  Scale, N | Collectibles",
+      "seoTitlePropuesto": "NECA Freddy Krueger | A Nightmare on elm street 3 | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 64,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Freddy Krueger",
+        "franquicia": "A Nightmare on elm street 3",
+        "marca": "NECA"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "0600a389-d470-4917-9c49-ed046c50dfe3",
+      "slug": "mercadolibre-MLU619309005",
+      "titleActual": "Disney! Body Goofy",
+      "seoTitleActual": "Disney Body Goofy | Collectibles | Collectibles",
+      "seoTitlePropuesto": "Disney Body Goofy | Collectibles",
+      "longitudActual": 47,
+      "longitudNueva": 32,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Goofy",
+        "franquicia": "",
+        "marca": "Collectibles"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "8a0bbeaf-3b67-4bce-a7e9-b876b8408636",
+      "slug": "mercadolibre-MLU617035623",
+      "titleActual": "Funko Pop! Wandavision - Monica Rambeu",
+      "seoTitleActual": "Funko Pop Wandavision - Monica Rambeu | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Monica Rambeau | WandaVision | Collectibles",
+      "longitudActual": 52,
+      "longitudNueva": 53,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Monica Rambeau",
+        "franquicia": "WandaVision",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "7779cea9-07b6-42ca-b191-6a201845de73",
+      "slug": "mercadolibre-MLU636520781",
+      "titleActual": "Funko Pop! Squid Game - Gi-hun 456",
+      "seoTitleActual": "Funko Pop Squid Game - Gi-hun 456 | Collectibles",
+      "seoTitlePropuesto": "Funko Pop GI-HUN 456 | Juego Calamar | Collectibles",
+      "longitudActual": 48,
+      "longitudNueva": 51,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "GI-HUN 456",
+        "franquicia": "Juego Calamar",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "5c0931d3-6a42-4679-a803-5906359eedb8",
+      "slug": "mercadolibre-MLU625406666",
+      "titleActual": "Neca! Universal Monsters - Frankenstein's (black & White)",
+      "seoTitleActual": "Neca Universal Monsters - Frankenstein's | Collectibles",
+      "seoTitlePropuesto": "NECA Frankenstein | Universal Monsters | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 53,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Frankenstein",
+        "franquicia": "Universal Monsters",
+        "marca": "NECA"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "354dcd05-a3ce-4a0e-a4a3-75863e0ea739",
+      "slug": "mercadolibre-MLU730125328",
+      "titleActual": "Power Rangers Card Game Idioma Inglés Power Ranger",
+      "seoTitleActual": "Power Rangers Card Game Idioma Inglés Po | Collectibles",
+      "seoTitlePropuesto": "Power Rangers Card Game Idioma Inglés Power | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 58,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "",
+        "franquicia": "",
+        "marca": "Bandai"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "25f99bc9-b68e-489d-8fba-4c04439ed7eb",
+      "slug": "mercadolibre-MLU651800334",
+      "titleActual": "Marvel Legends! Spiderman: Across The Spiderverse - Jessica Drew",
+      "seoTitleActual": "Marvel Legends Spiderman: Across The Spi | Collectibles",
+      "seoTitlePropuesto": "Marvel Legends Jessica Drew Spider-Woman | Marvel | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 64,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Jessica Drew Spider-Woman",
+        "franquicia": "Marvel",
+        "marca": "Marvel"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "ac6ccd32-56ff-4fe9-9c7a-ae95786c4c0c",
+      "slug": "mercadolibre-MLU619315442",
+      "titleActual": "Body Disney! Lion King: Pumba Naranja Oscuro 18 Meses",
+      "seoTitleActual": "Body Disney Lion King: Pumba Naranja Osc | Collectibles",
+      "seoTitlePropuesto": "Pumba | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 20,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Pumba",
+        "franquicia": "",
+        "marca": "Benpres"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "3592a831-9ae5-47f5-b94c-ed3163cf0e3c",
+      "slug": "mercadolibre-MLU617931111",
+      "titleActual": "Marvel Heroclix: Avenger Fantastic Four Empyre Booster",
+      "seoTitleActual": "Marvel Heroclix: Avenger Fantastic Four  | Collectibles",
+      "seoTitlePropuesto": "Fantastic Four HeroClix! | Heroclix | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 50,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Fantastic Four",
+        "franquicia": "HeroClix!",
+        "marca": "Heroclix"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "d92d9fe4-0f5e-4123-aba3-1fed2d7b97ff",
+      "slug": "mercadolibre-MLU623371618",
+      "titleActual": "Marvel Legends! X-men Age Of Apocalypse - Legion",
+      "seoTitleActual": "Marvel Legends X-men Age Of Apocalypse - | Collectibles",
+      "seoTitlePropuesto": "Marvel Legends Legion | Marvel | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 45,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Legion",
+        "franquicia": "Marvel",
+        "marca": "Marvel"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "bb36a2df-48f5-4ec9-a7d1-af591ba2638e",
+      "slug": "mercadolibre-MLU651358264",
+      "titleActual": "Funko Pop! The Eternals - Ikaris",
+      "seoTitleActual": "Funko Pop The Eternals - Ikaris | Eternals | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Ikaris | Eternals | Collectibles",
+      "longitudActual": 57,
+      "longitudNueva": 42,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Ikaris",
+        "franquicia": "Eternals",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "9e576c32-87fe-4494-9fe9-8d97cb83ccd4",
+      "slug": "mercadolibre-MLU678132406",
+      "titleActual": "Groot Who Dances Body Knocker - Solar Power - Neca",
+      "seoTitleActual": "Groot Who Dances Body Knocker - Solar Po | Collectibles",
+      "seoTitlePropuesto": "NECA Groot | Marvel | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 34,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Groot",
+        "franquicia": "Marvel",
+        "marca": "NECA"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "c01a1358-fe3b-4429-9599-9003862a0e02",
+      "slug": "mercadolibre-MLU1245699994",
+      "titleActual": "Funko Pop! Marvel 80 Years - Nick Fury #528",
+      "seoTitleActual": "Funko Pop Marvel 80 Years - Nick Fury #5 | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Nick Fury | Marvel | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 43,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Nick Fury",
+        "franquicia": "Marvel",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "4f2ad171-a9a5-4a75-afca-fad1a20cade7",
+      "slug": "mercadolibre-MLU617517223",
+      "titleActual": "Harry Potter! Cuaderno Slytherin Verde Oscuro",
+      "seoTitleActual": "Harry Potter Cuaderno Slytherin Verde Os | Collectibles",
+      "seoTitlePropuesto": "Harry Potter Cuaderno Slytherin Verde Oscuro | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 59,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "",
+        "franquicia": "",
+        "marca": "Cinereplicas"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "3a2ae73c-9e64-4536-b696-35d436b60b75",
+      "slug": "mercadolibre-MLU625368128",
+      "titleActual": "NECA - Universal Monsters Frankenstein 18 Cm",
+      "seoTitleActual": "NECA - Universal Monsters Frankenstein 1 | Collectibles",
+      "seoTitlePropuesto": "NECA Frankenstein | FRANKENSTEIN | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 47,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Frankenstein",
+        "franquicia": "FRANKENSTEIN",
+        "marca": "NECA"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "9e84d3c2-aa47-4a8b-bb26-5c884a894532",
+      "slug": "mercadolibre-MLU651176312",
+      "titleActual": "Funko Pop! Hawkeye - Maya Lopez",
+      "seoTitleActual": "Funko Pop Hawkeye - Maya Lopez | Hawkeye | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Ojo de halcón | Hawkeye | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 48,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Ojo de halcón",
+        "franquicia": "Hawkeye",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "d5a24e8c-502d-4c74-800e-dcc52a50ecb7",
+      "slug": "mercadolibre-MLU478614383",
+      "titleActual": "Marvel Heroclix: Wolverine Vs. Cyclops X-men Regenesis ",
+      "seoTitleActual": "Marvel Heroclix: Wolverine Vs. Cyclops X | Collectibles",
+      "seoTitlePropuesto": "X-Men X-Men Regenesis | Heroclix | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 47,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "X-Men",
+        "franquicia": "X-Men Regenesis",
+        "marca": "Heroclix"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "a48f7ebb-0675-486d-b214-d644044d1037",
+      "slug": "mercadolibre-MLU625251401",
+      "titleActual": "NECA Gremlins 2 The New Batch Ultimate Brain ",
+      "seoTitleActual": "NECA Gremlins 2 The New Batch Ultimate B | Collectibles",
+      "seoTitlePropuesto": "NECA Brain | Gremlins 2 | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 38,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Brain",
+        "franquicia": "Gremlins 2",
+        "marca": "NECA"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "398940e8-ddd6-4ecc-b60f-7945c7aba98d",
+      "slug": "mercadolibre-MLU636144390",
+      "titleActual": "Funko Plushies! Star Wars Luke",
+      "seoTitleActual": "Funko Plushies Star Wars Luke | Funko | Collectibles",
+      "seoTitlePropuesto": "Funko Plush Star Wars | Collectibles",
+      "longitudActual": 52,
+      "longitudNueva": 36,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Star Wars",
+        "franquicia": "",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "047b3d14-a6b6-4acb-87cd-62fb7bc2e301",
+      "slug": "mercadolibre-MLU479167640",
+      "titleActual": "Funko Pop! Dumb And Dumber - Lloyd Christmas",
+      "seoTitleActual": "Funko Pop Dumb And Dumber - Lloyd Christ | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Lloyd | dumb and dumber | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 48,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Lloyd",
+        "franquicia": "dumb and dumber",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "b581126e-b756-443f-a111-9ee0e867915e",
+      "slug": "mercadolibre-MLU625391106",
+      "titleActual": "Neca - Back To The Future Part 2 Ultimate Doc Brown (2015)",
+      "seoTitleActual": "Neca - Back To The Future Part 2 Ultimat | Collectibles",
+      "seoTitlePropuesto": "NECA Doc Brown | Back to the Future | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 50,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Doc Brown",
+        "franquicia": "Back to the Future",
+        "marca": "NECA"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "38cecd38-aa54-4bbe-b1c9-bd7408482639",
+      "slug": "mercadolibre-MLU625439249",
+      "titleActual": "NECA The Boys Ultimate Black Noir Action Figure",
+      "seoTitleActual": "NECA The Boys Ultimate Black Noir Action | Collectibles",
+      "seoTitlePropuesto": "NECA Black Noir | The Boys | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 41,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Black Noir",
+        "franquicia": "The Boys",
+        "marca": "NECA"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "e654ab93-ae2d-4145-b8e3-0eced9a0556e",
+      "slug": "mercadolibre-MLU669905894",
+      "titleActual": "Funko Pop! Doctor Strange in the Multiverse -América Chávez ",
+      "seoTitleActual": "Funko Pop Doctor Strange in the Multiver | Collectibles",
+      "seoTitlePropuesto": "Funko Pop America Chavez | Marvel | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 48,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "America Chavez",
+        "franquicia": "Marvel",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "ccc75ebf-af40-4eba-a91d-92af38672200",
+      "slug": "mercadolibre-MLU600075610",
+      "titleActual": "Ghostbuster 2021 After Life Series - Ray Stantz",
+      "seoTitleActual": "Ghostbuster 2021 After Life Series - Ray | Collectibles",
+      "seoTitlePropuesto": "Stantz Ghostbusters | Hasbro | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 43,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Stantz",
+        "franquicia": "Ghostbusters",
+        "marca": "Hasbro"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "b1d4da6a-7f36-455c-84ba-a35e292382c4",
+      "slug": "mercadolibre-MLU615149323",
+      "titleActual": "Harry Potter! Gorro & Guantes (kids) - Ravenclaw Azul",
+      "seoTitleActual": "Harry Potter Gorro & Guantes (kids) - Ra | Collectibles",
+      "seoTitlePropuesto": "Harry Potter Gorro & Guantes (kids) - Ravenclaw | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 62,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "",
+        "franquicia": "",
+        "marca": "Cinereplicas"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "a10cfa75-6d3e-495c-8953-1158eee46f40",
+      "slug": "mercadolibre-MLU618223531",
+      "titleActual": "Harry Potter! Túnica De Quidditch Gryffindor Personalizada",
+      "seoTitleActual": "Harry Potter Túnica De Quidditch Gryffin | Collectibles",
+      "seoTitlePropuesto": "Harry Potter Túnica De Quidditch Gryffindor | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 58,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "",
+        "franquicia": "",
+        "marca": "Cinereplicas"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "dd918aba-fbbb-4a70-8516-033dcce8a3b2",
+      "slug": "mercadolibre-MLU636495359",
+      "titleActual": "Funko Pop! Squid Game - Kang Sae-Byeok 067",
+      "seoTitleActual": "Funko Pop Squid Game - Kang Sae-Byeok 06 | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Kang Sae-Byeok | Squid Game | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 52,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Kang Sae-Byeok",
+        "franquicia": "Squid Game",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "12f9f75b-b0c2-4be1-95b2-a4448fbf19b6",
+      "slug": "mercadolibre-MLU651214566",
+      "titleActual": "Funko Pop! Set De 5 Protectores Para Funko",
+      "seoTitleActual": "Funko Pop Set De 5 Protectores Para Funk | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Cajas Protectoras | Funko | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 50,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Cajas Protectoras",
+        "franquicia": "Funko",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "d73db2a1-edc0-4e2e-97ad-c5826bc7d82d",
+      "slug": "mercadolibre-MLU651215560",
+      "titleActual": "Marvel Legends! Thor: Love And Thunder  - Groot",
+      "seoTitleActual": "Marvel Legends Thor: Love And Thunder  - | Collectibles",
+      "seoTitlePropuesto": "Marvel Legends Groot | Marvel | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 44,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Groot",
+        "franquicia": "Marvel",
+        "marca": "Marvel"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "81a68825-c668-4955-80ea-852f78188212",
+      "slug": "mercadolibre-MLU691639351",
+      "titleActual": "Fifa World Cup 2026! Mascota de Mexico - Zayu 25cm",
+      "seoTitleActual": "Fifa World Cup 2026 Mascota de Mexico -  | Collectibles",
+      "seoTitlePropuesto": "Zayu | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 19,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Zayu",
+        "franquicia": "",
+        "marca": "Jazwares"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "c6882f13-bf55-42a1-a452-45fa8d952e84",
+      "slug": "mercadolibre-MLU642653945",
+      "titleActual": "Funko Pop! Masters Of The Universe - He-Man 10\"",
+      "seoTitleActual": "Funko Pop Masters Of The Universe - He-M | Collectibles",
+      "seoTitlePropuesto": "Funko Pop He-Man | Masters of the Universe | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 57,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "He-Man",
+        "franquicia": "Masters of the Universe",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "553d0c0c-651e-4f47-8faa-e9ddf6942207",
+      "slug": "mercadolibre-MLU645336674",
+      "titleActual": "Funko Pop! Squid Game - Ali 199",
+      "seoTitleActual": "Funko Pop Squid Game - Ali 199 | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Ali | JUEGO DEL CALAMAR | Collectibles",
+      "longitudActual": 45,
+      "longitudNueva": 48,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Ali",
+        "franquicia": "JUEGO DEL CALAMAR",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "05c3212b-4d3d-4d53-981b-8e7aecd10fd2",
+      "slug": "mercadolibre-MLU658358450",
+      "titleActual": "Funko Pop! Eternals - Dave Whitman",
+      "seoTitleActual": "Funko Pop Eternals - Dave Whitman | Marvel | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Dave Whitman 738 | Marvel | Collectibles",
+      "longitudActual": 57,
+      "longitudNueva": 50,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Dave Whitman 738",
+        "franquicia": "Marvel",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "dccd7d8d-b495-41b5-91fe-b3163938711d",
+      "slug": "mercadolibre-MLU651202688",
+      "titleActual": "Funko Pop Albums: News Of The World - Queen",
+      "seoTitleActual": "Funko Pop Albums: News Of The World - Qu | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Queen | Queen | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 38,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Queen",
+        "franquicia": "Queen",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "719ccf39-bd2b-496e-b38d-2fe2ac779e08",
+      "slug": "mercadolibre-MLU651824832",
+      "titleActual": "Funko Pop! Squid Game - Cho Sang-woo 218",
+      "seoTitleActual": "Funko Pop Squid Game - Cho Sang-woo 218 | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Cho Sang-Woo | Squid Game | Collectibles",
+      "longitudActual": 54,
+      "longitudNueva": 50,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Cho Sang-Woo",
+        "franquicia": "Squid Game",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "c196aa38-dc25-4990-92ee-990969b06a21",
+      "slug": "mercadolibre-MLU623083645",
+      "titleActual": "Funko Pop! Whitney Houston",
+      "seoTitleActual": "Funko Pop Whitney Houston | Iconic | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Whitney Houston | Iconic | Collectibles",
+      "longitudActual": 49,
+      "longitudNueva": 49,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Whitney Houston",
+        "franquicia": "Iconic",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "b83e7820-ecf9-44d2-ae18-3669eada3a34",
+      "slug": "mercadolibre-MLU651254586",
+      "titleActual": "Funko Pop! The Eternals - Ajak",
+      "seoTitleActual": "Funko Pop The Eternals - Ajak | Eternals | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Ajak | Eternals | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 40,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Ajak",
+        "franquicia": "Eternals",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "e3424dff-deec-4fca-bceb-2cb35a77c5bd",
+      "slug": "mercadolibre-MLU729199580",
+      "titleActual": "Funko Pop! Fortnite Llavero Highrise Assault Trooper Verde",
+      "seoTitleActual": "Funko Pop Fortnite Llavero Highrise Assa | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Fortnite Llavero Highrise Assault | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 58,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "",
+        "franquicia": "",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "0619980c-94ff-4f03-85c2-79d29d2e546b",
+      "slug": "mercadolibre-MLU608707069",
+      "titleActual": "Dc Multiverse! Figuras Mcfarlane - Bloodsport",
+      "seoTitleActual": "Dc Multiverse Figuras Mcfarlane - Bloods | Collectibles",
+      "seoTitlePropuesto": "BLOODSPORT Collectibles | Mcfarlane | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 50,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "BLOODSPORT",
+        "franquicia": "Collectibles",
+        "marca": "Mcfarlane"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "37106d31-4312-4034-abc4-1f575903aa5e",
+      "slug": "mercadolibre-MLU699751468",
+      "titleActual": "Funko Pop Marilyn Thornhill Wednesday",
+      "seoTitleActual": "Funko Pop Marilyn Thornhill Wednesday | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Marilyn Thornhill | Figuas De Vinil | Collectibles",
+      "longitudActual": 52,
+      "longitudNueva": 60,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Marilyn Thornhill",
+        "franquicia": "Figuas De Vinil",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "44aa012e-6b0b-4c89-ac09-74c22e07fb04",
+      "slug": "mercadolibre-MLU620108019",
+      "titleActual": "Funko Pop! Dr. Strange In The Multiverse- America Chavez 1",
+      "seoTitleActual": "Funko Pop Dr. Strange In The Multiverse- | Collectibles",
+      "seoTitlePropuesto": "Funko Pop America Chavez | Marvel | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 48,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "America Chavez",
+        "franquicia": "Marvel",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "c20ba329-4ecb-4398-a24e-46bcf286a1dd",
+      "slug": "mercadolibre-MLU481369961",
+      "titleActual": "Ghostbuster 1985 Plasma Series - Ray Stantz ",
+      "seoTitleActual": "Ghostbuster 1985 Plasma Series - Ray Sta | Collectibles",
+      "seoTitlePropuesto": "Rey Stantz The Real Ghostbusters | Hasbro | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 56,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Rey Stantz",
+        "franquicia": "The Real Ghostbusters",
+        "marca": "Hasbro"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "832c169e-2f9c-4942-a538-abb066b27aa4",
+      "slug": "mercadolibre-MLU631519179",
+      "titleActual": "Iron Studios! Spiderman No Way Home Amazing Spiderman 1/10",
+      "seoTitleActual": "Iron Studios Spiderman No Way Home Amazi | Collectibles",
+      "seoTitlePropuesto": "Asombroso Spider-man Spiderman | Iron Studios | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 60,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Asombroso Spider-man",
+        "franquicia": "Spiderman",
+        "marca": "Iron Studios"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "2f3d1585-4671-400b-947e-d4b6149f206d",
+      "slug": "mercadolibre-MLU629964263",
+      "titleActual": "Funko Plushies! Avenger Infinity War - Hulkbuster",
+      "seoTitleActual": "Funko Plushies Avenger Infinity War - Hu | Collectibles",
+      "seoTitlePropuesto": "Funko Plush Iron Man | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 35,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Iron Man",
+        "franquicia": "",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "4e972383-b753-4eac-9c47-6a30db3f62e9",
+      "slug": "mercadolibre-MLU622877193",
+      "titleActual": "Sudadera Capitán América Para Bebés Y Niños 24 Meses Azul Blanco Rojo",
+      "seoTitleActual": "Sudadera Capitán América Para Bebés Y Ni | Collectibles",
+      "seoTitlePropuesto": "Sudadera Capitán América Para Bebés Y Niños 24 | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 61,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "",
+        "franquicia": "",
+        "marca": "CROSSOVER"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "f1162e3b-6f89-4c09-b75a-c6e6fc3d3a15",
+      "slug": "mercadolibre-MLU687159176",
+      "titleActual": "Marvel Legends Comics! Retro Iron Man Model 09",
+      "seoTitleActual": "Marvel Legends Comics Retro Iron Man Mod | Collectibles",
+      "seoTitlePropuesto": "Marvel Legends Iron Man | Marvel | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 47,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Iron Man",
+        "franquicia": "Marvel",
+        "marca": "Marvel"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "221f6f12-796a-4bbf-b053-503a191c7acd",
+      "slug": "mercadolibre-MLU480039994",
+      "titleActual": "Plushies! Toki Doki- Cora Mermicorno (small)",
+      "seoTitleActual": "Plushies Toki Doki- Cora Mermicorno (sma | Collectibles",
+      "seoTitlePropuesto": "Cora Mermicorno Tokidoki | Tokidoki | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 50,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Cora Mermicorno",
+        "franquicia": "Tokidoki",
+        "marca": "Tokidoki"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "fef2acf0-4c0b-4a70-b93d-fb6ae258b1f7",
+      "slug": "mercadolibre-MLU615896308",
+      "titleActual": "Marvel Legends! Thor Love And Thunder - Groot",
+      "seoTitleActual": "Marvel Legends Thor Love And Thunder - G | Collectibles",
+      "seoTitlePropuesto": "Marvel Legends Groot | Marvel | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 44,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Groot",
+        "franquicia": "Marvel",
+        "marca": "Marvel"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "75aafd3e-d4a5-4e16-8051-0ffebfa7a58f",
+      "slug": "mercadolibre-MLU615456373",
+      "titleActual": "Fantastic Beasts! Llaveros Plush - Newt Scamander",
+      "seoTitleActual": "Fantastic Beasts Llaveros Plush - Newt S | Collectibles",
+      "seoTitlePropuesto": "Fantastic Beasts Llaveros Plush - Newt Scamander | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 63,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "",
+        "franquicia": "",
+        "marca": "Cinereplicas"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "1fd8a0eb-dec0-4464-8c31-53d50f8ea066",
+      "slug": "mercadolibre-MLU620148536",
+      "titleActual": "Funko Pop! Hawkeye - Maya Lopez",
+      "seoTitleActual": "Funko Pop Hawkeye - Maya Lopez | Hawkeye | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Hawkeye | Hawkeye | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 42,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Hawkeye",
+        "franquicia": "Hawkeye",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "80403933-f3af-408d-b433-b32203855b80",
+      "slug": "mercadolibre-MLU620219552",
+      "titleActual": "Marvel Legends X-men Age Of Apocalypse - Marvel's Shadowcat",
+      "seoTitleActual": "Marvel Legends X-men Age Of Apocalypse - | Collectibles",
+      "seoTitlePropuesto": "Marvel Legends Shadowcat | Marvel | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 48,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Shadowcat",
+        "franquicia": "Marvel",
+        "marca": "Marvel"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "84308d6d-b5e9-4f6a-940a-0fa975832fdf",
+      "slug": "mercadolibre-MLU615495408",
+      "titleActual": "Harry Potter! Llaveros Plush - Viktor Rojo",
+      "seoTitleActual": "Harry Potter Llaveros Plush - Viktor Roj | Collectibles",
+      "seoTitlePropuesto": "Harry Potter Llaveros Plush - Viktor Rojo | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 56,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "",
+        "franquicia": "",
+        "marca": "Cinereplicas"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "619178f4-f9e5-4194-b0c9-e401dcdbff5e",
+      "slug": "mercadolibre-MLU651279190",
+      "titleActual": "Funko Pop! The Eternals -  Phastos",
+      "seoTitleActual": "Funko Pop The Eternals -  Phastos | Marvel | Collectibles",
+      "seoTitlePropuesto": "Funko Pop [Figuras de acción] | Marvel | Collectibles",
+      "longitudActual": 57,
+      "longitudNueva": 53,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "[Figuras de acción]",
+        "franquicia": "Marvel",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "fe7bee6f-fbf4-40db-9cb6-69aa1294842e",
+      "slug": "mercadolibre-MLU625290260",
+      "titleActual": "Neca! Gremlins 2 -the New Batch Ultimate Greta Action Figure",
+      "seoTitleActual": "Neca Gremlins 2 -the New Batch Ultimate  | Collectibles",
+      "seoTitlePropuesto": "NECA Greta | Gremlins 2: The New Batch | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 53,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Greta",
+        "franquicia": "Gremlins 2: The New Batch",
+        "marca": "NECA"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "b4090cac-1d38-42cb-ad9d-8994d3b92734",
+      "slug": "mercadolibre-MLU480116003",
+      "titleActual": "Plushies! Toki Doki- Corsica Mermicorn (medium)",
+      "seoTitleActual": "Plushies Toki Doki- Corsica Mermicorn (m | Collectibles",
+      "seoTitlePropuesto": "Corsica Mermicorn Tokidoki | Aurora | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 50,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Corsica Mermicorn",
+        "franquicia": "Tokidoki",
+        "marca": "Aurora"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "122b5b23-fcdd-43e1-8113-5f7fbe88838d",
+      "slug": "mercadolibre-MLU636004868",
+      "titleActual": "Peluche Gashouse But-crackula Violeta Oscuro",
+      "seoTitleActual": "Peluche Gashouse But-crackula Violeta Os | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Butt-Crackula | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 38,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Butt-Crackula",
+        "franquicia": "",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "a2ed9747-4f4a-4927-881d-6553c0383a97",
+      "slug": "mercadolibre-MLU1336067964",
+      "titleActual": "Fifa World Cup 2026! Llavero Peluche mascota de Mexico - Zayu 10cm",
+      "seoTitleActual": "Fifa World Cup 2026 Llavero Peluche masc | Collectibles",
+      "seoTitlePropuesto": "Zayu | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 19,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Zayu",
+        "franquicia": "",
+        "marca": "Jazwares"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "69a7d9eb-6ca5-479d-a6ea-493ca8ec5da0",
+      "slug": "mercadolibre-MLU618733181",
+      "titleActual": "Marvel Legends! Fantastic Four Psycho- Man",
+      "seoTitleActual": "Marvel Legends Fantastic Four Psycho- Ma | Collectibles",
+      "seoTitlePropuesto": "Marvel Legends Psycho-Man | Marvel | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 49,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Psycho-Man",
+        "franquicia": "Marvel",
+        "marca": "Marvel"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "1332616a-a732-4a00-981a-e4bfc3fe2cf4",
+      "slug": "mercadolibre-MLU1336041162",
+      "titleActual": "Fifa World Cup 2026! Llavero Peluche mascota de EE.UU - Clutch 10cm",
+      "seoTitleActual": "Fifa World Cup 2026 Llavero Peluche masc | Collectibles",
+      "seoTitlePropuesto": "Clutch | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 21,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Clutch",
+        "franquicia": "",
+        "marca": "Jazwares"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "0c919538-4d5c-4372-93a6-5a18f56ce537",
+      "slug": "mercadolibre-MLU652708498",
+      "titleActual": "Peluche Tokidoki Pixie Unicorno Pequeño 15cm Modelo Plushies",
+      "seoTitleActual": "Peluche Tokidoki Pixie Unicorno Pequeño  | Collectibles",
+      "seoTitlePropuesto": "PIXIE UNICORNO | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 29,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "PIXIE UNICORNO",
+        "franquicia": "",
+        "marca": "Tokidoki"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "4554aa00-ad21-4823-ab78-a1a83b016284",
+      "slug": "mercadolibre-MLU615514954",
+      "titleActual": "Harry Potter! Llaveros Plush - Fleur Delacour Celeste",
+      "seoTitleActual": "Harry Potter Llaveros Plush - Fleur Dela | Collectibles",
+      "seoTitlePropuesto": "Harry Potter Llaveros Plush - Fleur Delacour | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 59,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "",
+        "franquicia": "",
+        "marca": "Cinereplicas"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "34d3ee31-a615-4d44-b7a9-49f6e60f16e9",
+      "slug": "mercadolibre-MLU978587468",
+      "titleActual": "Mcfarlane Toys! Mortal Kombat Classic Scorpion",
+      "seoTitleActual": "Mcfarlane Toys Mortal Kombat Classic Sco | Collectibles",
+      "seoTitlePropuesto": "Scorpion Mortal Kombat | Mcfarlane | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 49,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Scorpion",
+        "franquicia": "Mortal Kombat",
+        "marca": "Mcfarlane"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "e337f092-2e96-41e3-98aa-f41df178b8f2",
+      "slug": "mercadolibre-MLU474015317",
+      "titleActual": "Funko! Mortal Kombat X Kitana Action Figure",
+      "seoTitleActual": "Funko Mortal Kombat X Kitana Action Figu | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Kitana | Mortal Kombat | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 47,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Kitana",
+        "franquicia": "Mortal Kombat",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "7e51ae95-f4d3-42cb-b195-32d26b926a71",
+      "slug": "mercadolibre-MLU618070243",
+      "titleActual": "Tortugas Ninja Vs Cobra Kai: Leonardo Vs Miguel Diaz",
+      "seoTitleActual": "Tortugas Ninja Vs Cobra Kai: Leonardo Vs | Collectibles",
+      "seoTitlePropuesto": "Leonardo vs Miguel Diaz Cobra Kai | Playmates Toys | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 65,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Leonardo vs Miguel Diaz",
+        "franquicia": "Cobra Kai",
+        "marca": "Playmates Toys"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "125aa502-d757-4fe3-a2ac-68acd672b6f2",
+      "slug": "mercadolibre-MLU477373935",
+      "titleActual": "Funko Mortal Kombat X Liu Kang Action Figure",
+      "seoTitleActual": "Funko Mortal Kombat X Liu Kang Action Fi | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Liu Kang | Mortal Kombat X | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 51,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Liu Kang",
+        "franquicia": "Mortal Kombat X",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "18fa9d80-8316-4bcc-90a0-6308be81d468",
+      "slug": "mercadolibre-MLU444484896",
+      "titleActual": "Suicide Squad! Figure Boomerang ",
+      "seoTitleActual": "Suicide Squad Figure Boomerang | Collectibles",
+      "seoTitlePropuesto": "Boomerang Escuadrón Suicida | Mattel | Collectibles",
+      "longitudActual": 45,
+      "longitudNueva": 51,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Boomerang",
+        "franquicia": "Escuadrón Suicida",
+        "marca": "Mattel"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "94275b41-3c59-4778-9903-eb3b3eb80a8b",
+      "slug": "mercadolibre-MLU480040481",
+      "titleActual": "Plushies! Toki Doki- Cerulean Mermicorno (small)",
+      "seoTitleActual": "Plushies Toki Doki- Cerulean Mermicorno  | Collectibles",
+      "seoTitlePropuesto": "CERULEAN Tokidoki | Tokidoki | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 43,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "CERULEAN",
+        "franquicia": "Tokidoki",
+        "marca": "Tokidoki"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "975078f3-fc00-4130-9db8-1b4810f9ae82",
+      "slug": "mercadolibre-MLU617492950",
+      "titleActual": "Harry Potter! Cuaderno Hufflepuff Amarillo",
+      "seoTitleActual": "Harry Potter Cuaderno Hufflepuff Amarill | Collectibles",
+      "seoTitlePropuesto": "Harry Potter Cuaderno Hufflepuff Amarillo | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 56,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "",
+        "franquicia": "",
+        "marca": "Cinereplicas"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "00b6a3aa-91f9-499f-9da7-363ff9d6338e",
+      "slug": "mercadolibre-MLU636156908",
+      "titleActual": "Peluche Gashouse Pat-ootie  Coral Claro",
+      "seoTitleActual": "Peluche Gashouse Pat-ootie  Coral Claro | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Pat-ootie | Collectibles",
+      "longitudActual": 54,
+      "longitudNueva": 34,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Pat-ootie",
+        "franquicia": "",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "c0d705e1-db5d-4461-888b-84d5afb61cf0",
+      "slug": "mercadolibre-MLU638581106",
+      "titleActual": "Funko Games! Puzzle De 500 Pcs Tortugas Ninja",
+      "seoTitleActual": "Funko Games Puzzle De 500 Pcs Tortugas N | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Tortugas Ninjas | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 40,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Tortugas Ninjas",
+        "franquicia": "",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "495c053f-70b8-4975-bf56-c6620e2d832f",
+      "slug": "mercadolibre-MLU629939909",
+      "titleActual": "Peluche Gashouse Paul-luted Celeste",
+      "seoTitleActual": "Peluche Gashouse Paul-luted Celeste | Funko | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Butt-Crackula | Collectibles",
+      "longitudActual": 58,
+      "longitudNueva": 38,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Butt-Crackula",
+        "franquicia": "",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "98b3fc03-a307-4aa3-baec-f2ea683fa52e",
+      "slug": "mercadolibre-MLU629964643",
+      "titleActual": "Funko Plushies! Incribles 2 - Mr. Increible",
+      "seoTitleActual": "Funko Plushies Incribles 2 - Mr. Increib | Collectibles",
+      "seoTitlePropuesto": "Funko Plush Sr. Increíble | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 40,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Sr. Increíble",
+        "franquicia": "",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "f5316519-a72d-4650-a8d7-3ae8d4692845",
+      "slug": "mercadolibre-MLU630763739",
+      "titleActual": "Peluche Star Wars Darth Vader Con Sonidos Y Luz Negro",
+      "seoTitleActual": "Peluche Star Wars Darth Vader Con Sonido | Collectibles",
+      "seoTitlePropuesto": "Darth Vader | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 26,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Darth Vader",
+        "franquicia": "",
+        "marca": "Mattel"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "1452c072-38b0-4bb6-bd89-409b6a608f23",
+      "slug": "mercadolibre-MLU620247317",
+      "titleActual": "Marvel Legends! Hawkeye - Kate Bishop",
+      "seoTitleActual": "Marvel Legends Hawkeye - Kate Bishop | Marvel | Collectibles",
+      "seoTitlePropuesto": "Marvel Legends Kate Bishop | Marvel | Collectibles",
+      "longitudActual": 60,
+      "longitudNueva": 50,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Kate Bishop",
+        "franquicia": "Marvel",
+        "marca": "Marvel"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "edd4168b-1435-4a72-ad10-c71182733215",
+      "slug": "mercadolibre-MLU639385900",
+      "titleActual": "Funko! Peluche De Lucha Libre La Estrella Cosmica Amarillo",
+      "seoTitleActual": "Funko Peluche De Lucha Libre La Estrella | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Lucha Libre | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 36,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Lucha Libre",
+        "franquicia": "",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "a5985c85-ceec-4fbc-a4a5-8a9a5c400555",
+      "slug": "mercadolibre-MLU623057633",
+      "titleActual": "Funko Pop! Doctor Strange In The Multiverse- Rintrah",
+      "seoTitleActual": "Funko Pop Doctor Strange In The Multiver | Collectibles",
+      "seoTitlePropuesto": "Funko Pop RINTRAH | Marvel | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 41,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "RINTRAH",
+        "franquicia": "Marvel",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "91562f5e-55e5-41af-ac55-29927d024ef1",
+      "slug": "mercadolibre-MLU652212324",
+      "titleActual": "Funko Games! Puzzle De 500 Pcs Guardianes De La Galaxia",
+      "seoTitleActual": "Funko Games Puzzle De 500 Pcs Guardianes | Collectibles",
+      "seoTitlePropuesto": "Guardianes de la Galaxia | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 39,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Guardianes de la Galaxia",
+        "franquicia": "",
+        "marca": "Nickelodeon"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "0353d592-d612-48ec-9ab9-d9ec53a15133",
+      "slug": "mercadolibre-MLU655389017",
+      "titleActual": "Funko Pop! Biker Mars From Mice - Throttle ",
+      "seoTitleActual": "Funko Pop Biker Mars From Mice - Throttl | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Biker Mars | Biker Mars from Mice - Throttle | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 69,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Biker Mars",
+        "franquicia": "Biker Mars from Mice - Throttle",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "fd327650-3811-4c10-9e39-43fdc881c6a0",
+      "slug": "mercadolibre-MLU629952295",
+      "titleActual": "Peluche Gashouse Ran-sid Fucsia",
+      "seoTitleActual": "Peluche Gashouse Ran-sid Fucsia | Funko | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Gashouse | Collectibles",
+      "longitudActual": 54,
+      "longitudNueva": 33,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Gashouse",
+        "franquicia": "",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "d9b496bb-a9e0-4cb8-94a7-e409ef86e14f",
+      "slug": "mercadolibre-MLU638238945",
+      "titleActual": "Majorette! The Originals - Volkswagen Deluxe",
+      "seoTitleActual": "Majorette The Originals - Volkswagen Del | Collectibles",
+      "seoTitlePropuesto": "Majorette The Originals - Volkswagen Deluxe | Majorette | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 70,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "",
+        "franquicia": "",
+        "marca": "Majorette"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "8f2844c0-d9aa-435b-899b-1cebf20edea2",
+      "slug": "mercadolibre-MLU615665574",
+      "titleActual": "Harry Potter! Set De Accesorios Para El Cabello - Slytherin Verde Oscuro Y Gris",
+      "seoTitleActual": "Harry Potter Set De Accesorios Para El C | Collectibles",
+      "seoTitlePropuesto": "Harry Potter Set De Accesorios Para El Cabello | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 61,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "",
+        "franquicia": "",
+        "marca": "Cinereplicas"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "3a942325-0e4e-4f92-848a-c3501bc06c39",
+      "slug": "mercadolibre-MLU646209935",
+      "titleActual": "Funko Pop! Alien Romulus - Andy ",
+      "seoTitleActual": "Funko Pop Alien Romulus - Andy | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Andy | Alien Romulus | Collectibles",
+      "longitudActual": 45,
+      "longitudNueva": 45,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Andy",
+        "franquicia": "Alien Romulus",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "7fe98ea9-f066-4076-a8da-77116ad2ee3f",
+      "slug": "mercadolibre-MLU480794035",
+      "titleActual": "Masters Of The Universe Origins Beasts - Land Shark",
+      "seoTitleActual": "Masters Of The Universe Origins Beasts - | Collectibles",
+      "seoTitlePropuesto": "Tubaronk Masters of the Universe | Mattel | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 56,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Tubaronk",
+        "franquicia": "Masters of the Universe",
+        "marca": "Mattel"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "24805d3c-066d-4025-bd36-8c41aa58b59b",
+      "slug": "mercadolibre-MLU622103777",
+      "titleActual": "Iron Studios! Batman Returns Minico Catwoman",
+      "seoTitleActual": "Iron Studios Batman Returns Minico Catwo | Collectibles",
+      "seoTitlePropuesto": "Catwoman DC Comics | Iron Studios | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 48,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Catwoman",
+        "franquicia": "DC Comics",
+        "marca": "Iron Studios"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "93bc34e9-3dce-46fc-8a15-8580360e2283",
+      "slug": "mercadolibre-MLU652253114",
+      "titleActual": "Funko Games! Puzzle De 500 Pcs Jurassic Park",
+      "seoTitleActual": "Funko Games Puzzle De 500 Pcs Jurassic P | Collectibles",
+      "seoTitlePropuesto": "Jurassic Park | Collectibles",
+      "longitudActual": 55,
+      "longitudNueva": 28,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Jurassic Park",
+        "franquicia": "",
+        "marca": "Nickelodeon"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "9dc6ac6f-fee5-4ab0-a6e3-62346513f7c4",
+      "slug": "mercadolibre-MLU629689942",
+      "titleActual": "Frozen! Camiseta Bebé Estampada ",
+      "seoTitleActual": "Frozen Camiseta Bebé Estampada | CROSSOVER | Collectibles",
+      "seoTitlePropuesto": "Frozen Camiseta Bebé Estampada | CROSSOVER | Collectibles",
+      "longitudActual": 57,
+      "longitudNueva": 57,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "",
+        "franquicia": "",
+        "marca": "CROSSOVER"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    },
+    {
+      "id": "308c7679-1ff3-4c09-9145-6dfa3b66be69",
+      "slug": "mercadolibre-MLU626432821",
+      "titleActual": "Funko Pop! Heroes- Black Lightning",
+      "seoTitleActual": "Funko Pop Heroes- Black Lightning | Collectibles",
+      "seoTitlePropuesto": "Funko Pop Black Lightning | DC Black Lightning | Collectibles",
+      "longitudActual": 48,
+      "longitudNueva": 61,
+      "esTruncado": true,
+      "entidades": {
+        "personaje": "Black Lightning",
+        "franquicia": "DC Black Lightning",
+        "marca": "Funko"
+      },
+      "razon": "Regla de formato específica o limpieza de truncamiento."
+    }
+  ]
+}

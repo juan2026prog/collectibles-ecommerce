@@ -1,10 +1,79 @@
-import { useState } from 'react';
-import { Store, CreditCard, Truck, Link2, Settings, Globe, Save, Camera, Image } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Store, CreditCard, Truck, Link2, Settings, Globe, Save, Camera, Image, Loader2 } from 'lucide-react';
 import { useLocale } from '../../contexts/LocaleContext';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function VSettings() {
   const [activeSection, setActiveSection] = useState('profile');
   const { language, currency, setLanguage, setCurrency } = useLocale();
+  const { user } = useAuth();
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState({
+    store_name: '',
+    description: '',
+    logo_url: '',
+    banner_url: '',
+    contact_email: '',
+    contact_phone: '',
+    social_links: { facebook: '', instagram: '', twitter: '' } as Record<string, string>,
+    pickup_address: { street: '', city: '', department: '' } as Record<string, string>,
+    shipping_settings: {} as Record<string, any>
+  });
+
+  useEffect(() => {
+    if (!user) return;
+    async function load() {
+      const { data, error } = await supabase.from('vendors').select('*').eq('id', user!.id).single();
+      if (data) {
+        setFormData({
+          store_name: data.store_name || '',
+          description: data.description || '',
+          logo_url: data.logo_url || '',
+          banner_url: data.banner_url || '',
+          contact_email: data.contact_email || '',
+          contact_phone: data.contact_phone || '',
+          social_links: data.social_links || { facebook: '', instagram: '', twitter: '' },
+          pickup_address: data.pickup_address || { street: '', city: '', department: '' },
+          shipping_settings: data.shipping_settings || {}
+        });
+      }
+      setLoading(false);
+    }
+    load();
+  }, [user]);
+
+  const handleSave = async () => {
+    if (!user) return;
+    setSaving(true);
+    const { error } = await supabase.from('vendors').update({
+      store_name: formData.store_name,
+      description: formData.description,
+      logo_url: formData.logo_url,
+      banner_url: formData.banner_url,
+      contact_email: formData.contact_email,
+      contact_phone: formData.contact_phone,
+      social_links: formData.social_links,
+      pickup_address: formData.pickup_address,
+      shipping_settings: formData.shipping_settings
+    }).eq('id', user.id);
+    setSaving(false);
+    if (!error) {
+      alert('Perfil guardado exitosamente');
+    } else {
+      alert('Error guardando perfil: ' + error.message);
+    }
+  };
+
+  const updateField = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const updateNested = (parent: 'social_links' | 'pickup_address', field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [parent]: { ...prev[parent], [field]: value } }));
+  };
 
   const sections = [
     { id: 'profile', label: 'Store Identity', icon: Store },
@@ -35,6 +104,10 @@ export default function VSettings() {
       <div className="px-4">
         {activeSection === 'profile' && (
           <div className="glass rounded-[3rem] border border-white/10 p-12 md:p-16 space-y-16 shadow-2xl relative overflow-hidden">
+            {loading ? (
+               <div className="flex justify-center p-20"><Loader2 className="w-10 h-10 animate-spin text-[#f00856]" /></div>
+            ) : (
+            <>
             <div className="absolute top-0 right-0 p-16 opacity-5 pointer-events-none">
                <Settings className="w-64 h-64 text-white rotate-12" />
             </div>
@@ -44,55 +117,32 @@ export default function VSettings() {
                   <div className="w-8 h-[2px] bg-[#f00856]"></div> Información de Entidad
                </h3>
                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                 <Field label="Nombre Comercial" value="Tienda Demo" />
-                 <Field label="Razón Social" value="Tienda Demo SRL" />
-                 <Field label="Tax ID / RUT" value="21-234567-0001" />
-                 <Field label="Ubicación Sede" value="Uruguay" />
-                 <Field label="Región / Depto" value="Montevideo" />
-                 <Field label="City Hub" value="Montevideo" />
-                 <div className="md:col-span-2 lg:col-span-3"><Field label="Physical Address" value="Av. Italia 3200" /></div>
-                 <Field label="Phone Contact" value="+598 99 123 456" />
-                 <Field label="Operations Email" value="admin@tiendademo.com.uy" />
+                 <Field label="Nombre Comercial" value={formData.store_name} onChange={(v) => updateField('store_name', v)} />
+                 <Field label="Contact Email" value={formData.contact_email} onChange={(v) => updateField('contact_email', v)} />
+                 <Field label="Phone Contact" value={formData.contact_phone} onChange={(v) => updateField('contact_phone', v)} />
+                 <Field label="Pickup Street" value={formData.pickup_address.street} onChange={(v) => updateNested('pickup_address', 'street', v)} />
+                 <Field label="Pickup City" value={formData.pickup_address.city} onChange={(v) => updateNested('pickup_address', 'city', v)} />
+                 <Field label="Pickup Department" value={formData.pickup_address.department} onChange={(v) => updateNested('pickup_address', 'department', v)} />
+                 <Field label="Instagram URL" value={formData.social_links.instagram} onChange={(v) => updateNested('social_links', 'instagram', v)} />
+                 <Field label="Facebook URL" value={formData.social_links.facebook} onChange={(v) => updateNested('social_links', 'facebook', v)} />
+                 <Field label="Twitter URL" value={formData.social_links.twitter} onChange={(v) => updateNested('social_links', 'twitter', v)} />
                </div>
             </div>
 
             <div className="relative z-10">
                <h3 className="text-[12px] font-black text-[#f00856] uppercase tracking-[0.5em] mb-10 flex items-center gap-4">
-                  <div className="w-8 h-[2px] bg-[#f00856]"></div> Brand Assets
+                  <div className="w-8 h-[2px] bg-[#f00856]"></div> Brand Assets (URLs)
                </h3>
-               <div className="flex flex-col sm:flex-row gap-6">
-                 <div className="w-48 h-48 rounded-[2.5rem] bg-white/5 border-2 border-white/10 border-dashed flex flex-col items-center justify-center cursor-pointer hover:bg-white/[0.08] hover:border-[#f00856]/50 transition-all group shadow-inner">
-                   <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center group-hover:bg-[#f00856]/10 transition-all">
-                      <Camera className="w-7 h-7 text-slate-700 group-hover:text-[#f00856] transition-colors" />
-                   </div>
-                   <span className="text-[10px] text-slate-600 font-black uppercase tracking-widest mt-4 group-hover:text-white transition-colors">Upload Logo</span>
-                 </div>
-                 <div className="flex-1 h-48 rounded-[2.5rem] bg-white/5 border-2 border-white/10 border-dashed flex flex-col items-center justify-center cursor-pointer hover:bg-white/[0.08] hover:border-[#f00856]/50 transition-all group shadow-inner relative overflow-hidden">
-                   <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center group-hover:bg-[#f00856]/10 transition-all">
-                      <Image className="w-7 h-7 text-slate-700 group-hover:text-[#f00856] transition-colors" />
-                   </div>
-                   <span className="text-[10px] text-slate-600 font-black uppercase tracking-widest mt-4 group-hover:text-white transition-colors">Upload Hero Banner</span>
-                 </div>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <Field label="Logo URL" value={formData.logo_url} onChange={(v) => updateField('logo_url', v)} />
+                 <Field label="Banner URL" value={formData.banner_url} onChange={(v) => updateField('banner_url', v)} />
                </div>
             </div>
 
             <div className="relative z-10">
               <label className="block text-[12px] font-black text-slate-600 uppercase tracking-[0.4em] mb-6">Editorial Bio / About</label>
-              <textarea rows={4} defaultValue="Tienda de moda urbana con envíos en el día para Montevideo." 
+              <textarea rows={4} value={formData.description} onChange={(e) => updateField('description', e.target.value)}
                 className="w-full bg-white/5 border border-white/10 p-8 rounded-[2rem] text-sm font-black text-white uppercase tracking-widest outline-none focus:border-[#f00856] focus:bg-white/[0.08] transition-all resize-none placeholder:text-slate-800 shadow-inner" />
-            </div>
-
-            <div className="pt-16 border-t border-white/5 relative z-10">
-               <h3 className="text-[12px] font-black text-[#f00856] uppercase tracking-[0.5em] mb-10 flex items-center gap-4">
-                  <div className="w-8 h-[2px] bg-[#f00856]"></div> Operational Parameters
-               </h3>
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 <Field label="Primary Currency" value="UYU ($)" />
-                 <Field label="SLA / Handling Time" value="24-48 horas" />
-                 <div className="md:col-span-2"><Field label="Refund Policy Terms" value="7 días desde la entrega" /></div>
-                 <Field label="Active Hours" value="L-V 9:00-18:00, Sáb 9:00-13:00" />
-                 <Field label="Default Settlement" value="Transferencia BROU" />
-               </div>
             </div>
 
             <div className="pt-16 border-t border-white/5 flex flex-col sm:flex-row justify-between items-center gap-10 relative z-10">
@@ -103,10 +153,12 @@ export default function VSettings() {
                      <p className="text-[11px] text-slate-600 font-black uppercase tracking-widest mt-1">Sincronización de catálogo activa</p>
                   </div>
                </div>
-               <button className="bg-[#f00856] text-white text-[12px] font-black uppercase tracking-[0.3em] px-14 py-6 rounded-full hover:bg-[#ff2c68] transition-all flex items-center gap-4 shadow-[0_0_50px_rgba(240,8,86,0.4)] active:scale-95 border border-white/10">
-                  <Save className="w-5 h-5" /> Save Store Profile
+               <button onClick={handleSave} disabled={saving} className="bg-[#f00856] text-white text-[12px] font-black uppercase tracking-[0.3em] px-14 py-6 rounded-full hover:bg-[#ff2c68] transition-all flex items-center gap-4 shadow-[0_0_50px_rgba(240,8,86,0.4)] active:scale-95 border border-white/10 disabled:opacity-50">
+                  {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} Save Store Profile
                </button>
             </div>
+            </>
+            )}
           </div>
         )}
 
@@ -252,11 +304,11 @@ export default function VSettings() {
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function Field({ label, value, onChange }: { label: string; value: string; onChange?: (val: string) => void }) {
   return (
     <div className="p-8 rounded-[2rem] bg-white/[0.03] border border-white/5 group hover:bg-white/[0.06] transition-all shadow-inner hover:border-[#f00856]/20">
       <label className="block text-[10px] font-black text-slate-600 uppercase tracking-[0.3em] mb-4 group-hover:text-[#f00856] transition-colors">{label}</label>
-      <input defaultValue={value} className="w-full bg-transparent text-[16px] font-black text-white uppercase tracking-widest outline-none placeholder:text-slate-800" />
+      <input value={value || ''} onChange={e => onChange?.(e.target.value)} className="w-full bg-transparent text-[16px] font-black text-white tracking-widest outline-none placeholder:text-slate-800" />
     </div>
   );
 }

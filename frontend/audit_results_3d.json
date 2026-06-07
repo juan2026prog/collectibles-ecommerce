@@ -1,0 +1,94 @@
+{
+  "sampleSize": 10,
+  "okCount": 9,
+  "robotsOk": true,
+  "sitemapOk": true,
+  "sitemapHasOptimized": false,
+  "report": [
+    {
+      "id": "8dc56c6d-bea5-40ac-bf92-3b2281b6ba3b",
+      "slug": "mercadolibre-MLU631321183",
+      "url": "https://collectibles.uy/p/mercadolibre-MLU631321183",
+      "expectedTitle": "Marvel Legends Star-Lord | Marvel | Collectibles",
+      "status": "OK",
+      "errors": []
+    },
+    {
+      "id": "e3424dff-deec-4fca-bceb-2cb35a77c5bd",
+      "slug": "mercadolibre-MLU729199580",
+      "url": "https://collectibles.uy/p/mercadolibre-MLU729199580",
+      "expectedTitle": "Funko Pop Fortnite Llavero Highrise Assault | Collectibles",
+      "status": "OK",
+      "errors": []
+    },
+    {
+      "id": "dd918aba-fbbb-4a70-8516-033dcce8a3b2",
+      "slug": "mercadolibre-MLU636495359",
+      "url": "https://collectibles.uy/p/mercadolibre-MLU636495359",
+      "expectedTitle": "Funko Pop Kang Sae-Byeok | Squid Game | Collectibles",
+      "status": "OK",
+      "errors": []
+    },
+    {
+      "id": "0619980c-94ff-4f03-85c2-79d29d2e546b",
+      "slug": "mercadolibre-MLU608707069",
+      "url": "https://collectibles.uy/p/mercadolibre-MLU608707069",
+      "expectedTitle": "BLOODSPORT Collectibles | Mcfarlane | Collectibles",
+      "status": "OK",
+      "errors": []
+    },
+    {
+      "id": "398940e8-ddd6-4ecc-b60f-7945c7aba98d",
+      "slug": "mercadolibre-MLU636144390",
+      "url": "https://collectibles.uy/p/mercadolibre-MLU636144390",
+      "expectedTitle": "Funko Plush Star Wars | Collectibles",
+      "status": "OK",
+      "errors": []
+    },
+    {
+      "id": "0600a389-d470-4917-9c49-ed046c50dfe3",
+      "slug": "mercadolibre-MLU619309005",
+      "url": "https://collectibles.uy/p/mercadolibre-MLU619309005",
+      "expectedTitle": "Disney Body Goofy | Collectibles",
+      "status": "OK",
+      "errors": []
+    },
+    {
+      "id": "c3d180a0-f16c-402c-91da-4da11884e84c",
+      "slug": "mercadolibre-MLU652927158",
+      "url": "https://collectibles.uy/p/mercadolibre-MLU652927158",
+      "expectedTitle": "Funko Pop Infec-ted | Collectibles",
+      "status": "OK",
+      "errors": []
+    },
+    {
+      "id": "b1d4da6a-7f36-455c-84ba-a35e292382c4",
+      "slug": "mercadolibre-MLU615149323",
+      "url": "https://collectibles.uy/p/mercadolibre-MLU615149323",
+      "expectedTitle": "Harry Potter Gorro & Guantes (kids) - Ravenclaw | Collectibles",
+      "status": "ERROR",
+      "errors": [
+        "FB Bot Title mismatch. Expected: \"Harry Potter Gorro & Guantes (kids) - Ravenclaw | Collectibles\", Got: \"Harry Potter Gorro &amp; Guantes (kids) - Ravenclaw | Collectibles\"",
+        "FB Bot OG:Title mismatch. Expected: \"Harry Potter Gorro & Guantes (kids) - Ravenclaw | Collectibles\", Got: \"Harry Potter Gorro &amp; Guantes (kids) - Ravenclaw | Collectibles\"",
+        "WA Bot Title mismatch. Expected: \"Harry Potter Gorro & Guantes (kids) - Ravenclaw | Collectibles\", Got: \"Harry Potter Gorro &amp; Guantes (kids) - Ravenclaw | Collectibles\"",
+        "WA Bot OG:Title mismatch. Expected: \"Harry Potter Gorro & Guantes (kids) - Ravenclaw | Collectibles\", Got: \"Harry Potter Gorro &amp; Guantes (kids) - Ravenclaw | Collectibles\""
+      ]
+    },
+    {
+      "id": "2f3d1585-4671-400b-947e-d4b6149f206d",
+      "slug": "mercadolibre-MLU629964263",
+      "url": "https://collectibles.uy/p/mercadolibre-MLU629964263",
+      "expectedTitle": "Funko Plush Iron Man | Collectibles",
+      "status": "OK",
+      "errors": []
+    },
+    {
+      "id": "ac6ccd32-56ff-4fe9-9c7a-ae95786c4c0c",
+      "slug": "mercadolibre-MLU619315442",
+      "url": "https://collectibles.uy/p/mercadolibre-MLU619315442",
+      "expectedTitle": "Pumba | Collectibles",
+      "status": "OK",
+      "errors": []
+    }
+  ]
+}

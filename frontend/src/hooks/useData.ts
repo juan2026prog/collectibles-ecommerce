@@ -89,7 +89,8 @@ export function useProducts(filters: ProductFilters = {}) {
         brand:brands(id, name, slug, logo_url),
         images:product_images(id, url, alt_text, sort_order, is_primary),
         variants:product_variants(id, sku, name, price_adjustment, inventory_count),
-        product_tags:product_tags(tag_id)
+        product_tags:product_tags(tag_id),
+        vendor:vendors(id, commercial_name, slug, logo_url)
         ${categoryId ? ', product_categories!inner(category_id)' : ''}
     `;
 
@@ -155,6 +156,7 @@ export function useProduct(slug: string | undefined) {
           images:product_images(id, url, alt_text, sort_order, is_primary),
           variants:product_variants(id, sku, name, price_adjustment, inventory_count),
           product_tags:product_tags(tag_id),
+          vendor:vendors(id, commercial_name, slug, logo_url),
           reviews:reviews(id, rating, title, body, created_at, user:profiles(first_name, last_name))
         `)
         .eq('slug', slug)
@@ -244,6 +246,9 @@ export interface CartItem {
   category_id?: string;
   brand_id?: string;
   vendor_id?: string;
+  vendor_name?: string;
+  vendor_slug?: string;
+  vendor_logo?: string;
   tag_ids?: string[];
 }
 
@@ -323,7 +328,8 @@ export function useProductGroups() {
               brand:brands(id, name, slug),
               images:product_images(id, url, alt_text, sort_order, is_primary),
               variants:product_variants(id, sku, name, price_adjustment, inventory_count),
-              product_tags:product_tags(tag_id)
+              product_tags:product_tags(tag_id),
+              vendor:vendors(id, commercial_name, slug, logo_url)
             )
           )
         `)
@@ -361,7 +367,8 @@ export function useProductGroup(slug: string | undefined) {
               brand:brands(id, name, slug),
               images:product_images(id, url, alt_text, sort_order, is_primary),
               variants:product_variants(id, sku, name, price_adjustment, inventory_count),
-              product_tags:product_tags(tag_id)
+              product_tags:product_tags(tag_id),
+              vendor:vendors(id, commercial_name, slug, logo_url)
             )
           )
         `)

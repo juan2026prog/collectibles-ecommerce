@@ -1,0 +1,308 @@
+{
+  "totalAfectados": 291,
+  "highConfidence": 131,
+  "mediumConfidence": 160,
+  "lowConfidence": 0,
+  "samples": [
+    {
+      "id": "2c5388f7-6fc5-4f84-8222-7bb78e85162c",
+      "title": "Funko Pop! Marvel: The Eternals - Sersi",
+      "issues": {
+        "category": "Mala/Varios",
+        "brand": "OK",
+        "franchise": "OK"
+      },
+      "suggestions": {
+        "category": "Funko Pop",
+        "brand": null,
+        "franchise": null
+      },
+      "confidenceScore": 65
+    },
+    {
+      "id": "92016fe1-8732-4d33-802d-7d9b57d4d4c6",
+      "title": "Peluche Charlie Brown Amarillo",
+      "issues": {
+        "category": "OK",
+        "brand": "Generico",
+        "franchise": "Vacia"
+      },
+      "suggestions": {
+        "category": null,
+        "brand": "Kohls Cares",
+        "franchise": null
+      },
+      "confidenceScore": 70
+    },
+    {
+      "id": "87248cd0-7041-4563-ba93-bbf8118fc0d3",
+      "title": "Plushies! Toki Doki- Strawberry Milk (small)",
+      "issues": {
+        "category": "Mala/Varios",
+        "brand": "Generico",
+        "franchise": "OK"
+      },
+      "suggestions": {
+        "category": "Peluches",
+        "brand": "Tokidoki",
+        "franchise": null
+      },
+      "confidenceScore": 85
+    },
+    {
+      "id": "23672507-d215-4398-becf-bf475af70d0b",
+      "title": "Plushies! Toki Doki- Corsica  (medium)",
+      "issues": {
+        "category": "Mala/Varios",
+        "brand": "Generico",
+        "franchise": "OK"
+      },
+      "suggestions": {
+        "category": "Peluches",
+        "brand": "Aurora",
+        "franchise": null
+      },
+      "confidenceScore": 85
+    },
+    {
+      "id": "bbd5b478-f961-4adf-91bd-ddd2b5f7402b",
+      "title": "Batman! Body Harley Quinn",
+      "issues": {
+        "category": "OK",
+        "brand": "Generico",
+        "franchise": "Vacia"
+      },
+      "suggestions": {
+        "category": null,
+        "brand": "CROSSOVER",
+        "franchise": "DC Comics"
+      },
+      "confidenceScore": 85
+    },
+    {
+      "id": "3988a638-2d6d-48d9-b212-ec372fada700",
+      "title": "Justice League! Body Sweet But Story",
+      "issues": {
+        "category": "OK",
+        "brand": "Generico",
+        "franchise": "Vacia"
+      },
+      "suggestions": {
+        "category": null,
+        "brand": "Justice League",
+        "franchise": null
+      },
+      "confidenceScore": 70
+    },
+    {
+      "id": "ffe7952f-fab9-442c-9fd8-0a60dae587b5",
+      "title": "Terminator 2: Judgement Day Ultimate T-1000 (motorcycle Cop)",
+      "issues": {
+        "category": "Mala/Varios",
+        "brand": "Generico",
+        "franchise": "OK"
+      },
+      "suggestions": {
+        "category": null,
+        "brand": "Terminator",
+        "franchise": null
+      },
+      "confidenceScore": 70
+    },
+    {
+      "id": "0600a389-d470-4917-9c49-ed046c50dfe3",
+      "title": "Disney! Body Goofy",
+      "issues": {
+        "category": "OK",
+        "brand": "Generico",
+        "franchise": "Vacia"
+      },
+      "suggestions": {
+        "category": null,
+        "brand": "Collectibles",
+        "franchise": "Disney"
+      },
+      "confidenceScore": 85
+    },
+    {
+      "id": "8a0bbeaf-3b67-4bce-a7e9-b876b8408636",
+      "title": "Funko Pop! Wandavision - Monica Rambeu",
+      "issues": {
+        "category": "Mala/Varios",
+        "brand": "OK",
+        "franchise": "OK"
+      },
+      "suggestions": {
+        "category": "Funko Pop",
+        "brand": null,
+        "franchise": null
+      },
+      "confidenceScore": 65
+    },
+    {
+      "id": "7779cea9-07b6-42ca-b191-6a201845de73",
+      "title": "Funko Pop! Squid Game - Gi-hun 456",
+      "issues": {
+        "category": "Mala/Varios",
+        "brand": "OK",
+        "franchise": "OK"
+      },
+      "suggestions": {
+        "category": "Funko Pop",
+        "brand": null,
+        "franchise": null
+      },
+      "confidenceScore": 65
+    },
+    {
+      "id": "354dcd05-a3ce-4a0e-a4a3-75863e0ea739",
+      "title": "Power Rangers Card Game Idioma Inglés Power Ranger",
+      "issues": {
+        "category": "OK",
+        "brand": "Generico",
+        "franchise": "Vacia"
+      },
+      "suggestions": {
+        "category": null,
+        "brand": "Bandai",
+        "franchise": null
+      },
+      "confidenceScore": 70
+    },
+    {
+      "id": "ac6ccd32-56ff-4fe9-9c7a-ae95786c4c0c",
+      "title": "Body Disney! Lion King: Pumba Naranja Oscuro 18 Meses",
+      "issues": {
+        "category": "OK",
+        "brand": "Generico",
+        "franchise": "Vacia"
+      },
+      "suggestions": {
+        "category": null,
+        "brand": "Benpres",
+        "franchise": "Disney"
+      },
+      "confidenceScore": 85
+    },
+    {
+      "id": "09e7d1fd-bd7b-41b5-a227-5191f54833f4",
+      "title": "Peluche Sonic The Hedgehog X Dc - Shadow Batman",
+      "issues": {
+        "category": "OK",
+        "brand": "OK",
+        "franchise": "Vacia"
+      },
+      "suggestions": {
+        "category": null,
+        "brand": null,
+        "franchise": "DC Comics"
+      },
+      "confidenceScore": 65
+    },
+    {
+      "id": "bb36a2df-48f5-4ec9-a7d1-af591ba2638e",
+      "title": "Funko Pop! The Eternals - Ikaris",
+      "issues": {
+        "category": "Mala/Varios",
+        "brand": "OK",
+        "franchise": "OK"
+      },
+      "suggestions": {
+        "category": "Funko Pop",
+        "brand": null,
+        "franchise": null
+      },
+      "confidenceScore": 65
+    },
+    {
+      "id": "c01a1358-fe3b-4429-9599-9003862a0e02",
+      "title": "Funko Pop! Marvel 80 Years - Nick Fury #528",
+      "issues": {
+        "category": "Mala/Varios",
+        "brand": "OK",
+        "franchise": "OK"
+      },
+      "suggestions": {
+        "category": "Funko Pop",
+        "brand": null,
+        "franchise": null
+      },
+      "confidenceScore": 65
+    },
+    {
+      "id": "4f2ad171-a9a5-4a75-afca-fad1a20cade7",
+      "title": "Harry Potter! Cuaderno Slytherin Verde Oscuro",
+      "issues": {
+        "category": "OK",
+        "brand": "OK",
+        "franchise": "Vacia"
+      },
+      "suggestions": {
+        "category": null,
+        "brand": null,
+        "franchise": "Harry Potter"
+      },
+      "confidenceScore": 65
+    },
+    {
+      "id": "9e84d3c2-aa47-4a8b-bb26-5c884a894532",
+      "title": "Funko Pop! Hawkeye - Maya Lopez",
+      "issues": {
+        "category": "Mala/Varios",
+        "brand": "OK",
+        "franchise": "OK"
+      },
+      "suggestions": {
+        "category": "Funko Pop",
+        "brand": null,
+        "franchise": null
+      },
+      "confidenceScore": 65
+    },
+    {
+      "id": "9b8b591f-e966-4ed0-a5e0-b99ddaddbe5d",
+      "title": "Peluche Sonic The Hedgehog X Dc - Knuckles Superman",
+      "issues": {
+        "category": "OK",
+        "brand": "OK",
+        "franchise": "Vacia"
+      },
+      "suggestions": {
+        "category": null,
+        "brand": null,
+        "franchise": "DC Comics"
+      },
+      "confidenceScore": 65
+    },
+    {
+      "id": "398940e8-ddd6-4ecc-b60f-7945c7aba98d",
+      "title": "Funko Plushies! Star Wars Luke",
+      "issues": {
+        "category": "OK",
+        "brand": "Generico",
+        "franchise": "Vacia"
+      },
+      "suggestions": {
+        "category": null,
+        "brand": "Funko",
+        "franchise": "Star Wars"
+      },
+      "confidenceScore": 85
+    },
+    {
+      "id": "047b3d14-a6b6-4acb-87cd-62fb7bc2e301",
+      "title": "Funko Pop! Dumb And Dumber - Lloyd Christmas",
+      "issues": {
+        "category": "Mala/Varios",
+        "brand": "OK",
+        "franchise": "OK"
+      },
+      "suggestions": {
+        "category": "Funko Pop",
+        "brand": null,
+        "franchise": null
+      },
+      "confidenceScore": 65
+    }
+  ]
+}

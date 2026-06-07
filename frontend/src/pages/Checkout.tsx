@@ -1027,6 +1027,13 @@ export default function Checkout() {
       return;
     }
 
+    const vendorIds = new Set(items.map(i => i.vendor_id || 'platform'));
+    if (vendorIds.size > 1) {
+      setCheckoutError('Actualmente no es posible finalizar una compra con productos de diferentes vendedores. Finalizá cada compra por separado.');
+      setIsSubmitting(false);
+      return;
+    }
+
     submitLockRef.current = true;
     setIsSubmitting(true);
     setCheckoutError('');
@@ -1036,6 +1043,7 @@ export default function Checkout() {
         items: items.map((item) => ({
           product_id: item.product_id,
           variant_id: item.variant_id,
+          vendor_id: item.vendor_id === 'platform' ? undefined : item.vendor_id,
           quantity: item.quantity,
           price: item.price,
           title: item.title,
@@ -2055,6 +2063,12 @@ export default function Checkout() {
                         </p>
                         {item.variant_name && (
                           <p className="text-[10px] text-slate-500 truncate leading-none mt-1">{item.variant_name}</p>
+                        )}
+                        {item.vendor_name && item.vendor_id !== 'platform' && (
+                          <div className="mt-1">
+                            <p className="text-[8px] font-black uppercase text-[#f00856]">Vendido por</p>
+                            <p className="text-[9px] font-bold text-slate-300 line-clamp-1">{item.vendor_name}</p>
+                          </div>
                         )}
                       </div>
                     </div>

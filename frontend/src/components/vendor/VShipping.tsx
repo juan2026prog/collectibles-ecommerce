@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
-import { Truck, MapPin, Clock, Save, QrCode, FileText, CheckCircle2, ArrowRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Truck, MapPin, Clock, Save, QrCode, FileText, CheckCircle2, ArrowRight, Loader2, Store } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 
 const ZONES_DATA = {
   near: { price: 169, label: 'Zonas cercanas', id: 'near', subzones: ['Zona 5', 'Zona 6', 'Zona 7'] },
@@ -8,6 +10,19 @@ const ZONES_DATA = {
 };
 
 export default function VShipping() {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const [providers, setProviders] = useState({
+    localPickup: false,
+    dac: false,
+    soyDelivery: false,
+    ues: false,
+    mirtrans: false,
+    pedidosYa: false
+  });
+
   const [flexActive, setFlexActive] = useState(true);
   const [selectedZones, setSelectedZones] = useState<string[]>(['near', 'medium', 'far']);
   
@@ -17,6 +32,28 @@ export default function VShipping() {
   const [saturdayActive, setSaturdayActive] = useState(true);
   const [sundayActive, setSundayActive] = useState(false);
   const [maxOrders, setMaxOrders] = useState('50');
+
+  useEffect(() => {
+    if (!user) return;
+    async function load() {
+      const { data } = await supabase.from('vendors').select('shipping_settings').eq('id', user!.id).single();
+      if (data && data.shipping_settings) {
+        const s = data.shipping_settings;
+        if (s.providers) setProviders(s.providers);
+        if (s.flexActive !== undefined) setFlexActive(s.flexActive);
+        if (s.selectedZones) setSelectedZones(s.selectedZones);
+        if (s.sameday !== undefined) setSameday(s.sameday);
+        if (s.weekdayCutoff) setWeekdayCutoff(s.weekdayCutoff);
+        if (s.saturdayCutoff) setSaturdayCutoff(s.saturdayCutoff);
+        if (s.saturdayActive !== undefined) setSaturdayActive(s.saturdayActive);
+        if (s.sundayActive !== undefined) setSundayActive(s.sundayActive);
+        if (s.maxOrders) setMaxOrders(s.maxOrders);
+        if (s.labelFormat) setLabelFormat(s.labelFormat);
+      }
+      setLoading(false);
+    }
+    load();
+  }, [user]);
 
   const [interiorPrice, setInteriorPrice] = useState('280');
   const [labelFormat, setLabelFormat] = useState('zebra');
@@ -29,9 +66,23 @@ export default function VShipping() {
     }
   }
 
-  function handleSave() {
-    alert("Configuración de envíos guardada.");
+  async function handleSave() {
+    if (!user) return;
+    setSaving(true);
+    const shipping_settings = {
+      providers,
+      flexActive, selectedZones, sameday, weekdayCutoff, saturdayCutoff, saturdayActive, sundayActive, maxOrders, labelFormat
+    };
+    const { error } = await supabase.from('vendors').update({ shipping_settings }).eq('id', user.id);
+    setSaving(false);
+    if (!error) {
+      alert("Configuración de envíos guardada.");
+    } else {
+      alert("Error al guardar: " + error.message);
+    }
   }
+
+  if (loading) return <div className="flex justify-center p-20"><Loader2 className="w-10 h-10 animate-spin text-[#f00856]" /></div>;
 
   return (
     <div className="max-w-7xl space-y-8 animation-fade-in pb-20">
@@ -41,9 +92,37 @@ export default function VShipping() {
            <h2 className="text-5xl font-black text-white">Configuración de Despacho</h2>
            <p className="text-sm text-slate-500 font-bold mt-3 uppercase tracking-[0.2em]">Gestión de rutas SoyDelivery, zonas Flex y envíos nacionales</p>
         </div>
-        <button onClick={handleSave} className="bg-white text-black text-[11px] font-black uppercase tracking-widest px-10 py-5 rounded-full hover:bg-[#f00856] hover:text-white transition-all shadow-xl active:scale-[0.98]">
-           Save Logistics Config
+        <button onClick={handleSave} disabled={saving} className="bg-white text-black text-[11px] font-black uppercase tracking-widest px-10 py-5 rounded-full hover:bg-[#f00856] hover:text-white transition-all shadow-xl active:scale-[0.98] flex items-center gap-2 disabled:opacity-50">
+           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save Logistics Config
         </button>
+      </div>
+
+      {/* MÉTODOS DE ENVÍO */}
+      <div className="glass rounded-[2.5rem] border border-white/10 overflow-hidden shadow-2xl p-10 md:p-12">
+         <h3 className="text-[12px] font-black text-[#f00856] uppercase tracking-[0.5em] mb-10 flex items-center gap-4">
+            <div className="w-8 h-[2px] bg-[#f00856]"></div> Proveedores Habilitados
+         </h3>
+         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              { id: 'localPickup', label: 'Retiro en Local', icon: Store },
+              { id: 'dac', label: 'DAC (Agencia Central)', icon: Truck },
+              { id: 'soyDelivery', label: 'SoyDelivery', icon: Truck },
+              { id: 'ues', label: 'UES', icon: Truck },
+              { id: 'mirtrans', label: 'Mirtrans', icon: Truck },
+              { id: 'pedidosYa', label: 'PedidosYa', icon: Truck },
+            ].map(p => (
+              <label key={p.id} className="flex items-center justify-between p-8 bg-white/[0.03] border border-white/5 rounded-3xl hover:bg-white/[0.06] cursor-pointer transition-all group shadow-lg hover:border-[#f00856]/20">
+                 <div className="flex items-center gap-4">
+                    <p.icon className={`w-5 h-5 ${providers[p.id as keyof typeof providers] ? 'text-[#f00856]' : 'text-slate-500 group-hover:text-white'}`} />
+                    <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest group-hover:text-white transition-colors">{p.label}</span>
+                 </div>
+                 <div className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" checked={providers[p.id as keyof typeof providers]} onChange={(e) => setProviders({...providers, [p.id]: e.target.checked})} className="sr-only peer" />
+                    <div className="w-12 h-7 bg-black/40 border border-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-slate-700 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:bg-white peer-checked:bg-[#f00856] shadow-inner"></div>
+                 </div>
+              </label>
+            ))}
+         </div>
       </div>
 
       {/* ENVÍOS FLEX */}

@@ -253,6 +253,12 @@ export default function CartDrawer() {
                               {item.variant_name}
                             </p>
                           )}
+                          {item.vendor_name && item.vendor_id !== 'platform' && (
+                             <div className="mt-1">
+                               <p className="text-[9px] font-black uppercase text-[#f00856]">Vendido por</p>
+                               <p className="text-[10px] font-bold text-slate-300">{item.vendor_name}</p>
+                             </div>
+                          )}
                         </div>
                         <button 
                           onClick={() => removeItem(item.variant_id)}
