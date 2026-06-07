@@ -90,7 +90,7 @@ export function useProducts(filters: ProductFilters = {}) {
         images:product_images(id, url, alt_text, sort_order, is_primary),
         variants:product_variants(id, sku, name, price_adjustment, inventory_count),
         product_tags:product_tags(tag_id),
-        vendor:vendors(id, commercial_name, slug, logo_url)
+        vendor:vendors(id, store_name, slug, logo_url)
         ${categoryId ? ', product_categories!inner(category_id)' : ''}
     `;
 
@@ -156,7 +156,7 @@ export function useProduct(slug: string | undefined) {
           images:product_images(id, url, alt_text, sort_order, is_primary),
           variants:product_variants(id, sku, name, price_adjustment, inventory_count),
           product_tags:product_tags(tag_id),
-          vendor:vendors(id, commercial_name, slug, logo_url),
+          vendor:vendors(id, store_name, slug, logo_url),
           reviews:reviews(id, rating, title, body, created_at, user:profiles(first_name, last_name))
         `)
         .eq('slug', slug)
@@ -329,7 +329,7 @@ export function useProductGroups() {
               images:product_images(id, url, alt_text, sort_order, is_primary),
               variants:product_variants(id, sku, name, price_adjustment, inventory_count),
               product_tags:product_tags(tag_id),
-              vendor:vendors(id, commercial_name, slug, logo_url)
+              vendor:vendors(id, store_name, slug, logo_url)
             )
           )
         `)
@@ -368,7 +368,7 @@ export function useProductGroup(slug: string | undefined) {
               images:product_images(id, url, alt_text, sort_order, is_primary),
               variants:product_variants(id, sku, name, price_adjustment, inventory_count),
               product_tags:product_tags(tag_id),
-              vendor:vendors(id, commercial_name, slug, logo_url)
+              vendor:vendors(id, store_name, slug, logo_url)
             )
           )
         `)

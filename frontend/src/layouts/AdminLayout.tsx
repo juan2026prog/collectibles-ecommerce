@@ -13,12 +13,14 @@ import { ToastProvider } from '../components/admin/Toast';
 import { ConfirmModalProvider } from '../components/admin/ConfirmModal';
 import AdminSearchGlobal from '../components/admin/AdminSearchGlobal';
 import AdminBreadcrumbs from '../components/admin/AdminBreadcrumbs';
+import { useFeatures } from '../contexts/FeatureToggleContext';
 
 export default function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut, profile } = useAuth();
   const { settings, loaded: settingsLoaded } = useSiteSettings();
+  const { features } = useFeatures();
   
   const navItems = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
@@ -33,6 +35,11 @@ export default function AdminLayout() {
     { name: 'Cocardas', path: '/admin/badges', icon: ShieldCheck },
     { name: 'Promociones', path: '/admin/promotions', icon: Percent },
     { name: 'Cupones', path: '/admin/coupons', icon: Tag },
+    ...(features.marketplaceEnabled ? [
+      { name: 'Vendors', path: '/admin/vendors', icon: Store },
+      { name: 'Vendor Payouts', path: '/admin/vendor-payouts', icon: CreditCard },
+      { name: 'Vendor KYC', path: '/admin/vendor-kyc', icon: ShieldCheck },
+    ] : []),
     { name: 'Afiliados', path: '/admin/affiliates', icon: Megaphone },
     { name: 'Pedidos', path: '/admin/orders', icon: ShoppingBag },
     { name: 'Pasarelas de Pago', path: '/admin/settings?tab=payments', icon: CreditCard },

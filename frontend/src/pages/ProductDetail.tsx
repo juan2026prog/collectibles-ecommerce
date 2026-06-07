@@ -188,7 +188,7 @@ export default function ProductDetail() {
       category_id: product.category?.id,
       brand_id: product.brand?.id,
       vendor_id: product.vendor_id,
-      vendor_name: product.vendor?.commercial_name,
+      vendor_name: product.vendor?.store_name,
       vendor_slug: product.vendor?.slug,
       vendor_logo: product.vendor?.logo_url,
       tag_ids: product.product_tags?.map((pt: any) => pt.tag_id) || [],
@@ -511,7 +511,7 @@ export default function ProductDetail() {
 
           <SoldByCard 
             vendorId={product.vendor_id} 
-            vendorName={product.vendor?.commercial_name} 
+            vendorName={product.vendor?.store_name} 
             vendorLogo={product.vendor?.logo_url ? resolveImage(product.vendor.logo_url) : undefined}
             vendorSlug={product.vendor?.slug}
           />
