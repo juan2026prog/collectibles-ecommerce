@@ -1,18 +1,7 @@
+import { useState, useEffect } from 'react';
 import { DollarSign, TrendingUp, ArrowDownCircle, Clock, CreditCard, FileText, Download, ArrowRight } from 'lucide-react';
-
-const mockFinances = [
-  { date: '27/03', order: 'ORD-4821', client: 'María López', gross: 4500, feePlatform: 450, feeGateway: 135, shipping: 169, net: 3746, status: 'pending' },
-  { date: '27/03', order: 'ORD-4819', client: 'Carlos Ruiz', gross: 4890, feePlatform: 489, feeGateway: 147, shipping: 169, net: 4085, status: 'pending' },
-  { date: '26/03', order: 'ORD-4815', client: 'Pedro Martínez', gross: 6490, feePlatform: 649, feeGateway: 195, shipping: 200, net: 5446, status: 'held' },
-  { date: '25/03', order: 'ORD-4810', client: 'Laura Sánchez', gross: 3490, feePlatform: 349, feeGateway: 105, shipping: 169, net: 2867, status: 'settlable' },
-  { date: '24/03', order: 'ORD-4805', client: 'Diego Torres', gross: 7990, feePlatform: 799, feeGateway: 240, shipping: 290, net: 6661, status: 'paid' },
-];
-
-const mockSettlements = [
-  { id: 'LIQ-042', period: '18/03 - 24/03', orders: 12, gross: 45800, discounts: 6870, adjustments: -500, final: 38430, payDate: '28/03/2026', status: 'pending' },
-  { id: 'LIQ-041', period: '11/03 - 17/03', orders: 18, gross: 67200, discounts: 10080, adjustments: 0, final: 57120, payDate: '21/03/2026', status: 'paid' },
-  { id: 'LIQ-040', period: '04/03 - 10/03', orders: 15, gross: 52300, discounts: 7845, adjustments: -1200, final: 43255, payDate: '14/03/2026', status: 'paid' },
-];
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 
 const stMap: Record<string, { l: string; c: string }> = {
   pending: { l: 'Pendiente', c: 'border-orange-500/20 text-orange-500 bg-orange-500/5' },
@@ -24,6 +13,74 @@ const stMap: Record<string, { l: string; c: string }> = {
 };
 
 export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | 'settlements' }) {
+  const { user } = useAuth();
+  const [finances, setFinances] = useState<any[]>([]);
+  const [settlements, setSettlements] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+    async function loadFinances() {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('vendor_payouts')
+        .select(`
+          *,
+          order_item:order_items(price, product_variant_id),
+          order:orders(id, created_at, customer:profiles(first_name, last_name, email))
+        `)
+        .eq('vendor_id', user!.id)
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        setFinances(data.map(p => {
+          const gross = Number(p.amount) / (1 - Number(p.fee_percentage) / 100);
+          return {
+            date: new Date(p.created_at).toLocaleDateString('es'),
+            order: p.order?.id?.slice(0, 8).toUpperCase() || 'N/A',
+            client: p.order?.customer?.first_name 
+                      ? `${p.order.customer.first_name} ${p.order.customer.last_name || ''}` 
+                      : (p.order?.customer?.email || 'Anónimo'),
+            gross: gross,
+            feePlatform: gross - Number(p.amount),
+            feeGateway: 0,
+            shipping: 0,
+            net: Number(p.amount),
+            status: p.status,
+            id: p.id
+          };
+        }));
+        
+        // Group into settlements (fake logic to show paid vs pending batches)
+        const s_paid = data.filter(p => p.status === 'paid');
+        const s_pending = data.filter(p => p.status === 'pending');
+        
+        const setts = [];
+        if (s_pending.length > 0) {
+          const gross = s_pending.reduce((acc, p) => acc + (Number(p.amount) / (1 - Number(p.fee_percentage) / 100)), 0);
+          const final = s_pending.reduce((acc, p) => acc + Number(p.amount), 0);
+          setts.push({
+            id: 'LIQ-PENDING', period: 'Actual', orders: s_pending.length, gross, discounts: gross - final, adjustments: 0, final, payDate: '-', status: 'pending'
+          });
+        }
+        if (s_paid.length > 0) {
+          const gross = s_paid.reduce((acc, p) => acc + (Number(p.amount) / (1 - Number(p.fee_percentage) / 100)), 0);
+          const final = s_paid.reduce((acc, p) => acc + Number(p.amount), 0);
+          setts.push({
+            id: 'LIQ-PAST', period: 'Anterior', orders: s_paid.length, gross, discounts: gross - final, adjustments: 0, final, payDate: 'Procesado', status: 'paid'
+          });
+        }
+        setSettlements(setts);
+      }
+      setLoading(false);
+    }
+    loadFinances();
+  }, [user]);
+
+  if (loading) {
+    return <div className="text-white text-center p-12">Cargando datos financieros...</div>;
+  }
+
   if (mode === 'settlements') {
     return (
       <div className="space-y-8 animation-fade-in pb-20">
@@ -50,7 +107,7 @@ export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | '
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {mockSettlements.map(s => (
+                {settlements.map(s => (
                   <tr key={s.id} className="hover:bg-white/[0.02] group transition-colors">
                     <td className="p-8 font-black text-white text-[16px] group-hover:text-[#f00856] transition-colors">{s.id}</td>
                     <td className="p-8">
@@ -58,10 +115,10 @@ export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | '
                        <p className="text-[9px] text-slate-600 font-black uppercase mt-1.5">Paid: {s.payDate}</p>
                     </td>
                     <td className="p-8 text-center font-black text-white text-[16px]">{s.orders}</td>
-                    <td className="p-8 text-right font-black text-slate-400 text-[15px]">${s.gross.toLocaleString()}</td>
-                    <td className="p-8 text-right font-black text-red-500 text-[15px]">-${s.discounts.toLocaleString()}</td>
+                    <td className="p-8 text-right font-black text-slate-400 text-[15px]">${s.gross.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td className="p-8 text-right font-black text-red-500 text-[15px]">-${s.discounts.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td className="p-8 text-right font-black text-slate-600 text-[15px]">{s.adjustments < 0 ? `-$${Math.abs(s.adjustments).toLocaleString()}` : '$0'}</td>
-                    <td className="p-8 text-right font-black text-white text-[18px] bg-white/[0.01] group-hover:bg-white/[0.03] transition-colors tracking-tighter">${s.final.toLocaleString()}</td>
+                    <td className="p-8 text-right font-black text-white text-[18px] bg-white/[0.01] group-hover:bg-white/[0.03] transition-colors tracking-tighter">${s.final.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td className="p-8">
                        <span className={`badge px-4 py-2 ${s.status === 'paid' ? 'text-emerald-400 bg-emerald-400/10' : 'text-orange-400 bg-orange-400/10'}`}>
                           {s.status === 'paid' ? 'Transfered' : 'Processing'}
@@ -72,6 +129,9 @@ export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | '
                     </td>
                   </tr>
                 ))}
+                {settlements.length === 0 && (
+                  <tr><td colSpan={9} className="p-8 text-center text-slate-400">No hay liquidaciones registradas.</td></tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -87,13 +147,11 @@ export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | '
            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
               <div className="soft p-8 rounded-3xl border border-white/5">
                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Primary Account</p>
-                 <p className="text-lg font-black text-white uppercase tracking-widest">BROU — **** 4521</p>
-                 <p className="text-[11px] text-slate-600 font-black mt-2 uppercase tracking-widest">Tienda Demo SRL</p>
+                 <p className="text-lg font-black text-white uppercase tracking-widest">A configurar</p>
               </div>
               <div className="soft p-8 rounded-3xl border border-white/5">
                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Payout Schedule</p>
-                 <p className="text-lg font-black text-white uppercase tracking-widest">Weekly / Every Friday</p>
-                 <p className="text-[11px] text-slate-600 font-black mt-2 uppercase tracking-widest">Next: 28/03/2026</p>
+                 <p className="text-lg font-black text-white uppercase tracking-widest">Semanal</p>
               </div>
               <div className="lg:flex lg:items-center lg:justify-end">
                  <button className="text-[11px] font-black text-[#f00856] uppercase tracking-[0.3em] hover:underline hover:translate-x-2 transition-all flex items-center gap-3">Update Payment Method <ArrowRight className="w-4 h-4" /></button>
@@ -105,12 +163,12 @@ export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | '
   }
 
   const totals = {
-    gross: mockFinances.reduce((s, f) => s + f.gross, 0),
-    fees: mockFinances.reduce((s, f) => s + f.feePlatform + f.feeGateway, 0),
-    shipping: mockFinances.reduce((s, f) => s + f.shipping, 0),
-    net: mockFinances.reduce((s, f) => s + f.net, 0),
-    pending: mockFinances.filter(f => f.status === 'pending').reduce((s, f) => s + f.net, 0),
-    settlable: mockFinances.filter(f => f.status === 'settlable').reduce((s, f) => s + f.net, 0),
+    gross: finances.reduce((s, f) => s + f.gross, 0),
+    fees: finances.reduce((s, f) => s + f.feePlatform + f.feeGateway, 0),
+    shipping: finances.reduce((s, f) => s + f.shipping, 0),
+    net: finances.reduce((s, f) => s + f.net, 0),
+    pending: finances.filter(f => f.status === 'pending').reduce((s, f) => s + f.net, 0),
+    paid: finances.filter(f => f.status === 'paid').reduce((s, f) => s + f.net, 0),
   };
 
   return (
@@ -122,17 +180,17 @@ export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | '
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Ventas Brutas" value={`$${totals.gross.toLocaleString()}`} icon={DollarSign} color="emerald" />
-        <StatCard label="Comisiones" value={`$${totals.fees.toLocaleString()}`} icon={ArrowDownCircle} color="red" />
-        <StatCard label="Logística" value={`$${totals.shipping.toLocaleString()}`} icon={CreditCard} color="purple" />
-        <StatCard label="Neto Estimado" value={`$${totals.net.toLocaleString()}`} icon={TrendingUp} color="green" />
+        <StatCard label="Ventas Brutas" value={`$${totals.gross.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={DollarSign} color="emerald" />
+        <StatCard label="Comisiones" value={`$${totals.fees.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={ArrowDownCircle} color="red" />
+        <StatCard label="Logística" value={`$${totals.shipping.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={CreditCard} color="purple" />
+        <StatCard label="Neto Histórico" value={`$${totals.net.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={TrendingUp} color="green" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="soft rounded-[2.5rem] p-12 hover:bg-white/[0.04] transition-all border border-white/5 shadow-xl">
           <p className="text-[11px] text-[#f00856] font-black uppercase tracking-[0.4em] mb-6">Escrow Balance</p>
           <div className="flex items-end gap-5">
-             <p className="text-6xl font-black text-white tracking-tighter">${totals.pending.toLocaleString()}</p>
+             <p className="text-6xl font-black text-white tracking-tighter">${totals.pending.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
              <span className="text-[11px] font-black text-slate-600 uppercase tracking-[0.2em] mb-2">Pendiente de cierre</span>
           </div>
         </div>
@@ -141,9 +199,9 @@ export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | '
              <CreditCard className="w-48 h-48 text-white -rotate-12" />
           </div>
           <div className="relative z-10">
-            <p className="text-[11px] text-emerald-500 font-black uppercase tracking-[0.4em] mb-6">Settlable Amount</p>
-            <p className="text-6xl font-black text-emerald-500 tracking-tighter mb-6">${totals.settlable.toLocaleString()}</p>
-            <p className="text-[11px] font-black text-white/40 uppercase tracking-widest">Release Date: <span className="text-white">28/03/2026</span></p>
+            <p className="text-[11px] text-emerald-500 font-black uppercase tracking-[0.4em] mb-6">Settled Amount</p>
+            <p className="text-6xl font-black text-emerald-500 tracking-tighter mb-6">${totals.paid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-[11px] font-black text-white/40 uppercase tracking-widest">Ya Transferido</p>
           </div>
         </div>
       </div>
@@ -165,23 +223,19 @@ export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | '
                 <th className="p-8">Client</th>
                 <th className="p-8 text-right">Gross</th>
                 <th className="p-8 text-right">Platform Fee</th>
-                <th className="p-8 text-right">Gateway</th>
-                <th className="p-8 text-right">Ship</th>
                 <th className="p-8 text-right font-black text-white">Net Flow</th>
                 <th className="p-8">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {mockFinances.map(f => (
-                <tr key={f.order} className="hover:bg-white/[0.02] group transition-colors">
+              {finances.map(f => (
+                <tr key={f.id} className="hover:bg-white/[0.02] group transition-colors">
                   <td className="p-8 text-slate-500 text-[11px] font-black uppercase tracking-widest">{f.date}</td>
                   <td className="p-8 font-black text-white text-[16px] group-hover:text-[#f00856] transition-colors uppercase">{f.order}</td>
                   <td className="p-8 text-slate-400 text-[13px] font-black uppercase tracking-widest">{f.client}</td>
-                  <td className="p-8 text-right font-black text-white text-[16px]">${f.gross.toLocaleString()}</td>
-                  <td className="p-8 text-right font-black text-red-500 text-[15px]">-${f.feePlatform}</td>
-                  <td className="p-8 text-right font-black text-red-500 text-[15px]">-${f.feeGateway}</td>
-                  <td className="p-8 text-right font-black text-slate-600 text-[15px]">-${f.shipping}</td>
-                  <td className="p-8 text-right font-black text-emerald-500 text-[18px] bg-white/[0.01] group-hover:bg-emerald-500/5 transition-colors tracking-tighter">+${f.net.toLocaleString()}</td>
+                  <td className="p-8 text-right font-black text-white text-[16px]">${f.gross.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="p-8 text-right font-black text-red-500 text-[15px]">-${f.feePlatform.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="p-8 text-right font-black text-emerald-500 text-[18px] bg-white/[0.01] group-hover:bg-emerald-500/5 transition-colors tracking-tighter">+${f.net.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   <td className="p-8">
                      <span className={`badge px-4 py-2 ${stMap[f.status]?.c.replace('border-', 'text-').split(' ')[0] + ' bg' + stMap[f.status]?.c.split(' bg')[1]}`}>
                         {stMap[f.status]?.l}
@@ -189,6 +243,9 @@ export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | '
                   </td>
                 </tr>
               ))}
+              {finances.length === 0 && (
+                <tr><td colSpan={7} className="p-8 text-center text-slate-400">No hay transacciones registradas.</td></tr>
+              )}
             </tbody>
           </table>
         </div>

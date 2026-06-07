@@ -7,10 +7,10 @@ ADD COLUMN IF NOT EXISTS is_stackable boolean DEFAULT false;
 
 -- Allow vendors to create promotions
 CREATE POLICY "Vendors can insert their own promotions" ON promotions
-FOR INSERT WITH CHECK (owner_vendor_id IN (SELECT id FROM vendors WHERE user_id = auth.uid()));
+FOR INSERT WITH CHECK (owner_vendor_id IN (SELECT id FROM vendors WHERE id = auth.uid()));
 
 CREATE POLICY "Vendors can update their own promotions" ON promotions
-FOR UPDATE USING (owner_vendor_id IN (SELECT id FROM vendors WHERE user_id = auth.uid()));
+FOR UPDATE USING (owner_vendor_id IN (SELECT id FROM vendors WHERE id = auth.uid()));
 
 CREATE POLICY "Vendors can delete their own promotions" ON promotions
-FOR DELETE USING (owner_vendor_id IN (SELECT id FROM vendors WHERE user_id = auth.uid()));
+FOR DELETE USING (owner_vendor_id IN (SELECT id FROM vendors WHERE id = auth.uid()));

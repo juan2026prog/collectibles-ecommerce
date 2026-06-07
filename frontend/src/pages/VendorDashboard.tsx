@@ -19,6 +19,7 @@ import VAudit from '../components/vendor/VAudit';
 import VRules from '../components/vendor/VRules';
 import VTeam from '../components/vendor/VTeam';
 import VSettings from '../components/vendor/VSettings';
+import VKyc from '../components/vendor/VKyc';
 import VHelp from '../components/vendor/VHelp';
 
 export default function VendorDashboard() {
@@ -125,6 +126,7 @@ export default function VendorDashboard() {
       {activeTab === 'warehouses' && <VInventory mode="warehouses" />}
       {activeTab === 'team' && <VTeam />}
       {activeTab === 'settings' && <VSettings />}
+      {activeTab === 'kyc' && <VKyc />}
       {activeTab === 'help' && <VHelp />}
     </div>
   );

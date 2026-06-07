@@ -21,6 +21,7 @@ const PortalLayout = lazy(() => import('./layouts/PortalLayout'));
 const Home = lazy(() => import('./pages/Home'));
 const Shop = lazy(() => import('./pages/Shop'));
 const ProductDetail = lazy(() => import('./pages/ProductDetail'));
+const VendorStorefront = lazy(() => import('./pages/VendorStorefront'));
 const Cart = lazy(() => import('./pages/Cart'));
 const Checkout = lazy(() => import('./pages/Checkout'));
 const CheckoutSuccess = lazy(() => import('./pages/CheckoutSuccess'));
@@ -67,10 +68,13 @@ const AdminArtists = lazy(() => import('./pages/admin/AdminArtists'));
 const AdminTags = lazy(() => import('./pages/admin/AdminTags'));
 const AdminAutomations = lazy(() => import('./pages/admin/AdminAutomations'));
 const AdminVendors = lazy(() => import('./pages/admin/AdminVendors'));
+const AdminVendorPayouts = lazy(() => import('./pages/admin/AdminVendorPayouts'));
+const AdminVendorKyc = lazy(() => import('./pages/admin/AdminVendorKyc'));
 
 // GodMode removed from production — SEC-CRIT-01 (hardcoded credentials)
 import { useReferralTracking } from './hooks/useReferralTracking';
 import MetaPixelTracker from './components/MetaPixelTracker';
+import MarketplaceGuard from './components/MarketplaceGuard';
 
 function ReferralTracker() {
   useReferralTracking();
@@ -100,6 +104,7 @@ function App() {
                     <Route path="/categoria/:categorySlug" element={<Shop />} />
                     <Route path="/marca/:brandSlug" element={<Shop />} />
                     <Route path="/p/:slug" element={<ProductDetail />} />
+                    <Route path="/store/:slug" element={<MarketplaceGuard><VendorStorefront /></MarketplaceGuard>} />
                     <Route path="/page/:slug" element={<DynamicPage />} />
                     <Route path="/collection/:slug" element={<Shop />} />
                     <Route path="/about" element={<Navigate to="/page/nosotros" replace />} />
@@ -129,9 +134,11 @@ function App() {
                 {/* Isolated Portals with Lateral Navigation */}
                 <Route path="/vendor" element={
                   <ProtectedRoute requireVendor>
+                    <MarketplaceGuard>
                     <Suspense fallback={<PageSkeleton />}>
                       <PortalLayout type="vendor" />
                     </Suspense>
+                    </MarketplaceGuard>
                   </ProtectedRoute>
                 }>
                   <Route index element={<VendorDashboard />} />
@@ -204,7 +211,9 @@ function App() {
                   <Route path="artists" element={<AdminArtists />} />
                   <Route path="tags" element={<AdminTags />} />
                   <Route path="automations" element={<AdminAutomations />} />
-                  <Route path="vendors" element={<AdminVendors />} />
+                  <Route path="vendors" element={<MarketplaceGuard><AdminVendors /></MarketplaceGuard>} />
+                  <Route path="vendor-payouts" element={<MarketplaceGuard><AdminVendorPayouts /></MarketplaceGuard>} />
+                  <Route path="vendor-kyc" element={<MarketplaceGuard><AdminVendorKyc /></MarketplaceGuard>} />
                 </Route>
                   </Routes>
                 </Suspense>
