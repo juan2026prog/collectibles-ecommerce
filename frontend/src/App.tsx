@@ -16,6 +16,7 @@ import StorefrontLayout from './layouts/StorefrontLayout';
 
 const AdminLayout = lazy(() => import('./layouts/AdminLayout'));
 const PortalLayout = lazy(() => import('./layouts/PortalLayout'));
+const VendorLayout = lazy(() => import('./layouts/VendorLayout'));
 
 // Public Storefront (Lazy)
 const Home = lazy(() => import('./pages/Home'));
@@ -136,7 +137,7 @@ function App() {
                   <ProtectedRoute requireVendor>
                     <MarketplaceGuard>
                     <Suspense fallback={<PageSkeleton />}>
-                      <PortalLayout type="vendor" />
+                      <VendorLayout />
                     </Suspense>
                     </MarketplaceGuard>
                   </ProtectedRoute>

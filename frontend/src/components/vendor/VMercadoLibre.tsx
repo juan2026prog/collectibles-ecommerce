@@ -239,13 +239,13 @@ export default function VMercadoLibre() {
   });
 
   return (
-    <div className="max-w-7xl space-y-8 animation-fade-in pb-20 text-white">
+    <div className="max-w-7xl space-y-8 animation-fade-in pb-20 text-gray-900">
       {/* Header */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
         <div>
-           <div className="text-[11px] text-[#f00856] font-black uppercase tracking-[0.4em] mb-3">Ecosystem Sync</div>
-           <h2 className="text-5xl font-black text-white">Mercado Libre</h2>
-           <p className="text-sm text-slate-500 font-bold mt-3 uppercase tracking-[0.2em]">Sincronización omnicanal de catálogo, stock y precios</p>
+           <div className="text-[11px] text-primary-600 font-black uppercase tracking-[0.4em] mb-3">Ecosystem Sync</div>
+           <h2 className="text-5xl font-black text-gray-900">Mercado Libre</h2>
+           <p className="text-sm text-gray-500 font-bold mt-3 uppercase tracking-[0.2em]">Sincronización omnicanal de catálogo, stock y precios</p>
         </div>
         
         {account && (
@@ -253,7 +253,7 @@ export default function VMercadoLibre() {
             <button 
               onClick={handleImportListings}
               disabled={actionLoading}
-              className="bg-[#FFE600] text-black text-[12px] font-black uppercase tracking-widest px-12 py-5 rounded-full hover:shadow-[0_0_50px_rgba(255,230,0,0.4)] transition-all flex items-center gap-3 active:scale-[0.98] border border-black/10 disabled:opacity-55"
+              className="bg-[#FFE600] text-black text-[12px] font-black uppercase tracking-widest px-12 py-5 rounded-full hover:shadow-sm transition-all flex items-center gap-3 active:scale-[0.98] border border-black/10 disabled:opacity-55"
             >
               <RefreshCw className={`w-5 h-5 ${actionLoading && 'animate-spin'}`} /> 
               {actionLoading ? 'Procesando...' : 'Importar Publicaciones'}
@@ -261,7 +261,7 @@ export default function VMercadoLibre() {
             <button 
               onClick={handleDisconnect}
               disabled={actionLoading}
-              className="glass border border-white/10 text-white text-[12px] font-black uppercase tracking-widest px-12 py-5 rounded-full hover:bg-red-650/15 hover:border-red-600/30 transition-all flex items-center gap-3 shadow-xl"
+              className="bg-white border border-gray-200 text-gray-900 text-[12px] font-black uppercase tracking-widest px-12 py-5 rounded-full hover:bg-red-650/15 hover:border-red-600/30 transition-all flex items-center gap-3 shadow-sm"
             >
               <X className="w-5 h-5 text-red-500" /> Desconectar Cuenta
             </button>
@@ -278,24 +278,24 @@ export default function VMercadoLibre() {
 
       {/* Account connection status */}
       {loadingAccount ? (
-        <div className="glass rounded-[2.5rem] border border-white/10 p-12 text-center text-slate-500 animate-pulse text-xs uppercase tracking-widest">
+        <div className="bg-white rounded-[2.5rem] border border-gray-200 p-12 text-center text-gray-500 animate-pulse text-xs uppercase tracking-widest">
           Cargando configuración de Mercado Libre...
         </div>
       ) : !account ? (
-        <div className="glass rounded-[2.5rem] border border-white/10 p-12 text-center space-y-6 relative overflow-hidden group">
+        <div className="bg-white rounded-[2.5rem] border border-gray-200 p-12 text-center space-y-6 relative overflow-hidden group">
           <div className="absolute -top-10 -right-10 w-40 h-40 bg-[#FFE600]/5 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700" />
-          <div className="w-16 h-16 bg-[#FFE600]/10 border border-[#FFE600]/20 rounded-2xl flex items-center justify-center mx-auto shadow-xl">
+          <div className="w-16 h-16 bg-[#FFE600]/10 border border-[#FFE600]/20 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
             <Link2 className="w-8 h-8 text-[#FFE600]" />
           </div>
           <div className="max-w-md mx-auto space-y-2">
             <h3 className="text-xl font-bold">Conectar tu Tienda</h3>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-gray-500">
               Conecta tu cuenta de Mercado Libre Collectibles para importar tus artículos, sincronizar stock en tiempo real de forma bidireccional y automatizar el inventario de ventas.
             </p>
           </div>
           <button 
             onClick={handleConnect}
-            className="bg-[#FFE600] text-black text-xs font-black uppercase tracking-widest px-10 py-4.5 rounded-full hover:shadow-[0_0_40px_rgba(255,230,0,0.3)] transition-all active:scale-[0.98]"
+            className="bg-[#FFE600] text-black text-xs font-black uppercase tracking-widest px-10 py-4.5 rounded-full hover:shadow-sm transition-all active:scale-[0.98]"
           >
             Conectar Mercado Libre
           </button>
@@ -311,25 +311,25 @@ export default function VMercadoLibre() {
           </div>
 
           {/* Sync Matrix */}
-          <div className="glass rounded-[2.5rem] border border-white/10 overflow-hidden shadow-2xl">
-            <div className="p-10 md:p-12 border-b border-white/5 bg-white/[0.04] flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="bg-white rounded-[2.5rem] border border-gray-200 overflow-hidden shadow-sm">
+            <div className="p-10 md:p-12 border-b border-gray-100 bg-gray-50 flex flex-col md:flex-row md:items-center justify-between gap-6">
                <div className="flex items-center gap-6">
-                 <div className="w-12 h-12 rounded-2xl bg-[#f00856]/10 flex items-center justify-center shadow-xl">
-                    <Layers className="w-6 h-6 text-[#f00856]" />
+                 <div className="w-12 h-12 rounded-2xl bg-primary-100 flex items-center justify-center shadow-sm">
+                    <Layers className="w-6 h-6 text-primary-600" />
                  </div>
                  <div>
-                   <h3 className="text-[12px] font-black text-white uppercase tracking-[0.5em]">Staging Catalog Matrix</h3>
-                   <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">Items importados y vinculaciones del catálogo</p>
+                   <h3 className="text-[12px] font-black text-gray-900 uppercase tracking-[0.5em]">Staging Catalog Matrix</h3>
+                   <p className="text-[10px] text-gray-500 font-bold uppercase mt-1">Items importados y vinculaciones del catálogo</p>
                  </div>
                </div>
 
                <div className="flex gap-2">
-                 <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2 shadow-inner focus-within:ring-2 focus-within:ring-pink-500/20">
-                   <Search className="w-4 h-4 text-slate-500" />
+                 <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 shadow-inner focus-within:ring-2 focus-within:ring-pink-500/20">
+                   <Search className="w-4 h-4 text-gray-500" />
                    <input 
                      type="text" 
                      placeholder="Buscar por título o ID..." 
-                     className="text-xs bg-transparent outline-none w-48 border-none ring-0 focus:ring-0 text-white" 
+                     className="text-xs bg-transparent outline-none w-48 border-none ring-0 focus:ring-0 text-gray-900" 
                      value={searchQuery}
                      onChange={e => setSearchQuery(e.target.value)}
                    />
@@ -338,7 +338,7 @@ export default function VMercadoLibre() {
                  <select
                    value={statusFilter}
                    onChange={e => setStatusFilter(e.target.value)}
-                   className="text-xs font-bold bg-white/5 border border-white/10 text-white rounded-xl px-2 py-2 outline-none cursor-pointer"
+                   className="text-xs font-bold bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-2 py-2 outline-none cursor-pointer"
                  >
                    <option value="all">Ver Todos (Estados)</option>
                    <option value="review_needed">Revisión Requerida</option>
@@ -351,13 +351,13 @@ export default function VMercadoLibre() {
 
             <div className="overflow-x-auto no-scrollbar">
               {loadingItems ? (
-                <div className="text-center py-20 text-slate-500 text-xs">Cargando catálogo en staging...</div>
+                <div className="text-center py-20 text-gray-500 text-xs">Cargando catálogo en staging...</div>
               ) : filteredItems.length === 0 ? (
-                <div className="text-center py-20 text-slate-500 text-xs">No se encontraron ítems.</div>
+                <div className="text-center py-20 text-gray-500 text-xs">No se encontraron ítems.</div>
               ) : (
                 <table className="w-full text-left border-collapse">
-                  <thead className="bg-white/[0.02] border-b border-white/5">
-                    <tr className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em]">
+                  <thead className="bg-gray-50 border-b border-gray-100">
+                    <tr className="text-[10px] font-black text-gray-500 uppercase tracking-[0.4em]">
                       <th className="p-8">Publicación / ID</th>
                       <th className="p-8 text-center">Estado Staging</th>
                       <th className="p-8 text-right">Precio Staging</th>
@@ -367,21 +367,21 @@ export default function VMercadoLibre() {
                       <th className="p-8">Estado Sync</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/5">
+                  <tbody className="divide-y divide-gray-100">
                     {filteredItems.map(item => {
                       const link = item.ml_catalog_links?.[0];
                       const isLinked = !!link;
                       
                       return (
-                        <tr key={item.id} className="hover:bg-white/[0.02] transition-colors group text-xs">
+                        <tr key={item.id} className="hover:bg-gray-50 transition-colors group text-xs">
                           <td className="p-8">
                              <div className="flex items-center gap-3">
-                               <img src={item.thumbnail} alt="" className="w-10 h-10 object-cover border border-white/10 rounded" />
+                               <img src={item.thumbnail} alt="" className="w-10 h-10 object-cover border border-gray-200 rounded" />
                                <div className="min-w-0">
-                                 <p className="font-black text-white text-[16px] group-hover:text-[#f00856] transition-colors uppercase tracking-tight truncate max-w-sm">{item.title}</p>
+                                 <p className="font-black text-gray-900 text-[16px] group-hover:text-primary-600 transition-colors uppercase tracking-tight truncate max-w-sm">{item.title}</p>
                                  <div className="flex items-center gap-2 mt-1">
-                                   <span className="font-mono text-[9px] text-slate-500 uppercase bg-white/5 px-2 py-0.5 rounded">{item.ml_item_id}</span>
-                                   <a href={item.permalink} target="_blank" rel="noreferrer" title="Ver en Mercado Libre" className="text-slate-500 hover:text-white">
+                                   <span className="font-mono text-[9px] text-gray-500 uppercase bg-gray-50 px-2 py-0.5 rounded">{item.ml_item_id}</span>
+                                   <a href={item.permalink} target="_blank" rel="noreferrer" title="Ver en Mercado Libre" className="text-gray-500 hover:text-gray-900">
                                      <ExternalLink className="w-3.5 h-3.5" />
                                    </a>
                                  </div>
@@ -392,7 +392,7 @@ export default function VMercadoLibre() {
                              <span className={`px-2 py-0.5 rounded text-[9px] uppercase font-black tracking-wider ${
                                item.status === 'approved' ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
                                item.status === 'review_needed' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' :
-                               item.status === 'ignored' ? 'bg-white/10 text-slate-400' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                               item.status === 'ignored' ? 'bg-gray-100 text-gray-500' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
                              }`}>
                                {item.status}
                              </span>
@@ -405,11 +405,11 @@ export default function VMercadoLibre() {
                             {isLinked ? (
                               <button 
                                 onClick={() => toggleSyncSetting(item.ml_item_id, 'sync_stock', link.sync_stock)}
-                                className="text-slate-400 hover:text-white transition-colors"
+                                className="text-gray-500 hover:text-gray-900 transition-colors"
                               >
                                 {link.sync_stock ? <ToggleRight className="w-8 h-8 text-pink-600" /> : <ToggleLeft className="w-8 h-8" />}
                               </button>
-                            ) : <span className="text-[10px] text-slate-600 italic">No Vinculado</span>}
+                            ) : <span className="text-[10px] text-gray-400 italic">No Vinculado</span>}
                           </td>
 
                           {/* Sync Price Toggle */}
@@ -417,11 +417,11 @@ export default function VMercadoLibre() {
                             {isLinked ? (
                               <button 
                                 onClick={() => toggleSyncSetting(item.ml_item_id, 'sync_price', link.sync_price)}
-                                className="text-slate-400 hover:text-white transition-colors"
+                                className="text-gray-500 hover:text-gray-900 transition-colors"
                               >
                                 {link.sync_price ? <ToggleRight className="w-8 h-8 text-pink-600" /> : <ToggleLeft className="w-8 h-8" />}
                               </button>
-                            ) : <span className="text-[10px] text-slate-600 italic">No Vinculado</span>}
+                            ) : <span className="text-[10px] text-gray-400 italic">No Vinculado</span>}
                           </td>
 
                           <td className="p-8 font-medium">
@@ -443,34 +443,34 @@ export default function VMercadoLibre() {
           </div>
 
           {/* Logs Panel */}
-          <div className="glass rounded-[2.5rem] border border-white/10 overflow-hidden shadow-2xl">
-            <div className="p-10 md:p-12 border-b border-white/5 bg-white/[0.04] flex items-center gap-6">
-               <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center">
-                  <Clock className="w-6 h-6 text-slate-500" />
+          <div className="bg-white rounded-[2.5rem] border border-gray-200 overflow-hidden shadow-sm">
+            <div className="p-10 md:p-12 border-b border-gray-100 bg-gray-50 flex items-center gap-6">
+               <div className="w-12 h-12 rounded-2xl bg-gray-50 flex items-center justify-center">
+                  <Clock className="w-6 h-6 text-gray-500" />
                </div>
                <div>
-                 <h3 className="text-[12px] font-black text-white uppercase tracking-[0.5em]">Event Log / System Activity</h3>
-                 <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">Historial reciente de sincronizaciones y errores</p>
+                 <h3 className="text-[12px] font-black text-gray-900 uppercase tracking-[0.5em]">Event Log / System Activity</h3>
+                 <p className="text-[10px] text-gray-500 font-bold uppercase mt-1">Historial reciente de sincronizaciones y errores</p>
                </div>
             </div>
             
             <div className="overflow-x-auto no-scrollbar">
               {loadingLogs ? (
-                <div className="text-center py-10 text-slate-500 text-xs">Cargando historial de eventos...</div>
+                <div className="text-center py-10 text-gray-500 text-xs">Cargando historial de eventos...</div>
               ) : logs.length === 0 ? (
-                <div className="text-center py-10 text-slate-500 text-xs">No hay actividad reciente en el historial.</div>
+                <div className="text-center py-10 text-gray-500 text-xs">No hay actividad reciente en el historial.</div>
               ) : (
                 <table className="w-full text-left border-collapse">
-                  <tbody className="divide-y divide-white/5">
+                  <tbody className="divide-y divide-gray-100">
                     {logs.map((log) => (
-                      <tr key={log.id} className="hover:bg-white/[0.02] transition-colors group text-xs">
-                        <td className="p-8 text-slate-700 font-black uppercase tracking-[0.2em] w-48">
+                      <tr key={log.id} className="hover:bg-gray-50 transition-colors group text-xs">
+                        <td className="p-8 text-gray-500 font-black uppercase tracking-[0.2em] w-48">
                           {new Date(log.created_at).toLocaleString()}
                         </td>
-                        <td className="p-8 font-black text-white text-[15px] uppercase tracking-widest group-hover:text-[#f00856] group-hover:translate-x-2 transition-all">
+                        <td className="p-8 font-black text-gray-900 text-[15px] uppercase tracking-widest group-hover:text-primary-600 group-hover:translate-x-2 transition-all">
                           {log.action}
                         </td>
-                        <td className="p-8 text-slate-400 font-medium">
+                        <td className="p-8 text-gray-500 font-medium">
                           {JSON.stringify(log.details)}
                         </td>
                         <td className="p-8">
@@ -502,10 +502,10 @@ function MiniStat({ label, value, color }: { label: string; value: number | stri
   };
 
   return (
-    <div className="soft rounded-[2rem] p-10 group hover:bg-white/[0.04] transition-all border border-white/5 hover:border-[#f00856]/30 shadow-xl overflow-hidden relative bg-white/[0.01]">
-      <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-white/5 rounded-full group-hover:scale-150 transition-transform duration-700"></div>
+    <div className="soft rounded-[2rem] p-10 group hover:bg-gray-50 transition-all border border-gray-100 hover:border-primary-300 shadow-sm overflow-hidden relative bg-white/[0.01]">
+      <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-gray-50 rounded-full group-hover:scale-150 transition-transform duration-700"></div>
       <p className={`text-4xl font-black mb-3 tracking-tighter relative z-10 truncate ${getTheme()}`}>{value}</p>
-      <p className="text-[10px] font-black text-slate-650 uppercase tracking-[0.4em] relative z-10 group-hover:text-slate-400 transition-colors">{label}</p>
+      <p className="text-[10px] font-black text-slate-650 uppercase tracking-[0.4em] relative z-10 group-hover:text-gray-500 transition-colors">{label}</p>
     </div>
   );
 }

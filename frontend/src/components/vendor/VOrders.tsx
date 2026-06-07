@@ -16,7 +16,7 @@ const prepLabels: Record<string, { label: string; cls: string }> = {
   packed: { label: 'Empaquetado', cls: 'border-indigo-500/20 text-indigo-500 bg-indigo-500/5' },
   dispatched: { label: 'Despachado', cls: 'border-sky-500/20 text-sky-500 bg-sky-500/5' },
   delivered: { label: 'Entregado', cls: 'border-emerald-500/20 text-emerald-500 bg-emerald-500/5' },
-  cancelled: { label: 'Cancelado', cls: 'border-white/10 text-slate-500 bg-white/5' },
+  cancelled: { label: 'Cancelado', cls: 'border-gray-200 text-gray-500 bg-gray-50' },
   incident: { label: 'Incidencia', cls: 'border-red-500/20 text-red-500 bg-red-500/5' },
 };
 
@@ -36,28 +36,28 @@ export default function VOrders() {
     const o = selectedOrder;
     return (
       <div className="max-w-7xl space-y-8 animation-fade-in pb-20">
-        <button onClick={() => setSelectedOrder(null)} className="text-[12px] font-black text-slate-500 hover:text-[#f00856] uppercase tracking-[0.3em] flex items-center gap-4 transition-all group px-4">
-          <div className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center group-hover:border-[#f00856] group-hover:bg-[#f00856]/10 transition-all">
+        <button onClick={() => setSelectedOrder(null)} className="text-[12px] font-black text-gray-500 hover:text-primary-600 uppercase tracking-[0.3em] flex items-center gap-4 transition-all group px-4">
+          <div className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center group-hover:border-primary-600 group-hover:bg-primary-100 transition-all">
             <ChevronRight className="w-5 h-5 rotate-180" />
           </div>
           Back to worklist
         </button>
         
-        <div className="glass rounded-[3rem] border border-white/10 overflow-hidden shadow-2xl">
-          <div className="p-12 md:p-16 border-b border-white/5 bg-white/[0.03] flex flex-col sm:flex-row sm:items-center justify-between gap-12 relative overflow-hidden">
+        <div className="bg-white rounded-[3rem] border border-gray-200 overflow-hidden shadow-sm">
+          <div className="p-12 md:p-16 border-b border-gray-100 bg-gray-50 flex flex-col sm:flex-row sm:items-center justify-between gap-12 relative overflow-hidden">
             <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
-               <Package className="w-48 h-48 text-white -rotate-12" />
+               <Package className="w-48 h-48 text-gray-900 -rotate-12" />
             </div>
             <div className="relative z-10">
-              <div className="text-[12px] text-[#f00856] font-black uppercase tracking-[0.5em] mb-4">Order Tracking Protocol</div>
-              <h2 className="text-5xl font-black text-white mb-4 tracking-tighter">{o.id}</h2>
+              <div className="text-[12px] text-primary-600 font-black uppercase tracking-[0.5em] mb-4">Order Tracking Protocol</div>
+              <h2 className="text-5xl font-black text-gray-900 mb-4 tracking-tighter">{o.id}</h2>
               <div className="flex items-center gap-4">
-                 <p className="text-[12px] text-slate-500 font-black uppercase tracking-widest bg-white/5 px-3 py-1 rounded-md">{o.date}</p>
+                 <p className="text-[12px] text-gray-500 font-black uppercase tracking-widest bg-gray-50 px-3 py-1 rounded-md">{o.date}</p>
                  <span className="text-slate-800">•</span>
-                 <p className="text-[12px] text-slate-300 font-black uppercase tracking-widest">{o.client}</p>
+                 <p className="text-[12px] text-gray-700 font-black uppercase tracking-widest">{o.client}</p>
               </div>
             </div>
-            <span className={`badge px-8 py-4 rounded-full border shadow-2xl text-[11px] ${prepLabels[o.prepStatus]?.cls.split(' border')[0]} bg${prepLabels[o.prepStatus]?.cls.split(' bg')[1]}`}>{prepLabels[o.prepStatus]?.label}</span>
+            <span className={`badge px-8 py-4 rounded-full border shadow-sm text-[11px] ${prepLabels[o.prepStatus]?.cls.split(' border')[0]} bg${prepLabels[o.prepStatus]?.cls.split(' bg')[1]}`}>{prepLabels[o.prepStatus]?.label}</span>
           </div>
 
           <div className="p-12 md:p-16 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 relative z-10">
@@ -71,43 +71,43 @@ export default function VOrders() {
             <Info label="Pago" value={o.payStatus} isStatus />
           </div>
 
-          <div className="p-12 md:p-16 border-t border-white/5 bg-black/20">
+          <div className="p-12 md:p-16 border-t border-gray-100 bg-black/20">
              <div className="flex justify-between items-end mb-12">
                 <div className="flex items-center gap-6">
-                   <div className="w-14 h-14 rounded-2xl bg-[#f00856]/10 flex items-center justify-center shadow-xl">
-                      <ShoppingCart className="w-7 h-7 text-[#f00856]" />
+                   <div className="w-14 h-14 rounded-2xl bg-primary-100 flex items-center justify-center shadow-sm">
+                      <ShoppingCart className="w-7 h-7 text-primary-600" />
                    </div>
                    <div>
-                      <div className="text-[12px] text-slate-500 font-black uppercase tracking-[0.3em] mb-2">Items List</div>
-                      <h4 className="text-3xl font-black text-white uppercase tracking-widest">Desglose de Productos</h4>
+                      <div className="text-[12px] text-gray-500 font-black uppercase tracking-[0.3em] mb-2">Items List</div>
+                      <h4 className="text-3xl font-black text-gray-900 uppercase tracking-widest">Desglose de Productos</h4>
                    </div>
                 </div>
                 <div className="text-right">
-                   <p className="text-[12px] text-slate-500 font-black uppercase tracking-[0.3em] mb-2">Total Order Value</p>
-                   <p className="text-6xl font-black text-white tracking-tighter">${o.total.toLocaleString()}</p>
+                   <p className="text-[12px] text-gray-500 font-black uppercase tracking-[0.3em] mb-2">Total Order Value</p>
+                   <p className="text-6xl font-black text-gray-900 tracking-tighter">${o.total.toLocaleString()}</p>
                 </div>
              </div>
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {o.items.map((item, i) => (
-                  <div key={i} className="flex justify-between p-10 soft rounded-[2rem] border border-white/5 hover:border-[#f00856]/30 hover:bg-white/[0.06] transition-all group shadow-xl">
+                  <div key={i} className="flex justify-between p-10 soft rounded-[2rem] border border-gray-100 hover:border-primary-300 hover:bg-gray-50 transition-all group shadow-sm">
                     <div className="flex items-center gap-6">
-                       <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-slate-500 font-black group-hover:text-[#f00856] transition-colors">
+                       <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center text-gray-500 font-black group-hover:text-primary-600 transition-colors">
                           {i + 1}
                        </div>
-                       <span className="text-[16px] font-black text-white uppercase tracking-widest group-hover:text-[#f00856] transition-colors">{item.name}</span>
+                       <span className="text-[16px] font-black text-gray-900 uppercase tracking-widest group-hover:text-primary-600 transition-colors">{item.name}</span>
                     </div>
-                    <span className="text-2xl font-black text-[#f00856] bg-[#f00856]/10 w-12 h-12 rounded-full flex items-center justify-center shadow-lg">x{item.qty}</span>
+                    <span className="text-2xl font-black text-primary-600 bg-primary-100 w-12 h-12 rounded-full flex items-center justify-center shadow-lg">x{item.qty}</span>
                   </div>
                 ))}
              </div>
           </div>
 
-          <div className="p-12 md:p-16 bg-white/[0.01] border-t border-white/5">
+          <div className="p-12 md:p-16 bg-white/[0.01] border-t border-gray-100">
             <div className="flex items-center gap-4 mb-12">
-               <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center">
-                  <Clock className="w-6 h-6 text-slate-500" />
+               <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center">
+                  <Clock className="w-6 h-6 text-gray-500" />
                </div>
-               <div className="text-[12px] text-slate-500 font-black uppercase tracking-[0.4em]">Workflow Priority Actions</div>
+               <div className="text-[12px] text-gray-500 font-black uppercase tracking-[0.4em]">Workflow Priority Actions</div>
             </div>
             <div className="flex flex-wrap gap-4">
               {o.prepStatus === 'new' && <Btn label="Aceptar Pedido" color="f00856" onClick={() => {}} />}
@@ -130,36 +130,36 @@ export default function VOrders() {
     <div className="max-w-7xl space-y-8 animation-fade-in pb-20">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
          <div>
-            <div className="text-[11px] text-[#f00856] font-black uppercase tracking-[0.4em] mb-3">Order Management</div>
-            <h2 className="text-5xl font-black text-white">Logística de Pedidos</h2>
-            <p className="text-sm text-slate-500 font-bold mt-3 uppercase tracking-[0.2em]">{mockOrders.length} transacciones registradas</p>
+            <div className="text-[11px] text-primary-600 font-black uppercase tracking-[0.4em] mb-3">Order Management</div>
+            <h2 className="text-5xl font-black text-gray-900">Logística de Pedidos</h2>
+            <p className="text-sm text-gray-500 font-bold mt-3 uppercase tracking-[0.2em]">{mockOrders.length} transacciones registradas</p>
          </div>
-         <button className="bg-white text-black text-[12px] font-black uppercase tracking-widest px-14 py-6 rounded-full hover:bg-[#f00856] hover:text-white transition-all shadow-2xl active:scale-[0.98] border border-white/10">
+         <button className="bg-white text-black text-[12px] font-black uppercase tracking-widest px-14 py-6 rounded-full hover:bg-primary-600 hover:text-gray-900 transition-all shadow-sm active:scale-[0.98] border border-gray-200">
             Sincronizar Pedidos
          </button>
       </div>
 
       <div className="flex flex-col xl:flex-row gap-6">
         <div className="relative flex-1 group">
-          <Search className="absolute left-8 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-600 group-focus-within:text-[#f00856] transition-colors" />
+          <Search className="absolute left-8 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-primary-600 transition-colors" />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by Order ID or Client Name..."
-            className="w-full bg-white/5 border border-white/10 p-7 pl-20 rounded-[2rem] text-sm font-black uppercase tracking-widest outline-none focus:border-[#f00856] focus:bg-white/[0.08] transition-all placeholder:text-slate-800 shadow-inner group-hover:border-white/20" />
+            className="w-full bg-gray-50 border border-gray-200 p-7 pl-20 rounded-[2rem] text-sm font-black uppercase tracking-widest outline-none focus:border-primary-600 focus:bg-white/[0.08] transition-all placeholder:text-slate-800 shadow-inner group-hover:border-white/20" />
         </div>
         <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
           {filters.map(f => (
             <button key={f} onClick={() => setFilter(f)}
-              className={`px-10 py-6 text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap rounded-3xl border ${filter === f ? 'bg-white text-black border-white shadow-2xl scale-[1.05]' : 'bg-white/5 text-slate-500 border-white/10 hover:bg-white/10 hover:border-white/20'}`}>
+              className={`px-10 py-6 text-[11px] font-black uppercase tracking-widest transition-all whitespace-nowrap rounded-3xl border ${filter === f ? 'bg-white text-black border-white shadow-sm scale-[1.05]' : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100 hover:border-white/20'}`}>
               {f === 'all' ? 'Ver Todos' : prepLabels[f]?.label || f}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="glass rounded-[2.5rem] border border-white/10 overflow-hidden shadow-2xl">
+      <div className="bg-white rounded-[2.5rem] border border-gray-200 overflow-hidden shadow-sm">
         <div className="overflow-x-auto no-scrollbar">
           <table className="w-full text-left border-collapse">
-            <thead className="bg-white/[0.04] border-b border-white/5">
-              <tr className="text-[11px] font-black text-slate-500 uppercase tracking-[0.4em]">
+            <thead className="bg-gray-50 border-b border-gray-100">
+              <tr className="text-[11px] font-black text-gray-500 uppercase tracking-[0.4em]">
                 <th className="p-10">ID</th>
                 <th className="p-10">Client</th>
                 <th className="p-10">Value</th>
@@ -170,35 +170,35 @@ export default function VOrders() {
                 <th className="p-10"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-gray-100">
               {filtered.map(o => (
-                <tr key={o.id} onClick={() => setSelectedOrder(o)} className="hover:bg-white/[0.02] cursor-pointer group transition-colors">
-                  <td className="p-10 font-black text-white text-[18px] group-hover:text-[#f00856] transition-colors uppercase tracking-tight">{o.id}</td>
+                <tr key={o.id} onClick={() => setSelectedOrder(o)} className="hover:bg-gray-50 cursor-pointer group transition-colors">
+                  <td className="p-10 font-black text-gray-900 text-[18px] group-hover:text-primary-600 transition-colors uppercase tracking-tight">{o.id}</td>
                   <td className="p-10">
-                     <p className="text-[18px] font-black text-slate-200 group-hover:text-white transition-colors">{o.client}</p>
-                     <p className="text-[11px] text-slate-600 font-black uppercase tracking-widest mt-2 bg-white/5 px-2 py-0.5 rounded inline-block">{o.items.reduce((s, i) => s + i.qty, 0)} Items</p>
+                     <p className="text-[18px] font-black text-slate-200 group-hover:text-gray-900 transition-colors">{o.client}</p>
+                     <p className="text-[11px] text-gray-400 font-black uppercase tracking-widest mt-2 bg-gray-50 px-2 py-0.5 rounded inline-block">{o.items.reduce((s, i) => s + i.qty, 0)} Items</p>
                   </td>
-                  <td className="p-10 font-black text-white text-[20px] tracking-tighter">${o.total.toLocaleString()}</td>
+                  <td className="p-10 font-black text-gray-900 text-[20px] tracking-tighter">${o.total.toLocaleString()}</td>
                   <td className="p-10">
                      <span className={`badge px-5 py-2.5 rounded-full shadow-lg text-[10px] ${o.payStatus === 'paid' ? 'text-emerald-400 bg-emerald-400/10' : 'text-red-400 bg-red-400/10'}`}>
                         {o.payStatus === 'paid' ? 'Paid' : 'Refund'}
                      </span>
                   </td>
                   <td className="p-10 text-center">
-                     <span className={`badge px-6 py-3 rounded-full shadow-xl text-[10px] ${prepLabels[o.prepStatus]?.cls.split(' border')[0]} bg${prepLabels[o.prepStatus]?.cls.split(' bg')[1]}`}>
+                     <span className={`badge px-6 py-3 rounded-full shadow-sm text-[10px] ${prepLabels[o.prepStatus]?.cls.split(' border')[0]} bg${prepLabels[o.prepStatus]?.cls.split(' bg')[1]}`}>
                         {prepLabels[o.prepStatus]?.label}
                      </span>
                   </td>
                   <td className="p-10">
-                     <p className="text-[12px] font-black text-slate-300 uppercase tracking-widest">{o.operator}</p>
-                     <p className="text-[11px] text-slate-600 font-black uppercase tracking-widest mt-2">{o.zone}</p>
+                     <p className="text-[12px] font-black text-gray-700 uppercase tracking-widest">{o.operator}</p>
+                     <p className="text-[11px] text-gray-400 font-black uppercase tracking-widest mt-2">{o.zone}</p>
                   </td>
                   <td className="p-10">
-                    <div className="bg-white/5 px-4 py-2 rounded-2xl border border-white/5 group-hover:bg-[#f00856]/5 group-hover:border-[#f00856]/20 transition-all">
-                       <p className="text-[11px] font-black text-white uppercase tracking-widest">{o.promise}</p>
+                    <div className="bg-gray-50 px-4 py-2 rounded-2xl border border-gray-100 group-hover:bg-primary-50 group-hover:border-primary-600/20 transition-all">
+                       <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">{o.promise}</p>
                     </div>
                   </td>
-                  <td className="p-10 text-right"><ChevronRight className="w-6 h-6 text-slate-800 group-hover:text-[#f00856] transition-all group-hover:translate-x-2" /></td>
+                  <td className="p-10 text-right"><ChevronRight className="w-6 h-6 text-slate-800 group-hover:text-primary-600 transition-all group-hover:translate-x-2" /></td>
                 </tr>
               ))}
             </tbody>
@@ -211,12 +211,12 @@ export default function VOrders() {
 
 function Info({ label, value, isStatus }: { label: string; value: string; isStatus?: boolean }) {
   return (
-    <div className="soft p-8 rounded-3xl border border-white/5 hover:border-white/10 transition-all shadow-lg">
-       <p className="text-[11px] font-black text-slate-600 uppercase tracking-[0.4em] mb-5">{label}</p>
+    <div className="soft p-8 rounded-3xl border border-gray-100 hover:border-gray-200 transition-all shadow-lg">
+       <p className="text-[11px] font-black text-gray-400 uppercase tracking-[0.4em] mb-5">{label}</p>
        {isStatus ? (
-         <span className={`badge px-6 py-3 rounded-full shadow-2xl text-[10px] ${value === 'paid' ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-red-400 bg-red-400/10 border-red-400/20'}`}>{value}</span>
+         <span className={`badge px-6 py-3 rounded-full shadow-sm text-[10px] ${value === 'paid' ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-red-400 bg-red-400/10 border-red-400/20'}`}>{value}</span>
        ) : (
-         <p className="text-[16px] font-black text-white uppercase tracking-widest leading-relaxed">{value}</p>
+         <p className="text-[16px] font-black text-gray-900 uppercase tracking-widest leading-relaxed">{value}</p>
        )}
     </div>
   );
@@ -224,18 +224,18 @@ function Info({ label, value, isStatus }: { label: string; value: string; isStat
 
 function Btn({ label, color, onClick, icon }: { label: string; color: string; onClick: () => void; icon?: React.ReactNode }) {
   const cls: Record<string, string> = { 
-    'f00856': 'bg-[#f00856] hover:bg-[#ff2c68] text-white shadow-[0_0_40px_rgba(240,8,86,0.4)] border border-white/10', 
-    purple: 'bg-purple-600/10 text-purple-400 border border-purple-500/20 hover:bg-purple-600 hover:text-white hover:shadow-[0_0_30px_rgba(147,51,234,0.3)]', 
-    indigo: 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-600 hover:text-white hover:shadow-[0_0_30px_rgba(79,70,229,0.3)]', 
-    sky: 'bg-sky-600/10 text-sky-400 border border-sky-500/20 hover:bg-sky-600 hover:text-white hover:shadow-[0_0_30px_rgba(2,132,199,0.3)]', 
-    green: 'bg-green-600/10 text-green-400 border border-green-500/20 hover:bg-green-600 hover:text-white hover:shadow-[0_0_30_rgba(22,163,74,0.3)]', 
-    emerald: 'bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-600 hover:text-white hover:shadow-[0_0_30px_rgba(5,150,105,0.3)]', 
-    red: 'bg-red-600/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white hover:shadow-[0_0_30px_rgba(239,68,68,0.3)]', 
-    orange: 'bg-orange-600/10 border border-orange-500/20 text-orange-500 hover:bg-orange-500 hover:text-white hover:shadow-[0_0_30px_rgba(234,88,12,0.3)]', 
-    gray: 'bg-white/5 border border-white/10 text-white hover:bg-white hover:text-black hover:shadow-2xl' 
+    'f00856': 'bg-primary-600 hover:bg-[#ff2c68] text-gray-900 shadow-sm border border-gray-200', 
+    purple: 'bg-purple-600/10 text-purple-400 border border-purple-500/20 hover:bg-purple-600 hover:text-gray-900 hover:shadow-sm', 
+    indigo: 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-600 hover:text-gray-900 hover:shadow-sm', 
+    sky: 'bg-sky-600/10 text-sky-400 border border-sky-500/20 hover:bg-sky-600 hover:text-gray-900 hover:shadow-sm', 
+    green: 'bg-green-600/10 text-green-400 border border-green-500/20 hover:bg-green-600 hover:text-gray-900 hover:shadow-sm', 
+    emerald: 'bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-600 hover:text-gray-900 hover:shadow-sm', 
+    red: 'bg-red-600/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-gray-900 hover:shadow-sm', 
+    orange: 'bg-orange-600/10 border border-orange-500/20 text-orange-500 hover:bg-orange-500 hover:text-gray-900 hover:shadow-sm', 
+    gray: 'bg-gray-50 border border-gray-200 text-gray-900 hover:bg-white hover:text-black hover:shadow-sm' 
   };
   return (
-    <button onClick={onClick} className={`text-[12px] font-black uppercase tracking-widest px-10 py-6 rounded-full flex items-center gap-5 transition-all active:scale-[0.96] shadow-xl ${cls[color]}`}>
+    <button onClick={onClick} className={`text-[12px] font-black uppercase tracking-widest px-10 py-6 rounded-full flex items-center gap-5 transition-all active:scale-[0.96] shadow-sm ${cls[color]}`}>
       {icon}{label}
     </button>
   );

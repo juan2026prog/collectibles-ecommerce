@@ -8,12 +8,12 @@ const mockTeam = [
 ];
 
 const roles: Record<string, { label: string; cls: string }> = {
-  owner: { label: 'Owner', cls: 'border-[#f00856]/20 text-[#f00856] bg-[#f00856]/5' },
+  owner: { label: 'Owner', cls: 'border-primary-600/20 text-primary-600 bg-primary-50' },
   manager: { label: 'Manager', cls: 'border-blue-500/20 text-blue-500 bg-blue-500/5' },
   catalogo: { label: 'Catálogo', cls: 'border-emerald-500/20 text-emerald-500 bg-emerald-500/5' },
   logistica: { label: 'Logística', cls: 'border-orange-500/20 text-orange-500 bg-orange-500/5' },
   finanzas: { label: 'Finanzas', cls: 'border-cyan-500/20 text-cyan-500 bg-cyan-500/5' },
-  operador: { label: 'Operador', cls: 'border-white/10 text-slate-500 bg-white/5' },
+  operador: { label: 'Operador', cls: 'border-gray-200 text-gray-500 bg-gray-50' },
 };
 
 const allPermissions = [
@@ -32,65 +32,65 @@ export default function VTeam() {
     <div className="max-w-7xl space-y-8 animation-fade-in pb-20">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
         <div>
-           <div className="text-[11px] text-[#f00856] font-black uppercase tracking-[0.4em] mb-3">Access Control</div>
-           <h2 className="text-5xl font-black text-white">Equipo & Permisos</h2>
-           <p className="text-sm text-slate-500 font-bold mt-3 uppercase tracking-[0.2em]">{mockTeam.length} Miembros con acceso activo</p>
+           <div className="text-[11px] text-primary-600 font-black uppercase tracking-[0.4em] mb-3">Access Control</div>
+           <h2 className="text-5xl font-black text-gray-900">Equipo & Permisos</h2>
+           <p className="text-sm text-gray-500 font-bold mt-3 uppercase tracking-[0.2em]">{mockTeam.length} Miembros con acceso activo</p>
         </div>
-        <button className="bg-white text-black text-[11px] font-black uppercase tracking-widest px-10 py-5 rounded-full hover:bg-[#f00856] hover:text-white transition-all shadow-xl active:scale-[0.98]">
+        <button className="bg-white text-black text-[11px] font-black uppercase tracking-widest px-10 py-5 rounded-full hover:bg-primary-600 hover:text-gray-900 transition-all shadow-sm active:scale-[0.98]">
            + Invite Collaborator
         </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {mockTeam.map(m => (
-          <div key={m.id} className="soft rounded-[2.5rem] p-10 hover:bg-white/[0.04] transition-all group border border-white/5 hover:border-[#f00856]/30 shadow-xl">
+          <div key={m.id} className="soft rounded-[2.5rem] p-10 hover:bg-gray-50 transition-all group border border-gray-100 hover:border-primary-300 shadow-sm">
             <div className="flex items-center justify-between gap-6 mb-10">
               <div className="flex items-center gap-6">
-                <div className="w-20 h-20 bg-white/5 rounded-2xl border border-white/10 flex items-center justify-center text-white font-black text-2xl group-hover:border-[#f00856] group-hover:text-[#f00856] group-hover:scale-110 transition-all shadow-inner">
+                <div className="w-20 h-20 bg-gray-50 rounded-2xl border border-gray-200 flex items-center justify-center text-gray-900 font-black text-2xl group-hover:border-primary-600 group-hover:text-primary-600 group-hover:scale-110 transition-all shadow-inner">
                    {m.name.split(' ').map(n => n[0]).join('')}
                 </div>
                 <div>
-                  <p className="text-xl font-black text-white uppercase tracking-widest group-hover:text-[#f00856] transition-colors">{m.name}</p>
-                  <p className="text-[11px] text-slate-600 font-black uppercase tracking-widest mt-2">{m.email}</p>
+                  <p className="text-xl font-black text-gray-900 uppercase tracking-widest group-hover:text-primary-600 transition-colors">{m.name}</p>
+                  <p className="text-[11px] text-gray-400 font-black uppercase tracking-widest mt-2">{m.email}</p>
                 </div>
               </div>
               <div className="text-right">
                 <span className={`badge ${roles[m.role]?.cls.split(' border')[0]} px-4 py-2`}>{roles[m.role]?.label}</span>
-                <p className="text-[10px] text-slate-700 font-black uppercase tracking-widest mt-4">Active: {m.lastActive}</p>
+                <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mt-4">Active: {m.lastActive}</p>
               </div>
             </div>
-            <div className="flex flex-wrap gap-2 pt-10 border-t border-white/5">
+            <div className="flex flex-wrap gap-2 pt-10 border-t border-gray-100">
               {m.permissions.includes('todo') ? (
-                <span className="text-[10px] bg-[#f00856]/10 text-[#f00856] font-black uppercase tracking-widest px-5 py-2 rounded-full flex items-center gap-3 border border-[#f00856]/20 shadow-[0_0_15px_rgba(240,8,86,0.1)]">
+                <span className="text-[10px] bg-primary-100 text-primary-600 font-black uppercase tracking-widest px-5 py-2 rounded-full flex items-center gap-3 border border-primary-600/20 shadow-sm">
                    <Shield className="w-4 h-4" /> Root Access
                 </span>
               ) : m.permissions.map(p => (
-                <span key={p} className="text-[10px] bg-white/5 border border-white/10 text-slate-500 font-black uppercase tracking-widest px-5 py-2 rounded-full group-hover:text-slate-300 group-hover:border-white/20 transition-all hover:bg-white/10">{p}</span>
+                <span key={p} className="text-[10px] bg-gray-50 border border-gray-200 text-gray-500 font-black uppercase tracking-widest px-5 py-2 rounded-full group-hover:text-gray-700 group-hover:border-white/20 transition-all hover:bg-gray-100">{p}</span>
               ))}
             </div>
           </div>
         ))}
       </div>
 
-      <div className="glass rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl">
-        <div className="p-10 md:p-12 border-b border-white/5 bg-white/[0.03] flex items-center gap-6">
-           <div className="w-12 h-12 rounded-2xl bg-[#f00856]/10 flex items-center justify-center shadow-[0_0_20px_rgba(240,8,86,0.1)]">
-              <Shield className="w-6 h-6 text-[#f00856]" />
+      <div className="bg-white rounded-[2rem] border border-gray-200 overflow-hidden shadow-sm">
+        <div className="p-10 md:p-12 border-b border-gray-100 bg-gray-50 flex items-center gap-6">
+           <div className="w-12 h-12 rounded-2xl bg-primary-100 flex items-center justify-center shadow-sm">
+              <Shield className="w-6 h-6 text-primary-600" />
            </div>
-           <h3 className="text-[11px] font-black text-white uppercase tracking-[0.4em]">Matrix: Rol & Permissions</h3>
+           <h3 className="text-[11px] font-black text-gray-900 uppercase tracking-[0.4em]">Matrix: Rol & Permissions</h3>
         </div>
         <div className="overflow-x-auto no-scrollbar">
           <table className="w-full text-left border-collapse">
-            <thead className="bg-white/[0.01] border-b border-white/5">
-              <tr className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">
+            <thead className="bg-white/[0.01] border-b border-gray-100">
+              <tr className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em]">
                 <th className="p-8">Permission Module</th>
                 {Object.entries(roles).map(([k, v]) => <th key={k} className="p-8 text-center">{v.label}</th>)}
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-gray-100">
               {allPermissions.map(p => (
-                <tr key={p.key} className="hover:bg-white/[0.02] transition-colors group">
-                  <td className="p-8 text-slate-300 text-[11px] font-black uppercase tracking-widest group-hover:text-white transition-colors">{p.label}</td>
+                <tr key={p.key} className="hover:bg-gray-50 transition-colors group">
+                  <td className="p-8 text-gray-700 text-[11px] font-black uppercase tracking-widest group-hover:text-gray-900 transition-colors">{p.label}</td>
                   <td className="p-8 text-center text-emerald-500 font-black text-2xl">✓</td>
                   <td className="p-8 text-center text-emerald-500 font-black text-2xl">✓</td>
                   <td className="p-8 text-center">
