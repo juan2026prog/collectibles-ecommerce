@@ -65,12 +65,16 @@ const AdminSeo = lazy(() => import('./pages/admin/AdminSeo'));
 const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
 const AdminFinances = lazy(() => import('./pages/admin/AdminFinances'));
 const AdminLogistics = lazy(() => import('./pages/admin/AdminLogistics'));
+const AdminLogisticsConnections = lazy(() => import('./pages/admin/AdminLogisticsConnections'));
 const AdminArtists = lazy(() => import('./pages/admin/AdminArtists'));
 const AdminTags = lazy(() => import('./pages/admin/AdminTags'));
 const AdminAutomations = lazy(() => import('./pages/admin/AdminAutomations'));
 const AdminVendors = lazy(() => import('./pages/admin/AdminVendors'));
 const AdminVendorPayouts = lazy(() => import('./pages/admin/AdminVendorPayouts'));
 const AdminVendorKyc = lazy(() => import('./pages/admin/AdminVendorKyc'));
+const AdminBuyBox = lazy(() => import('./pages/admin/AdminBuyBox'));
+const AdminInternationalAmazon = lazy(() => import('./pages/admin/AdminInternationalAmazon'));
+const AdminInternationalProducts = lazy(() => import('./pages/admin/AdminInternationalProducts'));
 
 // GodMode removed from production — SEC-CRIT-01 (hardcoded credentials)
 import { useReferralTracking } from './hooks/useReferralTracking';
@@ -209,12 +213,16 @@ function App() {
                   <Route path="users" element={<AdminUsers />} />
                   <Route path="finances" element={<AdminFinances />} />
                   <Route path="logistics" element={<AdminLogistics />} />
+                  <Route path="logistics-connections" element={<AdminLogisticsConnections />} />
                   <Route path="artists" element={<AdminArtists />} />
                   <Route path="tags" element={<AdminTags />} />
                   <Route path="automations" element={<AdminAutomations />} />
                   <Route path="vendors" element={<MarketplaceGuard><AdminVendors /></MarketplaceGuard>} />
                   <Route path="vendor-payouts" element={<MarketplaceGuard><AdminVendorPayouts /></MarketplaceGuard>} />
                   <Route path="vendor-kyc" element={<MarketplaceGuard><AdminVendorKyc /></MarketplaceGuard>} />
+                  <Route path="buybox" element={<MarketplaceGuard><AdminBuyBox /></MarketplaceGuard>} />
+                  <Route path="internacional/amazon" element={<AdminInternationalAmazon />} />
+                  <Route path="internacional/productos" element={<AdminInternationalProducts />} />
                 </Route>
                   </Routes>
                 </Suspense>

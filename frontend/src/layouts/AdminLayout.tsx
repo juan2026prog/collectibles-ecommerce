@@ -3,7 +3,7 @@ import {
   LayoutDashboard, ShoppingBag, FolderTree, Users, Settings, LogOut, Package, 
   Tag, Image, CreditCard, LayoutTemplate, Star, Percent, Megaphone,
   Mail, ShoppingCart, BarChart3, Search, ShieldCheck, Store, Share2, ExternalLink, Library, FileText,
-  Activity, Bot, Clock
+  Activity, Bot, Clock, Trophy, Globe, Download
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LocaleSwitcher from '../components/LocaleSwitcher';
@@ -39,6 +39,8 @@ export default function AdminLayout() {
       { name: 'Vendors', path: '/admin/vendors', icon: Store },
       { name: 'Vendor Payouts', path: '/admin/vendor-payouts', icon: CreditCard },
       { name: 'Vendor KYC', path: '/admin/vendor-kyc', icon: ShieldCheck },
+      { name: 'Buy Box Analytics', path: '/admin/buybox', icon: Trophy },
+      { name: 'Conexiones Logísticas', path: '/admin/logistics-connections', icon: Package },
     ] : []),
     { name: 'Afiliados', path: '/admin/affiliates', icon: Megaphone },
     { name: 'Pedidos', path: '/admin/orders', icon: ShoppingBag },
@@ -94,6 +96,17 @@ export default function AdminLayout() {
                   </Link>
                 );
               })}
+
+              {/* Internacional */}
+              <div className="pt-4 pb-2">
+                <p className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">Internacional</p>
+                <Link to="/admin/internacional/amazon" className="flex items-center px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors">
+                  <Download className="mr-3 h-4 w-4" /> Importador Amazon
+                </Link>
+                <Link to="/admin/internacional/productos" className="flex items-center px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors">
+                  <Globe className="mr-3 h-4 w-4" /> Productos Internacionales
+                </Link>
+              </div>
 
               {/* Otros Portales */}
               <div className="pt-4 pb-2">
