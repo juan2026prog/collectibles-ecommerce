@@ -92,6 +92,20 @@ serve(async (req) => {
       }
       return cat?.id || null;
     };
+    const inferBrandFromTitle = (title: string) => {
+      const t = title.toLowerCase();
+      if (t.includes('pokemon') || t.includes('pokémon')) return 'Pokémon';
+      if (t.includes('neca')) return 'NECA';
+      if (t.includes('funko')) return 'Funko';
+      if (t.includes('hasbro')) return 'Hasbro';
+      if (t.includes('marvel')) return 'Marvel';
+      if (t.includes('star wars')) return 'Star Wars';
+      if (t.includes('dc multiverse') || t.includes('dc comics')) return 'DC Comics';
+      if (t.includes('lego')) return 'LEGO';
+      if (t.includes('bandai')) return 'Bandai';
+      if (t.includes('mcfarlane')) return 'McFarlane Toys';
+      return null;
+    };
 
     const products = rawResponse.results || [];
     const candidates = [];
@@ -104,15 +118,22 @@ serve(async (req) => {
       if (min_price && price !== null && price < min_price) continue;
       if (max_price && price !== null && price > max_price) continue;
       if (min_rating && p.stars && p.stars < min_rating) continue;
-      if (brand && p.brand && !p.brand.toLowerCase().includes(brand.toLowerCase())) continue;
       
+      // Normalize Brand
+      let normalizedBrand = p.brand || p.manufacturer || p.raw_data?.brand || p.raw_data?.manufacturer || inferBrandFromTitle(p.title) || null;
+      if (brand && normalizedBrand && !normalizedBrand.toLowerCase().includes(brand.toLowerCase())) continue;
+
+      // Normalize Image
+      const normalizedImageUrl = p.image_url || p.main_image_url_external || p.image || p.raw_data?.image || p.raw_data?.main_image || p.raw_data?.images?.[0] || null;
+
       let suggested_category_id = null;
       let suggested_subcategory_id = null;
       let mapping_confidence = 0;
+      let category_inferred = false;
 
       // 1. Check brand mapping
-      if (p.brand) {
-        const bMap = brandMappings?.find(b => b.brand_name.toLowerCase() === p.brand.toLowerCase());
+      if (normalizedBrand) {
+        const bMap = brandMappings?.find(b => b.brand_name.toLowerCase() === normalizedBrand!.toLowerCase());
         if (bMap) {
           suggested_category_id = bMap.collectibles_category_id;
           suggested_subcategory_id = bMap.collectibles_subcategory_id;
@@ -136,54 +157,103 @@ serve(async (req) => {
       // 3. Fallback Heuristics
       if (!suggested_category_id) {
         const titleL = p.title.toLowerCase();
-        const brandL = (p.brand || '').toLowerCase();
+        const brandL = (normalizedBrand || '').toLowerCase();
         
         const figParent = getCategoryId('Figuras') || getCategoryId('Figuras / Coleccionables');
         const indParent = getCategoryId('Indumentaria') || getCategoryId('Ropa');
+        const legoParent = getCategoryId('LEGO') || getCategoryId('Bloques');
+        const booksParent = getCategoryId('Libros') || getCategoryId('Literatura');
 
         if (brandL.includes('pokemon') || titleL.includes('pokemon')) {
           suggested_category_id = figParent;
           suggested_subcategory_id = getCategoryId('Pokémon');
           mapping_confidence = 70;
+          category_inferred = true;
         } else if (brandL === 'neca') {
           suggested_category_id = figParent;
           suggested_subcategory_id = getCategoryId('NECA');
           mapping_confidence = 70;
+          category_inferred = true;
         } else if (brandL === 'funko' || titleL.includes('funko pop')) {
           suggested_category_id = figParent;
           suggested_subcategory_id = getCategoryId('Funko POP') || getCategoryId('Funko');
           mapping_confidence = 70;
+          category_inferred = true;
+        } else if (brandL === 'hasbro') {
+          suggested_category_id = figParent;
+          suggested_subcategory_id = getCategoryId('Hasbro');
+          mapping_confidence = 70;
+          category_inferred = true;
         } else if (titleL.includes('marvel legends')) {
           suggested_category_id = figParent;
           suggested_subcategory_id = getCategoryId('Marvel Legends') || getCategoryId('Marvel');
           mapping_confidence = 70;
+          category_inferred = true;
         } else if (titleL.includes('black series') && titleL.includes('star wars')) {
           suggested_category_id = figParent;
           suggested_subcategory_id = getCategoryId('Star Wars Black Series') || getCategoryId('Star Wars');
           mapping_confidence = 70;
-        } else if (titleL.includes('t-shirt') || titleL.includes('hoodie') || titleL.includes('jacket') || titleL.includes('cap')) {
+          category_inferred = true;
+        } else if (titleL.includes('dc multiverse')) {
+          suggested_category_id = figParent;
+          suggested_subcategory_id = getCategoryId('DC Multiverse') || getCategoryId('DC Comics');
+          mapping_confidence = 70;
+          category_inferred = true;
+        } else if (brandL.includes('lego') || titleL.includes('lego ')) {
+          suggested_category_id = legoParent;
+          mapping_confidence = 70;
+          category_inferred = true;
+        } else if (titleL.includes('t-shirt') || titleL.includes('shirt')) {
           suggested_category_id = indParent;
-          // No subcategory inferred for now
+          suggested_subcategory_id = getCategoryId('Remeras');
           mapping_confidence = 60;
+          category_inferred = true;
+        } else if (titleL.includes('hoodie')) {
+          suggested_category_id = indParent;
+          suggested_subcategory_id = getCategoryId('Buzos');
+          mapping_confidence = 60;
+          category_inferred = true;
+        } else if (titleL.includes('jacket')) {
+          suggested_category_id = indParent;
+          suggested_subcategory_id = getCategoryId('Camperas');
+          mapping_confidence = 60;
+          category_inferred = true;
+        } else if (titleL.includes('artbook') || titleL.includes(' book ')) {
+          suggested_category_id = booksParent;
+          suggested_subcategory_id = getCategoryId('Artbooks') || getCategoryId('Arte');
+          mapping_confidence = 60;
+          category_inferred = true;
         }
       }
+
+      // 4. Populate _normalized
+      const enrichedRawData = {
+        ...p,
+        _normalized: {
+          brand: normalizedBrand,
+          manufacturer: p.manufacturer || p.raw_data?.manufacturer || null,
+          imageUrl: normalizedImageUrl,
+          category_detected: p.categories || null,
+          category_inferred
+        }
+      };
 
       candidates.push({
         search_id: searchRecord.id,
         external_product_id: p.product_id,
         title: p.title,
-        brand: p.brand || null,
+        brand: normalizedBrand,
         category: null, 
-        image_url: p.image || null,
-        main_image_url_external: p.image || null,
-        image_urls_external: p.image ? [p.image] : [],
+        image_url: normalizedImageUrl,
+        main_image_url_external: normalizedImageUrl,
+        image_urls_external: normalizedImageUrl ? [normalizedImageUrl] : [],
         product_url_external: `https://www.amazon.com/dp/${p.product_id}`,
         price_usd: price,
         currency: 'USD',
         rating: p.stars || null,
         review_count: p.num_reviews || 0,
         availability: 'available',
-        raw_data: p,
+        raw_data: enrichedRawData,
         status: 'review',
         suggested_category_id,
         suggested_subcategory_id,

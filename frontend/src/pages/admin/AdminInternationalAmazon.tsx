@@ -41,6 +41,7 @@ export default function AdminInternationalAmazon() {
   });
 
   const [candidates, setCandidates] = useState<any[]>([]);
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showImportModal, setShowImportModal] = useState(false);
   const [dbCategories, setDbCategories] = useState<any[]>([]);
@@ -113,32 +114,8 @@ export default function AdminInternationalAmazon() {
       if (error) throw error;
       if (data.error) throw new Error(data.error);
 
-      let results = data.candidates || [];
-      if (params.min_reviews) {
-        results = results.filter((c: any) => c.review_count >= Number(params.min_reviews));
-      }
-      if (params.availability === 'in_stock') {
-        results = results.filter((c: any) => c.raw_data?.availability?.toLowerCase().includes('in stock') || !c.raw_data?.availability);
-      } else if (params.availability === 'preorder') {
-        results = results.filter((c: any) => c.raw_data?.availability?.toLowerCase().includes('pre-order'));
-      }
-
-      // Brand filtering
-      if (params.onlyRecognizedBrands) {
-        results = results.filter((c: any) => {
-          const b = (c.brand || '').toLowerCase();
-          if (!b || b === 'sin marca' || b === 'generic' || b === 'n/a') return false;
-          return true;
-        });
-      }
-      if (!params.includeGenerics) {
-        results = results.filter((c: any) => {
-          const b = (c.brand || '').toLowerCase();
-          return b && b !== 'generic' && b !== 'sin marca';
-        });
-      }
-
-      addToast({ title: 'Búsqueda completada', message: `Se encontraron ${results.length} resultados.`, type: 'success' });
+      // El filtrado principal ahora ocurre en la renderización (filteredCandidates)
+      addToast({ title: 'Búsqueda completada', message: `Se obtuvieron los resultados de Zinc.`, type: 'success' });
       fetchCandidates();
     } catch (err: any) {
       console.error(err);
@@ -255,6 +232,32 @@ export default function AdminInternationalAmazon() {
   const parentCategories = dbCategories.filter(c => !c.parent_id);
   const importSubCategories = dbCategories.filter(c => c.parent_id === importSettings.target_category_id);
 
+  const filteredCandidates = candidates.filter(c => {
+    // Basic local filters
+    if (searchParams.min_reviews && c.review_count < Number(searchParams.min_reviews)) return false;
+    if (searchParams.availability === 'in_stock' && !(c.raw_data?.availability?.toLowerCase().includes('in stock') || !c.raw_data?.availability)) return false;
+    if (searchParams.availability === 'preorder' && !c.raw_data?.availability?.toLowerCase().includes('pre-order')) return false;
+
+    // Brand logic
+    const b = (c.brand || '').toLowerCase();
+    
+    if (searchParams.onlyRecognizedBrands) {
+      if (!b || b === 'sin marca' || b === 'generic' || b === 'n/a') return false;
+    } else if (!searchParams.includeGenerics) {
+      if (b === 'generic' || b === 'sin marca' || !b) return false;
+    }
+
+    if (selectedBrands.length > 0) {
+      const displayBrand = c.brand || 'Sin Marca';
+      const match = selectedBrands.includes(displayBrand);
+      if (!match) return false;
+    }
+    
+    return true;
+  });
+
+  const extractedBrands = Array.from(new Set(candidates.map(c => c.brand || 'Sin Marca'))).filter(Boolean).sort();
+
   return (
     <div className="space-y-6 pb-20">
       <div className="flex items-center justify-between">
@@ -344,19 +347,52 @@ export default function AdminInternationalAmazon() {
             </select>
           </div>
 
-          <div className="md:col-span-12 flex flex-wrap items-center gap-6 p-3 bg-gray-50 rounded-lg border border-gray-200 mt-2">
-            <div className="flex items-center text-sm font-medium text-gray-700">
+          <div className="md:col-span-12 bg-gray-50 rounded-lg border border-gray-200 mt-2 p-4">
+            <div className="flex items-center text-sm font-bold text-gray-800 mb-3 border-b pb-2">
               <Filter className="w-4 h-4 mr-2" />
-              Filtros Locales:
+              Filtros Locales (Aplicados sobre resultados)
             </div>
-            <label className="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
-              <input type="checkbox" className="rounded text-primary-600 focus:ring-primary-500" checked={searchParams.onlyRecognizedBrands} onChange={e => setSearchParams({...searchParams, onlyRecognizedBrands: e.target.checked})} />
-              <span>Solo Marcas Reconocidas</span>
-            </label>
-            <label className="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
-              <input type="checkbox" className="rounded text-primary-600 focus:ring-primary-500" checked={searchParams.includeGenerics} onChange={e => setSearchParams({...searchParams, includeGenerics: e.target.checked})} />
-              <span>Incluir Genéricos / Sin Marca</span>
-            </label>
+            
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-wrap items-center gap-6">
+                <label className="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+                  <input type="checkbox" className="rounded text-primary-600 focus:ring-primary-500" checked={searchParams.onlyRecognizedBrands} onChange={e => setSearchParams({...searchParams, onlyRecognizedBrands: e.target.checked})} />
+                  <span>Solo Marcas Reconocidas</span>
+                </label>
+                <label className="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+                  <input type="checkbox" className="rounded text-primary-600 focus:ring-primary-500" checked={searchParams.includeGenerics} onChange={e => setSearchParams({...searchParams, includeGenerics: e.target.checked})} />
+                  <span>Incluir Genéricos / Sin Marca</span>
+                </label>
+                {searchParams.onlyRecognizedBrands && searchParams.includeGenerics && (
+                  <span className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded border border-orange-200">
+                    <AlertCircle className="w-3 h-3 inline mr-1" />
+                    Los genéricos están ocultos porque "Solo marcas reconocidas" tiene prioridad.
+                  </span>
+                )}
+              </div>
+
+              {extractedBrands.length > 0 && (
+                <div>
+                  <div className="text-xs font-semibold text-gray-500 mb-2 uppercase">Marcas encontradas:</div>
+                  <div className="flex flex-wrap gap-2">
+                    {extractedBrands.map(b => (
+                      <label key={b} className="flex items-center space-x-1.5 text-sm bg-white border border-gray-200 px-2.5 py-1 rounded-md hover:bg-gray-50 cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          className="rounded text-primary-600" 
+                          checked={selectedBrands.includes(b)}
+                          onChange={e => {
+                            if (e.target.checked) setSelectedBrands([...selectedBrands, b]);
+                            else setSelectedBrands(selectedBrands.filter(sb => sb !== b));
+                          }}
+                        />
+                        <span>{b}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="md:col-span-12 flex justify-end pt-2 border-t mt-2">
@@ -372,7 +408,7 @@ export default function AdminInternationalAmazon() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
           <h3 className="font-bold text-gray-800 flex items-center gap-2">
-            Resultados Enriquecidos ({candidates.length})
+            Resultados Enriquecidos ({filteredCandidates.length})
             <button onClick={fetchCandidates} className="text-gray-500 hover:text-primary-600 ml-2" title="Refrescar">
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
@@ -380,7 +416,7 @@ export default function AdminInternationalAmazon() {
           <div className="space-x-2">
             <button 
               onClick={() => {
-                const toSelect = candidates.filter(c => c.status === 'review' && c.price_usd != null).slice(0, 20).map(c => c.id);
+                const toSelect = filteredCandidates.filter(c => c.status === 'review' && c.price_usd != null).slice(0, 20).map(c => c.id);
                 setSelectedIds(toSelect);
               }}
               className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 inline-flex items-center"
@@ -410,9 +446,9 @@ export default function AdminInternationalAmazon() {
               <tr>
                 <th className="px-4 py-3 text-left w-12">
                   <input type="checkbox" onChange={e => {
-                    if (e.target.checked) setSelectedIds(candidates.filter(c => c.status === 'review' && c.price_usd != null).map(c => c.id));
+                    if (e.target.checked) setSelectedIds(filteredCandidates.filter(c => c.status === 'review' && c.price_usd != null).map(c => c.id));
                     else setSelectedIds([]);
-                  }} checked={selectedIds.length > 0 && selectedIds.length === candidates.filter(c => c.status === 'review' && c.price_usd != null).length} className="rounded text-primary-600 focus:ring-primary-500" />
+                  }} checked={selectedIds.length > 0 && selectedIds.length === filteredCandidates.filter(c => c.status === 'review' && c.price_usd != null).length} className="rounded text-primary-600 focus:ring-primary-500" />
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Imagen</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Producto / Marca</th>
@@ -424,7 +460,7 @@ export default function AdminInternationalAmazon() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {candidates.map((c) => (
+              {filteredCandidates.map((c) => (
                 <tr key={c.id} className={`${c.status !== 'review' ? 'bg-gray-50 opacity-75' : 'hover:bg-blue-50/30'} transition-colors`}>
                   <td className="px-4 py-4">
                     <input 
@@ -441,7 +477,14 @@ export default function AdminInternationalAmazon() {
                   <td className="px-4 py-4">
                     <div className="w-16 h-16 bg-white border rounded overflow-hidden flex items-center justify-center p-1 relative">
                       {(c.image_url || c.main_image_url_external || c.raw_data?.image) ? (
-                         <img src={getProxyImageUrl(c.image_url || c.main_image_url_external || c.raw_data?.image)} alt="" className="max-w-full max-h-full object-contain" loading="lazy" referrerPolicy="no-referrer" />
+                         <img 
+                           src={getProxyImageUrl(c.image_url || c.main_image_url_external || c.raw_data?.image)} 
+                           alt="" 
+                           className="max-w-full max-h-full object-contain" 
+                           loading="lazy" 
+                           referrerPolicy="no-referrer" 
+                           onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400?text=Error+Image'; }}
+                         />
                       ) : (
                          <span className="text-[10px] text-gray-400 text-center leading-tight">Sin<br/>imagen</span>
                       )}
