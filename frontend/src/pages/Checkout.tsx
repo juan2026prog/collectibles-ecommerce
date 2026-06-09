@@ -113,6 +113,12 @@ export default function Checkout() {
   const [couponSuccess, setCouponSuccess] = useState<string | null>(null);
   const [couponLoading, setCouponLoading] = useState(false);
 
+  const [internationalCourier, setInternationalCourier] = useState<'urubox' | 'other'>('urubox');
+  const [courierSuite, setCourierSuite] = useState('');
+  const [courierAddress, setCourierAddress] = useState('');
+
+  const uruboxTotalEstimate = items.reduce((sum, item) => sum + ((item.urubox_estimate || 0) * item.quantity), 0);
+
   const { promotions } = usePromotions();
   
   let autoDiscountAmount = 0;
@@ -1074,6 +1080,26 @@ export default function Checkout() {
     setCheckoutError('');
 
     try {
+      // 1. ZINC LIVE CHECK
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session && items.length > 0) {
+         const { data: zincCheck, error: zincErr } = await supabase.functions.invoke('zinc-live-check-before-payment', {
+            body: { cart_items: items }
+         });
+
+         if (zincErr) {
+            console.error('zinc-live-check-before-payment error:', zincErr);
+         } else if (zincCheck && !zincCheck.all_ok) {
+            const blockedResult = zincCheck.results?.find((r: any) => !r.ok);
+            if (blockedResult && blockedResult.message) {
+               setCheckoutError(blockedResult.message);
+               setIsSubmitting(false);
+               submitLockRef.current = false;
+               return;
+            }
+         }
+      }
+
       const order = await createCheckoutOrder({
         items: items.map((item) => ({
           product_id: item.product_id,
@@ -1099,6 +1125,9 @@ export default function Checkout() {
           country: form.country,
           barrio: selectedShippingMethod === 'pickup' ? undefined : form.barrio,
           reference: selectedShippingMethod === 'pickup' ? undefined : form.reference,
+          international_courier: items.some(i => i.is_international) ? internationalCourier : undefined,
+          international_suite: items.some(i => i.is_international) && internationalCourier === 'urubox' ? courierSuite : undefined,
+          international_miami_address: items.some(i => i.is_international) && internationalCourier === 'other' ? courierAddress : undefined,
           ci: (selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') ? form.ci : undefined,
           ...(selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency' ? {
             dac_delivery_mode: dacDeliveryMode,
@@ -1422,6 +1451,73 @@ export default function Checkout() {
                   <h2 className="font-bold text-lg mb-1">Datos de envío</h2>
                   <p className="text-xs text-slate-400 mb-6">Elegí cómo querés recibir tu pedido.</p>
 
+                  {items.some(i => i.is_international) && (
+                    <div className="mb-8 bg-[#f00856]/5 border border-[#f00856]/20 p-4 rounded-xl">
+                      <h3 className="font-bold text-white mb-2 flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-[#f00856]" /> Importación Internacional
+                      </h3>
+                      <p className="text-xs text-slate-400 mb-4">
+                        Tus productos se enviarán a un courier en Miami, USA.
+                      </p>
+                      
+                      <div className="space-y-4">
+                        <label className={`flex items-start gap-4 p-4 border-2 cursor-pointer transition-all rounded-lg ${internationalCourier === 'urubox' ? 'border-[#f00856] bg-[#f00856]/10' : 'border-white/10 hover:border-white/20 bg-white/5'}`}>
+                          <input type="radio" checked={internationalCourier === 'urubox'} onChange={() => setInternationalCourier('urubox')} className="sr-only" />
+                          <div className={`w-4 h-4 rounded-full mt-1 border-2 flex items-center justify-center ${internationalCourier === 'urubox' ? 'border-[#f00856]' : 'border-slate-500'}`}>
+                            {internationalCourier === 'urubox' && <div className="w-2 h-2 bg-[#f00856] rounded-full" />}
+                          </div>
+                          <div className="flex-1">
+                            <div className="font-bold text-white flex items-center gap-2">
+                              Usar Urubox <span className="bg-green-500/20 text-green-400 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-black">Recomendado</span>
+                            </div>
+                            <p className="text-xs text-slate-400 mt-1">Conectamos automáticamente con Urubox para facilitar tu importación.</p>
+                            
+                            {internationalCourier === 'urubox' && (
+                              <div className="mt-4">
+                                <label className="form-label text-white">Tu Número de Casilla / Suite Urubox</label>
+                                <input 
+                                  type="text" 
+                                  required
+                                  placeholder="Ej: UY12345"
+                                  className="form-input bg-black/20"
+                                  value={courierSuite}
+                                  onChange={e => setCourierSuite(e.target.value)}
+                                />
+                                <p className="text-[10px] text-slate-500 mt-1">Si no tenés, creá una cuenta gratis en Urubox.com</p>
+                              </div>
+                            )}
+                          </div>
+                        </label>
+
+                        <label className={`flex items-start gap-4 p-4 border-2 cursor-pointer transition-all rounded-lg ${internationalCourier === 'other' ? 'border-[#f00856] bg-[#f00856]/10' : 'border-white/10 hover:border-white/20 bg-white/5'}`}>
+                          <input type="radio" checked={internationalCourier === 'other'} onChange={() => setInternationalCourier('other')} className="sr-only" />
+                          <div className={`w-4 h-4 rounded-full mt-1 border-2 flex items-center justify-center ${internationalCourier === 'other' ? 'border-[#f00856]' : 'border-slate-500'}`}>
+                            {internationalCourier === 'other' && <div className="w-2 h-2 bg-[#f00856] rounded-full" />}
+                          </div>
+                          <div className="flex-1">
+                            <div className="font-bold text-white">Otro Courier</div>
+                            <p className="text-xs text-slate-400 mt-1">Si usás otro courier, ingresá la dirección en Miami.</p>
+                            
+                            {internationalCourier === 'other' && (
+                              <div className="mt-4">
+                                <label className="form-label text-white">Dirección de tu Courier en Miami</label>
+                                <textarea 
+                                  required
+                                  rows={3}
+                                  placeholder="Ingresá la dirección completa, incluyendo tu número de suite o ID de cliente..."
+                                  className="form-input bg-black/20"
+                                  value={courierAddress}
+                                  onChange={e => setCourierAddress(e.target.value)}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
+                  <h3 className="font-bold text-white mb-4">Envío dentro de Uruguay</h3>
                   {/* Shipping method selection */}
                   <div className="grid sm:grid-cols-2 gap-4">
                     {form.department === 'Montevideo' ? (
@@ -2262,6 +2358,22 @@ export default function Checkout() {
                     )}
                   </div>
                 </div>
+                {items.some(i => i.is_international) && (
+                  <div className="mt-4 bg-[#f00856]/10 border border-[#f00856]/20 p-3 rounded-lg flex flex-col gap-2">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-[#f00856] shrink-0" />
+                      <p className="text-xs text-slate-300">
+                        <b className="text-[#f00856]">Importación Internacional:</b> El costo de traslado desde tu courier en USA hasta Uruguay no está incluido en el total.
+                      </p>
+                    </div>
+                    {internationalCourier === 'urubox' && uruboxTotalEstimate > 0 && (
+                      <div className="mt-2 pt-2 border-t border-[#f00856]/20 flex justify-between items-center">
+                        <span className="text-xs text-slate-300 font-medium">Estimación flete Urubox:</span>
+                        <span className="text-sm font-bold text-white">USD {uruboxTotalEstimate.toFixed(2)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Sección de Cupón de Descuento */}

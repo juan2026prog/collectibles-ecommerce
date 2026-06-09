@@ -75,6 +75,7 @@ const AdminVendorKyc = lazy(() => import('./pages/admin/AdminVendorKyc'));
 const AdminBuyBox = lazy(() => import('./pages/admin/AdminBuyBox'));
 const AdminInternationalAmazon = lazy(() => import('./pages/admin/AdminInternationalAmazon'));
 const AdminInternationalProducts = lazy(() => import('./pages/admin/AdminInternationalProducts'));
+const AdminInternationalSync = lazy(() => import('./pages/admin/AdminInternationalSync'));
 
 // GodMode removed from production — SEC-CRIT-01 (hardcoded credentials)
 import { useReferralTracking } from './hooks/useReferralTracking';
@@ -112,6 +113,7 @@ function App() {
                     <Route path="/store/:slug" element={<MarketplaceGuard><VendorStorefront /></MarketplaceGuard>} />
                     <Route path="/page/:slug" element={<DynamicPage />} />
                     <Route path="/collection/:slug" element={<Shop />} />
+                    <Route path="/internacional" element={<ProtectedRoute requireAdmin><Shop isInternational={true} /></ProtectedRoute>} />
                     <Route path="/about" element={<Navigate to="/page/nosotros" replace />} />
                     <Route path="/contact" element={<Contact />} />
                     <Route path="/terms" element={<Navigate to="/page/terminos" replace />} />
@@ -223,6 +225,7 @@ function App() {
                   <Route path="buybox" element={<MarketplaceGuard><AdminBuyBox /></MarketplaceGuard>} />
                   <Route path="internacional/amazon" element={<AdminInternationalAmazon />} />
                   <Route path="internacional/productos" element={<AdminInternationalProducts />} />
+                  <Route path="internacional/sync" element={<AdminInternationalSync />} />
                 </Route>
                   </Routes>
                 </Suspense>

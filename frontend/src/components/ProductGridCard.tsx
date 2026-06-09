@@ -50,6 +50,8 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
           <img
             src={img}
             alt={product.title}
+            referrerPolicy="no-referrer"
+            loading="lazy"
             className="max-w-full max-h-full object-contain transition-transform duration-300 group-hover:scale-105"
           />
         </Link>
@@ -114,6 +116,10 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
           </div>
           <span className="text-slate-500">({reviewsCount})</span>
         </div>
+        
+        {product.source_provider === 'zinc' && (
+          <div className="text-[10px] text-blue-400 font-bold uppercase mb-1">Vendido en Amazon</div>
+        )}
         
         <Link to={`/p/${product.slug}`}>
           <h3 className="text-xs md:text-sm font-bold leading-tight line-clamp-2 min-h-[34px] text-white hover:text-[#f00856] transition-colors">

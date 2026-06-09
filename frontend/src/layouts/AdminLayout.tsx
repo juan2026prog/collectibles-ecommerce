@@ -3,7 +3,7 @@ import {
   LayoutDashboard, ShoppingBag, FolderTree, Users, Settings, LogOut, Package, 
   Tag, Image, CreditCard, LayoutTemplate, Star, Percent, Megaphone,
   Mail, ShoppingCart, BarChart3, Search, ShieldCheck, Store, Share2, ExternalLink, Library, FileText,
-  Activity, Bot, Clock, Trophy, Globe, Download
+  Activity, Bot, Clock, Trophy, Globe, Download, RefreshCw
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LocaleSwitcher from '../components/LocaleSwitcher';
@@ -105,6 +105,9 @@ export default function AdminLayout() {
                 </Link>
                 <Link to="/admin/internacional/productos" className="flex items-center px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors">
                   <Globe className="mr-3 h-4 w-4" /> Productos Internacionales
+                </Link>
+                <Link to="/admin/internacional/sync" className="flex items-center px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors">
+                  <RefreshCw className="mr-3 h-4 w-4" /> Sincronización
                 </Link>
               </div>
 

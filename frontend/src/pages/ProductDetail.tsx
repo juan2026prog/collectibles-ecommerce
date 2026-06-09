@@ -216,6 +216,8 @@ export default function ProductDetail() {
       vendor_slug: product.vendor?.slug,
       vendor_logo: product.vendor?.logo_url,
       tag_ids: product.product_tags?.map((pt: any) => pt.tag_id) || [],
+      is_international: product.source_provider === 'zinc',
+      urubox_estimate: product.international_products?.urubox_estimated_cost_usd || 0
     });
 
     if (!selectedOption) {
@@ -382,6 +384,7 @@ export default function ProductDetail() {
             <img
               src={displayImage}
               alt={product.title}
+              referrerPolicy="no-referrer"
               className={`max-w-[75%] max-h-[75%] object-contain mix-blend-multiply transition-all duration-700 ${isHovering ? 'scale-105' : 'scale-100'}`}
             />
             
@@ -413,7 +416,7 @@ export default function ProductDetail() {
                   onMouseEnter={() => setSelectedImage(i)}
                   className={`relative rounded-xl aspect-square overflow-hidden transition-all duration-300 bg-white ${i === selectedImage ? 'ring-2 ring-[#f00856] ring-offset-2 ring-offset-[#05070f] scale-[0.98] opacity-100' : 'border border-slate-200 opacity-60 hover:opacity-100 hover:border-slate-300'}`}
                 >
-                  <img src={src} alt="" className="w-full h-full object-contain p-2 mix-blend-multiply" />
+                  <img src={src} alt="" referrerPolicy="no-referrer" loading="lazy" className="w-full h-full object-contain p-2 mix-blend-multiply" />
                 </button>
               );
             })}
@@ -438,6 +441,15 @@ export default function ProductDetail() {
                   {promo.badge_text}
                 </span>
               ))}
+            </div>
+          )}
+
+          {/* AMAZON BADGES */}
+          {product.source_provider === 'zinc' && product.international_products?.amazon_discount_percent > 0 && (
+            <div className="flex flex-wrap gap-2 mt-3 mb-2">
+              <span className="px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-md text-white shadow-lg shadow-black/20 bg-[#f00856]">
+                {product.international_products?.amazon_discount_percent > 40 ? '🔥 Liquidación' : product.international_products?.amazon_discount_percent > 25 ? '🔥 Gran Oferta' : '🔥 Oferta Amazon'}
+              </span>
             </div>
           )}
 
@@ -487,18 +499,64 @@ export default function ProductDetail() {
           <div className="glass rounded-[2rem] p-6 sm:p-8 mt-8 border border-white/10 shadow-lg relative overflow-hidden">
             <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
               <div>
-                <div className="text-[10px] uppercase text-slate-500 font-black tracking-[0.2em] mb-1">Precio actual</div>
-                <div className="text-4xl sm:text-5xl font-black text-white flex items-end gap-3 flex-wrap">
-                  <span>{formatCurrencyPrice(displayPrice)}</span>
-                  {hasDiscount && (
-                    <span className="text-xl sm:text-2xl text-slate-500 line-through font-bold mb-1">
-                      {formatCurrencyPrice(displayOldPrice)}
-                    </span>
-                  )}
-                </div>
-                <div className="text-sm text-slate-400 mt-2 flex items-center gap-2 font-medium">
-                   <Truck className="w-4 h-4 text-[#f00856]" /> {settings['product_shipping_calc_label'] || 'Envío calculado al finalizar'}
-                </div>
+                {product.source_provider === 'zinc' ? (
+                  <>
+                    <div className="flex flex-col gap-1 mb-4 border-b border-white/10 pb-4">
+                      {product.international_products?.amazon_list_price_usd && (
+                        <div className="text-sm text-slate-400 font-bold flex items-center gap-2">
+                          <span className="line-through">USD {product.international_products?.amazon_list_price_usd.toFixed(2)}</span>
+                          <span className="text-red-500 bg-red-500/10 px-2 py-0.5 rounded text-[10px] uppercase">{product.international_products?.amazon_discount_percent}% OFF</span>
+                        </div>
+                      )}
+                      <div className="text-2xl font-bold text-white">USD {product.international_products?.amazon_current_price_usd?.toFixed(2) || product.base_price?.toFixed(2)}</div>
+                    </div>
+                    <div className="text-[10px] uppercase text-slate-500 font-black tracking-[0.2em] mb-1 mt-4">Precio final Collectibles</div>
+                    <div className="text-4xl sm:text-5xl font-black text-white flex items-end gap-3 flex-wrap">
+                      <span>{formatCurrencyPrice(displayPrice)}</span>
+                    </div>
+
+                    {product.international_products?.urubox_estimated_cost_usd > 0 && (
+                      <div className="mt-4 border-t border-white/5 pt-4">
+                        <div className="flex justify-between items-center text-sm mb-1">
+                          <span className="text-slate-400">Precio Collectibles</span>
+                          <span className="font-medium text-white">USD {product.international_products.final_price_usd}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm mb-2">
+                          <span className="text-slate-400">Estimación Urubox (Courier)</span>
+                          <span className="font-medium text-white">USD {product.international_products.urubox_estimated_cost_usd}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-base font-bold bg-[#f00856]/10 p-2 rounded-lg text-[#f00856] border border-[#f00856]/20">
+                          <span>Costo Total Estimado</span>
+                          <span>USD {product.international_products.total_estimated_cost_usd}</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-2 text-center">
+                          Basado en peso estimado. El costo final puede variar según peso real y courier seleccionado.
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-[#f00856] bg-[#f00856]/10 px-3 py-1 rounded-full">
+                       🌎 Importación Internacional
+                    </div>
+                    <div className="text-xs text-slate-400 mt-2">Compra protegida por Collectibles. Envío a tu courier en USA.</div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-[10px] uppercase text-slate-500 font-black tracking-[0.2em] mb-1">Precio actual</div>
+                    <div className="text-4xl sm:text-5xl font-black text-white flex items-end gap-3 flex-wrap">
+                      <span>{formatCurrencyPrice(displayPrice)}</span>
+                      {hasDiscount && (
+                        <span className="text-xl sm:text-2xl text-slate-500 line-through font-bold mb-1">
+                          {formatCurrencyPrice(displayOldPrice)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm text-slate-400 mt-2 flex items-center gap-2 font-medium">
+                       <Truck className="w-4 h-4 text-[#f00856]" /> {settings['product_shipping_calc_label'] || 'Envío calculado al finalizar'}
+                    </div>
+                  </>
+                )}
+                
                 <div className={`text-sm font-bold mt-2 flex items-center gap-2 ${stockInfo.className}`}>
                   <span className="w-2 h-2 rounded-full bg-current shadow-[0_0_10px_currentColor]" />
                   {stockInfo.text}
@@ -781,6 +839,7 @@ export default function ProductDetail() {
               <img
                 src={displayImage}
                 alt={product.title}
+                referrerPolicy="no-referrer"
                 className="w-12 h-12 rounded-lg object-contain bg-white p-1 flex-shrink-0"
               />
               <div className="overflow-hidden">

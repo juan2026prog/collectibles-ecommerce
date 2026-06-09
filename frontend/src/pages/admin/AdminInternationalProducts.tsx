@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Edit, RefreshCw, XCircle, Eye, Loader2, Search } from 'lucide-react';
+import { Edit, RefreshCw, XCircle, Eye, Loader2, Search, ExternalLink, Code } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 
 export default function AdminInternationalProducts() {
@@ -139,32 +139,56 @@ export default function AdminInternationalProducts() {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Imagen</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Título</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Desglose Precio (USD)</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Final</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Costos Base (Amazon + USA)</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rentabilidad</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Final Collectibles</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Costo Final Estimado (Urubox)</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sync</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sincronización</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Acciones</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredProducts.map((p) => (
                 <tr key={p.id}>
-                  <td className="px-6 py-4"><img src={p.image_url} alt="" className="w-12 h-12 object-cover rounded" /></td>
                   <td className="px-6 py-4">
-                    <div className="text-sm font-medium text-gray-900 line-clamp-2" title={p.title}>{p.title}</div>
-                    <div className="text-xs text-gray-500">{p.brand} | Disp: {p.availability}</div>
+                    <img src={p.image_url} alt="" referrerPolicy="no-referrer" loading="lazy" className="w-12 h-12 object-cover rounded" />
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm font-medium text-gray-900 line-clamp-2" title={p.title}>
+                      <a href={`https://www.amazon.com/dp/${p.id}`} target="_blank" rel="noreferrer" className="hover:text-primary-600 hover:underline flex items-center gap-1">
+                        {p.title}
+                        <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                      </a>
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      <span className="font-bold text-gray-700">{p.brand || 'Sin Marca'}</span> | Disp: {p.availability}
+                    </div>
+                    <div className="text-[10px] text-gray-400 mt-1 truncate max-w-xs" title={p.category || p.raw_data?.categories?.[0] || 'Sin categoría'}>
+                      Cat: {p.category || p.raw_data?.categories?.[0] || 'Sin categoría'}
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-xs text-gray-600">
-                    <div>Base: ${p.base_price_usd}</div>
-                    <div>Envío: ${p.usa_domestic_shipping_usd}</div>
-                    <div>Fee: ${p.collectibles_fee_usd}</div>
+                    <div>Amazon: ${p.amazon_current_price_usd || p.base_price_usd}</div>
+                    {p.amazon_list_price_usd && <div className="line-through text-gray-400">Lista: ${p.amazon_list_price_usd}</div>}
+                    <div>Envío USA: ${p.usa_domestic_shipping_usd || 0}</div>
+                    <div className="font-bold text-gray-700 mt-1 border-t pt-1">Costo Real: ${p.real_cost_usd || '?'}</div>
+                  </td>
+                  <td className="px-6 py-4 text-xs text-gray-600">
+                    <div>Margen Esperado: ${p.expected_profit_usd || '?'}</div>
+                    <div className="font-bold text-green-700">Fee Aplicado: ${p.collectibles_fee_usd}</div>
+                    <div className="text-gray-500">{(p.final_price_usd > 0 ? ((Number(p.collectibles_fee_usd) / Number(p.final_price_usd)) * 100).toFixed(1) : 0)}% del Final</div>
                   </td>
                   <td className="px-6 py-4 text-sm font-bold">
                     <div className="text-primary-600">${p.final_price_usd} USD</div>
-                    <div className="text-gray-500">${p.final_price_uyu} UYU</div>
+                    <div className="text-gray-500 text-xs font-normal">${p.final_price_uyu} UYU</div>
                   </td>
-                  <td className="px-6 py-4 text-sm">
-                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                  <td className="px-6 py-4 text-xs text-gray-600">
+                    <div>Flete Urubox: ${p.urubox_estimated_cost_usd || '?'}</div>
+                    <div className="font-bold text-red-600 border-t pt-1 mt-1">Total: ${p.total_estimated_cost_usd || '?'}</div>
+                  </td>
+                  <td className="px-6 py-4 text-xs">
+                    <span className={`px-2 py-1 rounded-full font-bold mb-2 inline-block ${
                       p.status === 'published' ? 'bg-green-100 text-green-800' :
                       p.status === 'draft' ? 'bg-yellow-100 text-yellow-800' :
                       p.status === 'unavailable' ? 'bg-red-100 text-red-800' :
@@ -173,8 +197,14 @@ export default function AdminInternationalProducts() {
                       {p.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-xs text-gray-500">
-                    {p.last_synced_at ? new Date(p.last_synced_at).toLocaleDateString() : 'Nunca'}
+                  <td className="px-6 py-4 text-xs">
+                    <div className="font-semibold text-gray-700">Estado: {p.sync_status || 'N/A'}</div>
+                    <div className="text-gray-500 mt-1">Última vez: {p.last_synced_at ? new Date(p.last_synced_at).toLocaleString() : 'Nunca'}</div>
+                    {p.price_change_percent && (
+                      <div className={`mt-1 font-bold ${p.price_change_percent > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        Dif: {p.price_change_percent > 0 ? '+' : ''}{p.price_change_percent.toFixed(2)}%
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-right space-x-2">
                     <button onClick={() => handleSync(p.id)} title="Sincronizar ahora" className="text-blue-500 hover:text-blue-700">
@@ -184,7 +214,7 @@ export default function AdminInternationalProducts() {
                       <Edit className="w-5 h-5 inline" />
                     </button>
                     <button onClick={() => setRawModalData(p.raw_data)} title="Ver raw data técnico" className="text-gray-400 hover:text-gray-600">
-                      <Eye className="w-5 h-5 inline" />
+                      <Code className="w-5 h-5 inline" />
                     </button>
                   </td>
                 </tr>

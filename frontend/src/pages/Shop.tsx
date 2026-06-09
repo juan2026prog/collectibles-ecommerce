@@ -21,7 +21,7 @@ function getVisiblePages(currentPage: number, total: number) {
   return [0, '...', currentPage - 1, currentPage, currentPage + 1, '...', total - 1];
 }
 
-export default function Shop() {
+export default function Shop({ isInternational }: { isInternational?: boolean } = {}) {
   const [searchParams, setSearchParams] = useSearchParams();
   const { categorySlug: catParam, brandSlug: brandParam, slug: groupSlug } = useParams<{ categorySlug?: string; brandSlug?: string; slug?: string }>();
   const location = useLocation();
@@ -81,6 +81,7 @@ export default function Shop() {
     sortBy,
     limit,
     offset: page * limit,
+    isInternational,
   });
 
   const totalPages = Math.ceil(count / limit);
@@ -357,12 +358,12 @@ export default function Shop() {
       <section className="relative hero-noise overflow-hidden border-b border-white/10">
         <div className="absolute -right-40 top-0 w-[560px] h-[560px] bg-[#f00856]/20 blur-3xl rounded-full"></div>
         <div className="relative max-w-7xl mx-auto px-6 py-6 md:py-10">
-          <div className="label-tag">{group ? "Colección" : isCategoryRoute ? "Categoría" : isBrandRoute ? "Marca" : "Catálogo"}</div>
+          <div className="label-tag">{isInternational ? "Especial" : group ? "Colección" : isCategoryRoute ? "Categoría" : isBrandRoute ? "Marca" : "Catálogo"}</div>
           <h1 className="text-5xl md:text-7xl font-black leading-[.9] mt-3 tracking-tighter">
-            {group ? group.name : isCategoryRoute && currentCategory ? currentCategory.name : isBrandRoute && currentBrand ? currentBrand.name : "Productos"}
+            {isInternational ? "Collectibles Internacional" : group ? group.name : isCategoryRoute && currentCategory ? currentCategory.name : isBrandRoute && currentBrand ? currentBrand.name : "Productos"}
           </h1>
           <p className="text-slate-300 text-lg mt-5 max-w-3xl leading-relaxed">
-            {group ? group.description || "Explora esta colección exclusiva de productos curados." : ""}
+            {isInternational ? "Explora nuestro catálogo de productos internacionales importados a pedido." : group ? group.description || "Explora esta colección exclusiva de productos curados." : ""}
           </p>
         </div>
       </section>

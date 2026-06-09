@@ -15,6 +15,7 @@ interface ProductFilters {
   limit?: number;
   offset?: number;
   group?: string;
+  isInternational?: boolean;
 }
 
 export function useProducts(filters: ProductFilters = {}) {
@@ -107,6 +108,7 @@ export function useProducts(filters: ProductFilters = {}) {
     if (filters.featured) query = query.eq('is_featured', true);
     if (filters.minPrice) query = query.gte('base_price', filters.minPrice);
     if (filters.maxPrice) query = query.lte('base_price', filters.maxPrice);
+    if (filters.isInternational) query = query.eq('source_provider', 'zinc');
     if (filters.search) {
       // Use ilike for simple search, fallback from textSearch if vector unavailable
       query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
@@ -157,7 +159,8 @@ export function useProduct(slug: string | undefined) {
           variants:product_variants(id, sku, name, price_adjustment, inventory_count),
           product_tags:product_tags(tag_id),
           vendor:vendors(id, store_name, slug, logo_url),
-          reviews:reviews(id, rating, title, body, created_at, user:profiles(first_name, last_name))
+          reviews:reviews(id, rating, title, body, created_at, user:profiles(first_name, last_name)),
+          international_products:international_products(amazon_list_price_usd, amazon_current_price_usd, amazon_discount_percent)
         `)
         .eq('slug', slug)
         .single();
@@ -286,6 +289,8 @@ export interface CartItem {
   vendor_slug?: string;
   vendor_logo?: string;
   tag_ids?: string[];
+  is_international?: boolean;
+  urubox_estimate?: number;
 }
 
 export function useCart() {
