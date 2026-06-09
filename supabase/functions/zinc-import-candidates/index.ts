@@ -16,7 +16,9 @@ serve(async (req) => {
       usa_domestic_shipping_usd, 
       exchange_rate, 
       estimated_delivery_min_days, 
-      estimated_delivery_max_days 
+      estimated_delivery_max_days,
+      target_category_id,
+      target_subcategory_id
     } = await req.json();
 
     if (!Array.isArray(candidate_ids) || candidate_ids.length === 0) {
@@ -62,6 +64,9 @@ serve(async (req) => {
       const final_price_usd = Number(c.price_usd) + Number(usa_domestic_shipping_usd) + Number(collectibles_fee_usd);
       const final_price_uyu = final_price_usd * Number(exchange_rate);
 
+      const categoryToUse = target_category_id || c.suggested_category_id || null;
+      const subcategoryToUse = target_subcategory_id || c.suggested_subcategory_id || null;
+
       const { error: insertError } = await supabase
         .from('international_products')
         .insert({
@@ -84,6 +89,11 @@ serve(async (req) => {
           review_count: c.review_count,
           estimated_delivery_min_days,
           estimated_delivery_max_days,
+          collectibles_category_id: categoryToUse,
+          collectibles_subcategory_id: subcategoryToUse,
+          gallery_images: c.raw_data?.images || [],
+          video_urls: c.raw_data?.videos || [],
+          external_sku: c.external_product_id,
           status: 'draft',
           raw_data: c.raw_data
         });

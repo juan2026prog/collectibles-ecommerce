@@ -23,7 +23,8 @@ serve(async (req) => {
       max_price, 
       min_rating, 
       max_results = 20, 
-      page = 1 
+      page = 1,
+      sort_by
     } = await req.json();
 
     if (!query) {
@@ -55,7 +56,8 @@ serve(async (req) => {
     if (searchError) throw searchError;
 
     // Call Zinc API
-    const zincUrl = `https://api.zinc.com/products/search?query=${encodeURIComponent(query)}&retailer=amazon&page=${page}`;
+    let zincUrl = `https://api.zinc.com/products/search?query=${encodeURIComponent(query)}&retailer=amazon&page=${page}`;
+    if (sort_by) zincUrl += `&sort=${sort_by}`;
     const zincRes = await fetch(zincUrl, {
       headers: {
         'Authorization': `Bearer ${ZINC_API_KEY}`
@@ -71,34 +73,70 @@ serve(async (req) => {
     // Update raw response in search
     await supabase.from('international_import_searches').update({ raw_response: rawResponse }).eq('id', searchRecord.id);
 
+    // Fetch Mapping Rules
+    const [{ data: brandMappings }, { data: keywordMappings }] = await Promise.all([
+      supabase.from('amazon_brand_mapping').select('*'),
+      supabase.from('keyword_mapping_rules').select('*').order('priority', { ascending: false })
+    ]);
+
     const products = rawResponse.results || [];
     const candidates = [];
 
     for (const p of products) {
-      if (!p.title || !p.url) continue;
+      if (!p.title || !p.product_id) continue;
 
-      const price = p.price ? p.price / 100 : null; // zinc returns cents usually, check docs: "price: 1999"
+      const price = p.price ? p.price / 100 : null;
 
       if (min_price && price !== null && price < min_price) continue;
       if (max_price && price !== null && price > max_price) continue;
       if (min_rating && p.stars && p.stars < min_rating) continue;
       if (brand && p.brand && !p.brand.toLowerCase().includes(brand.toLowerCase())) continue;
       
+      let suggested_category_id = null;
+      let suggested_subcategory_id = null;
+      let mapping_confidence = 0;
+
+      // 1. Check brand mapping
+      if (p.brand) {
+        const bMap = brandMappings?.find(b => b.brand_name.toLowerCase() === p.brand.toLowerCase());
+        if (bMap) {
+          suggested_category_id = bMap.collectibles_category_id;
+          suggested_subcategory_id = bMap.collectibles_subcategory_id;
+          mapping_confidence = bMap.confidence_score || 90;
+        }
+      }
+
+      // 2. Check keyword mapping
+      if (!suggested_category_id && p.title) {
+        const titleLower = p.title.toLowerCase();
+        for (const kMap of keywordMappings || []) {
+          if (titleLower.includes(kMap.keyword.toLowerCase())) {
+            suggested_category_id = kMap.target_category_id;
+            suggested_subcategory_id = kMap.target_subcategory_id;
+            mapping_confidence = 80;
+            break;
+          }
+        }
+      }
+
       candidates.push({
         search_id: searchRecord.id,
-        external_product_id: p.product_id || p.asin,
+        external_product_id: p.product_id,
         title: p.title,
         brand: p.brand || null,
-        category: null, // Zinc might not return a clean category in search
+        category: null, 
         image_url: p.image || "https://via.placeholder.com/400?text=No+Image",
-        product_url_external: p.url,
+        product_url_external: `https://www.amazon.com/dp/${p.product_id}`,
         price_usd: price,
         currency: 'USD',
         rating: p.stars || null,
         review_count: p.num_reviews || 0,
         availability: 'available',
         raw_data: p,
-        status: 'review'
+        status: 'review',
+        suggested_category_id,
+        suggested_subcategory_id,
+        mapping_confidence
       });
 
       if (candidates.length >= max_results) break;
