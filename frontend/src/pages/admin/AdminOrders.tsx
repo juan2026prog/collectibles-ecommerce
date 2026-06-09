@@ -50,6 +50,11 @@ export default function AdminOrders() {
   const [isSyncingTracking, setIsSyncingTracking] = useState(false);
   const [isDacActive, setIsDacActive] = useState(false);
 
+  // Added for products and suborders
+  const [orderItems, setOrderItems] = useState<any[]>([]);
+  const [orderSuborders, setOrderSuborders] = useState<any[]>([]);
+  const [loadingItems, setLoadingItems] = useState(false);
+
   const { toast } = useToast();
   const { confirm, prompt } = useConfirmModal();
 
@@ -95,10 +100,47 @@ export default function AdminOrders() {
       setDacWeight('1.0');
       setDacQuantity('1');
       setDacObs('');
+      
+      loadOrderItemsAndSuborders(selectedOrder.id);
     } else {
       setDacShipment(null);
+      setOrderItems([]);
+      setOrderSuborders([]);
     }
   }, [selectedOrder]);
+
+  async function loadOrderItemsAndSuborders(orderId: string) {
+    setLoadingItems(true);
+    try {
+      // Load items
+      const { data: items, error: itemsErr } = await supabase
+        .from('order_items')
+        .select(`
+          *,
+          product:products(title),
+          variant:product_variants(sku, name, product:products(title)),
+          vendor:vendors(store_name)
+        `)
+        .eq('order_id', orderId);
+      
+      if (itemsErr) throw itemsErr;
+      setOrderItems(items || []);
+
+      // Load suborders
+      const { data: suborders, error: subordersErr } = await supabase
+        .from('order_suborders')
+        .select('*')
+        .eq('parent_order_id', orderId);
+      
+      if (subordersErr) throw subordersErr;
+      setOrderSuborders(suborders || []);
+    } catch (err: any) {
+      console.error("Error loading items/suborders:", err.message);
+      toast.error("No se pudieron cargar los productos de la orden.");
+    } finally {
+      setLoadingItems(false);
+    }
+  }
 
   async function loadDacShipmentForOrder(orderId: string) {
     setLoadingDac(true);
@@ -502,7 +544,12 @@ export default function AdminOrders() {
                   <tr key={o.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-1.5">
-                        <p className="text-sm font-mono font-bold text-primary-600">#{o.id.slice(0,8).toUpperCase()}</p>
+                        <button 
+                          onClick={() => setSelectedOrder(o)}
+                          className="text-sm font-mono font-bold text-primary-600 hover:text-primary-800 hover:underline transition-all text-left"
+                        >
+                          #{o.id.slice(0,8).toUpperCase()}
+                        </button>
                         {o.ml_order_id && (
                           <span className="px-1.5 py-0.5 rounded text-[9px] uppercase font-black bg-yellow-100 text-yellow-800 border border-yellow-250 flex items-center gap-0.5" title={`Mercado Libre ID: ${o.ml_order_id}`}>
                             ML 🛒
@@ -591,6 +638,69 @@ export default function AdminOrders() {
                   <p className="mt-1 font-mono text-[10px] text-yellow-600">ID de Mercado Libre: {selectedOrder.ml_order_id}</p>
                 </div>
               )}
+              
+              {/* PRODUCTOS DE LA ORDEN */}
+              <div className="space-y-4 bg-white p-4 rounded-xl border border-gray-100">
+                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                  <Package className="w-4 h-4" /> Productos de la Orden
+                </h4>
+                {loadingItems ? (
+                  <p className="text-xs text-gray-500 text-center py-4">Cargando productos...</p>
+                ) : orderItems.length === 0 ? (
+                  <p className="text-xs text-gray-500 text-center py-4">No se encontraron productos.</p>
+                ) : (
+                  <div className="space-y-6">
+                    {orderSuborders.length > 0 ? (
+                      orderSuborders.map(suborder => {
+                        const subItems = orderItems.filter(item => item.suborder_id === suborder.id);
+                        return (
+                          <div key={suborder.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                            <div className="bg-gray-50 p-3 border-b border-gray-200 flex justify-between items-center">
+                              <div>
+                                <h5 className="font-bold text-sm text-gray-900">{suborder.vendor_name || 'Collectibles'}</h5>
+                                <p className="text-[10px] text-gray-500 font-mono mt-0.5">{suborder.suborder_number}</p>
+                              </div>
+                              <div className="text-right">
+                                <span className="inline-block px-2 py-1 bg-white border border-gray-200 rounded text-[10px] font-bold uppercase text-gray-700">
+                                  {suborder.status}
+                                </span>
+                                {suborder.tracking_number && (
+                                  <p className="text-[10px] text-blue-600 mt-1 font-bold flex items-center justify-end gap-1">
+                                    <Truck className="w-3 h-3" /> {suborder.tracking_number}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="divide-y divide-gray-100">
+                              {subItems.length > 0 ? subItems.map(item => (
+                                <OrderItemRow key={item.id} item={item} />
+                              )) : (
+                                <p className="text-xs text-gray-400 p-3 text-center">Sin productos (error de datos)</p>
+                              )}
+                            </div>
+                            <div className="bg-gray-50 p-3 border-t border-gray-200 flex justify-between items-center text-xs">
+                              <span className="font-medium text-gray-500">Subtotal Vendor</span>
+                              <span className="font-bold text-gray-900">${suborder.product_subtotal}</span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="divide-y divide-gray-100">
+                          {orderItems.map(item => (
+                            <OrderItemRow key={item.id} item={item} />
+                          ))}
+                        </div>
+                        <div className="bg-gray-50 p-3 border-t border-gray-200 flex justify-between items-center text-xs">
+                          <span className="font-medium text-gray-500">Total Productos</span>
+                          <span className="font-bold text-gray-900">${selectedOrder.subtotal_products || selectedOrder.total_amount}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               
               {/* STATUS & COMPRA ASISTIDA */}
               <div className="space-y-4 bg-white p-4 rounded-xl border border-gray-100">
@@ -1048,6 +1158,32 @@ export default function AdminOrders() {
         </>
       )}
 
+    </div>
+  );
+}
+
+function OrderItemRow({ item }: { item: any }) {
+  const productName = item.product_name || item.product?.title || item.variant?.product?.title || 'Producto Desconocido';
+  const sku = item.sku || item.variant?.sku || 'N/A';
+  const vendorName = item.vendor?.store_name || 'Collectibles';
+  const variantName = item.variant?.name || '';
+  
+  return (
+    <div className="p-3 flex items-start gap-3">
+      <div className="w-12 h-12 bg-gray-100 rounded border border-gray-200 flex-shrink-0 flex items-center justify-center">
+        <Package className="w-5 h-5 text-gray-400" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <h6 className="text-sm font-bold text-gray-900 truncate">{productName} {variantName ? `- ${variantName}` : ''}</h6>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+          <span className="text-[10px] font-mono text-gray-500">SKU: {sku}</span>
+          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 rounded">Vendor: {vendorName}</span>
+        </div>
+        <div className="mt-2 flex items-center justify-between">
+          <span className="text-xs text-gray-600 font-medium">{item.quantity} x ${item.unit_price}</span>
+          <span className="text-sm font-black text-gray-900">${item.final_total || (item.quantity * item.unit_price)}</span>
+        </div>
+      </div>
     </div>
   );
 }
