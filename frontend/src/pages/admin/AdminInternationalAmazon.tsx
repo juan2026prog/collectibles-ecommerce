@@ -454,6 +454,7 @@ export default function AdminInternationalAmazon() {
                 <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Producto / Marca</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-40">Categoría Amazon</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-40">Mapeo Collectibles</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-32">Entrega</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Métricas</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Estado</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Acciones</th>
@@ -538,6 +539,21 @@ export default function AdminInternationalAmazon() {
                         )}
                       </div>
                     )}
+                  </td>
+                  <td className="px-4 py-4">
+                    <div className="flex items-start gap-1.5">
+                      <span className="text-sm shrink-0 mt-0.5">
+                        {c.amazon_delivery_type === 'prime' ? '⭐' : 
+                         c.amazon_delivery_type === 'in_stock' ? '📦' :
+                         c.amazon_delivery_type === 'preorder' ? '⏳' :
+                         c.amazon_delivery_type === 'backorder' ? '⏳' :
+                         c.amazon_delivery_type === 'unknown' ? '🚚' : '❌'}
+                      </span>
+                      <div className="text-xs text-gray-700 leading-tight">
+                        <span className="font-bold block capitalize">{c.amazon_delivery_type === 'in_stock' ? 'En Stock' : c.amazon_delivery_type}</span>
+                        {c.amazon_delivery_text}
+                      </div>
+                    </div>
                   </td>
                   <td className="px-4 py-4">
                     <div className="text-sm font-bold text-gray-900">${c.price_usd} USD</div>
@@ -636,14 +652,13 @@ export default function AdminInternationalAmazon() {
                   <label className="block text-sm font-medium text-gray-700">Tipo de Cambio a UYU</label>
                   <input type="number" step="0.01" className="mt-1 block w-full text-sm rounded-md border-gray-300 shadow-sm" value={importSettings.exchange_rate} onChange={e => setImportSettings({...importSettings, exchange_rate: Number(e.target.value)})} />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="col-span-2 mt-4 bg-orange-50 border border-orange-200 p-3 rounded-lg flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Días Mín.</label>
-                    <input type="number" className="mt-1 block w-full text-sm rounded-md border-gray-300 shadow-sm" value={importSettings.estimated_delivery_min_days} onChange={e => setImportSettings({...importSettings, estimated_delivery_min_days: Number(e.target.value)})} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Días Máx.</label>
-                    <input type="number" className="mt-1 block w-full text-sm rounded-md border-gray-300 shadow-sm" value={importSettings.estimated_delivery_max_days} onChange={e => setImportSettings({...importSettings, estimated_delivery_max_days: Number(e.target.value)})} />
+                    <h5 className="text-sm font-bold text-orange-900">Sobre Tiempos de Entrega</h5>
+                    <p className="text-xs text-orange-800 mt-1">
+                      El tiempo de entrega desde el courier en USA hasta Uruguay depende del servicio final contratado por el cliente y no está incluido en la estimación provista por Amazon/Zinc. Los días mínimos y máximos genéricos han sido removidos.
+                    </p>
                   </div>
                 </div>
               </div>

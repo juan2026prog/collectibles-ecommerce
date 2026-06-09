@@ -226,7 +226,31 @@ serve(async (req) => {
         }
       }
 
-      // 4. Populate _normalized
+      // 4. Delivery Information Parsing
+      let amazon_delivery_type = 'unknown';
+      let amazon_delivery_text = 'Tiempo de entrega no informado por Amazon';
+
+      const availLow = (p.availability || '').toLowerCase();
+      const delivLow = (p.delivery_message || '').toLowerCase();
+      
+      if (p.prime) {
+        amazon_delivery_type = 'prime';
+        amazon_delivery_text = p.delivery_message || 'Envío Prime';
+      } else if (availLow.includes('pre-order') || availLow.includes('preorder')) {
+        amazon_delivery_type = 'preorder';
+        amazon_delivery_text = p.availability || 'Preventa';
+      } else if (availLow.includes('in stock') || availLow.includes('available')) {
+        amazon_delivery_type = 'in_stock';
+        amazon_delivery_text = p.delivery_message || 'En stock';
+      } else if (availLow.includes('backorder') || availLow.includes('out of stock')) {
+        amazon_delivery_type = 'backorder';
+        amazon_delivery_text = p.availability || 'Backorder / Sin stock';
+      } else if (p.delivery_message) {
+        amazon_delivery_text = p.delivery_message;
+        amazon_delivery_type = 'unknown';
+      }
+
+      // 5. Populate _normalized
       const enrichedRawData = {
         ...p,
         _normalized: {
@@ -234,7 +258,9 @@ serve(async (req) => {
           manufacturer: p.manufacturer || p.raw_data?.manufacturer || null,
           imageUrl: normalizedImageUrl,
           category_detected: p.categories || null,
-          category_inferred
+          category_inferred,
+          amazon_delivery_type,
+          amazon_delivery_text
         }
       };
 
@@ -253,6 +279,8 @@ serve(async (req) => {
         rating: p.stars || null,
         review_count: p.num_reviews || 0,
         availability: 'available',
+        amazon_delivery_text,
+        amazon_delivery_type,
         raw_data: enrichedRawData,
         status: 'review',
         suggested_category_id,
