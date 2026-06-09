@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Search, Loader2, Import, XCircle, Eye, AlertCircle, RefreshCw, Wand2, ArrowRight, ExternalLink } from 'lucide-react';
+import { Search, Loader2, Import, XCircle, Eye, AlertCircle, RefreshCw, Wand2, ArrowRight, ExternalLink, Code, Sparkles, Filter } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 
 const QUICK_COLLECTIONS = [
@@ -34,6 +34,8 @@ export default function AdminInternationalAmazon() {
     min_reviews: '',
     sort_by: '',
     availability: '',
+    onlyRecognizedBrands: true,
+    includeGenerics: false,
     max_results: '20',
     page: '1'
   });
@@ -111,7 +113,6 @@ export default function AdminInternationalAmazon() {
       if (error) throw error;
       if (data.error) throw new Error(data.error);
 
-      // Client side filtering for min_reviews and availability if API doesn't fully support it
       let results = data.candidates || [];
       if (params.min_reviews) {
         results = results.filter((c: any) => c.review_count >= Number(params.min_reviews));
@@ -120,6 +121,21 @@ export default function AdminInternationalAmazon() {
         results = results.filter((c: any) => c.raw_data?.availability?.toLowerCase().includes('in stock') || !c.raw_data?.availability);
       } else if (params.availability === 'preorder') {
         results = results.filter((c: any) => c.raw_data?.availability?.toLowerCase().includes('pre-order'));
+      }
+
+      // Brand filtering
+      if (params.onlyRecognizedBrands) {
+        results = results.filter((c: any) => {
+          const b = (c.brand || '').toLowerCase();
+          if (!b || b === 'sin marca' || b === 'generic' || b === 'n/a') return false;
+          return true;
+        });
+      }
+      if (!params.includeGenerics) {
+        results = results.filter((c: any) => {
+          const b = (c.brand || '').toLowerCase();
+          return b && b !== 'generic' && b !== 'sin marca';
+        });
       }
 
       addToast({ title: 'Búsqueda completada', message: `Se encontraron ${results.length} resultados.`, type: 'success' });
@@ -184,6 +200,26 @@ export default function AdminInternationalAmazon() {
       fetchCandidates();
     } catch (err: any) {
       addToast({ title: 'Error', message: err.message, type: 'error' });
+    }
+  }
+
+  const [enrichingId, setEnrichingId] = useState<string | null>(null);
+
+  async function handleEnrich(id: string) {
+    setEnrichingId(id);
+    try {
+      const { data, error } = await supabase.functions.invoke('zinc-enrich-candidate', {
+        body: { candidate_ids: [id] }
+      });
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+
+      addToast({ title: 'Enriquecimiento completado', message: 'Categoría e imágenes originales obtenidas.', type: 'success' });
+      fetchCandidates();
+    } catch (err: any) {
+      addToast({ title: 'Error', message: err.message, type: 'error' });
+    } finally {
+      setEnrichingId(null);
     }
   }
 
@@ -308,6 +344,21 @@ export default function AdminInternationalAmazon() {
             </select>
           </div>
 
+          <div className="md:col-span-12 flex flex-wrap items-center gap-6 p-3 bg-gray-50 rounded-lg border border-gray-200 mt-2">
+            <div className="flex items-center text-sm font-medium text-gray-700">
+              <Filter className="w-4 h-4 mr-2" />
+              Filtros Locales:
+            </div>
+            <label className="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+              <input type="checkbox" className="rounded text-primary-600 focus:ring-primary-500" checked={searchParams.onlyRecognizedBrands} onChange={e => setSearchParams({...searchParams, onlyRecognizedBrands: e.target.checked})} />
+              <span>Solo Marcas Reconocidas</span>
+            </label>
+            <label className="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+              <input type="checkbox" className="rounded text-primary-600 focus:ring-primary-500" checked={searchParams.includeGenerics} onChange={e => setSearchParams({...searchParams, includeGenerics: e.target.checked})} />
+              <span>Incluir Genéricos / Sin Marca</span>
+            </label>
+          </div>
+
           <div className="md:col-span-12 flex justify-end pt-2 border-t mt-2">
             <button type="submit" disabled={loading} className="flex items-center px-6 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 font-medium">
               {loading ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Search className="w-5 h-5 mr-2" />}
@@ -365,7 +416,8 @@ export default function AdminInternationalAmazon() {
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Imagen</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Producto / Marca</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-48">Mapeo a Categoría</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-40">Categoría Amazon</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-40">Mapeo Collectibles</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Métricas</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Estado</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Acciones</th>
@@ -387,8 +439,12 @@ export default function AdminInternationalAmazon() {
                     />
                   </td>
                   <td className="px-4 py-4">
-                    <div className="w-16 h-16 bg-white border rounded overflow-hidden flex items-center justify-center p-1">
-                      <img src={getProxyImageUrl(c.image_url)} alt="" className="max-w-full max-h-full object-contain" loading="lazy" />
+                    <div className="w-16 h-16 bg-white border rounded overflow-hidden flex items-center justify-center p-1 relative">
+                      {(c.image_url || c.main_image_url_external || c.raw_data?.image) ? (
+                         <img src={getProxyImageUrl(c.image_url || c.main_image_url_external || c.raw_data?.image)} alt="" className="max-w-full max-h-full object-contain" loading="lazy" referrerPolicy="no-referrer" />
+                      ) : (
+                         <span className="text-[10px] text-gray-400 text-center leading-tight">Sin<br/>imagen</span>
+                      )}
                     </div>
                   </td>
                   <td className="px-4 py-4">
@@ -408,11 +464,24 @@ export default function AdminInternationalAmazon() {
                     {c.price_usd == null && <div className="text-xs text-red-500 mt-1 flex items-center"><AlertCircle className="w-3 h-3 mr-1"/> Sin precio, no importable</div>}
                   </td>
                   <td className="px-4 py-4">
+                    {c.amazon_category_path ? (
+                      <div className="text-[11px] text-gray-700 bg-gray-100 p-1.5 rounded line-clamp-3 leading-tight" title={c.amazon_category_path}>
+                        {c.amazon_category_path}
+                      </div>
+                    ) : c.amazon_category ? (
+                      <div className="text-[11px] text-gray-700 bg-gray-100 p-1.5 rounded">
+                        {c.amazon_category}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-400 italic">No disponible en búsqueda</div>
+                    )}
+                  </td>
+                  <td className="px-4 py-4">
                     {c.suggested_category_id ? (
                       <div className="space-y-1">
-                        <div className="text-xs font-medium text-green-700 bg-green-50 inline-block px-2 py-1 rounded-md border border-green-200">
+                        <div className="text-[11px] font-medium text-green-700 bg-green-50 inline-block px-1.5 py-1 rounded border border-green-200">
                           {getCategoryName(c.suggested_category_id)}
-                          {c.suggested_subcategory_id && <><ArrowRight className="w-3 h-3 inline mx-1" />{getCategoryName(c.suggested_subcategory_id)}</>}
+                          {c.suggested_subcategory_id && <><ArrowRight className="w-3 h-3 inline mx-0.5" />{getCategoryName(c.suggested_subcategory_id)}</>}
                         </div>
                         <div className="text-[10px] text-gray-400">Confianza: {c.mapping_confidence}%</div>
                       </div>
@@ -434,18 +503,28 @@ export default function AdminInternationalAmazon() {
                     </div>
                   </td>
                   <td className="px-4 py-4 text-sm">
-                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider ${
+                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                       c.status === 'imported' ? 'bg-green-100 text-green-800 border border-green-200' :
                       c.status === 'rejected' ? 'bg-red-100 text-red-800 border border-red-200' :
                       'bg-blue-50 text-blue-700 border border-blue-200'
                     }`}>
-                      {c.status}
+                      {c.status === 'imported' ? 'Ya Importado' : c.status}
                     </span>
                   </td>
-                  <td className="px-4 py-4 text-right space-y-2">
-                    <button onClick={() => setRawModalData(c.raw_data)} className="text-gray-400 hover:text-gray-600 p-1 bg-white border border-gray-200 rounded shadow-sm hover:shadow" title="Ver raw data">
-                      <Eye className="w-4 h-4" />
-                    </button>
+                  <td className="px-4 py-4 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <button 
+                        onClick={() => handleEnrich(c.id)} 
+                        disabled={enrichingId === c.id}
+                        className="text-indigo-600 hover:text-indigo-800 p-1.5 bg-indigo-50 border border-indigo-100 rounded shadow-sm hover:shadow disabled:opacity-50" 
+                        title="Enriquecer Detalle (Zinc Product Endpoint)"
+                      >
+                        {enrichingId === c.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                      </button>
+                      <button onClick={() => setRawModalData(c.raw_data)} className="text-gray-600 hover:text-gray-800 p-1.5 bg-gray-50 border border-gray-200 rounded shadow-sm hover:shadow" title="Ver Datos en Bruto (JSON)">
+                        <Code className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

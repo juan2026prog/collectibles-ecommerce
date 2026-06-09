@@ -1,78 +1,72 @@
 import { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, ArrowDownCircle, Clock, CreditCard, FileText, Download, ArrowRight } from 'lucide-react';
+import { DollarSign, TrendingUp, ArrowDownCircle, Clock, CreditCard, Download, ArrowRight, ShieldAlert, CheckCircle2, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 
-const stMap: Record<string, { l: string; c: string }> = {
-  pending: { l: 'Pendiente', c: 'border-orange-500/20 text-orange-500 bg-orange-500/5' },
-  held: { l: 'Retenido', c: 'border-yellow-500/20 text-yellow-500 bg-yellow-500/5' },
-  settlable: { l: 'Liquidable', c: 'border-green-500/20 text-green-500 bg-green-500/5' },
-  paid: { l: 'Pagado', c: 'border-emerald-500/20 text-emerald-500 bg-emerald-500/5' },
-  adjusted: { l: 'Ajustado', c: 'border-blue-500/20 text-blue-500 bg-blue-500/5' },
-  refunded: { l: 'Reembolsado', c: 'border-red-500/20 text-red-500 bg-red-500/5' },
+const suborderStatusMap: Record<string, { l: string; c: string }> = {
+  pending: { l: 'Pendiente', c: 'border-gray-500/20 text-gray-400 bg-gray-500/5' },
+  confirmed: { l: 'Confirmado', c: 'border-blue-500/20 text-blue-500 bg-blue-500/5' },
+  preparing: { l: 'Preparando', c: 'border-yellow-500/20 text-yellow-500 bg-yellow-500/5' },
+  shipped: { l: 'Enviado', c: 'border-indigo-500/20 text-indigo-500 bg-indigo-500/5' },
+  delivered: { l: 'Entregado', c: 'border-green-500/20 text-green-500 bg-green-500/5' },
+  cancelled: { l: 'Cancelado', c: 'border-red-500/20 text-red-500 bg-red-500/5' },
+  refunded: { l: 'Reembolsado', c: 'border-purple-500/20 text-purple-500 bg-purple-500/5' },
+  claim_open: { l: 'Reclamo', c: 'border-orange-500/20 text-orange-500 bg-orange-500/5' }
+};
+
+const liqStatusMap: Record<string, { l: string; c: string }> = {
+  pending: { l: 'Pendiente', c: 'text-gray-400 bg-gray-400/10' },
+  eligible: { l: 'Elegible', c: 'text-blue-500 bg-blue-500/10' },
+  included_in_batch: { l: 'En Lote', c: 'text-yellow-500 bg-yellow-500/10' },
+  paid: { l: 'Pagado', c: 'text-emerald-500 bg-emerald-500/10' },
+  blocked: { l: 'Bloqueado', c: 'text-red-500 bg-red-500/10' },
+  cancelled: { l: 'Cancelado', c: 'text-gray-500 bg-gray-500/10' }
 };
 
 export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | 'settlements' }) {
   const { user } = useAuth();
-  const [finances, setFinances] = useState<any[]>([]);
-  const [settlements, setSettlements] = useState<any[]>([]);
+  const [suborders, setSuborders] = useState<any[]>([]);
+  const [liquidations, setLiquidations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!user) return;
     async function loadFinances() {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('vendor_payouts')
-        .select(`
-          *,
-          order_item:order_items(price, product_variant_id),
-          order:orders(id, created_at, customer:profiles(first_name, last_name, email))
-        `)
-        .eq('vendor_id', user!.id)
-        .order('created_at', { ascending: false });
+      try {
+        // 1. Fetch suborders
+        const { data: subData, error: subError } = await supabase
+          .from('order_suborders')
+          .select(`
+            *,
+            orders!parent_order_id (
+              created_at,
+              customer_name,
+              customer_email,
+              payment_status,
+              status
+            )
+          `)
+          .eq('vendor_id', user!.id)
+          .order('created_at', { ascending: false });
 
-      if (!error && data) {
-        setFinances(data.map(p => {
-          const gross = Number(p.amount) / (1 - Number(p.fee_percentage) / 100);
-          return {
-            date: new Date(p.created_at).toLocaleDateString('es'),
-            order: p.order?.id?.slice(0, 8).toUpperCase() || 'N/A',
-            client: p.order?.customer?.first_name 
-                      ? `${p.order.customer.first_name} ${p.order.customer.last_name || ''}` 
-                      : (p.order?.customer?.email || 'Anónimo'),
-            gross: gross,
-            feePlatform: gross - Number(p.amount),
-            feeGateway: 0,
-            shipping: 0,
-            net: Number(p.amount),
-            status: p.status,
-            id: p.id
-          };
-        }));
-        
-        // Group into settlements (fake logic to show paid vs pending batches)
-        const s_paid = data.filter(p => p.status === 'paid');
-        const s_pending = data.filter(p => p.status === 'pending');
-        
-        const setts = [];
-        if (s_pending.length > 0) {
-          const gross = s_pending.reduce((acc, p) => acc + (Number(p.amount) / (1 - Number(p.fee_percentage) / 100)), 0);
-          const final = s_pending.reduce((acc, p) => acc + Number(p.amount), 0);
-          setts.push({
-            id: 'LIQ-PENDING', period: 'Actual', orders: s_pending.length, gross, discounts: gross - final, adjustments: 0, final, payDate: '-', status: 'pending'
-          });
-        }
-        if (s_paid.length > 0) {
-          const gross = s_paid.reduce((acc, p) => acc + (Number(p.amount) / (1 - Number(p.fee_percentage) / 100)), 0);
-          const final = s_paid.reduce((acc, p) => acc + Number(p.amount), 0);
-          setts.push({
-            id: 'LIQ-PAST', period: 'Anterior', orders: s_paid.length, gross, discounts: gross - final, adjustments: 0, final, payDate: 'Procesado', status: 'paid'
-          });
-        }
-        setSettlements(setts);
+        if (subError) throw subError;
+        setSuborders(subData || []);
+
+        // 2. Fetch liquidations
+        const { data: liqData, error: liqError } = await supabase
+          .from('vendor_liquidations')
+          .select('*')
+          .eq('vendor_id', user!.id)
+          .order('created_at', { ascending: false });
+
+        if (liqError) throw liqError;
+        setLiquidations(liqData || []);
+      } catch (err) {
+        console.error('Error fetching vendor finances:', err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
     loadFinances();
   }, [user]);
@@ -80,6 +74,29 @@ export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | '
   if (loading) {
     return <div className="text-gray-900 text-center p-12">Cargando datos financieros...</div>;
   }
+
+  // Totals calculations
+  const totals = {
+    gross: suborders.reduce((sum, s) => sum + Number(s.product_subtotal) + Number(s.shipping_cost), 0),
+    fees: suborders.reduce((sum, s) => sum + Number(s.marketplace_fee), 0),
+    gateway: suborders.reduce((sum, s) => sum + Number(s.payment_fee_share), 0),
+    shipping: suborders.reduce((sum, s) => sum + Number(s.shipping_cost), 0),
+    net: suborders.reduce((sum, s) => sum + Number(s.vendor_net_amount), 0),
+    pending: suborders
+      .filter(s => ['pending', 'eligible', 'included_in_batch'].includes(s.liquidation_status))
+      .reduce((sum, s) => sum + Number(s.vendor_net_amount), 0),
+    paid: suborders
+      .filter(s => s.liquidation_status === 'paid')
+      .reduce((sum, s) => sum + Number(s.vendor_net_amount), 0)
+  };
+
+  const nextPayoutDate = () => {
+    const d = new Date();
+    const day = d.getDay();
+    const diff = d.getDate() + (day <= 3 ? 3 - day : 10 - day); // next Wednesday
+    const nextWed = new Date(d.setDate(diff));
+    return nextWed.toLocaleDateString('es-UY', { weekday: 'long', day: 'numeric', month: 'short' });
+  };
 
   if (mode === 'settlements') {
     return (
@@ -95,42 +112,45 @@ export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | '
             <table className="w-full text-left border-collapse">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em]">
-                  <th className="p-8">Statement ID</th>
-                  <th className="p-8">Period</th>
-                  <th className="p-8 text-center">Orders</th>
-                  <th className="p-8 text-right">Gross</th>
-                  <th className="p-8 text-right">Fees</th>
-                  <th className="p-8 text-right">Adjust</th>
-                  <th className="p-8 text-right font-black text-gray-900">Net Final</th>
-                  <th className="p-8">Bank Status</th>
-                  <th className="p-8"></th>
+                  <th className="p-8">Liquidación ID</th>
+                  <th className="p-8">Período</th>
+                  <th className="p-8 text-right">Venta Bruta</th>
+                  <th className="p-8 text-right">Comisiones Retenidas</th>
+                  <th className="p-8 text-right">Gastos Pasarela</th>
+                  <th className="p-8 text-right font-black text-gray-900">Neto Final</th>
+                  <th className="p-8">Estado de Pago</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {settlements.map(s => (
-                  <tr key={s.id} className="hover:bg-gray-50 group transition-colors">
-                    <td className="p-8 font-black text-gray-900 text-[16px] group-hover:text-primary-600 transition-colors">{s.id}</td>
+                {liquidations.map(liq => (
+                  <tr key={liq.id} className="hover:bg-gray-50 group transition-colors text-sm">
+                    <td className="p-8 font-mono font-bold text-gray-500">{liq.id.substring(0, 8).toUpperCase()}</td>
                     <td className="p-8">
-                       <p className="text-[11px] font-black text-gray-500 uppercase tracking-widest">{s.period}</p>
-                       <p className="text-[9px] text-gray-400 font-black uppercase mt-1.5">Paid: {s.payDate}</p>
+                       <p className="text-[11px] font-black text-gray-500 uppercase tracking-widest">
+                         {new Date(liq.period_start).toLocaleDateString('es')} - {new Date(liq.period_end).toLocaleDateString('es')}
+                       </p>
+                       {liq.paid_at && (
+                         <p className="text-[9px] text-gray-400 font-black uppercase mt-1.5">Pagado: {new Date(liq.paid_at).toLocaleDateString('es')}</p>
+                       )}
                     </td>
-                    <td className="p-8 text-center font-black text-gray-900 text-[16px]">{s.orders}</td>
-                    <td className="p-8 text-right font-black text-gray-500 text-[15px]">${s.gross.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                    <td className="p-8 text-right font-black text-red-500 text-[15px]">-${s.discounts.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                    <td className="p-8 text-right font-black text-gray-400 text-[15px]">{s.adjustments < 0 ? `-$${Math.abs(s.adjustments).toLocaleString()}` : '$0'}</td>
-                    <td className="p-8 text-right font-black text-gray-900 text-[18px] bg-white/[0.01] group-hover:bg-gray-50 transition-colors tracking-tighter">${s.final.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td className="p-8 text-right font-black text-gray-500 text-[15px]">${(Number(liq.gross_sales) + Number(liq.shipping_collected)).toLocaleString('es-UY', { minimumFractionDigits: 2 })}</td>
+                    <td className="p-8 text-right font-black text-red-500 text-[15px]">-${Number(liq.marketplace_fees).toLocaleString('es-UY', { minimumFractionDigits: 2 })}</td>
+                    <td className="p-8 text-right font-black text-red-500 text-[15px]">-${Number(liq.payment_fees).toLocaleString('es-UY', { minimumFractionDigits: 2 })}</td>
+                    <td className="p-8 text-right font-black text-gray-900 text-[17px] bg-white/[0.01] group-hover:bg-gray-50 transition-colors tracking-tighter">${Number(liq.net_amount).toLocaleString('es-UY', { minimumFractionDigits: 2 })}</td>
                     <td className="p-8">
-                       <span className={`badge px-4 py-2 ${s.status === 'paid' ? 'text-emerald-400 bg-emerald-400/10' : 'text-orange-400 bg-orange-400/10'}`}>
-                          {s.status === 'paid' ? 'Transfered' : 'Processing'}
+                       <span className={`badge px-4 py-2 font-bold rounded-full text-xs uppercase ${
+                         liq.status === 'paid' ? 'text-emerald-500 bg-emerald-500/10' : 'text-yellow-600 bg-yellow-500/10'
+                       }`}>
+                          {liq.status === 'paid' ? 'Transferido' : 'Pendiente'}
                        </span>
-                    </td>
-                    <td className="p-8 text-right">
-                       <button className="w-12 h-12 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-500 hover:text-primary-600 hover:border-primary-600/50 transition-all active:scale-90"><Download className="w-4 h-4" /></button>
+                       {liq.payment_reference && (
+                         <span className="block text-[10px] text-slate-400 mt-1 font-mono">Ref: {liq.payment_reference}</span>
+                       )}
                     </td>
                   </tr>
                 ))}
-                {settlements.length === 0 && (
-                  <tr><td colSpan={9} className="p-8 text-center text-gray-500">No hay liquidaciones registradas.</td></tr>
+                {liquidations.length === 0 && (
+                  <tr><td colSpan={7} className="p-8 text-center text-gray-400">No hay liquidaciones registradas.</td></tr>
                 )}
               </tbody>
             </table>
@@ -151,7 +171,7 @@ export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | '
               </div>
               <div className="soft p-8 rounded-3xl border border-gray-100">
                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Payout Schedule</p>
-                 <p className="text-lg font-black text-gray-900 uppercase tracking-widest">Semanal</p>
+                 <p className="text-lg font-black text-gray-900 uppercase tracking-widest">Semanal (Miércoles)</p>
               </div>
               <div className="lg:flex lg:items-center lg:justify-end">
                  <button className="text-[11px] font-black text-primary-600 uppercase tracking-[0.3em] hover:underline hover:translate-x-2 transition-all flex items-center gap-3">Update Payment Method <ArrowRight className="w-4 h-4" /></button>
@@ -162,15 +182,6 @@ export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | '
     );
   }
 
-  const totals = {
-    gross: finances.reduce((s, f) => s + f.gross, 0),
-    fees: finances.reduce((s, f) => s + f.feePlatform + f.feeGateway, 0),
-    shipping: finances.reduce((s, f) => s + f.shipping, 0),
-    net: finances.reduce((s, f) => s + f.net, 0),
-    pending: finances.filter(f => f.status === 'pending').reduce((s, f) => s + f.net, 0),
-    paid: finances.filter(f => f.status === 'paid').reduce((s, f) => s + f.net, 0),
-  };
-
   return (
     <div className="space-y-8 animation-fade-in pb-20">
       <div>
@@ -180,28 +191,34 @@ export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | '
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Ventas Brutas" value={`$${totals.gross.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={DollarSign} color="emerald" />
-        <StatCard label="Comisiones" value={`$${totals.fees.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={ArrowDownCircle} color="red" />
-        <StatCard label="Logística" value={`$${totals.shipping.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={CreditCard} color="purple" />
-        <StatCard label="Neto Histórico" value={`$${totals.net.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={TrendingUp} color="green" />
+        <StatCard label="Ventas Brutas" value={`$${totals.gross.toLocaleString('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={DollarSign} color="emerald" />
+        <StatCard label="Comisión Collectibles" value={`$${totals.fees.toLocaleString('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={ArrowDownCircle} color="red" />
+        <StatCard label="Costo Pasarela (MP/Handy)" value={`$${totals.gateway.toLocaleString('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={ShieldAlert} color="red" />
+        <StatCard label="Neto Histórico" value={`$${totals.net.toLocaleString('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={TrendingUp} color="green" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="soft rounded-[2.5rem] p-12 hover:bg-gray-50 transition-all border border-gray-100 shadow-sm">
-          <p className="text-[11px] text-primary-600 font-black uppercase tracking-[0.4em] mb-6">Escrow Balance</p>
-          <div className="flex items-end gap-5">
-             <p className="text-6xl font-black text-gray-900 tracking-tighter">${totals.pending.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-             <span className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Pendiente de cierre</span>
+          <p className="text-[11px] text-primary-600 font-black uppercase tracking-[0.4em] mb-6">Saldo a Liquidar</p>
+          <div className="flex items-end justify-between">
+             <div>
+               <p className="text-5xl font-black text-gray-900 tracking-tighter">${totals.pending.toLocaleString('es-UY', { minimumFractionDigits: 2 })}</p>
+               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1 block">Próxima liquidación: {nextPayoutDate()}</span>
+             </div>
+             <Clock className="w-10 h-10 text-gray-400 animate-pulse" />
           </div>
         </div>
         <div className="bg-white rounded-[2.5rem] border border-primary-600/30 p-12 bg-primary-50 relative overflow-hidden group shadow-sm">
           <div className="absolute top-0 right-0 p-12 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
              <CreditCard className="w-48 h-48 text-gray-900 -rotate-12" />
           </div>
-          <div className="relative z-10">
-            <p className="text-[11px] text-emerald-500 font-black uppercase tracking-[0.4em] mb-6">Settled Amount</p>
-            <p className="text-6xl font-black text-emerald-500 tracking-tighter mb-6">${totals.paid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-            <p className="text-[11px] font-black text-gray-900/40 uppercase tracking-widest">Ya Transferido</p>
+          <div className="relative z-10 flex justify-between items-end">
+            <div>
+              <p className="text-[11px] text-emerald-500 font-black uppercase tracking-[0.4em] mb-6">Monto Transferido</p>
+              <p className="text-5xl font-black text-emerald-500 tracking-tighter mb-1">${totals.paid.toLocaleString('es-UY', { minimumFractionDigits: 2 })}</p>
+              <p className="text-[10px] font-black text-gray-900/40 uppercase tracking-widest">Depositado en cuenta</p>
+            </div>
+            <CheckCircle2 className="w-10 h-10 text-emerald-500" />
           </div>
         </div>
       </div>
@@ -212,39 +229,57 @@ export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | '
               <h3 className="text-[11px] font-black text-primary-600 uppercase tracking-[0.4em] mb-1">Transaction Stream</h3>
               <h4 className="text-2xl font-black text-gray-900 uppercase tracking-widest">Detalle Financiero por Pedido</h4>
            </div>
-           <button className="text-[11px] font-black text-gray-500 uppercase tracking-widest border border-gray-200 px-8 py-4 rounded-full hover:bg-white hover:text-black transition-all active:scale-95">Export XLS</button>
         </div>
         <div className="overflow-x-auto no-scrollbar">
           <table className="w-full text-left border-collapse">
             <thead className="bg-white/[0.01] border-b border-gray-100">
               <tr className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em]">
-                <th className="p-8">Timestamp</th>
-                <th className="p-8">Order</th>
-                <th className="p-8">Client</th>
-                <th className="p-8 text-right">Gross</th>
-                <th className="p-8 text-right">Platform Fee</th>
-                <th className="p-8 text-right font-black text-gray-900">Net Flow</th>
-                <th className="p-8">Status</th>
+                <th className="p-8">Fecha</th>
+                <th className="p-8">Suborden</th>
+                <th className="p-8 text-right">Venta Bruta</th>
+                <th className="p-8 text-right">Comisión Plataforma</th>
+                <th className="p-8 text-right">Costo Pago</th>
+                <th className="p-8 text-right font-black text-gray-900">Flujo Neto</th>
+                <th className="p-8">Estado Envío</th>
+                <th className="p-8">Estado Liquidación</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
-              {finances.map(f => (
-                <tr key={f.id} className="hover:bg-gray-50 group transition-colors">
-                  <td className="p-8 text-gray-500 text-[11px] font-black uppercase tracking-widest">{f.date}</td>
-                  <td className="p-8 font-black text-gray-900 text-[16px] group-hover:text-primary-600 transition-colors uppercase">{f.order}</td>
-                  <td className="p-8 text-gray-500 text-[13px] font-black uppercase tracking-widest">{f.client}</td>
-                  <td className="p-8 text-right font-black text-gray-900 text-[16px]">${f.gross.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  <td className="p-8 text-right font-black text-red-500 text-[15px]">-${f.feePlatform.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  <td className="p-8 text-right font-black text-emerald-500 text-[18px] bg-white/[0.01] group-hover:bg-emerald-500/5 transition-colors tracking-tighter">+${f.net.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  <td className="p-8">
-                     <span className={`badge px-4 py-2 ${stMap[f.status]?.c.replace('border-', 'text-').split(' ')[0] + ' bg' + stMap[f.status]?.c.split(' bg')[1]}`}>
-                        {stMap[f.status]?.l}
-                     </span>
-                  </td>
-                </tr>
-              ))}
-              {finances.length === 0 && (
-                <tr><td colSpan={7} className="p-8 text-center text-gray-500">No hay transacciones registradas.</td></tr>
+            <tbody className="divide-y divide-gray-100 text-sm">
+              {suborders.map(s => {
+                const date = s.created_at ? new Date(s.created_at).toLocaleDateString('es-UY') : '-';
+                const client = s.orders?.customer_name || s.orders?.customer_email || 'Cliente';
+                const gross = Number(s.product_subtotal) + Number(s.shipping_cost);
+
+                return (
+                  <tr key={s.id} className="hover:bg-gray-50 group transition-colors">
+                    <td className="p-8 text-gray-500 text-[11px] font-black uppercase tracking-widest">{date}</td>
+                    <td className="p-8 font-black text-gray-900 text-[15px] group-hover:text-primary-600 transition-colors uppercase">
+                      {s.suborder_number}
+                      <span className="block text-[10px] text-gray-400 font-normal normal-case mt-0.5">{client}</span>
+                    </td>
+                    <td className="p-8 text-right font-bold text-gray-900">${gross.toFixed(2)}</td>
+                    <td className="p-8 text-right font-bold text-red-500">-${Number(s.marketplace_fee).toFixed(2)}</td>
+                    <td className="p-8 text-right font-bold text-red-500">-${Number(s.payment_fee_share).toFixed(2)}</td>
+                    <td className="p-8 text-right font-black text-emerald-500 text-[17px] bg-white/[0.01] group-hover:bg-emerald-500/5 transition-colors tracking-tighter">+${Number(s.vendor_net_amount).toFixed(2)}</td>
+                    <td className="p-8">
+                       <span className={`inline-flex items-center border px-3 py-1 rounded-full text-xs font-bold uppercase ${
+                         suborderStatusMap[s.status]?.c || 'border-gray-200 text-gray-600 bg-gray-50'
+                       }`}>
+                          {suborderStatusMap[s.status]?.l || s.status}
+                       </span>
+                    </td>
+                    <td className="p-8">
+                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase ${
+                         liqStatusMap[s.liquidation_status]?.c || 'text-gray-400 bg-gray-100'
+                       }`}>
+                          {liqStatusMap[s.liquidation_status]?.l || s.liquidation_status}
+                       </span>
+                    </td>
+                  </tr>
+                );
+              })}
+              {suborders.length === 0 && (
+                <tr><td colSpan={8} className="p-8 text-center text-gray-500">No hay subórdenes registradas.</td></tr>
               )}
             </tbody>
           </table>
@@ -265,7 +300,7 @@ function StatCard({ label, value, icon: Icon, color }: { label: string; value: s
     <div className="soft rounded-3xl p-10 group hover:bg-gray-50 transition-all border border-gray-100 hover:border-primary-300 shadow-sm">
       <div className="flex justify-between items-start mb-8">
         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${c[color]}`}><Icon className="w-5 h-5" /></div>
-        <span className="text-3xl font-black text-gray-900 group-hover:text-primary-600 transition-colors">{value}</span>
+        <span className="text-2xl font-black text-gray-900 group-hover:text-primary-600 transition-colors">{value}</span>
       </div>
       <p className="text-[11px] font-black text-gray-500 uppercase tracking-[0.3em]">{label}</p>
     </div>

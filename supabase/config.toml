@@ -31,3 +31,21 @@ entrypoint = "./functions/trigger-soy/index.ts"
 enabled = true
 verify_jwt = false
 
+[functions.send-whatsapp-notification]
+enabled = true
+verify_jwt = false
+import_map = "./functions/send-whatsapp-notification/deno.json"
+entrypoint = "./functions/send-whatsapp-notification/index.ts"
+
+
+
+[functions.zinc-enrich-candidate]
+enabled = true
+verify_jwt = false
+import_map = "./functions/zinc-enrich-candidate/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/zinc-enrich-candidate/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/zinc-enrich-candidate/*.html" ]

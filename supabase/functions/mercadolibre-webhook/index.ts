@@ -210,7 +210,8 @@ async function processEvent(supabase: any, eventId: string, fetchFn: typeof fetc
             // Deduct master stock
             const { error: invErr } = await supabase.rpc("decrement_inventory", {
               p_variant_id: link.variant_id,
-              p_quantity: qty
+              p_quantity: qty,
+              p_skip_ml_sync: true
             });
             if (invErr) console.error(`[Webhook Process] Master inventory decrement failed:`, invErr.message);
 
@@ -228,6 +229,7 @@ async function processEvent(supabase: any, eventId: string, fetchFn: typeof fetc
                   .from('vendor_product_variants')
                   .update({
                     inventory_count: newStock,
+                    skip_ml_sync: true,
                     updated_at: new Date().toISOString()
                   })
                   .eq('id', link.vendor_product_variant_id);

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Save, ToggleLeft, ToggleRight, Settings, Store, Truck, Palette, LayoutTemplate, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, FileText, Share2, Link as LinkIcon, ImageIcon, CreditCard, ShieldCheck, Sparkles, Brain, Zap, Search as SearchIcon, Tag, Menu } from 'lucide-react';
+import { Save, ToggleLeft, ToggleRight, Settings, Store, Truck, Palette, LayoutTemplate, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, FileText, Share2, Link as LinkIcon, ImageIcon, CreditCard, ShieldCheck, Sparkles, Brain, Zap, Search as SearchIcon, Tag, Menu, Bell, RefreshCw } from 'lucide-react';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
 import { useToast } from '../../components/admin/Toast';
 import { updateCachedSetting } from '../../hooks/useSiteSettings';
@@ -444,6 +444,125 @@ export default function AdminSettings() {
   const [showMediaPicker, setShowMediaPicker] = useState<false | 'logo'>(false);
   const { toast } = useToast();
 
+  const [adminNotifications, setAdminNotifications] = useState({
+    id: '',
+    whatsapp_numbers: [] as { label: string; number: string; enabled: boolean }[],
+    notify_own_sales: false,
+    notify_vendor_sales: false,
+    notify_payment_received: false,
+    notify_low_stock: false,
+    notify_shipping_events: false,
+    notify_payout_pending: false,
+    is_active: false
+  });
+  const [whatsappLogs, setWhatsappLogs] = useState<any[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+
+  async function loadAdminNotifications() {
+    try {
+      const { data, error } = await supabase
+        .from('admin_notification_settings')
+        .select('*')
+        .maybeSingle();
+      if (error) throw error;
+      if (data) {
+        const dbNumbers = data.whatsapp_numbers || [];
+        const paddedNumbers = [...dbNumbers];
+        while (paddedNumbers.length < 3) {
+          paddedNumbers.push({ label: `Admin ${paddedNumbers.length + 1}`, number: '', enabled: false });
+        }
+        setAdminNotifications({
+          id: data.id,
+          whatsapp_numbers: paddedNumbers.slice(0, 3),
+          notify_own_sales: !!data.notify_own_sales,
+          notify_vendor_sales: !!data.notify_vendor_sales,
+          notify_payment_received: !!data.notify_payment_received,
+          notify_low_stock: !!data.notify_low_stock,
+          notify_shipping_events: !!data.notify_shipping_events,
+          notify_payout_pending: !!data.notify_payout_pending,
+          is_active: !!data.is_active
+        });
+      }
+    } catch (err: any) {
+      console.error("Error loading admin notifications:", err);
+    }
+  }
+
+  async function fetchWhatsappLogs() {
+    setLoadingLogs(true);
+    try {
+      const { data, error } = await supabase
+        .from('notification_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(30);
+      if (error) throw error;
+      setWhatsappLogs(data || []);
+    } catch (err: any) {
+      console.error("Error loading admin whatsapp logs:", err);
+    } finally {
+      setLoadingLogs(false);
+    }
+  }
+
+  async function saveAdminNotifications() {
+    try {
+      const numbers = adminNotifications.whatsapp_numbers || [];
+      
+      // Validations
+      for (const n of numbers) {
+        const numClean = n.number.trim();
+        if (n.enabled && numClean === '') {
+          throw new Error(`La etiqueta "${n.label}" está activa pero no tiene un número configurado.`);
+        }
+        if (numClean !== '') {
+          if (!numClean.startsWith('+598')) {
+            throw new Error(`El número "${n.number}" debe comenzar con +598 (formato Uruguay).`);
+          }
+          if (numClean.length < 11) {
+            throw new Error(`El número "${n.number}" es inválido (muy corto).`);
+          }
+        }
+      }
+
+      // Duplicate validation
+      const nonValued = numbers.map(n => n.number.trim()).filter(n => n !== '');
+      const duplicates = nonValued.filter((item, index) => nonValued.indexOf(item) !== index);
+      if (duplicates.length > 0) {
+        throw new Error(`No se permiten números duplicados: ${duplicates.join(', ')}`);
+      }
+
+      const payload = {
+        whatsapp_numbers: numbers,
+        notify_own_sales: adminNotifications.notify_own_sales,
+        notify_vendor_sales: adminNotifications.notify_vendor_sales,
+        notify_payment_received: adminNotifications.notify_payment_received,
+        notify_low_stock: adminNotifications.notify_low_stock,
+        notify_shipping_events: adminNotifications.notify_shipping_events,
+        notify_payout_pending: adminNotifications.notify_payout_pending,
+        is_active: adminNotifications.is_active,
+        updated_at: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('admin_notification_settings')
+        .upsert({ is_singleton: true, ...payload }, { onConflict: 'is_singleton' });
+
+      if (error) throw error;
+      toast.success('Configuración de notificaciones guardada');
+      fetchWhatsappLogs();
+    } catch (err: any) {
+      toast.error(err.message || 'Error al guardar');
+    }
+  }
+
+  useEffect(() => {
+    if (currentTab === 'notifications') {
+      loadAdminNotifications();
+      fetchWhatsappLogs();
+    }
+  }, [currentTab]);
+
   useEffect(() => { fetchData(); }, []);
 
   async function fetchData() {
@@ -562,6 +681,7 @@ export default function AdminSettings() {
           { key: 'shipping', label: 'Envios', icon: Truck },
           { key: 'social', label: 'Redes Sociales', icon: Share2 },
           { key: 'ai', label: 'Asistencia IA', icon: Sparkles },
+          { key: 'notifications', label: 'Notificaciones WhatsApp', icon: Bell },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key as any)}
             className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-bold transition-colors whitespace-nowrap ${
@@ -1645,6 +1765,208 @@ export default function AdminSettings() {
               </select>
             </div>
             <AiUsageStats period={settings['_ai_usage_period'] || '30'} />
+          </div>
+        </div>
+      )}
+
+      {/* NOTIFICACIONES WHATSAPP TAB */}
+      {currentTab === 'notifications' && (
+        <div className="space-y-8 max-w-4xl">
+          <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6 shadow-sm">
+            <div className="flex justify-between items-center border-b pb-4">
+              <div>
+                <h3 className="font-bold text-lg text-gray-950 flex items-center gap-2">
+                  <Bell className="w-5 h-5 text-indigo-600" /> WhatsApp Comercial Interno
+                </h3>
+                <p className="text-sm text-gray-500 mt-1 font-medium">Configurá las notificaciones operativas de WhatsApp para la administración de Collectibles.</p>
+              </div>
+              <button 
+                onClick={saveAdminNotifications}
+                className="bg-black text-white px-5 py-2 rounded-lg font-bold hover:bg-gray-800 transition-colors flex items-center gap-2 text-sm shadow-sm"
+              >
+                <Save className="w-4 h-4" />
+                Guardar cambios
+              </button>
+            </div>
+
+            {/* Toggle Activo */}
+            <div className="flex items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-200/50">
+              <div>
+                <span className="text-sm font-bold text-gray-900">Activar servicio de avisos internos</span>
+                <p className="text-xs text-gray-500 mt-0.5 font-medium">Habilita o deshabilita los envíos de WhatsApp para el equipo administrativo.</p>
+              </div>
+              <button 
+                onClick={() => setAdminNotifications(p => ({ ...p, is_active: !p.is_active }))}
+                className="focus:outline-none"
+              >
+                {adminNotifications.is_active ? (
+                  <ToggleRight className="w-10 h-10 text-emerald-600 transition-colors" />
+                ) : (
+                  <ToggleLeft className="w-10 h-10 text-gray-300 transition-colors" />
+                )}
+              </button>
+            </div>
+
+            {/* 3 WhatsApp Numbers */}
+            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-6 mb-3">Números de Destino Internos (Máx 3)</h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {(() => {
+                const padded = [...(adminNotifications.whatsapp_numbers || [])];
+                while (padded.length < 3) {
+                  padded.push({ label: `Admin ${padded.length + 1}`, number: '', enabled: false });
+                }
+                return padded.slice(0, 3).map((n, i) => {
+                  const updateIndex = (field: 'label' | 'number' | 'enabled', val: any) => {
+                    const nextList = [...padded];
+                    nextList[i] = { ...nextList[i], [field]: val };
+                    setAdminNotifications(prev => ({ ...prev, whatsapp_numbers: nextList }));
+                  };
+                  return (
+                    <div key={i} className="bg-white p-4 rounded-xl border border-gray-200 space-y-3 shadow-sm hover:border-gray-300 transition-colors">
+                      <div className="flex justify-between items-center border-b border-gray-50 pb-2">
+                        <input 
+                          type="text"
+                          value={n.label}
+                          onChange={(e) => updateIndex('label', e.target.value)}
+                          className="text-xs font-bold text-gray-800 uppercase tracking-wider bg-transparent border-none focus:outline-none w-2/3"
+                          placeholder={`Administrador ${i+1}`}
+                        />
+                        <label className="flex items-center cursor-pointer">
+                          <input 
+                            type="checkbox"
+                            checked={n.enabled}
+                            onChange={(e) => updateIndex('enabled', e.target.checked)}
+                            className="w-4 h-4 text-black border-gray-300 rounded focus:ring-black cursor-pointer"
+                          />
+                          <span className="text-[10px] text-gray-500 ml-1.5 font-medium select-none">Activo</span>
+                        </label>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Número de Celular</label>
+                        <input 
+                          type="text"
+                          value={n.number}
+                          onChange={(e) => updateIndex('number', e.target.value)}
+                          className="w-full text-xs font-mono px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-black focus:border-black"
+                          placeholder="Ej: +59899123456"
+                        />
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            {/* Config Toggles */}
+            <div className="bg-gray-50/50 p-6 rounded-xl border border-gray-200/50 space-y-4 shadow-sm mt-6">
+              <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Avisos Disponibles para Collectibles</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[
+                  { key: 'notify_own_sales', label: 'Ventas propias de Collectibles', desc: 'Avisos de ventas directas de mercadería propia de Collectibles.' },
+                  { key: 'notify_vendor_sales', label: 'Ventas de Vendors', desc: 'Alertas cuando un vendedor del Marketplace realiza una venta.' },
+                  { key: 'notify_payment_received', label: 'Pagos recibidos', desc: 'Notificaciones inmediatas al procesar un pago con tarjeta/Mercado Pago.' },
+                  { key: 'notify_low_stock', label: 'Stock bajo', desc: 'Alerta general cuando algún producto o variante queda con poco stock (<= 2).' },
+                  { key: 'notify_shipping_events', label: 'Eventos de envío', desc: 'Actualización sobre etiquetas generadas, despachadas o entregas finalizadas.' },
+                  { key: 'notify_payout_pending', label: 'Liquidaciones pendientes', desc: 'Alertas para revisión de liquidaciones pendientes a vendedores.' },
+                ].map(item => (
+                  <label key={item.key} className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm">
+                    <input 
+                      type="checkbox"
+                      checked={!!(adminNotifications as any)[item.key]}
+                      onChange={(e) => setAdminNotifications(p => ({ ...p, [item.key]: e.target.checked }))}
+                      className="w-4 h-4 text-black border-gray-300 rounded focus:ring-black mt-0.5 cursor-pointer"
+                    />
+                    <div>
+                      <span className="text-sm font-bold text-gray-800">{item.label}</span>
+                      <p className="text-[11px] text-gray-500 mt-0.5 font-medium leading-relaxed">{item.desc}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Logs Globales */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h4 className="text-lg font-bold text-gray-900">Historial Global de Notificaciones (WhatsApp)</h4>
+                <p className="text-xs text-gray-500 mt-1 font-medium">Monitoreo en tiempo real de todos los mensajes encolados y enviados.</p>
+              </div>
+              <button 
+                onClick={fetchWhatsappLogs}
+                disabled={loadingLogs}
+                className="text-xs text-gray-500 hover:text-black flex items-center gap-1 bg-white border border-gray-200 px-3 py-1.5 rounded-lg shadow-sm font-bold hover:bg-gray-50 disabled:opacity-50 transition-all active:scale-95"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingLogs ? 'animate-spin' : ''}`} />
+                Recargar
+              </button>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+              {loadingLogs ? (
+                <div className="p-8 text-center text-xs text-gray-500 animate-pulse font-medium">Cargando logs globales...</div>
+              ) : whatsappLogs.length === 0 ? (
+                <div className="p-8 text-center text-xs text-gray-400 font-medium">Aún no se han generado notificaciones en el sistema.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50 text-[10px] font-bold text-gray-500 uppercase tracking-widest border-b border-gray-200">
+                        <th className="px-6 py-3">Fecha</th>
+                        <th className="px-6 py-3">Ámbito</th>
+                        <th className="px-6 py-3">Evento</th>
+                        <th className="px-6 py-3">Celular Enmascarado</th>
+                        <th className="px-6 py-3">Estado</th>
+                        <th className="px-6 py-3">Error / Detalle</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-xs text-gray-700">
+                      {whatsappLogs.map((log) => {
+                        const statusColors: Record<string, string> = {
+                          'sent': 'bg-emerald-50 text-emerald-700 border-emerald-100',
+                          'queued': 'bg-blue-50 text-blue-700 border-blue-100',
+                          'failed': 'bg-rose-50 text-rose-700 border-rose-100'
+                        };
+                        const eventLabels: Record<string, string> = {
+                          'order_paid': 'Nueva venta / Pago aprobado',
+                          'payout_paid': 'Liquidación pagada',
+                          'low_stock': 'Stock bajo',
+                          'shipment_created': 'Pedido enviado',
+                          'shipment_delivered': 'Pedido entregado'
+                        };
+                        return (
+                          <tr key={log.id} className="hover:bg-gray-50/50">
+                            <td className="px-6 py-3 text-gray-500 font-mono">
+                              {new Date(log.created_at).toLocaleString()}
+                            </td>
+                            <td className="px-6 py-3">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${log.scope === 'admin' ? 'bg-indigo-100 text-indigo-800' : 'bg-amber-100 text-amber-800'}`}>
+                                {log.scope}
+                              </span>
+                            </td>
+                            <td className="px-6 py-3 font-bold text-gray-900">
+                              {eventLabels[log.event_type] || log.event_type}
+                            </td>
+                            <td className="px-6 py-3 font-mono">
+                              {log.recipient_number_masked}
+                            </td>
+                            <td className="px-6 py-3">
+                              <span className={`px-2 py-0.5 border rounded-full text-[10px] font-bold uppercase ${statusColors[log.status] || 'bg-gray-50 text-gray-600 border-gray-100'}`}>
+                                {log.status}
+                              </span>
+                            </td>
+                            <td className="px-6 py-3 text-gray-500 max-w-xs truncate" title={log.error_message || ''}>
+                              {log.error_message || '-'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

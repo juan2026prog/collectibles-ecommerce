@@ -5,6 +5,7 @@ import { Store, MapPin, Mail, ExternalLink, ShieldCheck, ChevronLeft, ChevronRig
 import { ProductGridCard } from '../components/ProductGridCard';
 import { useCartContext } from '../contexts/CartContext';
 import { getProductImage } from '../lib/imageUtils';
+import { Helmet } from 'react-helmet-async';
 
 export default function VendorStorefront() {
   const { slug } = useParams<{ slug: string }>();
@@ -129,8 +130,39 @@ export default function VendorStorefront() {
 
   const totalPages = Math.ceil(totalProducts / pageSize);
 
+  const seoTitle = `${vendor.store_name} | Collectibles Marketplace`;
+  const seoDesc = vendor.description || `Productos de ${vendor.store_name} disponibles en Uruguay. Descubrí artículos de colección con envío a todo el país.`;
+  const canonicalUrl = `https://collectibles.uy/store/${slug}`;
+
   return (
     <div className="min-h-screen bg-[#05070f] pb-20 pt-20">
+      <Helmet>
+        <title>{seoTitle}</title>
+        <meta name="description" content={seoDesc} />
+        <link rel="canonical" href={canonicalUrl} />
+        <meta property="og:title" content={seoTitle} />
+        <meta property="og:description" content={seoDesc} />
+        <meta property="og:url" content={canonicalUrl} />
+        <meta property="og:type" content="website" />
+        {vendor.logo_url && <meta property="og:image" content={vendor.logo_url} />}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={seoTitle} />
+        <meta name="twitter:description" content={seoDesc} />
+        {vendor.logo_url && <meta name="twitter:image" content={vendor.logo_url} />}
+        
+        {/* Schema.org for Store */}
+        <script type="application/ld+json">
+          {JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "Store",
+            "name": vendor.store_name,
+            "description": seoDesc,
+            "url": canonicalUrl,
+            "image": vendor.logo_url || "https://collectibles.uy/logo.png"
+          })}
+        </script>
+      </Helmet>
+
       {/* Banner / Header */}
       <div className="bg-[#05070f] border-b border-white/5 relative z-10">
         {vendor.banner_url ? (

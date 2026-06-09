@@ -255,21 +255,33 @@ export default function CustomerPortal() {
                     <div>
                       <p className="text-xs text-slate-400 font-bold uppercase tracking-wider text-right">TOTAL</p>
                       <p className="font-bold text-lg text-primary-600">{formatCurrencyPrice(order.total_amount)}</p>
+                      <div className="flex flex-col items-end gap-2">
+                        <span className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase ${
+                          ['paid', 'delivered'].includes(order.status) ? 'bg-green-100 text-green-700' :
+                          order.status === 'shipped' ? 'bg-blue-100 text-blue-700' :
+                          order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                          order.status === 'cancelada' || order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                          'bg-white/10 text-slate-300'
+                        }`}>
+                          {order.status === 'pending' && 'Pendiente'}
+                          {order.status === 'paid' && 'Pagado'}
+                          {order.status === 'processing' && 'En Preparación'}
+                          {order.status === 'shipped' && 'En Tránsito'}
+                          {order.status === 'delivered' && 'Entregado'}
+                          {(order.status === 'cancelled' || order.status === 'cancelada') && 'Cancelado'}
+                        </span>
+                        
+                        {order.tracking_number && (
+                          <div className="text-right">
+                            <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{order.carrier || 'Logística'}</div>
+                            <div className="text-xs font-mono font-bold text-blue-400">{order.tracking_number}</div>
+                            {order.tracking_url && (
+                              <a href={order.tracking_url} target="_blank" rel="noreferrer" className="text-[10px] text-primary-500 hover:underline">Rastrear envío</a>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <span className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase ${
-                      ['paid', 'delivered'].includes(order.status) ? 'bg-green-100 text-green-700' :
-                      order.status === 'shipped' ? 'bg-blue-100 text-blue-700' :
-                      order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                      order.status === 'cancelada' || order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                      'bg-white/10 text-slate-300'
-                    }`}>
-                      {order.status === 'pending' && 'Pendiente'}
-                      {order.status === 'paid' && 'Pagado'}
-                      {order.status === 'processing' && 'En Preparación'}
-                      {order.status === 'shipped' && 'En Tránsito'}
-                      {order.status === 'delivered' && 'Entregado'}
-                      {(order.status === 'cancelled' || order.status === 'cancelada') && 'Cancelado'}
-                    </span>
                   </div>
                   <div className="p-6">
                     {order.order_items.map((item: any, i: number) => (

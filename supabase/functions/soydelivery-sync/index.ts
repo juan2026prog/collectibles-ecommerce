@@ -18,25 +18,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // 1. Fetch site settings to get SoyDelivery credentials
-    const { data: settingsData } = await supabase.from('site_settings').select('key, value');
-    const settings = Object.fromEntries((settingsData || []).map((s: any) => [s.key, s.value]));
-
-    if (settings['shipping_soydelivery_enabled'] !== 'true') {
-      return new Response(JSON.stringify({ skipped: true, reason: "SoyDelivery disabled in settings" }), { headers: corsHeaders });
-    }
-
-    const apiId = settings['shipping_soydelivery_api_id'];
-    const apiKey = settings['shipping_soydelivery_api_key'];
-    const negocioId = settings['shipping_soydelivery_negocio_id'];
-    const negocioClave = settings['shipping_soydelivery_negocio_clave'];
-    const isSandbox = settings['shipping_soydelivery_sandbox'] === 'true';
-
-    if (!apiId || !apiKey || !negocioId || !negocioClave) {
-      throw new Error("Missing SoyDelivery credentials in settings");
-    }
-
-    // 2. Fetch the order
+    // 1. Fetch the order
     const { data: order, error: orderErr } = await supabase
       .from("orders")
       .select("*")
@@ -44,7 +26,7 @@ serve(async (req) => {
       .single();
 
     if (orderErr || !order) throw new Error(orderErr?.message || "Order not found");
-    
+
     // Skip if the order is not assigned to SoyDelivery
     if (order.shipping_provider !== "SoyDelivery") {
       return new Response(JSON.stringify({ skipped: true, reason: `Not a SoyDelivery order (assigned to: ${order.shipping_provider})` }), { headers: corsHeaders });
@@ -55,6 +37,60 @@ serve(async (req) => {
     if (!addr || typeof addr === 'string' || !addr.street) {
       return new Response(JSON.stringify({ skipped: true, reason: "No shipping address (might be pickup)" }), { headers: corsHeaders });
     }
+
+    // 2. Fetch SoyDelivery credentials (Vendor or Global Fallback)
+    let apiId = '';
+    let apiKey = '';
+    let negocioId = '';
+    let negocioClave = '';
+    let isSandbox = false;
+    let usedVendor = false;
+
+    if (order.vendor_id) {
+      const { data: vConn } = await supabase
+        .from('vendor_shipping_connections')
+        .select('*')
+        .eq('vendor_id', order.vendor_id)
+        .eq('provider', 'soydelivery')
+        .single();
+      
+      if (vConn && vConn.connection_status === 'connected' && vConn.credentials_encrypted) {
+        try {
+           const { decryptData } = await import("../_shared/crypto.ts");
+           const secret = Deno.env.get("SHIPPING_ENCRYPTION_KEY") || supabaseKey.substring(0, 32);
+           const decryptedJson = await decryptData(vConn.credentials_encrypted, secret);
+           const creds = JSON.parse(decryptedJson);
+           apiKey = creds.apiKey;
+           apiId = creds.clientId;
+           negocioId = creds.clientId; // Assumed client config maps to these
+           negocioClave = creds.secret;
+           usedVendor = true;
+        } catch (e) {
+           console.log("[SoyDelivery] Fallo al desencriptar credenciales del vendor, ignorando.");
+        }
+      }
+    }
+
+    if (!usedVendor) {
+      const { data: settingsData } = await supabase.from('site_settings').select('key, value');
+      const settings = Object.fromEntries((settingsData || []).map((s: any) => [s.key, s.value]));
+
+      if (settings['shipping_soydelivery_enabled'] !== 'true') {
+        return new Response(JSON.stringify({ skipped: true, reason: "SoyDelivery disabled in global settings" }), { headers: corsHeaders });
+      }
+
+      apiId = settings['shipping_soydelivery_api_id'];
+      apiKey = settings['shipping_soydelivery_api_key'];
+      negocioId = settings['shipping_soydelivery_negocio_id'];
+      negocioClave = settings['shipping_soydelivery_negocio_clave'];
+      isSandbox = settings['shipping_soydelivery_sandbox'] === 'true';
+    }
+
+    if (!apiId || !apiKey || !negocioId || !negocioClave) {
+      throw new Error("Faltan credenciales de SoyDelivery (ni vendor ni global).");
+    }
+    
+
 
     // Determine base URL
     const baseUrl = isSandbox 

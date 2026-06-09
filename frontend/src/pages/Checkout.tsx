@@ -207,6 +207,7 @@ export default function Checkout() {
   });
 
   const [dacShippingCost, setDacShippingCost] = useState<number | null>(null);
+  const [vendorShippingCosts, setVendorShippingCosts] = useState<Record<string, number>>({});
   const [dacShippingLoading, setDacShippingLoading] = useState(false);
   const [dacShippingError, setDacShippingError] = useState<string | null>(null);
   const [selectedShippingMethod, setSelectedShippingMethod] = useState<'delivery' | 'pickup' | 'dac' | 'dac_home' | 'dac_agency'>('delivery');
@@ -273,6 +274,7 @@ export default function Checkout() {
     setDacShippingCost(null);
     setDacShippingError(null);
     setDetectedKOficina(null);
+    setVendorShippingCosts({});
   }, [dacDeliveryMode, selectedShippingMethod]);
 
   useEffect(() => {
@@ -308,51 +310,75 @@ export default function Checkout() {
       setDacShippingLoading(true);
       setDacShippingError(null);
       try {
-        const bodyPayload: any = {
-          mode: dacDeliveryMode === 'dac_agency' ? 'agency' : 'home',
-          department: form.department,
-          city: dacDeliveryMode === 'dac_agency' ? (selectedAgency?.city || form.city || selectedAgency?.office_name) : form.city,
-          locality: dacDeliveryMode === 'dac_agency' ? (selectedAgency?.locality || form.barrio || "") : (form.barrio || ""),
-          phone: form.phone,
-          package_quantity: 1,
-          package_type: 1,
-          cart_total: total,
-          items: items.map(item => ({
-            product_id: item.product_id,
-            variant_id: item.variant_id || "",
-            quantity: item.quantity,
-            price: item.price,
-            title: item.title
-          }))
-        };
+        let totalCost = 0;
+        let lastKOficina = null;
+        const costsByVendor: Record<string, number> = {};
 
-        if (dacDeliveryMode === 'dac_agency' && selectedAgency) {
-          bodyPayload.dac_office_id = selectedAgency.id;
-          bodyPayload.k_oficina_destino = selectedAgency.k_oficina;
-          bodyPayload.address = selectedAgency.address || selectedAgency.office_name;
-        } else {
-          bodyPayload.address = form.street;
+        // Group items by vendor
+        const groups = items.reduce((acc: Record<string, any[]>, item: any) => {
+          const vendorId = item.vendor_id || 'collectibles';
+          if (!acc[vendorId]) acc[vendorId] = [];
+          acc[vendorId].push(item);
+          return acc;
+        }, {});
+
+        for (const [vendorId, groupItems] of Object.entries(groups)) {
+          const groupTotal = groupItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
+          
+          if (isFreeShipping) {
+            costsByVendor[vendorId] = 0;
+            continue;
+          }
+
+          const bodyPayload: any = {
+            mode: dacDeliveryMode === 'dac_agency' ? 'agency' : 'home',
+            department: form.department,
+            city: dacDeliveryMode === 'dac_agency' ? (selectedAgency?.city || form.city || selectedAgency?.office_name) : form.city,
+            locality: dacDeliveryMode === 'dac_agency' ? (selectedAgency?.locality || form.barrio || "") : (form.barrio || ""),
+            phone: form.phone,
+            package_quantity: 1,
+            package_type: 1,
+            cart_total: groupTotal,
+            items: groupItems.map(item => ({
+              product_id: item.product_id,
+              variant_id: item.variant_id || "",
+              quantity: item.quantity,
+              price: item.price,
+              title: item.title
+            }))
+          };
+
+          if (dacDeliveryMode === 'dac_agency' && selectedAgency) {
+            bodyPayload.dac_office_id = selectedAgency.id;
+            bodyPayload.k_oficina_destino = selectedAgency.k_oficina;
+            bodyPayload.address = selectedAgency.address || selectedAgency.office_name;
+          } else {
+            bodyPayload.address = form.street;
+          }
+
+          console.log(`[Checkout Debug] Llamado a dac-get-cost para ${vendorId} con payload:`, bodyPayload);
+
+          const { data, error } = await supabase.functions.invoke('dac-get-cost', {
+            body: bodyPayload
+          });
+
+          if (!active) return;
+          if (error) throw error;
+
+          console.log(`[Checkout Debug] Respuesta dac-get-cost para ${vendorId}:`, data);
+
+          if (data && data.success) {
+            costsByVendor[vendorId] = data.cost;
+            totalCost += data.cost;
+            lastKOficina = data.raw_response?.k_oficina || data.finalKOficina || null;
+          } else {
+            throw new Error(data?.error || "Error al calcular costo DAC.");
+          }
         }
 
-        console.log("[Checkout Debug] Llamado a dac-get-cost con payload:", bodyPayload);
-
-        const { data, error } = await supabase.functions.invoke('dac-get-cost', {
-          body: bodyPayload
-        });
-
-        if (!active) return;
-
-        if (error) throw error;
-
-        console.log("[Checkout Debug] Respuesta dac-get-cost:", data);
-
-        if (data && data.success) {
-          // If free shipping applies, override cost to 0 but keep the office code
-          setDacShippingCost(isFreeShipping ? 0 : data.cost);
-          setDetectedKOficina(data.raw_response?.k_oficina || data.finalKOficina || null);
-        } else {
-          throw new Error(data?.error || "Error al calcular costo DAC.");
-        }
+        setVendorShippingCosts(costsByVendor);
+        setDacShippingCost(isFreeShipping ? 0 : totalCost);
+        setDetectedKOficina(lastKOficina);
       } catch (err: any) {
         console.error("Error fetching DAC cost:", err);
         if (active) {
@@ -403,7 +429,23 @@ export default function Checkout() {
   if (shippingMethod === 'delivery') {
     if (isMontevideo) {
       if (form.barrio !== '') {
-        shipping = calculateShipping(resolvedCityForShipping, form.department, total, freeShippingThreshold);
+        const isFreeShipping = total >= freeShippingThreshold;
+        if (isFreeShipping) {
+          shipping = 0;
+        } else {
+          // Group items by vendor to calculate per-package shipping
+          const groups = items.reduce((acc: Record<string, any[]>, item: any) => {
+            const vendorId = item.vendor_id || 'collectibles';
+            if (!acc[vendorId]) acc[vendorId] = [];
+            acc[vendorId].push(item);
+            return acc;
+          }, {});
+
+          for (const [vendorId, groupItems] of Object.entries(groups)) {
+            const groupSubtotal = groupItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
+            shipping += calculateShipping(resolvedCityForShipping, form.department, groupSubtotal, freeShippingThreshold);
+          }
+        }
       } else {
         shipping = 0;
       }
@@ -1027,13 +1069,6 @@ export default function Checkout() {
       return;
     }
 
-    const vendorIds = new Set(items.map(i => i.vendor_id || 'platform'));
-    if (vendorIds.size > 1) {
-      setCheckoutError('Actualmente no es posible finalizar una compra con productos de diferentes vendedores. Finalizá cada compra por separado.');
-      setIsSubmitting(false);
-      return;
-    }
-
     submitLockRef.current = true;
     setIsSubmitting(true);
     setCheckoutError('');
@@ -1043,7 +1078,7 @@ export default function Checkout() {
         items: items.map((item) => ({
           product_id: item.product_id,
           variant_id: item.variant_id,
-          vendor_id: item.vendor_id === 'platform' ? undefined : item.vendor_id,
+          vendor_id: item.vendor_id === 'platform' || !item.vendor_id ? undefined : item.vendor_id,
           quantity: item.quantity,
           price: item.price,
           title: item.title,
@@ -2044,77 +2079,115 @@ export default function Checkout() {
               </button>
 
               <div className={`mt-6 lg:block ${isSummaryExpanded ? 'block animate-fade-in' : 'hidden'}`}>
-                <div className="space-y-3 mb-6">
-                {items.map((item) => {
-                  const itemDiscount = evaluateItemDiscount(item as any, promotions);
-                  const displayPrice = (item.price * item.quantity) - itemDiscount;
+                <div className="space-y-4 mb-6">
+                  {Object.entries(
+                    items.reduce((acc: Record<string, { name: string; items: any[] }>, item: any) => {
+                      const vendorId = item.vendor_id || 'collectibles';
+                      const vendorName = item.vendor_name || (vendorId === 'collectibles' ? 'Collectibles' : 'Vendedor');
+                      if (!acc[vendorId]) {
+                        acc[vendorId] = { name: vendorName, items: [] };
+                      }
+                      acc[vendorId].items.push(item);
+                      return acc;
+                    }, {})
+                  ).map(([vendorId, group]) => {
+                    // Calculate vendor group shipping cost dynamically
+                    let groupShippingCost = 0;
+                    if (shippingMethod === 'delivery') {
+                      if (total < freeShippingThreshold) {
+                        if (form.department === 'Montevideo') {
+                          if (form.barrio !== '') {
+                            const groupSubtotal = group.items.reduce((sum, it) => sum + it.price * it.quantity, 0);
+                            groupShippingCost = calculateShipping(resolvedCityForShipping, form.department, groupSubtotal, freeShippingThreshold);
+                          }
+                        } else {
+                          groupShippingCost = vendorShippingCosts[vendorId] ?? 0;
+                        }
+                      }
+                    }
+                    const providerLabel = form.department === 'Montevideo' ? 'Soy Delivery' : 'DAC';
 
-                  return (
-                  <div key={item.variant_id} className="flex items-center gap-2.5 p-2 rounded-xl bg-white/[0.02] border border-white/5 justify-between animate-fade-in">
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                      <img
-                        src={resolveImage(item.image) || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect fill="%23f3f4f6" width="48" height="48" rx="8"/></svg>'}
-                        alt=""
-                        className="w-12 h-12 object-contain bg-white/5 p-0.5 rounded-lg shrink-0"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-semibold text-white line-clamp-1 leading-snug" title={item.title}>
-                          {item.title}
-                        </p>
-                        {item.variant_name && (
-                          <p className="text-[10px] text-slate-500 truncate leading-none mt-1">{item.variant_name}</p>
-                        )}
-                        {item.vendor_name && item.vendor_id !== 'platform' && (
-                          <div className="mt-1">
-                            <p className="text-[8px] font-black uppercase text-[#f00856]">Vendido por</p>
-                            <p className="text-[9px] font-bold text-slate-300 line-clamp-1">{item.vendor_name}</p>
-                          </div>
-                        )}
+                    return (
+                      <div key={vendorId} className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-3">
+                        <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                          <span className="text-xs font-black uppercase text-[#f00856] tracking-wider">{group.name}</span>
+                          {shippingMethod === 'delivery' && isLocationSelected && form.department && (
+                            <span className="text-[10px] font-bold text-slate-400">
+                              Envío ({providerLabel}): {groupShippingCost === 0 ? 'GRATIS' : formatCurrencyPrice(groupShippingCost)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="space-y-2.5">
+                          {group.items.map((item) => {
+                            const itemDiscount = evaluateItemDiscount(item as any, promotions);
+                            const displayPrice = (item.price * item.quantity) - itemDiscount;
+
+                            return (
+                              <div key={item.variant_id} className="flex items-center gap-2.5 justify-between animate-fade-in">
+                                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                  <img
+                                    src={resolveImage(item.image) || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect fill="%23f3f4f6" width="48" height="48" rx="8"/></svg>'}
+                                    alt=""
+                                    className="w-10 h-10 object-contain bg-white/5 p-0.5 rounded-lg shrink-0"
+                                  />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-xs font-semibold text-white line-clamp-1 leading-snug" title={item.title}>
+                                      {item.title}
+                                    </p>
+                                    {item.variant_name && (
+                                      <p className="text-[10px] text-slate-500 truncate leading-none mt-1">{item.variant_name}</p>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-3 shrink-0">
+                                  <div className="flex items-center border border-white/10 rounded bg-white/5 overflow-hidden">
+                                    <button
+                                      type="button"
+                                      onClick={() => updateQuantity(item.variant_id, item.quantity - 1)}
+                                      className="p-1 px-1.5 hover:bg-white/5 text-slate-400 hover:text-white transition-colors border-r border-white/10"
+                                    >
+                                      <Minus className="w-2.5 h-2.5" />
+                                    </button>
+                                    <span className="px-2 text-[10px] font-bold text-white min-w-[14px] text-center">
+                                      {item.quantity}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => updateQuantity(item.variant_id, item.quantity + 1)}
+                                      className="p-1 px-1.5 hover:bg-white/5 text-slate-400 hover:text-white transition-colors border-l border-white/10"
+                                    >
+                                      <Plus className="w-2.5 h-2.5" />
+                                    </button>
+                                  </div>
+                                  <div className="flex flex-col items-end gap-0.5">
+                                    <span className="text-xs font-bold text-white whitespace-nowrap">
+                                      {formatCurrencyPrice(displayPrice)}
+                                    </span>
+                                    {itemDiscount > 0 && (
+                                      <span className="text-[10px] text-slate-500 line-through whitespace-nowrap">
+                                        {formatCurrencyPrice(item.price * item.quantity)}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => removeItem(item.variant_id)}
+                                      className="text-slate-500 hover:text-red-500 transition-colors p-1"
+                                      title="Eliminar"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <div className="flex items-center border border-white/10 rounded bg-white/5 overflow-hidden">
-                        <button
-                          type="button"
-                          onClick={() => updateQuantity(item.variant_id, item.quantity - 1)}
-                          className="p-1 px-1.5 hover:bg-white/5 text-slate-400 hover:text-white transition-colors border-r border-white/10"
-                        >
-                          <Minus className="w-2.5 h-2.5" />
-                        </button>
-                        <span className="px-2 text-[10px] font-bold text-white min-w-[14px] text-center">
-                          {item.quantity}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => updateQuantity(item.variant_id, item.quantity + 1)}
-                          className="p-1 px-1.5 hover:bg-white/5 text-slate-400 hover:text-white transition-colors border-l border-white/10"
-                        >
-                          <Plus className="w-2.5 h-2.5" />
-                        </button>
-                      </div>
-                      <div className="flex flex-col items-end gap-0.5">
-                        <span className="text-xs font-bold text-white whitespace-nowrap">
-                          {formatCurrencyPrice(displayPrice)}
-                        </span>
-                        {itemDiscount > 0 && (
-                          <span className="text-[10px] text-slate-500 line-through whitespace-nowrap">
-                            {formatCurrencyPrice(item.price * item.quantity)}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center">
-                        <button
-                          type="button"
-                          onClick={() => removeItem(item.variant_id)}
-                          className="text-slate-500 hover:text-red-500 transition-colors p-1"
-                          title="Eliminar"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )})}
+                    );
+                  })}
+                </div>
               </div>
               <div className="border-t pt-4 space-y-2">
                 <div className="flex justify-between text-sm"><span className="text-slate-400">Subtotal ({items.reduce((s, i) => s + i.quantity, 0)} {items.reduce((s, i) => s + i.quantity, 0) === 1 ? 'item' : 'items'})</span><span className="font-bold">{formatCurrencyPrice(total - autoDiscountAmount)}</span></div>
@@ -2307,7 +2380,6 @@ export default function Checkout() {
               </div>
             </div>
           </div>
-        </div>
       </form>
 
       {showPaymentMethodsModal && (

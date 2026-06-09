@@ -170,6 +170,42 @@ export function useProduct(slug: string | undefined) {
   return { product, loading };
 }
 
+// --------------------------------------------------------------------------------
+// useProductBuyBox (Buy Box V2)
+// --------------------------------------------------------------------------------
+export function useProductBuyBox(productId: string | undefined) {
+  const [buyBox, setBuyBox] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!productId) {
+      setBuyBox(null);
+      setLoading(false);
+      return;
+    }
+    
+    async function fetch() {
+      setLoading(true);
+      try {
+        const { data, error } = await supabase.rpc('get_product_buybox', { p_product_id: productId });
+        if (error) {
+          console.error('Error fetching buy box:', error);
+          setBuyBox(null);
+        } else {
+          setBuyBox(data);
+        }
+      } catch (err) {
+        console.error('Exception fetching buy box:', err);
+        setBuyBox(null);
+      }
+      setLoading(false);
+    }
+    fetch();
+  }, [productId]);
+
+  return { buyBox, loading };
+}
+
 // ═══ useCategories ═══
 export function useCategories() {
   const [categories, setCategories] = useState<any[]>([]);

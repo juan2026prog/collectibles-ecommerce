@@ -73,11 +73,25 @@ serve(async (req) => {
     // Update raw response in search
     await supabase.from('international_import_searches').update({ raw_response: rawResponse }).eq('id', searchRecord.id);
 
-    // Fetch Mapping Rules
-    const [{ data: brandMappings }, { data: keywordMappings }] = await Promise.all([
+    // Fetch Mapping Rules and Categories for Heuristics
+    const [{ data: brandMappings }, { data: keywordMappings }, { data: dbCategories }] = await Promise.all([
       supabase.from('amazon_brand_mapping').select('*'),
-      supabase.from('keyword_mapping_rules').select('*').order('priority', { ascending: false })
+      supabase.from('keyword_mapping_rules').select('*').order('priority', { ascending: false }),
+      supabase.from('categories').select('*')
     ]);
+
+    const categories = dbCategories || [];
+    const getCategoryId = (name: string, parentName?: string) => {
+      let cat = categories.find(c => c.name.toLowerCase() === name.toLowerCase());
+      if (cat && parentName) {
+        // optionally check parent if we want to be strict
+        const parent = categories.find(c => c.id === cat.parent_id);
+        if (parent && parent.name.toLowerCase() !== parentName.toLowerCase()) {
+           cat = categories.find(c => c.name.toLowerCase() === name.toLowerCase() && c.parent_id);
+        }
+      }
+      return cat?.id || null;
+    };
 
     const products = rawResponse.results || [];
     const candidates = [];
@@ -119,13 +133,50 @@ serve(async (req) => {
         }
       }
 
+      // 3. Fallback Heuristics
+      if (!suggested_category_id) {
+        const titleL = p.title.toLowerCase();
+        const brandL = (p.brand || '').toLowerCase();
+        
+        const figParent = getCategoryId('Figuras') || getCategoryId('Figuras / Coleccionables');
+        const indParent = getCategoryId('Indumentaria') || getCategoryId('Ropa');
+
+        if (brandL.includes('pokemon') || titleL.includes('pokemon')) {
+          suggested_category_id = figParent;
+          suggested_subcategory_id = getCategoryId('Pokémon');
+          mapping_confidence = 70;
+        } else if (brandL === 'neca') {
+          suggested_category_id = figParent;
+          suggested_subcategory_id = getCategoryId('NECA');
+          mapping_confidence = 70;
+        } else if (brandL === 'funko' || titleL.includes('funko pop')) {
+          suggested_category_id = figParent;
+          suggested_subcategory_id = getCategoryId('Funko POP') || getCategoryId('Funko');
+          mapping_confidence = 70;
+        } else if (titleL.includes('marvel legends')) {
+          suggested_category_id = figParent;
+          suggested_subcategory_id = getCategoryId('Marvel Legends') || getCategoryId('Marvel');
+          mapping_confidence = 70;
+        } else if (titleL.includes('black series') && titleL.includes('star wars')) {
+          suggested_category_id = figParent;
+          suggested_subcategory_id = getCategoryId('Star Wars Black Series') || getCategoryId('Star Wars');
+          mapping_confidence = 70;
+        } else if (titleL.includes('t-shirt') || titleL.includes('hoodie') || titleL.includes('jacket') || titleL.includes('cap')) {
+          suggested_category_id = indParent;
+          // No subcategory inferred for now
+          mapping_confidence = 60;
+        }
+      }
+
       candidates.push({
         search_id: searchRecord.id,
         external_product_id: p.product_id,
         title: p.title,
         brand: p.brand || null,
         category: null, 
-        image_url: p.image || "https://via.placeholder.com/400?text=No+Image",
+        image_url: p.image || null,
+        main_image_url_external: p.image || null,
+        image_urls_external: p.image ? [p.image] : [],
         product_url_external: `https://www.amazon.com/dp/${p.product_id}`,
         price_usd: price,
         currency: 'USD',

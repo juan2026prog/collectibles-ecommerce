@@ -1,7 +1,7 @@
 import { useParams, Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { ShoppingCart, Minus, Plus, Truck, ShieldCheck, Star, ChevronDown, Heart } from 'lucide-react';
-import { useProduct } from '../hooks/useData';
+import { ShoppingCart, Minus, Plus, Truck, ShieldCheck, Star, ChevronDown, Heart, Trophy } from 'lucide-react';
+import { useProduct, useProductBuyBox } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useWishlistContext } from '../contexts/WishlistContext';
@@ -19,6 +19,7 @@ export default function ProductDetail() {
   const { settings } = useSiteSettings();
   const { slug } = useParams();
   const { product, loading } = useProduct(slug);
+  const { buyBox, loading: buyBoxLoading } = useProductBuyBox(product?.id);
   const cart = useCartContext();
   const { user } = useAuth();
   const { formatCurrencyPrice } = useCurrency();
@@ -123,8 +124,22 @@ export default function ProductDetail() {
   const productImage = getProductImage(product);
   const { images = [], variants = [], reviews = [] } = product || {};
   const selectedVariant = variants[selectedVariantIdx] || variants[0];
-  const stock = selectedVariant?.inventory_count || 0;
-  const finalPrice = product.base_price + (selectedVariant?.price_adjustment || 0);
+  
+  const activeBuyBox = buyBox?.[selectedVariant?.id];
+  const bbWinner = activeBuyBox?.winner;
+  const hideVendors = activeBuyBox?.hide_vendors || false;
+  const bbOtherOptions = hideVendors ? [] : (activeBuyBox?.other_options || []);
+
+  const stock = bbWinner ? bbWinner.stock : (selectedVariant?.inventory_count || 0);
+  const finalPrice = bbWinner 
+    ? (bbWinner.is_collectibles ? product.base_price + bbWinner.price_adjustment : Number(bbWinner.price)) 
+    : (product.base_price + (selectedVariant?.price_adjustment || 0));
+    
+  const winnerIsCollectibles = bbWinner ? bbWinner.is_collectibles : (!product?.vendor_id);
+  const winnerVendorId = hideVendors ? null : (bbWinner ? bbWinner.vendor_id : product?.vendor_id);
+  const winnerVendorName = hideVendors ? 'Collectibles Uruguay' : (bbWinner ? bbWinner.vendor_name : (product?.vendor?.store_name || 'Collectibles Uruguay'));
+  const winnerHasLogistics = hideVendors ? false : (bbWinner ? bbWinner.has_logistics : false);
+
   const avgRating = reviews.length > 0 ? reviews.reduce((s: number, r: any) => s + r.rating, 0) / reviews.length : 0;
   const currentImage = images[selectedImage]?.url;
   const displayImage = currentImage ? resolveImage(currentImage) : productImage;
@@ -172,30 +187,41 @@ export default function ProductDetail() {
     setMousePos({ x, y });
   };
 
-  function addToCart() {
+  function addToCart(selectedOption?: any) {
     if (!selectedVariant) return;
-    if (stock <= 0) return;
-    if (quantity > stock) return;
+    
+    // If a specific option from "Other Options" was clicked, use it instead of winner
+    const targetPrice = selectedOption ? selectedOption.price : finalPrice;
+    const targetStock = selectedOption ? selectedOption.stock : stock;
+    const targetVendorId = selectedOption ? selectedOption.vendor_id : winnerVendorId;
+    const targetVendorName = selectedOption ? selectedOption.vendor_name : winnerVendorName;
+    const targetVpvId = selectedOption ? selectedOption.vpv_id : (bbWinner && !bbWinner.is_collectibles ? bbWinner.vpv_id : null);
+
+    if (targetStock <= 0) return;
+    if (quantity > targetStock) return;
 
     cart.addItem({
       product_id: product.id,
       variant_id: selectedVariant.id,
-      quantity,
+      vendor_product_variant_id: targetVpvId, // Will be null for Collectibles
+      quantity: selectedOption ? 1 : quantity,
       title: product.title,
-      price: finalPrice,
+      price: targetPrice,
       image: productImage,
       variant_name: selectedVariant.name,
       category_id: product.category?.id,
       brand_id: product.brand?.id,
-      vendor_id: product.vendor_id,
-      vendor_name: product.vendor?.store_name,
+      vendor_id: targetVendorId,
+      vendor_name: targetVendorName,
       vendor_slug: product.vendor?.slug,
       vendor_logo: product.vendor?.logo_url,
       tag_ids: product.product_tags?.map((pt: any) => pt.tag_id) || [],
     });
 
-    setAddedToCart(true);
-    setTimeout(() => setAddedToCart(false), 2000);
+    if (!selectedOption) {
+      setAddedToCart(true);
+      setTimeout(() => setAddedToCart(false), 2000);
+    }
 
     analytics.track({
       eventName: 'AddToCart',
@@ -203,44 +229,75 @@ export default function ProductDetail() {
         content_name: product.title,
         content_ids: [product.id],
         content_type: 'product',
-        value: finalPrice * quantity,
+        value: targetPrice * (selectedOption ? 1 : quantity),
         currency: 'UYU'
-      },
-      user: { email: user?.email || undefined }
+      }
     });
 
+    trackAddToCart({
+      content_name: product.title,
+      content_ids: [product.id],
+      content_type: 'product',
+      value: targetPrice * (selectedOption ? 1 : quantity),
+      currency: 'UYU'
+    }, generateMetaEventId('AddToCart', product.id));
   }
 
-  const seoTitle = product.seo_title || `${product.title} - Comprar Online`;
-  const seoDescription = product.seo_description || product.short_description || product.title;
-  const productUrl = typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '';
-  const productSchema: any = {
-    "@context": "https://schema.org/",
-    "@type": "Product",
-    "name": seoTitle,
-    "image": [
-      displayImage
-     ],
-    "description": seoDescription,
-    "sku": selectedVariant?.sku || product.id,
-    "brand": {
-      "@type": "Brand",
-      "name": product.brand?.name || "Generic"
-    },
-    "url": productUrl,
-    "offers": {
-      "@type": "Offer",
-      "url": productUrl,
-      "priceCurrency": "UYU",
-      "price": finalPrice,
-      "availability": stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
-      "itemCondition": "https://schema.org/NewCondition",
-      "seller": {
-        "@type": "Organization",
-        "name": "Collectibles Uruguay"
-      }
+  useEffect(() => {
+    if (product) {
+      analytics.track({
+        eventName: 'ViewContent',
+        eventData: {
+          content_name: product.title,
+          content_ids: [product.id],
+          content_type: 'product',
+          value: finalPrice * quantity,
+          currency: 'UYU'
+        },
+        user: { email: user?.email || undefined }
+      });
+
+      trackViewContent({
+        content_name: product.title,
+        content_ids: [product.id],
+        content_type: 'product',
+        value: finalPrice * quantity,
+        currency: 'UYU'
+      }, generateMetaEventId('ViewContent', product.id));
     }
-  };
+  }, [product, user, finalPrice, quantity]);
+
+  const vendorNameSuffix = hideVendors ? '' : (!winnerIsCollectibles ? ` (Vendido por ${winnerVendorName})` : '');
+  const seoTitle = (product.seo_title || `${product.title} - Comprar Online`) + vendorNameSuffix;
+  const seoDescription = (product.seo_description || product.short_description || product.title) + (hideVendors ? '' : (!winnerIsCollectibles ? ` - Vendido por ${winnerVendorName} en Collectibles.` : ''));
+  const productUrl = typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '';
+    const productSchema: any = {
+      "@context": "https://schema.org/",
+      "@type": "Product",
+      "name": seoTitle,
+      "image": [
+        displayImage
+       ],
+      "description": seoDescription,
+      "sku": selectedVariant?.sku || product.id,
+      "brand": {
+        "@type": "Brand",
+        "name": product.brand?.name || "Generic"
+      },
+      "url": productUrl,
+      "offers": {
+        "@type": "Offer",
+        "url": productUrl,
+        "priceCurrency": "UYU",
+        "price": finalPrice,
+        "availability": stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+        "itemCondition": "https://schema.org/NewCondition",
+        "seller": {
+          "@type": "Organization",
+          "name": winnerVendorName
+        }
+      }
+    };
 
   if (reviews && reviews.length > 0) {
     productSchema.aggregateRating = {
@@ -509,12 +566,50 @@ export default function ProductDetail() {
             </div>
           )}
 
-          <SoldByCard 
-            vendorId={product.vendor_id} 
-            vendorName={product.vendor?.store_name} 
-            vendorLogo={product.vendor?.logo_url ? resolveImage(product.vendor.logo_url) : undefined}
-            vendorSlug={product.vendor?.slug}
-          />
+          {!hideVendors && (
+            <SoldByCard 
+              vendorId={winnerVendorId} 
+              vendorName={winnerVendorName} 
+              vendorLogo={(!winnerIsCollectibles && product.vendor?.id === winnerVendorId) ? (product.vendor?.logo_url ? resolveImage(product.vendor.logo_url) : undefined) : undefined}
+              vendorSlug={(!winnerIsCollectibles && product.vendor?.id === winnerVendorId) ? product.vendor?.slug : undefined}
+            />
+          )}
+
+          {/* OTRAS OPCIONES DE COMPRA (BUY BOX) */}
+          {!hideVendors && bbOtherOptions.length > 0 && (
+            <div className="glass rounded-[2rem] p-6 mt-4">
+              <div className="text-[10px] uppercase text-slate-500 font-black tracking-[0.2em] mb-4">
+                Otras opciones de compra
+              </div>
+              <div className="flex flex-col gap-3">
+                {bbOtherOptions.map((opt: any) => (
+                  <div key={opt.vpv_id} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 hover:border-white/20 transition-colors">
+                    <div className="flex flex-col">
+                      <span className="text-white font-bold text-sm">{formatCurrencyPrice(opt.price)}</span>
+                      <span className="text-slate-400 text-xs">Vendido por <b>{opt.vendor_name}</b></span>
+                    </div>
+                    <button 
+                      onClick={() => addToCart(opt)}
+                      className="btn-primary py-2 px-4 rounded-full text-xs"
+                    >
+                      Comprar
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* AUDITORÍA DE BUY BOX */}
+          {bbWinner?.decision_reason && (
+            <div className="mt-4 p-4 rounded-2xl bg-[#05070f]/50 border border-slate-700/50 flex items-start gap-3">
+              <Trophy className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Buy Box Winner</p>
+                <p className="text-sm text-slate-300">{bbWinner.decision_reason}</p>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-3 gap-3 mt-4">
             <div className="soft rounded-2xl p-4 transition-colors hover:bg-white/5">

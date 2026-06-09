@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, handleOptions } from "../_shared/cors.ts";
-import { verifyAdmin, verifyVendor } from "../_shared/auth.ts";
+import { verifyAuth } from "../_shared/auth.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -21,13 +21,13 @@ Deno.serve(async (req) => {
     let isAdmin = false;
 
     // Check if caller is admin or vendor
-    try {
-      user = await verifyAdmin(req);
-      isAdmin = true;
-    } catch (_e) {
-      user = await verifyVendor(req);
-      isVendor = true;
+    user = await verifyAuth(req);
+    const { data: profile } = await supabase.from('profiles').select('is_admin, is_vendor').eq('id', user.id).single();
+    if (!profile?.is_admin && !profile?.is_vendor) {
+      throw new Error("Acceso denegado: Se requiere cuenta de Admin o Vendor.");
     }
+    isAdmin = profile.is_admin;
+    isVendor = profile.is_vendor;
 
     const body = await req.json().catch(() => ({}));
     const { code, redirect_uri, vendor_id } = body;
@@ -114,6 +114,7 @@ Deno.serve(async (req) => {
         success: true,
         message: "Mercado Libre connected successfully",
         expires_in: data.expires_in,
+        seller_id: sellerId
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

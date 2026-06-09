@@ -119,6 +119,7 @@ INSERT INTO public.payment_providers (
   )
 ) ON CONFLICT (provider_key) DO NOTHING;
 
+DROP FUNCTION IF EXISTS public.get_public_payment_providers();
 CREATE OR REPLACE FUNCTION public.get_public_payment_providers()
 RETURNS TABLE (
   provider_key text,

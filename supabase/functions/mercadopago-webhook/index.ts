@@ -150,6 +150,10 @@ Deno.serve(async (req: Request) => {
             headers: responseHeaders
           });
         }
+        const totalPaymentFee = paymentData.fee_details 
+          ? paymentData.fee_details.reduce((sum: number, fee: any) => sum + fee.amount, 0) 
+          : (paymentData.transaction_amount - paymentData.transaction_details?.net_received_amount) || 0;
+
         if (order?.status !== 'paid') {
           console.log(`[MP Webhook] Marking Order ${orderId} as PAID`);
           
@@ -159,11 +163,46 @@ Deno.serve(async (req: Request) => {
             .update({ 
               status: "paid", 
               payment_status: "approved",
+              payment_provider: "mercadopago",
+              payment_provider_reference: paymentId.toString(),
+              total_payment_fee: totalPaymentFee,
               payment_id: paymentId.toString(),
               payment_processed_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             })
             .eq("id", orderId);
+
+          // Get the actual order total amount
+          const { data: refreshedOrder } = await supabaseAdmin
+            .from('orders')
+            .select('total_amount')
+            .eq('id', orderId)
+            .single();
+          const orderTotal = refreshedOrder ? Number(refreshedOrder.total_amount) : 0;
+
+          // Fetch suborders and update them
+          const { data: suborders } = await supabaseAdmin
+            .from('order_suborders')
+            .select('*')
+            .eq('parent_order_id', orderId);
+
+          if (suborders) {
+            for (const sub of suborders) {
+              const suborderTotal = Number(sub.product_subtotal) + Number(sub.shipping_cost) - Number(sub.discount_total);
+              const feeShare = orderTotal > 0 ? (totalPaymentFee * suborderTotal / orderTotal) : 0;
+              const vendorNetAmount = Number(sub.product_subtotal) + Number(sub.shipping_cost) - Number(sub.marketplace_fee) - feeShare;
+
+              await supabaseAdmin
+                .from('order_suborders')
+                .update({
+                  status: 'confirmed',
+                  payment_fee_share: feeShare,
+                  vendor_net_amount: vendorNetAmount,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', sub.id);
+            }
+          }
 
           // Inventory Management
           const { data: orderItems } = await supabaseAdmin.from("order_items").select("*").eq("order_id", orderId);
@@ -204,27 +243,21 @@ Deno.serve(async (req: Request) => {
             body: JSON.stringify({ order_id: orderId })
           }).catch((err: any) => console.error("Error triggering soydelivery:", err));
 
-          // Trigger DAC Creation
-          try {
-            const { data: orderCheck } = await supabaseAdmin
-              .from('orders')
-              .select('shipping_method')
-              .eq('id', orderId)
-              .single();
-
-            if (orderCheck && (orderCheck.shipping_method === "dac_home" || orderCheck.shipping_method === "dac_agency")) {
-              console.log(`[MP Webhook] Triggering DAC shipment creation for order ${orderId}`);
-              await fetch(`${supabaseUrl}/functions/v1/dac-create-shipment`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "Authorization": `Bearer ${supabaseServiceKey}`
-                },
-                body: JSON.stringify({ order_id: orderId })
-              }).catch((err: any) => console.error("Error triggering DAC create shipment from MP Webhook:", err));
+          // Trigger DAC Creation per suborder
+          if (suborders) {
+            for (const sub of suborders) {
+              if (sub.shipping_method === "dac_home" || sub.shipping_method === "dac_agency" || sub.shipping_method === "dac") {
+                console.log(`[MP Webhook] Triggering DAC shipment creation for suborder ${sub.suborder_number} (${sub.id})`);
+                await fetch(`${supabaseUrl}/functions/v1/dac-create-shipment`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${supabaseServiceKey}`
+                  },
+                  body: JSON.stringify({ order_id: sub.id }) // polymorphic: passes suborder ID
+                }).catch((err: any) => console.error(`Error triggering DAC for suborder ${sub.id}:`, err));
+              }
             }
-          } catch (err: any) {
-            console.error("Error checking DAC shipping method in MP Webhook:", err);
           }
 
           // Trigger transactional email

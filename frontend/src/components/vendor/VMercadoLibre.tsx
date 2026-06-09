@@ -186,7 +186,7 @@ export default function VMercadoLibre() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ action: 'list_item_ids', limit: 50 })
+        body: JSON.stringify({ action: 'list_item_ids', limit: 50, seller_id: account?.seller_id })
       });
 
       const listData = await listRes.json();
@@ -211,7 +211,7 @@ export default function VMercadoLibre() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ action: 'import', ml_item_ids: itemIds })
+        body: JSON.stringify({ action: 'import', ml_item_ids: itemIds, seller_id: account?.seller_id })
       });
 
       const importData = await importRes.json();
@@ -239,31 +239,47 @@ export default function VMercadoLibre() {
   });
 
   return (
-    <div className="max-w-7xl space-y-8 animation-fade-in pb-20 text-gray-900">
+    <div className="space-y-8 animation-fade-in text-gray-900">
       {/* Header */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 border-b border-gray-100 pb-4">
         <div>
-           <div className="text-[11px] text-primary-600 font-black uppercase tracking-[0.4em] mb-3">Ecosystem Sync</div>
-           <h2 className="text-5xl font-black text-gray-900">Mercado Libre</h2>
-           <p className="text-sm text-gray-500 font-bold mt-3 uppercase tracking-[0.2em]">Sincronización omnicanal de catálogo, stock y precios</p>
+           <h3 className="text-lg font-bold text-gray-900">Integración con Mercado Libre</h3>
+           <p className="text-sm text-gray-500 mt-1">Sincronización bidireccional de catálogo, stock y precios</p>
         </div>
         
         {account && (
           <div className="flex gap-4">
-            <button 
-              onClick={handleImportListings}
-              disabled={actionLoading}
-              className="bg-[#FFE600] text-black text-[12px] font-black uppercase tracking-widest px-12 py-5 rounded-full hover:shadow-sm transition-all flex items-center gap-3 active:scale-[0.98] border border-black/10 disabled:opacity-55"
-            >
-              <RefreshCw className={`w-5 h-5 ${actionLoading && 'animate-spin'}`} /> 
-              {actionLoading ? 'Procesando...' : 'Importar Publicaciones'}
-            </button>
+            {(() => {
+              const isTokenExpired = account?.expires_at ? new Date(account.expires_at) < new Date() : false;
+              if (isTokenExpired) {
+                return (
+                  <button 
+                    onClick={handleConnect}
+                    className="bg-red-500 text-white text-sm font-medium px-6 py-2.5 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2 shadow-sm"
+                  >
+                    <AlertTriangle className="w-4 h-4" /> 
+                    Reautorizar Cuenta
+                  </button>
+                );
+              }
+              return (
+                <button 
+                  onClick={handleImportListings}
+                  disabled={actionLoading}
+                  className="bg-[#FFE600] text-black text-sm font-medium px-6 py-2.5 rounded-lg hover:brightness-95 transition-all flex items-center gap-2 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 ${actionLoading && 'animate-spin'}`} /> 
+                  {actionLoading ? 'Procesando...' : 'Importar Publicaciones'}
+                </button>
+              );
+            })()}
+
             <button 
               onClick={handleDisconnect}
               disabled={actionLoading}
-              className="bg-white border border-gray-200 text-gray-900 text-[12px] font-black uppercase tracking-widest px-12 py-5 rounded-full hover:bg-red-650/15 hover:border-red-600/30 transition-all flex items-center gap-3 shadow-sm"
+              className="bg-white border border-gray-200 text-gray-700 text-sm font-medium px-6 py-2.5 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors flex items-center gap-2 shadow-sm"
             >
-              <X className="w-5 h-5 text-red-500" /> Desconectar Cuenta
+              <X className="w-4 h-4" /> Desconectar
             </button>
           </div>
         )}
@@ -277,25 +293,30 @@ export default function VMercadoLibre() {
       )}
 
       {/* Account connection status */}
+      {account && account.expires_at && new Date(account.expires_at) < new Date() && (
+        <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-3xl flex items-center gap-3 text-xs text-red-500 font-bold mb-4">
+          <AlertTriangle className="w-5 h-5 shrink-0" />
+          <span>Tu conexión con Mercado Libre venció. Volvé a conectar tu cuenta para reanudar la sincronización.</span>
+        </div>
+      )}
       {loadingAccount ? (
         <div className="bg-white rounded-[2.5rem] border border-gray-200 p-12 text-center text-gray-500 animate-pulse text-xs uppercase tracking-widest">
           Cargando configuración de Mercado Libre...
         </div>
       ) : !account ? (
-        <div className="bg-white rounded-[2.5rem] border border-gray-200 p-12 text-center space-y-6 relative overflow-hidden group">
-          <div className="absolute -top-10 -right-10 w-40 h-40 bg-[#FFE600]/5 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700" />
-          <div className="w-16 h-16 bg-[#FFE600]/10 border border-[#FFE600]/20 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
-            <Link2 className="w-8 h-8 text-[#FFE600]" />
+        <div className="bg-gray-50 rounded-xl border border-gray-200 p-8 text-center space-y-4">
+          <div className="w-12 h-12 bg-[#FFE600]/20 rounded-full flex items-center justify-center mx-auto">
+            <Link2 className="w-6 h-6 text-[#b3a100]" />
           </div>
-          <div className="max-w-md mx-auto space-y-2">
-            <h3 className="text-xl font-bold">Conectar tu Tienda</h3>
-            <p className="text-xs text-gray-500">
-              Conecta tu cuenta de Mercado Libre Collectibles para importar tus artículos, sincronizar stock en tiempo real de forma bidireccional y automatizar el inventario de ventas.
+          <div className="max-w-sm mx-auto space-y-1">
+            <h3 className="text-base font-bold text-gray-900">Conectar tu Tienda</h3>
+            <p className="text-sm text-gray-500">
+              Sincroniza stock bidireccionalmente y automatiza tu inventario en la plataforma.
             </p>
           </div>
           <button 
             onClick={handleConnect}
-            className="bg-[#FFE600] text-black text-xs font-black uppercase tracking-widest px-10 py-4.5 rounded-full hover:shadow-sm transition-all active:scale-[0.98]"
+            className="bg-[#FFE600] text-black text-sm font-medium px-8 py-2.5 rounded-lg hover:brightness-95 transition-all mt-4"
           >
             Conectar Mercado Libre
           </button>

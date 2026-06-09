@@ -22,7 +22,6 @@ serve(async (req) => {
     }
 
     // Security check: Only allow Amazon images or specific domains
-    const allowedDomains = ['m.media-amazon.com', 'images-na.ssl-images-amazon.com', 'via.placeholder.com'];
     let parsedTarget;
     try {
       parsedTarget = new URL(targetUrl);
@@ -30,7 +29,7 @@ serve(async (req) => {
       return new Response("Invalid URL format", { status: 400 });
     }
 
-    if (!allowedDomains.includes(parsedTarget.hostname)) {
+    if (!parsedTarget.hostname.endsWith('amazon.com') && parsedTarget.hostname !== 'via.placeholder.com') {
       return new Response("Domain not allowed for proxy", { status: 403 });
     }
 

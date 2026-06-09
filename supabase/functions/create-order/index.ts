@@ -194,7 +194,7 @@ Deno.serve(async (req) => {
     // 3. Consulta segura y correcta a la tabla real 'products' (columna 'base_price')
     const { data: products, error: productError } = await supabase
       .from("products")
-      .select("id, base_price, category_id, brand_id, vendor_id, product_tags(tag_id)")
+      .select("id, title, base_price, category_id, brand_id, vendor_id, vendors(store_name), product_tags(tag_id)")
       .in("id", productIds);
 
     if (productError) {
@@ -222,7 +222,7 @@ Deno.serve(async (req) => {
       // 3. Consulta segura y correcta a la tabla real 'product_variants' (columna 'price_adjustment')
       const { data: variants, error: variantError } = await supabase
         .from("product_variants")
-        .select("id, price_adjustment")
+        .select("id, sku, name, price_adjustment")
         .in("id", variantIds);
 
       if (variantError) {
@@ -594,72 +594,160 @@ Deno.serve(async (req) => {
 
     const freeShippingThreshold = thresholdSetting?.value ? Number(thresholdSetting.value) : 4000;
 
-    let shippingRate = 0;
-    if (payload.shipping_method === "delivery" || payload.shipping_method === "dac" || payload.shipping_method === "dac_home" || payload.shipping_method === "dac_agency") {
-      const isMontevideo = payload.shipping_address.department === "Montevideo";
-      if (isMontevideo) {
-        shippingRate = calculateShipping(shippingCity, "Montevideo", subtotal, freeShippingThreshold);
-      } else {
-        if (subtotal >= freeShippingThreshold) {
-          shippingRate = 0;
-        } else {
-          // DAC shipping cost — NO FALLBACKS. If this fails, order creation is blocked.
-          const { data: provider } = await supabase
-            .from('delivery_providers')
-            .select('is_active')
-            .eq('provider_key', 'dac')
-            .single();
-
-          if (!provider || !provider.is_active) {
-            throw new Error("El servicio de envío DAC no está disponible. Consultanos por WhatsApp.");
-          }
-
-          const dacCostResponse = await fetch(`${supabaseUrl}/functions/v1/dac-get-cost`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${supabaseServiceKey}`
-            },
-            body: JSON.stringify({
-              mode: payload.shipping_method === "dac_agency" ? "agency" : "home",
-              department: payload.shipping_address.department,
-              city: payload.shipping_address.city,
-              address: payload.shipping_address.street || '',
-              dac_office_id: payload.shipping_address.dac_office_id,
-              k_oficina_destino: payload.shipping_address.dac_k_oficina_destino,
-              package_quantity: 1,
-              package_type: 1,
-              cart_total: subtotal,
-              items: verifiedItems
-            })
-          });
-          const dacCostResult = await dacCostResponse.json();
-          
-          if (!dacCostResult || !dacCostResult.success) {
-            const dacError = dacCostResult?.error || "No pudimos calcular el costo de envío DAC.";
-            console.error("[Create Order] DAC cost failed, BLOCKING order:", dacError);
-            throw new Error(dacError);
-          }
-          
-          shippingRate = dacCostResult.cost;
-          console.log("[Create Order] DAC cost calculated successfully:", shippingRate);
-        }
+    // Map variants for easy lookup of SKU and name
+    const variantMap = new Map<string, any>();
+    if (variantIds.length > 0) {
+      // Re-create the map using the loaded variants
+      const { data: fullVariants } = await supabase
+        .from("product_variants")
+        .select("id, sku, name")
+        .in("id", variantIds);
+      for (const v of fullVariants || []) {
+        variantMap.set(v.id, v);
       }
     }
 
-    const totalAmount = Math.max(subtotal - autoDiscountAmount - discountAmount - bankDiscount + shippingRate, 0);
-    const orderItems = verifiedItems.map((item) => ({
-      product_id: item.product_id,
-      variant_id: item.variant_id || "",
-      quantity: item.quantity,
-      unit_price: item.price,
-    }));
+    // Group items by vendor
+    const groups = new Map<string | null, any[]>();
+    for (const item of verifiedItems) {
+      const dbProduct = products?.find(p => p.id === item.product_id);
+      const vendorId = dbProduct?.vendor_id || null;
+      if (!groups.has(vendorId)) {
+        groups.set(vendorId, []);
+      }
+      
+      const variantObj = item.variant_id ? variantMap.get(item.variant_id) : null;
+      const productName = variantObj ? `${dbProduct?.title} (${variantObj.name})` : (dbProduct?.title || item.title || "Producto");
+      const itemSku = variantObj?.sku || null;
+
+      groups.get(vendorId)!.push({
+        ...item,
+        product_name: productName,
+        sku: itemSku,
+        vendor_id: vendorId,
+      });
+    }
+
+    const totalDiscounts = discountAmount + autoDiscountAmount + bankDiscount;
+    const subordersList = [];
+    let totalShippingCost = 0;
+
+    // Process each vendor group
+    for (const [vendorId, groupItems] of groups.entries()) {
+      const dbProduct = products?.find(p => p.vendor_id === vendorId || (vendorId === null && !p.vendor_id));
+      const vendorName = vendorId === null ? "Collectibles" : (dbProduct?.vendors?.store_name || "Vendor");
+      const groupSubtotal = groupItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
+      const groupDiscount = subtotal > 0 ? (totalDiscounts * groupSubtotal / subtotal) : 0;
+      
+      let groupShippingCost = 0;
+      if (payload.shipping_method === "delivery" || payload.shipping_method === "dac" || payload.shipping_method === "dac_home" || payload.shipping_method === "dac_agency") {
+        const isMontevideo = payload.shipping_address.department === "Montevideo";
+        if (isMontevideo) {
+          groupShippingCost = calculateShipping(shippingCity, "Montevideo", groupSubtotal, freeShippingThreshold);
+        } else {
+          if (groupSubtotal >= freeShippingThreshold) {
+            groupShippingCost = 0;
+          } else {
+            // DAC cost per vendor package
+            const { data: provider } = await supabase
+              .from('delivery_providers')
+              .select('is_active')
+              .eq('provider_key', 'dac')
+              .single();
+
+            if (!provider || !provider.is_active) {
+              throw new Error("El servicio de envío DAC no está disponible. Consultanos por WhatsApp.");
+            }
+
+            const dacCostResponse = await fetch(`${supabaseUrl}/functions/v1/dac-get-cost`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseServiceKey}`
+              },
+              body: JSON.stringify({
+                mode: payload.shipping_method === "dac_agency" ? "agency" : "home",
+                department: payload.shipping_address.department,
+                city: payload.shipping_address.city,
+                address: payload.shipping_address.street || '',
+                dac_office_id: payload.shipping_address.dac_office_id,
+                k_oficina_destino: payload.shipping_address.dac_k_oficina_destino,
+                package_quantity: 1,
+                package_type: 1,
+                cart_total: groupSubtotal,
+                items: groupItems
+              })
+            });
+            const dacCostResult = await dacCostResponse.json();
+            
+            if (!dacCostResult || !dacCostResult.success) {
+              const dacError = dacCostResult?.error || `No pudimos calcular el costo de envío DAC para el vendedor ${vendorName}.`;
+              console.error(`[Create Order] DAC cost failed for ${vendorName}:`, dacError);
+              throw new Error(dacError);
+            }
+            
+            groupShippingCost = dacCostResult.cost;
+          }
+        }
+      }
+
+      totalShippingCost += groupShippingCost;
+
+      // Commission Rate & Fee
+      let commissionRate = 0;
+      let marketplaceFee = 0;
+      if (vendorId !== null) {
+        const { data: commData, error: commErr } = await supabase.rpc("get_vendor_commission_rate", { p_vendor_id: vendorId });
+        if (commErr) {
+          console.warn(`[Create Order] Failed to fetch commission rate for ${vendorName}, using default 5%`, commErr);
+          commissionRate = 5.00;
+        } else {
+          commissionRate = Number(commData);
+        }
+        marketplaceFee = groupSubtotal * (commissionRate / 100);
+      }
+
+      subordersList.push({
+        vendor_id: vendorId,
+        vendor_name: vendorName,
+        is_collectibles_order: vendorId === null,
+        product_subtotal: groupSubtotal,
+        shipping_method: payload.shipping_method,
+        shipping_provider: vendorId === null ? "SoyDelivery" : "DAC",
+        shipping_cost: groupShippingCost,
+        marketplace_commission_rate: commissionRate,
+        marketplace_fee: marketplaceFee,
+        vendor_gross_amount: groupSubtotal + groupShippingCost,
+        vendor_net_amount: groupSubtotal + groupShippingCost - marketplaceFee,
+        discount_total: groupDiscount
+      });
+    }
+
+    const totalAmount = Math.max(subtotal - totalDiscounts + totalShippingCost, 0);
+
+    const orderItems = [];
+    for (const [vendorId, groupItems] of groups.entries()) {
+      for (const item of groupItems) {
+        const itemDiscount = subtotal > 0 ? (totalDiscounts * (item.price * item.quantity) / subtotal) : 0;
+        orderItems.push({
+          product_id: item.product_id,
+          variant_id: item.variant_id || "",
+          vendor_id: vendorId || "",
+          quantity: item.quantity,
+          unit_price: item.price,
+          product_name: item.product_name,
+          sku: item.sku,
+          discount_total: itemDiscount,
+          final_total: Math.max(item.price - (item.quantity > 0 ? (itemDiscount / item.quantity) : 0), 0)
+        });
+      }
+    }
 
     const orderShippingAddress = {
       ...payload.shipping_address,
       shipping_method: payload.shipping_method,
       bank_promo: bankPromoSummary,
-      shipping_cost: shippingRate,
+      shipping_cost: totalShippingCost,
       discount_amount: discountAmount,
       bank_discount: bankDiscount,
       dac_delivery_mode: payload.shipping_method === "dac_agency" ? "agency" : "home",
@@ -681,6 +769,7 @@ Deno.serve(async (req) => {
       p_affiliate_id: affiliateId,
       p_coupon_id: couponId,
       p_items: orderItems,
+      p_suborders: subordersList,
       p_terms_accepted: payload.terms_accepted,
       p_terms_accepted_at: payload.terms_accepted_at,
       p_accepted_terms_version: payload.accepted_terms_version,

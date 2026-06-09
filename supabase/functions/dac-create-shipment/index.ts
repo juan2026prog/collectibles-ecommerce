@@ -31,25 +31,69 @@ serve(async (req) => {
     // 1. Validation of Order ID
     if (!order_id) throw new Error("Missing order_id");
 
-    // Fetch order to resolve DAC parameters and customer details
-    const { data: orderData, error: orderErr } = await supabase
-      .from('orders')
-      .select('shipping_address, shipping_method, customer_phone, tracking_number')
-      .eq('id', order_id)
-      .single();
+    // Fetch order/suborder to resolve DAC parameters and customer details
+    let resolvedVendorId = null;
+    let resolvedShippingMethod = null;
+    let resolvedTrackingNumber = null;
+    let resolvedShippingAddress = null;
+    let resolvedCustomerPhone = null;
+    let resolvedCustomerEmail = null;
+    let isSuborder = false;
+    let parentOrderId = order_id;
 
-    if (orderErr || !orderData) {
-      throw new Error(`No se encontró la orden con ID ${order_id}: ${orderErr?.message}`);
+    const { data: suborderData } = await supabase
+      .from('order_suborders')
+      .select('*')
+      .eq('id', order_id)
+      .maybeSingle();
+
+    if (suborderData) {
+      isSuborder = true;
+      parentOrderId = suborderData.parent_order_id;
+      resolvedVendorId = suborderData.vendor_id;
+      resolvedShippingMethod = suborderData.shipping_method;
+      resolvedTrackingNumber = suborderData.tracking_number;
+      
+      // Fetch parent order's shipping address and details
+      const { data: parentOrder, error: parentErr } = await supabase
+        .from('orders')
+        .select('shipping_address, customer_phone, customer_email')
+        .eq('id', suborderData.parent_order_id)
+        .single();
+        
+      if (parentErr || !parentOrder) {
+        throw new Error(`No se encontró la orden principal de la suborden: ${parentErr?.message}`);
+      }
+      resolvedShippingAddress = parentOrder.shipping_address || {};
+      resolvedCustomerPhone = parentOrder.customer_phone;
+      resolvedCustomerEmail = parentOrder.customer_email;
+    } else {
+      // Fallback: It's a main order
+      const { data: orderData, error: orderErr } = await supabase
+        .from('orders')
+        .select('shipping_address, shipping_method, customer_phone, customer_email, tracking_number, vendor_id')
+        .eq('id', order_id)
+        .single();
+
+      if (orderErr || !orderData) {
+        throw new Error(`No se encontró la orden con ID ${order_id}: ${orderErr?.message}`);
+      }
+      resolvedVendorId = orderData.vendor_id;
+      resolvedShippingMethod = orderData.shipping_method;
+      resolvedTrackingNumber = orderData.tracking_number;
+      resolvedShippingAddress = orderData.shipping_address || {};
+      resolvedCustomerPhone = orderData.customer_phone;
+      resolvedCustomerEmail = orderData.customer_email;
     }
 
     // 2. Idempotency / Duplicate Check
-    // A. Check tracking number on order table
-    if (orderData.tracking_number) {
-      console.log(`[DAC Create Shipment] Order ${order_id} already has a tracking number: ${orderData.tracking_number}. Skipping.`);
+    // A. Check tracking number
+    if (resolvedTrackingNumber) {
+      console.log(`[DAC Create Shipment] Already has a tracking number: ${resolvedTrackingNumber}. Skipping.`);
       return new Response(JSON.stringify({
         success: true,
         already_exists: true,
-        trackingCode: orderData.tracking_number
+        trackingCode: resolvedTrackingNumber
       }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -57,16 +101,20 @@ serve(async (req) => {
     }
 
     // B. Check existing shipment in database
-    const { data: existingShipment } = await supabase
+    const shipmentQuery = supabase
       .from('shipments')
-      .select('id, tracking_code, external_guide, shipping_label_url')
-      .eq('order_id', order_id)
-      .eq('provider_key', 'dac')
-      .maybeSingle();
+      .select('id, tracking_code, external_guide, shipping_label_url');
+      
+    if (isSuborder) {
+      shipmentQuery.eq('suborder_id', order_id);
+    } else {
+      shipmentQuery.eq('order_id', order_id).is('suborder_id', null);
+    }
+    const { data: existingShipment } = await shipmentQuery.maybeSingle();
 
     if (existingShipment) {
       if (existingShipment.tracking_code || existingShipment.external_guide) {
-        console.log(`[DAC Create Shipment] Shipment already exists for order ${order_id} with tracking ${existingShipment.tracking_code}`);
+        console.log(`[DAC Create Shipment] Shipment already exists with tracking ${existingShipment.tracking_code}`);
         return new Response(JSON.stringify({
           success: true,
           already_exists: true,
@@ -78,7 +126,6 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       } else {
-        // If it was an error state row, let's delete it so we can insert a fresh one cleanly
         console.log(`[DAC Create Shipment] Deleting existing failed shipment row ${existingShipment.id} for retry.`);
         await supabase
           .from('shipments')
@@ -88,12 +135,12 @@ serve(async (req) => {
     }
 
     // 3. Resolve missing fields dynamically
-    const shippingAddress = orderData.shipping_address || {};
-    const shippingMethod = orderData.shipping_method;
+    const shippingAddress = resolvedShippingAddress || {};
+    const shippingMethod = resolvedShippingMethod;
     const dacDeliveryMode = shippingAddress.dac_delivery_mode || (shippingMethod === "dac_agency" ? "agency" : "home");
 
     const resolvedName = (customer_name || `${shippingAddress.first_name || ""} ${shippingAddress.last_name || ""}`.trim()).trim();
-    const resolvedPhone = (customer_phone || orderData.customer_phone || shippingAddress.phone || "").trim();
+    const resolvedPhone = (customer_phone || resolvedCustomerPhone || shippingAddress.phone || "").trim();
     const resolvedCity = (customer_city || shippingAddress.city || "").trim();
     const resolvedDepartment = (customer_department || shippingAddress.department || "").trim();
     const resolvedAddress = (customer_address || shippingAddress.street || "").trim();
@@ -115,27 +162,69 @@ serve(async (req) => {
       throw new Error("Invalid package_quantity. Must be an integer greater than 0");
     }
 
-    // 4. Fetch DAC provider details
-    const { data: provider, error: providerErr } = await supabase
-      .from('delivery_providers')
-      .select('*')
-      .eq('provider_key', 'dac')
-      .single();
+    // 4. Fetch DAC credentials (Vendor-specific or Global fallback)
+    let username = "";
+    let password_encrypted = "";
+    let api_url = "http://ws01.dac.com.uy/ws_ecommerce_v4/ServiciosGenerales.asmx"; // Default URL
+    let kOficinaOrigen = "800";
+    let entregaDomicilio = 1;
+    let entregaAgencia = 2;
+    let kTipoGuia = 4;
+    let kTipoEnvio = 1;
+    let usedVendor = false;
 
-    if (providerErr || !provider) {
-      throw new Error("DAC provider configuration not found in database.");
+    if (resolvedVendorId) {
+      const { data: vConn } = await supabase
+        .from('vendor_shipping_connections')
+        .select('*')
+        .eq('vendor_id', resolvedVendorId)
+        .eq('provider', 'dac')
+        .single();
+      
+      if (vConn && vConn.connection_status === 'connected' && vConn.credentials_encrypted) {
+        try {
+           const { decryptData } = await import("../_shared/crypto.ts");
+           const secret = Deno.env.get("SHIPPING_ENCRYPTION_KEY") || supabaseKey.substring(0, 32);
+           const decryptedJson = await decryptData(vConn.credentials_encrypted, secret);
+           const creds = JSON.parse(decryptedJson);
+           username = creds.username;
+           password_encrypted = creds.password; // Ya es texto plano en realidad pero wsLogin acepta plano
+           usedVendor = true;
+           
+           if (vConn.settings?.agencyCode) kOficinaOrigen = String(vConn.settings.agencyCode);
+        } catch (e) {
+           console.log("[DAC] Fallo al desencriptar credenciales del vendor, ignorando.");
+        }
+      }
     }
 
-    const { username, password_encrypted, api_url, settings = {} } = provider;
-    if (!username || !password_encrypted || !api_url) {
-      throw new Error("Missing DAC credentials in delivery_providers.");
-    }
-    const kOficinaOrigen = settings.k_oficina_origen !== undefined ? String(settings.k_oficina_origen) : "800";
+    // Fallback to Global if vendor credentials are not available or it's not a vendor order
+    if (!usedVendor) {
+      const { data: provider, error: providerErr } = await supabase
+        .from('delivery_providers')
+        .select('*')
+        .eq('provider_key', 'dac')
+        .single();
 
-    const entregaDomicilio = settings.entrega_domicilio !== undefined ? Number(settings.entrega_domicilio) : 1;
-    const entregaAgencia = settings.entrega_agencia !== undefined ? Number(settings.entrega_agencia) : 2;
-    const kTipoGuia = settings.k_tipo_guia !== undefined ? Number(settings.k_tipo_guia) : 4;
-    const kTipoEnvio = settings.k_tipo_envio !== undefined ? Number(settings.k_tipo_envio) : 1;
+      if (providerErr || !provider) {
+        throw new Error("No hay credenciales DAC válidas (ni vendor ni global).");
+      }
+      username = provider.username;
+      password_encrypted = provider.password_encrypted;
+      api_url = provider.api_url || api_url;
+      
+      if (provider.settings) {
+        if (provider.settings.k_oficina_origen !== undefined) kOficinaOrigen = String(provider.settings.k_oficina_origen);
+        if (provider.settings.entrega_domicilio !== undefined) entregaDomicilio = Number(provider.settings.entrega_domicilio);
+        if (provider.settings.entrega_agencia !== undefined) entregaAgencia = Number(provider.settings.entrega_agencia);
+        if (provider.settings.k_tipo_guia !== undefined) kTipoGuia = Number(provider.settings.k_tipo_guia);
+        if (provider.settings.k_tipo_envio !== undefined) kTipoEnvio = Number(provider.settings.k_tipo_envio);
+      }
+    }
+
+    if (!username || !password_encrypted) {
+      throw new Error("Faltan credenciales DAC para realizar el envío.");
+    }
 
     // 5. Resolve active session
     let { data: activeSession } = await supabase
@@ -271,7 +360,8 @@ serve(async (req) => {
     const { data: shipment, error: dbErr } = await supabase
       .from('shipments')
       .insert({
-        order_id: order_id,
+        order_id: parentOrderId,
+        suborder_id: isSuborder ? order_id : null,
         provider_key: 'dac',
         tracking_code: dacResult.trackingCode,
         external_guide: dacResult.kGuia,
@@ -308,41 +398,44 @@ serve(async (req) => {
       throw new Error(`Failed to store shipment record: ${dbErr.message}`);
     }
 
-    // 10. Update main order table with tracking code, provider and shipping_status (if it exists)
-    // We use a safe check and retry in case the orders.shipping_status column doesn't exist.
-    let orderUpdateSuccess = false;
-    try {
-      const { error: orderUpdateErr } = await supabase
-        .from('orders')
+    // 10. Update tracking info in order/suborder tables
+    if (isSuborder) {
+      await supabase
+        .from('order_suborders')
         .update({
           tracking_number: dacResult.trackingCode,
-          tracking_provider: 'dac',
-          shipping_status: 'documented'
+          tracking_url: `https://www.gacela.com.uy/gacelamobile/tracking?guia=${dacResult.trackingCode}`,
+          shipping_status: 'documented',
+          updated_at: new Date().toISOString()
         })
         .eq('id', order_id);
+    } else {
+      let orderUpdateSuccess = false;
+      try {
+        const { error: orderUpdateErr } = await supabase
+          .from('orders')
+          .update({
+            tracking_number: dacResult.trackingCode,
+            tracking_provider: 'dac',
+            shipping_status: 'documented'
+          })
+          .eq('id', order_id);
 
-      if (!orderUpdateErr) {
-        orderUpdateSuccess = true;
-      } else if (orderUpdateErr.message.includes('column "shipping_status" does not exist')) {
-        console.log("[DAC Create Shipment] orders.shipping_status column does not exist. Retrying update without it.");
-      } else {
-        throw orderUpdateErr;
+        if (!orderUpdateErr) {
+          orderUpdateSuccess = true;
+        }
+      } catch {
+        // Fallback
       }
-    } catch {
-      // Fallback update
-    }
 
-    if (!orderUpdateSuccess) {
-      const { error: orderFallbackErr } = await supabase
-        .from('orders')
-        .update({
-          tracking_number: dacResult.trackingCode,
-          tracking_provider: 'dac'
-        })
-        .eq('id', order_id);
-
-      if (orderFallbackErr) {
-        console.error("[DAC Create Shipment] Fallback order update error:", orderFallbackErr.message);
+      if (!orderUpdateSuccess) {
+        await supabase
+          .from('orders')
+          .update({
+            tracking_number: dacResult.trackingCode,
+            tracking_provider: 'dac'
+          })
+          .eq('id', order_id);
       }
     }
 

@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { CreditCard, CheckCircle, Clock, AlertTriangle, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CreditCard, CheckCircle, Clock, AlertTriangle, Search, ChevronLeft, ChevronRight, X, Building, User, FileText, DollarSign } from 'lucide-react';
 
 export default function AdminVendorPayouts() {
   const [payouts, setPayouts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedPayout, setSelectedPayout] = useState<any>(null);
   
   // Pagination
   const [page, setPage] = useState(1);
@@ -32,7 +33,7 @@ export default function AdminVendorPayouts() {
         .from('vendor_payouts')
         .select(`
           *,
-          vendor:vendors(store_name, slug),
+          vendor:vendors(store_name, slug, vendor_payment_settings),
           order:orders(id, created_at)
         `, { count: 'exact' });
 
@@ -178,15 +179,12 @@ export default function AdminVendorPayouts() {
                       {p.status === 'held' && <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest rounded-md bg-red-100 text-red-800"><AlertTriangle className="w-3 h-3" /> Retenido</span>}
                     </td>
                     <td className="px-6 py-4">
-                      <select
-                        value={p.status}
-                        onChange={(e) => updatePayoutStatus(p.id, e.target.value)}
-                        className="text-xs font-bold rounded-lg px-3 py-2 border-gray-200 bg-gray-50 hover:bg-gray-100 focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                      <button
+                        onClick={() => setSelectedPayout(p)}
+                        className="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded bg-black text-white hover:bg-gray-800 transition-colors"
                       >
-                        <option value="pending">Marcar Pendiente</option>
-                        <option value="held">Retener Fondos</option>
-                        <option value="paid">Marcar Pagado</option>
-                      </select>
+                        Gestionar
+                      </button>
                     </td>
                   </tr>
                 );
@@ -220,6 +218,93 @@ export default function AdminVendorPayouts() {
           </div>
         )}
       </div>
+
+      {selectedPayout && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 animate-fade-in">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center p-6 border-b border-gray-100">
+              <div>
+                <h3 className="text-xl font-black text-gray-900">Gestionar Liquidación</h3>
+                <p className="text-sm text-gray-500 mt-1">Orden #{selectedPayout.order?.id?.slice(0,8).toUpperCase()} - {selectedPayout.vendor?.store_name}</p>
+              </div>
+              <button onClick={() => setSelectedPayout(null)} className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-1">
+              <div className="bg-gray-50 rounded-xl p-5 mb-6 border border-gray-200">
+                <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-4">Datos Bancarios del Vendedor</h4>
+                
+                {selectedPayout.vendor?.vendor_payment_settings?.account_number ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <Building className="w-4 h-4 text-gray-400" />
+                      <div>
+                        <div className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Banco</div>
+                        <div className="text-sm font-medium text-gray-900">{selectedPayout.vendor.vendor_payment_settings.bank_name || 'No especificado'}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <User className="w-4 h-4 text-gray-400" />
+                      <div>
+                        <div className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Titular de Cuenta</div>
+                        <div className="text-sm font-medium text-gray-900">{selectedPayout.vendor.vendor_payment_settings.account_name || 'No especificado'}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <FileText className="w-4 h-4 text-gray-400" />
+                      <div>
+                        <div className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Número de Cuenta</div>
+                        <div className="text-sm font-bold tracking-widest text-gray-900">{selectedPayout.vendor.vendor_payment_settings.account_number}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <DollarSign className="w-4 h-4 text-gray-400" />
+                      <div>
+                        <div className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Moneda</div>
+                        <div className="text-sm font-medium text-gray-900">{selectedPayout.vendor.vendor_payment_settings.currency || 'UYU'}</div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3 text-amber-600 bg-amber-50 p-4 rounded-lg border border-amber-200">
+                    <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                    <p className="text-sm font-medium">El vendedor no ha configurado sus datos bancarios.</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-sm font-bold text-gray-700">Monto a Transferir:</span>
+                <span className="text-2xl font-black text-emerald-600">${Number(selectedPayout.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-100 bg-gray-50 flex gap-3 flex-wrap">
+              <button
+                onClick={async () => {
+                  await updatePayoutStatus(selectedPayout.id, 'paid');
+                  setSelectedPayout(null);
+                }}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition-colors text-sm flex justify-center items-center gap-2"
+              >
+                <CheckCircle className="w-4 h-4" /> Marcar como Pagado
+              </button>
+              
+              <button
+                onClick={async () => {
+                  await updatePayoutStatus(selectedPayout.id, 'held');
+                  setSelectedPayout(null);
+                }}
+                className="flex-1 bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold py-3 rounded-xl transition-colors text-sm flex justify-center items-center gap-2"
+              >
+                <AlertTriangle className="w-4 h-4" /> Retener Fondos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

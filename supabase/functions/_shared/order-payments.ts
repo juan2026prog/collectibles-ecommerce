@@ -70,28 +70,31 @@ export async function triggerPostPaymentActions(
     console.error("Soy Delivery provider validation error:", err);
   }
 
-  // Trigger DAC post-payment shipment automation
+  // Trigger DAC post-payment shipment automation per suborder
   try {
-    const { data: orderData } = await supabaseClient
-      .from("orders")
-      .select("shipping_method")
-      .eq("id", orderId)
-      .single();
+    const { data: suborders } = await supabaseClient
+      .from('order_suborders')
+      .select('*')
+      .eq('parent_order_id', orderId);
 
-    if (orderData && (orderData.shipping_method === "dac_home" || orderData.shipping_method === "dac_agency")) {
-      console.log(`[Post-Payment] Triggering DAC shipment creation for order ${orderId}`);
-      const dacResponse = await fetch(`${supabaseUrl}/functions/v1/dac-create-shipment`, {
-        method: "POST",
-        headers: functionHeaders,
-        body: JSON.stringify({ order_id: orderId }),
-      });
+    if (suborders) {
+      for (const sub of suborders) {
+        if (sub.shipping_method === "dac_home" || sub.shipping_method === "dac_agency" || sub.shipping_method === "dac") {
+          console.log(`[Post-Payment] Triggering DAC shipment creation for suborder ${sub.suborder_number} (${sub.id})`);
+          const dacResponse = await fetch(`${supabaseUrl}/functions/v1/dac-create-shipment`, {
+            method: "POST",
+            headers: functionHeaders,
+            body: JSON.stringify({ order_id: sub.id }), // Polymorphic: passes suborder ID
+          });
 
-      if (!dacResponse.ok) {
-        const errorText = await dacResponse.text();
-        console.error(`[Post-Payment] DAC shipment creation failed (Status: ${dacResponse.status}):`, errorText);
-      } else {
-        const resJson = await dacResponse.json();
-        console.log(`[Post-Payment] DAC shipment creation result:`, resJson);
+          if (!dacResponse.ok) {
+            const errorText = await dacResponse.text();
+            console.error(`[Post-Payment] DAC shipment creation failed for suborder ${sub.suborder_number} (Status: ${dacResponse.status}):`, errorText);
+          } else {
+            const resJson = await dacResponse.json();
+            console.log(`[Post-Payment] DAC shipment creation result for suborder ${sub.suborder_number}:`, resJson);
+          }
+        }
       }
     }
   } catch (err: any) {
@@ -139,12 +142,41 @@ export async function finalizeOrderIfNeeded(
     return currentOrder;
   }
 
+  // Retrieve payment details to extract fee if available
+  let totalPaymentFee = 0;
+  try {
+    const { data: payRecord } = await supabaseClient
+      .from('payments')
+      .select('*')
+      .eq('order_id', orderId)
+      .eq('status', 'approved')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (payRecord) {
+      const rawResponse = payRecord.raw_response || {};
+      totalPaymentFee = rawResponse.fee_amount || rawResponse.fee || rawResponse.charge_fee || 0;
+      if (totalPaymentFee === 0 && rawResponse.net_received_amount) {
+        totalPaymentFee = Number(payRecord.amount) - Number(rawResponse.net_received_amount);
+      }
+      if (totalPaymentFee === 0 && rawResponse.fee_details) {
+        totalPaymentFee = rawResponse.fee_details.reduce((sum: number, fee: any) => sum + fee.amount, 0);
+      }
+    }
+  } catch (e) {
+    console.warn("Could not retrieve payment record for fee share calculation:", e);
+  }
+
   const { data: updatedOrder, error: updateError } = await supabaseClient
     .from("orders")
     .update({
       status: "paid",
       payment_status: "approved",
       payment_id: paymentId || currentOrder.payment_id,
+      payment_provider: currentOrder.payment_method,
+      payment_provider_reference: paymentId || currentOrder.payment_id,
+      total_payment_fee: totalPaymentFee,
       payment_processed_at: new Date().toISOString(),
     })
     .eq("id", orderId)
@@ -153,6 +185,32 @@ export async function finalizeOrderIfNeeded(
 
   if (updateError || !updatedOrder) {
     throw new Error(updateError?.message || "No se pudo marcar la orden como pagada.");
+  }
+
+  // Update order suborders
+  const { data: suborders } = await supabaseClient
+    .from('order_suborders')
+    .select('*')
+    .eq('parent_order_id', orderId);
+
+  const orderTotal = Number(updatedOrder.total_amount);
+
+  if (suborders) {
+    for (const sub of suborders) {
+      const suborderTotal = Number(sub.product_subtotal) + Number(sub.shipping_cost) - Number(sub.discount_total);
+      const feeShare = orderTotal > 0 ? (totalPaymentFee * suborderTotal / orderTotal) : 0;
+      const vendorNetAmount = Number(sub.product_subtotal) + Number(sub.shipping_cost) - Number(sub.marketplace_fee) - feeShare;
+
+      await supabaseClient
+        .from('order_suborders')
+        .update({
+          status: 'confirmed',
+          payment_fee_share: feeShare,
+          vendor_net_amount: vendorNetAmount,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', sub.id);
+    }
   }
 
   await triggerPostPaymentActions(supabaseClient, supabaseUrl, supabaseServiceRoleKey, orderId);
