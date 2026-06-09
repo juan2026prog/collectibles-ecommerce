@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Search, Loader2, Import, XCircle, Eye, AlertCircle, RefreshCw, Wand2, ArrowRight } from 'lucide-react';
+import { Search, Loader2, Import, XCircle, Eye, AlertCircle, RefreshCw, Wand2, ArrowRight, ExternalLink } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 
 const QUICK_COLLECTIONS = [
@@ -392,12 +392,17 @@ export default function AdminInternationalAmazon() {
                     </div>
                   </td>
                   <td className="px-4 py-4">
-                    <div className="text-sm font-medium text-gray-900 line-clamp-2 leading-tight" title={c.title}>{c.title}</div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{c.brand || 'No Brand'}</span>
-                      <span className="text-xs text-gray-400">ID: {c.external_product_id}</span>
+                    <div className="text-sm font-medium text-gray-900 line-clamp-2 leading-tight" title={c.title}>
+                      <a href={`https://www.amazon.com/dp/${c.external_product_id}`} target="_blank" rel="noreferrer" className="hover:text-primary-600 hover:underline flex items-center gap-1">
+                        {c.title}
+                        <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                      </a>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{c.brand || 'Sin Marca'}</span>
+                      <span className="text-xs text-gray-400">ASIN: {c.external_product_id}</span>
                       <span className="text-xs text-blue-500 bg-blue-50 px-2 py-0.5 rounded">
-                        Vendido por: {c.raw_data?.seller?.name || 'Amazon / Desconocido'}
+                        Vendido por: {c.raw_data?.first_party_seller === true ? 'Amazon' : 'Terceros (Ver en Amazon)'}
                       </span>
                     </div>
                     {c.price_usd == null && <div className="text-xs text-red-500 mt-1 flex items-center"><AlertCircle className="w-3 h-3 mr-1"/> Sin precio, no importable</div>}
