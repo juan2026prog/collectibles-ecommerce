@@ -84,6 +84,51 @@ export function useProducts(filters: ProductFilters = {}) {
     }
 
     // ── Step 2: main product query ──
+    if (filters.isInternational) {
+      let query = supabase
+        .from('international_products')
+        .select('*', { count: 'exact' })
+        .eq('status', 'published');
+
+      if (filters.search) {
+        query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
+      }
+
+      switch (filters.sortBy) {
+        case 'price-low': query = query.order('final_price_usd', { ascending: true }); break;
+        case 'price-high': query = query.order('final_price_usd', { ascending: false }); break;
+        case 'newest': query = query.order('created_at', { ascending: false }); break;
+        case 'name': query = query.order('title', { ascending: true }); break;
+        default: query = query.order('created_at', { ascending: false });
+      }
+
+      const limit = filters.limit || 12;
+      const offset = filters.offset || 0;
+      query = query.range(offset, offset + limit - 1);
+
+      const { data, count: totalCount, error } = await query;
+      if (!error && data) {
+        const mappedProducts = data.map((item: any) => ({
+          id: item.id,
+          slug: item.id, // we use ID as slug for international products
+          title: item.title,
+          description: item.description,
+          base_price: item.final_price_usd,
+          compare_at_price: item.amazon_list_price_usd || item.final_price_usd,
+          images: [{ url: item.image_url, is_primary: true }],
+          brand: { name: item.brand, slug: item.brand },
+          category: { name: item.category, slug: item.category },
+          source_provider: 'zinc',
+          is_active: true,
+          status: 'published'
+        }));
+        setProducts(mappedProducts);
+        setCount(totalCount || 0);
+      }
+      setLoading(false);
+      return;
+    }
+
     const selectStr = `
         *,
         category:categories(id, name, slug),
@@ -108,7 +153,6 @@ export function useProducts(filters: ProductFilters = {}) {
     if (filters.featured) query = query.eq('is_featured', true);
     if (filters.minPrice) query = query.gte('base_price', filters.minPrice);
     if (filters.maxPrice) query = query.lte('base_price', filters.maxPrice);
-    if (filters.isInternational) query = query.eq('source_provider', 'zinc');
     if (filters.search) {
       // Use ilike for simple search, fallback from textSearch if vector unavailable
       query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
@@ -164,7 +208,42 @@ export function useProduct(slug: string | undefined) {
         `)
         .eq('slug', slug)
         .single();
-      setProduct(data);
+        
+      if (data) {
+        setProduct(data);
+      } else {
+        // Fallback for international products (slug is UUID)
+        const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(slug);
+        if (isUUID) {
+          const { data: intlData } = await supabase
+            .from('international_products')
+            .select('*')
+            .eq('id', slug)
+            .single();
+            
+          if (intlData) {
+            setProduct({
+              id: intlData.id,
+              slug: intlData.id,
+              title: intlData.title,
+              description: intlData.description,
+              base_price: intlData.final_price_usd,
+              compare_at_price: intlData.amazon_list_price_usd || intlData.final_price_usd,
+              images: [{ url: intlData.image_url, is_primary: true }],
+              brand: { name: intlData.brand, slug: intlData.brand },
+              category: { name: intlData.category, slug: intlData.category },
+              source_provider: 'zinc',
+              is_active: true,
+              status: 'published',
+              international_products: [intlData]
+            });
+          } else {
+            setProduct(null);
+          }
+        } else {
+          setProduct(null);
+        }
+      }
       setLoading(false);
     }
     fetch();
