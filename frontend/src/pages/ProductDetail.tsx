@@ -14,6 +14,7 @@ import { analytics } from '../lib/analytics';
 import { trackViewContent, trackAddToCart, generateMetaEventId } from '../lib/meta/metaPixel';
 import SEO from '../components/SEO';
 import { useSiteSettings } from '../hooks/useSiteSettings';
+import { formatUSD } from '../lib/formatters';
 import SoldByCard from '../components/SoldByCard';
 import AdminTechnicalPanel from '../components/AdminTechnicalPanel';
 
@@ -547,11 +548,11 @@ export default function ProductDetail() {
                     <div className="flex flex-col gap-1 mb-4 border-b border-white/10 pb-4">
                       {product.international_products?.amazon_list_price_usd && (
                         <div className="text-sm text-slate-400 font-bold flex items-center gap-2">
-                          <span className="line-through">USD {product.international_products?.amazon_list_price_usd.toFixed(2)}</span>
+                          <span className="line-through">{formatUSD(product.international_products?.amazon_list_price_usd)}</span>
                           <span className="text-red-500 bg-red-500/10 px-2 py-0.5 rounded text-[10px] uppercase">{product.international_products?.amazon_discount_percent}% OFF</span>
                         </div>
                       )}
-                      <div className="text-2xl font-bold text-white">USD {product.international_products?.amazon_current_price_usd?.toFixed(2) || product.base_price?.toFixed(2)}</div>
+                      <div className="text-2xl font-bold text-white">{formatUSD(product.international_products?.amazon_current_price_usd || product.base_price)}</div>
                     </div>
                     <div className="text-[10px] uppercase text-slate-500 font-black tracking-[0.2em] mb-1 mt-4">Precio final Collectibles</div>
                     <div className="text-4xl sm:text-5xl font-black text-white flex items-end gap-3 flex-wrap">
@@ -561,15 +562,15 @@ export default function ProductDetail() {
                     <div className="mt-4 border-t border-white/5 pt-4">
                       <div className="flex justify-between items-center text-sm mb-1">
                         <span className="text-slate-400">Precio Collectibles</span>
-                        <span className="font-medium text-white">USD {intlProduct?.final_price_usd || product.base_price}</span>
+                        <span className="font-medium text-white">{formatUSD(intlProduct?.final_price_usd || product.base_price)}</span>
                       </div>
                       <div className="flex justify-between items-center text-sm mb-2">
                         <span className="text-slate-400">Estimación Urubox (Courier)</span>
-                        <span className="font-medium text-white">USD {uruboxEstimatedCost.toFixed(2)}</span>
+                        <span className="font-medium text-white">{formatUSD(uruboxEstimatedCost)}</span>
                       </div>
                       <div className="flex justify-between items-center text-base font-bold bg-[#f00856]/10 p-2 rounded-lg text-[#f00856] border border-[#f00856]/20">
                         <span>Costo Total Estimado</span>
-                        <span>USD {totalEstimatedCost.toFixed(2)}</span>
+                        <span>{formatUSD(totalEstimatedCost)}</span>
                       </div>
                       <p className="text-[10px] text-slate-500 mt-2 text-center">
                         Basado en peso estimado ({weightKg}kg). El costo final puede variar según peso real y courier seleccionado.

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Edit, RefreshCw, XCircle, Eye, Loader2, Search, ExternalLink, Code } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
+import { formatUSD, formatUYU, formatPercent, formatDate } from '../../lib/formatters';
 
 export default function AdminInternationalProducts() {
   const { addToast } = useToast();
@@ -250,23 +251,23 @@ export default function AdminInternationalProducts() {
                     </div>
                   </td>
                   <td className="px-6 py-4 text-xs text-gray-600">
-                    <div>Amazon: ${p.amazon_current_price_usd || p.base_price_usd}</div>
-                    {p.amazon_list_price_usd && <div className="line-through text-gray-400">Lista: ${p.amazon_list_price_usd}</div>}
-                    <div>Envío USA: ${p.usa_domestic_shipping_usd || 0}</div>
-                    <div className="font-bold text-gray-700 mt-1 border-t pt-1">Costo Real: ${p.real_cost_usd || '?'}</div>
+                    <div>Amazon: {formatUSD(p.amazon_current_price_usd || p.base_price_usd)}</div>
+                    {p.amazon_list_price_usd && <div className="line-through text-gray-400">Lista: {formatUSD(p.amazon_list_price_usd)}</div>}
+                    <div>Envío USA: {formatUSD(p.usa_domestic_shipping_usd || 0)}</div>
+                    <div className="font-bold text-gray-700 mt-1 border-t pt-1">Costo Real: {p.real_cost_usd ? formatUSD(p.real_cost_usd) : '?'}</div>
                   </td>
                   <td className="px-6 py-4 text-xs text-gray-600">
-                    <div>Margen Esperado: ${p.expected_profit_usd || '?'}</div>
-                    <div className="font-bold text-green-700">Fee Aplicado: ${p.collectibles_fee_usd}</div>
-                    <div className="text-gray-500">{(p.final_price_usd > 0 ? ((Number(p.collectibles_fee_usd) / Number(p.final_price_usd)) * 100).toFixed(1) : 0)}% del Final</div>
+                    <div>Margen Esperado: {p.expected_profit_usd ? formatUSD(p.expected_profit_usd) : '?'}</div>
+                    <div className="font-bold text-green-700">Fee Aplicado: {formatUSD(p.collectibles_fee_usd)}</div>
+                    <div className="text-gray-500">{formatPercent(p.final_price_usd > 0 ? ((Number(p.collectibles_fee_usd) / Number(p.final_price_usd)) * 100) : 0)} del Final</div>
                   </td>
                   <td className="px-6 py-4 text-sm font-bold">
-                    <div className="text-primary-600">${p.final_price_usd} USD</div>
-                    <div className="text-gray-500 text-xs font-normal">${p.final_price_uyu} UYU</div>
+                    <div className="text-primary-600">{formatUSD(p.final_price_usd)}</div>
+                    <div className="text-gray-500 text-xs font-normal">{formatUYU(p.final_price_uyu)}</div>
                   </td>
                   <td className="px-6 py-4 text-xs text-gray-600">
-                    <div>Flete Urubox: ${p.urubox_estimated_cost_usd || '?'}</div>
-                    <div className="font-bold text-red-600 border-t pt-1 mt-1">Total: ${p.total_estimated_cost_usd || '?'}</div>
+                    <div>Flete Urubox: {p.urubox_estimated_cost_usd ? formatUSD(p.urubox_estimated_cost_usd) : '?'}</div>
+                    <div className="font-bold text-red-600 border-t pt-1 mt-1">Total: {p.total_estimated_cost_usd ? formatUSD(p.total_estimated_cost_usd) : '?'}</div>
                   </td>
                   <td className="px-6 py-4 text-xs">
                     <span className={`px-2 py-1 rounded-full font-bold mb-2 inline-block ${
@@ -280,10 +281,10 @@ export default function AdminInternationalProducts() {
                   </td>
                   <td className="px-6 py-4 text-xs">
                     <div className="font-semibold text-gray-700">Estado: {p.sync_status || 'N/A'}</div>
-                    <div className="text-gray-500 mt-1">Última vez: {p.last_synced_at ? new Date(p.last_synced_at).toLocaleString() : 'Nunca'}</div>
+                    <div className="text-gray-500 mt-1">Última vez: {formatDate(p.last_synced_at)}</div>
                     {p.price_change_percent && (
                       <div className={`mt-1 font-bold ${p.price_change_percent > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        Dif: {p.price_change_percent > 0 ? '+' : ''}{p.price_change_percent.toFixed(2)}%
+                        Dif: {p.price_change_percent > 0 ? '+' : ''}{formatPercent(p.price_change_percent)}
                       </div>
                     )}
                   </td>

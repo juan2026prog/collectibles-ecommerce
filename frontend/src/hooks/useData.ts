@@ -16,6 +16,7 @@ interface ProductFilters {
   offset?: number;
   group?: string;
   isInternational?: boolean;
+  includeDrafts?: boolean;
 }
 
 export function useProducts(filters: ProductFilters = {}) {
@@ -87,8 +88,13 @@ export function useProducts(filters: ProductFilters = {}) {
     if (filters.isInternational) {
       let query = supabase
         .from('international_products')
-        .select('*', { count: 'exact' })
-        .eq('status', 'published');
+        .select('*', { count: 'exact' });
+
+      if (!filters.includeDrafts) {
+        query = query.eq('status', 'published');
+      } else {
+        query = query.in('status', ['published', 'draft']);
+      }
 
       if (filters.search) {
         query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
@@ -120,7 +126,8 @@ export function useProducts(filters: ProductFilters = {}) {
           category: { name: item.category, slug: item.category },
           source_provider: 'zinc',
           is_active: true,
-          status: 'published'
+          status: item.status,
+          raw_international_data: item
         }));
         setProducts(mappedProducts);
         setCount(totalCount || 0);
@@ -234,7 +241,8 @@ export function useProduct(slug: string | undefined) {
               category: { name: intlData.category, slug: intlData.category },
               source_provider: 'zinc',
               is_active: true,
-              status: 'published',
+              status: intlData.status,
+              raw_international_data: intlData,
               international_products: [intlData]
             });
           } else {
