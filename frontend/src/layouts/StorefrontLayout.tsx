@@ -22,6 +22,7 @@ import { STORE_ISOLOGO_URL } from '../lib/brand';
 import { sanitizeHeadMarkup, sanitizeRichHtml } from '../lib/sanitize';
 import { FacebookIcon, InstagramIcon, TwitterIcon, YoutubeIcon, TiktokIcon, WhatsappIcon } from '../components/SocialIcons';
 import { CurrencySelector } from '../components/CurrencySelector';
+import AdminModeToggle from '../components/AdminModeToggle';
 import React from 'react';
 import { useMetaPageTracking } from '../hooks/useMetaPageTracking';
 import { trackContact, trackFindLocation, generateMetaEventId } from '../lib/meta/metaPixel';
@@ -766,6 +767,7 @@ export default function StorefrontLayout() {
           animation: slide-right 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
       `}} />
+      <AdminModeToggle />
     </div>
   );
 }

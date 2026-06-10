@@ -11,6 +11,13 @@ import { CurrencyProvider } from './contexts/CurrencyContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import { PageSkeleton } from './components/Skeletons';
 import ScrollToTop from './components/ScrollToTop';
+import { AdminModeProvider } from './contexts/AdminModeContext';
+import { InternationalCartProvider } from './contexts/InternationalCartContext';
+
+import InternationalCart from './pages/international/InternationalCart';
+import InternationalCourier from './pages/international/InternationalCourier';
+import InternationalReview from './pages/international/InternationalReview';
+import InternationalOrderPreview from './pages/international/InternationalOrderPreview';
 
 import StorefrontLayout from './layouts/StorefrontLayout';
 
@@ -95,9 +102,11 @@ function App() {
       <AnalyticsProvider>
         <ReferralTracker />
         <AuthProvider>
+          <AdminModeProvider>
           <MetaPixelTracker />
           <WishlistProvider>
             <CartProvider>
+              <InternationalCartProvider>
               <FeatureToggleProvider>
               <LocaleProvider>
                 <CurrencyProvider>
@@ -151,6 +160,22 @@ function App() {
                   <Route index element={<VendorDashboard />} />
                 </Route>
                 
+                {/* International Checkout Simulation */}
+                <Route path="/internacional/cart" element={
+                  <StorefrontLayout />
+                }>
+                  <Route index element={<InternationalCart />} />
+                </Route>
+                <Route path="/internacional/checkout" element={
+                  <ProtectedRoute>
+                    <StorefrontLayout />
+                  </ProtectedRoute>
+                }>
+                  <Route path="courier" element={<InternationalCourier />} />
+                  <Route path="review" element={<InternationalReview />} />
+                  <Route path="success" element={<InternationalOrderPreview />} />
+                </Route>
+
                 <Route path="/artist" element={
                   <ProtectedRoute>
                     <Suspense fallback={<PageSkeleton />}>
@@ -232,8 +257,10 @@ function App() {
                 </CurrencyProvider>
               </LocaleProvider>
               </FeatureToggleProvider>
+              </InternationalCartProvider>
             </CartProvider>
           </WishlistProvider>
+          </AdminModeProvider>
         </AuthProvider>
       </AnalyticsProvider>
     </BrowserRouter>

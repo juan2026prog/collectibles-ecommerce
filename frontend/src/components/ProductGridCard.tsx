@@ -4,6 +4,7 @@ import { ProductBadge } from './ProductBadge';
 import { getProductImage } from '../lib/imageUtils';
 import { evaluateItemDiscountDetailed } from '../hooks/usePromotions';
 import { useWishlistContext } from '../contexts/WishlistContext';
+import { useAdminMode } from '../contexts/AdminModeContext';
 
 interface ProductGridCardProps {
   product: any;
@@ -18,6 +19,7 @@ interface ProductGridCardProps {
  */
 export function ProductGridCard({ product, onAddToCart, formatPrice, applicablePromos = [] }: ProductGridCardProps) {
   const { toggleWishlist, isInWishlist } = useWishlistContext();
+  const { isAdminMode } = useAdminMode();
   const img = getProductImage(product);
   const finalPrice = product.base_price + (product.variants?.[0]?.price_adjustment || 0);
   
@@ -104,6 +106,13 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
         >
           <ShoppingCart className="w-5 h-5" />
         </button>
+
+        {/* Admin Mode Badge */}
+        {isAdminMode && product.source_provider === 'zinc' && product.international_products?.[0] && (
+          <div className="absolute bottom-2 right-2 bg-indigo-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm z-20">
+            Costo: ${Number(product.international_products[0].base_price_usd) + Number(product.international_products[0].usa_domestic_shipping_usd)}
+          </div>
+        )}
       </div>
 
       {/* 2. INFORMACIÓN */}

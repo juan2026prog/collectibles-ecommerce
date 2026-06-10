@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { ShoppingCart, Minus, Plus, Truck, ShieldCheck, Star, ChevronDown, Heart, Trophy } from 'lucide-react';
 import { useProduct, useProductBuyBox } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
+import { useInternationalCartContext } from '../contexts/InternationalCartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useWishlistContext } from '../contexts/WishlistContext';
 import { usePromotions, getApplicablePromotions, evaluateItemDiscountDetailed } from '../hooks/usePromotions';
@@ -14,6 +15,7 @@ import { trackViewContent, trackAddToCart, generateMetaEventId } from '../lib/me
 import SEO from '../components/SEO';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import SoldByCard from '../components/SoldByCard';
+import AdminTechnicalPanel from '../components/AdminTechnicalPanel';
 
 export default function ProductDetail() {
   const { settings } = useSiteSettings();
@@ -21,6 +23,7 @@ export default function ProductDetail() {
   const { product, loading } = useProduct(slug);
   const { buyBox, loading: buyBoxLoading } = useProductBuyBox(product?.id);
   const cart = useCartContext();
+  const internationalCart = useInternationalCartContext();
   const { user } = useAuth();
   const { formatCurrencyPrice } = useCurrency();
   const { promotions } = usePromotions();
@@ -187,6 +190,24 @@ export default function ProductDetail() {
     setMousePos({ x, y });
   };
 
+  // Cálculo Urubox en vivo
+  const getEstimatedWeightKg = (categoryName?: string) => {
+    const cat = (categoryName || '').toLowerCase();
+    if (cat.includes('funko')) return 0.4;
+    if (cat.includes('marvel legend') || cat.includes('hasbro')) return 0.7;
+    if (cat.includes('neca')) return 1.0;
+    if (cat.includes('hot toys')) return 3.0;
+    if (cat.includes('lego')) return 2.0;
+    return 1.0; // default
+  };
+
+  const intlProduct = product?.international_products?.[0] || product?.international_products;
+  const rawWeightGrams = intlProduct?.weight_grams;
+  const weightKg = rawWeightGrams ? rawWeightGrams / 1000 : getEstimatedWeightKg(product?.category?.name);
+  const uruboxRate = 22; // USD per Kg
+  const uruboxEstimatedCost = intlProduct?.urubox_estimated_cost_usd || Number((weightKg * uruboxRate).toFixed(2));
+  const totalEstimatedCost = intlProduct?.total_estimated_cost_usd || Number(((intlProduct?.final_price_usd || product?.base_price) + uruboxEstimatedCost).toFixed(2));
+
   function addToCart(selectedOption?: any) {
     if (!selectedVariant) return;
     
@@ -199,6 +220,27 @@ export default function ProductDetail() {
 
     if (targetStock <= 0) return;
     if (quantity > targetStock) return;
+
+    if (product.source_provider === 'zinc' || product.source_provider === 'amazon') {
+      const intlProduct = product.international_products?.[0] || product.international_products;
+      const weightKg = intlProduct?.weight_grams ? intlProduct.weight_grams / 1000 : undefined;
+      
+      internationalCart.addItem({
+        product_id: product.id,
+        variant_id: selectedVariant.id,
+        title: product.title,
+        price_usd: Number(intlProduct?.final_price_usd) || product.base_price,
+        image_url: resolveImage(images[0]?.url) || product.image_url,
+        quantity: quantity,
+        weight_kg,
+        raw_data: intlProduct?.raw_data,
+        international_data: intlProduct
+      });
+      // Navegar directo al checkout internacional o carrito
+      setAddedToCart(true);
+      setTimeout(() => setAddedToCart(false), 2000);
+      return;
+    }
 
     cart.addItem({
       product_id: product.id,
@@ -356,6 +398,7 @@ export default function ProductDetail() {
         type="product"
         schema={[productSchema, breadcrumbSchema]}
       />
+      <AdminTechnicalPanel product={product} />
 
       <nav className="flex items-center text-[11px] font-black uppercase tracking-[0.2em] text-slate-500 mb-8 flex-wrap gap-2">
         <Link to="/" className="hover:text-primary-500 transition-colors">Inicio</Link>
@@ -515,25 +558,31 @@ export default function ProductDetail() {
                       <span>{formatCurrencyPrice(displayPrice)}</span>
                     </div>
 
-                    {product.international_products?.urubox_estimated_cost_usd > 0 && (
-                      <div className="mt-4 border-t border-white/5 pt-4">
-                        <div className="flex justify-between items-center text-sm mb-1">
-                          <span className="text-slate-400">Precio Collectibles</span>
-                          <span className="font-medium text-white">USD {product.international_products.final_price_usd}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-sm mb-2">
-                          <span className="text-slate-400">Estimación Urubox (Courier)</span>
-                          <span className="font-medium text-white">USD {product.international_products.urubox_estimated_cost_usd}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-base font-bold bg-[#f00856]/10 p-2 rounded-lg text-[#f00856] border border-[#f00856]/20">
-                          <span>Costo Total Estimado</span>
-                          <span>USD {product.international_products.total_estimated_cost_usd}</span>
-                        </div>
-                        <p className="text-[10px] text-slate-500 mt-2 text-center">
-                          Basado en peso estimado. El costo final puede variar según peso real y courier seleccionado.
-                        </p>
+                    <div className="mt-4 border-t border-white/5 pt-4">
+                      <div className="flex justify-between items-center text-sm mb-1">
+                        <span className="text-slate-400">Precio Collectibles</span>
+                        <span className="font-medium text-white">USD {intlProduct?.final_price_usd || product.base_price}</span>
                       </div>
-                    )}
+                      <div className="flex justify-between items-center text-sm mb-2">
+                        <span className="text-slate-400">Estimación Urubox (Courier)</span>
+                        <span className="font-medium text-white">USD {uruboxEstimatedCost.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-base font-bold bg-[#f00856]/10 p-2 rounded-lg text-[#f00856] border border-[#f00856]/20">
+                        <span>Costo Total Estimado</span>
+                        <span>USD {totalEstimatedCost.toFixed(2)}</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-2 text-center">
+                        Basado en peso estimado ({weightKg}kg). El costo final puede variar según peso real y courier seleccionado.
+                      </p>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                      {intlProduct?.amazon_delivery_type && (
+                        <div className="font-bold text-green-400 bg-green-400/10 px-2 py-1 rounded">
+                          {intlProduct.amazon_delivery_type.includes('prime') ? '✓ Prime' : 'Disponibilidad Amazon'}
+                        </div>
+                      )}
+                    </div>
 
                     <div className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-[#f00856] bg-[#f00856]/10 px-3 py-1 rounded-full">
                        🌎 Importación Internacional
