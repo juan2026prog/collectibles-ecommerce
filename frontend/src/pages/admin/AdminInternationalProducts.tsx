@@ -10,6 +10,7 @@ export default function AdminInternationalProducts() {
   const [products, setProducts] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [rawModalData, setRawModalData] = useState<any>(null);
@@ -33,8 +34,15 @@ export default function AdminInternationalProducts() {
     setLoading(false);
   }
 
-  async function handleSync(productId?: string) {
-    const ids = productId ? [productId] : products.map(p => p.id);
+  async function handleSync(productIdsToSync?: string[] | string) {
+    let ids: string[];
+    if (Array.isArray(productIdsToSync)) {
+      ids = productIdsToSync;
+    } else if (productIdsToSync) {
+      ids = [productIdsToSync];
+    } else {
+      ids = products.map(p => p.id);
+    }
     if (ids.length === 0) return;
     
     setSyncing(true);
@@ -88,6 +96,28 @@ export default function AdminInternationalProducts() {
     }
   }
 
+  async function handleBulkStatusChange(newStatus: string) {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('international_products')
+        .update({ status: newStatus })
+        .in('id', ids);
+
+      if (error) throw error;
+
+      addToast({ title: 'Éxito', message: `Se actualizaron ${ids.length} productos a ${newStatus}.`, type: 'success' });
+      setSelectedIds(new Set());
+      fetchProducts();
+    } catch (err: any) {
+      addToast({ title: 'Error', message: err.message, type: 'error' });
+      setLoading(false);
+    }
+  }
+
   const filteredProducts = products.filter(p => 
     p.title.toLowerCase().includes(search.toLowerCase()) || 
     (p.brand && p.brand.toLowerCase().includes(search.toLowerCase()))
@@ -97,11 +127,35 @@ export default function AdminInternationalProducts() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-gray-900">Productos Internacionales (Amazon)</h2>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center flex-wrap">
+          {selectedIds.size > 0 && (
+            <>
+              <span className="text-sm text-gray-500 mr-2">{selectedIds.size} seleccionados</span>
+              <button 
+                onClick={() => handleBulkStatusChange('published')} 
+                className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors"
+              >
+                Publicar
+              </button>
+              <button 
+                onClick={() => handleBulkStatusChange('draft')} 
+                className="px-3 py-1.5 bg-yellow-500 text-white text-sm rounded-lg hover:bg-yellow-600 transition-colors"
+              >
+                Borrador
+              </button>
+              <button 
+                onClick={() => handleSync(Array.from(selectedIds))} 
+                disabled={syncing}
+                className="flex items-center px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} /> Sincronizar ({selectedIds.size})
+              </button>
+            </>
+          )}
           <button 
             onClick={() => handleSync()} 
             disabled={syncing || products.length === 0} 
-            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            className="flex items-center px-4 py-1.5 bg-gray-800 text-white text-sm rounded-lg hover:bg-gray-900 disabled:opacity-50 transition-colors"
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} /> Sincronizar Todos
           </button>
@@ -137,6 +191,20 @@ export default function AdminInternationalProducts() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-6 py-3 text-left">
+                  <input 
+                    type="checkbox" 
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    checked={filteredProducts.length > 0 && selectedIds.size === filteredProducts.length}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedIds(new Set(filteredProducts.map(p => p.id)));
+                      } else {
+                        setSelectedIds(new Set());
+                      }
+                    }}
+                  />
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Imagen</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Título</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Costos Base (Amazon + USA)</th>
@@ -150,7 +218,20 @@ export default function AdminInternationalProducts() {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredProducts.map((p) => (
-                <tr key={p.id}>
+                <tr key={p.id} className={selectedIds.has(p.id) ? 'bg-blue-50/50' : ''}>
+                  <td className="px-6 py-4">
+                    <input 
+                      type="checkbox" 
+                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      checked={selectedIds.has(p.id)}
+                      onChange={(e) => {
+                        const newSet = new Set(selectedIds);
+                        if (e.target.checked) newSet.add(p.id);
+                        else newSet.delete(p.id);
+                        setSelectedIds(newSet);
+                      }}
+                    />
+                  </td>
                   <td className="px-6 py-4">
                     <img src={p.image_url} alt="" referrerPolicy="no-referrer" loading="lazy" className="w-12 h-12 object-cover rounded" />
                   </td>
