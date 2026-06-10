@@ -13,7 +13,7 @@ import { PageSkeleton } from './components/Skeletons';
 import ScrollToTop from './components/ScrollToTop';
 import { AdminModeProvider } from './contexts/AdminModeContext';
 import { InternationalCartProvider } from './contexts/InternationalCartContext';
-
+import InternationalLaboratory from './pages/international/InternationalLaboratory';
 import InternationalCart from './pages/international/InternationalCart';
 import InternationalCourier from './pages/international/InternationalCourier';
 import InternationalReview from './pages/international/InternationalReview';
@@ -122,7 +122,7 @@ function App() {
                     <Route path="/store/:slug" element={<MarketplaceGuard><VendorStorefront /></MarketplaceGuard>} />
                     <Route path="/page/:slug" element={<DynamicPage />} />
                     <Route path="/collection/:slug" element={<Shop />} />
-                    <Route path="/internacional" element={<ProtectedRoute requireAdmin><Shop isInternational={true} /></ProtectedRoute>} />
+                    <Route path="/internacional" element={<ProtectedRoute requireAdmin><InternationalLaboratory /></ProtectedRoute>} />
                     <Route path="/about" element={<Navigate to="/page/nosotros" replace />} />
                     <Route path="/contact" element={<Contact />} />
                     <Route path="/terms" element={<Navigate to="/page/terminos" replace />} />
