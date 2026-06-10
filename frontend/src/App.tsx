@@ -80,6 +80,7 @@ const AdminVendors = lazy(() => import('./pages/admin/AdminVendors'));
 const AdminVendorPayouts = lazy(() => import('./pages/admin/AdminVendorPayouts'));
 const AdminVendorKyc = lazy(() => import('./pages/admin/AdminVendorKyc'));
 const AdminBuyBox = lazy(() => import('./pages/admin/AdminBuyBox'));
+const AdminMarketplace = lazy(() => import('./pages/admin/AdminMarketplace'));
 const AdminInternationalAmazon = lazy(() => import('./pages/admin/AdminInternationalAmazon'));
 const AdminInternationalProducts = lazy(() => import('./pages/admin/AdminInternationalProducts'));
 const AdminInternationalSync = lazy(() => import('./pages/admin/AdminInternationalSync'));
@@ -232,7 +233,7 @@ function App() {
                   <Route path="promotions" element={<AdminPromotions />} />
                   <Route path="affiliates" element={<AdminAffiliates />} />
                   <Route path="mailing" element={<AdminMailing />} />
-                  <Route path="mercadolibre" element={<AdminMercadoLibre />} />
+                  <Route path="mercadolibre" element={<Navigate to="/admin/marketplace?tab=conexiones" replace />} />
                   <Route path="reports" element={<AdminReports />} />
                   <Route path="seo" element={<AdminSeo />} />
                   <Route path="media" element={<AdminMedia />} />
@@ -240,14 +241,15 @@ function App() {
                   <Route path="users" element={<AdminUsers />} />
                   <Route path="finances" element={<AdminFinances />} />
                   <Route path="logistics" element={<AdminLogistics />} />
-                  <Route path="logistics-connections" element={<AdminLogisticsConnections />} />
+                  <Route path="logistics-connections" element={<Navigate to="/admin/marketplace?tab=conexiones" replace />} />
                   <Route path="artists" element={<AdminArtists />} />
                   <Route path="tags" element={<AdminTags />} />
                   <Route path="automations" element={<AdminAutomations />} />
-                  <Route path="vendors" element={<MarketplaceGuard><AdminVendors /></MarketplaceGuard>} />
-                  <Route path="vendor-payouts" element={<MarketplaceGuard><AdminVendorPayouts /></MarketplaceGuard>} />
-                  <Route path="vendor-kyc" element={<MarketplaceGuard><AdminVendorKyc /></MarketplaceGuard>} />
-                  <Route path="buybox" element={<MarketplaceGuard><AdminBuyBox /></MarketplaceGuard>} />
+                  <Route path="marketplace" element={<MarketplaceGuard><AdminMarketplace /></MarketplaceGuard>} />
+                  <Route path="vendors" element={<Navigate to="/admin/marketplace?tab=vendors" replace />} />
+                  <Route path="vendor-payouts" element={<Navigate to="/admin/marketplace?tab=liquidaciones" replace />} />
+                  <Route path="vendor-kyc" element={<Navigate to="/admin/marketplace?tab=kyc" replace />} />
+                  <Route path="buybox" element={<Navigate to="/admin/marketplace?tab=analytics" replace />} />
                   <Route path="internacional/amazon" element={<AdminInternationalAmazon />} />
                   <Route path="internacional/productos" element={<AdminInternationalProducts />} />
                   <Route path="internacional/sync" element={<AdminInternationalSync />} />

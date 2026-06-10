@@ -200,7 +200,7 @@ export default function AdminDashboard() {
                 { name: 'Marcas', href: '/admin/brands', icon: Star, color: 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100' },
                 { name: 'Banners', href: '/admin/banners', icon: Eye, color: 'bg-pink-50 text-pink-600 hover:bg-pink-100' },
                 { name: 'Afiliados', href: '/admin/affiliates', icon: Users, color: 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100' },
-                ...(features.marketplaceEnabled ? [{ name: 'Vendors', href: '/admin/vendors', icon: Store, color: 'bg-teal-50 text-teal-600 hover:bg-teal-100' }] : []),
+                ...(features.marketplaceEnabled ? [{ name: 'Marketplace', href: '/admin/marketplace', icon: Store, color: 'bg-teal-50 text-teal-600 hover:bg-teal-100' }] : []),
                 { name: 'Settings', href: '/admin/settings', icon: SettingsIcon, color: 'bg-gray-100 text-gray-600 hover:bg-gray-200' },
               ].map(q => (
                 <Link key={q.name} to={q.href} className={`flex items-center gap-2 px-3 py-3 rounded-lg text-sm font-bold transition-colors ${q.color}`}>
