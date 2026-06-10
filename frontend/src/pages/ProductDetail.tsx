@@ -288,29 +288,6 @@ export default function ProductDetail() {
     }, generateMetaEventId('AddToCart', product.id));
   }
 
-  useEffect(() => {
-    if (product) {
-      analytics.track({
-        eventName: 'ViewContent',
-        eventData: {
-          content_name: product.title,
-          content_ids: [product.id],
-          content_type: 'product',
-          value: finalPrice * quantity,
-          currency: 'UYU'
-        },
-        user: { email: user?.email || undefined }
-      });
-
-      trackViewContent({
-        content_name: product.title,
-        content_ids: [product.id],
-        content_type: 'product',
-        value: finalPrice * quantity,
-        currency: 'UYU'
-      }, generateMetaEventId('ViewContent', product.id));
-    }
-  }, [product, user, finalPrice, quantity]);
 
   const vendorNameSuffix = hideVendors ? '' : (!winnerIsCollectibles ? ` (Vendido por ${winnerVendorName})` : '');
   const seoTitle = (product.seo_title || `${product.title} - Comprar Online`) + vendorNameSuffix;
