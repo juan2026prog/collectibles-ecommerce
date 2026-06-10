@@ -50,7 +50,7 @@ export default function InternationalLaboratory() {
   const [dbProducts, setDbProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
-  const { cartItems, addToCart } = useInternationalCartContext();
+  const { items: cartItems, addItem: addToCart } = useInternationalCartContext();
   const navigate = useNavigate();
 
   useEffect(() => {
