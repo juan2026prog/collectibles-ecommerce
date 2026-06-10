@@ -384,7 +384,14 @@ export function useCart() {
   const [items, setItems] = useState<CartItem[]>(() => {
     try {
       const stored = localStorage.getItem('cart');
-      return stored ? JSON.parse(stored) : [];
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          // Filter out broken items that might have NaN, null or undefined prices
+          return parsed.filter(item => typeof item.price === 'number' && !isNaN(item.price));
+        }
+      }
+      return [];
     } catch { return []; }
   });
 
@@ -393,6 +400,11 @@ export function useCart() {
   }, [items]);
 
   const addItem = (item: CartItem) => {
+    if (typeof item.price !== 'number' || isNaN(item.price)) {
+      console.warn('[Cart] Rejected item with invalid price:', item);
+      return; // Do not add broken items
+    }
+
     // 📊 Track Analytics (Non-blocking)
     try {
       if (typeof trackEvent === 'function') {
