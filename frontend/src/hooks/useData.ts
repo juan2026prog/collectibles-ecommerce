@@ -400,18 +400,22 @@ export function useCart() {
   }, [items]);
 
   const addItem = (item: CartItem) => {
-    if (typeof item.price !== 'number' || isNaN(item.price)) {
+    const numericPrice = Number(item.price);
+    if (isNaN(numericPrice) || item.price === null || item.price === undefined) {
       console.warn('[Cart] Rejected item with invalid price:', item);
       return; // Do not add broken items
     }
+    
+    // Ensure the item always stores the price as a number type
+    const safeItem = { ...item, price: numericPrice };
 
     // 📊 Track Analytics (Non-blocking)
     try {
       if (typeof trackEvent === 'function') {
         trackEvent('AddToCart', {
-          content_name: item.title,
-          content_ids: [item.product_id],
-          value: item.price * item.quantity,
+          content_name: safeItem.title,
+          content_ids: [safeItem.product_id],
+          value: safeItem.price * safeItem.quantity,
           currency: 'UYU'
         });
       }
@@ -420,11 +424,11 @@ export function useCart() {
     }
 
     setItems(prev => {
-      const existing = prev.find(i => i.variant_id === item.variant_id);
+      const existing = prev.find(i => i.variant_id === safeItem.variant_id);
       if (existing) {
-        return prev.map(i => i.variant_id === item.variant_id ? { ...i, quantity: i.quantity + item.quantity } : i);
+        return prev.map(i => i.variant_id === safeItem.variant_id ? { ...i, quantity: i.quantity + safeItem.quantity } : i);
       }
-      return [...prev, item];
+      return [...prev, safeItem];
     });
   };
 
