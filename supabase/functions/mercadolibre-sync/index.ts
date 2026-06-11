@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
-import { corsHeaders, handleOptions } from "../_shared/cors.ts";
+import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { verifyAuth } from "../_shared/auth.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
@@ -519,7 +519,7 @@ Deno.serve(async (req) => {
     if (!mlToken) {
       return new Response(
         JSON.stringify({ success: false, error: "Mercado Libre no está conectado. Ve a la sección de configuración para conectar tu cuenta." }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+        { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }, status: 200 }
       );
     }
 
@@ -644,7 +644,7 @@ Deno.serve(async (req) => {
         const { allIds, totalItems } = await searchMLItemIds();
         return new Response(
           JSON.stringify({ success: true, item_ids: allIds, total: totalItems }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
         );
     }
 
@@ -654,13 +654,13 @@ Deno.serve(async (req) => {
         if (!allIds.length) {
           return new Response(
             JSON.stringify({ success: true, items: [], total: 0 }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
           );
         }
         const enrichedItems = await fetchItemDetails(allIds);
         return new Response(
           JSON.stringify({ success: true, items: enrichedItems, total: totalItems }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
         );
     }
 
@@ -670,13 +670,13 @@ Deno.serve(async (req) => {
         if (!mlIds.length) {
           return new Response(
             JSON.stringify({ success: true, items: [] }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
           );
         }
         const enrichedItems = await fetchItemDetails(mlIds);
         return new Response(
           JSON.stringify({ success: true, items: enrichedItems }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
         );
     }
 
@@ -685,7 +685,7 @@ Deno.serve(async (req) => {
         if (!product_ids.length) {
           return new Response(
             JSON.stringify({ success: false, error: "No hay productos seleccionados para importar" }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+            { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }, status: 200 }
           );
         }
         
@@ -954,7 +954,7 @@ Deno.serve(async (req) => {
 
         return new Response(
           JSON.stringify({ success: true, results }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
         );
     }
 
@@ -1022,7 +1022,7 @@ Deno.serve(async (req) => {
                 results.push({ id: p.id, status: 'error', error: err.message });
             }
         }
-        return new Response(JSON.stringify({ success: true, results, count: results.filter(r => r.status === 'success').length }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ success: true, results, count: results.filter(r => r.status === 'success').length }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
     }
 
     // ═══ ACTION: SYNC STOCK (Web → ML Bidirectional Partial Implementation) ═══
@@ -1067,7 +1067,7 @@ Deno.serve(async (req) => {
                 results.push({ id: p.id, status: 'error', error: err.message });
             }
         }
-        return new Response(JSON.stringify({ success: true, results, count: results.filter(r => r.status === 'success').length }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ success: true, results, count: results.filter(r => r.status === 'success').length }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
     }
 
     // ═══ ACTION: PROCESS SYNC QUEUE ═══
@@ -1302,7 +1302,7 @@ Deno.serve(async (req) => {
 
         return new Response(
           JSON.stringify({ success: true, processed: results.length, results }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
         );
     }
 
@@ -1456,7 +1456,7 @@ Deno.serve(async (req) => {
 
         return new Response(
           JSON.stringify({ success: true, message: "Item successfully linked", product_id, vendor_product_id: vendorProd.id }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
         );
     }
 
@@ -1647,7 +1647,7 @@ Deno.serve(async (req) => {
 
         return new Response(
           JSON.stringify({ success: true, message: "Product successfully created and linked", product_id: newProd.id }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
         );
     }
 
@@ -1689,7 +1689,7 @@ Deno.serve(async (req) => {
 
         return new Response(
           JSON.stringify({ success: true, message: "Item ignored successfully" }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
         );
     }
 
@@ -1729,7 +1729,7 @@ Deno.serve(async (req) => {
 
         return new Response(
           JSON.stringify({ success: true, message: "Item updated successfully" }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
         );
     }
 
@@ -1985,7 +1985,7 @@ Deno.serve(async (req) => {
         
         return new Response(
           JSON.stringify({ success: true, results }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
         );
     }
 
@@ -2064,7 +2064,7 @@ Deno.serve(async (req) => {
 
         return new Response(
           JSON.stringify({ success: true, mismatch_count: mismatchCount, report }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
         );
     }
 
@@ -2117,7 +2117,7 @@ Deno.serve(async (req) => {
 
         return new Response(
           JSON.stringify({ success: true, checked_accounts: accounts?.length || 0, alerts_raised: alertCount }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
         );
     }
 
@@ -2206,20 +2206,22 @@ Deno.serve(async (req) => {
 
         return new Response(
           JSON.stringify({ success: true, results }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
         );
     }
 
     return new Response(
       JSON.stringify({ success: false, error: "Action not recognized or not implemented" }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
 
   } catch (e: any) {
     console.error("mercadolibre-sync error:", e);
     return new Response(
       JSON.stringify({ success: false, error: e.message }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }, status: 200 }
     );
   }
 });
+
+

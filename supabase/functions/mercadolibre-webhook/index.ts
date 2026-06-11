@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
-import { corsHeaders, handleOptions } from "../_shared/cors.ts";
+import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -562,7 +562,7 @@ Deno.serve(async (req) => {
         console.warn("[Webhook Server] Webhook processing is globally disabled (ml_webhooks_enabled = false). Aborting request.");
         return new Response(
           JSON.stringify({ success: false, error: "Webhooks are globally disabled", message: "Webhooks are globally disabled" }), 
-          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+          { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }, status: 200 }
         );
       }
     }
@@ -572,7 +572,7 @@ Deno.serve(async (req) => {
       const eventId = body.event_id;
       if (!eventId) throw new Error("Missing event_id");
       await processEvent(supabase, eventId, customFetch);
-      return new Response(JSON.stringify({ success: true, processed: eventId }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ success: true, processed: eventId }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
     }
 
     // ═══ Action: sweep (Cron job / manual Sweep) ═══
@@ -593,13 +593,13 @@ Deno.serve(async (req) => {
         processedIds.push(ev.id);
       }
 
-      return new Response(JSON.stringify({ success: true, swept_count: processedIds.length, ids: processedIds }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ success: true, swept_count: processedIds.length, ids: processedIds }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
     }
 
     // ═══ Action: get_dlq_test (For automated testing RLS bypass) ═══
     if (action === 'get_dlq_test') {
       if (!isTestBypass) {
-        return new Response(JSON.stringify({ error: "Unauthorized test action" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ error: "Unauthorized test action" }), { status: 401, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
       }
       const sellerId = body.seller_id;
       const { data, error } = await supabase
@@ -611,13 +611,13 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (error) throw error;
-      return new Response(JSON.stringify({ success: true, data }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ success: true, data }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
     }
 
     // ═══ Action: test_cleanup (For automated testing RLS bypass) ═══
     if (action === 'test_cleanup') {
       if (!isTestBypass) {
-        return new Response(JSON.stringify({ error: "Unauthorized test action" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ error: "Unauthorized test action" }), { status: 401, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
       }
       
       // Delete test orders
@@ -638,13 +638,13 @@ Deno.serve(async (req) => {
       // Delete simulated backlog items
       await supabase.from('ml_sync_queue').delete().eq('ml_item_id', 'MLU_MOCK_BACKLOG');
 
-      return new Response(JSON.stringify({ success: true, message: "Test data cleaned up successfully" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ success: true, message: "Test data cleaned up successfully" }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
     }
 
     // ═══ Action: test_assertion (For automated testing RLS bypass) ═══
     if (action === 'test_assertion') {
       if (!isTestBypass) {
-        return new Response(JSON.stringify({ error: "Unauthorized test action" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ error: "Unauthorized test action" }), { status: 401, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
       }
       
       const orderId = body.ml_order_id;
@@ -695,13 +695,13 @@ Deno.serve(async (req) => {
         event = data;
       }
 
-      return new Response(JSON.stringify({ success: true, order, variant, vendorVariant, alert, seller, event }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ success: true, order, variant, vendorVariant, alert, seller, event }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
     }
 
     // ═══ Action: test_cancel_order (For automated testing RLS bypass) ═══
     if (action === 'test_cancel_order') {
       if (!isTestBypass) {
-        return new Response(JSON.stringify({ error: "Unauthorized test action" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ error: "Unauthorized test action" }), { status: 401, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
       }
       const orderId = body.order_id;
       const { error } = await supabase
@@ -709,13 +709,13 @@ Deno.serve(async (req) => {
         .update({ status: 'cancelled' })
         .eq('id', orderId);
       if (error) throw error;
-      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ success: true }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
     }
 
     // ═══ Action: test_expire_token (For automated testing RLS bypass) ═══
     if (action === 'test_expire_token') {
       if (!isTestBypass) {
-        return new Response(JSON.stringify({ error: "Unauthorized test action" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ error: "Unauthorized test action" }), { status: 401, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
       }
       const sellerId = body.seller_id;
       const pastDate = new Date(Date.now() - 3600 * 1000).toISOString();
@@ -724,13 +724,13 @@ Deno.serve(async (req) => {
         .update({ expires_at: pastDate })
         .eq('seller_id', sellerId);
       if (error) throw error;
-      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ success: true }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
     }
 
     // ═══ Action: test_set_kill_switch (For automated testing RLS bypass) ═══
     if (action === 'test_set_kill_switch') {
       if (!isTestBypass) {
-        return new Response(JSON.stringify({ error: "Unauthorized test action" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ error: "Unauthorized test action" }), { status: 401, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
       }
       const enabled = body.enabled;
       const { error } = await supabase
@@ -741,13 +741,13 @@ Deno.serve(async (req) => {
           updated_at: new Date().toISOString()
         }, { onConflict: 'key' });
       if (error) throw error;
-      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ success: true }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
     }
 
     // ═══ Action: test_simulate_backlog (For automated testing RLS bypass) ═══
     if (action === 'test_simulate_backlog') {
       if (!isTestBypass) {
-        return new Response(JSON.stringify({ error: "Unauthorized test action" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ error: "Unauthorized test action" }), { status: 401, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
       }
       const sellerId = body.seller_id;
       const variantId = body.variant_id;
@@ -768,13 +768,13 @@ Deno.serve(async (req) => {
       }
       const { error } = await supabase.from('ml_sync_queue').insert(itemsToInsert);
       if (error) throw error;
-      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ success: true }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
     }
 
     // ═══ Action: test_set_token_expiry (For automated testing RLS bypass) ═══
     if (action === 'test_set_token_expiry') {
       if (!isTestBypass) {
-        return new Response(JSON.stringify({ error: "Unauthorized test action" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ error: "Unauthorized test action" }), { status: 401, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
       }
       const sellerId = body.seller_id;
       const hoursOffset = body.hours_offset || 0;
@@ -784,13 +784,13 @@ Deno.serve(async (req) => {
         .update({ expires_at: targetDate })
         .eq('seller_id', sellerId);
       if (error) throw error;
-      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ success: true }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
     }
 
     // ═══ Action: test_decrement_inventory (For automated testing RLS bypass) ═══
     if (action === 'test_decrement_inventory') {
       if (!isTestBypass) {
-        return new Response(JSON.stringify({ error: "Unauthorized test action" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ error: "Unauthorized test action" }), { status: 401, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
       }
       
       const variantId = body.variant_id;
@@ -802,10 +802,10 @@ Deno.serve(async (req) => {
       });
 
       if (error) {
-        return new Response(JSON.stringify({ success: false, error: error.message }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ success: false, error: error.message }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
       }
 
-      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ success: true }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
     }
 
     // ═══ External Webhook Event Ingestion ═══
@@ -816,7 +816,7 @@ Deno.serve(async (req) => {
     const sentAtStr = body.sent || new Date().toISOString();
 
     if (!resource || !topic) {
-      return new Response(JSON.stringify({ error: "Invalid webhook payload (missing resource or topic)" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: "Invalid webhook payload (missing resource or topic)" }), { status: 400, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
     }
 
     // 1. Check idempotency: is there an active event in the queue?
@@ -831,7 +831,7 @@ Deno.serve(async (req) => {
 
     if (existingEvent) {
       console.log(`[Webhook Event] Event already in queue or processing (Resource: ${resource}, Status: ${existingEvent.status}). Skipping...`);
-      return new Response(JSON.stringify({ success: true, message: "Duplicate event skipped", id: existingEvent.id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ success: true, message: "Duplicate event skipped", id: existingEvent.id }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
     }
 
     // 2. Ingest or update the event as pending
@@ -899,10 +899,12 @@ Deno.serve(async (req) => {
     }
 
     // Return low-latency response to Mercado Libre (<50ms)
-    return new Response(JSON.stringify({ success: true, message: "Event ingested", id: newEvent.id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ success: true, message: "Event ingested", id: newEvent.id }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
 
   } catch (err: any) {
     console.error("mercadolibre-webhook error:", err);
-    return new Response(JSON.stringify({ success: false, error: err.message }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 });
+    return new Response(JSON.stringify({ success: false, error: err.message }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }, status: 200 });
   }
 });
+
+

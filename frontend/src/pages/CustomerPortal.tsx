@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useCartContext } from '../contexts/CartContext';
-import { Package, User, Settings, Save, Check, ShoppingCart, RotateCcw, MapPin, Phone, Plus, Trash2, Lock, Eye, EyeOff, Edit3 } from 'lucide-react';
+import { Package, User, Settings, Save, Check, ShoppingCart, RotateCcw, MapPin, Phone, Plus, Trash2, Lock, Eye, EyeOff, Edit3, Store } from 'lucide-react';
 import { useLocale } from '../contexts/LocaleContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { URUGUAY_LOCATIONS, DEPARTAMENTOS } from '../utils/uruguayLocations';
@@ -40,6 +40,7 @@ export default function CustomerPortal() {
   const [activeTab, setActiveTab] = useState<'orders' | 'profile' | 'security'>('orders');
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
+  const [isVendor, setIsVendor] = useState(false);
 
   // Profile fields
   const [firstName, setFirstName] = useState('');
@@ -78,12 +79,13 @@ export default function CustomerPortal() {
 
       // Load profile
       const { data: profileData } = await supabase
-        .from('profiles').select('first_name, last_name, phone, saved_addresses').eq('id', user!.id).single();
+        .from('profiles').select('first_name, last_name, phone, saved_addresses, is_vendor').eq('id', user!.id).single();
       if (profileData) {
         setFirstName(profileData.first_name || '');
         setLastName(profileData.last_name || '');
         setPhone(profileData.phone || '');
         setAddresses(Array.isArray(profileData.saved_addresses) ? profileData.saved_addresses : []);
+        setIsVendor(!!profileData.is_vendor);
       }
       setLoading(false);
     }
@@ -184,6 +186,11 @@ export default function CustomerPortal() {
             <h1 className="text-3xl font-bold">Mi Cuenta</h1>
             <p className="text-slate-400">{user?.email}</p>
             {firstName && <p className="text-sm text-slate-300 font-medium mt-1">{firstName} {lastName}</p>}
+            {isVendor && (
+              <Link to="/vendor" className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg text-sm font-bold hover:bg-primary-600 transition-colors shadow-lg shadow-primary-500/20">
+                <Store className="w-4 h-4" /> Ir a mi Panel de Ventas
+              </Link>
+            )}
           </div>
         </div>
         <div className="bg-white/5 border  p-6 w-full md:w-auto">

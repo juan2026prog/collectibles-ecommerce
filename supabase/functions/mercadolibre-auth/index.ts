@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { corsHeaders, handleOptions } from "../_shared/cors.ts";
+import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { verifyAuth } from "../_shared/auth.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
     if (!code) {
       return new Response(
         JSON.stringify({ error: "Code is required" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+        { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }, status: 400 }
       );
     }
 
@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
     if (!response.ok) {
       return new Response(
         JSON.stringify({ error: data.error || "Failed to get access token", details: data }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+        { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }, status: 400 }
       );
     }
 
@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
     if (!meRes.ok) {
       return new Response(
         JSON.stringify({ error: meData.message || "Failed to fetch user profile from Mercado Libre" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+        { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }, status: 400 }
       );
     }
 
@@ -81,6 +81,22 @@ Deno.serve(async (req) => {
     const nickname = meData.nickname;
 
     const targetVendorId = isVendor ? user.id : (vendor_id || null);
+
+    // Check if this Mercado Libre account (sellerId) is already connected to another vendor or admin
+    const { data: existingSeller } = await supabase
+      .from("ml_seller_accounts")
+      .select("vendor_id")
+      .eq("seller_id", sellerId)
+      .maybeSingle();
+
+    if (existingSeller && existingSeller.vendor_id !== targetVendorId) {
+      return new Response(
+        JSON.stringify({ 
+          error: "Esta cuenta de Mercado Libre ya está conectada a otra tienda o a la cuenta principal. Por favor cerrá sesión en Mercado Libre y conectá una cuenta diferente." 
+        }),
+        { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }, status: 400 }
+      );
+    }
 
     // Clear old accounts for this vendor / platform
     if (targetVendorId === null) {
@@ -90,7 +106,7 @@ Deno.serve(async (req) => {
     }
 
     // Insert new seller account details
-    await supabase.from("ml_seller_accounts").insert({
+    const { error: insertError } = await supabase.from("ml_seller_accounts").insert({
       vendor_id: targetVendorId,
       seller_id: sellerId,
       nickname: nickname,
@@ -99,6 +115,13 @@ Deno.serve(async (req) => {
       expires_at: expiresAt,
       updated_at: new Date().toISOString(),
     });
+
+    if (insertError) {
+      return new Response(
+        JSON.stringify({ error: "No se pudo guardar la conexión en la base de datos.", details: insertError }),
+        { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }, status: 500 }
+      );
+    }
 
     await supabase.from("site_settings").upsert(
       {
@@ -116,13 +139,13 @@ Deno.serve(async (req) => {
         expires_in: data.expires_in,
         seller_id: sellerId
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
 
   } catch (error: any) {
     return new Response(
       JSON.stringify({ error: error.message }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }, status: 500 }
     );
   }
 });
