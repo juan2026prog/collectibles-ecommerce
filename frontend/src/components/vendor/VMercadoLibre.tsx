@@ -318,6 +318,10 @@ export default function VMercadoLibre() {
             <p className="text-sm text-gray-500">
               Sincroniza stock bidireccionalmente y automatiza tu inventario en la plataforma.
             </p>
+            <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800 text-left">
+              <p className="font-bold mb-1">¡Atención!</p>
+              <p>Se abrirá Mercado Libre para autorizar tu cuenta. Si ya tenés una sesión iniciada, se conectará esa cuenta automáticamente. Si querés conectar otra cuenta distinta, <strong>cerrá sesión en Mercado Libre antes de continuar</strong>.</p>
+            </div>
           </div>
           <button 
             onClick={handleConnect}
