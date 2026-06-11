@@ -137,6 +137,7 @@ function App() {
                     <Route path="/callback" element={<Callback />} />
                     
                     {/* User Portals */}
+                    <Route path="/profile" element={<Navigate to="/account" replace />} />
                     <Route path="/account" element={
                       <ProtectedRoute>
                         <CustomerPortal />

@@ -400,7 +400,7 @@ export default function StorefrontLayout() {
                            <div className="text-xs font-black text-[#f00856] uppercase tracking-widest">Collector</div>
                            <div className="text-sm font-black text-white truncate">{profile?.first_name ? `${profile.first_name} ${profile.last_name || ''}`.trim() : user.email}</div>
                         </div>
-                        <Link to="/profile" className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 text-sm font-bold text-slate-300">
+                        <Link to="/account" className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 text-sm font-bold text-slate-300">
                            <Package className="w-4 h-4" /> Mis pedidos
                         </Link>
                         {profile?.is_admin && (
