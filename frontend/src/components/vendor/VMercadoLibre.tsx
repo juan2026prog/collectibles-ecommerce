@@ -34,10 +34,15 @@ export default function VMercadoLibre() {
   const [importStatusFilter, setImportStatusFilter] = useState('active');
   const [importLimitFilter, setImportLimitFilter] = useState('-1'); // -1 means All
 
+  // Categories for publishing
+  const [categories, setCategories] = useState<any[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<Record<string, string>>({});
+
   useEffect(() => {
     if (user?.id) {
       loadAccountDetails();
       loadClientId();
+      loadCategories();
     }
   }, [user]);
 
@@ -52,6 +57,57 @@ export default function VMercadoLibre() {
       setLoadingLogs(false);
     }
   }, [account, statusFilter]);
+
+  async function handlePublish(item: any) {
+    const catId = selectedCategories[item.ml_item_id] || item.raw_payload?.normalized_metadata?.suggested_category_id;
+    if (!catId) {
+      toast.error('Selecciona una categoría para publicar');
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const session = (await supabase.auth.getSession()).data.session;
+      const token = session?.access_token || '';
+
+      const res = await fetch(`${supabaseUrl}/functions/v1/mercadolibre-sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'curate_create',
+          raw_item_id: item.id,
+          title: item.title,
+          price: item.price,
+          stock: item.available_quantity,
+          category_id: catId,
+          seller_id: account?.seller_id
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Error al publicar');
+      }
+
+      toast.success('Producto publicado y vinculado en tu tienda');
+      loadItemsAndLinks(); // reload items to show updated sync toggles
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function loadCategories() {
+    try {
+      const { data } = await supabase.from('categories').select('id, name').order('name', { ascending: true });
+      if (data) setCategories(data);
+    } catch (_e) { }
+  }
 
   async function loadClientId() {
     try {
@@ -425,6 +481,7 @@ export default function VMercadoLibre() {
                       <th className="p-8 text-center">Sincronizar Stock</th>
                       <th className="p-8 text-center">Sincronizar Precio</th>
                       <th className="p-8">Estado Sync</th>
+                      <th className="p-8 text-center">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -492,6 +549,35 @@ export default function VMercadoLibre() {
                                  <span className="text-red-400 flex items-center gap-1" title={link.last_sync_error || 'Fallo desconocido'}><ShieldAlert className="w-3.5 h-3.5" /> Fallido</span>
                                )
                              ) : '—'}
+                          </td>
+
+                          {/* Acciones */}
+                          <td className="p-8 text-center min-w-[200px]">
+                            {!isLinked && item.status !== 'ignored' ? (
+                              <div className="flex flex-col gap-2">
+                                <select 
+                                  className="bg-white border border-gray-200 text-gray-700 text-[10px] px-2 py-1.5 rounded focus:outline-none focus:ring-2 focus:ring-blue-500/50 w-full"
+                                  value={selectedCategories[item.ml_item_id] || item.raw_payload?.normalized_metadata?.suggested_category_id || ''}
+                                  onChange={(e) => setSelectedCategories(prev => ({ ...prev, [item.ml_item_id]: e.target.value }))}
+                                >
+                                  <option value="" disabled>Selecciona categoría...</option>
+                                  {categories.map(cat => (
+                                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                  ))}
+                                </select>
+                                <button
+                                  onClick={() => handlePublish(item)}
+                                  disabled={actionLoading}
+                                  className="bg-blue-600 text-white text-[10px] font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-colors w-full"
+                                >
+                                  Publicar en tienda
+                                </button>
+                              </div>
+                            ) : isLinked ? (
+                              <span className="text-[10px] text-gray-400 italic">Producto Activo</span>
+                            ) : (
+                              <span className="text-[10px] text-gray-400 italic">—</span>
+                            )}
                           </td>
                         </tr>
                       );
