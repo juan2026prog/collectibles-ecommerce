@@ -29,6 +29,10 @@ export default function VMercadoLibre() {
   // Operation states
   const [actionLoading, setActionLoading] = useState(false);
   const [importProgress, setImportProgress] = useState('');
+  
+  // Import Filter states
+  const [importStatusFilter, setImportStatusFilter] = useState('active');
+  const [importLimitFilter, setImportLimitFilter] = useState('-1'); // -1 means All
 
   useEffect(() => {
     if (user?.id) {
@@ -189,7 +193,12 @@ export default function VMercadoLibre() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ action: 'list_item_ids', limit: 50, seller_id: account?.seller_id })
+        body: JSON.stringify({ 
+          action: 'list_item_ids', 
+          limit: parseInt(importLimitFilter), 
+          status: importStatusFilter,
+          seller_id: account?.seller_id 
+        })
       });
 
       const listData = await listRes.json();
@@ -266,14 +275,37 @@ export default function VMercadoLibre() {
                 );
               }
               return (
-                <button 
-                  onClick={handleImportListings}
-                  disabled={actionLoading}
-                  className="bg-[#FFE600] text-black text-sm font-medium px-6 py-2.5 rounded-lg hover:brightness-95 transition-all flex items-center gap-2 disabled:opacity-50"
-                >
-                  <RefreshCw className={`w-4 h-4 ${actionLoading && 'animate-spin'}`} /> 
-                  {actionLoading ? 'Procesando...' : 'Importar Publicaciones'}
-                </button>
+                <div className="flex flex-col sm:flex-row items-center gap-3">
+                  <select
+                    value={importStatusFilter}
+                    onChange={(e) => setImportStatusFilter(e.target.value)}
+                    className="bg-white border border-gray-200 text-gray-700 text-sm font-medium px-3 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FFE600]/50"
+                    disabled={actionLoading}
+                  >
+                    <option value="active">Solo Activos</option>
+                    <option value="all">Todos los estados</option>
+                  </select>
+                  
+                  <select
+                    value={importLimitFilter}
+                    onChange={(e) => setImportLimitFilter(e.target.value)}
+                    className="bg-white border border-gray-200 text-gray-700 text-sm font-medium px-3 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FFE600]/50"
+                    disabled={actionLoading}
+                  >
+                    <option value="-1">Importar Todos</option>
+                    <option value="50">Últimos 50</option>
+                    <option value="100">Últimos 100</option>
+                  </select>
+
+                  <button 
+                    onClick={handleImportListings}
+                    disabled={actionLoading}
+                    className="bg-[#FFE600] text-black text-sm font-medium px-6 py-2.5 rounded-lg hover:brightness-95 transition-all flex items-center gap-2 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${actionLoading && 'animate-spin'}`} /> 
+                    {actionLoading ? 'Procesando...' : 'Importar Publicaciones'}
+                  </button>
+                </div>
               );
             })()}
 
