@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -31,21 +31,26 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
   const touchEndX = useRef<number | null>(null);
   const autoplayTimer = useRef<NodeJS.Timeout | null>(null);
 
-  // Filter active banners
-  const activeBanners = banners.filter(b => b.image_url);
+  // Filter active banners (memoized to prevent render loops)
+  const activeBanners = useMemo(() => banners.filter(b => b.image_url), [banners]);
 
   // Programmatic image preloading to prevent flickers/flashes during slide transitions
+  // Only preload the NEXT banner to avoid massive network requests
   useEffect(() => {
-    if (activeBanners.length === 0) return;
-    activeBanners.forEach(banner => {
+    if (activeBanners.length <= 1) return;
+    
+    const nextIndex = (activeIndex + 1) % activeBanners.length;
+    const bannerToPreload = activeBanners[nextIndex];
+    
+    if (bannerToPreload?.image_url) {
       const img = new Image();
-      img.src = banner.image_url;
-      if (banner.mobile_image_url) {
-        const mobImg = new Image();
-        mobImg.src = banner.mobile_image_url;
-      }
-    });
-  }, [activeBanners]);
+      img.src = bannerToPreload.image_url;
+    }
+    if (bannerToPreload?.mobile_image_url) {
+      const mobImg = new Image();
+      mobImg.src = bannerToPreload.mobile_image_url;
+    }
+  }, [activeIndex, activeBanners]);
 
   // Track prev index for smooth crossfade blending
   useEffect(() => {
@@ -204,9 +209,8 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
                 style={{
                   transform: isCurrent ? 'scale(1.05)' : 'scale(1.00)'
                 }}
-                loading="eager"
-                fetchPriority={index === activeIndex ? 'high' : 'low'}
-                {...((index === activeIndex) ? { fetchpriority: 'high' } : { fetchpriority: 'low' })}
+                loading={index === 0 ? "eager" : "lazy"}
+                fetchPriority={index === 0 ? "high" : "auto"}
                 decoding="async"
               />
             </picture>

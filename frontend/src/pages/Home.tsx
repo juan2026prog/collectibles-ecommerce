@@ -594,6 +594,7 @@ export default function Home() {
                           src={desktopImg}
                           alt={c.name}
                           loading="lazy"
+                          decoding="async"
                           className="w-full h-full object-cover object-center opacity-100 group-hover:scale-[1.03] transition-all duration-700 ease-out"
                         />
                       )}
@@ -721,6 +722,7 @@ export default function Home() {
                             alt={p.title}
                             className="max-w-full max-h-full object-contain transition-transform duration-500 group-hover:scale-105"
                             loading="lazy"
+                            decoding="async"
                           />
                         </Link>
 
@@ -836,6 +838,7 @@ export default function Home() {
                           src={t.image_url}
                           alt={t.title}
                           loading="lazy"
+                          decoding="async"
                           className="absolute inset-0 w-full h-full object-cover object-center opacity-30 blur-sm group-hover:scale-105 transition-all duration-700 ease-out"
                         />
                       )}
@@ -968,6 +971,7 @@ export default function Home() {
                         src={b.logo_url}
                         alt={b.name}
                         loading="lazy"
+                        decoding="async"
                         className="h-14 md:h-16 w-auto object-contain"
                       />
                     ) : (

@@ -54,6 +54,7 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
             alt={product.title}
             referrerPolicy="no-referrer"
             loading="lazy"
+            decoding="async"
             className="max-w-full max-h-full object-contain transition-transform duration-300 group-hover:scale-105"
           />
         </Link>
