@@ -247,6 +247,38 @@ serve(async (req: Request) => {
       return new Response(JSON.stringify({ success: true, email }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
     }
 
+    // 4. VENDOR INVITATION
+    if (payload.type === 'vendor_invitation') {
+      const { email, store_name, invite_link, expires_at } = payload;
+      if (!email || !invite_link) return new Response("Missing parameters", { status: 400, headers: corsHeaders });
+
+      const subject = `Invitación para vender en Collectibles Marketplace`;
+      const html = `
+        <div style="font-family: Arial, sans-serif; padding: 20px; background: #fafafa; border-radius: 8px;">
+          <h2 style="color: #111;">Hola ${store_name},</h2>
+          <p>Collectibles te ha invitado a gestionar tu tienda dentro de su marketplace.</p>
+          <p>Desde tu panel de vendedor podrás:</p>
+          <ul>
+            <li>Cargar y gestionar tus productos</li>
+            <li>Conectar con Mercado Libre y automatizar publicaciones</li>
+            <li>Configurar tus envíos</li>
+            <li>Ver tus ventas en tiempo real</li>
+            <li>Consultar tus liquidaciones y comisiones</li>
+          </ul>
+          <p style="margin-top:20px; margin-bottom:20px;">
+             <a href="${invite_link}" style="padding: 12px 24px; background: #0d9488; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Activar mi cuenta y configurar mi tienda</a>
+          </p>
+          <p style="color: #eab308; font-weight: bold; font-size: 14px;">Esta invitación vence el: ${expires_at}</p>
+          <p style="color: #666; font-size: 12px; margin-top: 20px;">Si tienes alguna pregunta, por favor responde a este correo.</p>
+          <p>Saludos,<br />El Equipo de Collectibles Marketplace.</p>
+        </div>
+      `;
+
+      await sendEmailAndLog(email, subject, html, 'vendor_invitation');
+
+      return new Response(JSON.stringify({ success: true, email }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
+    }
+
     return new Response(JSON.stringify({ ignored: true }), { headers: corsHeaders });
 
   } catch (error: any) {

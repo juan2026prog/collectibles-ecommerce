@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useSearchParams } from 'react-router-dom';
-import { Store, RefreshCw } from 'lucide-react';
+import { Store, RefreshCw, AlertTriangle, ShieldAlert } from 'lucide-react';
 
 import VOverview from '../components/vendor/VOverview';
 import VProducts from '../components/vendor/VProducts';
@@ -54,7 +54,25 @@ export default function VendorDashboard() {
     );
   }
 
-  // Onboarding for non-vendors
+  // If the vendor is suspended
+  if (vendorData?.status === 'suspended') {
+    return (
+      <div className="flex-1 flex flex-col justify-center items-center text-center min-h-[60vh] py-20 px-6 bg-gray-50">
+        <div className="bg-white p-12 rounded-2xl border border-red-200 shadow-sm max-w-xl w-full">
+          <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">Cuenta Suspendida</h1>
+          <p className="text-gray-500 mb-6">
+            Tu cuenta de vendedor ha sido suspendida. Por favor, contacta a soporte para más información.
+          </p>
+          <a href="/contact" className="px-6 py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-colors inline-block">
+            Contactar Soporte
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  // Onboarding for non-vendors (should be rare since ProtectedRoute and accept invite handle this, but just in case)
   if (!vendorData) {
     return (
       <div className="flex-1 flex flex-col justify-center items-center text-center min-h-[60vh] py-20 px-6 bg-gray-50">
@@ -66,7 +84,7 @@ export default function VendorDashboard() {
           
           <h1 className="text-3xl font-bold text-gray-900 mb-4">Activar Panel Seller</h1>
           <p className="text-gray-500 mb-10 max-w-md mx-auto">
-            Únete al ecosistema de sellers oficiales de Collectibles. Gestiona tu stock, sincroniza con Mercado Libre y escala tus ventas con logística inteligente.
+            Tu cuenta ha sido habilitada por un administrador. Haz clic abajo para crear tu tienda en el ecosistema de Collectibles.
           </p>
           
           <button onClick={handleInitialize}

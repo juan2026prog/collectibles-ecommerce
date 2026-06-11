@@ -40,6 +40,7 @@ const Contact = lazy(() => import('./pages/Contact'));
 
 // Auth (Lazy)
 const Login = lazy(() => import('./pages/Login'));
+const LoginVendors = lazy(() => import('./pages/LoginVendors'));
 
 // Portals (Lazy)
 const CustomerPortal = lazy(() => import('./pages/CustomerPortal'));
@@ -209,6 +210,7 @@ function App() {
 
                 {/* Auth */}
                 <Route path="/login" element={<Login />} />
+                <Route path="/login_vendors" element={<LoginVendors />} />
                 {/* GodMode route removed — SEC-CRIT-01 */}
 
                 {/* Admin */}

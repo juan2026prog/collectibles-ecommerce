@@ -83,7 +83,7 @@ export default function CustomerPortal() {
         setFirstName(profileData.first_name || '');
         setLastName(profileData.last_name || '');
         setPhone(profileData.phone || '');
-        setAddresses(profileData.saved_addresses || []);
+        setAddresses(Array.isArray(profileData.saved_addresses) ? profileData.saved_addresses : []);
       }
       setLoading(false);
     }
