@@ -126,8 +126,13 @@ export default function VMercadoLibre() {
       toast.error('Configuración de Mercado Libre ausente (Falta Client ID).');
       return;
     }
-    const redirectUri = import.meta.env.VITE_ML_REDIRECT_URI || `${window.location.origin}/auth/callback`;
-    const authUrl = `https://auth.mercadolibre.com.uy/authorization?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    const redirectUri = `${window.location.origin}/vendor/ml/callback`;
+    
+    // Generate and store state token to prevent CSRF
+    const stateToken = `vml_${Math.random().toString(36).substring(2, 15)}_${Date.now()}`;
+    localStorage.setItem('vml_oauth_state', stateToken);
+
+    const authUrl = `https://auth.mercadolibre.com.uy/authorization?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${stateToken}`;
     
     toast.info('Redireccionando a Mercado Libre...');
     window.location.href = authUrl;

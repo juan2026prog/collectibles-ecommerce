@@ -34,6 +34,7 @@ const Cart = lazy(() => import('./pages/Cart'));
 const Checkout = lazy(() => import('./pages/Checkout'));
 const CheckoutSuccess = lazy(() => import('./pages/CheckoutSuccess'));
 const MLCallback = lazy(() => import('./pages/MLCallback'));
+const VendorMLCallback = lazy(() => import('./pages/VendorMLCallback'));
 const Callback = lazy(() => import('./pages/Callback'));
 const DynamicPage = lazy(() => import('./pages/DynamicPage'));
 const Contact = lazy(() => import('./pages/Contact'));
@@ -134,6 +135,7 @@ function App() {
                     <Route path="/checkout" element={<Checkout />} />
                     <Route path="/checkout/success" element={<CheckoutSuccess />} />
                     <Route path="/auth/callback" element={<MLCallback />} />
+                    <Route path="/vendor/ml/callback" element={<VendorMLCallback />} />
                     <Route path="/callback" element={<Callback />} />
                     
                     {/* User Portals */}
