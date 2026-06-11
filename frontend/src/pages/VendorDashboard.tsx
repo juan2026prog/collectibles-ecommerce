@@ -102,23 +102,31 @@ export default function VendorDashboard() {
     try {
       const storeName = profile?.first_name ? `Tienda de ${profile.first_name}` : 'Mi Tienda';
       const slug = storeName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + '-' + user.id.slice(0, 6);
-      const { error } = await supabase.from('vendors').insert({
+      
+      // Step 1: Insert as pending to satisfy RLS policy
+      const { error: insertError } = await supabase.from('vendors').insert({
         id: user.id,
         store_name: storeName,
         slug,
         description: 'Tienda recién creada',
         base_commission_rate: 10,
-        status: 'active',
+        status: 'pending',
         shipping_mode: 'platform',
       });
-      if (error) {
-        console.error('Error creating vendor:', error);
+      
+      if (insertError) {
+        console.error('Error creating vendor:', insertError);
+        alert(`Error al inicializar tienda: ${insertError.message}`);
       } else {
+        // Step 2: Immediately update to active since they are already authorized
+        await supabase.from('vendors').update({ status: 'active' }).eq('id', user.id);
+        
         const { data: vendor } = await supabase.from('vendors').select('*').eq('id', user.id).single();
         if (vendor) setVendorData(vendor);
       }
     } catch (err) {
       console.error(err);
+      alert("Ocurrió un error inesperado al intentar activar tu tienda.");
     } finally {
       setLoading(false);
     }
