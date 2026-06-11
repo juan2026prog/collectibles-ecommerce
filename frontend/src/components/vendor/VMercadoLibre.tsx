@@ -395,7 +395,7 @@ export default function VMercadoLibre() {
           Cargando configuración de Mercado Libre...
         </div>
       ) : !account ? (
-        <div className="bg-gray-50 rounded-xl border border-gray-200 p-8 text-center space-y-4">
+        <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 text-center space-y-4">
           <div className="w-12 h-12 bg-[#FFE600]/20 rounded-full flex items-center justify-center mx-auto">
             <Link2 className="w-6 h-6 text-[#b3a100]" />
           </div>
@@ -465,7 +465,7 @@ export default function VMercadoLibre() {
                </div>
             </div>
 
-            <div className="overflow-x-auto no-scrollbar">
+            <div className="overflow-x-auto ">
               {loadingItems ? (
                 <div className="text-center py-20 text-gray-500 text-xs">Cargando catálogo en staging...</div>
               ) : filteredItems.length === 0 ? (
@@ -474,14 +474,14 @@ export default function VMercadoLibre() {
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-gray-50 border-b border-gray-100">
                     <tr className="text-[10px] font-black text-gray-500 uppercase tracking-[0.4em]">
-                      <th className="p-8">Publicación / ID</th>
-                      <th className="p-8 text-center">Estado Staging</th>
-                      <th className="p-8 text-right">Precio Staging</th>
-                      <th className="p-8 text-center">Stock Staging</th>
-                      <th className="p-8 text-center">Sincronizar Stock</th>
-                      <th className="p-8 text-center">Sincronizar Precio</th>
-                      <th className="p-8">Estado Sync</th>
-                      <th className="p-8 text-center">Acciones</th>
+                      <th className="p-4">Publicación / ID</th>
+                      <th className="p-4 text-center">Estado Staging</th>
+                      <th className="p-4 text-right">Precio Staging</th>
+                      <th className="p-4 text-center">Stock Staging</th>
+                      <th className="p-4 text-center">Sincronizar Stock</th>
+                      <th className="p-4 text-center">Sincronizar Precio</th>
+                      <th className="p-4">Estado Sync</th>
+                      <th className="p-4 text-center">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -491,7 +491,7 @@ export default function VMercadoLibre() {
                       
                       return (
                         <tr key={item.id} className="hover:bg-gray-50 transition-colors group text-xs">
-                          <td className="p-8">
+                          <td className="p-4">
                              <div className="flex items-center gap-3">
                                <img src={item.thumbnail} alt="" className="w-10 h-10 object-cover border border-gray-200 rounded" />
                                <div className="min-w-0">
@@ -505,7 +505,7 @@ export default function VMercadoLibre() {
                                </div>
                              </div>
                           </td>
-                          <td className="p-8 text-center">
+                          <td className="p-4 text-center">
                              <span className={`px-2 py-0.5 rounded text-[9px] uppercase font-black tracking-wider ${
                                item.status === 'approved' ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
                                item.status === 'review_needed' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' :
@@ -514,11 +514,11 @@ export default function VMercadoLibre() {
                                {item.status}
                              </span>
                           </td>
-                          <td className="p-8 text-right text-[15px] font-black tracking-tighter">${Math.round(item.price)}</td>
-                          <td className="p-8 text-center font-black text-[15px] tracking-tighter">{item.available_quantity} u.</td>
+                          <td className="p-4 text-right text-[15px] font-black tracking-tighter">${Math.round(item.price)}</td>
+                          <td className="p-4 text-center font-black text-[15px] tracking-tighter">{item.available_quantity} u.</td>
                           
                           {/* Sync Stock Toggle */}
-                          <td className="p-8 text-center">
+                          <td className="p-4 text-center">
                             {isLinked ? (
                               <button 
                                 onClick={() => toggleSyncSetting(item.ml_item_id, 'sync_stock', link.sync_stock)}
@@ -530,7 +530,7 @@ export default function VMercadoLibre() {
                           </td>
 
                           {/* Sync Price Toggle */}
-                          <td className="p-8 text-center">
+                          <td className="p-4 text-center">
                             {isLinked ? (
                               <button 
                                 onClick={() => toggleSyncSetting(item.ml_item_id, 'sync_price', link.sync_price)}
@@ -541,7 +541,7 @@ export default function VMercadoLibre() {
                             ) : <span className="text-[10px] text-gray-400 italic">No Vinculado</span>}
                           </td>
 
-                          <td className="p-8 font-medium">
+                          <td className="p-4 font-medium">
                              {isLinked ? (
                                link.last_sync_status === 'synced' ? (
                                  <span className="text-emerald-400 flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" /> Sincronizado</span>
@@ -552,7 +552,7 @@ export default function VMercadoLibre() {
                           </td>
 
                           {/* Acciones */}
-                          <td className="p-8 text-center min-w-[200px]">
+                          <td className="p-4 text-center min-w-[200px]">
                             {!isLinked && item.status !== 'ignored' ? (
                               <div className="flex flex-col gap-2">
                                 <select 
@@ -600,7 +600,7 @@ export default function VMercadoLibre() {
                </div>
             </div>
             
-            <div className="overflow-x-auto no-scrollbar">
+            <div className="overflow-x-auto ">
               {loadingLogs ? (
                 <div className="text-center py-10 text-gray-500 text-xs">Cargando historial de eventos...</div>
               ) : logs.length === 0 ? (
@@ -610,16 +610,16 @@ export default function VMercadoLibre() {
                   <tbody className="divide-y divide-gray-100">
                     {logs.map((log) => (
                       <tr key={log.id} className="hover:bg-gray-50 transition-colors group text-xs">
-                        <td className="p-8 text-gray-500 font-black uppercase tracking-[0.2em] w-48">
+                        <td className="p-4 text-gray-500 font-black uppercase tracking-[0.2em] w-48">
                           {new Date(log.created_at).toLocaleString()}
                         </td>
-                        <td className="p-8 font-black text-gray-900 text-[15px] uppercase tracking-widest group-hover:text-primary-600 group-hover:translate-x-2 transition-all">
+                        <td className="p-4 font-black text-gray-900 text-[15px] uppercase tracking-widest group-hover:text-primary-600 group-hover:translate-x-2 transition-all">
                           {log.action}
                         </td>
-                        <td className="p-8 text-gray-500 font-medium">
+                        <td className="p-4 text-gray-500 font-medium">
                           {JSON.stringify(log.details)}
                         </td>
-                        <td className="p-8">
+                        <td className="p-4">
                            <span className={`px-2.5 py-1.5 rounded-full shadow-lg text-[9px] uppercase font-black tracking-wider ${
                              log.status === 'success' ? 'text-emerald-400 bg-emerald-400/10' : 'text-red-400 bg-red-400/10'
                            }`}>
