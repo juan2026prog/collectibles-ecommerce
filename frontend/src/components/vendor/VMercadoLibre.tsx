@@ -51,12 +51,10 @@ export default function VMercadoLibre() {
 
   async function loadClientId() {
     try {
-      const { data } = await supabase
-        .from('site_settings')
-        .select('key, value')
-        .eq('key', 'mercadolibre_client_id')
-        .maybeSingle();
-      if (data) setDbClientId(data.value);
+      const { data, error } = await supabase.rpc('get_public_ml_client_id');
+      if (!error && data) {
+        setDbClientId(data);
+      }
     } catch (_e) { /* best-effort */ }
   }
 
