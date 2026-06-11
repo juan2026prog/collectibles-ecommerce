@@ -1,0 +1,1 @@
+ALTER TABLE public.ml_catalog_links ADD CONSTRAINT ml_catalog_links_ml_item_id_fkey FOREIGN KEY (ml_item_id) REFERENCES public.ml_raw_items(ml_item_id) ON DELETE CASCADE;
