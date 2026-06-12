@@ -626,10 +626,10 @@ export default function VMercadoLibre() {
                         <input 
                           type="checkbox" 
                           className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                          checked={filteredItems.length > 0 && selectedItemIds.length === filteredItems.filter(i => !i.ml_catalog_links?.[0]).length}
+                          checked={filteredItems.length > 0 && selectedItemIds.length === filteredItems.filter(i => !i.ml_catalog_links?.[0] && i.status !== 'ignored').length}
                           onChange={(e) => {
                             if (e.target.checked) {
-                              setSelectedItemIds(filteredItems.filter(i => !i.ml_catalog_links?.[0]).map(i => i.id));
+                              setSelectedItemIds(filteredItems.filter(i => !i.ml_catalog_links?.[0] && i.status !== 'ignored').map(i => i.id));
                             } else {
                               setSelectedItemIds([]);
                             }

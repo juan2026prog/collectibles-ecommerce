@@ -228,14 +228,16 @@ function detectUniverseAndLine(cleanTitleText: string) {
   return { universe, line };
 }
 
-async function downloadAndUploadImageToSupabase(supabase: any, imageUrl: string, filename: string, fetchFn: typeof fetch = fetch): Promise<string | null> {
+async function downloadAndUploadImageToSupabase(supabase: any, imageUrl: string, filename: string, fetchFn: typeof fetch = fetch, vendorId?: string | null): Promise<string | null> {
   try {
-    const storagePath = `ml-curation/${filename}`;
+    const bucket = vendorId ? 'public-assets' : 'product-images';
+    const folderPath = vendorId ? `vendors/${vendorId}/ml-curation` : 'ml-curation';
+    const storagePath = `${folderPath}/${filename}`;
 
     // 1. Basic deduplication: Check if file already exists in Supabase storage
     const { data: listData } = await supabase.storage
-      .from('product-images')
-      .list('ml-curation', {
+      .from(bucket)
+      .list(folderPath, {
         limit: 1,
         search: filename
       });
@@ -243,7 +245,7 @@ async function downloadAndUploadImageToSupabase(supabase: any, imageUrl: string,
     if (listData && listData.length > 0) {
       console.log(`[Image Download] Image ${filename} already exists in storage. Reusing...`);
       const { data: { publicUrl } } = supabase.storage
-        .from('product-images')
+        .from(bucket)
         .getPublicUrl(storagePath);
       return publicUrl;
     }
@@ -269,9 +271,9 @@ async function downloadAndUploadImageToSupabase(supabase: any, imageUrl: string,
       throw new Error("Downloaded image payload is empty");
     }
 
-    // 3. Upload to 'product-images' bucket
+    // 3. Upload to bucket
     const { data, error } = await supabase.storage
-      .from('product-images')
+      .from(bucket)
       .upload(storagePath, bytes.buffer, {
         contentType,
         upsert: true
@@ -283,7 +285,7 @@ async function downloadAndUploadImageToSupabase(supabase: any, imageUrl: string,
     }
 
     const { data: { publicUrl } } = supabase.storage
-      .from('product-images')
+      .from(bucket)
       .getPublicUrl(storagePath);
 
     return publicUrl;
@@ -1529,7 +1531,7 @@ Deno.serve(async (req) => {
           const filename = `${newProd.id}-main.${fileExtension}`;
           
           console.log(`[Curation] Downloading main image for product ${newProd.id}...`);
-          const storageUrl = await downloadAndUploadImageToSupabase(supabase, mainImgUrl, filename, customFetch);
+          const storageUrl = await downloadAndUploadImageToSupabase(supabase, mainImgUrl, filename, customFetch, vendorId);
           const finalMainImgUrl = storageUrl || mainImgUrl.replace('http://', 'https://');
 
           const { error: mainImgErr } = await supabase
