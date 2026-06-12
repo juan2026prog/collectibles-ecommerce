@@ -1505,6 +1505,7 @@ Deno.serve(async (req) => {
         const { data: newProd, error: prodErr } = await supabase
           .from('products')
           .insert({
+            vendor_id: vendorId,
             title,
             description: description || title,
             slug: uniqueSlug,
