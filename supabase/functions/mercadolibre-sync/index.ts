@@ -1329,16 +1329,21 @@ Deno.serve(async (req) => {
           throw new Error(`Raw item not found: ${rawItemErr?.message || ''}`);
         }
         
-        if (profile?.is_vendor && !profile?.is_admin && rawItem.seller_id !== targetSellerId) {
+        if (profile?.is_vendor && !profile?.is_admin && String(rawItem.seller_id) !== String(targetSellerId)) {
            throw new Error("Acceso denegado sobre este ítem.");
         }
 
-        const { data: sellerAcc } = await supabase
-          .from('ml_seller_accounts')
-          .select('vendor_id')
-          .eq('seller_id', rawItem.seller_id)
-          .maybeSingle();
-        const vendorId = sellerAcc?.vendor_id || null;
+        let vendorId = null;
+        if (profile?.is_vendor && !profile?.is_admin) {
+          vendorId = profile.id;
+        } else {
+          const { data: sellerAcc } = await supabase
+            .from('ml_seller_accounts')
+            .select('vendor_id')
+            .eq('seller_id', rawItem.seller_id)
+            .maybeSingle();
+          vendorId = sellerAcc?.vendor_id || null;
+        }
 
         let targetVariantId = variant_id;
         if (!targetVariantId) {
@@ -1483,16 +1488,21 @@ Deno.serve(async (req) => {
           throw new Error(`Raw item not found: ${rawItemErr?.message || ''}`);
         }
         
-        if (profile?.is_vendor && !profile?.is_admin && rawItem.seller_id !== targetSellerId) {
+        if (profile?.is_vendor && !profile?.is_admin && String(rawItem.seller_id) !== String(targetSellerId)) {
            throw new Error("Acceso denegado sobre este ítem.");
         }
 
-        const { data: sellerAcc } = await supabase
-          .from('ml_seller_accounts')
-          .select('vendor_id')
-          .eq('seller_id', rawItem.seller_id)
-          .maybeSingle();
-        const vendorId = sellerAcc?.vendor_id || null;
+        let vendorId = null;
+        if (profile?.is_vendor && !profile?.is_admin) {
+          vendorId = profile.id;
+        } else {
+          const { data: sellerAcc } = await supabase
+            .from('ml_seller_accounts')
+            .select('vendor_id')
+            .eq('seller_id', rawItem.seller_id)
+            .maybeSingle();
+          vendorId = sellerAcc?.vendor_id || null;
+        }
 
         const slugBase = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
         const uniqueSlug = `${slugBase}-${Math.random().toString(36).substring(2, 7)}`;
@@ -1716,7 +1726,7 @@ Deno.serve(async (req) => {
 
         if (fetchErr || !rawItem) throw new Error(`Raw item not found: ${fetchErr?.message || ''}`);
         
-        if (profile?.is_vendor && !profile?.is_admin && rawItem.seller_id !== targetSellerId) {
+        if (profile?.is_vendor && !profile?.is_admin && String(rawItem.seller_id) !== String(targetSellerId)) {
            throw new Error("Acceso denegado sobre este ítem.");
         }
 
@@ -1765,7 +1775,7 @@ Deno.serve(async (req) => {
 
             if (!rawItem) throw new Error("Item not found");
             
-            if (profile?.is_vendor && !profile?.is_admin && rawItem.seller_id !== targetSellerId) {
+            if (profile?.is_vendor && !profile?.is_admin && String(rawItem.seller_id) !== String(targetSellerId)) {
                throw new Error("Acceso denegado sobre este ítem.");
             }
 
