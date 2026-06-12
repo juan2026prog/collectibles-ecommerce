@@ -9,6 +9,7 @@ const itemSchema = z.object({
   product_id: z.string().uuid().optional(),
   id: z.string().uuid().optional(),
   variant_id: z.string().uuid().optional(),
+  vendor_id: z.string().uuid().nullable().optional(),
   quantity: z.number().int().min(1),
   price: z.number().min(0),
   title: z.string().optional(),
@@ -262,30 +263,58 @@ Deno.serve(async (req) => {
         });
       }
 
-      const dbBasePrice = productPriceMap.get(productId);
-      if (dbBasePrice === undefined) {
-        return new Response(JSON.stringify({
-          success: false,
-          error: `No se pudo verificar el precio del producto ${productId}`,
-          details: {
-            product_id: productId,
-            reason: "not_found"
-          }
-        }), {
-          status: 200,
-          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
-        });
-      }
+      let serverPrice = 0;
+      if (item.vendor_id) {
+        const { data: vProduct, error: vpError } = await supabase
+          .from("vendor_products")
+          .select("id, price")
+          .eq("product_id", productId)
+          .eq("vendor_id", item.vendor_id)
+          .eq("status", "active")
+          .maybeSingle();
 
-      let serverPrice = dbBasePrice;
-      if (item.variant_id) {
-        if (!variantPriceAdjustmentMap.has(item.variant_id)) {
+        if (vpError) {
+          console.error("Error fetching vendor product price:", vpError);
+        }
+
+        if (vProduct) {
+          let adjustment = 0;
+          if (item.variant_id) {
+            const { data: vVariant, error: vvError } = await supabase
+              .from("vendor_product_variants")
+              .select("price_adjustment")
+              .eq("vendor_product_id", vProduct.id)
+              .eq("variant_id", item.variant_id)
+              .maybeSingle();
+
+            if (vvError) {
+              console.error("Error fetching vendor product variant adjustment:", vvError);
+            }
+            adjustment = Number(vVariant?.price_adjustment || 0);
+          }
+          serverPrice = Number(vProduct.price) + adjustment;
+        } else {
           return new Response(JSON.stringify({
             success: false,
-            error: `No se pudo verificar el precio de la variante ${item.variant_id}`,
+            error: `El vendedor no tiene este producto activo.`,
             details: {
               product_id: productId,
-              variant_id: item.variant_id,
+              vendor_id: item.vendor_id,
+              reason: "vendor_product_not_found"
+            }
+          }), {
+            status: 200,
+            headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
+          });
+        }
+      } else {
+        const dbBasePrice = productPriceMap.get(productId);
+        if (dbBasePrice === undefined) {
+          return new Response(JSON.stringify({
+            success: false,
+            error: `No se pudo verificar el precio del producto ${productId}`,
+            details: {
+              product_id: productId,
               reason: "not_found"
             }
           }), {
@@ -293,8 +322,26 @@ Deno.serve(async (req) => {
             headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
           });
         }
-        const adjustment = variantPriceAdjustmentMap.get(item.variant_id) || 0;
-        serverPrice = dbBasePrice + adjustment;
+
+        serverPrice = dbBasePrice;
+        if (item.variant_id) {
+          if (!variantPriceAdjustmentMap.has(item.variant_id)) {
+            return new Response(JSON.stringify({
+              success: false,
+              error: `No se pudo verificar el precio de la variante ${item.variant_id}`,
+              details: {
+                product_id: productId,
+                variant_id: item.variant_id,
+                reason: "not_found"
+              }
+            }), {
+              status: 200,
+              headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
+            });
+          }
+          const adjustment = variantPriceAdjustmentMap.get(item.variant_id) || 0;
+          serverPrice = dbBasePrice + adjustment;
+        }
       }
 
       if (serverPrice === undefined || isNaN(serverPrice)) {
@@ -382,7 +429,7 @@ Deno.serve(async (req) => {
       const now = new Date().toISOString();
       const { data: autoPromotions, error: autoPromosError } = await supabase
         .from("promotions")
-        .select("id, name, discount_type, discount_value, min_quantity, is_stackable, priority")
+        .select("id, name, discount_type, discount_value, min_quantity, is_stackable, priority, owner_vendor_id")
         .neq("discount_type", "bank_discount")
         .eq("is_active", true)
         .or(`starts_at.is.null,starts_at.lte.${now}`)
@@ -412,6 +459,11 @@ Deno.serve(async (req) => {
           let itemDiscount = 0;
 
           for (const promo of autoPromotions) {
+            const itemVendorId = item.vendor_id || product.vendor_id || null;
+            if (promo.owner_vendor_id && promo.owner_vendor_id !== itemVendorId) {
+              continue;
+            }
+
             // Check exclusions
             let isExcluded = false;
             const promoExclusions = (allExclusions || []).filter(e => e.promotion_id === promo.id);
@@ -505,7 +557,7 @@ Deno.serve(async (req) => {
       const now = new Date().toISOString();
       const { data: promotion } = await supabase
         .from("promotions")
-        .select("id, bank_name, discount_type, discount_value, min_purchase, max_discount, promo_label, starts_at, ends_at, is_active")
+        .select("id, bank_name, discount_type, discount_value, min_purchase, max_discount, promo_label, starts_at, ends_at, is_active, owner_vendor_id")
         .eq("id", payload.bank_promo.promo_id)
         .eq("is_active", true)
         .single();
@@ -539,6 +591,11 @@ Deno.serve(async (req) => {
       for (const item of verifiedItems) {
         const product = products?.find(p => p.id === item.product_id);
         let isExcluded = false;
+
+        const itemVendorId = item.vendor_id || product?.vendor_id || null;
+        if (promotion.owner_vendor_id && promotion.owner_vendor_id !== itemVendorId) {
+          isExcluded = true;
+        }
         
         if (exclusions && exclusions.length > 0) {
            for (const exc of exclusions) {
@@ -611,7 +668,7 @@ Deno.serve(async (req) => {
     const groups = new Map<string | null, any[]>();
     for (const item of verifiedItems) {
       const dbProduct = products?.find(p => p.id === item.product_id);
-      const vendorId = dbProduct?.vendor_id || null;
+      const vendorId = item.vendor_id || dbProduct?.vendor_id || null;
       if (!groups.has(vendorId)) {
         groups.set(vendorId, []);
       }

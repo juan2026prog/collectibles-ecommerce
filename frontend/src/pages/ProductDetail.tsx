@@ -152,7 +152,7 @@ export default function ProductDetail() {
     product_id: product.id,
     category_id: product.category?.id,
     brand_id: product.brand?.id,
-    vendor_id: product.vendor_id,
+    vendor_id: winnerVendorId,
     tag_ids: product.product_tags?.map((pt: any) => pt.tag_id) || []
   }, promotions) : [];
 
@@ -162,7 +162,7 @@ export default function ProductDetail() {
       product_id: product.id,
       category_id: product.category?.id,
       brand_id: product.brand?.id,
-      vendor_id: product.vendor_id,
+      vendor_id: winnerVendorId,
       tag_ids: product.product_tags?.map((pt: any) => pt.tag_id) || [],
       price: finalPrice,
       quantity: 1

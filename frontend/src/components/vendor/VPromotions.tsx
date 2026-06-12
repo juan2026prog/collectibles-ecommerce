@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Percent, Plus, Trash2, Save, X, Calendar, CreditCard, Tag, Building2, ChevronDown } from 'lucide-react';
+import { Percent, Plus, Pencil, Trash2, Save, X, Calendar, CreditCard, Tag, Building2, ChevronDown } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 // ═══ URUGUAYAN BANK CARDS ═══

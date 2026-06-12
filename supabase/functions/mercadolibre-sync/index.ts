@@ -484,11 +484,11 @@ Deno.serve(async (req) => {
 
     if (isTestBypassReq || isServiceRole) {
       user = { id: isServiceRole ? 'service_role' : 'test_bypass' };
-      profile = { is_admin: true, is_vendor: false };
+      profile = { id: user.id, is_admin: true, is_vendor: false };
     } else {
       user = await verifyAuth(req);
-      const { data: p } = await supabase.from('profiles').select('is_admin, is_vendor').eq('id', user.id).single();
-      profile = p || { is_admin: false, is_vendor: false };
+      const { data: p } = await supabase.from('profiles').select('id, is_admin, is_vendor').eq('id', user.id).single();
+      profile = p || { id: null, is_admin: false, is_vendor: false };
     }
 
     if (!profile?.is_admin && !profile?.is_vendor) {

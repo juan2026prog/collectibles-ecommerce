@@ -7,24 +7,32 @@ import {
 } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 
+// Client-side cache to survive React unmounts when switching tabs
+let cachedAccount: any = null;
+let cachedClientId: string = '';
+let cachedCategories: any[] = [];
+let cachedItems: any[] = [];
+let cachedLogs: any[] = [];
+let cacheLoadedForUser: string | null = null;
+
 export default function VMercadoLibre() {
   const { user } = useAuth();
   const { toast } = useToast();
   
   // Connection states
-  const [account, setAccount] = useState<any>(null);
-  const [loadingAccount, setLoadingAccount] = useState(true);
-  const [dbClientId, setDbClientId] = useState('');
+  const [account, setAccount] = useState<any>(cachedAccount);
+  const [loadingAccount, setLoadingAccount] = useState(!cachedAccount);
+  const [dbClientId, setDbClientId] = useState(cachedClientId);
   
   // Staging items and links state
-  const [items, setItems] = useState<any[]>([]);
-  const [loadingItems, setLoadingItems] = useState(true);
+  const [items, setItems] = useState<any[]>(cachedItems);
+  const [loadingItems, setLoadingItems] = useState(cachedItems.length === 0);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
   // Logs state
-  const [logs, setLogs] = useState<any[]>([]);
-  const [loadingLogs, setLoadingLogs] = useState(true);
+  const [logs, setLogs] = useState<any[]>(cachedLogs);
+  const [loadingLogs, setLoadingLogs] = useState(cachedLogs.length === 0);
 
   // Operation states
   const [actionLoading, setActionLoading] = useState(false);
@@ -35,7 +43,7 @@ export default function VMercadoLibre() {
   const [importLimitFilter, setImportLimitFilter] = useState('-1'); // -1 means All
 
   // Categories for publishing
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>(cachedCategories);
   const [selectedCategories, setSelectedCategories] = useState<Record<string, string>>({});
 
   // Bulk Publish & Filters state
@@ -48,6 +56,26 @@ export default function VMercadoLibre() {
 
   useEffect(() => {
     if (user?.id) {
+      if (cacheLoadedForUser !== user.id) {
+        // Clear cache for new user session
+        cachedAccount = null;
+        cachedClientId = '';
+        cachedCategories = [];
+        cachedItems = [];
+        cachedLogs = [];
+        cacheLoadedForUser = user.id;
+
+        // Reset state
+        setAccount(null);
+        setLoadingAccount(true);
+        setDbClientId('');
+        setCategories([]);
+        setItems([]);
+        setLoadingItems(true);
+        setLogs([]);
+        setLoadingLogs(true);
+      }
+      
       loadAccountDetails();
       loadClientId();
       loadCategories();
@@ -176,7 +204,10 @@ export default function VMercadoLibre() {
   async function loadCategories() {
     try {
       const { data } = await supabase.from('categories').select('id, name').order('name', { ascending: true });
-      if (data) setCategories(data);
+      if (data) {
+        setCategories(data);
+        cachedCategories = data;
+      }
     } catch (_e) { }
   }
 
@@ -185,12 +216,13 @@ export default function VMercadoLibre() {
       const { data, error } = await supabase.rpc('get_public_ml_client_id');
       if (!error && data) {
         setDbClientId(data);
+        cachedClientId = data;
       }
     } catch (_e) { /* best-effort */ }
   }
 
   async function loadAccountDetails() {
-    setLoadingAccount(true);
+    if (!cachedAccount) setLoadingAccount(true);
     try {
       const { data, error } = await supabase
         .from('ml_seller_accounts')
@@ -199,6 +231,7 @@ export default function VMercadoLibre() {
         .maybeSingle();
       if (error) throw error;
       setAccount(data || null);
+      cachedAccount = data || null;
     } catch (err: any) {
       toast.error('Error al cargar la cuenta: ' + err.message);
     } finally {
@@ -207,7 +240,7 @@ export default function VMercadoLibre() {
   }
 
   async function loadItemsAndLinks() {
-    setLoadingItems(true);
+    if (cachedItems.length === 0) setLoadingItems(true);
     try {
       // Query raw items matching seller
       let query = supabase
@@ -223,6 +256,7 @@ export default function VMercadoLibre() {
       const { data, error } = await query;
       if (error) throw error;
       setItems(data || []);
+      cachedItems = data || [];
     } catch (err: any) {
       toast.error('Error al cargar items de catálogo: ' + err.message);
     } finally {
@@ -231,7 +265,7 @@ export default function VMercadoLibre() {
   }
 
   async function loadImportLogs() {
-    setLoadingLogs(true);
+    if (cachedLogs.length === 0) setLoadingLogs(true);
     try {
       const { data, error } = await supabase
         .from('ml_import_logs')
@@ -241,6 +275,7 @@ export default function VMercadoLibre() {
         .limit(10);
       if (error) throw error;
       setLogs(data || []);
+      cachedLogs = data || [];
     } catch (err: any) {
       toast.error('Error al cargar logs: ' + err.message);
     } finally {
@@ -279,6 +314,10 @@ export default function VMercadoLibre() {
       if (error) throw error;
       toast.success('Cuenta desconectada con éxito');
       setAccount(null);
+      // Clear cache
+      cachedAccount = null;
+      cachedItems = [];
+      cachedLogs = [];
     } catch (err: any) {
       toast.error('Error al desconectar: ' + err.message);
     } finally {
