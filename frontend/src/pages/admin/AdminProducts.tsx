@@ -153,6 +153,7 @@ export default function AdminProducts() {
     const { data } = await supabase
       .from('products')
       .select('*, product_categories(categories(id, name)), brand:brands(id, name), images:product_images(id, url), variants:product_variants(id, inventory_count, sku)')
+      .is('vendor_id', null)
       .order('created_at', { ascending: false });
     setProducts(data || []);
     setLoading(false);
