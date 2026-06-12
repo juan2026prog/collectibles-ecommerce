@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Package, Search, Plus, Upload, Copy, Edit3, Eye, MoreHorizontal, ChevronRight, Image as ImageIcon, Tag, AlertTriangle, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Search, Plus, Upload, Copy, Eye, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { resolveImage } from '../../lib/imageUtils';
@@ -19,10 +19,18 @@ export default function VProducts() {
   const { formatCurrencyPrice } = useCurrency();
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  
   const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [selected, setSelected] = useState<string[]>([]);
-  const [mlSellers, setMlSellers] = useState<string[]>([]);
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  const [itemsPerPage, setItemsPerPage] = useState<number | 'Todos'>(50);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sortField, setSortField] = useState<string>('created_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [filterCategory, setFilterCategory] = useState<string>('');
+  const [filterBrand, setFilterBrand] = useState<string>('');
+
+  const [categories, setCategories] = useState<any[]>([]);
+  const [brands, setBrands] = useState<any[]>([]);
 
   const loadProducts = async () => {
     if (!user) return;
@@ -31,7 +39,14 @@ export default function VProducts() {
       // Fetch seller IDs for the vendor
       const { data: mlAccounts } = await supabase.from('ml_seller_accounts').select('ml_seller_id').eq('vendor_id', user.id);
       const sellerIds = mlAccounts?.map(a => a.ml_seller_id) || [];
-      setMlSellers(sellerIds);
+
+      // Fetch categories & brands for filters
+      const [{ data: cats }, { data: brs }] = await Promise.all([
+        supabase.from('categories').select('id, name').order('name'),
+        supabase.from('brands').select('id, name').order('name')
+      ]);
+      setCategories(cats || []);
+      setBrands(brs || []);
 
       // Fetch vendor products with base product details and variants
       const { data, error } = await supabase
@@ -47,13 +62,9 @@ export default function VProducts() {
       if (error) throw error;
 
       if (data) {
-        // Find if they are synced with ML
         let mlItems: any[] = [];
         if (sellerIds.length > 0) {
-          const { data: items } = await supabase
-            .from('ml_raw_items')
-            .select('catalog_product_id, status')
-            .in('seller_id', sellerIds);
+          const { data: items } = await supabase.from('ml_raw_items').select('catalog_product_id, status').in('seller_id', sellerIds);
           if (items) mlItems = items;
         }
 
@@ -62,7 +73,6 @@ export default function VProducts() {
           const variants = vp.variants || [];
           const basePrice = Number(vp.price || baseProduct.base_price || 0);
           const totalStock = variants.reduce((sum: number, v: any) => sum + (v.inventory_count || 0), 0);
-          const totalValue = variants.reduce((sum: number, v: any) => sum + ((v.inventory_count || 0) * (basePrice + Number(v.price_adjustment || 0))), 0);
           
           let derivedStatus = vp.status;
           if (derivedStatus === 'active' && totalStock === 0) derivedStatus = 'out_of_stock';
@@ -72,23 +82,25 @@ export default function VProducts() {
             : basePrice;
 
           const mlMatch = mlItems.find(i => i.catalog_product_id === baseProduct.id);
+          
+          const cat = cats?.find(c => c.id === baseProduct.category_id);
+          const brand = brs?.find(b => b.id === baseProduct.brand_id);
 
           return {
             id: vp.id,
             product_id: baseProduct.id,
             name: baseProduct.title || 'Producto sin título',
-            sku: variants[0]?.sku_vendedor || 'Sin SKU',
-            category: baseProduct.category_id || 'General',
-            brand: baseProduct.brand_id || 'Genérica',
+            sku: variants[0]?.sku_vendedor || '-',
+            category_id: baseProduct.category_id,
+            brand_id: baseProduct.brand_id,
+            categoryName: cat ? cat.name : 'General',
+            brandName: brand ? brand.name : 'Genérica',
             price: minPrice,
             stock: totalStock,
-            totalValue: totalValue,
             status: derivedStatus,
-            images: baseProduct.product_images?.length || 0,
             primaryImage: baseProduct.product_images?.[0]?.url,
-            variants: variants.length,
             ml_synced: !!mlMatch,
-            origin: mlMatch ? 'mercadolibre' : 'local'
+            created_at: vp.created_at
           };
         });
         setProducts(formatted);
@@ -110,219 +122,269 @@ export default function VProducts() {
     }
   };
 
-  const handleBulkUpdateStatus = async (newStatus: string) => {
-    if (selected.length === 0) return;
-    try {
-      setProducts(prev => prev.map(p => selected.includes(p.id) ? { ...p, status: newStatus } : p));
-      const { error } = await supabase.from('vendor_products').update({ status: newStatus }).in('id', selected);
-      if (error) throw error;
-      setSelected([]);
-    } catch (err) {
-      console.error('Error updating status:', err);
-      loadProducts();
-    }
-  };
-
   useEffect(() => {
     loadProducts();
   }, [user]);
 
-  const filtered = products.filter(p => {
-    if (filterStatus !== 'all' && p.status !== filterStatus) return false;
-    if (search && !p.name.toLowerCase().includes(search.toLowerCase()) && !p.sku.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  });
+  const toggleSort = (field: string) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder(field === 'created_at' || field === 'stock' ? 'desc' : 'asc');
+    }
+  };
 
-  const toggleSelect = (id: string) => setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  const toggleAll = () => setSelected(selected.length === filtered.length && filtered.length > 0 ? [] : filtered.map(p => p.id));
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => {
+      const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase());
+      const matchesCategory = filterCategory === '' || p.category_id === filterCategory;
+      const matchesBrand = filterBrand === '' || p.brand_id === filterBrand;
+      return matchesSearch && matchesCategory && matchesBrand;
+    });
+  }, [products, search, filterCategory, filterBrand]);
+
+  const getSortedProducts = (prods: any[]) => {
+    return [...prods].sort((a, b) => {
+      let valA = a[sortField] || '';
+      let valB = b[sortField] || '';
+
+      if (sortField === 'created_at') {
+        valA = new Date(a.created_at).getTime();
+        valB = new Date(b.created_at).getTime();
+      } else if (sortField === 'category') {
+        valA = a.categoryName; valB = b.categoryName;
+      } else if (sortField === 'brand') {
+        valA = a.brandName; valB = b.brandName;
+      } else if (sortField === 'is_active') {
+        valA = a.status === 'active' ? 1 : 0;
+        valB = b.status === 'active' ? 1 : 0;
+      }
+
+      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+  };
+
+  const sortedAndPaginated = useMemo(() => {
+    const sorted = getSortedProducts(filteredProducts);
+    if (itemsPerPage === 'Todos') return sorted;
+    return sorted.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  }, [filteredProducts, sortField, sortOrder, currentPage, itemsPerPage]);
 
   return (
-    <div className="max-w-7xl space-y-8 animation-fade-in pb-20">
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
-        <div>
-           <div className="text-[11px] text-primary-600 font-black uppercase tracking-[0.4em] mb-3">Inventory Control</div>
-           <h2 className="text-5xl font-black text-gray-900">Gestión de Catálogo</h2>
-           <p className="text-sm text-gray-500 font-bold mt-3 uppercase tracking-[0.2em]">{products.length} items total — {products.filter(p => p.status === 'active').length} publicados</p>
+    <div className="max-w-full pb-20">
+      {/* Header aligned with AdminProducts */}
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between mb-8 gap-4">
+        <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
+          <div>
+            <div className="flex items-center gap-3">
+               <h2 className="text-2xl font-black text-gray-900">Productos <span className="bg-blue-600 text-white text-[8px] px-1 py-0.5 rounded ml-2 relative -top-1">v2</span></h2>
+               {!loading && (
+                 <span className="bg-gray-100 border border-gray-200 text-gray-500 text-[10px] font-black uppercase px-2 py-1 rounded-md tracking-widest hidden md:inline-flex items-center gap-1">
+                   {products.length} {products.length === 1 ? 'PRODUCTO' : 'PRODUCTOS'}
+                 </span>
+               )}
+            </div>
+            <p className="text-gray-500 text-sm italic mt-1">Gestión de catálogo y stock</p>
+          </div>
+          
+          <div className="flex items-center gap-4 bg-white border border-gray-200 px-4 py-2 rounded-xl shadow-sm hover:border-blue-400 transition-colors mt-2 md:mt-0">
+            <label className="flex items-center gap-2 cursor-pointer group">
+              <input 
+                type="checkbox" 
+                className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer" 
+                checked={sortedAndPaginated.length > 0 && sortedAndPaginated.every(p => selectedProducts.includes(p.id))}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    const uniqueIds = Array.from(new Set([...selectedProducts, ...sortedAndPaginated.map((p: any) => p.id)]));
+                    setSelectedProducts(uniqueIds);
+                  } else {
+                    const currentIds = sortedAndPaginated.map((p: any) => p.id);
+                    setSelectedProducts(selectedProducts.filter(id => !currentIds.includes(id)));
+                  }
+                }}
+              />
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest group-hover:text-blue-600 transition-colors">Página</span>
+            </label>
+            
+            <div className="w-px h-4 bg-gray-200"></div>
+            
+            <label className="flex items-center gap-2 cursor-pointer group">
+              <input 
+                type="checkbox" 
+                className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer" 
+                checked={products.length > 0 && products.length === selectedProducts.length}
+                onChange={(e) => {
+                  if (e.target.checked) setSelectedProducts(products.map(p => p.id));
+                  else setSelectedProducts([]);
+                }}
+              />
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest group-hover:text-blue-600 transition-colors">Todos ({products.length})</span>
+            </label>
+          </div>
         </div>
-        <div className="flex gap-4 w-full lg:w-auto">
-          <button onClick={loadProducts} className="flex-1 lg:flex-none bg-white text-gray-900 text-[12px] font-black uppercase tracking-widest px-8 py-5 rounded-full hover:bg-gray-100 transition-all shadow-sm border border-gray-200 flex items-center justify-center">
-            <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-          <button className="flex-1 lg:flex-none bg-primary-600 text-gray-900 text-[12px] font-black uppercase tracking-widest px-12 py-5 rounded-full hover:bg-[#ff2c68] transition-all shadow-sm active:scale-[0.98] border border-gray-200">
-             + Nuevo Producto
-          </button>
-          <button className="flex-1 lg:flex-none bg-white border border-gray-200 text-gray-900 text-[12px] font-black uppercase tracking-widest px-12 py-5 rounded-full hover:bg-gray-100 transition-all shadow-sm">
-             <Upload className="w-5 h-5 inline mr-3" /> Import CSV
-          </button>
+        <div className="flex gap-3 w-full lg:w-auto">
+          <button className="flex-1 lg:flex-none btn-secondary px-4 py-2 text-sm gap-2 font-bold bg-[#4B5563] hover:bg-[#374151] border-none text-white shadow-sm flex items-center justify-center rounded-full"><Upload className="w-4 h-4" /> IMPORTAR</button>
+          <button className="flex-1 lg:flex-none btn-primary gap-2 bg-blue-600 hover:bg-blue-700 border-blue-600 text-white rounded-full font-bold px-6 py-2 flex items-center justify-center shadow-lg shadow-blue-200"><Plus className="w-5 h-5" /> AÑADIR NUEVO</button>
         </div>
       </div>
 
-      {/* Filters & Search */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-center">
-          <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1">Activos</p>
-          <p className="text-3xl font-black text-gray-900">{products.filter(p => p.status === 'active').length}</p>
-        </div>
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-center">
-          <p className="text-[10px] text-red-500 font-black uppercase tracking-widest mb-1">Sin Stock</p>
-          <p className="text-3xl font-black text-red-500">{products.filter(p => p.stock === 0).length}</p>
-        </div>
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-center">
-          <p className="text-[10px] text-orange-500 font-black uppercase tracking-widest mb-1">Pendientes</p>
-          <p className="text-3xl font-black text-orange-500">{products.filter(p => p.status === 'pending' || p.status === 'draft').length}</p>
-        </div>
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-center">
-          <p className="text-[10px] text-[#FFE600] font-black uppercase tracking-widest mb-1">Mercado Libre</p>
-          <p className="text-3xl font-black text-gray-900">{products.filter(p => p.ml_synced).length}</p>
-        </div>
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-center">
-          <p className="text-[10px] text-red-600 font-black uppercase tracking-widest mb-1">Error Sync</p>
-          <p className="text-3xl font-black text-red-600">{products.filter(p => p.status === 'sync_error').length}</p>
-        </div>
-        <div className="bg-primary-50 p-6 rounded-3xl border border-primary-100 shadow-sm flex flex-col justify-center">
-          <p className="text-[10px] text-primary-600 font-black uppercase tracking-widest mb-1">Valor Inventario</p>
-          <p className="text-xl lg:text-2xl font-black text-primary-700 tracking-tighter">{formatCurrencyPrice(products.reduce((sum, p) => sum + p.totalValue, 0))}</p>
-        </div>
-      </div>
-
-      <div className="flex flex-col lg:flex-row gap-4 lg:items-center justify-between bg-white p-4 rounded-full border border-gray-200 shadow-sm">
-        <div className="flex items-center bg-gray-50 rounded-full px-6 py-4 flex-1 border border-gray-100 focus-within:border-primary-500 focus-within:ring-2 focus-within:ring-primary-100 transition-all">
-          <Search className="w-5 h-5 text-gray-400 mr-3" />
-          <input 
-            type="text" 
-            placeholder="Buscar por SKU, Nombre, Marca o EAN..." 
-            className="bg-transparent border-none outline-none w-full text-sm font-bold text-gray-900 placeholder-gray-400"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 lg:pb-0">
-          {['all', 'active', 'out_of_stock', 'pending', 'sync_error'].map(s => (
-            <button 
-              key={s}
-              onClick={() => setFilterStatus(s)}
-              className={`whitespace-nowrap px-6 py-4 rounded-full text-[11px] font-black uppercase tracking-widest transition-all ${
-                filterStatus === s 
-                ? 'bg-gray-900 text-white shadow-md' 
-                : 'bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-100'
-              }`}
-            >
-              {s === 'all' ? 'Ver Todos' : statusMap[s]?.label || s}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Bulk Actions */}
-      {selected.length > 0 && (
-        <div className="bg-primary-600 p-10 rounded-[3rem] flex flex-col md:flex-row items-center justify-between gap-10 animation-slide-up shadow-sm border border-white/20 relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-10 opacity-10 pointer-events-none">
-             <Package className="w-32 h-32 text-gray-900 -rotate-12" />
-          </div>
-          <div className="flex items-center gap-6 relative z-10">
-             <div className="w-14 h-14 rounded-2xl bg-white text-primary-600 flex items-center justify-center font-black text-2xl shadow-sm animate-in zoom-in duration-300">{selected.length}</div>
-             <div>
-                <span className="text-[12px] font-black text-gray-900 uppercase tracking-[0.4em]">{selected.length} items seleccionados</span>
-                <p className="text-[10px] text-gray-900/60 font-black uppercase mt-1">Acción masiva en progreso</p>
-             </div>
-          </div>
-          <div className="flex flex-wrap justify-center gap-3 relative z-10">
-            <button onClick={() => handleBulkUpdateStatus('paused')} className="text-[11px] font-black uppercase tracking-widest bg-black/20 text-gray-900 px-8 py-4 rounded-full hover:bg-black/40 transition-all border border-gray-200 active:scale-95 shadow-lg">
-              Pausar
-            </button>
-            <button onClick={() => handleBulkUpdateStatus('active')} className="text-[11px] font-black uppercase tracking-widest bg-black/20 text-gray-900 px-8 py-4 rounded-full hover:bg-black/40 transition-all border border-gray-200 active:scale-95 shadow-lg">
-              Activar
-            </button>
-            <button className="text-[11px] font-black uppercase tracking-widest bg-white text-primary-600 px-8 py-4 rounded-full hover:bg-black hover:text-gray-900 transition-all shadow-sm active:scale-95">
-              Delete Forever
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Table Area */}
-      <div className="bg-white rounded-[2.5rem] border border-gray-200 overflow-hidden shadow-sm">
-        <div className="overflow-x-auto no-scrollbar">
-          <table className="w-full text-left border-collapse">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr className="text-[11px] font-black text-gray-500 uppercase tracking-[0.4em]">
-                <th className="p-10 w-16">
-                  <input type="checkbox" checked={selected.length === filtered.length && filtered.length > 0} onChange={toggleAll} 
-                    className="w-6 h-6 bg-black/40 border-gray-200 rounded-lg checked:bg-primary-600 transition-all cursor-pointer shadow-inner" />
-                </th>
-                <th className="p-10">Product Details</th>
-                <th className="p-10">SKU</th>
-                <th className="p-10">Financials</th>
-                <th className="p-10">Inventory</th>
-                <th className="p-10">Sync</th>
-                <th className="p-10 text-center">Status</th>
-                <th className="p-10"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filtered.map(p => (
-                <tr key={p.id} className="hover:bg-gray-50 group transition-colors">
-                  <td className="p-10">
-                    <input type="checkbox" checked={selected.includes(p.id)} onChange={() => toggleSelect(p.id)} 
-                      className="w-6 h-6 bg-black/40 border-gray-200 rounded-lg checked:bg-primary-600 transition-all cursor-pointer shadow-inner" />
-                  </td>
-                  <td className="p-10">
-                    <div className="flex items-center gap-8">
-                      <div className="w-20 h-20 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-center flex-shrink-0 group-hover:border-primary-600/40 group-hover:bg-primary-50 transition-all overflow-hidden shadow-inner">
-                        {p.primaryImage ? (
-                          <img src={resolveImage(p.primaryImage)} alt={p.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <ImageIcon className="w-8 h-8 text-slate-800 group-hover:text-primary-600 transition-colors" />
-                        )}
-                      </div>
-                      <div>
-                        <p className="font-black text-gray-900 text-[18px] group-hover:text-primary-600 transition-colors uppercase tracking-tight">{p.name}</p>
-                        <p className="text-[11px] text-gray-400 font-black uppercase tracking-[0.2em] mt-2 bg-gray-50 px-2 py-1 rounded inline-block">{p.category} — {p.brand}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="p-10">
-                    <span className="font-mono text-[12px] text-gray-500 tracking-tighter bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100 group-hover:text-gray-900 transition-colors">{p.sku}</span>
-                  </td>
-                  <td className="p-10">
-                    <p className="font-black text-gray-900 text-[20px] tracking-tighter">{formatCurrencyPrice(p.price)}</p>
-                  </td>
-                  <td className="p-10">
-                    <div className="flex items-center gap-4">
-                       <span className={`text-[20px] font-black ${p.stock === 0 ? 'text-red-500' : p.stock <= 5 ? 'text-amber-500' : 'text-gray-900'}`}>{p.stock}</span>
-                       {p.stock <= 5 && <AlertTriangle className={`w-5 h-5 ${p.stock === 0 ? 'text-red-500 shadow-sm animate-pulse' : 'text-amber-500'}`} />}
-                    </div>
-                    <p className="text-[11px] text-gray-400 font-black uppercase tracking-widest mt-2 bg-gray-50 px-2 py-0.5 rounded inline-block">{p.variants} variantes</p>
-                  </td>
-                  <td className="p-10">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-4 h-4 rounded-full border-2 border-black ${p.ml_synced ? 'bg-[#FFE600] shadow-sm' : 'bg-slate-200 shadow-sm'}`} title={p.ml_synced ? 'Synced' : 'Not Synced'}></div>
-                      <span className="text-xs font-bold text-gray-500">{p.ml_synced ? 'WEB + ML' : 'WEB'}</span>
-                    </div>
-                  </td>
-                  <td className="p-10 text-center">
-                    <span className={`badge px-5 py-2.5 rounded-full ${statusMap[p.status]?.cls.split(' border')[0]} shadow-sm text-[10px]`}>
-                      {statusMap[p.status]?.label || p.status}
-                    </span>
-                  </td>
-                  <td className="p-10">
-                    <div className="flex gap-3 opacity-0 group-hover:opacity-100 transition-all justify-end scale-95 group-hover:scale-100">
-                      <button onClick={() => window.open(`/product/${p.product_id}`, '_blank')} className="w-12 h-12 rounded-2xl border border-gray-100 bg-gray-50 hover:bg-primary-600 hover:text-gray-900 hover:border-primary-600 flex items-center justify-center transition-all shadow-sm" title="Ver en tienda">
-                        <Eye className="w-5 h-5" />
-                      </button>
-                      <button onClick={() => handleUpdateStatus(p.id, p.status === 'active' ? 'paused' : 'active')} className="w-12 h-12 rounded-2xl border border-gray-100 bg-gray-50 hover:bg-primary-600 hover:text-gray-900 hover:border-primary-600 flex items-center justify-center transition-all shadow-sm" title={p.status === 'active' ? 'Pausar' : 'Activar'}>
-                        <MoreHorizontal className="w-5 h-5" />
-                      </button>
-                      <button className="w-12 h-12 rounded-2xl border border-gray-100 bg-gray-50 hover:bg-primary-600 hover:text-gray-900 hover:border-primary-600 flex items-center justify-center transition-all shadow-sm" title="Editar">
-                        <Edit3 className="w-5 h-5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {/* Main Table */}
+      <div className="bg-white rounded-xl border shadow-sm flex flex-col overflow-hidden">
+         <div className="p-4 border-b bg-gray-50/50 flex flex-col lg:flex-row gap-4 items-start lg:items-center">
+            <div className="relative flex-1 w-full lg:max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input type="text" placeholder="Buscar productos..." value={search} onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
+                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500" />
+            </div>
+            <div className="flex flex-wrap gap-4 items-center">
+               <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 font-bold">Mostrar:</span>
+                  <select className="border-gray-200 border rounded text-xs p-1 outline-none bg-white" value={itemsPerPage} onChange={(e) => { setItemsPerPage(e.target.value === 'Todos' ? 'Todos' : Number(e.target.value)); setCurrentPage(1); }}>
+                     <option value="50">50</option>
+                     <option value="200">200</option>
+                     <option value="Todos">Todos</option>
+                  </select>
+               </div>
+               <div className="flex flex-wrap gap-2 text-xs font-bold text-gray-500">
+                  <select className="border-gray-200 border rounded px-2 py-1.5 text-xs outline-none bg-white" value={filterCategory} onChange={e => { setFilterCategory(e.target.value); setCurrentPage(1); }}>
+                    <option value="">Todas las categorías</option>
+                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  <select className="border-gray-200 border rounded px-2 py-1.5 text-xs outline-none bg-white" value={filterBrand} onChange={e => { setFilterBrand(e.target.value); setCurrentPage(1); }}>
+                    <option value="">Todas las marcas</option>
+                    {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  </select>
+               </div>
+            </div>
+         </div>
+         
+         <div className="flex-1 overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-100">
+               <thead className="bg-white sticky top-0 z-10 shadow-sm border-b">
+                 <tr className="text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                   <th className="px-6 py-4 w-12">
+                     <input 
+                        type="checkbox" 
+                        className="rounded border-gray-300" 
+                        checked={selectedProducts.length > 0 && sortedAndPaginated.length > 0 && sortedAndPaginated.every(p => selectedProducts.includes(p.id))}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedProducts(sortedAndPaginated.map((p: any) => p.id));
+                          else setSelectedProducts([]);
+                        }}
+                      />
+                   </th>
+                   <th className="px-6 py-4">Producto</th>
+                   <th className="px-6 py-4">Precio</th>
+                   <th className="px-6 py-4 cursor-pointer hover:bg-gray-50 transition-colors" onClick={() => toggleSort('category')}>
+                     Categoría {sortField === 'category' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+                   </th>
+                   <th className="px-6 py-4 cursor-pointer hover:bg-gray-50 transition-colors" onClick={() => toggleSort('brand')}>
+                     Marca {sortField === 'brand' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+                   </th>
+                   <th className="px-6 py-4 cursor-pointer hover:bg-gray-50 transition-colors" onClick={() => toggleSort('stock')}>
+                     Stock {sortField === 'stock' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+                   </th>
+                    <th className="px-6 py-4 cursor-pointer hover:bg-gray-50 transition-colors" onClick={() => toggleSort('is_active')}>
+                      Visible (ON/OFF) {sortField === 'is_active' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+                    </th>
+                    <th className="px-6 py-4 cursor-pointer hover:bg-gray-50 transition-colors" onClick={() => toggleSort('status')}>
+                      Estado {sortField === 'status' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+                    </th>
+                   <th className="px-6 py-4 text-right cursor-pointer hover:bg-gray-50 transition-colors" onClick={() => toggleSort('created_at')}>
+                     Fecha {sortField === 'created_at' ? (sortOrder === 'asc' ? '↓' : '↑') : ''}
+                   </th>
+                 </tr>
+               </thead>
+               <tbody className="divide-y divide-gray-100 bg-white">
+                 {loading ? (
+                    <tr><td colSpan={9} className="px-6 py-12 text-center text-gray-400 animate-pulse">Cargando catálogo...</td></tr>
+                 ) : sortedAndPaginated.map((p: any) => (
+                    <tr key={p.id} className="hover:bg-blue-50/20 group transition-all">
+                      <td className="px-6 py-4">
+                        <input 
+                          type="checkbox" 
+                          className="rounded border-gray-300" 
+                          checked={selectedProducts.includes(p.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedProducts([...selectedProducts, p.id]);
+                            else setSelectedProducts(selectedProducts.filter(id => id !== p.id));
+                          }}
+                        />
+                      </td>
+                      <td className="px-6 py-4">
+                         <div className="flex items-center gap-4">
+                            {p.primaryImage ? (
+                               <img src={resolveImage(p.primaryImage)} alt={p.name} className="w-12 h-12 rounded-lg object-cover border border-gray-100 shadow-sm" />
+                            ) : (
+                               <div className="w-12 h-12 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center"><ImageIcon className="w-5 h-5 text-gray-300"/></div>
+                            )}
+                            <div>
+                               <p className="font-bold text-gray-900 text-sm group-hover:text-blue-600 transition-colors">{p.name}</p>
+                               <div className="flex gap-1 items-center mt-0.5">
+                                  <span className="text-[9px] font-mono text-gray-400 uppercase">{p.sku}</span>
+                                  {p.ml_synced && <div className="w-6 h-3 bg-[#FFE600] rounded-sm text-[8px] flex items-center justify-center font-bold text-blue-900 ml-1">ML</div>}
+                               </div>
+                            </div>
+                         </div>
+                      </td>
+                      <td className="px-6 py-4 font-black text-gray-900 text-sm whitespace-nowrap">
+                        {formatCurrencyPrice(p.price)}
+                      </td>
+                      <td className="px-6 py-4 text-xs font-bold text-gray-500">
+                        {p.categoryName}
+                      </td>
+                      <td className="px-6 py-4 text-xs font-bold text-gray-500">
+                        {p.brandName !== 'Genérica' ? p.brandName : '-'}
+                      </td>
+                      <td className="px-6 py-4">
+                         <span className={`text-xs font-black uppercase tracking-tight ${p.stock === 0 ? 'text-blue-600' : 'text-blue-600'}`}>
+                            {p.stock} u.
+                         </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <button
+                          onClick={() => handleUpdateStatus(p.id, p.status === 'active' ? 'paused' : 'active')}
+                          className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${p.status === 'active' ? 'bg-green-500' : 'bg-gray-300'}`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${p.status === 'active' ? 'translate-x-5' : 'translate-x-0'}`}
+                          />
+                        </button>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">
+                           {p.status === 'active' ? 'ACTIVO' : p.status === 'paused' ? 'OCULTO' : p.status === 'draft' ? 'BORRADOR' : p.status === 'out_of_stock' ? 'SIN STOCK' : p.status.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right text-xs font-medium text-gray-400">
+                        <div className="flex justify-end gap-3 items-center mb-1">
+                          <button onClick={() => window.open(`/product/${p.product_id}`, '_blank')} className="text-blue-500 hover:underline text-xs font-bold">Detalles</button>
+                          <button className="text-gray-400 hover:text-blue-600 transition-colors" title="Copiar">
+                             <Copy className="w-4 h-4" />
+                          </button>
+                          <button className="text-red-400 hover:text-red-600 transition-colors" title="Eliminar">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                        {new Date(p.created_at).toLocaleDateString()}
+                      </td>
+                    </tr>
+                 ))}
+               </tbody>
+            </table>
+         </div>
+         {itemsPerPage !== 'Todos' && (
+            <div className="bg-white border-t px-6 py-3 flex items-center justify-between text-xs text-gray-500">
+               <span>Página {currentPage}</span>
+               <div className="flex items-center gap-2">
+                 <button disabled={currentPage <= 1} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50">Anterior</button>
+                 <button disabled={filteredProducts.length <= (currentPage * (typeof itemsPerPage === 'number' ? itemsPerPage : 0))} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50">Siguiente</button>
+               </div>
+            </div>
+         )}
       </div>
     </div>
   );

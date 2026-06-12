@@ -229,8 +229,7 @@ async function processEvent(supabase: any, eventId: string, fetchFn: typeof fetc
                   .from('vendor_product_variants')
                   .update({
                     inventory_count: newStock,
-                    skip_ml_sync: true,
-                    updated_at: new Date().toISOString()
+                    skip_ml_sync: true
                   })
                   .eq('id', link.vendor_product_variant_id);
                 if (vvErr) console.error(`[Webhook Process] Vendor product variant decrement failed:`, vvErr.message);
@@ -349,22 +348,37 @@ async function processEvent(supabase: any, eventId: string, fetchFn: typeof fetc
 
       // Handle listing state changes (pause or delete)
       const isPaused = mlItem.status === 'paused' || mlItem.status === 'closed' || mlItem.status === 'under_review';
-      if (isPaused) {
-        console.log(`[Webhook Process] Item ${mlItemId} is paused/closed in ML. Disabling local vendor offer...`);
-        // Find links
-        const { data: links } = await supabase
-          .from('ml_catalog_links')
-          .select('vendor_product_id')
-          .eq('ml_item_id', mlItemId);
+      
+      // Sync stock and status back to vendor variants
+      const { data: links } = await supabase
+        .from('ml_catalog_links')
+        .select('vendor_product_id, vendor_product_variant_id')
+        .eq('ml_item_id', mlItemId);
 
-        for (const link of (links || [])) {
-          if (link.vendor_product_id) {
-            // Pause vendor product offer
-            await supabase
-              .from('vendor_products')
-              .update({ status: 'paused', updated_at: new Date().toISOString() })
-              .eq('id', link.vendor_product_id);
-          }
+      for (const link of (links || [])) {
+        if (isPaused && link.vendor_product_id) {
+          // Pause vendor product offer
+          await supabase
+            .from('vendor_products')
+            .update({ status: 'paused', updated_at: new Date().toISOString() })
+            .eq('id', link.vendor_product_id);
+        }
+        
+        // Sync bidirectional stock from ML
+        if (link.vendor_product_variant_id) {
+           const { error: vvErr } = await supabase
+             .from('vendor_product_variants')
+             .update({ 
+               inventory_count: Number(mlItem.available_quantity || 0),
+               skip_ml_sync: true // Prevent anti-loop triggers
+             })
+             .eq('id', link.vendor_product_variant_id);
+           
+           if (vvErr) {
+             console.error(`[Webhook Process] Error updating vendor product variant ${link.vendor_product_variant_id}:`, vvErr.message);
+           } else {
+             console.log(`[Webhook Process] Successfully updated vendor product variant ${link.vendor_product_variant_id} stock to ${mlItem.available_quantity}`);
+           }
         }
       }
 
@@ -639,6 +653,40 @@ Deno.serve(async (req) => {
       await supabase.from('ml_sync_queue').delete().eq('ml_item_id', 'MLU_MOCK_BACKLOG');
 
       return new Response(JSON.stringify({ success: true, message: "Test data cleaned up successfully" }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
+    }
+
+    // ═══ Action: test_process_event_verbose ═══
+    if (action === 'test_process_event_verbose') {
+      if (!isTestBypass) {
+         return new Response(JSON.stringify({ error: "Unauthorized test action" }), { status: 401, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
+      }
+      
+      const mlItemId = "MLU615886931";
+      const logs = [];
+      logs.push("Fetching links...");
+      const { data: links, error: lErr } = await supabase
+        .from('ml_catalog_links')
+        .select('vendor_product_id, vendor_product_variant_id')
+        .eq('ml_item_id', mlItemId);
+      logs.push({ lErr, links });
+
+      for (const link of (links || [])) {
+        if (link.vendor_product_variant_id) {
+           logs.push(`Updating ${link.vendor_product_variant_id}...`);
+           const { data, error: vvErr } = await supabase
+             .from('vendor_product_variants')
+             .update({ 
+               inventory_count: body.qty || 9,
+               skip_ml_sync: true,
+               updated_at: new Date().toISOString() 
+             })
+             .eq('id', link.vendor_product_variant_id)
+             .select('*');
+           logs.push({ updatedData: data, vvErr });
+        }
+      }
+
+      return new Response(JSON.stringify({ success: true, logs }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
     }
 
     // ═══ Action: test_assertion (For automated testing RLS bypass) ═══

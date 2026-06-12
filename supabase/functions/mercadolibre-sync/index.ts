@@ -511,10 +511,10 @@ Deno.serve(async (req) => {
     }
 
     let mlToken = body.auth_token;
-    if (!mlToken) {
-      mlToken = await getValidMercadoLibreToken(supabase, targetSellerId, customFetch);
+    if (!mlToken && action !== 'process_sync_queue' && action !== 'process_incoming_events') {
+      mlToken = await getValidMercadoLibreToken(supabase, targetSellerId, fetch);
     }
-    if (!mlToken) {
+    if (!mlToken && action !== 'process_sync_queue' && action !== 'process_incoming_events') {
       return new Response(
         JSON.stringify({ success: false, error: "Mercado Libre no está conectado. Ve a la sección de configuración para conectar tu cuenta." }),
         { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }, status: 200 }
@@ -1119,7 +1119,7 @@ Deno.serve(async (req) => {
 
           try {
              // 1. Get valid token for the seller
-             const token = await getValidMercadoLibreToken(supabase, item.seller_id, customFetch);
+             const token = await getValidMercadoLibreToken(supabase, item.seller_id, fetch);
              if (!token) {
                 throw new Error(`Could not retrieve valid token for seller_id: ${item.seller_id}`);
              }
@@ -1153,8 +1153,14 @@ Deno.serve(async (req) => {
              // 4. Construct payload for ML API
              const payload: any = {};
              if (syncStock) {
-               payload.available_quantity = Math.max(0, variant.inventory_count);
-               payload.status = variant.inventory_count <= 0 ? 'paused' : 'active';
+               let currentInvCount = variant.inventory_count;
+               // Priority 1: vendor specific inventory count from queue payload
+               if (item.payload && typeof item.payload.inventory_count === 'number') {
+                 currentInvCount = item.payload.inventory_count;
+               }
+               
+               payload.available_quantity = Math.max(0, currentInvCount);
+               payload.status = currentInvCount <= 0 ? 'paused' : 'active';
              }
 
              if (syncPrice) {
@@ -1194,7 +1200,7 @@ Deno.serve(async (req) => {
                    'Content-Type': 'application/json'
                  };
 
-                 const mlRes = await customFetch(`https://api.mercadolibre.com/items/${item.ml_item_id}`, {
+                 const mlRes = await fetch(`https://api.mercadolibre.com/items/${item.ml_item_id}`, {
                    method: 'PUT',
                    headers: mlHeaders,
                    body: JSON.stringify(payload)
