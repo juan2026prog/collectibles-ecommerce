@@ -1,7 +1,8 @@
 import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   LayoutDashboard, ShoppingBag, Settings, LogOut, Package, 
-  CreditCard, Truck, Layers, HelpCircle, ExternalLink, Store, Search
+  CreditCard, Truck, Layers, HelpCircle, ExternalLink, Store, Search,
+  FolderOpen, Tag, Image, Percent
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LocaleSwitcher from '../components/LocaleSwitcher';
@@ -37,6 +38,13 @@ export default function VendorLayout() {
     { name: 'Pedidos', path: '/vendor?tab=orders', tab: 'orders', icon: ShoppingBag },
     { name: 'Envíos', path: '/vendor?tab=shipping', tab: 'shipping', icon: Truck },
     { name: 'Finanzas', path: '/vendor?tab=finances', tab: 'finances', icon: CreditCard },
+  ];
+
+  const taxonomyItems = [
+    { name: 'Categorías', path: '/vendor?tab=categories', tab: 'categories', icon: FolderOpen },
+    { name: 'Marcas', path: '/vendor?tab=brands', tab: 'brands', icon: Tag },
+    { name: 'Promociones', path: '/vendor?tab=promotions', tab: 'promotions', icon: Percent },
+    { name: 'Multimedia', path: '/vendor?tab=media', tab: 'media', icon: Image },
   ];
 
   const secondaryNavItems = [
@@ -84,6 +92,24 @@ export default function VendorLayout() {
                   </Link>
                 );
               })}
+
+              <div className="pt-4 pb-2">
+                <div className="border-t border-dark-800 mb-4" />
+                <p className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Catálogo</p>
+                {taxonomyItems.map((item) => {
+                  const isActive = currentTab === item.tab;
+                  const Icon = item.icon;
+                  return (
+                    <Link key={item.name} to={item.path}
+                      className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                        isActive ? 'bg-primary-600 text-white shadow-md' : 'hover:bg-dark-800 hover:text-white'
+                      }`}>
+                      <Icon className={`mr-3 h-5 w-5 ${isActive ? 'text-white' : 'text-gray-400'}`} />
+                      {item.name}
+                    </Link>
+                  );
+                })}
+              </div>
 
               <div className="pt-6 pb-2">
                 <div className="border-t border-dark-800 mb-4" />

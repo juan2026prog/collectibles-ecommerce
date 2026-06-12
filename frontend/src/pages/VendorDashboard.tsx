@@ -22,6 +22,11 @@ import VSettings from '../components/vendor/VSettings';
 import VKyc from '../components/vendor/VKyc';
 import VHelp from '../components/vendor/VHelp';
 
+import VCategories from '../components/vendor/VCategories';
+import VBrands from '../components/vendor/VBrands';
+import VPromotions from '../components/vendor/VPromotions';
+import VMedia from '../components/vendor/VMedia';
+
 export default function VendorDashboard() {
   const { user, profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -153,6 +158,11 @@ export default function VendorDashboard() {
       {activeTab === 'settings' && <VSettings />}
       {activeTab === 'kyc' && <VKyc />}
       {activeTab === 'help' && <VHelp />}
+
+      {activeTab === 'categories' && <VCategories />}
+      {activeTab === 'brands' && <VBrands />}
+      {activeTab === 'promotions' && <VPromotions />}
+      {activeTab === 'media' && <VMedia />}
     </div>
   );
 }

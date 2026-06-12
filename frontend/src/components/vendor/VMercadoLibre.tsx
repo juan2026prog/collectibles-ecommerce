@@ -42,6 +42,9 @@ export default function VMercadoLibre() {
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
   const [mlCategoryFilter, setMlCategoryFilter] = useState('all');
   const [mlBrandFilter, setMlBrandFilter] = useState('all');
+  
+  // Bulk Assign Category
+  const [bulkCategory, setBulkCategory] = useState<string>('');
 
   useEffect(() => {
     if (user?.id) {
@@ -529,13 +532,38 @@ export default function VMercadoLibre() {
 
                <div className="flex gap-2">
                  {selectedItemIds.length > 0 && (
-                   <button 
-                     onClick={handlePublishBulk}
-                     disabled={actionLoading}
-                     className="bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2 mr-2"
-                   >
-                     Publicar {selectedItemIds.length} ítems
-                   </button>
+                   <div className="flex items-center gap-2 mr-2 bg-blue-50 border border-blue-200 rounded-xl p-1 pr-2 shadow-sm">
+                     <select
+                       value={bulkCategory}
+                       onChange={(e) => {
+                         const newCat = e.target.value;
+                         setBulkCategory(newCat);
+                         if (newCat) {
+                           const updates: Record<string, string> = {};
+                           selectedItemIds.forEach(id => {
+                             const item = items.find(i => i.id === id);
+                             if (item) updates[item.ml_item_id] = newCat;
+                           });
+                           setSelectedCategories(prev => ({ ...prev, ...updates }));
+                           toast.success(`Categoría asignada a ${selectedItemIds.length} ítems`);
+                         }
+                       }}
+                       className="bg-white border border-gray-200 text-gray-700 text-xs px-2 py-1.5 rounded outline-none w-40 font-bold"
+                     >
+                       <option value="">Asignar Categoría...</option>
+                       {categories.map(cat => (
+                         <option key={cat.id} value={cat.id}>{cat.name}</option>
+                       ))}
+                     </select>
+                     
+                     <button 
+                       onClick={handlePublishBulk}
+                       disabled={actionLoading}
+                       className="bg-blue-600 text-white text-xs font-bold px-4 py-1.5 rounded hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+                     >
+                       Publicar {selectedItemIds.length}
+                     </button>
+                   </div>
                  )}
 
                  <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 shadow-inner focus-within:ring-2 focus-within:ring-pink-500/20">
