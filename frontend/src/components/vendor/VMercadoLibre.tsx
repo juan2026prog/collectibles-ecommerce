@@ -475,6 +475,7 @@ export default function VMercadoLibre() {
                   <thead className="bg-gray-50 border-b border-gray-100">
                     <tr className="text-[10px] font-black text-gray-500 uppercase tracking-[0.4em]">
                       <th className="p-4">Publicación / ID</th>
+                      <th className="p-4 text-left">SKU</th>
                       <th className="p-4 text-center">Estado Staging</th>
                       <th className="p-4 text-right">Precio Staging</th>
                       <th className="p-4 text-center">Stock Staging</th>
@@ -489,6 +490,10 @@ export default function VMercadoLibre() {
                       const link = item.ml_catalog_links?.[0];
                       const isLinked = !!link;
                       
+                      const rawAttrs = item.raw_payload?.attributes || [];
+                      const skuFallback = rawAttrs.find((a: any) => a.id === 'SELLER_SKU' || a.id === 'SKU')?.value_name;
+                      const sku = item.raw_payload?.seller_custom_field || item.raw_payload?.normalized_metadata?.extracted_seller_sku || skuFallback || '—';
+
                       return (
                         <tr key={item.id} className="hover:bg-gray-50 transition-colors group text-xs">
                           <td className="p-4">
@@ -504,6 +509,9 @@ export default function VMercadoLibre() {
                                  </div>
                                </div>
                              </div>
+                          </td>
+                          <td className="p-4 font-mono text-[10px] text-gray-600 uppercase">
+                            {sku}
                           </td>
                           <td className="p-4 text-center">
                              <span className={`px-2 py-0.5 rounded text-[9px] uppercase font-black tracking-wider ${

@@ -136,20 +136,18 @@ function extractRealSkuFromML(item: any, variation: any = null) {
 
    const getFromAttr = (attrs: any[], code: string) => attrs?.find((a: any) => a.id === code)?.value_name;
 
-   if (variation?.seller_custom_field) { sku = variation.seller_custom_field; source = 'seller_custom_field_var'; }
-   else if (item.seller_custom_field) { sku = item.seller_custom_field; source = 'seller_custom_field'; }
+   if (item.seller_custom_field) { sku = item.seller_custom_field; source = 'seller_custom_field'; }
+   else if (variation?.seller_custom_field) { sku = variation.seller_custom_field; source = 'seller_custom_field_var'; }
    else if (getFromAttr(item.attributes, 'SELLER_SKU')) { sku = getFromAttr(item.attributes, 'SELLER_SKU'); source = 'seller_sku'; }
    else if (getFromAttr(item.attributes, 'SKU')) { sku = getFromAttr(item.attributes, 'SKU'); source = 'sku'; }
-   else if (getFromAttr(item.attributes, 'GTIN')) { sku = getFromAttr(item.attributes, 'GTIN'); source = 'gtin'; }
-   else if (getFromAttr(item.attributes, 'EAN')) { sku = getFromAttr(item.attributes, 'EAN'); source = 'ean'; }
-   else if (getFromAttr(item.attributes, 'UPC')) { sku = getFromAttr(item.attributes, 'UPC'); source = 'upc'; }
-   else if (getFromAttr(item.attributes, 'ISBN')) { sku = getFromAttr(item.attributes, 'ISBN'); source = 'isbn'; }
+   else if (item.inventory_id) { sku = item.inventory_id; source = 'inventory_id'; }
+   else if (variation?.inventory_id) { sku = variation.inventory_id; source = 'inventory_id_var'; }
 
    if (!sku) {
-       sku = null; 
-       source = 'missing';
+       sku = item.id; 
+       source = 'ml_item_id_fallback';
    }
-   return { sku, source, generated_sku: `COL-ML-${item.id}` };
+   return { sku, source, generated_sku: sku };
 }
 
 function cleanTitle(title: string): string {
@@ -1560,13 +1558,16 @@ Deno.serve(async (req) => {
           category_id
         });
 
+        // Extract SKU robustly
+        const extractedSku = extractRealSkuFromML(rawItem.raw_payload || {}).sku;
+
         // Create standard variant
         const { data: newVar, error: varErr } = await supabase
           .from('product_variants')
           .insert({
             product_id: newProd.id,
             name: 'Estándar',
-            sku: `COL-ML-${rawItem.ml_item_id}`,
+            sku: extractedSku || `COL-ML-${rawItem.ml_item_id}`,
             inventory_count: stock || 0,
             price_adjustment: 0.00
           })
@@ -1582,7 +1583,7 @@ Deno.serve(async (req) => {
             vendor_id: vendorId,
             product_id: newProd.id,
             price: price || 0,
-            status: 'pending' // requires manual activation
+            status: 'active' // Auto activate for vendors when publishing
           })
           .select()
           .single();
@@ -1597,7 +1598,7 @@ Deno.serve(async (req) => {
             variant_id: newVar.id,
             inventory_count: stock || 0,
             price_adjustment: 0.00,
-            sku_vendedor: rawItem.raw_payload?.normalized_metadata?.extracted_seller_sku || null
+            sku_vendedor: extractedSku
           })
           .select()
           .single();
@@ -1615,7 +1616,7 @@ Deno.serve(async (req) => {
             vendor_product_id: vendorProd.id,
             vendor_product_variant_id: vendorVar.id,
             sync_stock: true,
-            sync_price: true,
+            sync_price: false,
             last_sync_status: 'synced',
             last_synced_at: new Date().toISOString()
           });
