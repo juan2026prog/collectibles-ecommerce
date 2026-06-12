@@ -59,7 +59,7 @@ function InlineEdit({ value, type = 'text', options = [], onSave, className = ''
   }
 
   return (
-    <div onDoubleClick={() => !saving && setEditing(true)} className={`cursor-pointer hover:bg-primary-50 hover:text-primary-700 px-2 py-1 -mx-2 rounded transition-colors ${className}`} title="Doble click para editar">
+    <div onClick={() => !saving && setEditing(true)} className={`cursor-pointer hover:bg-primary-50 hover:text-primary-700 px-2 py-1 -mx-2 rounded transition-colors ${className}`} title="Haz click para editar">
       {type === 'select' ? options.find(o => o.value === value)?.label || value : value}
     </div>
   );
@@ -851,8 +851,12 @@ export default function VProducts() {
                         );
                      })()}
                    </th>
-                   <th className="px-6 py-4">Producto</th>
-                   <th className="px-6 py-4">Precio</th>
+                   <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('title')}>
+                     Producto {sortField === 'title' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+                   </th>
+                   <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('base_price')}>
+                     Precio {sortField === 'base_price' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+                   </th>
                    <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('category')}>
                      Categoría {sortField === 'category' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
                    </th>
@@ -895,7 +899,7 @@ export default function VProducts() {
                           onClick={e => e.stopPropagation()} 
                         />
                       </td>
-                      <td className="px-6 py-4 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'title'}); setInlineValue(p.title); }}>
+                      <td className="px-6 py-4 cursor-pointer hover:bg-white transition-colors rounded" onClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'title'}); setInlineValue(p.title); }}>
                          <div className="flex items-center gap-4">
                             <img src={getProductImage(p)} alt="" className="w-12 h-12 rounded-lg object-cover border border-gray-100 shadow-sm" />
                             <div>
@@ -915,14 +919,14 @@ export default function VProducts() {
                             </div>
                          </div>
                       </td>
-                      <td className="px-6 py-4 font-black text-dark-800 text-sm whitespace-nowrap cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'base_price'}); setInlineValue(p.base_price); }}>
+                      <td className="px-6 py-4 font-black text-dark-800 text-sm whitespace-nowrap cursor-pointer hover:bg-white transition-colors rounded" onClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'base_price'}); setInlineValue(p.base_price); }}>
                         {inlineEdit?.id === p.id && inlineEdit.field === 'base_price' ? (
                           <input autoFocus type="number" className="w-24 p-1 border rounded text-xs font-bold" value={inlineValue} onChange={e => setInlineValue(e.target.value)} onBlur={() => handleInlineUpdate(p.id, 'base_price', inlineValue)} onKeyDown={e => e.key === 'Enter' && handleInlineUpdate(p.id, 'base_price', inlineValue)} onClick={e => e.stopPropagation()} />
                         ) : (
                           <span>UYU {p.base_price.toLocaleString()}</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-xs font-bold text-gray-500 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'category_id'}); setInlineValue(primaryCat?.id || ''); }}>
+                      <td className="px-6 py-4 text-xs font-bold text-gray-500 cursor-pointer hover:bg-white transition-colors rounded" onClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'category_id'}); setInlineValue(primaryCat?.id || ''); }}>
                         {inlineEdit?.id === p.id && inlineEdit.field === 'category_id' ? (
                           <select 
                             autoFocus
@@ -939,7 +943,7 @@ export default function VProducts() {
                           primaryCat?.name || '-'
                         )}
                       </td>
-                      <td className="px-6 py-4 text-xs font-bold text-gray-500 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'brand_id'}); setInlineValue(p.brand?.id || ''); }}>
+                      <td className="px-6 py-4 text-xs font-bold text-gray-500 cursor-pointer hover:bg-white transition-colors rounded" onClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'brand_id'}); setInlineValue(p.brand?.id || ''); }}>
                         {inlineEdit?.id === p.id && inlineEdit.field === 'brand_id' ? (
                           <select 
                             autoFocus
@@ -956,7 +960,7 @@ export default function VProducts() {
                           p.brand?.name || '-'
                         )}
                       </td>
-                      <td className="px-6 py-4 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'stock'}); setInlineValue(p.variants?.[0]?.inventory_count || 0); }}>
+                      <td className="px-6 py-4 cursor-pointer hover:bg-white transition-colors rounded" onClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'stock'}); setInlineValue(p.variants?.[0]?.inventory_count || 0); }}>
                          {inlineEdit?.id === p.id && inlineEdit.field === 'stock' ? (
                             <input autoFocus type="number" className="w-16 p-1 border rounded text-xs font-bold text-center" value={inlineValue} onChange={e => setInlineValue(e.target.value)} onBlur={() => handleInlineUpdate(p.id, 'stock', inlineValue)} onKeyDown={e => e.key === 'Enter' && handleInlineUpdate(p.id, 'stock', inlineValue)} onClick={e => e.stopPropagation()} />
                          ) : (
@@ -988,7 +992,7 @@ export default function VProducts() {
                           />
                         </button>
                       </td>
-                      <td className="px-6 py-4 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'status'}); setInlineValue(p.status); }}>
+                      <td className="px-6 py-4 cursor-pointer hover:bg-white transition-colors rounded" onClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'status'}); setInlineValue(p.status); }}>
                         {inlineEdit?.id === p.id && inlineEdit.field === 'status' ? (
                            <select autoFocus className="bg-white border rounded text-[10px] p-1 font-bold outline-none" value={inlineValue} onChange={e => { setInlineValue(e.target.value); handleInlineUpdate(p.id, 'status', e.target.value); }} onBlur={() => setInlineEdit(null)} onClick={e => e.stopPropagation()}>
                              <option value="published">Visible</option>
