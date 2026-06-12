@@ -1514,6 +1514,17 @@ Deno.serve(async (req) => {
           source_platform: 'mercadolibre'
         };
 
+        let finalCategoryId = category_id;
+        // If it's a ML category (not a UUID), try to map it
+        if (finalCategoryId && !finalCategoryId.includes('-')) {
+          const { data: catMap } = await supabase.from('categories').select('id').eq('ml_category_id', finalCategoryId).maybeSingle();
+          if (catMap) {
+            finalCategoryId = catMap.id;
+          } else {
+            throw new Error(`No se encontró una categoría local mapeada para ${finalCategoryId}. Por favor asígnala manualmente.`);
+          }
+        }
+
         const { data: newProd, error: prodErr } = await supabase
           .from('products')
           .insert({
@@ -1522,7 +1533,7 @@ Deno.serve(async (req) => {
             description: description || title,
             slug: uniqueSlug,
             base_price: price || 0,
-            category_id,
+            category_id: finalCategoryId,
             brand_id: brand_id || null,
             status: 'draft', // do not publish to storefront automatically
             is_active: false,
