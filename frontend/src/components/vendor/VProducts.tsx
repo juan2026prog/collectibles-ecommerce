@@ -7,7 +7,7 @@ import type { ParsedProduct } from '../../lib/bulkImportUtils';
 import { getProductImage } from '../../lib/imageUtils';
 import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface InlineEditProps {
   value: string | number;
