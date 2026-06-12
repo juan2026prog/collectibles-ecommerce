@@ -38,6 +38,11 @@ export default function VMercadoLibre() {
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<Record<string, string>>({});
 
+  // Bulk Publish & Filters state
+  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
+  const [mlCategoryFilter, setMlCategoryFilter] = useState('all');
+  const [mlBrandFilter, setMlBrandFilter] = useState('all');
+
   useEffect(() => {
     if (user?.id) {
       loadAccountDetails();
@@ -97,6 +102,69 @@ export default function VMercadoLibre() {
       loadItemsAndLinks(); // reload items to show updated sync toggles
     } catch (e: any) {
       toast.error(e.message);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handlePublishBulk() {
+    if (selectedItemIds.length === 0) return;
+    
+    // Check if all selected items have a category selected
+    const missingCategories = selectedItemIds.filter(id => {
+      const item = items.find(i => i.id === id);
+      const catId = selectedCategories[item.ml_item_id] || item.raw_payload?.normalized_metadata?.suggested_category_id;
+      return !catId;
+    });
+
+    if (missingCategories.length > 0) {
+      toast.error('Selecciona una categoría para todos los productos seleccionados');
+      return;
+    }
+
+    if (!confirm(`¿Estás seguro de publicar ${selectedItemIds.length} productos en tu tienda?`)) return;
+
+    setActionLoading(true);
+    let successCount = 0;
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const session = (await supabase.auth.getSession()).data.session;
+      const token = session?.access_token || '';
+
+      for (const id of selectedItemIds) {
+        const item = items.find(i => i.id === id);
+        if (!item) continue;
+        
+        const catId = selectedCategories[item.ml_item_id] || item.raw_payload?.normalized_metadata?.suggested_category_id;
+
+        const res = await fetch(`${supabaseUrl}/functions/v1/mercadolibre-sync`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: 'curate_create',
+            raw_item_id: item.id,
+            title: item.title,
+            price: item.price,
+            stock: item.available_quantity,
+            category_id: catId,
+            seller_id: account?.seller_id
+          })
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+          successCount++;
+        }
+      }
+
+      toast.success(`${successCount} productos publicados y vinculados exitosamente`);
+      setSelectedItemIds([]);
+      loadItemsAndLinks();
+    } catch (e: any) {
+      toast.error(e.message || 'Error al publicar productos');
     } finally {
       setActionLoading(false);
     }
@@ -299,11 +367,31 @@ export default function VMercadoLibre() {
     }
   }
 
+  // Derived options for filters
+  const availableMlCategories = Array.from(new Set(items.map(i => i.raw_payload?.category_id).filter(Boolean)));
+  const availableMlBrands = Array.from(new Set(items.map(i => {
+    const rawAttrs = i.raw_payload?.attributes || [];
+    return rawAttrs.find((a: any) => a.id === 'BRAND')?.value_name;
+  }).filter(Boolean)));
+
   // Filter local items
   const filteredItems = items.filter(item => {
     const titleMatch = item.title.toLowerCase().includes(searchQuery.toLowerCase());
     const itemIdMatch = item.ml_item_id.toLowerCase().includes(searchQuery.toLowerCase());
-    return titleMatch || itemIdMatch;
+    
+    let mlCategoryMatch = true;
+    if (mlCategoryFilter !== 'all') {
+      mlCategoryMatch = item.raw_payload?.category_id === mlCategoryFilter;
+    }
+
+    let mlBrandMatch = true;
+    if (mlBrandFilter !== 'all') {
+      const rawAttrs = item.raw_payload?.attributes || [];
+      const brand = rawAttrs.find((a: any) => a.id === 'BRAND')?.value_name;
+      mlBrandMatch = brand === mlBrandFilter;
+    }
+
+    return (titleMatch || itemIdMatch) && mlCategoryMatch && mlBrandMatch;
   });
 
   return (
@@ -440,6 +528,16 @@ export default function VMercadoLibre() {
                </div>
 
                <div className="flex gap-2">
+                 {selectedItemIds.length > 0 && (
+                   <button 
+                     onClick={handlePublishBulk}
+                     disabled={actionLoading}
+                     className="bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2 mr-2"
+                   >
+                     Publicar {selectedItemIds.length} ítems
+                   </button>
+                 )}
+
                  <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 shadow-inner focus-within:ring-2 focus-within:ring-pink-500/20">
                    <Search className="w-4 h-4 text-gray-500" />
                    <input 
@@ -462,6 +560,28 @@ export default function VMercadoLibre() {
                    <option value="approved">Aprobados</option>
                    <option value="ignored">Ignorados</option>
                  </select>
+
+                 <select
+                   value={mlCategoryFilter}
+                   onChange={e => setMlCategoryFilter(e.target.value)}
+                   className="text-xs font-bold bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-2 py-2 outline-none cursor-pointer"
+                 >
+                   <option value="all">Todas las Categorías ML</option>
+                   {availableMlCategories.map(cat => (
+                     <option key={cat} value={cat}>{cat}</option>
+                   ))}
+                 </select>
+
+                 <select
+                   value={mlBrandFilter}
+                   onChange={e => setMlBrandFilter(e.target.value)}
+                   className="text-xs font-bold bg-gray-50 border border-gray-200 text-gray-900 rounded-xl px-2 py-2 outline-none cursor-pointer"
+                 >
+                   <option value="all">Todas las Marcas</option>
+                   {availableMlBrands.map(brand => (
+                     <option key={brand} value={brand}>{brand}</option>
+                   ))}
+                 </select>
                </div>
             </div>
 
@@ -474,6 +594,20 @@ export default function VMercadoLibre() {
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-gray-50 border-b border-gray-100">
                     <tr className="text-[10px] font-black text-gray-500 uppercase tracking-[0.4em]">
+                      <th className="p-4 w-12 text-center">
+                        <input 
+                          type="checkbox" 
+                          className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                          checked={filteredItems.length > 0 && selectedItemIds.length === filteredItems.filter(i => !i.ml_catalog_links?.[0]).length}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedItemIds(filteredItems.filter(i => !i.ml_catalog_links?.[0]).map(i => i.id));
+                            } else {
+                              setSelectedItemIds([]);
+                            }
+                          }}
+                        />
+                      </th>
                       <th className="p-4">Publicación / ID</th>
                       <th className="p-4 text-left">SKU</th>
                       <th className="p-4 text-center">Estado Staging</th>
@@ -496,6 +630,19 @@ export default function VMercadoLibre() {
 
                       return (
                         <tr key={item.id} className="hover:bg-gray-50 transition-colors group text-xs">
+                          <td className="p-4 text-center">
+                            {!isLinked && item.status !== 'ignored' && (
+                              <input 
+                                type="checkbox" 
+                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                checked={selectedItemIds.includes(item.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) setSelectedItemIds(prev => [...prev, item.id]);
+                                  else setSelectedItemIds(prev => prev.filter(id => id !== item.id));
+                                }}
+                              />
+                            )}
+                          </td>
                           <td className="p-4">
                              <div className="flex items-center gap-3">
                                <img src={item.thumbnail} alt="" className="w-10 h-10 object-cover border border-gray-200 rounded" />
