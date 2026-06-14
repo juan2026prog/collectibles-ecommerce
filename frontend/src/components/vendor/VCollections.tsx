@@ -338,7 +338,7 @@ export default function VCollections() {
             Crear tu primera colección
           </button>
         </div>
-      ) : (
+      ) : !editing ? (
         <div className="space-y-3">
           {groups.map(g => (
             <div key={g.id} className="border border-gray-100 rounded-xl p-4 flex items-center justify-between hover:border-primary-100 hover:shadow-sm transition-all group bg-white">
@@ -401,7 +401,7 @@ export default function VCollections() {
             </div>
           ))}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

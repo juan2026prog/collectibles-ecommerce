@@ -536,7 +536,7 @@ export default function VPromotions() {
           <p className="text-gray-500 text-sm mb-6 max-w-md mx-auto">Atrae más clientes ofreciendo descuentos porcentuales, montos fijos o promociones bancarias aplicables solo a tus productos.</p>
           <button onClick={startNew} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold transition-colors shadow-md">Crear mi primera promoción</button>
         </div>
-      ) : (
+      ) : !editing ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {promos.map(p => {
             const now = new Date();
@@ -611,7 +611,7 @@ export default function VPromotions() {
             );
           })}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
