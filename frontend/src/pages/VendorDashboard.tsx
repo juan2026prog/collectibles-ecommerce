@@ -24,6 +24,7 @@ import VHelp from '../components/vendor/VHelp';
 
 import VCategories from '../components/vendor/VCategories';
 import VBrands from '../components/vendor/VBrands';
+import VPromotions from '../components/vendor/VPromotions';
 import VMedia from '../components/vendor/VMedia';
 import VCollections from '../components/vendor/VCollections';
 
@@ -161,6 +162,7 @@ export default function VendorDashboard() {
 
       {activeTab === 'categories' && <VCategories />}
       {activeTab === 'brands' && <VBrands />}
+      {activeTab === 'promotions' && <VPromotions />}
       {activeTab === 'media' && <VMedia />}
       {activeTab === 'collections' && <VCollections />}
     </div>
