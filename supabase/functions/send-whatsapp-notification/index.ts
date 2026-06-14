@@ -398,17 +398,21 @@ serve(async (req: Request) => {
         throw new Error("vendor_id is required for test_notification");
       }
 
-      // Load vendor settings
-      const { data: settings, error: settingsErr } = await supabaseAdmin
-        .from('vendor_notification_settings')
-        .select('*')
-        .eq('vendor_id', body_vendor_id)
-        .maybeSingle();
+      // Try to get numbers from request body, otherwise load from DB
+      let activeNumbers: any[] = [];
+      if (body.whatsapp_numbers && Array.isArray(body.whatsapp_numbers)) {
+        activeNumbers = body.whatsapp_numbers.filter((n: any) => n.enabled && n.number);
+      } else {
+        const { data: settings, error: settingsErr } = await supabaseAdmin
+          .from('vendor_notification_settings')
+          .select('*')
+          .eq('vendor_id', body_vendor_id)
+          .maybeSingle();
 
-      if (settingsErr) throw settingsErr;
-
-      const numbers = (settings?.whatsapp_numbers || []) as any[];
-      const activeNumbers = numbers.filter(n => n.enabled && n.number);
+        if (settingsErr) throw settingsErr;
+        const numbers = (settings?.whatsapp_numbers || []) as any[];
+        activeNumbers = numbers.filter(n => n.enabled && n.number);
+      }
 
       if (activeNumbers.length === 0) {
         throw new Error("No hay números de WhatsApp activos configurados para enviar la prueba.");

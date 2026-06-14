@@ -85,7 +85,8 @@ export default function VSettings() {
       const { data, error } = await supabase.functions.invoke('send-whatsapp-notification', {
         body: {
           event_type: 'test_notification',
-          vendor_id: user.id
+          vendor_id: user.id,
+          whatsapp_numbers: activeNumbers
         }
       });
       if (error) throw error;
