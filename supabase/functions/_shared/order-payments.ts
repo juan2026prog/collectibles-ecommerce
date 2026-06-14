@@ -55,22 +55,7 @@ export async function triggerPostPaymentActions(
     body: JSON.stringify({ order_id: orderId }),
   }).catch((err: any) => console.error("Commissions error:", err));
 
-  try {
-    const soyResponse = await fetch(`${supabaseUrl}/functions/v1/soydelivery-sync`, {
-      method: "POST",
-      headers: functionHeaders,
-      body: JSON.stringify({ order_id: orderId }),
-    });
-
-    if (!soyResponse.ok) {
-      const errorText = await soyResponse.text();
-      console.error(`Soy Delivery provider validation error (Status: ${soyResponse.status}):`, errorText);
-    }
-  } catch (err: any) {
-    console.error("Soy Delivery provider validation error:", err);
-  }
-
-  // Trigger DAC post-payment shipment automation per suborder
+  // Trigger post-payment shipment automation per suborder (DAC, SoyDelivery, UES)
   try {
     const { data: suborders } = await supabaseClient
       .from('order_suborders')
@@ -79,26 +64,45 @@ export async function triggerPostPaymentActions(
 
     if (suborders) {
       for (const sub of suborders) {
-        if (sub.shipping_method === "dac_home" || sub.shipping_method === "dac_agency" || sub.shipping_method === "dac") {
+        const method = (sub.shipping_method || "").toLowerCase();
+        const provider = (sub.shipping_provider || "").toLowerCase();
+        
+        if (method.includes("dac") || provider.includes("dac")) {
           console.log(`[Post-Payment] Triggering DAC shipment creation for suborder ${sub.suborder_number} (${sub.id})`);
-          const dacResponse = await fetch(`${supabaseUrl}/functions/v1/dac-create-shipment`, {
+          await fetch(`${supabaseUrl}/functions/v1/dac-create-shipment`, {
             method: "POST",
             headers: functionHeaders,
-            body: JSON.stringify({ order_id: sub.id }), // Polymorphic: passes suborder ID
-          });
-
-          if (!dacResponse.ok) {
-            const errorText = await dacResponse.text();
-            console.error(`[Post-Payment] DAC shipment creation failed for suborder ${sub.suborder_number} (Status: ${dacResponse.status}):`, errorText);
-          } else {
-            const resJson = await dacResponse.json();
-            console.log(`[Post-Payment] DAC shipment creation result for suborder ${sub.suborder_number}:`, resJson);
-          }
+            body: JSON.stringify({ order_id: sub.id }),
+          }).then(async res => {
+            if (!res.ok) console.error(`[Post-Payment] DAC failed for suborder ${sub.suborder_number}:`, await res.text());
+          }).catch(err => console.error(`[Post-Payment] DAC trigger failed:`, err));
+        } 
+        
+        else if (method.includes("soydelivery") || provider.includes("soydelivery")) {
+          console.log(`[Post-Payment] Triggering SoyDelivery shipment creation for suborder ${sub.suborder_number} (${sub.id})`);
+          await fetch(`${supabaseUrl}/functions/v1/soydelivery-sync`, {
+            method: "POST",
+            headers: functionHeaders,
+            body: JSON.stringify({ order_id: sub.id }),
+          }).then(async res => {
+            if (!res.ok) console.error(`[Post-Payment] SoyDelivery failed for suborder ${sub.suborder_number}:`, await res.text());
+          }).catch(err => console.error(`[Post-Payment] SoyDelivery trigger failed:`, err));
+        }
+        
+        else if (method.includes("ues") || provider.includes("ues")) {
+          console.log(`[Post-Payment] Triggering UES shipment creation for suborder ${sub.suborder_number} (${sub.id})`);
+          await fetch(`${supabaseUrl}/functions/v1/ues-create-shipment`, {
+            method: "POST",
+            headers: functionHeaders,
+            body: JSON.stringify({ order_id: sub.id }),
+          }).then(async res => {
+            if (!res.ok) console.error(`[Post-Payment] UES failed for suborder ${sub.suborder_number}:`, await res.text());
+          }).catch(err => console.error(`[Post-Payment] UES trigger failed:`, err));
         }
       }
     }
   } catch (err: any) {
-    console.error("[Post-Payment] DAC post-payment trigger failed:", err);
+    console.error("[Post-Payment] Suborder shipment triggers failed:", err);
   }
 
   const { data: fullOrder } = await supabaseClient

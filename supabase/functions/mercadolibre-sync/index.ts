@@ -737,15 +737,48 @@ Deno.serve(async (req) => {
                 let brandId = null;
                 let brandName = item.attributes?.find((a: any) => a.id === 'BRAND')?.value_name || null;
                 if (brandName) {
-                   const slugBrand = brandName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-                   const { data: br } = await supabase.from('brands').upsert({
-                      name: brandName,
-                      slug: slugBrand
-                   }, { onConflict: 'name' }).select().single();
-                   if (br) brandId = br.id;
+                   // Search for an existing brand (case insensitive check)
+                   const { data: existingBrands } = await supabase
+                     .from('brands')
+                     .select('id, status, owner_vendor_id')
+                     .ilike('name', brandName.trim());
+                   
+                   const approvedBrand = existingBrands?.find((b: any) => b.status === 'approved');
+                   const vendorPendingBrand = targetVendorId ? existingBrands?.find((b: any) => b.status === 'pending_review' && b.owner_vendor_id === targetVendorId) : null;
+                   
+                   if (approvedBrand) {
+                      brandId = approvedBrand.id;
+                   } else if (vendorPendingBrand) {
+                      brandId = vendorPendingBrand.id;
+                   } else {
+                      // Create a new brand proposal (pending review if created by vendor)
+                      const slugBrandBase = brandName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
+                      const slugBrand = targetVendorId ? `${slugBrandBase}-v${targetVendorId.substring(0, 4)}` : slugBrandBase;
+                      const { data: newBr, error: newBrErr } = await supabase
+                        .from('brands')
+                        .insert({
+                          name: brandName.trim(),
+                          slug: slugBrand,
+                          owner_vendor_id: targetVendorId || null,
+                          status: targetVendorId ? 'pending_review' : 'approved',
+                          is_active: true
+                        })
+                        .select()
+                        .single();
+                      
+                      if (newBrErr) {
+                         console.error("Error creating brand during import:", newBrErr.message);
+                      } else if (newBr) {
+                         brandId = newBr.id;
+                      }
+                   }
                 } else {
                    // Title search fallback for brand
-                   const { data: allBrands } = await supabase.from('brands').select('id, name');
+                   // We only match against approved brands
+                   const { data: allBrands } = await supabase
+                     .from('brands')
+                     .select('id, name')
+                     .eq('status', 'approved');
                    if (allBrands) {
                      const lowerCleanTitle = cleanTitleText.toLowerCase();
                      const matchedBrand = allBrands.find((b: any) => lowerCleanTitle.includes(b.name.toLowerCase()));
@@ -1525,6 +1558,27 @@ Deno.serve(async (req) => {
           }
         }
 
+        // Check if brand is pending review
+        let isBrandPending = false;
+        const resolvedBrandId = brand_id || rawItem.raw_payload?.normalized_metadata?.brand_id || null;
+        if (resolvedBrandId) {
+          const { data: brandData } = await supabase.from('brands').select('status').eq('id', resolvedBrandId).maybeSingle();
+          if (brandData?.status === 'pending_review') {
+            isBrandPending = true;
+          }
+        }
+
+        // Check if category is pending review
+        let isCategoryPending = false;
+        if (finalCategoryId) {
+          const { data: catData } = await supabase.from('categories').select('status').eq('id', finalCategoryId).maybeSingle();
+          if (catData?.status === 'pending_review') {
+            isCategoryPending = true;
+          }
+        }
+
+        const initialProductStatus = (isBrandPending || isCategoryPending) ? 'pending_taxonomy_review' : 'draft';
+
         const { data: newProd, error: prodErr } = await supabase
           .from('products')
           .insert({
@@ -1534,8 +1588,8 @@ Deno.serve(async (req) => {
             slug: uniqueSlug,
             base_price: price || 0,
             category_id: finalCategoryId,
-            brand_id: brand_id || null,
-            status: 'draft', // do not publish to storefront automatically
+            brand_id: resolvedBrandId,
+            status: initialProductStatus, // set to pending_taxonomy_review if any taxonomy is pending
             is_active: false,
             metadata
           })
@@ -1585,7 +1639,7 @@ Deno.serve(async (req) => {
         // Category link in junction table
         await supabase.from('product_categories').insert({
           product_id: newProd.id,
-          category_id
+          category_id: finalCategoryId
         });
 
         // Extract SKU robustly

@@ -1,14 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
-
 import { corsHeaders, handleOptions } from "../_shared/cors.ts";
 
-
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  const optionsResponse = handleOptions(req);
+  if (optionsResponse) return optionsResponse;
 
   try {
     const { order_id } = await req.json();
@@ -18,27 +15,80 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // 1. Fetch the order
-    const { data: order, error: orderErr } = await supabase
-      .from("orders")
-      .select("*")
-      .eq("id", order_id)
-      .single();
+    // 1. Fetch order/suborder polymorphically
+    let resolvedVendorId = null;
+    let resolvedShippingMethod = null;
+    let resolvedTrackingNumber = null;
+    let resolvedShippingAddress = null;
+    let resolvedCustomerPhone = null;
+    let resolvedCustomerEmail = null;
+    let isSuborder = false;
+    let parentOrderId = order_id;
+    let orderNumber = "";
 
-    if (orderErr || !order) throw new Error(orderErr?.message || "Order not found");
+    const { data: suborderData } = await supabase
+      .from('order_suborders')
+      .select('*')
+      .eq('id', order_id)
+      .maybeSingle();
 
-    // Skip if the order is not assigned to SoyDelivery
-    if (order.shipping_provider !== "SoyDelivery") {
-      return new Response(JSON.stringify({ skipped: true, reason: `Not a SoyDelivery order (assigned to: ${order.shipping_provider})` }), { headers: corsHeaders });
+    if (suborderData) {
+      isSuborder = true;
+      parentOrderId = suborderData.parent_order_id;
+      resolvedVendorId = suborderData.vendor_id;
+      resolvedShippingMethod = suborderData.shipping_method;
+      resolvedTrackingNumber = suborderData.tracking_number;
+      orderNumber = suborderData.suborder_number;
+      
+      const { data: parentOrder, error: parentErr } = await supabase
+        .from('orders')
+        .select('shipping_address, customer_phone, customer_email')
+        .eq('id', suborderData.parent_order_id)
+        .single();
+        
+      if (parentErr || !parentOrder) {
+        throw new Error(`No se encontró la orden principal de la suborden: ${parentErr?.message}`);
+      }
+      resolvedShippingAddress = parentOrder.shipping_address || {};
+      resolvedCustomerPhone = parentOrder.customer_phone;
+      resolvedCustomerEmail = parentOrder.customer_email;
+    } else {
+      // Fallback: It's a parent order
+      const { data: orderData, error: orderErr } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', order_id)
+        .single();
+
+      if (orderErr || !orderData) {
+        throw new Error(`No se encontró la orden: ${orderErr?.message}`);
+      }
+      resolvedVendorId = orderData.vendor_id;
+      resolvedShippingMethod = orderData.shipping_method;
+      resolvedTrackingNumber = orderData.tracking_number;
+      resolvedShippingAddress = orderData.shipping_address || {};
+      resolvedCustomerPhone = orderData.customer_phone;
+      resolvedCustomerEmail = orderData.customer_email;
+      orderNumber = String(orderData.id);
+    }
+
+    // 2. Idempotency / Duplicate Check
+    if (resolvedTrackingNumber) {
+      console.log(`[SoyDelivery] Already has a tracking number: ${resolvedTrackingNumber}. Skipping.`);
+      return new Response(JSON.stringify({
+        success: true,
+        already_exists: true,
+        trackingId: resolvedTrackingNumber
+      }), { headers: corsHeaders });
     }
 
     // Only process if shipping to an address (not pickup)
-    const addr = order.shipping_address;
+    const addr = resolvedShippingAddress;
     if (!addr || typeof addr === 'string' || !addr.street) {
       return new Response(JSON.stringify({ skipped: true, reason: "No shipping address (might be pickup)" }), { headers: corsHeaders });
     }
 
-    // 2. Fetch SoyDelivery credentials (Vendor or Global Fallback)
+    // 3. Fetch SoyDelivery credentials (Vendor or Global Fallback)
     let apiId = '';
     let apiKey = '';
     let negocioId = '';
@@ -46,11 +96,11 @@ serve(async (req) => {
     let isSandbox = false;
     let usedVendor = false;
 
-    if (order.vendor_id) {
+    if (resolvedVendorId) {
       const { data: vConn } = await supabase
         .from('vendor_shipping_connections')
         .select('*')
-        .eq('vendor_id', order.vendor_id)
+        .eq('vendor_id', resolvedVendorId)
         .eq('provider', 'soydelivery')
         .single();
       
@@ -62,7 +112,7 @@ serve(async (req) => {
            const creds = JSON.parse(decryptedJson);
            apiKey = creds.apiKey;
            apiId = creds.clientId;
-           negocioId = creds.clientId; // Assumed client config maps to these
+           negocioId = creds.clientId; 
            negocioClave = creds.secret;
            usedVendor = true;
         } catch (e) {
@@ -72,6 +122,9 @@ serve(async (req) => {
     }
 
     if (!usedVendor) {
+      if (resolvedVendorId) {
+        throw new Error("No se pudo generar la guía. El vendor no tiene una conexión logística activa.");
+      }
       const { data: settingsData } = await supabase.from('site_settings').select('key, value');
       const settings = Object.fromEntries((settingsData || []).map((s: any) => [s.key, s.value]));
 
@@ -87,17 +140,15 @@ serve(async (req) => {
     }
 
     if (!apiId || !apiKey || !negocioId || !negocioClave) {
-      throw new Error("Faltan credenciales de SoyDelivery (ni vendor ni global).");
+      throw new Error("Faltan credenciales de SoyDelivery.");
     }
-    
-
 
     // Determine base URL
     const baseUrl = isSandbox 
         ? "http://testing.soydelivery.com.uy/rest" 
         : "https://soydelivery.com.uy/rest";
 
-    // 3. Authenticate with SoyDelivery
+    // 4. Authenticate with SoyDelivery
     const authRes = await fetch(`${baseUrl}/sdws_autenticar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -114,7 +165,7 @@ serve(async (req) => {
     const token = authData.AccessToken;
     if (!token) throw new Error("No token returned from SoyDelivery");
 
-    // 4. Create the delivery order
+    // 5. Create the delivery order
     // Parse street and number from addr.street
     const streetMatches = addr.street.match(/^(.*?)([\d].*)$/);
     const street = streetMatches ? streetMatches[1].trim() : addr.street;
@@ -131,8 +182,8 @@ serve(async (req) => {
         Negocio_clave: Number(negocioClave),
         Negocio_RepartidoId: 0,
         Nombre_cliente: `${addr.first_name || ''} ${addr.last_name || ''}`.trim(),
-        Telefono_cliente: order.customer_phone || "099000000",
-        Email_cliente: order.customer_email || "",
+        Telefono_cliente: resolvedCustomerPhone || "099000000",
+        Email_cliente: resolvedCustomerEmail || "",
         Negocio_sucursal_external_id: "1",
         Ciudad_origen: "",
         Calle_origen: "Retiro Defecto",
@@ -151,8 +202,8 @@ serve(async (req) => {
         Fecha_entrega: deliveryDate,
         Franja_horaria: 4, // 4 = Todo el dia (10 a 18hs)
         Cantidad_bultos: 1,
-        Detalle: `Orden #${order.id}`,
-        Pedido_external_id: order.id,
+        Detalle: `Orden #${orderNumber}`,
+        Pedido_external_id: order_id,
         Nro_Factura: "",
         Servicio: "Express",
         Tipo_Vehiculo_Nombre: "MOTO",
@@ -177,16 +228,49 @@ serve(async (req) => {
         throw new Error(`SoyDelivery Create Error: ${createData.Error_desc}`);
     }
 
-    // 5. Update order with tracking ID (Pedido_id returned by SoyDelivery)
+    // 6. Update order/suborder with tracking ID
     const trackingId = createData.Pedido_id;
     if (trackingId) {
-        await supabase
-          .from("orders")
-          .update({ 
-               tracking_number: String(trackingId),
-               shipping_provider: "SoyDelivery"
-          })
-          .eq("id", order_id);
+        if (isSuborder) {
+            await supabase
+              .from("order_suborders")
+              .update({ 
+                   tracking_number: String(trackingId),
+                   shipping_provider: "SoyDelivery",
+                   shipping_status: "ready_to_ship",
+                   updated_at: new Date().toISOString()
+              })
+              .eq("id", order_id);
+        } else {
+            await supabase
+              .from("orders")
+              .update({ 
+                   tracking_number: String(trackingId),
+                   shipping_provider: "SoyDelivery",
+                   shipping_status: "ready_to_ship",
+                   updated_at: new Date().toISOString()
+              })
+              .eq("id", order_id);
+        }
+
+        // 7. Insert into shipments table using correct schema columns
+        const shipmentPayload = {
+            order_id: isSuborder ? parentOrderId : order_id,
+            suborder_id: isSuborder ? order_id : null,
+            provider_key: 'soydelivery',
+            tracking_code: String(trackingId),
+            shipping_label_url: null,
+            shipping_status: 'ready_to_ship',
+            customer_name: `${addr.first_name || ''} ${addr.last_name || ''}`.trim(),
+            customer_phone: resolvedCustomerPhone || "099000000",
+            customer_address: `${street} ${number}`,
+            customer_city: addr.city || "Montevideo",
+            customer_department: addr.department || "",
+            package_weight: 1.0,
+            package_quantity: 1,
+            provider_response: createData
+        };
+        await supabase.from('shipments').insert(shipmentPayload);
     }
 
     return new Response(JSON.stringify({ success: true, trackingId }), {

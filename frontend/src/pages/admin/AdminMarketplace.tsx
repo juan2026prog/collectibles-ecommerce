@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Store, ShieldCheck, CreditCard, Link2, Trophy } from 'lucide-react';
+import { Store, ShieldCheck, CreditCard, Link2, Trophy, Tag } from 'lucide-react';
 import AdminVendors from './AdminVendors';
 import AdminVendorKyc from './AdminVendorKyc';
 import AdminVendorPayouts from './AdminVendorPayouts';
 import AdminLogisticsConnections from './AdminLogisticsConnections';
 import AdminMercadoLibre from './AdminMercadoLibre';
 import AdminBuyBox from './AdminBuyBox';
+import AdminTaxonomies from './AdminTaxonomies';
 import { useFeatures } from '../../contexts/FeatureToggleContext';
 
 export default function AdminMarketplace() {
@@ -22,6 +23,7 @@ export default function AdminMarketplace() {
   const tabs = [
     { id: 'vendors', label: 'Vendors', icon: Store },
     { id: 'kyc', label: 'KYC', icon: ShieldCheck },
+    { id: 'taxonomias', label: 'Taxonomías', icon: Tag },
     { id: 'liquidaciones', label: 'Liquidaciones', icon: CreditCard },
     { id: 'conexiones', label: 'Conexiones', icon: Link2 },
     { id: 'analytics', label: 'Analytics', icon: Trophy },
@@ -69,6 +71,7 @@ export default function AdminMarketplace() {
       <div className="mt-6">
         {currentTab === 'vendors' && <AdminVendors />}
         {currentTab === 'kyc' && <AdminVendorKyc />}
+        {currentTab === 'taxonomias' && <AdminTaxonomies />}
         {currentTab === 'liquidaciones' && <AdminVendorPayouts />}
         {currentTab === 'conexiones' && (
           <div className="space-y-12">

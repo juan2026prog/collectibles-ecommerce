@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/admin/Toast';
@@ -10,7 +11,14 @@ import { User, CreditCard, Truck, Link2, FileText, Save, UploadCloud, Bell, Aler
 export default function VSettings() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState('profile');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('sub') || 'profile';
+  const setActiveTab = (tab: string) => {
+    setSearchParams(prev => {
+      prev.set('sub', tab);
+      return prev;
+    });
+  };
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 

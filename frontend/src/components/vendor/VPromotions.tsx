@@ -120,7 +120,7 @@ export default function VPromotions() {
         supabase.from('brands').select('id, name').or(`owner_vendor_id.eq.${user!.id},owner_vendor_id.is.null`),
         supabase.from('categories').select('id, name').or(`owner_vendor_id.eq.${user!.id},owner_vendor_id.is.null`),
         supabase.from('tags').select('id, name'),
-        supabase.from('product_groups').select('id, name')
+        supabase.from('product_groups').select('id, name').or(`owner_vendor_id.eq.${user!.id},owner_vendor_id.is.null`)
       ]);
       setBrands(b || []);
       setCategories(c || []);

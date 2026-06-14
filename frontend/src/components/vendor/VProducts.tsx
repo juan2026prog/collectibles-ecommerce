@@ -163,8 +163,8 @@ export default function VProducts() {
 
   async function fetchMeta() {
     const [{ data: cats }, { data: brs }, { data: tgs }] = await Promise.all([
-      supabase.from('categories').select('id, name').or(`owner_vendor_id.eq.${user?.id},owner_vendor_id.is.null`).order('sort_order'),
-      supabase.from('brands').select('id, name').or(`owner_vendor_id.eq.${user?.id},owner_vendor_id.is.null`).order('sort_order'),
+      supabase.from('categories').select('id, name, status, parent_id').or(`owner_vendor_id.eq.${user?.id},status.eq.approved`).order('sort_order'),
+      supabase.from('brands').select('id, name, status').or(`owner_vendor_id.eq.${user?.id},status.eq.approved`).order('sort_order'),
       supabase.from('tags').select('id, name').order('name'),
     ]);
     setCategories(cats || []);
@@ -217,11 +217,26 @@ export default function VProducts() {
       if (!form.title) throw new Error("El título es obligatorio");
       let titleSlug = form.slug || form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'); if (!editing && !form.slug) { titleSlug = `${titleSlug.replace(/-+$/, '')}-`; }
 
+      // Check if selected brand is pending review
+      const selectedBrandId = form.brands[0] || null;
+      const isBrandPending = selectedBrandId ? brands.find(b => b.id === selectedBrandId)?.status === 'pending_review' : false;
+
+      // Check if any of selected categories is pending review
+      const isAnyCategoryPending = form.categories.some(cid => {
+        const cat = categories.find(c => c.id === cid);
+        return cat?.status === 'pending_review';
+      });
+
+      let finalStatus = form.status;
+      if (isBrandPending || isAnyCategoryPending) {
+        finalStatus = 'pending_taxonomy_review';
+      }
+
       const payload = {
         title: form.title, slug: titleSlug, description: form.description, short_description: form.short_description,
         base_price: parseFloat(form.base_price) || 0, compare_at_price: form.compare_at_price ? parseFloat(form.compare_at_price) : null,
-        status: form.status, badge: form.badge || null, is_featured: form.is_featured, is_active: form.is_active,
-        brand_id: form.brands[0] || null, category_id: form.categories[0] || null
+        status: finalStatus, badge: form.badge || null, is_featured: form.is_featured, is_active: form.is_active,
+        brand_id: selectedBrandId, category_id: form.categories[0] || null
       };
 
         let productId = editing?.id;
@@ -316,28 +331,30 @@ export default function VProducts() {
   };
 
   const handleAddCategory = async () => {
-    if (!newCatInput.trim()) return;
+    if (!newCatInput.trim() || !user) return;
     try {
-      const slug = newCatInput.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
-      const { data, error } = await supabase.from('categories').insert({ name: newCatInput, slug }).select().single();
+      let slug = newCatInput.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
+      slug = `${slug}-v${user.id.substring(0, 4)}`;
+      const { data, error } = await supabase.from('categories').insert({ name: newCatInput.trim(), slug, owner_vendor_id: user.id, status: 'pending_review', is_active: true }).select().single();
       if (error) throw error;
       setCategories([...categories, data]);
       toggleCategory(data.id);
       setNewCatInput('');
-      toast.success('Categoría creada');
+      toast.success('Categoría propuesta (pendiente de revisión)');
     } catch (err: any) { toast.error(err.message); }
   };
 
   const handleAddBrand = async () => {
-    if (!newBrandInput.trim()) return;
+    if (!newBrandInput.trim() || !user) return;
     try {
-      const slug = newBrandInput.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
-      const { data, error } = await supabase.from('brands').insert({ name: newBrandInput, slug }).select().single();
+      let slug = newBrandInput.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
+      slug = `${slug}-v${user.id.substring(0, 4)}`;
+      const { data, error } = await supabase.from('brands').insert({ name: newBrandInput.trim(), slug, owner_vendor_id: user.id, status: 'pending_review', is_active: true }).select().single();
       if (error) throw error;
       setBrands([...brands, data]);
       toggleBrand(data.id);
       setNewBrandInput('');
-      toast.success('Marca creada');
+      toast.success('Marca propuesta (pendiente de revisión)');
     } catch (err: any) { toast.error(err.message); }
   };
 
@@ -349,10 +366,20 @@ export default function VProducts() {
       if (field === 'category_id') {
         const { error } = await supabase.from('product_categories').delete().eq('product_id', id);
         if (error) throw error;
+        
+        let newStatus = undefined;
         if (value) {
+          const cat = categories.find(c => c.id === value);
+          if (cat?.status === 'pending_review') {
+            newStatus = 'pending_taxonomy_review';
+          }
           const { error: insErr } = await supabase.from('product_categories').insert({ product_id: id, category_id: value });
           if (insErr) throw insErr;
-          const { error: updErr } = await supabase.from('products').update({ category_id: value }).eq('id', id).select().single();
+          
+          const productUpdates: any = { category_id: value };
+          if (newStatus) productUpdates.status = newStatus;
+          
+          const { error: updErr } = await supabase.from('products').update(productUpdates).eq('id', id).select().single();
           if (updErr) throw updErr;
         } else {
           const { error: updErr2 } = await supabase.from('products').update({ category_id: null }).eq('id', id).select().single();
@@ -368,6 +395,13 @@ export default function VProducts() {
         }
       } else {
         updates[field] = value === '' ? null : value;
+        // If updating brand_id, check if it's pending review
+        if (field === 'brand_id' && value) {
+          const br = brands.find(b => b.id === value);
+          if (br?.status === 'pending_review') {
+            updates.status = 'pending_taxonomy_review';
+          }
+        }
         const { error } = await supabase.from('products').update(updates).eq('id', id).select().single();
         if (error) throw error;
       }
@@ -996,12 +1030,19 @@ export default function VProducts() {
                         {inlineEdit?.id === p.id && inlineEdit.field === 'status' ? (
                            <select autoFocus className="bg-white border rounded text-[10px] p-1 font-bold outline-none" value={inlineValue} onChange={e => { setInlineValue(e.target.value); handleInlineUpdate(p.id, 'status', e.target.value); }} onBlur={() => setInlineEdit(null)} onClick={e => e.stopPropagation()}>
                              <option value="published">Visible</option>
+                             <option value="pending_taxonomy_review">Pendiente Taxonomía</option>
                              <option value="draft">Borrador</option>
                              <option value="archived">Archivado</option>
                            </select>
                         ) : (
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${p.status === 'published' ? 'text-green-700 bg-green-50' : 'text-gray-500 bg-gray-100'}`}>
-                             {p.status === 'published' ? 'Visible' : 'Oculto'}
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${
+                             p.status === 'published' ? 'text-green-700 bg-green-50' : 
+                             p.status === 'pending_taxonomy_review' ? 'text-yellow-700 bg-yellow-50' :
+                             'text-gray-500 bg-gray-100'
+                           }`}>
+                             {p.status === 'published' ? 'Visible' : 
+                              p.status === 'pending_taxonomy_review' ? 'Pendiente Taxonomía' : 
+                              'Oculto'}
                           </span>
                         )}
                       </td>
@@ -1151,6 +1192,7 @@ export default function VProducts() {
                                 <span className="text-gray-500 font-bold">Estado:</span>
                                 <select className="bg-transparent border-none p-0 text-blue-600 font-bold outline-none cursor-pointer" value={form.status} onChange={e => setForm({...form, status: e.target.value})}>
                                    <option value="published">Visible</option>
+                                   <option value="pending_taxonomy_review">Pendiente Taxonomía</option>
                                    <option value="draft">Borrador</option>
                                    <option value="archived">Archivado</option>
                                 </select>

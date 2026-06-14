@@ -5,22 +5,48 @@ import { useToast } from '../../components/admin/Toast';
 
 export default function AdminLogisticsConnections() {
   const [connections, setConnections] = useState<any[]>([]);
+  const [stats, setStats] = useState<Record<string, { count: number; trackings: string[] }>>({});
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
   const fetchConnections = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      const { data: connData, error: connErr } = await supabase
         .from('vendor_shipping_connections')
         .select(`
-          id, provider, account_name, connection_status, last_tested_at, last_error, updated_at,
-          vendors ( id, company_name, email )
+          id, provider, account_name, connection_status, last_tested_at, last_error, updated_at, vendor_id,
+          vendors ( id, company_name, store_name, email )
         `)
         .order('updated_at', { ascending: false });
 
-      if (error) throw error;
-      setConnections(data || []);
+      if (connErr) throw connErr;
+
+      // Fetch all shipments for stats
+      const { data: shipData, error: shipErr } = await supabase
+        .from('shipments')
+        .select('provider_key, tracking_code, order_suborders!inner(vendor_id)')
+        .not('tracking_code', 'is', null);
+
+      const computedStats: Record<string, { count: number; trackings: string[] }> = {};
+      if (shipData) {
+        shipData.forEach((s: any) => {
+          const vId = s.order_suborders?.vendor_id;
+          const provider = s.provider_key;
+          if (!vId || !provider) return;
+          const key = `${vId}_${provider}`;
+          if (!computedStats[key]) {
+            computedStats[key] = { count: 0, trackings: [] };
+          }
+          computedStats[key].count += 1;
+          if (s.tracking_code && !computedStats[key].trackings.includes(s.tracking_code) && computedStats[key].trackings.length < 3) {
+            computedStats[key].trackings.push(s.tracking_code);
+          }
+        });
+      }
+
+      setStats(computedStats);
+      setConnections(connData || []);
     } catch (err: any) {
       toast.error('Error al cargar conexiones: ' + err.message);
     } finally {
@@ -51,53 +77,71 @@ export default function AdminLogisticsConnections() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendor</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Proveedor</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Última Prueba</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Última Prueba / Error</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cantidad Envíos</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trackings Recientes</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {loading ? (
-              <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500">Cargando...</td></tr>
+              <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-500">Cargando...</td></tr>
             ) : connections.length === 0 ? (
-              <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500">No hay conexiones registradas.</td></tr>
+              <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-500">No hay conexiones registradas.</td></tr>
             ) : (
-              connections.map(conn => (
-                <tr key={conn.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="font-medium text-gray-900">{conn.vendors?.company_name || 'Desconocido'}</div>
-                    <div className="text-sm text-gray-500">{conn.vendors?.email}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <Truck className="w-4 h-4 text-gray-400" />
-                      <span className="font-medium capitalize">{conn.provider}</span>
-                      <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded ml-2">
-                        {conn.account_name}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {conn.connection_status === 'connected' ? (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 gap-1">
-                        <CheckCircle className="w-3 h-3" /> Conectado
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 gap-1">
-                        <AlertTriangle className="w-3 h-3" /> Error
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {conn.last_tested_at ? new Date(conn.last_tested_at).toLocaleString() : 'Nunca'}
-                    {conn.last_error && <div className="text-xs text-red-500 mt-1 truncate max-w-[200px]" title={conn.last_error}>{conn.last_error}</div>}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button onClick={() => toast.info('Acción reservada para futuras versiones.')} className="text-blue-600 hover:text-blue-900">
-                      Ver Detalles
-                    </button>
-                  </td>
-                </tr>
-              ))
+              connections.map(conn => {
+                const key = `${conn.vendor_id}_${conn.provider}`;
+                const connStats = stats[key] || { count: 0, trackings: [] };
+                return (
+                  <tr key={conn.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="font-medium text-gray-900">{conn.vendors?.store_name || conn.vendors?.company_name || 'Desconocido'}</div>
+                      <div className="text-sm text-gray-500">{conn.vendors?.email}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <Truck className="w-4 h-4 text-gray-400" />
+                        <span className="font-medium capitalize">{conn.provider}</span>
+                        {conn.account_name && (
+                          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded ml-2">
+                            {conn.account_name}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {conn.connection_status === 'connected' ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 gap-1">
+                          <CheckCircle className="w-3 h-3" /> Conectado
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 gap-1">
+                          <AlertTriangle className="w-3 h-3" /> Error / Inactivo
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {conn.last_tested_at ? new Date(conn.last_tested_at).toLocaleString() : 'Nunca'}
+                      {conn.last_error && <div className="text-xs text-red-500 mt-1 truncate max-w-[200px]" title={conn.last_error}>{conn.last_error}</div>}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-semibold">
+                      {connStats.count}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500">
+                      {connStats.trackings.length === 0 ? (
+                        <span className="text-gray-400 italic">Ninguno</span>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {connStats.trackings.map((t: string) => (
+                            <span key={t} className="px-2 py-0.5 bg-gray-100 border rounded font-mono text-gray-700">
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

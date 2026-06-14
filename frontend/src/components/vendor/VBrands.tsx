@@ -72,7 +72,8 @@ export default function VBrands() {
       logo_url: form.logo_url || null,
       is_active: form.is_active,
       sort_order: form.sort_order,
-      owner_vendor_id: user!.id
+      owner_vendor_id: user!.id,
+      status: 'pending_review'
     };
     if (editing) await supabase.from('brands').update(payload).eq('id', editing.id);
     else await supabase.from('brands').insert(payload);
@@ -134,11 +135,26 @@ export default function VBrands() {
                   </td>
                   <td className="px-6 py-4 font-semibold text-gray-900">{b.name}</td>
                   <td className="px-6 py-4">
-                    {b.is_active !== false ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-800 tracking-wider">VISIBLE</span>
-                    ) : (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800 tracking-wider">OCULTA</span>
-                    )}
+                    <div className="flex flex-col gap-1">
+                      {b.is_active !== false ? (
+                        <span className="inline-flex items-center w-max px-2 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-800 tracking-wider">VISIBLE</span>
+                      ) : (
+                        <span className="inline-flex items-center w-max px-2 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-800 tracking-wider">OCULTA</span>
+                      )}
+                      
+                      {b.status === 'approved' && (
+                        <span className="inline-flex items-center w-max px-2 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-800 tracking-wider">APROBADA</span>
+                      )}
+                      {b.status === 'pending_review' && (
+                        <span className="inline-flex items-center w-max px-2 py-0.5 rounded text-[9px] font-bold bg-yellow-100 text-yellow-800 tracking-wider">PENDIENTE</span>
+                      )}
+                      {b.status === 'rejected' && (
+                        <span className="inline-flex items-center w-max px-2 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-800 tracking-wider">RECHAZADA</span>
+                      )}
+                      {b.status === 'merged' && (
+                        <span className="inline-flex items-center w-max px-2 py-0.5 rounded text-[9px] font-bold bg-gray-100 text-gray-800 tracking-wider">FUSIONADA</span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-gray-500 text-xs max-w-xs truncate">{b.description || '-'}</td>
                   <td className="px-6 py-4 text-right">

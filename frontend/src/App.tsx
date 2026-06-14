@@ -38,6 +38,7 @@ const VendorMLCallback = lazy(() => import('./pages/VendorMLCallback'));
 const Callback = lazy(() => import('./pages/Callback'));
 const DynamicPage = lazy(() => import('./pages/DynamicPage'));
 const Contact = lazy(() => import('./pages/Contact'));
+const VendorPrueba = lazy(() => import('./pages/VendorPrueba'));
 
 // Auth (Lazy)
 const Login = lazy(() => import('./pages/Login'));
@@ -128,6 +129,7 @@ function App() {
                     <Route path="/internacional" element={<ProtectedRoute requireAdmin><InternationalLaboratory /></ProtectedRoute>} />
                     <Route path="/about" element={<Navigate to="/page/nosotros" replace />} />
                     <Route path="/contact" element={<Contact />} />
+                    <Route path="/vendor_prueba" element={<VendorPrueba />} />
                     <Route path="/terms" element={<Navigate to="/page/terminos" replace />} />
                     <Route path="/privacy" element={<Navigate to="/page/pol-ticas-de-privacidad" replace />} />
                     <Route path="/help" element={<Navigate to="/page/condiciones-de-compra" replace />} />
@@ -136,6 +138,7 @@ function App() {
                     <Route path="/checkout/success" element={<CheckoutSuccess />} />
                     <Route path="/auth/callback" element={<MLCallback />} />
                     <Route path="/vendor/ml/callback" element={<VendorMLCallback />} />
+                    <Route path="/vendor/settings/logistics" element={<Navigate to="/vendor?tab=settings&sub=shipping" replace />} />
                     <Route path="/callback" element={<Callback />} />
                     
                     {/* User Portals */}

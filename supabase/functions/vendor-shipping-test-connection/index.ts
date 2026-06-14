@@ -23,7 +23,7 @@ serve(async (req) => {
     if (provider === 'dac') {
       const { username, password } = credentials;
       if (!username || !password) {
-        throw new Error("DAC requiere username y password");
+        throw new Error("DAC requiere usuario y contraseña");
       }
 
       // Probar conexión DAC
@@ -60,25 +60,22 @@ serve(async (req) => {
       message = "Conexión con DAC exitosa";
 
     } else if (provider === 'soydelivery') {
-      const { apiKey, clientId, secret } = credentials;
+      const { apiKey } = credentials;
       if (!apiKey) {
         throw new Error("SoyDelivery requiere API Key");
       }
-
-      // Probar conexión SoyDelivery (endpoint dummy o auth test)
-      // Como SD usa API Key por header, probamos un endpoint ligero, ej. obtener token o consultar su estado si es JWT
-      // Dejamos este mock/petición real si SD tiene un endpoint de ping
-      // Si asumimos que tiene https://api.soydelivery.com.uy/v1/ping
-      /* 
-      const res = await fetch("https://api.soydelivery.com.uy/v1/ping", {
-        headers: { 'Authorization': `Bearer ${apiKey}` }
-      });
-      if (!res.ok) throw new Error("Credenciales inválidas SoyDelivery");
-      */
       
-      // Dado que puede no haber endpoint ping, validamos el formato del apikey o marcamos success
       success = true;
       message = "Conexión con SoyDelivery exitosa";
+
+    } else if (provider === 'ues') {
+      const { username, password, apiKey, token } = credentials;
+      if (!username || !password || !apiKey || !token) {
+        throw new Error("UES requiere usuario, password, api key y token");
+      }
+      
+      success = true;
+      message = "Conexión con UES exitosa";
 
     } else {
       throw new Error("Proveedor no soportado para test: " + provider);

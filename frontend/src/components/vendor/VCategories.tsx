@@ -100,6 +100,7 @@ export default function VCategories() {
       parent_id: form.parent_id || null,
       is_active: form.is_active,
       owner_vendor_id: user!.id,
+      status: 'pending_review',
       metadata: { 
         ml_category_id: form.ml_category_id || null,
         subtitle: form.subtitle || null,
@@ -173,11 +174,26 @@ export default function VCategories() {
                   </td>
                   <td className="px-6 py-4 text-gray-500"><span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">{c.product_categories?.[0]?.count || 0}</span></td>
                   <td className="px-6 py-4">
-                    {c.is_active !== false ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-800 tracking-wider">VISIBLE</span>
-                    ) : (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800 tracking-wider">OCULTA</span>
-                    )}
+                    <div className="flex flex-col gap-1">
+                      {c.is_active !== false ? (
+                        <span className="inline-flex items-center w-max px-2 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-800 tracking-wider">VISIBLE</span>
+                      ) : (
+                        <span className="inline-flex items-center w-max px-2 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-800 tracking-wider">OCULTA</span>
+                      )}
+                      
+                      {c.status === 'approved' && (
+                        <span className="inline-flex items-center w-max px-2 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-800 tracking-wider">APROBADA</span>
+                      )}
+                      {c.status === 'pending_review' && (
+                        <span className="inline-flex items-center w-max px-2 py-0.5 rounded text-[9px] font-bold bg-yellow-100 text-yellow-800 tracking-wider">PENDIENTE</span>
+                      )}
+                      {c.status === 'rejected' && (
+                        <span className="inline-flex items-center w-max px-2 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-800 tracking-wider">RECHAZADA</span>
+                      )}
+                      {c.status === 'merged' && (
+                        <span className="inline-flex items-center w-max px-2 py-0.5 rounded text-[9px] font-bold bg-gray-100 text-gray-800 tracking-wider">FUSIONADA</span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end gap-1">
