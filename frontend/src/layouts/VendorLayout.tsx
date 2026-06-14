@@ -44,7 +44,6 @@ export default function VendorLayout() {
     { name: 'Colecciones', path: '/vendor?tab=collections', tab: 'collections', icon: Layers },
     { name: 'Categorías', path: '/vendor?tab=categories', tab: 'categories', icon: FolderOpen },
     { name: 'Marcas', path: '/vendor?tab=brands', tab: 'brands', icon: Tag },
-    { name: 'Promociones', path: '/vendor?tab=promotions', tab: 'promotions', icon: Percent },
     { name: 'Multimedia', path: '/vendor?tab=media', tab: 'media', icon: Image },
   ];
 
