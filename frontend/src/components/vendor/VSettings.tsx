@@ -60,10 +60,43 @@ export default function VSettings() {
     notify_order_shipped: false,
     notify_low_stock: false,
     notify_payout_paid: false,
+    notify_test: false,
     is_active: false
   });
   const [logs, setLogs] = useState<any[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const [sendingTest, setSendingTest] = useState(false);
+
+  const handleSendTestNotification = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!user) return;
+
+    // Validate numbers first
+    const numbers = notificationSettings.whatsapp_numbers || [];
+    const activeNumbers = numbers.filter(n => n.number.trim() !== '' && n.enabled);
+    if (activeNumbers.length === 0) {
+      toast.error('Debes tener al menos un número de celular activo y guardado para enviar la prueba.');
+      return;
+    }
+
+    setSendingTest(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-whatsapp-notification', {
+        body: {
+          event_type: 'test_notification',
+          vendor_id: user.id
+        }
+      });
+      if (error) throw error;
+      toast.success('Notificación de prueba enviada');
+      loadLogs();
+    } catch (err: any) {
+      toast.error(err.message || 'Error al enviar la notificación de prueba');
+    } finally {
+      setSendingTest(false);
+    }
+  };
 
   const loadNotificationSettings = async () => {
     if (!user) return;
@@ -89,6 +122,7 @@ export default function VSettings() {
           notify_order_shipped: !!data.notify_order_shipped,
           notify_low_stock: !!data.notify_low_stock,
           notify_payout_paid: !!data.notify_payout_paid,
+          notify_test: !!data.notify_test,
           is_active: !!data.is_active
         });
       } else {
@@ -104,6 +138,7 @@ export default function VSettings() {
           notify_order_shipped: false,
           notify_low_stock: false,
           notify_payout_paid: false,
+          notify_test: false,
           is_active: false
         });
       }
@@ -209,6 +244,7 @@ export default function VSettings() {
           notify_order_shipped: notificationSettings.notify_order_shipped,
           notify_low_stock: notificationSettings.notify_low_stock,
           notify_payout_paid: notificationSettings.notify_payout_paid,
+          notify_test: notificationSettings.notify_test,
           is_active: notificationSettings.is_active,
           updated_at: new Date().toISOString()
         };
@@ -593,6 +629,7 @@ export default function VSettings() {
                     { key: 'notify_order_shipped', label: 'Pedido enviado', desc: 'Aviso al generar la etiqueta de despacho o entrega.' },
                     { key: 'notify_low_stock', label: 'Stock bajo', desc: 'Alerta cuando un producto queda con 2 o menos unidades.' },
                     { key: 'notify_payout_paid', label: 'Liquidación pagada', desc: 'Notificación de fondos transferidos a tu cuenta.' },
+                    { key: 'notify_test', label: 'Prueba', desc: 'Envío de un aviso de prueba para verificar el funcionamiento.' },
                   ].map(item => (
                     <label key={item.key} className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm">
                       <input 
@@ -601,8 +638,20 @@ export default function VSettings() {
                         onChange={(e) => setNotificationSettings(p => ({ ...p, [item.key]: e.target.checked }))}
                         className="w-4 h-4 text-black border-gray-300 rounded focus:ring-black mt-0.5 cursor-pointer"
                       />
-                      <div>
-                        <span className="text-sm font-bold text-gray-800">{item.label}</span>
+                      <div className="flex-1">
+                        <div className="flex justify-between items-start">
+                          <span className="text-sm font-bold text-gray-800">{item.label}</span>
+                          {item.key === 'notify_test' && (
+                            <button
+                              type="button"
+                              onClick={handleSendTestNotification}
+                              disabled={sendingTest}
+                              className="text-[10px] bg-black text-white hover:bg-gray-800 px-2.5 py-1 rounded font-bold transition-all disabled:opacity-50 select-none active:scale-95 ml-2"
+                            >
+                              {sendingTest ? 'Enviando...' : 'Enviar prueba'}
+                            </button>
+                          )}
+                        </div>
                         <p className="text-[11px] text-gray-500 mt-0.5 font-medium leading-relaxed">{item.desc}</p>
                       </div>
                     </label>

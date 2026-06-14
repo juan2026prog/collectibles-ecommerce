@@ -496,6 +496,7 @@ export default function VPromotions() {
                 <MultiSelectCheckbox title="Marcas" items={brands} selectedIds={editing.inclusions_brand_ids} onChange={(ids: string[]) => setEditing({ ...editing, inclusions_brand_ids: ids })} />
                 <MultiSelectCheckbox title="Categorías" items={categories} selectedIds={editing.inclusions_category_ids} onChange={(ids: string[]) => setEditing({ ...editing, inclusions_category_ids: ids })} />
                 <MultiSelectCheckbox title="Tags" items={tags} selectedIds={editing.inclusions_tag_ids} onChange={(ids: string[]) => setEditing({ ...editing, inclusions_tag_ids: ids })} />
+                <MultiSelectCheckbox title="Grupos de Productos" items={groups} selectedIds={editing.inclusions_group_ids} onChange={(ids: string[]) => setEditing({ ...editing, inclusions_group_ids: ids })} />
                 <div>
                   <label className="block text-xs font-bold text-gray-600 mb-1">IDs de Productos específicos (comas)</label>
                   <textarea className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none resize-none" rows={2} value={editing.inclusions_product_ids} onChange={e => setEditing({ ...editing, inclusions_product_ids: e.target.value })} placeholder="uuid-1, uuid-2..."></textarea>
@@ -510,6 +511,7 @@ export default function VPromotions() {
                 <MultiSelectCheckbox title="Excluir Marcas" items={brands} selectedIds={editing.exclusions_brand_ids} onChange={(ids: string[]) => setEditing({ ...editing, exclusions_brand_ids: ids })} />
                 <MultiSelectCheckbox title="Excluir Categorías" items={categories} selectedIds={editing.exclusions_category_ids} onChange={(ids: string[]) => setEditing({ ...editing, exclusions_category_ids: ids })} />
                 <MultiSelectCheckbox title="Excluir Tags" items={tags} selectedIds={editing.exclusions_tag_ids} onChange={(ids: string[]) => setEditing({ ...editing, exclusions_tag_ids: ids })} />
+                <MultiSelectCheckbox title="Excluir Grupos de Productos" items={groups} selectedIds={editing.exclusions_group_ids} onChange={(ids: string[]) => setEditing({ ...editing, exclusions_group_ids: ids })} />
                 <div>
                   <label className="block text-xs font-bold text-gray-600 mb-1">Excluir IDs de Productos específicos</label>
                   <textarea className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none resize-none" rows={2} value={editing.exclusions_product_ids} onChange={e => setEditing({ ...editing, exclusions_product_ids: e.target.value })} placeholder="uuid-1, uuid-2..."></textarea>

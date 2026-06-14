@@ -381,6 +381,40 @@ serve(async (req: Request) => {
           }
         }
       }
+    } else if (event_type === 'test_notification') {
+      if (!body_vendor_id) {
+        throw new Error("vendor_id is required for test_notification");
+      }
+
+      // Load vendor settings
+      const { data: settings, error: settingsErr } = await supabaseAdmin
+        .from('vendor_notification_settings')
+        .select('*')
+        .eq('vendor_id', body_vendor_id)
+        .maybeSingle();
+
+      if (settingsErr) throw settingsErr;
+
+      const numbers = (settings?.whatsapp_numbers || []) as any[];
+      const activeNumbers = numbers.filter(n => n.enabled && n.number);
+
+      if (activeNumbers.length === 0) {
+        throw new Error("No hay números de WhatsApp activos configurados para enviar la prueba.");
+      }
+
+      const { data: vendor } = await supabaseAdmin
+        .from('vendors')
+        .select('store_name')
+        .eq('id', body_vendor_id)
+        .maybeSingle();
+
+      const storeName = vendor?.store_name || 'tu tienda';
+      const message = `Notificación de prueba\n\nTu canal de WhatsApp Comercial para "${storeName}" está configurado correctamente y funcionando. ✅`;
+
+      for (const n of activeNumbers) {
+        const res = await dispatchWhatsApp(n.number, message);
+        await logNotification('vendor', body_vendor_id, n.number, res.status, res.error);
+      }
     }
 
     return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
