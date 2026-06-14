@@ -1,43 +1,46 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Package, Truck, Search, Eye } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function VOrders() {
+  const { user } = useAuth();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchOrders();
-  }, []);
+    if (user) {
+      fetchOrders();
+    } else {
+      setLoading(false);
+    }
+  }, [user]);
 
   async function fetchOrders() {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      // For this implementation we'll fetch the profile and matching vendor
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data: vendorData } = await supabase.from('vendors').select('id').eq('profile_id', user.id).single();
-      
-      // If we're testing or the vendor id is fixed:
-      const vId = vendorData?.id;
-      if (!vId) return;
-
       const { data, error } = await supabase
         .from('orders')
         .select(`
           *,
           order_items!inner(*)
         `)
-        .eq('order_items.vendor_id', vId)
+        .eq('order_items.vendor_id', user.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       setOrders(data || []);
     } catch (err) {
       console.error('Error fetching vendor orders:', err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
+
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-20 animate-fade-in">
