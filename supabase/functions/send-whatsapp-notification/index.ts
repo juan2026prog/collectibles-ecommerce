@@ -29,10 +29,10 @@ serve(async (req: Request) => {
 
     // 1. Authenticate Request
     const authHeader = req.headers.get('Authorization');
-    const serviceKeyToken = authHeader?.replace('Bearer ', '');
+    const token = authHeader?.replace('Bearer ', '');
     
     let isAuthorized = false;
-    if (serviceKeyToken === supabaseServiceKey) {
+    if (token === supabaseServiceKey) {
       isAuthorized = true;
     } else if (webhook_secret) {
       const { data: secretSetting } = await supabaseAdmin
@@ -42,6 +42,18 @@ serve(async (req: Request) => {
         .maybeSingle();
       if (secretSetting && secretSetting.value === webhook_secret) {
         isAuthorized = true;
+      }
+    }
+
+    // If it's a test notification, we allow the vendor user to authorize it using their own user JWT token
+    if (!isAuthorized && event_type === 'test_notification' && token) {
+      try {
+        const { data: { user: authUser } } = await supabaseAdmin.auth.getUser(token);
+        if (authUser && authUser.id === body_vendor_id) {
+          isAuthorized = true;
+        }
+      } catch (err) {
+        console.error("[WhatsApp Function] Failed to verify user token:", err);
       }
     }
 
