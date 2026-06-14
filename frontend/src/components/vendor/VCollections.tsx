@@ -59,12 +59,12 @@ export default function VCollections() {
 
   async function fetchProducts() {
     try {
-      // Exclusively fetch vendor's own published products
+      // Fetch all vendor's own products (published, active, pending, draft) except archived ones
       const { data, error } = await supabase
         .from('products')
         .select('id, title, base_price, status')
         .eq('vendor_id', user!.id)
-        .eq('status', 'published')
+        .neq('status', 'archived')
         .order('title');
       if (error) throw error;
       setProducts(data || []);
@@ -291,7 +291,20 @@ export default function VCollections() {
                       }} 
                       className="w-4 h-4 rounded text-primary-600 focus:ring-primary-500 border-gray-300" 
                     />
-                    <span className="text-xs font-semibold text-gray-800 flex-1">{p.title}</span>
+                    <span className="text-xs font-semibold text-gray-800 flex-1 flex items-center gap-2 flex-wrap">
+                      {p.title}
+                      {p.status !== 'published' && p.status !== 'active' && (
+                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${
+                          p.status === 'draft' ? 'bg-gray-100 text-gray-500 border border-gray-200' :
+                          p.status === 'pending_taxonomy_review' ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' :
+                          'bg-blue-50 text-blue-700 border border-blue-200'
+                        }`}>
+                          {p.status === 'draft' ? 'Borrador' :
+                           p.status === 'pending_taxonomy_review' ? 'Pendiente' :
+                           p.status}
+                        </span>
+                      )}
+                    </span>
                     <span className="text-[10px] font-black text-slate-400">${p.base_price}</span>
                   </label>
                 ))}
