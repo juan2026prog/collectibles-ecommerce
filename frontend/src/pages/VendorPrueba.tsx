@@ -54,6 +54,7 @@ export default function VendorPrueba() {
           brand:brands(id, name),
           categories:product_categories(category:categories(id, name)),
           variants:product_variants(id, sku, inventory_count),
+          images:product_images(id, url, alt_text, sort_order, is_primary),
           ml_catalog_links(last_sync_status, last_sync_error)
         `)
         .not('vendor_id', 'is', null)
