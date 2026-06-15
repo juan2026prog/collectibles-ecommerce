@@ -4,8 +4,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/admin/Toast';
 import { 
   Truck, Store, Package, AlertTriangle, CheckCircle, XCircle, 
-  MapPin, Plus, Trash2, Shield, Settings, Info, Check, RefreshCw, Sparkles 
+  MapPin, Plus, Trash2, Shield, Settings, Info, Check, RefreshCw, Sparkles, Eye 
 } from 'lucide-react';
+import VendorLabelPreviewModal from './VendorLabelPreviewModal';
 
 interface DispatchAddress {
   id: string;
@@ -98,6 +99,10 @@ export default function VShipping() {
   const [wizardLoading, setWizardLoading] = useState(false);
   const [wizardResult, setWizardResult] = useState<any>(null);
 
+  // 5. Vendor settings preview states
+  const [vendorObj, setVendorObj] = useState<any>(null);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+
   const departments = [
     'Artigas', 'Canelones', 'Cerro Largo', 'Colonia', 'Durazno', 
     'Flores', 'Florida', 'Lavalleja', 'Maldonado', 'Montevideo', 
@@ -108,33 +113,65 @@ export default function VShipping() {
   const loadData = async () => {
     if (!user) return;
     try {
-      // A. Cargar settings básicos del vendor
-      const { data: vendorData, error: vErr } = await supabase
-        .from('vendors')
-        .select('shipping_settings')
-        .eq('id', user.id)
-        .single();
-      if (vErr) throw vErr;
-      
-      if (vendorData?.shipping_settings) {
-        setShippingData(prev => ({ ...prev, ...vendorData.shipping_settings }));
+      // Run queries in parallel
+      const [vendorRes, connRes, addrRes, mlRes] = await Promise.all([
+        supabase
+          .from('vendors')
+          .select('store_name, logo_url, slug, contact_phone, pickup_address, shipping_settings')
+          .eq('id', user.id)
+          .single()
+          .then(res => ({ success: true, data: res.data, error: res.error }))
+          .catch(err => ({ success: false, data: null, error: err })),
+
+        supabase
+          .from('vendor_shipping_connections')
+          .select('*')
+          .eq('vendor_id', user.id)
+          .then(res => ({ success: true, data: res.data, error: res.error }))
+          .catch(err => ({ success: false, data: null, error: err })),
+
+        supabase
+          .from('vendor_dispatch_addresses')
+          .select('*')
+          .eq('vendor_id', user.id)
+          .order('is_default', { ascending: false })
+          .order('created_at', { ascending: false })
+          .then(res => ({ success: true, data: res.data, error: res.error }))
+          .catch(err => ({ success: false, data: null, error: err })),
+
+        supabase
+          .from('ml_seller_accounts')
+          .select('id, nickname')
+          .eq('vendor_id', user.id)
+          .maybeSingle()
+          .then(res => ({ success: true, data: res.data, error: res.error }))
+          .catch(err => ({ success: false, data: null, error: err }))
+      ]);
+
+      // Process vendor result
+      if (vendorRes.success && vendorRes.data) {
+        setVendorObj(vendorRes.data);
+        if (vendorRes.data.shipping_settings) {
+          setShippingData(prev => ({ ...prev, ...vendorRes.data.shipping_settings }));
+        }
+      } else if (vendorRes.error) {
+        console.error("Error loading vendor profile:", vendorRes.error);
+        try {
+          toast.error("Error al cargar perfil de vendedor");
+        } catch (e) {
+          console.error("Toast error:", e);
+        }
       }
 
-      // B. Cargar conexiones seguras
-      const { data: connData, error: cErr } = await supabase
-        .from('vendor_shipping_connections')
-        .select('*')
-        .eq('vendor_id', user.id);
-      if (cErr) throw cErr;
-
-      if (connData) {
+      // Process connections result
+      if (connRes.success && connRes.data) {
+        const connData = connRes.data;
         const newConns = { ...connections };
         connData.forEach(c => {
           if (newConns[c.provider]) {
             newConns[c.provider].status = c.connection_status;
             newConns[c.provider].account_name = c.account_name;
             newConns[c.provider].last_tested_at = c.last_tested_at;
-            // settings publicos
             if (c.settings) {
               Object.assign(newConns[c.provider], c.settings);
             }
@@ -144,28 +181,31 @@ export default function VShipping() {
           }
         });
         setConnections(newConns);
+      } else if (connRes.error) {
+        console.error("Error loading shipping connections:", connRes.error);
       }
 
-      // C. Cargar direcciones de despacho
-      const { data: addrData, error: addrErr } = await supabase
-        .from('vendor_dispatch_addresses')
-        .select('*')
-        .eq('vendor_id', user.id)
-        .order('is_default', { ascending: false })
-        .order('created_at', { ascending: false });
-      if (addrErr) throw addrErr;
-      setDispatchAddresses(addrData || []);
+      // Process dispatch addresses result
+      if (addrRes.success && addrRes.data) {
+        setDispatchAddresses(addrRes.data);
+      } else if (addrRes.error) {
+        console.error("Error loading dispatch addresses:", addrRes.error);
+      }
 
-      // D. Cargar cuenta de Mercado Libre conectada
-      const { data: mlData } = await supabase
-        .from('ml_seller_accounts')
-        .select('id, nickname')
-        .eq('vendor_id', user.id)
-        .maybeSingle();
-      setMlAccountConnected(!!mlData);
+      // Process ML account result
+      if (mlRes.success) {
+        setMlAccountConnected(!!mlRes.data);
+      } else if (mlRes.error) {
+        console.error("Error loading ML accounts:", mlRes.error);
+      }
 
     } catch (err: any) {
-      toast.error('Error al cargar datos logísticos: ' + err.message);
+      console.error("Critical error in loadData:", err);
+      try {
+        toast.error('Error al cargar datos logísticos: ' + err.message);
+      } catch (e) {
+        console.error("Toast error:", e);
+      }
     } finally {
       setLoading(false);
     }
@@ -445,13 +485,22 @@ export default function VShipping() {
           <h2 className="text-3xl font-bold text-gray-900 tracking-tight">Configuración de Logística (BYOC)</h2>
           <p className="text-sm text-gray-500 mt-2">Conectá tus propias cuentas logísticas para facturación, etiquetas y envíos directos.</p>
         </div>
-        <button 
-          onClick={saveBasicSettings} 
-          disabled={saving} 
-          className="bg-black text-white px-6 py-2.5 rounded-lg font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 text-sm shadow-sm"
-        >
-          Guardar Básicos
-        </button>
+        <div className="flex gap-2">
+          <button 
+            type="button"
+            onClick={() => setShowPreviewModal(true)}
+            className="flex items-center gap-1.5 bg-white border border-gray-300 text-gray-700 px-5 py-2.5 rounded-lg font-medium hover:bg-slate-50 transition-colors text-sm shadow-sm"
+          >
+            <Eye className="w-4 h-4 text-gray-500" /> Ver preview de etiqueta
+          </button>
+          <button 
+            onClick={saveBasicSettings} 
+            disabled={saving} 
+            className="bg-black text-white px-6 py-2.5 rounded-lg font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 text-sm shadow-sm"
+          >
+            Guardar Básicos
+          </button>
+        </div>
       </div>
 
       {/* SEGURIDAD INFO */}
@@ -909,6 +958,7 @@ export default function VShipping() {
             </div>
 
             <div className="mt-6 flex gap-3 border-t pt-4">
+              <button type="button" onClick={() => setShowPreviewModal(true)} className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded-lg font-bold">Vista previa etiqueta</button>
               <button type="button" onClick={() => testConnection('soydelivery')} disabled={saving} className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded-lg font-bold disabled:opacity-50">Probar Conexión</button>
               <button type="button" onClick={() => saveConnection('soydelivery')} disabled={saving} className="bg-[#FF4500] text-white px-4 py-2 rounded-lg font-bold hover:opacity-90 disabled:opacity-50">Guardar Conexión</button>
             </div>
@@ -916,6 +966,14 @@ export default function VShipping() {
         </div>
 
       </div>
+
+      {showPreviewModal && vendorObj && (
+        <VendorLabelPreviewModal
+          vendor={vendorObj}
+          defaultAddress={dispatchAddresses.find(a => a.is_default) || null}
+          onClose={() => setShowPreviewModal(false)}
+        />
+      )}
     </div>
   );
 }
