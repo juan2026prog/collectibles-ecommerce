@@ -117,10 +117,10 @@ export default function VPromotions() {
   async function fetchMetadata() {
     try {
       const [{ data: b }, { data: c }, { data: t }, { data: g }] = await Promise.all([
-        supabase.from('brands').select('id, name').or(`owner_vendor_id.eq.${user!.id},owner_vendor_id.is.null`),
+        supabase.from('brands').select('id, name').eq('owner_vendor_id', user!.id),
         supabase.from('categories').select('id, name').or(`owner_vendor_id.eq.${user!.id},owner_vendor_id.is.null`),
         supabase.from('tags').select('id, name'),
-        supabase.from('product_groups').select('id, name').or(`owner_vendor_id.eq.${user!.id},owner_vendor_id.is.null`)
+        supabase.from('product_groups').select('id, name').eq('owner_vendor_id', user!.id)
       ]);
       setBrands(b || []);
       setCategories(c || []);
