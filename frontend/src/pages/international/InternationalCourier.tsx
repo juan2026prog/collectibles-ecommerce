@@ -109,7 +109,7 @@ export default function InternationalCourier() {
             <div className="bg-blue-500/10 border border-blue-500/20 p-6 rounded-2xl text-center">
               <h4 className="text-blue-400 font-bold text-lg mb-2">Paso 1: Creá tu cuenta</h4>
               <p className="text-sm text-slate-300 mb-4">Abrí Urubox en una nueva pestaña y registrate. Te darán un número de Suite.</p>
-              <a href="https://urubox.com.uy" target="_blank" rel="noopener noreferrer" className="btn-primary w-full py-3 rounded-xl flex justify-center items-center gap-2 text-sm">
+              <a href="https://micasilla.urubox.com.uy/#/registro" target="_blank" rel="noopener noreferrer" className="btn-primary w-full py-3 rounded-xl flex justify-center items-center gap-2 text-sm">
                 Registrarse en Urubox <ExternalLink className="w-4 h-4" />
               </a>
             </div>
