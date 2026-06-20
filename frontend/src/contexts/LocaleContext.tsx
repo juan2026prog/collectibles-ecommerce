@@ -5,11 +5,15 @@ import { useAuth } from './AuthContext';
 type Language = 'es' | 'en';
 type Currency = 'UYU' | 'USD' | 'ARS';
 
+export type CountryCode = string;
+
 interface LocaleContextProps {
   language: Language;
   currency: Currency;
+  country: CountryCode;
   setLanguage: (lang: Language) => void;
   setCurrency: (curr: Currency) => void;
+  setCountry: (country: CountryCode) => void;
   formatPrice: (amount: number) => string;
   t: (key: string) => string;
 }
@@ -240,6 +244,14 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
   const [currency, setCurrencyState] = useState<Currency>(() => {
     return (localStorage.getItem('preferred_currency') as Currency) || 'UYU';
   });
+  const [country, setCountryState] = useState<CountryCode>(() => {
+    const stored = localStorage.getItem('preferred_country');
+    if (stored) return stored;
+    const initialCurrency = (localStorage.getItem('preferred_currency') as Currency) || 'UYU';
+    if (initialCurrency === 'UYU') return 'UY';
+    if (initialCurrency === 'ARS') return 'AR';
+    return 'LATAM';
+  });
 
   // Live exchange rates — cached in localStorage for 1 hour
   const [rates, setRates] = useState<Record<Currency, number>>(FALLBACK_RATES);
@@ -292,6 +304,11 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
             if (data.preferred_currency) {
               setCurrencyState(data.preferred_currency as Currency);
               localStorage.setItem('preferred_currency', data.preferred_currency);
+              
+              // Sync country from database-loaded currency preference
+              const mapped = data.preferred_currency === 'UYU' ? 'UY' : data.preferred_currency === 'ARS' ? 'AR' : 'LATAM';
+              setCountryState(mapped);
+              localStorage.setItem('preferred_country', mapped);
             }
           }
         });
@@ -306,9 +323,20 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
+  const setCountry = useCallback(async (c: CountryCode) => {
+    setCountryState(c);
+    localStorage.setItem('preferred_country', c);
+  }, []);
+
   const setCurrency = useCallback(async (curr: Currency) => {
     setCurrencyState(curr);
     localStorage.setItem('preferred_currency', curr);
+    
+    // Automatically map currency to country
+    const mapped = curr === 'UYU' ? 'UY' : curr === 'ARS' ? 'AR' : 'LATAM';
+    setCountryState(mapped);
+    localStorage.setItem('preferred_country', mapped);
+    
     if (user) {
       await supabase.from('profiles').update({ preferred_currency: curr }).eq('id', user.id);
     }
@@ -329,8 +357,8 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
   }, [language]);
 
   const value = useMemo(() => ({
-    language, currency, setLanguage, setCurrency, formatPrice, t
-  }), [language, currency, setLanguage, setCurrency, formatPrice, t]);
+    language, currency, country, setLanguage, setCurrency, setCountry, formatPrice, t
+  }), [language, currency, country, setLanguage, setCurrency, setCountry, formatPrice, t]);
 
   return (
     <LocaleContext.Provider value={value}>

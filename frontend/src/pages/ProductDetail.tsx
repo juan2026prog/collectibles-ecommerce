@@ -17,6 +17,7 @@ import { useSiteSettings } from '../hooks/useSiteSettings';
 import { formatUSD } from '../lib/formatters';
 import SoldByCard from '../components/SoldByCard';
 import AdminTechnicalPanel from '../components/AdminTechnicalPanel';
+import { calculateUruboxEstimate, getEstimatedWeightKg } from '../lib/urubox';
 
 export default function ProductDetail() {
   const { settings } = useSiteSettings();
@@ -192,22 +193,17 @@ export default function ProductDetail() {
   };
 
   // Cálculo Urubox en vivo
-  const getEstimatedWeightKg = (categoryName?: string) => {
-    const cat = (categoryName || '').toLowerCase();
-    if (cat.includes('funko')) return 0.4;
-    if (cat.includes('marvel legend') || cat.includes('hasbro')) return 0.7;
-    if (cat.includes('neca')) return 1.0;
-    if (cat.includes('hot toys')) return 3.0;
-    if (cat.includes('lego')) return 2.0;
-    return 1.0; // default
-  };
-
   const intlProduct = product?.international_products?.[0] || product?.international_products;
   const rawWeightGrams = intlProduct?.weight_grams;
   const weightKg = rawWeightGrams ? rawWeightGrams / 1000 : getEstimatedWeightKg(product?.category?.name);
-  const uruboxRate = 22; // USD per Kg
-  const uruboxEstimatedCost = intlProduct?.urubox_estimated_cost_usd || Number((weightKg * uruboxRate).toFixed(2));
-  const totalEstimatedCost = intlProduct?.total_estimated_cost_usd || Number(((intlProduct?.final_price_usd || product?.base_price) + uruboxEstimatedCost).toFixed(2));
+  
+  const uruboxEstimate = calculateUruboxEstimate({
+    weight_kg: weightKg,
+    category: product?.category?.name,
+    destination_type: 'no_local_delivery'
+  });
+  const uruboxEstimatedCost = uruboxEstimate.total_urubox_usd;
+  const totalEstimatedCost = Number(((intlProduct?.final_price_usd || product?.base_price) + uruboxEstimatedCost).toFixed(2));
 
   function addToCart(selectedOption?: any) {
     if (!selectedVariant) return;
@@ -260,7 +256,9 @@ export default function ProductDetail() {
       vendor_logo: product.vendor?.logo_url,
       tag_ids: product.product_tags?.map((pt: any) => pt.tag_id) || [],
       is_international: product.source_provider === 'zinc',
-      urubox_estimate: product.international_products?.urubox_estimated_cost_usd || 0
+      urubox_estimate: product.international_products?.urubox_estimated_cost_usd || 0,
+      weight_kg: weightKg,
+      category_name: product.category?.name
     });
 
     if (!selectedOption) {
@@ -542,15 +540,15 @@ export default function ProductDetail() {
                         <span className="font-medium text-white">{formatUSD(intlProduct?.final_price_usd || product.base_price)}</span>
                       </div>
                       <div className="flex justify-between items-center text-sm mb-2">
-                        <span className="text-slate-400">Estimación Urubox (Courier)</span>
+                        <span className="text-slate-400">Estimación Urubox</span>
                         <span className="font-medium text-white">{formatUSD(uruboxEstimatedCost)}</span>
                       </div>
                       <div className="flex justify-between items-center text-base font-bold bg-[#f00856]/10 p-2 rounded-lg text-[#f00856] border border-[#f00856]/20">
-                        <span>Costo Total Estimado</span>
+                        <span>Total estimado puesto en Uruguay</span>
                         <span>{formatUSD(totalEstimatedCost)}</span>
                       </div>
                       <p className="text-[10px] text-slate-500 mt-2 text-center">
-                        Basado en peso estimado ({weightKg}kg). El costo final puede variar según peso real y courier seleccionado.
+                        Estimación basada en peso informado o estimado. El costo final puede variar según el peso real del courier.
                       </p>
                     </div>
 

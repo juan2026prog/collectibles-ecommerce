@@ -13,6 +13,7 @@ import { URUGUAY_LOCATIONS, DEPARTAMENTOS, calculateShipping } from '../utils/ur
 import { getProductImage, resolveImage } from '../lib/imageUtils';
 import { usePromotions, evaluateItemDiscount, evaluateItemDiscountDetailed } from '../hooks/usePromotions';
 import { generateMetaEventId, trackInitiateCheckout, trackAddPaymentInfo } from '../lib/meta/metaPixel';
+import { calculateUruboxEstimate, getEstimatedWeightKg } from '../lib/urubox';
 
 function normalizeLocation(value?: string | null) {
   return (value || "")
@@ -117,7 +118,7 @@ export default function Checkout() {
   const [courierSuite, setCourierSuite] = useState('');
   const [courierAddress, setCourierAddress] = useState('');
 
-  const uruboxTotalEstimate = items.reduce((sum, item) => sum + ((item.urubox_estimate || 0) * item.quantity), 0);
+  // Calculated dynamically after form and shippingMethod states are declared
 
   const { promotions } = usePromotions();
   
@@ -220,6 +221,29 @@ export default function Checkout() {
   const [detectedKOficina, setDetectedKOficina] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [finalTotal, setFinalTotal] = useState(0);
+
+  // Destination type based on shipping form in Uruguay
+  let destinationType = 'no_local_delivery';
+  if (shippingMethod === 'delivery') {
+    if (form.department === 'Montevideo') {
+      destinationType = 'montevideo';
+    } else {
+      destinationType = 'interior_agency';
+    }
+  }
+
+  // Calculate total weight of international products
+  const totalIntlWeightKg = items.reduce((sum, item) => {
+    if (!item.is_international) return sum;
+    const itemWeight = item.weight_kg || getEstimatedWeightKg(item.category_name);
+    return sum + (itemWeight * item.quantity);
+  }, 0);
+
+  const uruboxEstimateResult = calculateUruboxEstimate({
+    weight_kg: totalIntlWeightKg,
+    destination_type: destinationType
+  });
+  const uruboxTotalEstimate = uruboxEstimateResult.total_urubox_usd;
 
   // DAC Multimodal state
   const [dacDeliveryMode, setDacDeliveryMode] = useState<'dac_home' | 'dac_agency'>('dac_home');
@@ -2363,13 +2387,30 @@ export default function Checkout() {
                     <div className="flex items-start gap-3">
                       <AlertCircle className="w-5 h-5 text-[#f00856] shrink-0" />
                       <p className="text-xs text-slate-300">
-                        <b className="text-[#f00856]">Importación Internacional:</b> El costo de traslado desde tu courier en USA hasta Uruguay no está incluido en el total.
+                        <b className="text-[#f00856]">Importación Internacional:</b> El costo de traslado desde tu courier en USA hasta Uruguay no está incluido en el total a pagar hoy.
                       </p>
                     </div>
-                    {internationalCourier === 'urubox' && uruboxTotalEstimate > 0 && (
-                      <div className="mt-2 pt-2 border-t border-[#f00856]/20 flex justify-between items-center">
-                        <span className="text-xs text-slate-300 font-medium">Estimación flete Urubox:</span>
-                        <span className="text-sm font-bold text-white">USD {uruboxTotalEstimate.toFixed(2)}</span>
+                    {internationalCourier === 'urubox' ? (
+                      <div className="mt-2 pt-2 border-t border-[#f00856]/20 space-y-1.5">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-slate-300 font-medium">Producto:</span>
+                          <span className="font-bold text-white">USD {items.reduce((sum, item) => sum + (item.is_international ? (item.price * item.quantity) : 0), 0).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-slate-300 font-medium">Urubox estimado:</span>
+                          <span className="font-bold text-white">USD {uruboxTotalEstimate.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm font-bold border-t border-[#f00856]/20 pt-1.5 text-white">
+                          <span>Total estimado:</span>
+                          <span className="text-[#f00856]">USD {(items.reduce((sum, item) => sum + (item.is_international ? (item.price * item.quantity) : 0), 0) + uruboxTotalEstimate).toFixed(2)}</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-2 text-center">
+                          Estimación basada en peso informado o estimado. El costo final puede variar según el peso real del courier.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="mt-2 pt-2 border-t border-[#f00856]/20 text-center text-xs text-amber-400 font-medium">
+                        El costo final dependerá del courier seleccionado.
                       </div>
                     )}
                   </div>

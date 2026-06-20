@@ -377,6 +377,8 @@ export interface CartItem {
   tag_ids?: string[];
   is_international?: boolean;
   urubox_estimate?: number;
+  weight_kg?: number;
+  category_name?: string;
 }
 
 export function useCart() {

@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { enqueueMlSyncEvent } from "../_shared/mercadolibre.ts";
+import { triggerZincVerificationIfNeeded } from "../_shared/order-payments.ts";
 
 // SEC-HIGH-01: Webhooks do NOT need CORS headers — they are server-to-server calls.
 // We include minimal headers only for the response format.
@@ -282,6 +283,14 @@ Deno.serve(async (req: Request) => {
               })
             }).catch((err: any) => console.error('MP email error:', err));
           }
+
+          // Trigger Zinc verification and automatic purchase for international items
+          await triggerZincVerificationIfNeeded(
+            supabaseAdmin,
+            supabaseUrl,
+            supabaseServiceKey,
+            orderId
+          );
         }
       } 
       // CANCELLED or REJECTED STATUS

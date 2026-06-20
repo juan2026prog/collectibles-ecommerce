@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useInternationalCartContext } from '../../contexts/InternationalCartContext';
 import { Trash2, Package, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
 import { useCurrency } from '../../contexts/CurrencyContext';
+import { calculateUruboxEstimate, getEstimatedWeightKg } from '../../lib/urubox';
 
 export default function InternationalCart() {
   const { items, removeItem, updateQuantity, totalUsd } = useInternationalCartContext();
@@ -9,9 +10,15 @@ export default function InternationalCart() {
   const navigate = useNavigate();
 
   // Calcular estimado Urubox global
-  const uruboxRate = 22; // USD per Kg
-  const totalWeightKg = items.reduce((acc, item) => acc + (item.weight_kg || 1) * item.quantity, 0);
-  const totalUruboxEstimated = totalWeightKg * uruboxRate;
+  const totalWeightKg = items.reduce((acc, item) => {
+    const itemWeight = item.weight_kg || getEstimatedWeightKg(item.international_data?.category);
+    return acc + itemWeight * item.quantity;
+  }, 0);
+  const uruboxEstimate = calculateUruboxEstimate({
+    weight_kg: totalWeightKg,
+    destination_type: 'no_local_delivery'
+  });
+  const totalUruboxEstimated = uruboxEstimate.total_urubox_usd;
   
   const totalWithCourier = totalUsd + totalUruboxEstimated;
 
@@ -40,8 +47,13 @@ export default function InternationalCart() {
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-4">
           {items.map((item) => {
-            const itemWeight = item.weight_kg || 1;
-            const itemUrubox = itemWeight * uruboxRate;
+            const itemWeight = item.weight_kg || getEstimatedWeightKg(item.international_data?.category);
+            const itemUruboxEstimate = calculateUruboxEstimate({
+              weight_kg: itemWeight,
+              category: item.international_data?.category,
+              destination_type: 'no_local_delivery'
+            });
+            const itemUrubox = itemUruboxEstimate.total_urubox_usd * item.quantity;
             return (
               <div key={item.variant_id} className="glass p-4 rounded-2xl flex gap-4 border border-white/5 relative">
                 <img src={item.image_url} alt={item.title} className="w-24 h-24 object-cover rounded-xl bg-slate-800" />
@@ -91,11 +103,11 @@ export default function InternationalCart() {
               
               <div className="bg-[#f00856]/10 p-3 rounded-lg border border-[#f00856]/20">
                 <div className="flex justify-between text-sm mb-1">
-                  <span className="text-[#f00856] font-bold">Estimación Courier (Urubox)</span>
+                  <span className="text-[#f00856] font-bold">Estimación Urubox (Courier)</span>
                   <span className="text-white font-bold">USD {totalUruboxEstimated.toFixed(2)}</span>
                 </div>
                 <p className="text-[10px] text-slate-400 leading-tight">
-                  Calculado a aprox. USD {uruboxRate}/kg. El costo final dependerá del peso real y de tu contrato con el courier.
+                  Estimación basada en peso informado o estimado. El costo final puede variar según el peso real del courier.
                 </p>
               </div>
               

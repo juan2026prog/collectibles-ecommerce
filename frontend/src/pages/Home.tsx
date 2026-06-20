@@ -10,6 +10,7 @@ import { ProductGridCard } from '../components/ProductGridCard';
 import { getProductImage } from '../lib/imageUtils';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import HeroSlider from '../components/HeroSlider';
+import BeybladeHeroBanner from '../components/BeybladeHeroBanner';
 
 // Lazy load heavy module components
 const MiniBannerCard = lazy(() => import('../components/home/MiniBannerCard'));
@@ -235,6 +236,41 @@ export default function Home() {
   const { settings } = useSiteSettings();
   const { banners, loading: bannersLoading } = useBanners();
   const { categories, loading: catsLoading } = useCategories();
+  const { country } = useLocale();
+
+  const [beybladeBanner, setBeybladeBanner] = useState<any>(null);
+  const [beybladeBannerLoading, setBeybladeBannerLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    setBeybladeBannerLoading(true);
+    
+    import('../lib/supabase').then(({ supabase }) => {
+      supabase
+        .schema('beyblade')
+        .from('hero_banners')
+        .select('*')
+        .eq('country_code', country)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+        .then(({ data, error }) => {
+          if (!isMounted) return;
+          if (error) {
+            console.error('Error fetching beyblade banner:', error);
+            setBeybladeBanner(null);
+          } else {
+            setBeybladeBanner(data || null);
+          }
+          setBeybladeBannerLoading(false);
+        });
+    });
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [country]);
   const { products: featured, loading: featuredLoading } = useProducts({ featured: true, limit: 10 });
   const { products: newArrivals, loading: newArrivalsLoading } = useProducts({ badge: 'new', limit: 8 });
   const { brands, loading: brandsLoading } = useBrands();
@@ -465,6 +501,12 @@ export default function Home() {
 
       /* ━━━━━━━━━━━ HERO CINEMATOGRÁFICO ━━━━━━━━━━━ */
       case 'hero': {
+        if (beybladeBannerLoading) {
+          return <BeybladeHeroBanner banner={{} as any} loading={true} />;
+        }
+        if (beybladeBanner) {
+          return <BeybladeHeroBanner banner={beybladeBanner} />;
+        }
         return (
           <HeroSlider banners={banners} loading={bannersLoading} />
         );

@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import { corsHeaders } from "../_shared/cors.ts";
 import { enqueueMlSyncEvent } from "../_shared/mercadolibre.ts";
+import { triggerZincVerificationIfNeeded } from "../_shared/order-payments.ts";
 
 async function createSignature(secretKey: string, xLogin: string, xDate: string, rawBody: string) {
   const encoder = new TextEncoder();
@@ -148,6 +149,13 @@ serve(async (req) => {
           headers: functionHeaders,
           body: JSON.stringify({ order_id }),
         }).catch((err) => console.error("Error triggering SoyDelivery:", err));
+
+        await triggerZincVerificationIfNeeded(
+          supabase,
+          Deno.env.get("SUPABASE_URL") ?? "",
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+          order_id
+        );
       }
     }
 

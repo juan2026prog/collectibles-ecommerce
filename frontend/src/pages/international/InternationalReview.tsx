@@ -4,6 +4,7 @@ import { ShieldCheck, ArrowRight, ArrowLeft, Loader2, RefreshCw, AlertTriangle, 
 import { useInternationalCartContext } from '../../contexts/InternationalCartContext';
 import { supabase } from '../../lib/supabase';
 import { useCurrency } from '../../contexts/CurrencyContext';
+import { calculateUruboxEstimate, getEstimatedWeightKg } from '../../lib/urubox';
 
 export default function InternationalReview() {
   const navigate = useNavigate();
@@ -28,10 +29,17 @@ export default function InternationalReview() {
     return null;
   }
 
-  const uruboxRate = 22; // USD per Kg
-  const totalWeightKg = items.reduce((acc, item) => acc + (item.weight_kg || 1) * item.quantity, 0);
+  const totalWeightKg = items.reduce((acc, item) => {
+    const itemWeight = item.weight_kg || getEstimatedWeightKg(item.international_data?.category);
+    return acc + itemWeight * item.quantity;
+  }, 0);
   const totalUsd = items.reduce((sum, i) => sum + (i.price_usd * i.quantity), 0);
-  const totalUruboxEstimated = totalWeightKg * uruboxRate;
+  
+  const uruboxEstimate = calculateUruboxEstimate({
+    weight_kg: totalWeightKg,
+    destination_type: 'no_local_delivery'
+  });
+  const totalUruboxEstimated = uruboxEstimate.total_urubox_usd;
   const totalWithCourier = totalUsd + totalUruboxEstimated;
 
   const handleLiveCheckAndSimulate = async () => {

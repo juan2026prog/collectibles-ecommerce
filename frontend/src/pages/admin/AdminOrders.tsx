@@ -30,6 +30,10 @@ export default function AdminOrders() {
   const [isBlocking, setIsBlocking] = useState(false);
   const [isSendingDiscount, setIsSendingDiscount] = useState(false);
 
+  // International Zinc tracking state
+  const [intlOrderItems, setIntlOrderItems] = useState<any[]>([]);
+  const [isProcessingZinc, setIsProcessingZinc] = useState(false);
+
   // DAC shipment details state
   const [dacShipment, setDacShipment] = useState<any | null>(null);
   const [loadingDac, setLoadingDac] = useState(false);
@@ -106,6 +110,7 @@ export default function AdminOrders() {
       setDacShipment(null);
       setOrderItems([]);
       setOrderSuborders([]);
+      setIntlOrderItems([]);
     }
   }, [selectedOrder]);
 
@@ -125,6 +130,22 @@ export default function AdminOrders() {
       
       if (itemsErr) throw itemsErr;
       setOrderItems(items || []);
+
+      // Load international items tracking
+      const itemIds = (items || []).map((i: any) => i.id);
+      if (itemIds.length > 0) {
+        const { data: intlItems, error: intlErr } = await supabase
+          .from('international_order_items')
+          .select('*')
+          .in('order_item_id', itemIds);
+        if (intlErr) {
+          console.error("Error loading international order items:", intlErr.message);
+        } else {
+          setIntlOrderItems(intlItems || []);
+        }
+      } else {
+        setIntlOrderItems([]);
+      }
 
       // Load suborders
       const { data: suborders, error: subordersErr } = await supabase
@@ -158,6 +179,72 @@ export default function AdminOrders() {
       console.error("Error loading DAC shipment:", err.message);
     } finally {
       setLoadingDac(false);
+    }
+  }
+
+  // Zinc Order Actions
+  async function handleRetryZincPurchase() {
+    if (!selectedOrder) return;
+    setIsProcessingZinc(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('zinc-verify-after-payment', {
+        body: { order_id: selectedOrder.id }
+      });
+      if (error) throw new Error(error.message);
+      toast.success("Compra en Zinc reintentada con éxito.");
+      loadOrderItemsAndSuborders(selectedOrder.id);
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Error al reintentar la compra: " + err.message);
+    } finally {
+      setIsProcessingZinc(false);
+    }
+  }
+
+  async function handleMoveToManualReview() {
+    if (!selectedOrder || orderItems.length === 0) return;
+    setIsProcessingZinc(true);
+    try {
+      const { error } = await supabase
+        .from('international_order_items')
+        .update({ 
+          purchase_status: 'manual_review', 
+          updated_at: new Date().toISOString() 
+        })
+        .in('order_item_id', orderItems.map((i: any) => i.id));
+        
+      if (error) throw error;
+      toast.success("Estado de compra cambiado a revisión manual.");
+      loadOrderItemsAndSuborders(selectedOrder.id);
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Error al cambiar estado: " + err.message);
+    } finally {
+      setIsProcessingZinc(false);
+    }
+  }
+
+  async function handleMarkDeliveredToCourier() {
+    if (!selectedOrder || orderItems.length === 0) return;
+    setIsProcessingZinc(true);
+    try {
+      const { error } = await supabase
+        .from('international_order_items')
+        .update({ 
+          purchase_status: 'delivered_to_courier', 
+          delivered_to_courier_at: new Date().toISOString(),
+          updated_at: new Date().toISOString() 
+        })
+        .in('order_item_id', orderItems.map((i: any) => i.id));
+        
+      if (error) throw error;
+      toast.success("Marcado como entregado al courier con éxito.");
+      loadOrderItemsAndSuborders(selectedOrder.id);
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Error al cambiar estado: " + err.message);
+    } finally {
+      setIsProcessingZinc(false);
     }
   }
 
@@ -701,6 +788,158 @@ export default function AdminOrders() {
                   </div>
                 )}
               </div>
+
+              {/* IMPORTACIÓN INTERNACIONAL (ZINC) PANEL */}
+              {intlOrderItems.length > 0 && (
+                <div className="space-y-4 bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                    🌎 Importación Internacional (Zinc)
+                  </h4>
+                  <div className="divide-y divide-gray-100 space-y-4">
+                    {intlOrderItems.map((intlItem) => {
+                      const orderItem = orderItems.find(oi => oi.id === intlItem.order_item_id);
+                      const productName = orderItem?.product?.title || orderItem?.variant?.product?.title || 'Producto Internacional';
+                      
+                      const merchantTotal = intlItem.zinc_response_payload?.merchant_order_total || intlItem.zinc_response_payload?.price || 0;
+                      const zincCostUsd = merchantTotal / 100;
+                      const realProfitUsd = zincCostUsd > 0 
+                        ? (intlItem.final_price_usd - zincCostUsd) 
+                        : (['purchased', 'shipped_to_courier', 'delivered_to_courier'].includes(intlItem.purchase_status) ? intlItem.expected_profit_usd : 0);
+
+                      // USA Courier address rendering
+                      const courier = selectedOrder.shipping_address?.international_courier || 'N/A';
+                      const suite = selectedOrder.shipping_address?.international_suite || '';
+                      const miamiAddr = selectedOrder.shipping_address?.international_miami_address;
+                      let miamiAddrStr = '';
+                      if (miamiAddr) {
+                        if (typeof miamiAddr === 'object') {
+                          miamiAddrStr = `${miamiAddr.fullName || ''}, ${miamiAddr.address1 || ''} ${miamiAddr.address2 || ''}, ${miamiAddr.city || ''}, ${miamiAddr.state || ''} ${miamiAddr.zip || ''}`;
+                        } else {
+                          miamiAddrStr = String(miamiAddr);
+                        }
+                      }
+
+                      return (
+                        <div key={intlItem.id} className="pt-3 first:pt-0 space-y-3">
+                          <div className="flex justify-between items-start">
+                            <div className="max-w-[70%]">
+                              <h5 className="font-bold text-sm text-gray-900 leading-tight truncate" title={productName}>{productName}</h5>
+                              <p className="text-[10px] text-gray-400 mt-0.5 font-mono">ID: {intlItem.order_item_id.slice(0, 8)}</p>
+                            </div>
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border shrink-0 ${
+                              intlItem.purchase_status === 'delivered_to_courier' ? 'bg-green-50 text-green-700 border-green-200' :
+                              intlItem.purchase_status === 'manual_review' ? 'bg-amber-50 text-amber-700 border-amber-250 animate-pulse' :
+                              intlItem.purchase_status === 'zinc_failed' ? 'bg-red-50 text-red-700 border-red-200' :
+                              'bg-blue-50 text-blue-700 border-blue-200'
+                            }`}>
+                              {intlItem.purchase_status.replace(/_/g, ' ')}
+                            </span>
+                          </div>
+
+                          {intlItem.zinc_error_message && (
+                            <div className="p-2.5 bg-red-50 border border-red-250 text-red-800 rounded-lg text-[11px] font-medium leading-relaxed">
+                              <b>Fallo:</b> {intlItem.zinc_error_message}
+                            </div>
+                          )}
+
+                          <div className="grid grid-cols-2 gap-3 text-[11px] bg-gray-50 p-3 rounded-lg border border-gray-150 font-medium">
+                            <div>
+                              <span className="text-[9px] font-bold text-gray-400 uppercase block">Zinc Order ID</span>
+                              <span className="font-mono text-gray-900 select-all font-semibold block truncate" title={intlItem.zinc_order_id || 'Sin emitir'}>
+                                {intlItem.zinc_order_id || 'Sin emitir'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-[9px] font-bold text-gray-400 uppercase block">Courier USA</span>
+                              <span className="text-gray-900 uppercase font-bold text-[10px] block truncate">
+                                {courier === 'urubox' ? `Urubox (Suite ${suite})` : 'Otro Courier'}
+                              </span>
+                            </div>
+                            {miamiAddrStr && (
+                              <div className="col-span-2 border-t border-gray-200 pt-2 mt-1">
+                                <span className="text-[9px] font-bold text-gray-400 uppercase block">Dirección USA</span>
+                                <span className="text-gray-700 text-[10px] break-words block">{miamiAddrStr}</span>
+                              </div>
+                            )}
+                            <div className="col-span-2 border-t border-gray-200 pt-2 mt-1 grid grid-cols-2 gap-3">
+                              <div>
+                                <span className="text-[9px] font-bold text-gray-400 uppercase block">Tracking USA</span>
+                                <span className="text-gray-900 font-bold font-mono select-all block truncate">
+                                  {intlItem.tracking_number ? (
+                                    intlItem.tracking_url ? (
+                                      <a href={intlItem.tracking_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                        {intlItem.tracking_number} 🔗
+                                      </a>
+                                    ) : intlItem.tracking_number
+                                  ) : 'Pendiente'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] font-bold text-gray-400 uppercase block">Carrier</span>
+                                <span className="text-gray-900 font-semibold block truncate">{intlItem.carrier || 'Pendiente'}</span>
+                              </div>
+                            </div>
+                            <div className="col-span-2 border-t border-gray-200 pt-2 mt-1 grid grid-cols-2 gap-3">
+                              <div>
+                                <span className="text-[9px] font-bold text-gray-400 uppercase block">Estimado en Courier</span>
+                                <span className="text-gray-900 font-semibold block truncate">
+                                  {intlItem.estimated_delivery_to_courier ? new Date(intlItem.estimated_delivery_to_courier).toLocaleDateString() : 'Pendiente'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] font-bold text-gray-400 uppercase block">Entregado en Courier</span>
+                                <span className="text-gray-900 font-semibold block truncate">
+                                  {intlItem.delivered_to_courier_at ? new Date(intlItem.delivered_to_courier_at).toLocaleDateString() : 'No entregado'}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="col-span-2 border-t border-gray-200 pt-2 mt-1 grid grid-cols-2 gap-3 bg-white p-2 rounded border border-gray-100">
+                              <div>
+                                <span className="text-[9px] font-bold text-gray-400 uppercase block">Ganancia Proyectada</span>
+                                <span className="text-emerald-700 font-black">USD {intlItem.expected_profit_usd.toFixed(2)}</span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] font-bold text-gray-400 uppercase block">Ganancia Real</span>
+                                <span className={`font-black ${realProfitUsd >= intlItem.expected_profit_usd ? 'text-green-700' : realProfitUsd > 0 ? 'text-amber-700' : 'text-red-700'}`}>
+                                  USD {realProfitUsd.toFixed(2)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* ACCIONES EXCLUSIVAS DE ADMINISTRADOR */}
+                          <div className="flex flex-col gap-2 pt-2">
+                            <div className="grid grid-cols-2 gap-2">
+                              <button
+                                onClick={handleRetryZincPurchase}
+                                disabled={isProcessingZinc}
+                                className="py-2 px-3 bg-[#f00856] hover:bg-[#f00856]/90 text-white font-bold rounded-lg text-center flex items-center justify-center gap-1.5 shadow-sm transition-colors text-xs disabled:opacity-50"
+                              >
+                                <RefreshCw className={`w-3.5 h-3.5 ${isProcessingZinc ? 'animate-spin' : ''}`} />
+                                Reintentar Compra Zinc
+                              </button>
+                              <button
+                                onClick={handleMoveToManualReview}
+                                disabled={isProcessingZinc}
+                                className="py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg flex items-center justify-center gap-1.5 shadow-sm transition-colors text-xs disabled:opacity-50"
+                              >
+                                Pasar a Revisión Manual
+                              </button>
+                            </div>
+                            <button
+                              onClick={handleMarkDeliveredToCourier}
+                              disabled={isProcessingZinc}
+                              className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg flex items-center justify-center gap-1.5 shadow-sm transition-colors text-xs disabled:opacity-50"
+                            >
+                              Marcar Entregado a Courier
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               
               {/* STATUS & COMPRA ASISTIDA */}
               <div className="space-y-4 bg-white p-4 rounded-xl border border-gray-100">

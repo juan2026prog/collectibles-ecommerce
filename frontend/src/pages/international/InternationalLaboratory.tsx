@@ -4,6 +4,7 @@ import { Helmet } from 'react-helmet-async';
 import { supabase } from '../../lib/supabase';
 import { useInternationalCartContext } from '../../contexts/InternationalCartContext';
 import { useNavigate } from 'react-router-dom';
+import { calculateUruboxEstimate, getEstimatedWeightKg } from '../../lib/urubox';
 import { useProducts } from '../../hooks/useData';
 import { formatUSD, formatUYU, formatPercent, formatDate } from '../../lib/formatters';
 
@@ -143,8 +144,13 @@ export default function InternationalLaboratory() {
                   const listPrice = raw.amazon_list_price_usd;
                   const discount = raw.amazon_discount_percent;
                   const isDraft = raw.status === 'draft';
-                  const weightKg = raw.weight_kg || 0.5;
-                  const uruboxEstimate = weightKg * 22; // $22/kg
+                  const weightKg = raw.weight_kg || (raw.weight_grams ? raw.weight_grams / 1000 : getEstimatedWeightKg(p.category?.name));
+                  const uruboxEstimateResult = calculateUruboxEstimate({
+                    weight_kg: weightKg,
+                    category: p.category?.name,
+                    destination_type: 'no_local_delivery'
+                  });
+                  const uruboxEstimate = uruboxEstimateResult.total_urubox_usd;
                   
                   return (
                     <div key={p.id} className="glass p-5 rounded-2xl border border-white/10 flex flex-col relative group transition-all hover:border-[#f00856]/50">
@@ -251,7 +257,13 @@ export default function InternationalLaboratory() {
                     const totalCost = amazonCost + usaShipping + zincFee + prexFee;
                     const subtotal = item.price_usd;
                     const margin = subtotal - totalCost;
-                    const uruboxEstimate = (item.weight_kg || 0.5) * 22;
+                    const itemWeight = item.weight_kg || getEstimatedWeightKg(item.international_data?.category);
+                    const itemUruboxEstimateResult = calculateUruboxEstimate({
+                      weight_kg: itemWeight,
+                      category: item.international_data?.category,
+                      destination_type: 'no_local_delivery'
+                    });
+                    const uruboxEstimate = itemUruboxEstimateResult.total_urubox_usd * item.quantity;
 
                     return (
                       <div key={item.variant_id} className="bg-black/40 p-6 rounded-2xl border border-white/5">
@@ -332,7 +344,7 @@ export default function InternationalLaboratory() {
             <div className="glass p-8 rounded-3xl border border-white/5">
               <h2 className="text-2xl font-black uppercase tracking-widest mb-6">Calculadora Urubox Interna</h2>
               <p className="text-slate-400 mb-8">
-                Esta es la matemática que usamos internamente para mostrar la estimación en el carrito.
+                Esta es la matemática oficial que usamos internamente para mostrar la estimación en el carrito y checkout.
               </p>
               
               <div className="max-w-md bg-black/40 p-6 rounded-2xl border border-white/5">
@@ -342,24 +354,24 @@ export default function InternationalLaboratory() {
                     <span>1.5 kg</span>
                   </div>
                   <div className="flex justify-between text-slate-400">
-                    <span>Flete Urubox ($22/kg):</span>
-                    <span>USD 33.00</span>
+                    <span>Flete Urubox ($19.90/kg):</span>
+                    <span>USD 29.85</span>
                   </div>
                   <div className="flex justify-between text-slate-400">
                     <span>Handling Urubox:</span>
                     <span>USD 5.00</span>
                   </div>
                   <div className="flex justify-between text-slate-400">
-                    <span>URSEC (Si aplica):</span>
-                    <span>10%</span>
+                    <span>URSEC (10% flete):</span>
+                    <span>USD 2.99</span>
                   </div>
                   <div className="flex justify-between text-slate-400">
                     <span>Envío UY (MVD/Interior):</span>
-                    <span>USD 5.00 + IVA</span>
+                    <span>USD 5.00 + IVA (USD 6.10)</span>
                   </div>
                   <div className="border-t border-white/10 pt-4 flex justify-between font-bold text-white text-lg">
-                    <span>Total Estimado:</span>
-                    <span className="text-[#f00856]">USD 43.00</span>
+                    <span>Total Estimado (c/ Envío):</span>
+                    <span className="text-[#f00856]">USD 43.94</span>
                   </div>
                 </div>
               </div>

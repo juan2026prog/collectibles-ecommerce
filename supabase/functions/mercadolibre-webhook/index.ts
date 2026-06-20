@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
+import { triggerZincVerificationIfNeeded } from "../_shared/order-payments.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -302,6 +303,13 @@ async function processEvent(supabase: any, eventId: string, fetchFn: typeof fetc
                local_order_id: existingOrder.id
              }
           });
+
+          await triggerZincVerificationIfNeeded(
+            supabase,
+            supabaseUrl,
+            supabaseServiceKey,
+            existingOrder.id
+          );
         }
       }
     }

@@ -123,6 +123,9 @@ export async function triggerPostPaymentActions(
       }),
     }).catch((err: any) => console.error("Email error:", err));
   }
+
+  // Trigger Zinc verification and automatic purchase for international items
+  await triggerZincVerificationIfNeeded(supabaseClient, supabaseUrl, supabaseServiceRoleKey, orderId);
 }
 
 export async function finalizeOrderIfNeeded(
@@ -219,4 +222,74 @@ export async function finalizeOrderIfNeeded(
 
   await triggerPostPaymentActions(supabaseClient, supabaseUrl, supabaseServiceRoleKey, orderId);
   return updatedOrder;
+}
+
+export async function triggerZincVerificationIfNeeded(
+  supabaseClient: any,
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  orderId: string
+) {
+  try {
+    // 1. Check if the order has international items
+    const { data: orderItems, error: itemsErr } = await supabaseClient
+      .from("order_items")
+      .select("id, product_id")
+      .eq("order_id", orderId);
+
+    if (itemsErr || !orderItems || orderItems.length === 0) return;
+
+    const itemIds = orderItems.map((i: any) => i.id);
+    const productIds = orderItems.map((i: any) => i.product_id).filter(Boolean);
+
+    let hasIntlItems = false;
+    if (productIds.length > 0) {
+      const { data: intlProducts } = await supabaseClient
+        .from("international_products")
+        .select("id")
+        .in("id", productIds);
+      if (intlProducts && intlProducts.length > 0) {
+        hasIntlItems = true;
+      }
+    }
+
+    if (!hasIntlItems && itemIds.length > 0) {
+      const { data: intlOrderItems } = await supabaseClient
+        .from("international_order_items")
+        .select("id")
+        .in("order_item_id", itemIds);
+      if (intlOrderItems && intlOrderItems.length > 0) {
+        hasIntlItems = true;
+      }
+    }
+
+    if (!hasIntlItems) {
+      console.log(`[Zinc Trigger] Order ${orderId} does not contain international products. Skipping.`);
+      return;
+    }
+
+    console.log(`[Zinc Trigger] Order ${orderId} has international products. Invoking zinc-verify-after-payment...`);
+
+    const functionHeaders = {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${serviceRoleKey}`,
+    };
+
+    const url = `${supabaseUrl}/functions/v1/zinc-verify-after-payment`;
+    await fetch(url, {
+      method: "POST",
+      headers: functionHeaders,
+      body: JSON.stringify({ order_id: orderId, is_auto: true }),
+    }).then(async (res) => {
+      if (!res.ok) {
+        console.error(`[Zinc Trigger] failed for order ${orderId}:`, await res.text());
+      } else {
+        console.log(`[Zinc Trigger] successfully invoked for order ${orderId}`);
+      }
+    }).catch((err) => {
+      console.error(`[Zinc Trigger] connection error for order ${orderId}:`, err);
+    });
+  } catch (err: any) {
+    console.error(`[Zinc Trigger] error:`, err);
+  }
 }
