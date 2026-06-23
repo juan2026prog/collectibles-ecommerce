@@ -19,7 +19,7 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
-  signUp: (email: string, password: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string) => Promise<{ data: any; error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signInWithGoogle: () => Promise<{ error: any }>;
   signInWithOtp: (email: string) => Promise<{ error: any }>;
@@ -72,8 +72,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signUp = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password });
-    return { error };
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    return { data, error };
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {

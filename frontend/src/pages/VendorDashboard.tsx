@@ -36,6 +36,7 @@ export default function VendorDashboard() {
 
   const [vendorData, setVendorData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
     if (!user) return;
@@ -89,13 +90,23 @@ export default function VendorDashboard() {
           </div>
           
           <h1 className="text-3xl font-bold text-gray-900 mb-4">Activar Panel Seller</h1>
-          <p className="text-gray-500 mb-10 max-w-md mx-auto">
+          <p className="text-gray-500 mb-6 max-w-md mx-auto">
             Tu cuenta ha sido habilitada por un administrador. Haz clic abajo para crear tu tienda en el ecosistema de Collectibles.
           </p>
+
+          {errorMsg && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-700 text-left">
+              <AlertTriangle className="w-5 h-5 flex-shrink-0 text-red-500" />
+              <div className="text-sm font-semibold">{errorMsg}</div>
+            </div>
+          )}
           
-          <button onClick={handleInitialize}
-            className="w-full bg-primary-600 text-white px-8 py-4 rounded-xl font-bold hover:bg-primary-700 transition-colors shadow-sm">
-            Inicializar Mi Tienda
+          <button 
+            onClick={handleInitialize}
+            disabled={loading}
+            className="w-full bg-primary-600 text-white px-8 py-4 rounded-xl font-bold hover:bg-primary-700 transition-colors shadow-sm disabled:opacity-50"
+          >
+            {loading ? 'Inicializando...' : 'Inicializar Mi Tienda'}
           </button>
         </div>
       </div>
@@ -105,10 +116,45 @@ export default function VendorDashboard() {
   async function handleInitialize() {
     if (!user?.id) return;
     setLoading(true);
+    setErrorMsg('');
     try {
-      const storeName = profile?.first_name ? `Tienda de ${profile.first_name}` : 'Mi Tienda';
+      // 1. Antes de crear, verificar si ya existe el vendor para este ID de usuario
+      const { data: existingVendor } = await supabase
+        .from('vendors')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (existingVendor) {
+        if (existingVendor.status === 'pending') {
+          await supabase.from('vendors').update({ status: 'active' }).eq('id', user.id);
+          const { data: activated } = await supabase.from('vendors').select('*').eq('id', user.id).single();
+          if (activated) setVendorData(activated);
+        } else {
+          setVendorData(existingVendor);
+        }
+        return;
+      }
+
+      // 2. Generar store_name dinámico y no usar nombres genéricos fijos
+      const timestamp = Math.floor(1000 + Math.random() * 9000);
+      const rawName = profile?.first_name ? profile.first_name : (user.email?.split('@')[0] || 'Seller');
+      const cleanName = rawName.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]+/g, ' ').trim();
+      const storeName = `Tienda-${cleanName.replace(/\s+/g, '-')}-${timestamp}`;
       const slug = storeName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + '-' + user.id.slice(0, 6);
       
+      // 3. Validar si el nombre ya existe por casualidad
+      const { data: nameConflict } = await supabase
+        .from('vendors')
+        .select('id')
+        .eq('store_name', storeName)
+        .maybeSingle();
+
+      if (nameConflict) {
+        setErrorMsg("La tienda ya existe. Elija otro nombre.");
+        return;
+      }
+
       // Step 1: Insert as pending to satisfy RLS policy
       const { error: insertError } = await supabase.from('vendors').insert({
         id: user.id,
@@ -122,7 +168,11 @@ export default function VendorDashboard() {
       
       if (insertError) {
         console.error('Error creating vendor:', insertError);
-        alert(`Error al inicializar tienda: ${insertError.message}`);
+        if (insertError.code === '23505') {
+          setErrorMsg("La tienda ya existe. Elija otro nombre.");
+        } else {
+          setErrorMsg(`Error al inicializar tienda: ${insertError.message}`);
+        }
       } else {
         // Step 2: Immediately update to active since they are already authorized
         await supabase.from('vendors').update({ status: 'active' }).eq('id', user.id);
@@ -132,7 +182,7 @@ export default function VendorDashboard() {
       }
     } catch (err) {
       console.error(err);
-      alert("Ocurrió un error inesperado al intentar activar tu tienda.");
+      setErrorMsg("Ocurrió un error inesperado al intentar activar tu tienda.");
     } finally {
       setLoading(false);
     }

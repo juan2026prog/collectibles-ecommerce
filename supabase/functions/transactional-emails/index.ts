@@ -279,6 +279,39 @@ serve(async (req: Request) => {
       return new Response(JSON.stringify({ success: true, email }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
     }
 
+    // 5. WELCOME EMAIL (Triggered on new user signup)
+    if (payload.type === 'welcome') {
+      const { email, first_name } = payload;
+      if (!email) return new Response("Missing email parameter", { status: 400, headers: corsHeaders });
+
+      const subject = `¡Te damos la bienvenida a Collectibles! 🎉`;
+      const name = first_name || 'Coleccionista';
+      const html = `
+        <div style="font-family: Arial, sans-serif; padding: 20px; background: #fafafa; border-radius: 8px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0;">
+          <div style="text-align: center; margin-bottom: 20px;">
+             <h2 style="color: #f00856; margin: 0;">¡Bienvenido a Collectibles!</h2>
+          </div>
+          <p>Hola <strong>${name}</strong>,</p>
+          <p>Te damos la bienvenida oficial a nuestra comunidad. Tu cuenta ha sido creada exitosamente.</p>
+          <p>A partir de ahora podrás:</p>
+          <ul>
+            <li>Explorar y comprar coleccionables únicos en nuestro marketplace</li>
+            <li>Gestionar tus compras y envíos en tu portal de cliente</li>
+            <li>Guardar tus productos favoritos en tu lista de deseos</li>
+          </ul>
+          <p>Esperamos que disfrutes tu experiencia en nuestra plataforma.</p>
+          <p style="margin-top:30px; border-top: 1px solid #e2e8f0; padding-top: 15px; color: #666; font-size: 12px; text-align: center;">
+             Si tienes alguna duda o necesitas asistencia, responde directamente a este correo.
+          </p>
+          <p style="text-align: center; font-weight: bold; margin-top: 10px;">El Equipo de Collectibles</p>
+        </div>
+      `;
+
+      await sendEmailAndLog(email, subject, html, 'welcome_email', payload.customer_id);
+
+      return new Response(JSON.stringify({ success: true, email }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
+    }
+
     return new Response(JSON.stringify({ ignored: true }), { headers: corsHeaders });
 
   } catch (error: any) {

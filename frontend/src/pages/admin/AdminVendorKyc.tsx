@@ -32,7 +32,7 @@ export default function AdminVendorKyc() {
         .from('vendors')
         .select(`
           id, store_name, tax_id, company_name, kyc_status, kyc_documents,
-          profiles:user_id(email, first_name, last_name)
+          profiles:profiles!vendors_id_fkey(email, first_name, last_name)
         `, { count: 'exact' });
 
       if (statusFilter !== 'all') {

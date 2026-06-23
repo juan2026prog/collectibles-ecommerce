@@ -94,22 +94,11 @@ export default function BeybladeHeroBanner({ banner, loading = false }: Beyblade
         )}
 
         {/* Title Group */}
-        <div className="space-y-4 w-full flex flex-col items-center">
+        <div className="space-y-2">
           {title_line1 && (
-            title_line1.trim().toUpperCase() === 'BEYBLADE X' ? (
-              <div className="flex justify-center items-center py-2 w-full max-w-[280px] sm:max-w-[440px] md:max-w-[580px] select-none">
-                <img 
-                  src="/images/beyblade_x_transparent.png" 
-                  alt="Beyblade X" 
-                  className="w-full h-auto object-contain select-none pointer-events-none"
-                  style={{ filter: 'invert(1) brightness(2) drop-shadow(0 0 20px rgba(0, 229, 255, 0.35))' }}
-                />
-              </div>
-            ) : (
-              <h1 className="text-5xl sm:text-7xl md:text-8xl font-black leading-none uppercase drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]">
-                {formatTitle1(title_line1)}
-              </h1>
-            )
+            <h1 className="text-5xl sm:text-7xl md:text-8xl font-black leading-none uppercase drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]">
+              {formatTitle1(title_line1)}
+            </h1>
           )}
           
           {title_line2 && (

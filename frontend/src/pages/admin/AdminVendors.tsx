@@ -64,7 +64,7 @@ export default function AdminVendors() {
 
       let query = supabase
         .from('vendors')
-        .select(`*, profiles:user_id(email, first_name, last_name)`, { count: 'exact' });
+        .select(`*, profiles:profiles!vendors_id_fkey(email, first_name, last_name)`, { count: 'exact' });
 
       if (searchTerm) {
         query = query.ilike('store_name', `%${searchTerm}%`);

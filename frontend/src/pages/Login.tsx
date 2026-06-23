@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { STORE_ISOLOGO_URL } from '../lib/brand';
 import { trackCompleteRegistration, generateMetaEventId } from '../lib/meta/metaPixel';
@@ -34,11 +35,32 @@ export default function Login() {
       if (error) setError(error.message);
       else navigate('/');
     } else {
-      const { error } = await signUp(email, password);
+      const { data, error } = await signUp(email, password);
       if (error) setError(error.message);
       else {
-        setSuccess('¡Cuenta creada! Revisá tu email para confirmar.');
         trackCompleteRegistration(generateMetaEventId(), { status: true, user_email: email });
+        
+        // Enviar email de bienvenida de forma asíncrona
+        try {
+          await supabase.functions.invoke('transactional-emails', {
+            body: {
+              type: 'welcome',
+              email: email,
+              customer_id: data?.user?.id
+            }
+          });
+        } catch (mailErr) {
+          console.error('Error enviando email de bienvenida:', mailErr);
+        }
+
+        if (data?.session) {
+          setSuccess('¡Cuenta creada con éxito! Redirigiendo...');
+          setTimeout(() => {
+            navigate('/');
+          }, 1500);
+        } else {
+          setSuccess('¡Cuenta creada! Por favor revisá tu email para confirmar tu cuenta e iniciar sesión.');
+        }
       }
     }
     setLoading(false);
