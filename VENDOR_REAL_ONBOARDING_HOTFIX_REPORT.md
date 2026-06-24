@@ -6,37 +6,40 @@
 
 ### 1. CAUSAS RAÍZ DETECTADAS Y SOLUCIONADAS
 
-#### A. Importación Parcial de Mercado Libre
-* **Causa Raíz:** Al intentar importar más de 1000 publicaciones (1093 en este caso), la llamada secuencial a la API de Mercado Libre desde la Edge Function de Supabase excedía el límite de tiempo de ejecución (timeout) de la plataforma serverless. Además, las ráfagas rápidas de peticiones sin pausa provocaban bloqueos intermitentes de tipo `429 Too Many Requests`.
+#### A. Importación Completa y Paginación de Mercado Libre
+* **Causa Raíz:** Al intentar importar más de 1000 publicaciones (1093 en este caso), la llamada secuencial a la API de Mercado Libre desde la Edge Function de Supabase excedía el límite de tiempo de ejecución (timeout) de la plataforma serverless. Además, la consulta inicial de búsqueda de ítems utilizando el parámetro `&status=` vacío en búsquedas generales causaba inconsistencias en la recuperación total de IDs, limitando el conteo de la API.
 * **Solución:** 
-  1. Se implementó una fragmentación (chunking) en el frontend (`VMercadoLibre.tsx`) para enviar y procesar las publicaciones en bloques de **50 items** secuenciales.
-  2. Se añadió soporte de reintento automático con **backoff exponencial** en la función HTTP de conexión (`customFetch` en la Edge Function) para amortiguar los límites de tasa (429) de la API de Mercado Libre.
-  3. Se muestra un indicador de progreso visual claro en el panel del vendor indicando el rango de ítems que se está importando (ej: `"Importando publicaciones 1 a 50 de 1093..."`).
+  1. Se implementó una paginación completa utilizando `search_type=scan` y `scroll_id` recursivo en la acción `list_item_ids` para recuperar los 1093 IDs de Mercado Libre sin colisiones de offset.
+  2. Se corrigió la construcción de parámetros para construir dinámicamente la cláusula de `status`. Si es "Todos los estados", se omite el parámetro de la petición, permitiendo recuperar activos, pausados y cerrados.
+  3. Se modificó el frontend (`VMercadoLibre.tsx`) para chunkear la importación en bloques de **50 items** secuenciales.
+  4. Se implementó un reporte detallado en tiempo real en el frontend con contadores para **Importados**, **Omitidos (Pausados o Sin Stock)**, **No Elegibles (Cerrados o Inactivos)** y **Con Error**.
 
 #### B. Estado de Taxonomía Pendiente
 * **Causa Raíz:** En la acción `curate_create` de la Edge Function, los productos creados a partir de Mercado Libre se guardaban por defecto en estado `draft` y con `is_active = false`, incluso cuando el vendedor asociaba el producto a una categoría y marca que ya estaban aprobadas por el administrador de Collectibles.
 * **Solución:** Se actualizó la lógica para verificar el estado de la marca y categoría seleccionadas. Si ambas ya están aprobadas (no tienen el estado `'pending_review'`), el producto maestro se inserta directamente en estado `'published'` y con `is_active = true`. Si alguna es nueva o está propuesta por el vendor y pendiente de aprobación, entonces el producto queda correctamente bloqueado en estado `'pending_taxonomy_review'` con `is_active = false`.
 
 #### C. Nombre del Vendedor Faltante ("Vendido por")
-* **Causa Raíz:** Las vistas públicas y de catálogo intentaban leer el campo `vendor.store_name` desde la base de datos o el carrito. Sin embargo, al añadir artículos al carrito desde las vistas de `Home`, `Shop`, `Wishlist` y `VendorStorefront`, no se estaban pasando los atributos relacionales del vendor al método `cart.addItem()`. Esto hacía que tanto el carrito lateral (`CartDrawer.tsx`) como el desglose y agrupamiento por paquetes en la pantalla de checkout (`Checkout.tsx`) no tuvieran la información del vendor, mostrando el fallback `"Vendedor"`.
-* **Solución:** Se actualizaron todas las llamadas a `cart.addItem()` en las páginas del cliente final para adjuntar las propiedades de vendor del producto (`vendor_id`, `vendor_name`, `vendor_slug`, `vendor_logo`). Asimismo, en la vista del catálogo (`ProductGridCard.tsx`), se agregó un distintivo superior destacado en color `#f00856` con el texto `"Vendido por: [Nombre de la tienda]"`.
+* **Causa Raíz:** Las vistas públicas y de catálogo intentaban leer el campo `vendor.store_name` desde la base de datos o el carrito. Sin embargo, al añadir artículos al carrito desde las vistas de `Home`, `Shop`, `Wishlist` y `VendorStorefront`, no se estaban pasando los atributos relacionales del vendor al método `cart.addItem()`. Además, el portal de clientes (`CustomerPortal.tsx`) no solicitaba la relación `vendor:vendors(store_name)` para los ítems de las órdenes pasadas.
+* **Solución:** 
+  1. Se actualizaron todas las llamadas a `cart.addItem()` en las páginas del cliente final para adjuntar las propiedades de vendor del producto (`vendor_id`, `vendor_name`, `vendor_slug`, `vendor_logo`).
+  2. En la vista del catálogo (`ProductGridCard.tsx`), se agregó un distintivo superior destacado en color `#f00856` con el texto `"Vendido por: [Nombre de la tienda]"`.
+  3. Se actualizó la consulta y renderizado del historial de órdenes en el portal de usuario (`CustomerPortal.tsx`) para recuperar y mostrar el nombre exacto de la tienda del vendor, evitando el fallback "Vendedor".
+  4. Se validó que el `vendor_id` viaja correctamente a `order_items` y `order_suborders` desde la Edge Function de creación de órdenes (`create-order/index.ts`).
 
 #### D. Dirección Vázquez 1418 en Envíos de Vendors Externos
-* **Causa Raíz:** El asistente wizard de envíos de Mercado Libre en el panel del vendor utilizaba simulaciones locales o el fallback global de la dirección física de Collectibles ("Vázquez 1418, Montevideo") cuando no se obtenía una dirección comercial de despacho del endpoint.
+* **Causa Raíz:** El asistente wizard de envíos de Mercado Libre en el panel del vendor utilizaba simulaciones locales o el fallback de la dirección física de Collectibles ("Vázquez 1418, Montevideo") cuando no se obtenía una dirección comercial de despacho del endpoint de perfil.
 * **Solución:** Se reemplazó la lógica simulada por una petición real al backend usando la nueva acción `get_shipping_onboarding`. Si la respuesta no contiene dirección comercial del vendor, se muestra el mensaje de advertencia requerido: `"No pudimos detectar dirección de despacho desde Mercado Libre. Configurá una dirección manualmente."`, impidiendo el uso de la dirección de la plataforma como fallback.
 
 ---
 
-### 2. DETECCIÓN DE LOGÍSTICA REAL DE MERCADO LIBRE
-El onboarding logístico consulta dos endpoints críticos usando las credenciales del seller:
-1. **`/users/me` o `/users/${seller_id}`:** Extrae la dirección comercial, ciudad y departamento del vendedor para establecer su ubicación real de origen.
-2. **`/users/${seller_id}/shipping_preferences`:** Lee el modo de envíos (`mode` = `me2`), el tipo de logística (`logistic_type` = `drop_off` / `cross_docking`), si tiene habilitado el retiro en tienda (`local_pick_up`), y etiquetas especiales como `flex` o `envios_rapidos`.
-
-#### Reglas de Sugerencia Aplicadas:
-* **Mercado Envíos Estándar (`me2`):** Sugiere activar **DAC** y **UES**.
-* **Flex / Envíos Rápidos:** Sugiere activar **SoyDelivery** y **UES Flex**.
-* **Retiro Local (`local_pick_up`):** Sugiere activar **Retiro en Local**.
-* **Sin coincidencia clara:** Muestra el mensaje `"Sugerencia pendiente de confirmar"`.
+### 2. DETECCIÓN DE LOGÍSTICA REAL DE MERCADO LIBRE Y ANÁLISIS DE PUBLICACIONES
+El onboarding logístico consulta los endpoints de perfil y preferencias del vendedor. Si estos fallan o devuelven información incompleta, el sistema cuenta con un **análisis de publicaciones por mayoría**:
+* Se consultan las primeras 50 publicaciones del seller en `ml_raw_items`.
+* Se extrae y computa la mayoría estadística de las configuraciones de envío:
+  * **Modo de envíos estándar (`me2`):** Sugiere DAC y UES.
+  * **Tags de envíos rápidos / flex:** Sugiere SoyDelivery y UES Flex.
+  * **Retiro habilitado (`local_pick_up`):** Sugiere Retiro en Local.
+* Si no hay coincidencias o no se detecta la ubicación real del vendedor, se solicita completarla manualmente y no se aplica Vázquez 1418.
 
 ---
 
@@ -57,6 +60,8 @@ El onboarding logístico consulta dos endpoints críticos usando las credenciale
 * `ml_raw_items`
 * `ml_import_logs`
 * `vendor_shipping_connections`
+* `order_items`
+* `order_suborders`
 
 #### Archivos Modificados:
 1. `supabase/functions/mercadolibre-sync/index.ts`
@@ -67,7 +72,8 @@ El onboarding logístico consulta dos endpoints críticos usando las credenciale
 6. `frontend/src/pages/Shop.tsx`
 7. `frontend/src/pages/VendorStorefront.tsx`
 8. `frontend/src/pages/Wishlist.tsx`
-9. `frontend/index.html`
+9. `frontend/src/pages/CustomerPortal.tsx`
+10. `frontend/index.html`
 
 ---
 
