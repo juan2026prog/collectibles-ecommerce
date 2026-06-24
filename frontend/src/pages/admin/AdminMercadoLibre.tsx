@@ -2012,20 +2012,48 @@ export default function AdminMercadoLibre() {
       {showImportModal && (
         <MLImportModal 
           onClose={() => setShowImportModal(false)} 
-          onImport={(ids) => {
+          onImport={async (ids) => {
             setShowImportModal(false);
-            // Trigger import action on edge function
             setActionLoading(true);
             setSyncLoading(true);
-            callSyncEdge({ action: 'import', ml_item_ids: ids }).then(data => {
-              toast.success(`Importación completada: ${data.count || data.results?.length || 0} ítems traídos a revisión.`);
+            
+            try {
+              const chunkSize = 15;
+              let totalImported = 0;
+              let totalErrors = 0;
+              
+              for (let i = 0; i < ids.length; i += chunkSize) {
+                const chunk = ids.slice(i, i + chunkSize);
+                try {
+                  const data = await callSyncEdge({ action: 'import', ml_item_ids: chunk });
+                  const chunkResults = data.results || [];
+                  let successCount = 0;
+                  chunkResults.forEach((r: any) => {
+                    if (r.status === 'success' && r.category !== 'no_elegible' && r.category !== 'omitido') {
+                      successCount++;
+                    } else if (r.status === 'error') {
+                      totalErrors++;
+                    }
+                  });
+                  totalImported += successCount;
+                } catch (chunkErr: any) {
+                  console.error(`Error importando bloque ${i} a ${i + chunk.length}:`, chunkErr);
+                  totalErrors += chunk.length;
+                }
+              }
+              
+              if (totalErrors > 0) {
+                toast.warning(`Importación completada: ${totalImported} ítems traídos a revisión (${totalErrors} errores/omitidos).`);
+              } else {
+                toast.success(`Importación completada: ${totalImported} ítems traídos a revisión.`);
+              }
               setRefreshTrigger(p => p + 1);
-            }).catch(e => {
-              toast.error('Error importando catálogo: ' + e.message);
-            }).finally(() => {
+            } catch (e: any) {
+              toast.error('Error general importando catálogo: ' + e.message);
+            } finally {
               setActionLoading(false);
               setSyncLoading(false);
-            });
+            }
           }}
           loading={actionLoading}
         />

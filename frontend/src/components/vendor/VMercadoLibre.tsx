@@ -390,7 +390,7 @@ export default function VMercadoLibre() {
       setImportProgress(`Importando ${itemIds.length} publicaciones a staging...`);
       setImportSummaryReport(null);
 
-      const chunkSize = 50;
+      const chunkSize = 15;
       let imported = 0;
       let skipped = 0;
       let noEligible = 0;
@@ -400,34 +400,45 @@ export default function VMercadoLibre() {
         const chunk = itemIds.slice(i, i + chunkSize);
         setImportProgress(`Importando publicaciones ${i + 1} a ${Math.min(i + chunkSize, itemIds.length)} de ${itemIds.length}...`);
 
-        const importRes = await fetch(`${supabaseUrl}/functions/v1/mercadolibre-sync`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ action: 'import', ml_item_ids: chunk, seller_id: account?.seller_id })
-        });
+        try {
+          const importRes = await fetch(`${supabaseUrl}/functions/v1/mercadolibre-sync`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ action: 'import', ml_item_ids: chunk, seller_id: account?.seller_id })
+          });
 
-        const importData = await importRes.json();
-        if (!importRes.ok || !importData.success) {
-          console.error(`Fallo en bloque ${i} a ${i + chunkSize}:`, importData.error);
-          errors += chunk.length;
-          continue;
-        }
-
-        const chunkResults = importData.results || [];
-        chunkResults.forEach((r: any) => {
-          if (r.status === 'error') {
-            errors++;
-          } else if (r.category === 'no_elegible') {
-            noEligible++;
-          } else if (r.category === 'omitido') {
-            skipped++;
-          } else {
-            imported++;
+          if (!importRes.ok) {
+            console.error(`Fallo HTTP en bloque ${i} a ${i + chunkSize}: ${importRes.status}`);
+            errors += chunk.length;
+            continue;
           }
-        });
+
+          const importData = await importRes.json();
+          if (!importData.success) {
+            console.error(`Fallo en lógica de bloque ${i} a ${i + chunkSize}:`, importData.error);
+            errors += chunk.length;
+            continue;
+          }
+
+          const chunkResults = importData.results || [];
+          chunkResults.forEach((r: any) => {
+            if (r.status === 'error') {
+              errors++;
+            } else if (r.category === 'no_elegible') {
+              noEligible++;
+            } else if (r.category === 'omitido') {
+              skipped++;
+            } else {
+              imported++;
+            }
+          });
+        } catch (chunkErr: any) {
+          console.error(`Fallo de conexión o parseo en bloque ${i} a ${i + chunkSize}:`, chunkErr);
+          errors += chunk.length;
+        }
       }
 
       setImportSummaryReport({
