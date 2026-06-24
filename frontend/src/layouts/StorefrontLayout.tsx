@@ -24,7 +24,7 @@ import { FacebookIcon, InstagramIcon, TwitterIcon, YoutubeIcon, TiktokIcon, What
 import { CurrencySelector } from '../components/CurrencySelector';
 import AdminModeToggle from '../components/AdminModeToggle';
 import React from 'react';
-import { useMetaPageTracking } from '../hooks/useMetaPageTracking';
+
 import { trackContact, trackFindLocation, generateMetaEventId } from '../lib/meta/metaPixel';
 
 // NAV_LINKS and MEGA_MENU are built dynamically inside the component
@@ -67,7 +67,8 @@ export default function StorefrontLayout() {
   const { brands: allBrands } = useBrands();
   const { settings, loaded: settingsLoaded } = useSiteSettings();
   
-  useMetaPageTracking();
+
+  // Meta Pixel is already tracked globally by MetaPixelTracker in App.tsx
 
   const getSocialUrl = (key: string, value: string) => {
     if (!value) return '#';

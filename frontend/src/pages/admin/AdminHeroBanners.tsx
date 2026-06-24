@@ -51,7 +51,6 @@ export default function AdminHeroBanners() {
     setLoading(true);
     try {
       const { data, error } = await supabase
-        .schema('beyblade')
         .from('hero_banners')
         .select('*')
         .order('country_code')
@@ -141,7 +140,6 @@ export default function AdminHeroBanners() {
 
       if (editing) {
         const { error } = await supabase
-          .schema('beyblade')
           .from('hero_banners')
           .update(payload)
           .eq('id', editing.id);
@@ -149,7 +147,6 @@ export default function AdminHeroBanners() {
         toast.success('Banner actualizado');
       } else {
         const { error } = await supabase
-          .schema('beyblade')
           .from('hero_banners')
           .insert(payload);
         if (error) throw error;
@@ -168,7 +165,6 @@ export default function AdminHeroBanners() {
     if (!(await confirm('¿Está seguro de que desea eliminar este banner?', { danger: true }))) return;
     try {
       const { error } = await supabase
-        .schema('beyblade')
         .from('hero_banners')
         .delete()
         .eq('id', id);
@@ -184,7 +180,6 @@ export default function AdminHeroBanners() {
   async function toggleActive(banner: BeybladeBanner) {
     try {
       const { error } = await supabase
-        .schema('beyblade')
         .from('hero_banners')
         .update({ is_active: !banner.is_active })
         .eq('id', banner.id);

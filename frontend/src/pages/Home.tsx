@@ -247,7 +247,6 @@ export default function Home() {
     
     import('../lib/supabase').then(({ supabase }) => {
       supabase
-        .schema('beyblade')
         .from('hero_banners')
         .select('*')
         .eq('country_code', country)
