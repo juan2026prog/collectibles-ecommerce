@@ -16,6 +16,8 @@ declare global {
     _fbq: any;
     metaDebug?: boolean;
     _metaPageViewTracked?: boolean;
+    _metaPixelInitialized?: boolean;
+    _metaPixelLastUserData?: string;
   }
 }
 
@@ -37,8 +39,18 @@ export function initPixel(userData?: any) {
   if (!canTrackMeta()) return;
   if (!window.fbq) return;
 
+  const userDataString = userData ? JSON.stringify(userData) : '{}';
+
+  // Evitar inicialización redundante si ya fue inicializado con la misma información de usuario
+  if (window._metaPixelInitialized && window._metaPixelLastUserData === userDataString) {
+    return;
+  }
+
   if (IS_DEBUG) console.log(`[Meta] Initializing Pixel ID: ${PIXEL_ID} with EMQ`, userData);
   window.fbq('init', PIXEL_ID, userData);
+
+  window._metaPixelInitialized = true;
+  window._metaPixelLastUserData = userDataString;
 }
 
 /**

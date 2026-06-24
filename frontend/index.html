@@ -54,6 +54,8 @@
       s.parentNode.insertBefore(t,s)}(window, document,'script',
       'https://connect.facebook.net/en_US/fbevents.js');
       fbq('init', '1623445247816011');
+      window._metaPixelInitialized = true;
+      window._metaPixelLastUserData = '{}';
       var initialEventId = 'meta_pageview_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
       window._metaInitialEventId = initialEventId;
       fbq('track', 'PageView', {}, { eventID: initialEventId });
