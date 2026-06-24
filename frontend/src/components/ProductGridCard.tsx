@@ -130,6 +130,12 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
         {product.source_provider === 'zinc' && (
           <div className="text-[10px] text-blue-400 font-bold uppercase mb-1">Vendido en Amazon</div>
         )}
+
+        {product.vendor && product.vendor_id && product.vendor_id !== 'platform' && (
+          <div className="text-[10px] text-[#f00856] font-black uppercase tracking-wider mb-1">
+            Vendido por: {product.vendor.store_name}
+          </div>
+        )}
         
         <Link to={`/p/${product.slug}`}>
           <h3 className="text-xs md:text-sm font-bold leading-tight line-clamp-2 min-h-[34px] text-white hover:text-[#f00856] transition-colors">

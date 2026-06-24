@@ -95,6 +95,7 @@ export default function VShipping() {
 
   // 4. ML Logistics Assistant Wizard
   const [mlAccountConnected, setMlAccountConnected] = useState(false);
+  const [mlSellerId, setMlSellerId] = useState<string | null>(null);
   const [showMlWizard, setShowMlWizard] = useState(false);
   const [wizardLoading, setWizardLoading] = useState(false);
   const [wizardResult, setWizardResult] = useState<any>(null);
@@ -141,7 +142,7 @@ export default function VShipping() {
 
         supabase
           .from('ml_seller_accounts')
-          .select('id, nickname')
+          .select('id, nickname, seller_id')
           .eq('vendor_id', user.id)
           .maybeSingle()
           .then(res => ({ success: true, data: res.data, error: res.error }))
@@ -193,10 +194,16 @@ export default function VShipping() {
       }
 
       // Process ML account result
-      if (mlRes.success) {
-        setMlAccountConnected(!!mlRes.data);
+      if (mlRes.success && mlRes.data) {
+        setMlAccountConnected(true);
+        setMlSellerId(mlRes.data.seller_id || null);
       } else if (mlRes.error) {
         console.error("Error loading ML accounts:", mlRes.error);
+        setMlAccountConnected(false);
+        setMlSellerId(null);
+      } else {
+        setMlAccountConnected(false);
+        setMlSellerId(null);
       }
 
     } catch (err: any) {
@@ -450,24 +457,55 @@ export default function VShipping() {
     }
   };
 
-  // ML Wizard Simulation (Based on Connected Accounts)
-  const runMlWizard = () => {
+  // ML Wizard (Based on Connected Accounts)
+  const runMlWizard = async () => {
     setWizardLoading(true);
     setShowMlWizard(true);
     setWizardResult(null);
-    setTimeout(() => {
-      // Simulate reading shipping modes/locations from the ML credentials
-      const simulatedResult = {
-        pickup: true,
-        shippingMode: 'me2',
-        logisticType: 'drop_off',
-        location: 'Montevideo, Uruguay',
-        shippingTags: ['flex', 'mercado_envios'],
-        address: 'Vázquez 1418, Montevideo'
-      };
-      setWizardResult(simulatedResult);
+
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const session = (await supabase.auth.getSession()).data.session;
+      const token = session?.access_token || '';
+
+      const res = await fetch(`${supabaseUrl}/functions/v1/mercadolibre-sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          action: 'get_shipping_onboarding', 
+          seller_id: mlSellerId 
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Error al obtener datos de onboarding');
+      }
+
+      setWizardResult({
+        pickup: data.pickup,
+        shippingMode: data.shippingMode,
+        logisticType: data.logisticType,
+        location: data.location || 'No detectado',
+        shippingTags: data.shippingTags || [],
+        address: data.address || null
+      });
+    } catch (err: any) {
+      toast.error('Error al detectar logística: ' + err.message);
+      setWizardResult({
+        pickup: false,
+        shippingMode: null,
+        logisticType: null,
+        location: 'No detectado',
+        shippingTags: [],
+        address: null
+      });
+    } finally {
       setWizardLoading(false);
-    }, 1800);
+    }
   };
 
   const toggleDay = (day: string) => {
@@ -652,23 +690,59 @@ export default function VShipping() {
                     <div className="bg-white p-4 rounded-lg border border-indigo-100 space-y-2 text-xs">
                       <div className="font-bold text-indigo-900 border-b border-indigo-50 pb-2 mb-2">Datos Detectados en Mercado Libre:</div>
                       <div className="grid grid-cols-2 gap-2 text-gray-700">
-                        <div><span className="font-semibold">Retiro Local:</span> ✓ Habilitado (local_pick_up)</div>
-                        <div><span className="font-semibold">Modo Envío:</span> Mercado Envíos (me2)</div>
-                        <div><span className="font-semibold">Logística:</span> Colecta / Drop-off (logistic_type)</div>
-                        <div><span className="font-semibold">Zona Vendedor:</span> Montevideo (seller location)</div>
-                        <div><span className="font-semibold">Dirección Comercial:</span> {wizardResult.address}</div>
-                        <div><span className="font-semibold">Tags Especiales:</span> flex, envios_rapidos (shipping tags)</div>
+                        <div><span className="font-semibold">Retiro Local:</span> {wizardResult.pickup ? '✓ Habilitado (local_pick_up)' : '✗ Deshabilitado'}</div>
+                        <div><span className="font-semibold">Modo Envío:</span> {wizardResult.shippingMode || 'No detectado'}</div>
+                        <div><span className="font-semibold">Logística:</span> {wizardResult.logisticType || 'No detectado'}</div>
+                        <div><span className="font-semibold">Zona Vendedor:</span> {wizardResult.location}</div>
+                        <div>
+                          <span className="font-semibold">Dirección Comercial:</span>{' '}
+                          {wizardResult.address ? (
+                            wizardResult.address
+                          ) : (
+                            <span className="text-red-500 font-bold block mt-1">
+                              ⚠️ No pudimos detectar dirección de despacho desde Mercado Libre. Configurá una dirección manualmente.
+                            </span>
+                          )}
+                        </div>
+                        <div><span className="font-semibold">Tags Especiales:</span> {wizardResult.shippingTags?.join(', ') || 'Ninguno'}</div>
                       </div>
                     </div>
                     
                     <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-xs text-emerald-800">
                       <div className="font-bold mb-1">Recomendamos Conectar:</div>
-                      <p className="mb-3">En base a tu ubicación en Montevideo y tu logística activa, te sugerimos activar los siguientes couriers en tu panel:</p>
-                      <div className="flex flex-wrap gap-2">
-                        <a href="#dac-form" className="bg-emerald-600 text-white font-bold px-3 py-1.5 rounded hover:bg-emerald-700">Conectar DAC</a>
-                        <a href="#ues-form" className="bg-emerald-600 text-white font-bold px-3 py-1.5 rounded hover:bg-emerald-700">Conectar UES</a>
-                        <a href="#soydelivery-form" className="bg-emerald-600 text-white font-bold px-3 py-1.5 rounded hover:bg-emerald-700">Conectar SoyDelivery</a>
-                      </div>
+                      <p className="mb-3">En base a tu ubicación en {wizardResult.location} y tu logística activa, te sugerimos activar los siguientes couriers en tu panel:</p>
+                      {(() => {
+                        const suggestions = [];
+                        const tags = wizardResult.shippingTags || [];
+                        const mode = wizardResult.shippingMode;
+                        const hasFlex = tags.includes('flex') || tags.includes('envios_rapidos');
+                        const pickup = wizardResult.pickup;
+
+                        if (mode === 'me2') {
+                          suggestions.push({ name: 'DAC (Recomendado)', href: '#dac-form' });
+                          suggestions.push({ name: 'UES (Estándar)', href: '#ues-form' });
+                        }
+                        if (hasFlex) {
+                          suggestions.push({ name: 'SoyDelivery (Flex)', href: '#soydelivery-form' });
+                        }
+                        if (pickup) {
+                          suggestions.push({ name: 'Retiro en Local', href: '#pickup-section' });
+                        }
+
+                        if (suggestions.length === 0) {
+                          return <div className="text-amber-700 font-bold">⚠️ Sugerencia pendiente de confirmar. Por favor revisa manualmente.</div>;
+                        }
+
+                        return (
+                          <div className="flex flex-wrap gap-2">
+                            {suggestions.map((s, idx) => (
+                              <a key={idx} href={s.href} className="bg-emerald-600 text-white font-bold px-3 py-1.5 rounded hover:bg-emerald-700">
+                                Conectar {s.name}
+                              </a>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 )}
@@ -800,7 +874,13 @@ export default function VShipping() {
                 <button onClick={() => disconnectProvider('dac')} className="text-[10px] text-red-600 font-bold mt-1 hover:underline">Desconectar</button>
               </div>
             ) : (
-              <span className="bg-gray-100 text-gray-500 text-[10px] font-bold px-2 py-0.5 rounded uppercase self-start">Desconectado</span>
+              (wizardResult?.shippingMode === 'me2') ? (
+                <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2.5 py-1 rounded uppercase tracking-wider self-start">
+                  DAC recomendado / pendiente conexión
+                </span>
+              ) : (
+                <span className="bg-gray-100 text-gray-500 text-[10px] font-bold px-2 py-0.5 rounded uppercase self-start">Desconectado</span>
+              )
             )}
           </div>
 
@@ -834,7 +914,9 @@ export default function VShipping() {
             
             <div className="mt-6 flex gap-3 border-t pt-4">
               <button type="button" onClick={() => testConnection('dac')} disabled={saving} className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded-lg font-bold disabled:opacity-50">Probar Conexión</button>
-              <button type="button" onClick={() => saveConnection('dac')} disabled={saving} className="bg-[#00388B] text-white px-4 py-2 rounded-lg font-bold hover:opacity-90 disabled:opacity-50">Guardar Conexión</button>
+              <button type="button" onClick={() => saveConnection('dac')} disabled={saving} className="bg-[#00388B] text-white px-4 py-2 rounded-lg font-bold hover:opacity-90 disabled:opacity-50">
+                {connections.dac.status === 'connected' ? 'Guardar Conexión' : 'Conectar DAC'}
+              </button>
             </div>
           </div>
         </div>

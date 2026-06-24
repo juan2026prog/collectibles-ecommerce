@@ -102,7 +102,22 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   function handleAddToCart(p: any) {
     const variant = p.variants?.[0];
     if (!variant) return;
-    cart.addItem({ product_id: p.id, variant_id: variant.id, quantity: 1, title: p.title, price: p.base_price + (variant.price_adjustment || 0), image: getProductImage(p), variant_name: variant.name, category_id: p.category_id, brand_id: p.brand_id, vendor_id: p.vendor_id, tag_ids: p.product_tags?.map((pt: any) => pt.tag_id) || [] });
+    cart.addItem({ 
+      product_id: p.id, 
+      variant_id: variant.id, 
+      quantity: 1, 
+      title: p.title, 
+      price: p.base_price + (variant.price_adjustment || 0), 
+      image: getProductImage(p), 
+      variant_name: variant.name, 
+      category_id: p.category_id, 
+      brand_id: p.brand_id, 
+      vendor_id: p.vendor_id, 
+      vendor_name: p.vendor?.store_name,
+      vendor_slug: p.vendor?.slug,
+      vendor_logo: p.vendor?.logo_url,
+      tag_ids: p.product_tags?.map((pt: any) => pt.tag_id) || [] 
+    });
   }
 
   function setFilter(key: string, value: string) {

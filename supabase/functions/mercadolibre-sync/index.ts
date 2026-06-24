@@ -469,6 +469,29 @@ Deno.serve(async (req) => {
         });
       }
     }
+    
+    let attempts = 0;
+    const maxAttempts = 3;
+    let delay = 1000;
+    while (attempts < maxAttempts) {
+      try {
+        const res = await fetch(url, init);
+        if (res.status === 429) {
+          console.warn(`[ML API 429] Rate limit hit on ${url}. Retrying in ${delay}ms...`);
+          await new Promise(r => setTimeout(r, delay));
+          attempts++;
+          delay *= 2;
+          continue;
+        }
+        return res;
+      } catch (err: any) {
+        if (attempts === maxAttempts - 1) throw err;
+        console.warn(`[ML API Error] Fetch failed on ${url}: ${err.message}. Retrying in ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+        attempts++;
+        delay *= 2;
+      }
+    }
     return fetch(url, init);
   };
 
@@ -637,6 +660,86 @@ Deno.serve(async (req) => {
         }));
 
         return allItems.map((it: any) => ({ ...it, category_name: catNameMap[it.category_id] || null }));
+    }
+
+    // ═══ ACTION: GET SHIPPING ONBOARDING ═══
+    if (action === 'get_shipping_onboarding') {
+        let meData: any = {};
+        let preferences: any = {};
+
+        if (isTestBypass) {
+          if (targetSellerId === '63700367' || !targetSellerId) {
+            meData = {
+              address: {
+                address: "Vázquez 1418",
+                city: "Montevideo",
+                state: "Montevideo"
+              }
+            };
+            preferences = {
+              local_pick_up: true,
+              mode: "me2",
+              logistic_type: "drop_off",
+              tags: ["flex", "mercado_envios"]
+            };
+          } else {
+            meData = {
+              address: {
+                address: "Av. Italia 3210",
+                city: "Montevideo",
+                state: "Montevideo"
+              }
+            };
+            preferences = {
+              local_pick_up: true,
+              mode: "me2",
+              logistic_type: "drop_off",
+              tags: ["flex"]
+            };
+          }
+        } else {
+          try {
+            const meRes = await customFetch(`https://api.mercadolibre.com/users/me`, { headers });
+            if (meRes.ok) {
+              meData = await meRes.json();
+            } else {
+              const fallbackRes = await customFetch(`https://api.mercadolibre.com/users/${targetSellerId}`, { headers });
+              if (fallbackRes.ok) meData = await fallbackRes.json();
+            }
+          } catch (e: any) {
+            console.error("Error fetching user data from ML:", e.message);
+          }
+
+          try {
+            const prefRes = await customFetch(`https://api.mercadolibre.com/users/${targetSellerId}/shipping_preferences`, { headers });
+            if (prefRes.ok) {
+              preferences = await prefRes.json();
+            }
+          } catch (e: any) {
+            console.error("Error fetching shipping preferences from ML:", e.message);
+          }
+        }
+
+        const address = meData.address?.address || null;
+        const city = meData.address?.city || null;
+        const location = city ? `${city}, Uruguay` : (meData.address?.state || null);
+        const pickup = preferences.local_pick_up || false;
+        const shippingMode = preferences.mode || null;
+        const logisticType = preferences.logistic_type || null;
+        const shippingTags = preferences.tags || [];
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            pickup,
+            shippingMode,
+            logisticType,
+            location,
+            shippingTags,
+            address: address ? `${address}${city ? `, ${city}` : ''}` : null
+          }),
+          { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
+        );
     }
 
     // ═══ ACTION: LIST ITEM IDS (Phase 1 — new frontend, just returns IDs) ═══
@@ -1577,7 +1680,8 @@ Deno.serve(async (req) => {
           }
         }
 
-        const initialProductStatus = (isBrandPending || isCategoryPending) ? 'pending_taxonomy_review' : 'draft';
+        const initialProductStatus = (isBrandPending || isCategoryPending) ? 'pending_taxonomy_review' : 'published';
+        const initialIsActive = (isBrandPending || isCategoryPending) ? false : true;
 
         const { data: newProd, error: prodErr } = await supabase
           .from('products')
@@ -1590,7 +1694,7 @@ Deno.serve(async (req) => {
             category_id: finalCategoryId,
             brand_id: resolvedBrandId,
             status: initialProductStatus, // set to pending_taxonomy_review if any taxonomy is pending
-            is_active: false,
+            is_active: initialIsActive,
             metadata
           })
           .select()

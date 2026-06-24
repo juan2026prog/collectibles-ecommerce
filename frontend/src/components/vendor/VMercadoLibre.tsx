@@ -382,23 +382,36 @@ export default function VMercadoLibre() {
 
       setImportProgress(`Importando ${itemIds.length} publicaciones a staging...`);
 
-      // 2. Import items to staging
-      const importRes = await fetch(`${supabaseUrl}/functions/v1/mercadolibre-sync`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ action: 'import', ml_item_ids: itemIds, seller_id: account?.seller_id })
-      });
+      const chunkSize = 50;
+      let totalImported = 0;
+      let totalFailed = 0;
 
-      const importData = await importRes.json();
-      if (!importRes.ok || !importData.success) {
-        throw new Error(importData.error || 'Fallo en la importación a staging');
+      for (let i = 0; i < itemIds.length; i += chunkSize) {
+        const chunk = itemIds.slice(i, i + chunkSize);
+        setImportProgress(`Importando publicaciones ${i + 1} a ${Math.min(i + chunkSize, itemIds.length)} de ${itemIds.length}...`);
+
+        const importRes = await fetch(`${supabaseUrl}/functions/v1/mercadolibre-sync`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ action: 'import', ml_item_ids: chunk, seller_id: account?.seller_id })
+        });
+
+        const importData = await importRes.json();
+        if (!importRes.ok || !importData.success) {
+          console.error(`Fallo en bloque ${i} a ${i + chunkSize}:`, importData.error);
+          totalFailed += chunk.length;
+          continue;
+        }
+
+        const successes = importData.results?.filter((r: any) => r.status === 'success')?.length || 0;
+        totalImported += successes;
+        totalFailed += (chunk.length - successes);
       }
 
-      const successes = importData.results?.filter((r: any) => r.status === 'success')?.length || 0;
-      toast.success(`Importación finalizada: ${successes} items ingestados en staging.`);
+      toast.success(`Importación finalizada: ${totalImported} éxitos, ${totalFailed} fallidos de ${itemIds.length} totales.`);
       loadItemsAndLinks();
       loadImportLogs();
     } catch (err: any) {
