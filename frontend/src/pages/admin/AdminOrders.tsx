@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { Eye, ChevronDown, Package, Truck, PhoneCall, X, Save, Ban, AlertTriangle, UserX, Gift, RefreshCw, FileText, Clock } from 'lucide-react';
+import { Eye, ChevronDown, Package, Truck, PhoneCall, X, Save, Ban, AlertTriangle, UserX, Gift, RefreshCw, FileText, Clock, Settings } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
 import { createDacShipment, getDacLabel, trackDacShipment } from '../../lib/dac';
@@ -38,6 +39,11 @@ export default function AdminOrders() {
   const [dacShipment, setDacShipment] = useState<any | null>(null);
   const [loadingDac, setLoadingDac] = useState(false);
   
+  // UES shipment details state
+  const [uesShipment, setUesShipment] = useState<any | null>(null);
+  const [loadingUes, setLoadingUes] = useState(false);
+  const [isUesActive, setIsUesActive] = useState(false);
+  
   // DAC Form inputs
   const [dacCustomerName, setDacCustomerName] = useState('');
   const [dacCustomerPhone, setDacCustomerPhone] = useState('');
@@ -65,26 +71,35 @@ export default function AdminOrders() {
   useEffect(() => { fetchOrders(); }, [statusFilter, channelFilter]);
 
   useEffect(() => {
-    async function checkDacActive() {
+    async function checkProvidersActive() {
       try {
-        const { data } = await supabase
+        const { data: dacData } = await supabase
           .from('delivery_providers_admin')
           .select('is_active')
           .eq('provider_key', 'dac')
           .maybeSingle();
-        if (data) {
-          setIsDacActive(data.is_active);
+        if (dacData) {
+          setIsDacActive(dacData.is_active);
+        }
+
+        const { data: uesData } = await supabase
+          .from('delivery_providers_admin')
+          .select('is_active')
+          .eq('provider_key', 'ues')
+          .maybeSingle();
+        if (uesData) {
+          setIsUesActive(uesData.is_active);
         }
       } catch (err) {
-        console.error("Error checking DAC active status:", err);
+        console.error("Error checking providers active status:", err);
       }
     }
-    checkDacActive();
+    checkProvidersActive();
   }, []);
 
   useEffect(() => {
     if (selectedOrder) {
-      loadDacShipmentForOrder(selectedOrder.id);
+      loadShipmentsForOrder(selectedOrder.id);
       
       // Prefill values from order address
       const addr = selectedOrder.shipping_address || {};
@@ -108,6 +123,7 @@ export default function AdminOrders() {
       loadOrderItemsAndSuborders(selectedOrder.id);
     } else {
       setDacShipment(null);
+      setUesShipment(null);
       setOrderItems([]);
       setOrderSuborders([]);
       setIntlOrderItems([]);
@@ -163,23 +179,33 @@ export default function AdminOrders() {
     }
   }
 
-  async function loadDacShipmentForOrder(orderId: string) {
+  async function loadShipmentsForOrder(orderId: string) {
     setLoadingDac(true);
+    setLoadingUes(true);
     try {
       const { data, error } = await supabase
         .from('shipments')
         .select('*')
-        .eq('order_id', orderId)
-        .eq('provider_key', 'dac')
-        .maybeSingle();
+        .eq('order_id', orderId);
 
       if (error) throw error;
-      setDacShipment(data || null);
+      
+      const shipments = data || [];
+      const dac = shipments.find((s: any) => s.provider_key === 'dac') || null;
+      const ues = shipments.find((s: any) => s.provider_key === 'ues') || null;
+      
+      setDacShipment(dac);
+      setUesShipment(ues);
     } catch (err: any) {
-      console.error("Error loading DAC shipment:", err.message);
+      console.error("Error loading shipments:", err.message);
     } finally {
       setLoadingDac(false);
+      setLoadingUes(false);
     }
+  }
+
+  async function loadDacShipmentForOrder(orderId: string) {
+    await loadShipmentsForOrder(orderId);
   }
 
   // Zinc Order Actions
@@ -1375,6 +1401,111 @@ export default function AdminOrders() {
                               </button>
                             </div>
                           </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* UES SHIPPING MODULE */}
+              {(() => {
+                const isUesOrder = selectedOrder.shipping_method?.toLowerCase().includes('ues') || 
+                                   orderSuborders.some((s: any) => s.shipping_method?.toLowerCase().includes('ues') || s.shipping_provider?.toLowerCase() === 'ues') ||
+                                   uesShipment !== null;
+
+                if (!isUesOrder) return null;
+
+                const isUesConfigError = uesShipment?.shipping_status === 'failed' && 
+                                         uesShipment?.provider_response?.status === 'provider_not_configured';
+
+                return (
+                  <div className="space-y-4 bg-white p-4 rounded-xl border border-teal-200 shadow-sm bg-teal-50/10 mt-4">
+                    <div className="flex items-center justify-between border-b border-teal-100 pb-2 mb-2">
+                      <h4 className="text-xs font-black text-teal-850 uppercase tracking-wider flex items-center gap-2">
+                        <Truck className="w-4 h-4 text-teal-600" /> Envíos UES
+                      </h4>
+                      {uesShipment && uesShipment.shipping_status !== 'failed' && (
+                        <span className="text-[9px] font-bold text-teal-600 bg-teal-50 border border-teal-150 px-2 py-0.5 rounded-full">
+                          UES Activo
+                        </span>
+                      )}
+                      {uesShipment?.shipping_status === 'failed' && (
+                        <span className="text-[9px] font-bold text-red-650 bg-red-50 border border-red-150 px-2 py-0.5 rounded-full">
+                          Fallo de Envío
+                        </span>
+                      )}
+                    </div>
+
+                    {loadingUes ? (
+                      <p className="text-xs text-gray-400 text-center py-4">Cargando datos de envío UES...</p>
+                    ) : (
+                      <>
+                        {isUesConfigError && (
+                          <div className="bg-red-50 border border-red-200 text-red-800 p-3 rounded-lg flex flex-col gap-2 text-xs">
+                            <div className="flex items-start gap-2">
+                              <AlertTriangle className="w-4 h-4 text-red-650 shrink-0 mt-0.5" />
+                              <div className="flex-1">
+                                <p className="font-bold">Error de Configuración de UES</p>
+                                <p className="text-red-750 text-[11px] mt-0.5">
+                                  La guía de UES no pudo crearse porque las credenciales globales de UES no están configuradas en la plataforma.
+                                </p>
+                              </div>
+                            </div>
+                            <Link
+                              to="/admin/logistics"
+                              className="self-start px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg text-[11px] flex items-center gap-1.5 transition-colors"
+                            >
+                              <Settings className="w-3.5 h-3.5" />
+                              <span>Configurar Proveedor UES</span>
+                            </Link>
+                          </div>
+                        )}
+
+                        {uesShipment && !isUesConfigError && (
+                          <div className="space-y-4 text-xs">
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-2 bg-gray-50 p-3 rounded-lg border border-gray-150 font-medium">
+                              <div>
+                                <span className="text-[9px] font-bold text-gray-400 uppercase block">Código Rastreo</span>
+                                <span className="font-mono text-gray-900 font-bold select-all">{uesShipment.tracking_code || 'N/A'}</span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] font-bold text-gray-400 uppercase block">Estado Envío</span>
+                                <div className="flex flex-col gap-1 mt-0.5">
+                                  <span className={`inline-block text-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    uesShipment.shipping_status === 'delivered' ? 'bg-green-100 text-green-800' :
+                                    uesShipment.shipping_status === 'failed' ? 'bg-red-100 text-red-800' :
+                                    'bg-blue-100 text-blue-800'
+                                  }`}>
+                                    {uesShipment.shipping_status === 'delivered' ? 'Entregado' :
+                                     uesShipment.shipping_status === 'failed' ? 'Fallo' : uesShipment.shipping_status || 'Generado'}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="col-span-2 border-t border-gray-250 pt-2 mt-1">
+                                <span className="text-[9px] font-bold text-gray-400 uppercase block">Dirección de Destino</span>
+                                <span className="text-gray-700 text-[10px]">
+                                  {uesShipment.customer_address}, {uesShipment.customer_city}, {uesShipment.customer_department}
+                                </span>
+                              </div>
+                            </div>
+
+                            {uesShipment.shipping_label_url && (
+                              <a
+                                href={uesShipment.shipping_label_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-center flex items-center justify-center gap-1.5 shadow-sm transition-colors text-xs"
+                              >
+                                <FileText className="w-4 h-4" />
+                                Descargar / Imprimir etiqueta UES
+                              </a>
+                            )}
+                          </div>
+                        )}
+
+                        {!uesShipment && (
+                          <p className="text-xs text-gray-500 italic">No hay información de despacho registrada en UES para esta orden.</p>
                         )}
                       </>
                     )}

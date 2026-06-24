@@ -28,7 +28,7 @@ const INITIAL_ZONES = {
 };
 
 export default function AdminLogistics() {
-  const [activeTab, setActiveTab] = useState<'soydelivery' | 'dac' | 'general'>('soydelivery');
+  const [activeTab, setActiveTab] = useState<'soydelivery' | 'dac' | 'general' | 'ues'>('soydelivery');
   
   // SoyDelivery state
   const [flexActive, setFlexActive] = useState(true);
@@ -69,6 +69,15 @@ export default function AdminLogistics() {
   const [dacUsaBolsa, setDacUsaBolsa] = useState(0);
   const [dacKOficinaOrigen, setDacKOficinaOrigen] = useState("800");
   const [dacKOficinaDestinoDefault, setDacKOficinaDestinoDefault] = useState<number>(601);
+
+  // UES Config States
+  const [uesEnabled, setUesEnabled] = useState(false);
+  const [uesUsername, setUesUsername] = useState('');
+  const [uesPassword, setUesPassword] = useState('');
+  const [uesApiKey, setUesApiKey] = useState('');
+  const [uesToken, setUesToken] = useState('');
+  const [uesEnv, setUesEnv] = useState<'uat' | 'production'>('production');
+  const [uesApiUrl, setUesApiUrl] = useState('https://api.ues.com.uy');
 
   // DAC Office Management States
   const [offices, setOffices] = useState<any[]>([]);
@@ -137,6 +146,29 @@ export default function AdminLogistics() {
         }
       } catch (err) {
         console.error("Error loading DAC provider config:", err);
+      }
+
+      // Load UES settings
+      try {
+        const { data: uesProv } = await supabase
+          .from('delivery_providers_admin')
+          .select('id, provider_key, provider_name, is_active, environment, api_url, username, settings')
+          .eq('provider_key', 'ues')
+          .maybeSingle();
+
+        if (uesProv) {
+          setUesEnabled(uesProv.is_active);
+          setUesUsername(uesProv.username || '');
+          setUesPassword('');
+          setUesEnv((uesProv.environment as any) || 'production');
+          setUesApiUrl(uesProv.api_url || 'https://api.ues.com.uy');
+          
+          const s = uesProv.settings || {};
+          setUesApiKey(s.apiKey || '');
+          setUesToken(s.token || '');
+        }
+      } catch (err) {
+        console.error("Error loading UES provider config:", err);
       }
     }
     loadSettings();
@@ -451,6 +483,29 @@ export default function AdminLogistics() {
 
       if (dacErr) throw dacErr;
 
+      // Save UES Settings
+      const uesUpdateData: any = {
+        is_active: uesEnabled,
+        username: uesUsername,
+        environment: uesEnv,
+        api_url: uesApiUrl,
+        settings: {
+          apiKey: uesApiKey,
+          token: uesToken
+        },
+        updated_at: new Date().toISOString()
+      };
+      if (uesPassword) {
+        uesUpdateData.password_encrypted = uesPassword;
+      }
+
+      const { error: uesErr } = await supabase
+        .from('delivery_providers')
+        .update(uesUpdateData)
+        .eq('provider_key', 'ues');
+
+      if (uesErr) throw uesErr;
+
       toast.success("Configuración de logística guardada correctamente");
     } catch (e: any) {
       console.error("[Logistics Save Error]:", e);
@@ -493,6 +548,16 @@ export default function AdminLogistics() {
           }`}
         >
           <Settings className="w-4 h-4" /> DAC / Grupo Agencia
+        </button>
+        <button
+          onClick={() => setActiveTab('ues')}
+          className={`px-4 py-2.5 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${
+            activeTab === 'ues'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Truck className="w-4 h-4" /> UES Envíos
         </button>
         <button
           onClick={() => setActiveTab('general')}
@@ -1186,6 +1251,64 @@ export default function AdminLogistics() {
               </code>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* TAB CONTENT: UES */}
+      {activeTab === 'ues' && (
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden animate-fade-in">
+          <div className="p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-teal-600 text-white flex items-center justify-center shadow-lg shadow-teal-500/20">
+                <Truck className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-black text-gray-900 text-lg">UES Envíos</h3>
+                <p className="text-xs text-gray-500 font-medium">Entregas a domicilio y pick centers a nivel nacional</p>
+              </div>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" className="sr-only peer" checked={uesEnabled} onChange={() => setUesEnabled(!uesEnabled)} />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-600"></div>
+            </label>
+          </div>
+
+          {uesEnabled && (
+            <div className="p-6 space-y-6">
+              <div className="bg-teal-50/50 p-6 rounded-xl border border-teal-100 space-y-4">
+                <h4 className="font-bold text-teal-900 text-sm">Credenciales de Integración UES</h4>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[11px] font-black text-teal-800 uppercase tracking-widest mb-1.5 font-sans">Usuario / Client ID</label>
+                    <input className="form-input w-full font-mono text-xs border-teal-200" value={uesUsername} onChange={e => setUesUsername(e.target.value)} placeholder="Ej: collectibles_ues" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-teal-800 uppercase tracking-widest mb-1.5 font-sans">Contraseña</label>
+                    <input type="password" style={{WebkitTextSecurity: 'disc'} as any} className="form-input w-full font-mono text-xs border-teal-200" value={uesPassword} onChange={e => setUesPassword(e.target.value)} placeholder="••••••••" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-teal-800 uppercase tracking-widest mb-1.5 font-sans">API Key</label>
+                    <input className="form-input w-full font-mono text-xs border-teal-200" value={uesApiKey} onChange={e => setUesApiKey(e.target.value)} placeholder="Ej: key_abc123" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-teal-800 uppercase tracking-widest mb-1.5 font-sans">Access Token</label>
+                    <input type="password" style={{WebkitTextSecurity: 'disc'} as any} className="form-input w-full font-mono text-xs border-teal-200" value={uesToken} onChange={e => setUesToken(e.target.value)} placeholder="Ej: tok_xyz" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-teal-800 uppercase tracking-widest mb-1.5 font-sans">URL de la API</label>
+                    <input className="form-input w-full font-mono text-xs border-teal-200" value={uesApiUrl} onChange={e => setUesApiUrl(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-black text-teal-800 uppercase tracking-widest mb-1.5 font-sans">Entorno</label>
+                    <select className="form-input w-full border-teal-200 bg-white" value={uesEnv} onChange={e => setUesEnv(e.target.value as any)}>
+                      <option value="uat">Testing (UAT)</option>
+                      <option value="production">Producción</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

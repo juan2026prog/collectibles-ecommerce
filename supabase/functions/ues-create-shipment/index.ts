@@ -141,11 +141,60 @@ serve(async (req) => {
       }
     }
 
-    // Since UES is currently simulated, fallback to mock strings if credentials are not configured globally
-    if (!username) username = 'global_ues_user';
-    if (!password) password = 'global_ues_password';
-    if (!apiKey) apiKey = 'global_ues_apikey';
-    if (!token) token = 'global_ues_token';
+    // Check if UES credentials are configured (from vendor or global)
+    if (!username || !apiKey || !token) {
+      console.log(`[UES] UES global credentials not configured. Failing shipment.`);
+      
+      // Update suborder status to failed
+      if (isSuborder) {
+        await supabase
+          .from("order_suborders")
+          .update({ 
+               shipping_provider: "UES",
+               shipping_status: "failed"
+          })
+          .eq("id", order_id);
+      } else {
+        await supabase
+          .from("orders")
+          .update({ 
+               shipping_provider: "UES"
+          })
+          .eq("id", order_id);
+      }
+
+      // Insert failed shipment row
+      const shipmentPayload = {
+          order_id: isSuborder ? parentOrderId : order_id,
+          suborder_id: isSuborder ? order_id : null,
+          provider_key: 'ues',
+          tracking_code: null,
+          shipping_label_url: null,
+          shipping_status: 'failed',
+          customer_name: `${addr.first_name || ''} ${addr.last_name || ''}`.trim(),
+          customer_phone: resolvedCustomerPhone || "099000000",
+          customer_address: addr.street || "",
+          customer_city: addr.city || "",
+          customer_department: addr.department || "",
+          package_weight: 1.0,
+          package_quantity: 1,
+          provider_response: { 
+            status: "provider_not_configured", 
+            error: "UES global credentials not configured",
+            created_at: new Date().toISOString() 
+          }
+      };
+      await supabase.from('shipments').insert(shipmentPayload);
+
+      return new Response(JSON.stringify({ 
+        success: false, 
+        status: "provider_not_configured",
+        error_message: "UES global credentials not configured" 
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
 
     // 4. Create shipment with UES API (Simulated/mocked ticket since it's a test environment)
     console.log(`[UES] Connecting to UES API using vendor credentials for order #${orderNumber}...`);

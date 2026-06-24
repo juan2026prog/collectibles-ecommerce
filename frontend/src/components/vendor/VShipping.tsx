@@ -32,7 +32,9 @@ export default function VShipping() {
     soydelivery: { active: false },
     correo_uruguayo: { active: false },
     pickup: { active: false, address: '', department: 'Montevideo', city: '', phone: '', hours: '', instructions: '' },
-    manual: { active: false, method_name: '', fixed_cost: '', instructions: '', estimated_time: '' }
+    manual: { active: false, method_name: '', fixed_cost: '', instructions: '', estimated_time: '' },
+    cutoff_time: '14:00',
+    dispatch_days: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']
   });
 
   // 2. Direcciones de Despacho (Remitente)
@@ -123,7 +125,9 @@ export default function VShipping() {
               fixed_cost: s.manual?.fixed_cost || '',
               instructions: s.manual?.instructions || '',
               estimated_time: s.manual?.estimated_time || ''
-            }
+            },
+            cutoff_time: s.cutoff_time || '14:00',
+            dispatch_days: Array.isArray(s.dispatch_days) ? s.dispatch_days : ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']
           });
         }
       } else if (vendorRes.error) {
@@ -689,6 +693,43 @@ export default function VShipping() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* SECCIÓN CONFIGURACIÓN OPERATIVA (DESPACHO) */}
+      <div className="border border-gray-200 rounded-xl p-6 bg-white shadow-sm space-y-4 animate-fade-in">
+        <div>
+          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <Settings className="w-5 h-5 text-gray-600" />
+            Configuración Operativa de Despacho
+          </h3>
+          <p className="text-xs text-gray-500 mt-1">Configurá tus horarios de procesamiento y los días que despachás mercadería.</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+          <div>
+            <label className="block font-bold text-gray-700 mb-1.5">Horario de Corte de Pedidos</label>
+            <input 
+              type="text" 
+              value={shippingData.cutoff_time || '14:00'} 
+              onChange={(e) => setShippingData(prev => ({ ...prev, cutoff_time: e.target.value }))} 
+              className="w-full px-3 py-2 border rounded-lg text-sm font-medium" 
+              placeholder="Ej: 14:00" 
+            />
+            <p className="text-[10px] text-gray-400 mt-1">Pedidos recibidos después de esta hora se despachan al siguiente día de despacho.</p>
+          </div>
+
+          <div>
+            <label className="block font-bold text-gray-700 mb-1.5">Días de Despacho Semanales</label>
+            <input 
+              type="text" 
+              value={Array.isArray(shippingData.dispatch_days) ? shippingData.dispatch_days.join(', ') : (shippingData.dispatch_days || 'Lunes a Viernes')} 
+              onChange={(e) => setShippingData(prev => ({ ...prev, dispatch_days: e.target.value.split(',').map(s => s.trim()) }))} 
+              className="w-full px-3 py-2 border rounded-lg text-sm font-medium" 
+              placeholder="Ej: Lunes, Martes, Miércoles, Jueves, Viernes" 
+            />
+            <p className="text-[10px] text-gray-400 mt-1">Separados por coma. Ejemplo: Lunes, Miércoles, Viernes</p>
+          </div>
+        </div>
       </div>
 
       {/* MERCADO LIBRE LOGISTICS ASSISTANT */}
