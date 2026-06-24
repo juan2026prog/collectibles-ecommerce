@@ -122,9 +122,6 @@ serve(async (req) => {
     }
 
     if (!usedVendor) {
-      if (resolvedVendorId) {
-        throw new Error("No se pudo generar la guía. El vendor no tiene una conexión logística activa.");
-      }
       const { data: settingsData } = await supabase.from('site_settings').select('key, value');
       const settings = Object.fromEntries((settingsData || []).map((s: any) => [s.key, s.value]));
 
@@ -137,6 +134,38 @@ serve(async (req) => {
       negocioId = settings['shipping_soydelivery_negocio_id'];
       negocioClave = settings['shipping_soydelivery_negocio_clave'];
       isSandbox = settings['shipping_soydelivery_sandbox'] === 'true';
+    }
+
+    // Centralized Logistics: Retrieve vendor's dispatch address as origin/remitente if possible
+    let originAddress = "Retiro Defecto";
+    let originCity = "Montevideo";
+    let originPhone = "099000000";
+
+    if (resolvedVendorId) {
+      const { data: defaultAddr } = await supabase
+        .from('vendor_dispatch_addresses')
+        .select('*')
+        .eq('vendor_id', resolvedVendorId)
+        .eq('is_default', true)
+        .maybeSingle();
+
+      if (defaultAddr) {
+        originAddress = defaultAddr.address;
+        originCity = defaultAddr.city;
+        originPhone = defaultAddr.phone || originPhone;
+      } else {
+        const { data: anyAddr } = await supabase
+          .from('vendor_dispatch_addresses')
+          .select('*')
+          .eq('vendor_id', resolvedVendorId)
+          .limit(1)
+          .maybeSingle();
+        if (anyAddr) {
+          originAddress = anyAddr.address;
+          originCity = anyAddr.city;
+          originPhone = anyAddr.phone || originPhone;
+        }
+      }
     }
 
     if (!apiId || !apiKey || !negocioId || !negocioClave) {
@@ -185,8 +214,8 @@ serve(async (req) => {
         Telefono_cliente: resolvedCustomerPhone || "099000000",
         Email_cliente: resolvedCustomerEmail || "",
         Negocio_sucursal_external_id: "1",
-        Ciudad_origen: "",
-        Calle_origen: "Retiro Defecto",
+        Ciudad_origen: originCity,
+        Calle_origen: originAddress,
         Numero_origen: "S/N",
         Apto_origen: "",
         Esquina_origen: "",

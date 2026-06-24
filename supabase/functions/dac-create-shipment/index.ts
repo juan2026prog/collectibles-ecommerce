@@ -198,12 +198,8 @@ serve(async (req) => {
       }
     }
 
-    // Fallback to Global only if it is NOT a vendor order (resolvedVendorId is null)
+    // Centralized Logistics Fallback: use global credentials if vendor connection is not configured/connected
     if (!usedVendor) {
-      if (resolvedVendorId) {
-        throw new Error("No se pudo generar la guía. El vendor no tiene una conexión logística activa.");
-      }
-
       const { data: provider, error: providerErr } = await supabase
         .from('delivery_providers')
         .select('*')
@@ -211,7 +207,7 @@ serve(async (req) => {
         .single();
 
       if (providerErr || !provider) {
-        throw new Error("No hay credenciales DAC válidas.");
+        throw new Error("No hay credenciales DAC globales configuradas en la plataforma.");
       }
       username = provider.username;
       password_encrypted = provider.password_encrypted;

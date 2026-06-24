@@ -106,14 +106,9 @@ export default function VOverview() {
       // 5. Build Alerts (KYC, ML, Logistics) & Onboarding
       const { data: vendorData } = await supabase
         .from('vendors')
-        .select('store_name, tax_id, kyc_status, vendor_payment_settings')
+        .select('store_name, tax_id, kyc_status, vendor_payment_settings, shipping_settings')
         .eq('id', vendorId)
         .single();
-
-      const { data: shippingConns } = await supabase
-        .from('vendor_shipping_connections')
-        .select('provider, connection_status')
-        .eq('vendor_id', vendorId);
 
       const { data: mlConn } = await supabase
         .from('ml_seller_accounts')
@@ -121,13 +116,23 @@ export default function VOverview() {
         .eq('vendor_id', vendorId)
         .maybeSingle();
 
-      const hasDac = !!shippingConns?.find(c => c.provider === 'dac' && c.connection_status === 'connected');
-      const hasSoyDelivery = !!shippingConns?.find(c => c.provider === 'soydelivery' && c.connection_status === 'connected');
+      let hasShipping = false;
+      if (vendorData?.shipping_settings) {
+        const s = vendorData.shipping_settings as any;
+        hasShipping = !!(
+          s.dac?.active ||
+          s.ues?.active ||
+          s.soydelivery?.active ||
+          s.correo_uruguayo?.active ||
+          s.pickup?.active ||
+          s.manual?.active
+        );
+      }
       
       const obProfile = !!vendorData?.store_name;
       const obKyc = !!vendorData?.tax_id && vendorData?.kyc_status !== 'pending'; // or just checking if they submitted documents
       const obBilling = !!vendorData?.vendor_payment_settings?.account_number;
-      const obShipping = hasDac || hasSoyDelivery;
+      const obShipping = hasShipping;
       const obML = mlConn?.status === 'active';
 
       setOnboarding({
