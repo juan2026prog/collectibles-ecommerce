@@ -64,7 +64,7 @@ export default function CustomerPortal() {
     async function loadData() {
       const orderSelect = `
         id, total_amount, currency, status, created_at, payment_method, customer_email,
-        order_items (quantity, unit_price, total_price, product_id, variant_id, products (title, slug, images:product_images(url)))
+        order_items (quantity, unit_price, total_price, product_id, variant_id, vendor_id, vendor:vendors(store_name), products (title, slug, images:product_images(url)))
       `;
 
       const { data: ordersData } = await supabase
@@ -298,6 +298,9 @@ export default function CustomerPortal() {
                         </Link>
                         <div className="flex-1 min-w-0">
                           <Link to={item.products?.slug ? `/p/${item.products.slug}` : '#'} className="font-bold text-white hover:text-primary-600 transition-colors line-clamp-1">{item.products?.title}</Link>
+                          {item.vendor?.store_name && item.vendor_id && item.vendor_id !== 'platform' && (
+                            <p className="text-[10px] font-black text-[#f00856] uppercase tracking-widest mt-0.5">Vendido por: {item.vendor.store_name}</p>
+                          )}
                           <p className="text-sm text-slate-400">Cant: {item.quantity} · {formatCurrencyPrice(item.unit_price)} c/u</p>
                         </div>
                       </div>

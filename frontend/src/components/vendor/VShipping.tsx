@@ -874,7 +874,7 @@ export default function VShipping() {
                 <button onClick={() => disconnectProvider('dac')} className="text-[10px] text-red-600 font-bold mt-1 hover:underline">Desconectar</button>
               </div>
             ) : (
-              (wizardResult?.shippingMode === 'me2') ? (
+              (wizardResult?.shippingMode === 'me2' || wizardResult?.logisticType === 'drop_off' || wizardResult?.shippingTags?.includes('mercado_envios')) ? (
                 <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2.5 py-1 rounded uppercase tracking-wider self-start">
                   DAC recomendado / pendiente conexión
                 </span>

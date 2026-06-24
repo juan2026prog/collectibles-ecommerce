@@ -577,7 +577,7 @@ Deno.serve(async (req) => {
             let scrollId = '';
             let hasMore = true;
             while (hasMore) {
-                const url = `https://api.mercadolibre.com/users/${userData.id}/items/search?search_type=scan&limit=100${scrollId ? `&scroll_id=${scrollId}` : ''}&status=${statusParam}`;
+                const url = `https://api.mercadolibre.com/users/${userData.id}/items/search?search_type=scan&limit=100${scrollId ? `&scroll_id=${scrollId}` : ''}${statusParam ? `&status=${statusParam}` : ''}`;
                 const searchRes = await customFetch(url, { headers });
                 const searchData = await searchRes.json();
                 
@@ -595,12 +595,12 @@ Deno.serve(async (req) => {
             // Standard offset pagination for limited fetches
             const maxLimit = limit;
             const firstBatch = Math.min(50, maxLimit);
-            const searchUrl = `https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${firstBatch}&offset=0&status=${statusParam}&sort=${sort}`;
+            const searchUrl = `https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${firstBatch}&offset=0${statusParam ? `&status=${statusParam}` : ''}&sort=${sort}`;
             const searchRes = await customFetch(searchUrl, { headers });
             const searchData = await searchRes.json();
             
             if (!searchRes.ok) throw new Error(searchData.message || 'Error en búsqueda inicial');
-
+ 
             allIds = searchData.results || [];
             totalItems = searchData.paging?.total || 0;
             const finalMaxLimit = Math.min(totalItems, maxLimit);
@@ -609,7 +609,7 @@ Deno.serve(async (req) => {
                 const searchUrls = [];
                 for (let offset = allIds.length; offset < finalMaxLimit; offset += 50) {
                     const bSize = Math.min(50, finalMaxLimit - offset);
-                    const url = `https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${bSize}&offset=${offset}&status=${statusParam}&sort=${sort}`;
+                    const url = `https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${bSize}&offset=${offset}${statusParam ? `&status=${statusParam}` : ''}&sort=${sort}`;
                     searchUrls.push(url);
                 }
                 for (let i = 0; i < searchUrls.length; i += 5) {
@@ -668,7 +668,10 @@ Deno.serve(async (req) => {
         let preferences: any = {};
 
         if (isTestBypass) {
-          if (targetSellerId === '63700367' || !targetSellerId) {
+          const isPlatformSeller = targetSellerId === '63700367' || !targetSellerId;
+          const isExternalVendor = targetVendorId !== null && targetVendorId !== 'service_role' && targetVendorId !== 'test_bypass';
+
+          if (isPlatformSeller && !isExternalVendor) {
             meData = {
               address: {
                 address: "Vázquez 1418",
@@ -723,10 +726,85 @@ Deno.serve(async (req) => {
         const address = meData.address?.address || null;
         const city = meData.address?.city || null;
         const location = city ? `${city}, Uruguay` : (meData.address?.state || null);
-        const pickup = preferences.local_pick_up || false;
-        const shippingMode = preferences.mode || null;
-        const logisticType = preferences.logistic_type || null;
-        const shippingTags = preferences.tags || [];
+        let pickup = preferences.local_pick_up || false;
+        let shippingMode = preferences.mode || null;
+        let logisticType = preferences.logistic_type || null;
+        let shippingTags = preferences.tags || [];
+
+        // Fallback: analyze shipping of imported publications by majority
+        if (!shippingMode && targetSellerId) {
+          try {
+            const { data: rawItems } = await supabase
+              .from('ml_raw_items')
+              .select('raw_payload')
+              .eq('seller_id', targetSellerId)
+              .limit(50);
+            
+            if (rawItems && rawItems.length > 0) {
+              const modeCounts: Record<string, number> = {};
+              const logisticCounts: Record<string, number> = {};
+              let localPickUpTrueCount = 0;
+              const tagCounts: Record<string, number> = {};
+
+              rawItems.forEach(it => {
+                const payload = it.raw_payload || {};
+                const ship = payload.shipping || {};
+                
+                const m = ship.mode;
+                if (m) modeCounts[m] = (modeCounts[m] || 0) + 1;
+
+                const l = ship.logistic_type;
+                if (l) logisticCounts[l] = (logisticCounts[l] || 0) + 1;
+
+                if (ship.local_pick_up === true) localPickUpTrueCount++;
+
+                const tags = ship.tags || [];
+                tags.forEach((t: string) => {
+                  tagCounts[t] = (tagCounts[t] || 0) + 1;
+                });
+              });
+
+              // Detect majority mode
+              let maxMode = null;
+              let maxModeCount = 0;
+              for (const [m, c] of Object.entries(modeCounts)) {
+                if (c > maxModeCount) {
+                  maxMode = m;
+                  maxModeCount = c;
+                }
+              }
+              if (maxMode) shippingMode = maxMode;
+
+              // Detect majority logistic type
+              let maxLogistic = null;
+              let maxLogisticCount = 0;
+              for (const [l, c] of Object.entries(logisticCounts)) {
+                if (c > maxLogisticCount) {
+                  maxLogistic = l;
+                  maxLogisticCount = c;
+                }
+              }
+              if (maxLogistic) logisticType = maxLogistic;
+
+              // Detect majority local pick up
+              if (localPickUpTrueCount > rawItems.length / 2) {
+                pickup = true;
+              }
+
+              // Detect tags that appear in at least 20% of items
+              const threshold = rawItems.length * 0.20;
+              const activeTags: string[] = [];
+              for (const [t, c] of Object.entries(tagCounts)) {
+                if (c >= threshold) {
+                  activeTags.push(t);
+                }
+              }
+              shippingTags = activeTags;
+            }
+          } catch (e: any) {
+            console.error("Error running majority logistics fallback analysis:", e.message);
+          }
+        }
 
         return new Response(
           JSON.stringify({
@@ -1060,9 +1138,28 @@ Deno.serve(async (req) => {
                    }
                 });
 
+                const mlStatus = item.status || 'active';
+                const stockQty = Number(item.available_quantity || 0);
+                
+                let itemCategory = "importado";
+                let itemReason = "active";
+                
+                if (mlStatus === 'closed' || mlStatus === 'deleted') {
+                  itemCategory = "no_elegible";
+                  itemReason = mlStatus;
+                } else if (stockQty === 0) {
+                  itemCategory = "omitido";
+                  itemReason = "out_of_stock";
+                } else if (mlStatus === 'paused') {
+                  itemCategory = "omitido";
+                  itemReason = "paused";
+                }
+
                 results.push({
                    ml_id: mlId,
                    status: "success",
+                   category: itemCategory,
+                   reason: itemReason,
                    raw_item_id: rawItemId,
                    matches_found: matchesToInsert.length,
                    classification: finalStatus
@@ -1084,7 +1181,13 @@ Deno.serve(async (req) => {
                 });
               } catch (_e) { /* ignore */ }
               
-              results.push({ ml_id: mlId, status: "error", error: e.message });
+              results.push({
+                 ml_id: mlId,
+                 status: "error",
+                 category: "error",
+                 reason: "network_error",
+                 error: e.message
+              });
             }
         }
 

@@ -37,6 +37,13 @@ export default function VMercadoLibre() {
   // Operation states
   const [actionLoading, setActionLoading] = useState(false);
   const [importProgress, setImportProgress] = useState('');
+  const [importSummaryReport, setImportSummaryReport] = useState<{
+    total: number;
+    imported: number;
+    skipped: number;
+    noEligible: number;
+    errors: number;
+  } | null>(null);
   
   // Import Filter states
   const [importStatusFilter, setImportStatusFilter] = useState('active');
@@ -381,10 +388,13 @@ export default function VMercadoLibre() {
       }
 
       setImportProgress(`Importando ${itemIds.length} publicaciones a staging...`);
+      setImportSummaryReport(null);
 
       const chunkSize = 50;
-      let totalImported = 0;
-      let totalFailed = 0;
+      let imported = 0;
+      let skipped = 0;
+      let noEligible = 0;
+      let errors = 0;
 
       for (let i = 0; i < itemIds.length; i += chunkSize) {
         const chunk = itemIds.slice(i, i + chunkSize);
@@ -402,16 +412,33 @@ export default function VMercadoLibre() {
         const importData = await importRes.json();
         if (!importRes.ok || !importData.success) {
           console.error(`Fallo en bloque ${i} a ${i + chunkSize}:`, importData.error);
-          totalFailed += chunk.length;
+          errors += chunk.length;
           continue;
         }
 
-        const successes = importData.results?.filter((r: any) => r.status === 'success')?.length || 0;
-        totalImported += successes;
-        totalFailed += (chunk.length - successes);
+        const chunkResults = importData.results || [];
+        chunkResults.forEach((r: any) => {
+          if (r.status === 'error') {
+            errors++;
+          } else if (r.category === 'no_elegible') {
+            noEligible++;
+          } else if (r.category === 'omitido') {
+            skipped++;
+          } else {
+            imported++;
+          }
+        });
       }
 
-      toast.success(`Importación finalizada: ${totalImported} éxitos, ${totalFailed} fallidos de ${itemIds.length} totales.`);
+      setImportSummaryReport({
+        total: itemIds.length,
+        imported,
+        skipped,
+        noEligible,
+        errors
+      });
+
+      toast.success(`Importación finalizada: ${imported} importados, ${skipped} omitidos, ${noEligible} no elegibles y ${errors} errores.`);
       loadItemsAndLinks();
       loadImportLogs();
     } catch (err: any) {
@@ -523,6 +550,47 @@ export default function VMercadoLibre() {
         <div className="bg-blue-650/10 border border-blue-500/20 p-4 rounded-3xl flex items-center gap-3 text-xs text-blue-400 animate-pulse">
           <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
           <span>{importProgress}</span>
+        </div>
+      )}
+
+      {importSummaryReport && (
+        <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-emerald-400" />
+              Resultado de la última importación
+            </h4>
+            <button 
+              onClick={() => setImportSummaryReport(null)}
+              className="text-xs text-slate-400 hover:text-white underline font-bold"
+            >
+              Cerrar Reporte
+            </button>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <div className="text-[10px] text-slate-400 uppercase font-black">Importados</div>
+              <div className="text-xl font-black text-emerald-400 mt-1">{importSummaryReport.imported}</div>
+            </div>
+            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <div className="text-[10px] text-slate-400 uppercase font-black">Omitidos</div>
+              <div className="text-xl font-black text-amber-400 mt-1">{importSummaryReport.skipped}</div>
+              <div className="text-[9px] text-slate-500 mt-0.5">Pausados / Sin stock</div>
+            </div>
+            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <div className="text-[10px] text-slate-400 uppercase font-black">No Elegibles</div>
+              <div className="text-xl font-black text-rose-400 mt-1">{importSummaryReport.noEligible}</div>
+              <div className="text-[9px] text-slate-500 mt-0.5">Cerrados / Inactivos</div>
+            </div>
+            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <div className="text-[10px] text-slate-400 uppercase font-black">Con Error</div>
+              <div className="text-xl font-black text-red-500 mt-1">{importSummaryReport.errors}</div>
+            </div>
+            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <div className="text-[10px] text-slate-400 uppercase font-black">Total Detectados</div>
+              <div className="text-xl font-black text-white mt-1">{importSummaryReport.total}</div>
+            </div>
+          </div>
         </div>
       )}
 
