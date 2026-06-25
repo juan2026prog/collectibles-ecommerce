@@ -30,6 +30,10 @@ export default function VMercadoLibre() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
+  // Fast Job Queue states
+  const [activeJob, setActiveJob] = useState<any | null>(null);
+  const [pollingIntervalId, setPollingIntervalId] = useState<any | null>(null);
+
   // Logs state
   const [logs, setLogs] = useState<any[]>(cachedLogs);
   const [loadingLogs, setLoadingLogs] = useState(cachedLogs.length === 0);
@@ -93,13 +97,82 @@ export default function VMercadoLibre() {
     if (account?.seller_id) {
       loadItemsAndLinks();
       loadImportLogs();
+      checkForActiveJobs();
     } else {
       setItems([]);
       setLogs([]);
       setLoadingItems(false);
       setLoadingLogs(false);
+      setActiveJob(null);
+      stopPollingJob();
     }
   }, [account, statusFilter]);
+
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalId) clearInterval(pollingIntervalId);
+    };
+  }, [pollingIntervalId]);
+
+  async function checkForActiveJobs() {
+    if (!account?.seller_id) return;
+    try {
+      const { data, error } = await supabase
+        .from('ml_import_jobs')
+        .select('*')
+        .eq('seller_id', account.seller_id)
+        .in('status', ['pending', 'running', 'paused'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (data) {
+        setActiveJob(data);
+        startPollingJob(data.id);
+      }
+    } catch (err) {
+      console.error("Error checking for active import jobs:", err);
+    }
+  }
+
+  function startPollingJob(jobId: string) {
+    stopPollingJob();
+    
+    const interval = setInterval(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('ml_import_jobs')
+          .select('*')
+          .eq('id', jobId)
+          .single();
+        
+        if (error) throw error;
+        
+        if (data) {
+          setActiveJob(data);
+          
+          if (['completed', 'partial', 'failed', 'cancelled'].includes(data.status)) {
+            clearInterval(interval);
+            setPollingIntervalId(null);
+            loadItemsAndLinks();
+            loadImportLogs();
+            toast.success(`Importación finalizada con estado: ${data.status}`);
+          }
+        }
+      } catch (err) {
+        console.error("Error polling job status:", err);
+      }
+    }, 3000);
+    
+    setPollingIntervalId(interval);
+  }
+
+  function stopPollingJob() {
+    if (pollingIntervalId) {
+      clearInterval(pollingIntervalId);
+      setPollingIntervalId(null);
+    }
+  }
 
   async function handlePublish(item: any) {
     const catId = selectedCategories[item.ml_item_id] || item.raw_payload?.normalized_metadata?.suggested_category_id;
@@ -348,112 +421,131 @@ export default function VMercadoLibre() {
     }
   }
 
-  // Import Listings initial trigger
+  // Control handlers for active job
+  async function handlePauseJob() {
+    if (!activeJob) return;
+    try {
+      const { error } = await supabase
+        .from('ml_import_jobs')
+        .update({ status: 'paused', updated_at: new Date().toISOString() })
+        .eq('id', activeJob.id);
+      if (error) throw error;
+      toast.success("Importación pausada.");
+      setActiveJob({ ...activeJob, status: 'paused' });
+    } catch (err: any) {
+      toast.error("Error al pausar: " + err.message);
+    }
+  }
+
+  async function handleResumeJob() {
+    if (!activeJob) return;
+    try {
+      const { error } = await supabase
+        .from('ml_import_jobs')
+        .update({ status: 'pending', updated_at: new Date().toISOString() })
+        .eq('id', activeJob.id);
+      if (error) throw error;
+      toast.success("Importación reanudada.");
+      setActiveJob({ ...activeJob, status: 'pending' });
+    } catch (err: any) {
+      toast.error("Error al reanudar: " + err.message);
+    }
+  }
+
+  async function handleCancelJob() {
+    if (!activeJob) return;
+    try {
+      const { error } = await supabase
+        .from('ml_import_jobs')
+        .update({ status: 'cancelled', completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq('id', activeJob.id);
+      if (error) throw error;
+      
+      await supabase
+        .from('ml_import_job_items')
+        .update({ status: 'cancelled' })
+        .eq('job_id', activeJob.id)
+        .eq('status', 'pending');
+      
+      toast.success("Importación cancelada.");
+      stopPollingJob();
+      setActiveJob(null);
+      loadItemsAndLinks();
+    } catch (err: any) {
+      toast.error("Error al cancelar: " + err.message);
+    }
+  }
+
+  async function handleRetryJobErrors() {
+    if (!activeJob) return;
+    try {
+      const { error: itemsErr } = await supabase
+        .from('ml_import_job_items')
+        .update({ status: 'pending', attempts: 0 })
+        .eq('job_id', activeJob.id)
+        .eq('status', 'failed');
+      if (itemsErr) throw itemsErr;
+
+      const { error: jobErr } = await supabase
+        .from('ml_import_jobs')
+        .update({ status: 'pending', error_items: 0, updated_at: new Date().toISOString() })
+        .eq('id', activeJob.id);
+      if (jobErr) throw jobErr;
+
+      toast.success("Reintentando publicaciones con error...");
+      setActiveJob({ ...activeJob, status: 'pending', error_items: 0 });
+      startPollingJob(activeJob.id);
+    } catch (err: any) {
+      toast.error("Error al reintentar: " + err.message);
+    }
+  }
+
+  // Import Listings initial trigger (Fast Job Queue)
   async function handleImportListings() {
     if (actionLoading) return;
     setActionLoading(true);
-    setImportProgress('Obteniendo IDs de publicaciones de Mercado Libre...');
+    setImportProgress('Iniciando importación en segundo plano...');
 
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const session = (await supabase.auth.getSession()).data.session;
       const token = session?.access_token || '';
 
-      // 1. Fetch publication IDs from Mercado Libre
-      const listRes = await fetch(`${supabaseUrl}/functions/v1/mercadolibre-sync`, {
+      // Call mercadolibre-sync to create import job
+      const res = await fetch(`${supabaseUrl}/functions/v1/mercadolibre-sync`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ 
-          action: 'list_item_ids', 
+          action: 'create_import_job', 
           limit: parseInt(importLimitFilter), 
           status: importStatusFilter,
           seller_id: account?.seller_id 
         })
       });
 
-      const listData = await listRes.json();
-      if (!listRes.ok || !listData.success) {
-        throw new Error(listData.error || 'Error al obtener publicaciones de Mercado Libre');
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Error al iniciar la importación');
       }
 
-      const itemIds = listData.item_ids || [];
-      if (itemIds.length === 0) {
-        toast.info('No se encontraron publicaciones activas en tu cuenta.');
-        setImportProgress('');
-        setActionLoading(false);
-        return;
+      toast.success(`Importación iniciada para ${data.total_items} publicaciones.`);
+      
+      // Load and poll job
+      const { data: jobData } = await supabase
+        .from('ml_import_jobs')
+        .select('*')
+        .eq('id', data.job_id)
+        .single();
+      
+      if (jobData) {
+        setActiveJob(jobData);
+        startPollingJob(jobData.id);
       }
-
-      setImportProgress(`Importando ${itemIds.length} publicaciones a staging...`);
-      setImportSummaryReport(null);
-
-      const chunkSize = 15;
-      let imported = 0;
-      let skipped = 0;
-      let noEligible = 0;
-      let errors = 0;
-
-      for (let i = 0; i < itemIds.length; i += chunkSize) {
-        const chunk = itemIds.slice(i, i + chunkSize);
-        setImportProgress(`Importando publicaciones ${i + 1} a ${Math.min(i + chunkSize, itemIds.length)} de ${itemIds.length}...`);
-
-        try {
-          const importRes = await fetch(`${supabaseUrl}/functions/v1/mercadolibre-sync`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ action: 'import', ml_item_ids: chunk, seller_id: account?.seller_id })
-          });
-
-          if (!importRes.ok) {
-            console.error(`Fallo HTTP en bloque ${i} a ${i + chunkSize}: ${importRes.status}`);
-            errors += chunk.length;
-            continue;
-          }
-
-          const importData = await importRes.json();
-          if (!importData.success) {
-            console.error(`Fallo en lógica de bloque ${i} a ${i + chunkSize}:`, importData.error);
-            errors += chunk.length;
-            continue;
-          }
-
-          const chunkResults = importData.results || [];
-          chunkResults.forEach((r: any) => {
-            if (r.status === 'error') {
-              errors++;
-            } else if (r.category === 'no_elegible') {
-              noEligible++;
-            } else if (r.category === 'omitido') {
-              skipped++;
-            } else {
-              imported++;
-            }
-          });
-        } catch (chunkErr: any) {
-          console.error(`Fallo de conexión o parseo en bloque ${i} a ${i + chunkSize}:`, chunkErr);
-          errors += chunk.length;
-        }
-      }
-
-      setImportSummaryReport({
-        total: itemIds.length,
-        imported,
-        skipped,
-        noEligible,
-        errors
-      });
-
-      toast.success(`Importación finalizada: ${imported} importados, ${skipped} omitidos, ${noEligible} no elegibles y ${errors} errores.`);
-      loadItemsAndLinks();
-      loadImportLogs();
     } catch (err: any) {
-      toast.error(err.message || 'Error durante la importación');
+      toast.error(err.message || 'Error al iniciar importación');
     } finally {
       setActionLoading(false);
       setImportProgress('');
@@ -558,9 +650,134 @@ export default function VMercadoLibre() {
       </div>
 
       {importProgress && (
-        <div className="bg-blue-650/10 border border-blue-500/20 p-4 rounded-3xl flex items-center gap-3 text-xs text-blue-400 animate-pulse">
+        <div className="bg-blue-650/10 border border-blue-500/20 p-4 rounded-3xl flex items-center gap-3 text-xs text-blue-400 animate-pulse animate-fade-in">
           <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
           <span>{importProgress}</span>
+        </div>
+      )}
+
+      {activeJob && (
+        <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-6 text-white shadow-xl relative overflow-hidden animate-fade-in">
+          <div className={`absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl opacity-20 ${
+            activeJob.status === 'running' ? 'bg-blue-500' :
+            activeJob.status === 'paused' ? 'bg-amber-500' :
+            'bg-slate-500'
+          }`} />
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4 relative z-10">
+            <div>
+              <h4 className="text-xs font-black uppercase tracking-wider flex items-center gap-2">
+                <RefreshCw className={`w-4 h-4 text-yellow-400 ${activeJob.status === 'running' && 'animate-spin'}`} />
+                Importación en Segundo Plano
+              </h4>
+              <p className="text-[10px] text-slate-400 mt-1 font-mono">Job ID: {activeJob.id}</p>
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-2 relative z-10">
+              <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full border ${
+                activeJob.status === 'running' ? 'bg-blue-950 text-blue-400 border-blue-800' :
+                activeJob.status === 'paused' ? 'bg-amber-950 text-amber-400 border-amber-800' :
+                'bg-slate-950 text-slate-400 border-slate-800'
+              }`}>
+                {activeJob.status === 'running' ? 'Procesando' :
+                 activeJob.status === 'paused' ? 'Pausado' : 'En cola / Pendiente'}
+              </span>
+
+              {activeJob.status === 'running' && (
+                <button
+                  onClick={handlePauseJob}
+                  className="bg-amber-500 hover:bg-amber-600 text-black text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  Pausar
+                </button>
+              )}
+
+              {activeJob.status === 'paused' && (
+                <button
+                  onClick={handleResumeJob}
+                  className="bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  Reanudar
+                </button>
+              )}
+
+              {activeJob.error_items > 0 && (activeJob.status === 'completed' || activeJob.status === 'partial' || activeJob.status === 'paused') && (
+                <button
+                  onClick={handleRetryJobErrors}
+                  className="bg-blue-650 hover:bg-blue-700 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  Reintentar Errores
+                </button>
+              )}
+
+              {['pending', 'running', 'paused'].includes(activeJob.status) && (
+                <button
+                  onClick={handleCancelJob}
+                  className="bg-red-650 hover:bg-red-750 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Progress Bar */}
+          {(() => {
+            const percent = activeJob.total_items > 0 
+              ? Math.round((activeJob.processed_items / activeJob.total_items) * 100) 
+              : 0;
+
+            const remaining = activeJob.total_items - activeJob.processed_items;
+            const estMinutes = Math.ceil(remaining / 24); 
+            const estTimeStr = estMinutes > 60 
+              ? `${Math.floor(estMinutes / 60)}h ${estMinutes % 60}m` 
+              : `${estMinutes} min`;
+
+            return (
+              <div className="space-y-3 relative z-10">
+                <div className="flex justify-between text-xs font-bold text-slate-300">
+                  <span>Progreso de sincronización</span>
+                  <span>{percent}% ({activeJob.processed_items} / {activeJob.total_items})</span>
+                </div>
+                
+                <div className="w-full bg-slate-950 rounded-full h-3 border border-slate-800 overflow-hidden">
+                  <div 
+                    className="bg-gradient-to-r from-yellow-400 to-[#FFE600] h-full rounded-full transition-all duration-500" 
+                    style={{ width: `${percent}%` }}
+                  />
+                </div>
+
+                {activeJob.status === 'running' && percent < 100 && (
+                  <p className="text-[10px] text-slate-400">
+                    Tiempo restante estimado: <span className="text-white font-black">{estTimeStr}</span> (a velocidad del rate limit de Mercado Libre).
+                  </p>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Metric Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 relative z-10 text-xs">
+            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Importados</span>
+              <span className="text-lg font-black text-emerald-400 block mt-1">{activeJob.imported_items}</span>
+            </div>
+            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Omitidos</span>
+              <span className="text-lg font-black text-amber-400 block mt-1">{activeJob.skipped_items}</span>
+              <span className="text-[8px] text-slate-500 block mt-0.5">Pausados / Sin Stock</span>
+            </div>
+            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Errores</span>
+              <span className="text-lg font-black text-red-500 block mt-1">{activeJob.error_items}</span>
+            </div>
+            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Restantes</span>
+              <span className="text-lg font-black text-slate-300 block mt-1">
+                {activeJob.total_items - activeJob.processed_items}
+              </span>
+            </div>
+          </div>
         </div>
       )}
 

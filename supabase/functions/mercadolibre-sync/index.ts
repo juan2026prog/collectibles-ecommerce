@@ -820,6 +820,61 @@ Deno.serve(async (req) => {
         );
     }
 
+    // ═══ ACTION: CREATE IMPORT JOB (Fast Job Queue) ═══
+    if (action === 'create_import_job') {
+        const { allIds, totalItems } = await searchMLItemIds();
+        
+        // 1. Insert Job Tracker
+        const { data: job, error: jobErr } = await supabase
+          .from('ml_import_jobs')
+          .insert({
+            vendor_id: targetVendorId,
+            seller_id: targetSellerId,
+            status: 'pending',
+            total_items: allIds.length,
+            processed_items: 0,
+            imported_items: 0,
+            skipped_items: 0,
+            error_items: 0,
+            started_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (jobErr) {
+          throw new Error(`Failed to create import job: ${jobErr.message}`);
+        }
+
+        // 2. Insert Job Items in bulk chunks
+        if (allIds.length > 0) {
+          const jobItems = allIds.map(mlId => ({
+            job_id: job.id,
+            vendor_id: targetVendorId,
+            ml_item_id: mlId,
+            status: 'pending',
+            attempts: 0
+          }));
+          
+          const bulkChunkSize = 500;
+          for (let offset = 0; offset < jobItems.length; offset += bulkChunkSize) {
+            const chunk = jobItems.slice(offset, offset + bulkChunkSize);
+            const { error: bulkErr } = await supabase
+              .from('ml_import_job_items')
+              .insert(chunk);
+            if (bulkErr) {
+              // Cleanup job on failure
+              await supabase.from('ml_import_jobs').delete().eq('id', job.id);
+              throw new Error(`Failed to create job items: ${bulkErr.message}`);
+            }
+          }
+        }
+
+        return new Response(
+          JSON.stringify({ success: true, job_id: job.id, total_items: allIds.length }),
+          { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
+        );
+    }
+
     // ═══ ACTION: LIST ITEM IDS (Phase 1 — new frontend, just returns IDs) ═══
     if (action === 'list_item_ids') {
         const { allIds, totalItems } = await searchMLItemIds();
