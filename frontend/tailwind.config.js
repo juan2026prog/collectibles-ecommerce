@@ -90,7 +90,7 @@ export default {
         'slide-down': 'slideDown 0.3s ease-out',
         'slide-in-right': 'slideInRight 0.3s ease-out',
         'slide-in-left': 'slideInLeft 0.3s ease-out',
-        'marquee': 'marquee 20s linear infinite',
+        'marquee': 'marquee 60s linear infinite',
         'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
         'glow-pulse': 'glowPulse 3s ease-in-out infinite',
       },
