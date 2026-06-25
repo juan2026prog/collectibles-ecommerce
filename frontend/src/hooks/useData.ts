@@ -79,6 +79,9 @@ export function useProducts(filters: ProductFilters = {}) {
         .from('brands')
         .select('id')
         .eq('slug', filters.brand)
+        .eq('status', 'approved')
+        .eq('is_active', true)
+        .eq('is_public', true)
         .single();
       brandId = data?.id ?? null;
       if (!brandId) { setProducts([]); setCount(0); setLoading(false); return; }
@@ -327,7 +330,9 @@ export function useBrands() {
       const { data } = await supabase
         .from('brands')
         .select('*')
+        .eq('status', 'approved')
         .eq('is_active', true)
+        .eq('is_public', true)
         .order('sort_order');
       setBrands(data || []);
       setLoading(false);

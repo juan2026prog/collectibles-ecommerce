@@ -235,7 +235,8 @@ export default function VProducts() {
       const payload = {
         title: form.title, slug: titleSlug, description: form.description, short_description: form.short_description,
         base_price: parseFloat(form.base_price) || 0, compare_at_price: form.compare_at_price ? parseFloat(form.compare_at_price) : null,
-        status: finalStatus, badge: form.badge || null, is_featured: form.is_featured, is_active: form.is_active,
+        status: finalStatus, badge: form.badge || null, is_featured: form.is_featured,
+        is_active: (isBrandPending || isAnyCategoryPending) ? false : form.is_active,
         brand_id: selectedBrandId, category_id: form.categories[0] || null
       };
 
@@ -349,7 +350,7 @@ export default function VProducts() {
     try {
       let slug = newBrandInput.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
       slug = `${slug}-v${user.id.substring(0, 4)}`;
-      const { data, error } = await supabase.from('brands').insert({ name: newBrandInput.trim(), slug, owner_vendor_id: user.id, status: 'pending_review', is_active: true }).select().single();
+      const { data, error } = await supabase.from('brands').insert({ name: newBrandInput.trim(), slug, owner_vendor_id: user.id, status: 'pending_review', is_active: false, is_public: false, source: 'manual' }).select().single();
       if (error) throw error;
       setBrands([...brands, data]);
       toggleBrand(data.id);
@@ -377,7 +378,10 @@ export default function VProducts() {
           if (insErr) throw insErr;
           
           const productUpdates: any = { category_id: value };
-          if (newStatus) productUpdates.status = newStatus;
+          if (newStatus === 'pending_taxonomy_review') {
+            productUpdates.status = newStatus;
+            productUpdates.is_active = false;
+          }
           
           const { error: updErr } = await supabase.from('products').update(productUpdates).eq('id', id).select().single();
           if (updErr) throw updErr;
@@ -400,6 +404,7 @@ export default function VProducts() {
           const br = brands.find(b => b.id === value);
           if (br?.status === 'pending_review') {
             updates.status = 'pending_taxonomy_review';
+            updates.is_active = false;
           }
         }
         const { error } = await supabase.from('products').update(updates).eq('id', id).select().single();
@@ -482,19 +487,25 @@ export default function VProducts() {
       // Ensure slug is unique by appending a random suffix
       const newSlug = `${baseSlug.replace(/-+$/, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
 
+      const brandId = product.brand?.id || product.brand_id || null;
+      const catId = product.category?.id || product.category_id || null;
+      const isBrandPending = brandId ? brands.find(b => b.id === brandId)?.status === 'pending_review' : false;
+      const isCatPending = catId ? categories.find(c => c.id === catId)?.status === 'pending_review' : false;
+
       const payload = {
+        vendor_id: user.id,
         title: newTitle,
         slug: newSlug,
         description: product.description,
         short_description: product.short_description,
         base_price: product.base_price,
         compare_at_price: product.compare_at_price,
-        status: 'draft', // Set to draft so they can review/edit
-        is_active: product.is_active !== false,
+        status: (isBrandPending || isCatPending) ? 'pending_taxonomy_review' : 'draft',
+        is_active: (isBrandPending || isCatPending) ? false : (product.is_active !== false),
         badge: product.badge,
         is_featured: product.is_featured,
-        brand_id: product.brand?.id || product.brand_id || null,
-        category_id: product.category?.id || product.category_id || null
+        brand_id: brandId,
+        category_id: catId
       };
 
       const { data: newProd, error: insertError } = await supabase.from('products').insert(payload).select().single();

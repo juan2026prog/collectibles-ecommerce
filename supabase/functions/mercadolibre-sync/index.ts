@@ -1059,7 +1059,9 @@ Deno.serve(async (req) => {
                           slug: slugBrand,
                           owner_vendor_id: targetVendorId || null,
                           status: targetVendorId ? 'pending_review' : 'approved',
-                          is_active: true
+                          is_active: targetVendorId ? false : true,
+                          is_public: targetVendorId ? false : true,
+                          source: targetVendorId ? 'vendor_import' : 'manual'
                         })
                         .select()
                         .single();

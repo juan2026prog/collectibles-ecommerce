@@ -267,17 +267,19 @@ async function importMLItemToStaging(supabase: any, mlId: string, sellerId: stri
      } else {
         const slugBrandBase = brandName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
         const slugBrand = vendorId ? `${slugBrandBase}-v${vendorId.substring(0, 4)}` : slugBrandBase;
-        const { data: newBr } = await supabase
-          .from('brands')
-          .insert({
-            name: brandName.trim(),
-            slug: slugBrand,
-            owner_vendor_id: vendorId || null,
-            status: vendorId ? 'pending_review' : 'approved',
-            is_active: true
-          })
-          .select()
-          .single();
+         const { data: newBr } = await supabase
+           .from('brands')
+           .insert({
+             name: brandName.trim(),
+             slug: slugBrand,
+             owner_vendor_id: vendorId || null,
+             status: vendorId ? 'pending_review' : 'approved',
+             is_active: vendorId ? false : true,
+             is_public: vendorId ? false : true,
+             source: vendorId ? 'vendor_import' : 'manual'
+           })
+           .select()
+           .single();
         if (newBr) brandId = newBr.id;
      }
   }

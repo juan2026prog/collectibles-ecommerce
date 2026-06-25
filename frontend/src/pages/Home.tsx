@@ -1081,8 +1081,25 @@ export default function Home() {
           100% { transform: translateX(-50%); }
         }
         .animate-marquee {
-          animation: marquee 60s linear infinite;
+          animation: marquee 60s linear infinite !important;
           will-change: transform;
+        }
+        .animate-marquee:hover {
+          animation-play-state: paused !important;
+        }
+        @media (max-width: 768px) {
+          .animate-marquee {
+            animation-duration: 90s !important;
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .animate-marquee {
+            animation: none !important;
+            overflow-x: auto !important;
+            white-space: normal !important;
+            flex-wrap: wrap !important;
+            justify-content: center !important;
+          }
         }
         .animate-float {
           animation: float 6s ease-in-out infinite;

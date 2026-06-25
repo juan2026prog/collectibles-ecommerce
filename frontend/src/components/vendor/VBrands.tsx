@@ -70,7 +70,9 @@ export default function VBrands() {
       slug, 
       description: form.description || null,
       logo_url: form.logo_url || null,
-      is_active: form.is_active,
+      is_active: editing ? form.is_active : false,
+      is_public: editing ? undefined : false,
+      source: editing ? undefined : 'manual',
       sort_order: form.sort_order,
       owner_vendor_id: user!.id,
       status: 'pending_review'

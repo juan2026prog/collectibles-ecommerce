@@ -123,13 +123,22 @@ export default function AdminTaxonomies() {
       const { data: { user } } = await supabase.auth.getUser();
       const table = type === 'brand' ? 'brands' : 'categories';
 
+      const updatePayload: any = {
+        status: 'approved',
+        approved_by: user?.id || null,
+        approved_at: new Date().toISOString()
+      };
+
+      if (type === 'brand') {
+        updatePayload.is_public = true;
+        updatePayload.is_active = true;
+      } else {
+        updatePayload.is_active = true;
+      }
+
       const { error } = await supabase
         .from(table)
-        .update({
-          status: 'approved',
-          approved_by: user?.id || null,
-          approved_at: new Date().toISOString()
-        })
+        .update(updatePayload)
         .eq('id', item.id);
 
       if (error) throw error;
@@ -317,26 +326,38 @@ export default function AdminTaxonomies() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50/30">
               <tr className="text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
-                <th className="px-6 py-3">Nombre propuesto</th>
-                <th className="px-6 py-3">Tipo</th>
+                <th className="px-6 py-3">Marca propuesta</th>
                 <th className="px-6 py-3">Vendor</th>
                 <th className="px-6 py-3">Producto asociado</th>
+                <th className="px-6 py-3">Fuente</th>
                 <th className="px-6 py-3">Fecha</th>
+                <th className="px-6 py-3">Estado</th>
                 <th className="px-6 py-3 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white text-sm text-gray-700">
               {loading ? (
-                <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400">Cargando propuestas...</td></tr>
+                <tr><td colSpan={7} className="px-6 py-8 text-center text-gray-400">Cargando propuestas...</td></tr>
               ) : brands.length === 0 ? (
-                <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-400">No hay marcas pendientes de revisión</td></tr>
+                <tr><td colSpan={7} className="px-6 py-8 text-center text-gray-400">No hay marcas pendientes de revisión</td></tr>
               ) : brands.map(b => (
                 <tr key={b.id} className="hover:bg-gray-50/50 transition-colors">
                   <td className="px-6 py-4 font-bold text-gray-900">{b.name}</td>
-                  <td className="px-6 py-4"><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 uppercase">Marca</span></td>
                   <td className="px-6 py-4 font-medium">{b.owner_vendor?.store_name || 'Desconocido'}</td>
                   <td className="px-6 py-4 max-w-xs truncate">{getProductTitle(b, 'brand')}</td>
+                  <td className="px-6 py-4">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                      b.source === 'vendor_import' ? 'bg-orange-50 text-orange-700' : 'bg-gray-100 text-gray-700'
+                    }`}>
+                      {b.source === 'vendor_import' ? 'Mercado Libre' : 'Manual'}
+                    </span>
+                  </td>
                   <td className="px-6 py-4 text-xs text-gray-500">{new Date(b.created_at).toLocaleDateString()}</td>
+                  <td className="px-6 py-4">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-yellow-50 text-yellow-800 uppercase">
+                      {b.status}
+                    </span>
+                  </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end gap-2">
                       <button onClick={() => handleApprove('brand', b)} className="p-1.5 bg-green-50 text-green-700 hover:bg-green-100 rounded-lg transition-colors" title="Aprobar"><Check className="w-4 h-4" /></button>
