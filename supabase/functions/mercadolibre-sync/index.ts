@@ -533,6 +533,8 @@ Deno.serve(async (req) => {
       const { data: vendorAcc } = await supabase.from('ml_seller_accounts').select('seller_id').eq('vendor_id', user.id).maybeSingle();
       if (!vendorAcc) throw new Error("No tienes una cuenta de Mercado Libre conectada.");
       targetSellerId = vendorAcc.seller_id; // FORCED isolation
+    } else {
+      targetVendorId = body.vendor_id || null;
     }
 
     let mlToken = body.auth_token;
@@ -822,16 +824,41 @@ Deno.serve(async (req) => {
 
     // ═══ ACTION: CREATE IMPORT JOB (Fast Job Queue) ═══
     if (action === 'create_import_job') {
-        const { allIds, totalItems } = await searchMLItemIds();
-        
-        // 1. Insert Job Tracker
+        // 1. Avoid duplicate jobs
+        const { data: existingJob, error: existingJobErr } = await supabase
+          .from('ml_import_jobs')
+          .select('id, status')
+          .eq('vendor_id', targetVendorId)
+          .eq('seller_id', targetSellerId)
+          .in('status', ['fetching_ids', 'pending', 'running', 'paused'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (existingJobErr) {
+          throw new Error(`Failed to check existing jobs: ${existingJobErr.message}`);
+        }
+
+        if (existingJob) {
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              job_id: existingJob.id, 
+              already_running: true, 
+              status: existingJob.status 
+            }),
+            { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
+          );
+        }
+
+        // 2. Insert Job Tracker in 'fetching_ids' state
         const { data: job, error: jobErr } = await supabase
           .from('ml_import_jobs')
           .insert({
             vendor_id: targetVendorId,
             seller_id: targetSellerId,
-            status: 'pending',
-            total_items: allIds.length,
+            status: 'fetching_ids',
+            total_items: 0,
             processed_items: 0,
             imported_items: 0,
             skipped_items: 0,
@@ -845,34 +872,70 @@ Deno.serve(async (req) => {
           throw new Error(`Failed to create import job: ${jobErr.message}`);
         }
 
-        // 2. Insert Job Items in bulk chunks
-        if (allIds.length > 0) {
-          const jobItems = allIds.map(mlId => ({
-            job_id: job.id,
-            vendor_id: targetVendorId,
-            ml_item_id: mlId,
-            status: 'pending',
-            attempts: 0
-          }));
+        try {
+          // 3. Fetch IDs using scan/scroll or standard search
+          const { allIds, totalItems } = await searchMLItemIds();
           
-          const bulkChunkSize = 500;
-          for (let offset = 0; offset < jobItems.length; offset += bulkChunkSize) {
-            const chunk = jobItems.slice(offset, offset + bulkChunkSize);
-            const { error: bulkErr } = await supabase
-              .from('ml_import_job_items')
-              .insert(chunk);
-            if (bulkErr) {
-              // Cleanup job on failure
-              await supabase.from('ml_import_jobs').delete().eq('id', job.id);
-              throw new Error(`Failed to create job items: ${bulkErr.message}`);
+          // 4. Insert Job Items in bulk chunks
+          if (allIds.length > 0) {
+            const jobItems = allIds.map(mlId => ({
+              job_id: job.id,
+              vendor_id: targetVendorId,
+              ml_item_id: mlId,
+              status: 'pending',
+              attempts: 0
+            }));
+            
+            const bulkChunkSize = 500;
+            for (let offset = 0; offset < jobItems.length; offset += bulkChunkSize) {
+              const chunk = jobItems.slice(offset, offset + bulkChunkSize);
+              const { error: bulkErr } = await supabase
+                .from('ml_import_job_items')
+                .insert(chunk);
+              if (bulkErr) {
+                throw new Error(`Failed to create job items: ${bulkErr.message}`);
+              }
             }
           }
-        }
 
-        return new Response(
-          JSON.stringify({ success: true, job_id: job.id, total_items: allIds.length }),
-          { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
-        );
+          // 5. Update Job status to 'pending' and set total_items
+          const { error: updateErr } = await supabase
+            .from('ml_import_jobs')
+            .update({
+              status: 'pending',
+              total_items: allIds.length,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', job.id);
+
+          if (updateErr) throw updateErr;
+
+          return new Response(
+            JSON.stringify({ success: true, job_id: job.id, total_items: allIds.length }),
+            { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
+          );
+
+        } catch (fetchErr: any) {
+          // 6. Fail gracefully: status = failed, last_error = detail
+          await supabase
+            .from('ml_import_jobs')
+            .update({
+              status: 'failed',
+              last_error: fetchErr.message || String(fetchErr),
+              completed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', job.id);
+
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: fetchErr.message || 'Error fetching Mercado Libre IDs', 
+              job_id: job.id 
+            }),
+            { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }, status: 500 }
+          );
+        }
     }
 
     // ═══ ACTION: LIST ITEM IDS (Phase 1 — new frontend, just returns IDs) ═══

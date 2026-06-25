@@ -121,7 +121,7 @@ export default function VMercadoLibre() {
         .from('ml_import_jobs')
         .select('*')
         .eq('seller_id', account.seller_id)
-        .in('status', ['pending', 'running', 'paused'])
+        .in('status', ['fetching_ids', 'pending', 'running', 'paused'])
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -481,19 +481,19 @@ export default function VMercadoLibre() {
     try {
       const { error: itemsErr } = await supabase
         .from('ml_import_job_items')
-        .update({ status: 'pending', attempts: 0 })
+        .update({ status: 'pending', attempts: 0, error_message: null, http_status: null })
         .eq('job_id', activeJob.id)
         .eq('status', 'failed');
       if (itemsErr) throw itemsErr;
 
       const { error: jobErr } = await supabase
         .from('ml_import_jobs')
-        .update({ status: 'pending', error_items: 0, updated_at: new Date().toISOString() })
+        .update({ status: 'pending', error_items: 0, next_run_at: null, last_error: null, updated_at: new Date().toISOString() })
         .eq('id', activeJob.id);
       if (jobErr) throw jobErr;
 
       toast.success("Reintentando publicaciones con error...");
-      setActiveJob({ ...activeJob, status: 'pending', error_items: 0 });
+      setActiveJob({ ...activeJob, status: 'pending', error_items: 0, next_run_at: null, last_error: null });
       startPollingJob(activeJob.id);
     } catch (err: any) {
       toast.error("Error al reintentar: " + err.message);
@@ -531,7 +531,11 @@ export default function VMercadoLibre() {
         throw new Error(data.error || 'Error al iniciar la importación');
       }
 
-      toast.success(`Importación iniciada para ${data.total_items} publicaciones.`);
+      if (data.already_running) {
+        toast.success("Ya tenés una importación en curso.");
+      } else {
+        toast.success(`Importación iniciada para ${data.total_items} publicaciones.`);
+      }
       
       // Load and poll job
       const { data: jobData } = await supabase
@@ -659,15 +663,17 @@ export default function VMercadoLibre() {
       {activeJob && (
         <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-6 text-white shadow-xl relative overflow-hidden animate-fade-in">
           <div className={`absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl opacity-20 ${
+            activeJob.status === 'fetching_ids' ? 'bg-indigo-500' :
             activeJob.status === 'running' ? 'bg-blue-500' :
             activeJob.status === 'paused' ? 'bg-amber-500' :
+            activeJob.status === 'failed' ? 'bg-red-500' :
             'bg-slate-500'
           }`} />
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4 relative z-10">
             <div>
               <h4 className="text-xs font-black uppercase tracking-wider flex items-center gap-2">
-                <RefreshCw className={`w-4 h-4 text-yellow-400 ${activeJob.status === 'running' && 'animate-spin'}`} />
+                <RefreshCw className={`w-4 h-4 text-yellow-400 ${['fetching_ids', 'running'].includes(activeJob.status) && 'animate-spin'}`} />
                 Importación en Segundo Plano
               </h4>
               <p className="text-[10px] text-slate-400 mt-1 font-mono">Job ID: {activeJob.id}</p>
@@ -675,12 +681,21 @@ export default function VMercadoLibre() {
             
             <div className="flex flex-wrap items-center gap-2 relative z-10">
               <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full border ${
+                activeJob.status === 'fetching_ids' ? 'bg-indigo-950 text-indigo-400 border-indigo-850 animate-pulse' :
                 activeJob.status === 'running' ? 'bg-blue-950 text-blue-400 border-blue-800' :
                 activeJob.status === 'paused' ? 'bg-amber-950 text-amber-400 border-amber-800' :
+                activeJob.status === 'failed' ? 'bg-red-950 text-red-400 border-red-800' :
+                activeJob.status === 'completed' ? 'bg-emerald-950 text-emerald-400 border-emerald-800' :
+                activeJob.status === 'partial' ? 'bg-sky-950 text-sky-400 border-sky-800' :
                 'bg-slate-950 text-slate-400 border-slate-800'
               }`}>
-                {activeJob.status === 'running' ? 'Procesando' :
-                 activeJob.status === 'paused' ? 'Pausado' : 'En cola / Pendiente'}
+                {activeJob.status === 'fetching_ids' ? 'Escaneando Publicaciones' :
+                 activeJob.status === 'running' ? (activeJob.next_run_at ? 'En Espera (Rate Limit)' : 'Procesando') :
+                 activeJob.status === 'paused' ? 'Pausado' :
+                 activeJob.status === 'failed' ? 'Fallado' :
+                 activeJob.status === 'completed' ? 'Completado' :
+                 activeJob.status === 'partial' ? 'Parcial (con errores)' :
+                 activeJob.status === 'cancelled' ? 'Cancelado' : 'En cola / Pendiente'}
               </span>
 
               {activeJob.status === 'running' && (
@@ -710,7 +725,7 @@ export default function VMercadoLibre() {
                 </button>
               )}
 
-              {['pending', 'running', 'paused'].includes(activeJob.status) && (
+              {['pending', 'running', 'paused', 'fetching_ids'].includes(activeJob.status) && (
                 <button
                   onClick={handleCancelJob}
                   className="bg-red-650 hover:bg-red-750 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors"
@@ -747,9 +762,23 @@ export default function VMercadoLibre() {
                   />
                 </div>
 
+                {activeJob.status === 'fetching_ids' && (
+                  <p className="text-[10px] text-indigo-400 animate-pulse">
+                    Obteniendo el catálogo completo desde Mercado Libre. Esto puede tomar unos segundos...
+                  </p>
+                )}
+
                 {activeJob.status === 'running' && percent < 100 && (
                   <p className="text-[10px] text-slate-400">
-                    Tiempo restante estimado: <span className="text-white font-black">{estTimeStr}</span> (a velocidad del rate limit de Mercado Libre).
+                    {activeJob.next_run_at ? (
+                      <span className="text-amber-400 font-medium animate-pulse">
+                        Sincronización en pausa por límite de tasa (429). Reanudando automáticamente...
+                      </span>
+                    ) : (
+                      <>
+                        Tiempo restante estimado: <span className="text-white font-black">{estTimeStr}</span> (a velocidad del rate limit de Mercado Libre).
+                      </>
+                    )}
                   </p>
                 )}
               </div>
@@ -757,7 +786,21 @@ export default function VMercadoLibre() {
           })()}
 
           {/* Metric Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 relative z-10 text-xs">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 relative z-10 text-xs">
+            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Total Detectado</span>
+              <span className="text-lg font-black text-blue-400 block mt-1">{activeJob.total_items}</span>
+            </div>
+            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">En Cola</span>
+              <span className="text-lg font-black text-slate-300 block mt-1">
+                {activeJob.total_items - activeJob.processed_items}
+              </span>
+            </div>
+            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Procesados</span>
+              <span className="text-lg font-black text-purple-400 block mt-1">{activeJob.processed_items}</span>
+            </div>
             <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
               <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Importados</span>
               <span className="text-lg font-black text-emerald-400 block mt-1">{activeJob.imported_items}</span>
@@ -765,19 +808,20 @@ export default function VMercadoLibre() {
             <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
               <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Omitidos</span>
               <span className="text-lg font-black text-amber-400 block mt-1">{activeJob.skipped_items}</span>
-              <span className="text-[8px] text-slate-500 block mt-0.5">Pausados / Sin Stock</span>
             </div>
             <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
               <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Errores</span>
               <span className="text-lg font-black text-red-500 block mt-1">{activeJob.error_items}</span>
             </div>
-            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Restantes</span>
-              <span className="text-lg font-black text-slate-300 block mt-1">
-                {activeJob.total_items - activeJob.processed_items}
-              </span>
-            </div>
           </div>
+
+          {/* Last Error display if any */}
+          {activeJob.last_error && (
+            <div className="bg-red-950/20 border border-red-800/40 p-4 rounded-xl text-xs text-red-400 relative z-10 flex gap-2 items-start font-mono">
+              <span className="font-bold uppercase shrink-0">Último error:</span>
+              <span>{activeJob.last_error}</span>
+            </div>
+          )}
         </div>
       )}
 
