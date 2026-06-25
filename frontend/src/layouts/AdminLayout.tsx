@@ -92,15 +92,6 @@ export default function AdminLayout() {
                 );
               })}
 
-              {/* Contenido */}
-              <div className="pt-4 pb-2">
-                <p className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">Contenido</p>
-                <Link to="/admin/hero-banners" className={`flex items-center px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors ${
-                  location.pathname === '/admin/hero-banners' ? 'bg-primary-600 text-white shadow-md' : ''
-                }`}>
-                  <Image className="mr-3 h-4 w-4 text-gray-400" /> Hero Banner Beyblade
-                </Link>
-              </div>
 
               {/* Internacional */}
               <div className="pt-4 pb-2">

@@ -61,7 +61,6 @@ const AdminCategories = lazy(() => import('./pages/admin/AdminCategories'));
 const AdminCustomers = lazy(() => import('./pages/admin/AdminCustomers'));
 const AdminCoupons = lazy(() => import('./pages/admin/AdminCoupons'));
 const AdminBanners = lazy(() => import('./pages/admin/AdminBanners'));
-const AdminHeroBanners = lazy(() => import('./pages/admin/AdminHeroBanners'));
 const AdminSettings = lazy(() => import('./pages/admin/AdminSettings'));
 const AdminMedia = lazy(() => import('./pages/admin/AdminMedia'));
 const AdminBrands = lazy(() => import('./pages/admin/AdminBrands'));
@@ -236,7 +235,6 @@ function App() {
                   <Route path="customers" element={<AdminCustomers />} />
                   <Route path="coupons" element={<AdminCoupons />} />
                   <Route path="banners" element={<AdminBanners />} />
-                  <Route path="hero-banners" element={<AdminHeroBanners />} />
                   <Route path="brands" element={<AdminBrands />} />
                   <Route path="groups" element={<AdminGroups />} />
                   <Route path="badges" element={<AdminBadges />} />
