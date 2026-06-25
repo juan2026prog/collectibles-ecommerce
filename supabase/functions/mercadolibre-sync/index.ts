@@ -829,7 +829,6 @@ Deno.serve(async (req) => {
           .from('ml_import_jobs')
           .select('id, status')
           .eq('vendor_id', targetVendorId)
-          .eq('seller_id', targetSellerId)
           .in('status', ['fetching_ids', 'pending', 'running', 'paused'])
           .order('created_at', { ascending: false })
           .limit(1)

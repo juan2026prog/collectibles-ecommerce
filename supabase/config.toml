@@ -69,3 +69,8 @@ verify_jwt = false
 [functions.zinc-sync-published-products]
 enabled = true
 verify_jwt = false
+
+[functions.ml-import-worker]
+enabled = true
+verify_jwt = false
+

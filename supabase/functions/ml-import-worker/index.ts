@@ -471,6 +471,243 @@ async function importMLItemToStaging(supabase: any, mlId: string, sellerId: stri
 // Deno Serve Entry point
 // ══════════════════════════════════════════════════════════════
 
+// ══════════════════════════════════════════════════════════════
+// Helper: Process a single batch of items for a job
+// ══════════════════════════════════════════════════════════════
+
+async function processBatchForJob(supabase: any, job: any): Promise<number> {
+  console.log(`[ML Import Worker] Processing Job ${job.id} for seller ${job.seller_id}`);
+
+  // 1. Fetch and claim a batch of pending/failed items using the atomic claim function
+  const BATCH_SIZE = 24;
+  const { data: pendingItems, error: itemsErr } = await supabase
+    .rpc('claim_import_job_items', { p_job_id: job.id, p_limit: BATCH_SIZE });
+
+  if (itemsErr) throw itemsErr;
+
+  // Check if the job has finished entirely
+  if (!pendingItems || pendingItems.length === 0) {
+    // Check if there are any remaining running items
+    const { count: runningCount } = await supabase
+      .from('ml_import_job_items')
+      .select('*', { count: 'exact', head: true })
+      .eq('job_id', job.id)
+      .eq('status', 'running');
+
+    if ((runningCount || 0) === 0) {
+      // If absolutely no pending/failed/running items are left, set job as complete
+      const { count: failedItemsCount } = await supabase
+        .from('ml_import_job_items')
+        .select('*', { count: 'exact', head: true })
+        .eq('job_id', job.id)
+        .eq('status', 'failed');
+      
+      const finalJobStatus = (failedItemsCount || 0) > 0 ? 'partial' : 'completed';
+      await supabase
+        .from('ml_import_jobs')
+        .update({
+          status: finalJobStatus,
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          estimated_finish_at: null // Clear when complete
+        })
+        .eq('id', job.id);
+      
+      console.log(`[ML Import Worker] Job ${job.id} finished with status: ${finalJobStatus}`);
+    } else {
+      console.log(`[ML Import Worker] Job ${job.id} has items currently running. Waiting...`);
+    }
+
+    return 0;
+  }
+
+  // 2. Prepare items processing state
+  const itemIds = pendingItems.map((it: any) => it.id);
+  const itemAttemptsMap = new Map(pendingItems.map((it: any) => [it.id, it.attempts]));
+  const processedItemIds = new Set<string>();
+
+  // 3. Retrieve valid token for this seller
+  let token = "";
+  try {
+    token = await getValidMercadoLibreToken(supabase, job.seller_id);
+  } catch (tokenErr: any) {
+    // Mark batch items as failed if token fails
+    await supabase
+      .from('ml_import_job_items')
+      .update({
+        status: 'failed',
+        attempts: pendingItems[0].attempts + 1,
+        error_message: `Token auth error: ${tokenErr.message}`,
+        http_status: 401,
+        processed_at: new Date().toISOString()
+      })
+      .in('id', itemIds);
+
+    await supabase
+      .from('ml_import_jobs')
+      .update({
+        last_error: `Auth error: ${tokenErr.message}`,
+        error_items: (job.error_items || 0) + pendingItems.length,
+        processed_items: (job.processed_items || 0) + pendingItems.length,
+        last_processed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', job.id);
+
+    throw tokenErr;
+  }
+
+  // 4. Process in parallel chunks with dynamic concurrency limit
+  let batchImported = 0;
+  let batchSkipped = 0;
+  let batchErrors = 0;
+  let rateLimitDetected = false;
+
+  let concurrencyLimit = 5; // Default to 5 concurrent requests
+  let offset = 0;
+  
+  while (offset < pendingItems.length) {
+    if (rateLimitDetected) {
+      concurrencyLimit = 2; // Drop to 2 if 429 detected
+    }
+    
+    const chunk = pendingItems.slice(offset, offset + concurrencyLimit);
+    offset += concurrencyLimit;
+    
+    await Promise.all(chunk.map(async (item: any) => {
+      const nextAttempt = (itemAttemptsMap.get(item.id) || 0) + 1;
+      try {
+        const result = await importMLItemToStaging(supabase, item.ml_item_id, job.seller_id, job.vendor_id, token);
+        
+        await supabase
+          .from('ml_import_job_items')
+          .update({
+            status: 'completed',
+            attempts: nextAttempt,
+            processed_at: new Date().toISOString(),
+            error_message: null,
+            http_status: 200
+          })
+          .eq('id', item.id);
+
+        processedItemIds.add(item.id);
+
+        if (result.category === 'omitido' || result.category === 'no_elegible') {
+          batchSkipped++;
+        } else {
+          batchImported++;
+        }
+
+      } catch (err: any) {
+        processedItemIds.add(item.id);
+        batchErrors++;
+        
+        const isRateLimit = err.message === 'RATE_LIMIT_EXCEEDED' || err.status === 429;
+        if (isRateLimit) {
+          rateLimitDetected = true;
+          console.warn(`[ML Import Worker] Rate limit 429 detected for item ${item.ml_item_id}`);
+          
+          await supabase
+            .from('ml_import_job_items')
+            .update({
+              status: 'failed',
+              attempts: nextAttempt,
+              error_message: 'Mercado Libre Rate Limit Exceeded (429)',
+              http_status: 429,
+              processed_at: new Date().toISOString()
+            })
+            .eq('id', item.id);
+        } else {
+          console.error(`[ML Import Worker] Failed item ${item.ml_item_id}:`, err.message);
+          await supabase
+            .from('ml_import_job_items')
+            .update({
+              status: 'failed',
+              attempts: nextAttempt,
+              error_message: err.message,
+              http_status: err.status || 500,
+              processed_at: new Date().toISOString()
+            })
+            .eq('id', item.id);
+        }
+      }
+    }));
+
+    if (rateLimitDetected) {
+      console.log(`[ML Import Worker] Aborting batch processing early due to 429 Rate Limit`);
+      break;
+    }
+  }
+
+  // 5. Reset any unprocessed items in this batch from 'running' back to 'pending'
+  const unprocessedItems = pendingItems.filter((it: any) => !processedItemIds.has(it.id));
+  if (unprocessedItems.length > 0) {
+    const unprocessedIds = unprocessedItems.map((it: any) => it.id);
+    await supabase
+      .from('ml_import_job_items')
+      .update({ status: 'pending' })
+      .in('id', unprocessedIds);
+    console.log(`[ML Import Worker] Reset ${unprocessedIds.length} unprocessed items back to pending`);
+  }
+
+  // 6. Update job stats in database
+  const totalProcessed = (pendingItems.length - unprocessedItems.length);
+  
+  // Retrieve current aggregates
+  const { data: updatedJob } = await supabase
+    .from('ml_import_jobs')
+    .select('processed_items, imported_items, skipped_items, error_items, started_at, total_items')
+    .eq('id', job.id)
+    .single();
+
+  const newProcessed = (updatedJob?.processed_items || 0) + totalProcessed;
+  const newImported = (updatedJob?.imported_items || 0) + batchImported;
+  const newSkipped = (updatedJob?.skipped_items || 0) + batchSkipped;
+  const newErrors = (updatedJob?.error_items || 0) + batchErrors;
+
+  // Calculate items_per_minute & estimated_finish_at
+  const startedAtTime = updatedJob?.started_at ? new Date(updatedJob.started_at).getTime() : Date.now();
+  const durationMs = Date.now() - startedAtTime;
+  const durationMinutes = durationMs / 60000;
+  const itemsPerMin = durationMinutes > 0.05 ? Math.round(newProcessed / durationMinutes) : 0;
+  
+  let estimatedFinishAt: string | null = null;
+  const remainingItems = (updatedJob?.total_items || 0) - newProcessed;
+  if (itemsPerMin > 0 && remainingItems > 0) {
+    const remainingMinutes = remainingItems / itemsPerMin;
+    estimatedFinishAt = new Date(Date.now() + remainingMinutes * 60000).toISOString();
+  }
+
+  const updatePayload: any = {
+    processed_items: newProcessed,
+    imported_items: newImported,
+    skipped_items: newSkipped,
+    error_items: newErrors,
+    items_per_minute: itemsPerMin,
+    estimated_finish_at: estimatedFinishAt,
+    last_processed_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+
+  if (rateLimitDetected) {
+    updatePayload.next_run_at = new Date(Date.now() + 60000).toISOString();
+  } else {
+    updatePayload.next_run_at = null;
+  }
+
+  await supabase
+    .from('ml_import_jobs')
+    .update(updatePayload)
+    .eq('id', job.id);
+
+  console.log(`[ML Import Worker] Batch processed for job ${job.id}: Imported=${batchImported}, Skipped=${batchSkipped}, Errors=${batchErrors}. Speed=${itemsPerMin} items/min`);
+  return totalProcessed;
+}
+
+// ══════════════════════════════════════════════════════════════
+// Deno Serve Entry point
+// ══════════════════════════════════════════════════════════════
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -489,267 +726,136 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 1. Fetch one active import job (respecting next_run_at backoff)
-    const nowStr = new Date().toISOString();
-    const { data: job, error: jobErr } = await supabase
-      .from('ml_import_jobs')
-      .select('*')
-      .in('status', ['pending', 'running'])
-      .or(`next_run_at.is.null,next_run_at.lte.${nowStr}`)
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .maybeSingle();
- 
-     if (jobErr) throw jobErr;
- 
-     if (!job) {
-       return new Response(JSON.stringify({ success: true, message: "No active import jobs in queue." }), {
-         headers: { ...corsHeaders, "Content-Type": "application/json" },
-         status: 200
-       });
-     }
- 
-     console.log(`[ML Import Worker] Processing Job ${job.id} for seller ${job.seller_id}`);
- 
-     // Update started_at and status if pending
-     if (job.status === 'pending') {
-       await supabase
-         .from('ml_import_jobs')
-         .update({ status: 'running', started_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-         .eq('id', job.id);
-     }
- 
-     // 2. Fetch and claim a batch of pending/failed items using the atomic claim function
-     const BATCH_SIZE = 24;
-     const { data: pendingItems, error: itemsErr } = await supabase
-       .rpc('claim_import_job_items', { p_job_id: job.id, p_limit: BATCH_SIZE });
- 
-     if (itemsErr) throw itemsErr;
- 
-     // Check if the job has finished entirely
-     if (!pendingItems || pendingItems.length === 0) {
-       // Check if there are any remaining running items
-       const { count: runningCount } = await supabase
-         .from('ml_import_job_items')
-         .select('*', { count: 'exact', head: true })
-         .eq('job_id', job.id)
-         .eq('status', 'running');
- 
-       if ((runningCount || 0) === 0) {
-         // If absolutely no pending/failed/running items are left, set job as complete
-         const { count: failedItemsCount } = await supabase
-           .from('ml_import_job_items')
-           .select('*', { count: 'exact', head: true })
-           .eq('job_id', job.id)
-           .eq('status', 'failed');
-         
-         const finalJobStatus = (failedItemsCount || 0) > 0 ? 'partial' : 'completed';
-         await supabase
+    const startTime = Date.now();
+    const maxDuration = 40000; // 40 seconds loop
+    let totalProcessedCount = 0;
+    let round = 1;
+
+    while (Date.now() - startTime < maxDuration) {
+      console.log(`[ML Import Worker] Starting Round ${round}...`);
+      
+      // 1. Fetch currently running jobs (respecting next_run_at backoff)
+      const nowStr = new Date().toISOString();
+      const { data: runningJobs, error: runningErr } = await supabase
+        .from('ml_import_jobs')
+        .select('*')
+        .eq('status', 'running')
+        .or(`next_run_at.is.null,next_run_at.lte.${nowStr}`)
+        .order('last_processed_at', { ascending: true, nullsFirst: true });
+
+      if (runningErr) throw runningErr;
+
+      let activeJobs = runningJobs || [];
+
+      // 2. If running jobs count < 3, check if we can promote pending jobs to running
+      if (activeJobs.length < 3) {
+         // Get list of vendors that are already active (running or paused/fetching_ids, etc.)
+         const { data: allActiveJobs, error: allActiveErr } = await supabase
            .from('ml_import_jobs')
-           .update({
-             status: finalJobStatus,
-             completed_at: new Date().toISOString(),
-             updated_at: new Date().toISOString()
-           })
-           .eq('id', job.id);
-         
-         console.log(`[ML Import Worker] Job ${job.id} finished with status: ${finalJobStatus}`);
-       } else {
-         console.log(`[ML Import Worker] Job ${job.id} has items currently running. Waiting...`);
-       }
- 
-       return new Response(JSON.stringify({ success: true, message: "No pending items for this batch." }), {
-         headers: { ...corsHeaders, "Content-Type": "application/json" },
-         status: 200
-       });
-     }
- 
-     // 3. Prepare items processing state
-     const itemIds = pendingItems.map((it: any) => it.id);
-     const itemAttemptsMap = new Map(pendingItems.map((it: any) => [it.id, it.attempts]));
-     const processedItemIds = new Set<string>();
- 
-     // 4. Retrieve valid token for this seller
-     let token = "";
-     try {
-       token = await getValidMercadoLibreToken(supabase, job.seller_id);
-     } catch (tokenErr: any) {
-       // Mark batch items as failed if token fails
-       await supabase
-         .from('ml_import_job_items')
-         .update({
-           status: 'failed',
-           attempts: pendingItems[0].attempts + 1,
-           error_message: `Token auth error: ${tokenErr.message}`,
-           http_status: 401,
-           processed_at: new Date().toISOString()
-         })
-         .in('id', itemIds);
- 
-       await supabase
-         .from('ml_import_jobs')
-         .update({
-           last_error: `Auth error: ${tokenErr.message}`,
-           error_items: (job.error_items || 0) + pendingItems.length,
-           processed_items: (job.processed_items || 0) + pendingItems.length,
-           updated_at: new Date().toISOString()
-         })
-         .eq('id', job.id);
- 
-       throw tokenErr;
-     }
- 
-     // 5. Process in parallel chunks with dynamic concurrency limit
-     let batchImported = 0;
-     let batchSkipped = 0;
-     let batchErrors = 0;
-     let rateLimitDetected = false;
- 
-     let concurrencyLimit = 5; // Default to 5 concurrent requests
-     let offset = 0;
-     
-     while (offset < pendingItems.length) {
-       if (rateLimitDetected) {
-         concurrencyLimit = 2; // Drop to 2 if 429 detected
-       }
-       
-       const chunk = pendingItems.slice(offset, offset + concurrencyLimit);
-       offset += concurrencyLimit;
-       
-       await Promise.all(chunk.map(async (item: any) => {
-         const nextAttempt = (itemAttemptsMap.get(item.id) || 0) + 1;
-         try {
-           // Sync single item
-           const result = await importMLItemToStaging(supabase, item.ml_item_id, job.seller_id, job.vendor_id, token);
-           
-           // Mark as complete in items
-           await supabase
-             .from('ml_import_job_items')
-             .update({
-               status: 'completed',
-               attempts: nextAttempt,
-               processed_at: new Date().toISOString(),
-               error_message: null,
-               http_status: 200
-             })
-             .eq('id', item.id);
- 
-           processedItemIds.add(item.id);
- 
-           if (result.category === 'omitido' || result.category === 'no_elegible') {
-             batchSkipped++;
-           } else {
-             batchImported++;
-           }
- 
-         } catch (err: any) {
-           processedItemIds.add(item.id);
-           batchErrors++;
-           
-           const isRateLimit = err.message === 'RATE_LIMIT_EXCEEDED' || err.status === 429;
-           if (isRateLimit) {
-             rateLimitDetected = true;
-             console.warn(`[ML Import Worker] Rate limit 429 detected for item ${item.ml_item_id}`);
-             
-             await supabase
-               .from('ml_import_job_items')
-               .update({
-                 status: 'failed',
-                 attempts: nextAttempt,
-                 error_message: 'Mercado Libre Rate Limit Exceeded (429)',
-                 http_status: 429,
-                 processed_at: new Date().toISOString()
-               })
-               .eq('id', item.id);
-           } else {
-             console.error(`[ML Import Worker] Failed item ${item.ml_item_id}:`, err.message);
-             await supabase
-               .from('ml_import_job_items')
-               .update({
-                 status: 'failed',
-                 attempts: nextAttempt,
-                 error_message: err.message,
-                 http_status: err.status || 500,
-                 processed_at: new Date().toISOString()
-               })
-               .eq('id', item.id);
-           }
+           .select('vendor_id')
+           .in('status', ['running', 'fetching_ids', 'paused']);
+
+         if (allActiveErr) throw allActiveErr;
+
+         const activeVendorIds = new Set((allActiveJobs || []).map((j: any) => j.vendor_id).filter(Boolean));
+
+         // Fetch pending jobs
+         const { data: pendingJobs, error: pendingErr } = await supabase
+           .from('ml_import_jobs')
+           .select('*')
+           .eq('status', 'pending')
+           .order('created_at', { ascending: true });
+
+         if (pendingErr) throw pendingErr;
+
+         if (pendingJobs && pendingJobs.length > 0) {
+            for (const pJob of pendingJobs) {
+               if (activeJobs.length >= 3) break;
+               
+               // Avoid promoting a job if its vendor already has a running/active job
+               if (pJob.vendor_id && activeVendorIds.has(pJob.vendor_id)) {
+                  continue;
+               }
+
+               // Promote job to running
+               const { data: updatedJob, error: promoErr } = await supabase
+                 .from('ml_import_jobs')
+                 .update({ 
+                    status: 'running', 
+                    started_at: new Date().toISOString(), 
+                    updated_at: new Date().toISOString() 
+                 })
+                 .eq('id', pJob.id)
+                 .select()
+                 .single();
+
+               if (promoErr) {
+                 console.error(`[ML Import Worker] Failed to promote job ${pJob.id}:`, promoErr.message);
+                 continue;
+               }
+
+               if (updatedJob) {
+                  activeJobs.push(updatedJob);
+                  if (updatedJob.vendor_id) activeVendorIds.add(updatedJob.vendor_id);
+               }
+            }
          }
-       }));
- 
-       // If 429 occurred, break early to pause and backoff
-       if (rateLimitDetected) {
-         console.log(`[ML Import Worker] Aborting batch processing early due to 429 Rate Limit`);
+      }
+
+      if (activeJobs.length === 0) {
+         console.log(`[ML Import Worker] No active or promoteable jobs in queue.`);
          break;
-       }
-     }
- 
-     // 6. Reset any unprocessed items in this batch from 'running' back to 'pending'
-     const unprocessedItems = pendingItems.filter((it: any) => !processedItemIds.has(it.id));
-     if (unprocessedItems.length > 0) {
-       const unprocessedIds = unprocessedItems.map((it: any) => it.id);
-       await supabase
-         .from('ml_import_job_items')
-         .update({ status: 'pending' })
-         .in('id', unprocessedIds);
-       console.log(`[ML Import Worker] Reset ${unprocessedIds.length} unprocessed items back to pending`);
-     }
- 
-     // 7. Update job stats in database
-     const totalProcessed = (pendingItems.length - unprocessedItems.length);
-     
-     // Retrieve current aggregates
-     const { data: updatedJob } = await supabase
-       .from('ml_import_jobs')
-       .select('processed_items, imported_items, skipped_items, error_items')
-       .eq('id', job.id)
-       .single();
- 
-     const newProcessed = (updatedJob?.processed_items || 0) + totalProcessed;
-     const newImported = (updatedJob?.imported_items || 0) + batchImported;
-     const newSkipped = (updatedJob?.skipped_items || 0) + batchSkipped;
-     const newErrors = (updatedJob?.error_items || 0) + batchErrors;
- 
-     const updatePayload: any = {
-       processed_items: newProcessed,
-       imported_items: newImported,
-       skipped_items: newSkipped,
-       error_items: newErrors,
-       updated_at: new Date().toISOString()
-     };
- 
-     if (rateLimitDetected) {
-       // Set next_run_at to 1 minute in the future
-       updatePayload.next_run_at = new Date(Date.now() + 60000).toISOString();
-     } else {
-       // Clear next_run_at if we finished the batch cleanly
-       updatePayload.next_run_at = null;
-     }
- 
-     await supabase
-       .from('ml_import_jobs')
-       .update(updatePayload)
-       .eq('id', job.id);
- 
-     console.log(`[ML Import Worker] Batch processed for job ${job.id}: Imported=${batchImported}, Skipped=${batchSkipped}, Errors=${batchErrors}. Rate Limit 429: ${rateLimitDetected}`);
- 
-     return new Response(JSON.stringify({
-       success: true,
-       processed: totalProcessed,
-       imported: batchImported,
-       skipped: batchSkipped,
-       errors: batchErrors,
-       rate_limit_paused: rateLimitDetected
-     }), {
-       headers: { ...corsHeaders, "Content-Type": "application/json" },
-       status: 200
-     });
- 
-   } catch (globalErr: any) {
-     console.error("[ML Import Worker] General error:", globalErr.message);
-     return new Response(JSON.stringify({ success: false, error: globalErr.message }), {
-       headers: { ...corsHeaders, "Content-Type": "application/json" },
-       status: 500
-     });
-   }
+      }
+
+      // 3. Round-Robin Ordering: Sort active jobs by last_processed_at ASC (NULLS FIRST)
+      activeJobs.sort((a: any, b: any) => {
+         const timeA = a.last_processed_at ? new Date(a.last_processed_at).getTime() : 0;
+         const timeB = b.last_processed_at ? new Date(b.last_processed_at).getTime() : 0;
+         return timeA - timeB;
+      });
+
+      // Limit execution to top 3 active jobs
+      const jobsToProcess = activeJobs.slice(0, 3);
+      console.log(`[ML Import Worker] Round ${round} processing jobs: ${jobsToProcess.map(j => j.id).join(', ')}`);
+
+      // 4. Process one batch of items for each of the selected active jobs concurrently
+      let processedAny = false;
+      await Promise.all(jobsToProcess.map(async (job) => {
+         try {
+            const count = await processBatchForJob(supabase, job);
+            if (count > 0) {
+               processedAny = true;
+               totalProcessedCount += count;
+            }
+         } catch (jobErr: any) {
+            console.error(`[ML Import Worker] Error processing batch for job ${job.id}:`, jobErr.message);
+         }
+      }));
+
+      if (!processedAny) {
+         console.log(`[ML Import Worker] No items processed in Round ${round}. Exiting loop.`);
+         break;
+      }
+
+      round++;
+      // Pause slightly between rounds (e.g. 500ms) to prevent absolute thrashing
+      await new Promise(r => setTimeout(r, 500));
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      message: `Completed queue processing. Total processed items in run: ${totalProcessedCount}`,
+      rounds: round - 1
+    }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 200
+    });
+
+  } catch (globalErr: any) {
+    console.error("[ML Import Worker] General error:", globalErr.message);
+    return new Response(JSON.stringify({ success: false, error: globalErr.message }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500
+    });
+  }
 });

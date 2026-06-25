@@ -50,8 +50,12 @@ async function callWebhookEdge(body: any) {
 }
 
 export default function AdminMercadoLibre() {
-  const [activeTab, setActiveTab] = useState<'summary' | 'products' | 'sync' | 'diagnostic'>('summary');
+  const [activeTab, setActiveTab] = useState<'summary' | 'products' | 'sync' | 'diagnostic' | 'jobs'>('summary');
   const [activeDiagTab, setActiveDiagTab] = useState<'metrics' | 'queue' | 'webhooks' | 'dlq' | 'oauth' | 'stock' | 'alerts'>('metrics');
+  
+  // Jobs Queue states
+  const [jobs, setJobs] = useState<any[]>([]);
+  const [jobsLoading, setJobsLoading] = useState(false);
   
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -172,6 +176,84 @@ export default function AdminMercadoLibre() {
       fetchDiagnosticTabData();
     }
   }, [activeTab, activeDiagTab, refreshTrigger]);
+
+  // Fetch jobs data & poll
+  useEffect(() => {
+    if (activeTab === 'jobs') {
+      fetchJobs();
+      const interval = setInterval(() => {
+        fetchJobs();
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [activeTab, refreshTrigger]);
+
+  async function fetchJobs() {
+    setJobsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('ml_import_jobs')
+        .select('*, vendors(store_name)')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setJobs(data || []);
+    } catch (e: any) {
+      toast.error('Error al cargar la cola de importaciones: ' + e.message);
+    } finally {
+      setJobsLoading(false);
+    }
+  }
+
+  async function handleAdminCancelJob(job: any) {
+    if (!confirm(`¿Estás seguro de cancelar la importación de ${job.vendors?.store_name || 'este vendor'}?`)) return;
+    setActionLoading(true);
+    try {
+      const { error } = await supabase
+        .from('ml_import_jobs')
+        .update({ status: 'cancelled', completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq('id', job.id);
+      if (error) throw error;
+      
+      await supabase
+        .from('ml_import_job_items')
+        .update({ status: 'cancelled' })
+        .eq('job_id', job.id)
+        .eq('status', 'pending');
+      
+      toast.success("Importación cancelada.");
+      fetchJobs();
+    } catch (err: any) {
+      toast.error("Error al cancelar: " + err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleAdminRetryJobErrors(job: any) {
+    setActionLoading(true);
+    try {
+      const { error: itemsErr } = await supabase
+        .from('ml_import_job_items')
+        .update({ status: 'pending', attempts: 0, error_message: null, http_status: null })
+        .eq('job_id', job.id)
+        .eq('status', 'failed');
+      if (itemsErr) throw itemsErr;
+
+      const { error: jobErr } = await supabase
+        .from('ml_import_jobs')
+        .update({ status: 'pending', error_items: 0, next_run_at: null, last_error: null, updated_at: new Date().toISOString() })
+        .eq('id', job.id);
+      if (jobErr) throw jobErr;
+
+      toast.success("Reintentando publicaciones con error...");
+      fetchJobs();
+    } catch (err: any) {
+      toast.error("Error al reintentar: " + err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  }
 
   async function fetchInitialData() {
     setLoading(true);
@@ -876,6 +958,7 @@ export default function AdminMercadoLibre() {
           { id: 'summary', name: 'Resumen General', icon: TrendingUp },
           { id: 'products', name: 'Productos por revisar', icon: Layers },
           { id: 'sync', name: 'Sincronización & Stock', icon: ShieldCheck },
+          { id: 'jobs', name: 'Cola de Importaciones', icon: RefreshCw },
           { id: 'diagnostic', name: 'Centro de Diagnóstico', icon: Sliders }
         ].map(tab => {
           const Icon = tab.icon;
@@ -1501,6 +1584,157 @@ export default function AdminMercadoLibre() {
                   </table>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════
+              PESTAÑA: COLA DE IMPORTACIONES
+              ══════════════════════════════════════════════════════════════ */}
+          {activeTab === 'jobs' && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white p-6 rounded-2xl border shadow-sm gap-4">
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">Cola de Importaciones ML</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">Monitoreo y administración global de trabajos de importación multivendor</p>
+                </div>
+                <button
+                  onClick={() => fetchJobs()}
+                  disabled={jobsLoading}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold px-4 py-2.5 rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${jobsLoading && 'animate-spin'}`} />
+                  Actualizar
+                </button>
+              </div>
+
+              {jobsLoading && jobs.length === 0 ? (
+                <div className="bg-white rounded-2xl border p-12 text-center text-gray-400 text-xs uppercase tracking-wider animate-pulse">
+                  Cargando trabajos de importación...
+                </div>
+              ) : jobs.length === 0 ? (
+                <div className="bg-white rounded-2xl border p-12 text-center text-gray-500">
+                  No hay trabajos de importación registrados.
+                </div>
+              ) : (
+                <div className="bg-white border rounded-2xl overflow-hidden shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b text-slate-400 font-bold uppercase tracking-wider">
+                          <th className="p-4">Tienda (Vendor)</th>
+                          <th className="p-4">Creado</th>
+                          <th className="p-4">Estado</th>
+                          <th className="p-4">Progreso / Total</th>
+                          <th className="p-4">Velocidad</th>
+                          <th className="p-4">Estimado</th>
+                          <th className="p-4">Errores</th>
+                          <th className="p-4 text-right">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {jobs.map((job) => {
+                          const percent = job.total_items > 0 
+                            ? Math.round((job.processed_items / job.total_items) * 100) 
+                            : 0;
+
+                          const isRateLimitPaused = job.next_run_at && new Date(job.next_run_at) > new Date();
+
+                          let estTimeStr = 'Calculando...';
+                          if (job.estimated_finish_at) {
+                            const diffMs = new Date(job.estimated_finish_at).getTime() - Date.now();
+                            const diffMins = Math.max(0, Math.ceil(diffMs / 60000));
+                            estTimeStr = diffMins > 60 
+                              ? `${Math.floor(diffMins / 60)}h ${diffMins % 60}m` 
+                              : `${diffMins} min`;
+                          } else if (job.status === 'completed' || percent === 100) {
+                            estTimeStr = 'Finalizado';
+                          } else if (job.status === 'failed') {
+                            estTimeStr = 'N/A';
+                          }
+
+                          return (
+                            <tr key={job.id} className="hover:bg-gray-50/50">
+                              <td className="p-4 font-bold text-gray-900">
+                                {job.vendors?.store_name || 'Vendedor Desconocido'}
+                                <span className="block text-[10px] text-gray-400 font-mono mt-0.5">Seller: {job.seller_id}</span>
+                              </td>
+                              <td className="p-4 text-gray-500 whitespace-nowrap">
+                                {new Date(job.created_at).toLocaleString()}
+                              </td>
+                              <td className="p-4 whitespace-nowrap">
+                                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${
+                                  job.status === 'fetching_ids' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+                                  job.status === 'running' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                  job.status === 'paused' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                  job.status === 'failed' ? 'bg-red-50 text-red-700 border-red-200' :
+                                  job.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                  job.status === 'partial' ? 'bg-sky-50 text-sky-700 border-sky-200' :
+                                  'bg-slate-50 text-slate-700 border-slate-200'
+                                }`}>
+                                  {job.status === 'fetching_ids' ? 'Escaneando IDs' :
+                                   job.status === 'running' ? (isRateLimitPaused ? 'Espera 429' : 'Procesando') :
+                                   job.status === 'paused' ? 'Pausado' :
+                                   job.status === 'failed' ? 'Fallado' :
+                                   job.status === 'completed' ? 'Completado' :
+                                   job.status === 'partial' ? 'Parcial' :
+                                   job.status === 'cancelled' ? 'Cancelado' : 'Pendiente'}
+                                </span>
+                              </td>
+                              <td className="p-4">
+                                <div className="space-y-1 min-w-[120px]">
+                                  <div className="flex justify-between text-[10px] font-medium text-gray-500">
+                                    <span>{percent}%</span>
+                                    <span>{job.processed_items} / {job.total_items}</span>
+                                  </div>
+                                  <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                                    <div 
+                                      className={`h-full rounded-full ${
+                                        job.status === 'failed' ? 'bg-red-500' : 'bg-emerald-500'
+                                      }`}
+                                      style={{ width: `${percent}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="p-4 font-mono font-bold text-gray-700">
+                                {job.items_per_minute || 0} /m
+                              </td>
+                              <td className="p-4 text-gray-500 whitespace-nowrap">
+                                {estTimeStr}
+                              </td>
+                              <td className="p-4 font-bold text-red-500">
+                                {job.error_items || 0}
+                              </td>
+                              <td className="p-4 text-right whitespace-nowrap">
+                                <div className="flex justify-end gap-2">
+                                  {['pending', 'running', 'paused', 'fetching_ids'].includes(job.status) && (
+                                    <button
+                                      onClick={() => handleAdminCancelJob(job)}
+                                      disabled={actionLoading}
+                                      className="bg-red-550 text-white hover:bg-red-650 px-2.5 py-1 rounded text-[10px] font-bold transition-all disabled:opacity-50"
+                                    >
+                                      Cancelar
+                                    </button>
+                                  )}
+                                  {job.error_items > 0 && ['completed', 'partial', 'failed', 'cancelled'].includes(job.status) && (
+                                    <button
+                                      onClick={() => handleAdminRetryJobErrors(job)}
+                                      disabled={actionLoading}
+                                      className="bg-blue-650 text-white hover:bg-blue-750 px-2.5 py-1 rounded text-[10px] font-bold transition-all disabled:opacity-50"
+                                    >
+                                      Reintentar
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

@@ -742,14 +742,23 @@ export default function VMercadoLibre() {
               ? Math.round((activeJob.processed_items / activeJob.total_items) * 100) 
               : 0;
 
-            const remaining = activeJob.total_items - activeJob.processed_items;
-            const estMinutes = Math.ceil(remaining / 24); 
-            const estTimeStr = estMinutes > 60 
-              ? `${Math.floor(estMinutes / 60)}h ${estMinutes % 60}m` 
-              : `${estMinutes} min`;
+            const isRateLimitPaused = activeJob.next_run_at && new Date(activeJob.next_run_at) > new Date();
+            
+            let estTimeStr = 'Calculando...';
+            if (activeJob.estimated_finish_at) {
+              const diffMs = new Date(activeJob.estimated_finish_at).getTime() - Date.now();
+              const diffMins = Math.max(0, Math.ceil(diffMs / 60000));
+              estTimeStr = diffMins > 60 
+                ? `${Math.floor(diffMins / 60)}h ${diffMins % 60}m` 
+                : `${diffMins} min`;
+            } else if (activeJob.status === 'completed' || percent === 100) {
+              estTimeStr = 'Finalizado';
+            }
+
+            const speed = activeJob.items_per_minute || 0;
 
             return (
-              <div className="space-y-3 relative z-10">
+              <div className="space-y-4 relative z-10">
                 <div className="flex justify-between text-xs font-bold text-slate-300">
                   <span>Progreso de sincronización</span>
                   <span>{percent}% ({activeJob.processed_items} / {activeJob.total_items})</span>
@@ -762,25 +771,29 @@ export default function VMercadoLibre() {
                   />
                 </div>
 
-                {activeJob.status === 'fetching_ids' && (
-                  <p className="text-[10px] text-indigo-400 animate-pulse">
-                    Obteniendo el catálogo completo desde Mercado Libre. Esto puede tomar unos segundos...
-                  </p>
-                )}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-[10px] text-slate-400 border-t border-slate-800/50 pt-2">
+                  <div className="flex items-center gap-4">
+                    <span>
+                      Velocidad actual: <span className="text-white font-bold">{speed} items/min</span>
+                    </span>
+                    <span>
+                      Tiempo estimado: <span className="text-white font-bold">{estTimeStr}</span>
+                    </span>
+                  </div>
 
-                {activeJob.status === 'running' && percent < 100 && (
-                  <p className="text-[10px] text-slate-400">
-                    {activeJob.next_run_at ? (
-                      <span className="text-amber-400 font-medium animate-pulse">
-                        Sincronización en pausa por límite de tasa (429). Reanudando automáticamente...
-                      </span>
-                    ) : (
-                      <>
-                        Tiempo restante estimado: <span className="text-white font-black">{estTimeStr}</span> (a velocidad del rate limit de Mercado Libre).
-                      </>
-                    )}
-                  </p>
-                )}
+                  {activeJob.status === 'fetching_ids' && (
+                    <span className="text-indigo-400 animate-pulse font-medium">
+                      Obteniendo catálogo de Mercado Libre...
+                    </span>
+                  )}
+
+                  {isRateLimitPaused && (
+                    <span className="text-amber-400 font-bold animate-pulse flex items-center gap-1">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      Pausado por Rate Limit (429). Reanudando automáticamente...
+                    </span>
+                  )}
+                </div>
               </div>
             );
           })()}

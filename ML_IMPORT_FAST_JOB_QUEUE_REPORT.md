@@ -121,7 +121,34 @@ Realizamos pruebas con un vendedor real (`seller_id`: `741226696`, Nickname: `FI
 
 ---
 
-## 5. Recomendaciones y Buenas Prácticas
+## 5. Control Multivendedor Global y Concurrencia
+
+Hemos integrado mecanismos para gestionar múltiples importaciones concurrentes de diferentes vendedores sin bloquear el worker ni saturar las cuotas de Mercado Libre:
+
+1. **Límites de Concurrencia**:
+   - **Máximo 1 job activo por vendor**: Evita que un mismo vendedor inicie múltiples procesos simultáneos (se verifica únicamente por `vendor_id`).
+   - **Máximo 3 jobs `running` globales simultáneos**: Controla el uso general de recursos del backend y las APIs externas.
+   - **Promoción de Cola**: El worker promueve automáticamente jobs en estado `pending` a `running` si el límite global de 3 concurrentes no se ha alcanzado.
+
+2. **Procesamiento Round-Robin**:
+   - Para evitar que un vendedor con un catálogo de 5.000 ítems bloquee a otros con catálogos más pequeños, el worker procesa los jobs activos en ciclos ordenados por `last_processed_at ASC NULLS FIRST`.
+   - En cada ciclo (bucle de hasta 40 segundos por invocación del cron), se toma un lote chico (24 ítems) por cada job activo de forma paralela.
+
+3. **Métricas de Velocidad en Tiempo Real**:
+   - **`items_per_minute`**: Velocidad real calculada en base a la diferencia de tiempo entre `started_at` y el procesamiento actual.
+   - **`estimated_finish_at`**: Tiempo estimado de finalización proyectado dinámicamente según la velocidad actual y los ítems restantes.
+   - **`last_processed_at`**: Registro del último lote procesado para mantener el orden de prioridad Round-Robin.
+
+4. **Validación Multi-Vendor (Junio 2026)**:
+   - **Job ID de Test**: `af2f0d34-54c8-4136-b995-19a8b924e6b8`
+   - **Rondas de Round-Robin**: 2 rondas consecutivas procesadas exitosamente dentro del mismo worker.
+   - **Items Procesados**: 10 ítems procesados.
+   - **Velocidad Registrada**: **180 items/minuto**.
+   - **Verificación en UI de Administración**: Pestaña "Cola de Importaciones" en el panel de control del Admin lista todos los vendedores activos, porcentaje de avance, errores, y provee botones para Cancelar y Reintentar.
+
+---
+
+## 6. Recomendaciones y Buenas Prácticas
 
 1. **Monitoreo de Rate Limits**: Mantener el límite de concurrencia en **5** para evitar alertas del PolicyAgent de Mercado Libre.
 2. **Reintentos Manuales**: Aconsejar a los vendedores que en caso de publicaciones fallidas utilicen el botón **"Reintentar Errores"**, el cual reseteará únicamente los productos que reportaron un fallo real (`status = 'failed'`).
