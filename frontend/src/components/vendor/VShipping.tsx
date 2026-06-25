@@ -7,6 +7,7 @@ import {
   MapPin, Plus, Trash2, Shield, Settings, Info, Check, RefreshCw, Sparkles, Eye 
 } from 'lucide-react';
 import VendorLabelPreviewModal from './VendorLabelPreviewModal';
+import { isLocationInSoyDeliveryZone, isSoyDeliveryAvailableForVendor } from '../../utils/uruguayLocations';
 
 interface DispatchAddress {
   id: string;
@@ -39,6 +40,10 @@ export default function VShipping() {
 
   // 2. Direcciones de Despacho (Remitente)
   const [dispatchAddresses, setDispatchAddresses] = useState<DispatchAddress[]>([]);
+  const defaultAddress = dispatchAddresses.find(a => a.is_default);
+  const isSoyDeliveryAvailable = defaultAddress 
+    ? isLocationInSoyDeliveryZone(defaultAddress.department, defaultAddress.city) 
+    : false;
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [savingAddress, setSavingAddress] = useState(false);
   const [newAddress, setNewAddress] = useState({
@@ -100,15 +105,27 @@ export default function VShipping() {
           .catch(err => ({ success: false, data: null, error: err }))
       ]);
 
+      // Process dispatch addresses result first
+      let loadedAddresses = [];
+      if (addrRes.success && addrRes.data) {
+        setDispatchAddresses(addrRes.data);
+        loadedAddresses = addrRes.data;
+      } else if (addrRes.error) {
+        console.error("Error loading dispatch addresses:", addrRes.error);
+      }
+
       // Process vendor result
       if (vendorRes.success && vendorRes.data) {
         setVendorObj(vendorRes.data);
         if (vendorRes.data.shipping_settings) {
           const s = vendorRes.data.shipping_settings as any;
+          const defaultAddr = loadedAddresses.find((a: any) => a.is_default);
+          const isSDAvail = defaultAddr ? isLocationInSoyDeliveryZone(defaultAddr.department, defaultAddr.city) : false;
+
           setShippingData({
             dac: { active: s.dac?.active || false },
             ues: { active: s.ues?.active || false },
-            soydelivery: { active: s.soydelivery?.active || false },
+            soydelivery: { active: isSDAvail ? (s.soydelivery?.active || false) : false },
             correo_uruguayo: { active: s.correo_uruguayo?.active || false },
             pickup: {
               active: s.pickup?.active || false,
@@ -133,13 +150,6 @@ export default function VShipping() {
       } else if (vendorRes.error) {
         console.error("Error loading vendor profile:", vendorRes.error);
         toast.error("Error al cargar perfil de vendedor");
-      }
-
-      // Process dispatch addresses result
-      if (addrRes.success && addrRes.data) {
-        setDispatchAddresses(addrRes.data);
-      } else if (addrRes.error) {
-        console.error("Error loading dispatch addresses:", addrRes.error);
       }
 
       // Process ML account result
@@ -167,9 +177,14 @@ export default function VShipping() {
     if (!user) return;
     setSaving(true);
     try {
+      const finalShippingData = {
+        ...shippingData,
+        soydelivery: { active: isSoyDeliveryAvailable ? shippingData.soydelivery.active : false }
+      };
+
       const { error } = await supabase
         .from('vendors')
-        .update({ shipping_settings: shippingData })
+        .update({ shipping_settings: finalShippingData })
         .eq('id', user.id);
       if (error) throw error;
       toast.success('Configuración de Collectibles Envíos guardada correctamente');
@@ -181,6 +196,10 @@ export default function VShipping() {
   };
 
   const toggleMethod = (method: 'dac' | 'ues' | 'soydelivery' | 'correo_uruguayo' | 'pickup' | 'manual') => {
+    if (method === 'soydelivery' && !isSoyDeliveryAvailable) {
+      toast.error("SoyDelivery/Flex no está disponible fuera de la zona de cobertura.");
+      return;
+    }
     setShippingData(prev => ({
       ...prev,
       [method]: { ...prev[method], active: !prev[method].active }
@@ -317,14 +336,15 @@ export default function VShipping() {
     if (!wizardResult) return;
     const tags = wizardResult.shippingTags || [];
     const mode = wizardResult.shippingMode;
-    const hasFlex = tags.includes('flex') || tags.includes('envios_rapidos');
+    const hasFlex = (tags.includes('flex') || tags.includes('envios_rapidos')) && isSoyDeliveryAvailable;
     const hasPickup = wizardResult.pickup;
 
     setShippingData(prev => ({
       ...prev,
       dac: { active: mode === 'me2' ? true : prev.dac.active },
       ues: { active: mode === 'me2' ? true : prev.ues.active },
-      soydelivery: { active: hasFlex ? true : prev.soydelivery.active },
+      soydelivery: { active: hasFlex }, // Set explicitly to false if not available
+      correo_uruguayo: { active: (!isSoyDeliveryAvailable && (tags.includes('flex') || tags.includes('envios_rapidos'))) ? true : prev.correo_uruguayo.active },
       pickup: { 
         ...prev.pickup, 
         active: hasPickup ? true : prev.pickup.active,
@@ -386,6 +406,13 @@ export default function VShipping() {
           <p className="text-xs text-gray-500 mt-1">Habilitá los métodos que estarán activos para tus publicaciones.</p>
         </div>
 
+        {!defaultAddress && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 flex gap-3 text-sm font-semibold animate-fade-in">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <span>Configurá tu dirección de despacho para calcular envíos.</span>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           
           {/* DAC */}
@@ -434,12 +461,25 @@ export default function VShipping() {
 
           {/* SOYDELIVERY */}
           <div 
-            onClick={() => toggleMethod('soydelivery')}
-            className={`p-4 border rounded-xl cursor-pointer transition-all flex items-start gap-3 hover:bg-slate-50 ${shippingData.soydelivery.active ? 'border-orange-500 bg-orange-50/20' : 'border-gray-200 bg-white'}`}
+            onClick={() => {
+              if (!isSoyDeliveryAvailable) {
+                toast.error("SoyDelivery/Flex solo está disponible para vendedores dentro de la zona de cobertura.");
+                return;
+              }
+              toggleMethod('soydelivery');
+            }}
+            className={`p-4 border rounded-xl transition-all flex items-start gap-3 ${
+              !isSoyDeliveryAvailable 
+                ? 'opacity-65 cursor-not-allowed border-gray-200 bg-gray-50' 
+                : shippingData.soydelivery.active 
+                  ? 'border-orange-500 bg-orange-50/20 cursor-pointer hover:bg-slate-50' 
+                  : 'border-gray-200 bg-white cursor-pointer hover:bg-slate-50'
+            }`}
           >
             <input 
               type="checkbox" 
               checked={shippingData.soydelivery.active} 
+              disabled={!isSoyDeliveryAvailable}
               onChange={() => {}} 
               className="mt-1 rounded text-orange-600 focus:ring-orange-500 pointer-events-none" 
             />
@@ -449,8 +489,21 @@ export default function VShipping() {
                 <span className="bg-orange-100 text-orange-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
                   Collectibles Envíos
                 </span>
+                {!isSoyDeliveryAvailable && (
+                  <span className="bg-red-100 text-red-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
+                    {dispatchAddresses.length === 0 ? "Sin dirección" : "Fuera de zona"}
+                  </span>
+                )}
               </div>
               <p className="text-xs text-gray-500 mt-1">Envíos express en el día (Flex) para Montevideo y zonas metropolitanas.</p>
+              {!isSoyDeliveryAvailable && (
+                <p className="text-[10px] text-red-600 mt-1 font-medium flex items-center gap-1">
+                  <Info className="w-3.5 h-3.5 shrink-0" />
+                  {dispatchAddresses.length === 0 
+                    ? "Configurá tu dirección de despacho para calcular envíos."
+                    : "SoyDelivery/Flex solo está disponible para vendedores dentro de la zona cubierta."}
+                </p>
+              )}
             </div>
           </div>
 
@@ -783,9 +836,28 @@ export default function VShipping() {
                     </div>
                   </div>
                   
+                  {wizardResult.shippingTags && (wizardResult.shippingTags.includes('flex') || wizardResult.shippingTags.includes('envios_rapidos')) && !isSoyDeliveryAvailable && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-xs text-amber-800 flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold mb-1">SoyDelivery no disponible</p>
+                        <p>
+                          Detectamos que usás Flex en Mercado Libre, pero tu dirección de despacho no está dentro de la zona cubierta por SoyDelivery en Collectibles. Te sugerimos activar <strong>DAC, UES o Correo Uruguayo</strong> como alternativa de envío.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-xs text-emerald-800">
                     <div className="font-bold mb-1">Recomendamos Activar:</div>
-                    <p className="mb-3">En base a tu ubicación en {wizardResult.location} y tu logística activa, te sugerimos habilitar los siguientes métodos:</p>
+                    <p className="mb-3">
+                      En base a tu ubicación en {wizardResult.location} y tu logística activa, te sugerimos habilitar:
+                      <span className="block mt-1 font-semibold text-emerald-950">
+                        {(!isSoyDeliveryAvailable && (wizardResult.shippingTags?.includes('flex') || wizardResult.shippingTags?.includes('envios_rapidos'))) 
+                          ? "✓ DAC, UES, Correo Uruguayo (Alternativas por falta de cobertura SoyDelivery)" 
+                          : "✓ DAC, UES, SoyDelivery/Flex (En zona cubierta)"}
+                      </span>
+                    </p>
                     <button 
                       onClick={applyWizardSuggestions} 
                       className="bg-emerald-600 text-white font-bold px-4 py-2 rounded hover:bg-emerald-700 transition-colors shadow-sm text-xs"

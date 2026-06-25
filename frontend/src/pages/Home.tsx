@@ -463,9 +463,10 @@ export default function Home() {
       category_id: p.category_id,
       brand_id: p.brand_id,
       vendor_id: p.vendor_id,
-      vendor_name: p.vendor?.store_name,
-      vendor_slug: p.vendor?.slug,
-      vendor_logo: p.vendor?.logo_url,
+      vendor_store_id: p.vendor_store_id || null,
+      vendor_name: p.vendor_store?.store_name || p.vendor?.store_name || 'Collectibles',
+      vendor_slug: p.vendor_store?.slug || p.vendor?.slug,
+      vendor_logo: p.vendor_store?.logo_url || p.vendor?.logo_url,
       tag_ids: p.product_tags?.map((pt: any) => pt.tag_id) || []
     });
   }

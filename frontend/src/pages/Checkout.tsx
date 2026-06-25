@@ -9,7 +9,7 @@ import { useSiteSettings } from '../hooks/useSiteSettings';
 import { analytics } from '../lib/analytics';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import { createCheckoutOrder, getPublicPaymentProviders, startCheckoutPayment, type PublicPaymentProvider } from '../lib/payments';
-import { URUGUAY_LOCATIONS, DEPARTAMENTOS, calculateShipping } from '../utils/uruguayLocations';
+import { URUGUAY_LOCATIONS, DEPARTAMENTOS, calculateShipping, isLocationInSoyDeliveryZone, isSoyDeliveryAvailableForVendor } from '../utils/uruguayLocations';
 import { getProductImage, resolveImage } from '../lib/imageUtils';
 import { usePromotions, evaluateItemDiscount, evaluateItemDiscountDetailed } from '../hooks/usePromotions';
 import { generateMetaEventId, trackInitiateCheckout, trackAddPaymentInfo } from '../lib/meta/metaPixel';
@@ -222,6 +222,107 @@ export default function Checkout() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [finalTotal, setFinalTotal] = useState(0);
 
+  const [vendorsData, setVendorsData] = useState<Record<string, {
+    id: string;
+    vendor_id?: string;
+    vendor_store_id?: string;
+    shipping_settings?: any;
+    default_address?: { department: string; city: string; address: string; phone?: string } | null;
+  }>>({});
+  const [globalProviders, setGlobalProviders] = useState<Record<string, boolean>>({ dac: true, ues: false, soydelivery: false });
+
+  useEffect(() => {
+    if (!items.length) return;
+    
+    async function loadVendorsShippingInfo() {
+      const loaded: Record<string, any> = {};
+      
+      // Load global active status of delivery providers
+      try {
+        const { data: provs } = await supabase
+          .from('delivery_providers')
+          .select('provider_key, is_active');
+        if (provs) {
+          const mapped: Record<string, boolean> = {};
+          provs.forEach(p => {
+            mapped[p.provider_key] = p.is_active;
+          });
+          setGlobalProviders(prev => ({ ...prev, ...mapped }));
+        }
+      } catch (err) {
+        console.error("Error loading delivery providers:", err);
+      }
+      
+      for (const item of items) {
+        const storeKey = item.vendor_store_id || item.vendor_id || 'collectibles';
+        if (loaded[storeKey]) continue;
+
+        if (storeKey === 'collectibles' || storeKey === 'platform') {
+          loaded[storeKey] = {
+            id: 'collectibles',
+            vendor_id: 'collectibles',
+            shipping_settings: { soydelivery: { active: true }, dac: { active: true } },
+            default_address: {
+              department: 'Montevideo',
+              city: 'Montevideo',
+              address: 'Vázquez 1418'
+            }
+          };
+          loaded['platform'] = loaded[storeKey];
+          continue;
+        }
+
+        try {
+          const vendorId = item.vendor_id;
+          const vendorStoreId = item.vendor_store_id;
+
+          // 1. Fetch vendor shipping settings
+          const { data: vendor } = await supabase
+            .from('vendors')
+            .select('id, shipping_settings')
+            .eq('id', vendorId)
+            .maybeSingle();
+
+          // 2. Fetch dispatch address (store-specific first, then vendor default)
+          let dispatchAddress = null;
+          if (vendorStoreId) {
+            const { data: storeAddr } = await supabase
+              .from('vendor_dispatch_addresses')
+              .select('department, city, address, phone')
+              .eq('vendor_store_id', vendorStoreId)
+              .eq('is_default', true)
+              .maybeSingle();
+            dispatchAddress = storeAddr;
+          }
+
+          if (!dispatchAddress) {
+            const { data: defaultAddr } = await supabase
+              .from('vendor_dispatch_addresses')
+              .select('department, city, address, phone')
+              .eq('vendor_id', vendorId)
+              .eq('is_default', true)
+              .maybeSingle();
+            dispatchAddress = defaultAddr;
+          }
+
+          loaded[storeKey] = {
+            id: storeKey,
+            vendor_id: vendorId,
+            vendor_store_id: vendorStoreId,
+            shipping_settings: vendor?.shipping_settings || {},
+            default_address: dispatchAddress || null
+          };
+        } catch (e) {
+          console.error(`Error loading shipping info for storeKey ${storeKey}:`, e);
+        }
+      }
+      
+      setVendorsData(loaded);
+    }
+    
+    loadVendorsShippingInfo();
+  }, [items]);
+
   // Destination type based on shipping form in Uruguay
   let destinationType = 'no_local_delivery';
   if (shippingMethod === 'delivery') {
@@ -307,32 +408,43 @@ export default function Checkout() {
     setVendorShippingCosts({});
   }, [dacDeliveryMode, selectedShippingMethod]);
 
+  const resolvedCityForShipping = form.department === 'Montevideo' ? form.barrio : form.city;
+  const isMontevideo = form.department === 'Montevideo';
+
   useEffect(() => {
-    const isMontevideo = form.department === 'Montevideo';
-    
-    if (shippingMethod !== 'delivery' || isMontevideo || !form.department) {
+    if (shippingMethod !== 'delivery' || !form.department) {
       setDacShippingCost(null);
       setDacShippingError(null);
       setDetectedKOficina(null);
+      setVendorShippingCosts({});
       return;
     }
 
-    // For agency mode, need selected agency; for home mode, need city
-    if (dacDeliveryMode === 'dac_agency' && !selectedAgency) {
-      setDacShippingCost(null);
-      setDacShippingError(null);
-      setDetectedKOficina(null);
-      return;
-    }
-    if (dacDeliveryMode === 'dac_home' && !form.city) {
-      setDacShippingCost(null);
-      setDacShippingError(null);
-      setDetectedKOficina(null);
-      return;
+    if (!isMontevideo) {
+      if (dacDeliveryMode === 'dac_agency' && !selectedAgency) {
+        setDacShippingCost(null);
+        setDacShippingError(null);
+        setDetectedKOficina(null);
+        setVendorShippingCosts({});
+        return;
+      }
+      if (dacDeliveryMode === 'dac_home' && !form.city) {
+        setDacShippingCost(null);
+        setDacShippingError(null);
+        setDetectedKOficina(null);
+        setVendorShippingCosts({});
+        return;
+      }
+    } else {
+      if (form.barrio === '') {
+        setDacShippingCost(null);
+        setDacShippingError(null);
+        setDetectedKOficina(null);
+        setVendorShippingCosts({});
+        return;
+      }
     }
 
-    // Even with free shipping, we still need to resolve the office code
-    // for shipment creation. The cost will be overridden to $0 below.
     const isFreeShipping = total >= freeShippingThreshold;
 
     let active = true;
@@ -344,75 +456,115 @@ export default function Checkout() {
         let lastKOficina = null;
         const costsByVendor: Record<string, number> = {};
 
-        // Group items by vendor
         const groups = items.reduce((acc: Record<string, any[]>, item: any) => {
-          const vendorId = item.vendor_id || 'collectibles';
-          if (!acc[vendorId]) acc[vendorId] = [];
-          acc[vendorId].push(item);
+          const storeKey = item.vendor_store_id || item.vendor_id || 'collectibles';
+          if (!acc[storeKey]) acc[storeKey] = [];
+          acc[storeKey].push(item);
           return acc;
         }, {});
 
-        for (const [vendorId, groupItems] of Object.entries(groups)) {
+        for (const [storeKey, groupItems] of Object.entries(groups)) {
           const groupTotal = groupItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
           
           if (isFreeShipping) {
-            costsByVendor[vendorId] = 0;
+            costsByVendor[storeKey] = 0;
             continue;
           }
 
-          const bodyPayload: any = {
-            mode: dacDeliveryMode === 'dac_agency' ? 'agency' : 'home',
-            department: form.department,
-            city: dacDeliveryMode === 'dac_agency' ? (selectedAgency?.city || form.city || selectedAgency?.office_name) : form.city,
-            locality: dacDeliveryMode === 'dac_agency' ? (selectedAgency?.locality || form.barrio || "") : (form.barrio || ""),
-            phone: form.phone,
-            package_quantity: 1,
-            package_type: 1,
-            cart_total: groupTotal,
-            items: groupItems.map(item => ({
-              product_id: item.product_id,
-              variant_id: item.variant_id || "",
-              quantity: item.quantity,
-              price: item.price,
-              title: item.title
-            }))
-          };
+          // Check if SoyDelivery is available for this vendor group (only in Montevideo)
+          const v = vendorsData[storeKey];
+          const hasSD = isMontevideo && v && isSoyDeliveryAvailableForVendor(
+            v.default_address, 
+            { department: form.department, city: resolvedCityForShipping }
+          ).available;
 
-          if (dacDeliveryMode === 'dac_agency' && selectedAgency) {
-            bodyPayload.dac_office_id = selectedAgency.id;
-            bodyPayload.k_oficina_destino = selectedAgency.k_oficina;
-            bodyPayload.address = selectedAgency.address || selectedAgency.office_name;
+          if (isMontevideo && hasSD) {
+            const cost = calculateShipping(resolvedCityForShipping, form.department, groupTotal, freeShippingThreshold);
+            costsByVendor[storeKey] = cost;
+            totalCost += cost;
           } else {
-            bodyPayload.address = form.street;
-          }
+            // Apply fallback ordered list:
+            // 1. DAC, if active for the vendor and globally.
+            // 2. UES, if active for the vendor and globally.
+            // 3. Correo Uruguayo, if active.
+            // 4. Envío manual, if active.
+            // 5. Block.
+            const isDacActive = v?.shipping_settings?.dac?.active && globalProviders['dac'];
+            const isUesActive = v?.shipping_settings?.ues?.active && globalProviders['ues'];
+            const isCorreoActive = v?.shipping_settings?.correo_uruguayo?.active;
+            const isManualActive = v?.shipping_settings?.manual?.active;
 
-          console.log(`[Checkout Debug] Llamado a dac-get-cost para ${vendorId} con payload:`, bodyPayload);
+            if (isDacActive) {
+              const mode = isMontevideo ? 'home' : (dacDeliveryMode === 'dac_agency' ? 'agency' : 'home');
+              const bodyPayload: any = {
+                mode,
+                department: form.department,
+                city: isMontevideo ? 'Montevideo' : (mode === 'agency' ? (selectedAgency?.city || form.city || selectedAgency?.office_name) : form.city),
+                locality: isMontevideo ? form.barrio : (mode === 'agency' ? (selectedAgency?.locality || form.barrio || "") : (form.barrio || "")),
+                phone: form.phone,
+                package_quantity: 1,
+                package_type: 1,
+                cart_total: groupTotal,
+                items: groupItems.map(item => ({
+                  product_id: item.product_id,
+                  variant_id: item.variant_id || "",
+                  quantity: item.quantity,
+                  price: item.price,
+                  title: item.title
+                })),
+                address: isMontevideo ? form.street : (mode === 'agency' && selectedAgency ? (selectedAgency.address || selectedAgency.office_name) : form.street)
+              };
 
-          const { data, error } = await supabase.functions.invoke('dac-get-cost', {
-            body: bodyPayload
-          });
+              if (mode === 'agency' && selectedAgency) {
+                bodyPayload.dac_office_id = selectedAgency.id;
+                bodyPayload.k_oficina_destino = selectedAgency.k_oficina;
+              }
 
-          if (!active) return;
-          if (error) throw error;
+              console.log(`[Checkout Debug] Fallback to DAC for ${storeKey} con payload:`, bodyPayload);
 
-          console.log(`[Checkout Debug] Respuesta dac-get-cost para ${vendorId}:`, data);
+              const { data, error } = await supabase.functions.invoke('dac-get-cost', {
+                body: bodyPayload
+              });
 
-          if (data && data.success) {
-            costsByVendor[vendorId] = data.cost;
-            totalCost += data.cost;
-            lastKOficina = data.raw_response?.k_oficina || data.finalKOficina || null;
-          } else {
-            throw new Error(data?.error || "Error al calcular costo DAC.");
+              if (!active) return;
+              if (error) throw error;
+
+              console.log(`[Checkout Debug] Respuesta dac-get-cost fallback para ${storeKey}:`, data);
+
+              if (data && data.success) {
+                costsByVendor[storeKey] = data.cost;
+                totalCost += data.cost;
+                lastKOficina = data.raw_response?.k_oficina || data.finalKOficina || null;
+              } else {
+                throw new Error(data?.error || "Error al calcular costo DAC.");
+              }
+            } else if (isUesActive) {
+              console.log(`[Checkout Debug] Fallback to UES for ${storeKey}`);
+              costsByVendor[storeKey] = 220; // standard UES flat fee
+              totalCost += 220;
+            } else if (isCorreoActive) {
+              console.log(`[Checkout Debug] Fallback to Correo Uruguayo for ${storeKey}`);
+              costsByVendor[storeKey] = 180; // standard Correo Uruguayo flat fee
+              totalCost += 180;
+            } else if (isManualActive) {
+              const fixedCost = Number(v.shipping_settings?.manual?.fixed_cost || 0);
+              console.log(`[Checkout Debug] Fallback to Envío manual for ${storeKey}: cost ${fixedCost}`);
+              costsByVendor[storeKey] = fixedCost;
+              totalCost += fixedCost;
+            } else {
+              throw new Error("Este vendedor no tiene métodos de envío disponibles para tu dirección. Probá coordinar envío manual o contactanos.");
+            }
           }
         }
 
+        if (!active) return;
         setVendorShippingCosts(costsByVendor);
         setDacShippingCost(isFreeShipping ? 0 : totalCost);
         setDetectedKOficina(lastKOficina);
       } catch (err: any) {
-        console.error("Error fetching DAC cost:", err);
+        console.error("Error fetching shipping cost:", err);
         if (active) {
-          setDacShippingError(err.message || "No pudimos calcular el costo DAC para esta localidad.");
+          setDacShippingError(err.message || "No pudimos calcular el costo de envío para esta localidad.");
           setDacShippingCost(null);
           setDetectedKOficina(null);
         }
@@ -442,50 +594,21 @@ export default function Checkout() {
     selectedAgency?.id,
     selectedAgency?.k_oficina,
     items.length,
-    total
+    total,
+    vendorsData
   ]);
 
-  const resolvedCityForShipping = form.department === 'Montevideo' ? form.barrio : form.city;
-  const isMontevideo = form.department === 'Montevideo';
-
+  const uniqueStoreKeys = Array.from(new Set(items.map(item => item.vendor_store_id || item.vendor_id || 'collectibles')));
   const isLocationSelected = 
     shippingMethod === 'pickup' || 
     (shippingMethod === 'delivery' && (
-      (isMontevideo && form.barrio !== '') || 
+      (isMontevideo && form.barrio !== '' && Object.keys(vendorShippingCosts).length === uniqueStoreKeys.length) || 
       (!isMontevideo && dacShippingCost !== null)
     ));
   
   let shipping = 0;
   if (shippingMethod === 'delivery') {
-    if (isMontevideo) {
-      if (form.barrio !== '') {
-        const isFreeShipping = total >= freeShippingThreshold;
-        if (isFreeShipping) {
-          shipping = 0;
-        } else {
-          // Group items by vendor to calculate per-package shipping
-          const groups = items.reduce((acc: Record<string, any[]>, item: any) => {
-            const vendorId = item.vendor_id || 'collectibles';
-            if (!acc[vendorId]) acc[vendorId] = [];
-            acc[vendorId].push(item);
-            return acc;
-          }, {});
-
-          for (const [vendorId, groupItems] of Object.entries(groups)) {
-            const groupSubtotal = groupItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
-            shipping += calculateShipping(resolvedCityForShipping, form.department, groupSubtotal, freeShippingThreshold);
-          }
-        }
-      } else {
-        shipping = 0;
-      }
-    } else {
-      if (dacShippingCost !== null) {
-        shipping = dacShippingCost;
-      } else {
-        shipping = 0;
-      }
-    }
+    shipping = Object.values(vendorShippingCosts).reduce((sum, cost) => sum + cost, 0);
   }
 
   // Debug log for shipping cost final
@@ -537,41 +660,55 @@ export default function Checkout() {
     }
 
     const isMontevideo = form.department === 'Montevideo';
-    const provider = isMontevideo ? 'soy_delivery' : 'dac';
-    const providerLabel = isMontevideo ? 'Soy Delivery' : 'DAC';
-
     const { hour: curHour, minute: curMin, dayOfWeek } = getUruguayDateTime();
 
-    if (provider === 'soy_delivery') {
+    const hasAnySD = items.some(item => {
+      const storeKey = item.vendor_store_id || item.vendor_id || 'collectibles';
+      const v = vendorsData[storeKey];
+      return isMontevideo && v && isSoyDeliveryAvailableForVendor(
+        v.default_address, 
+        { department: form.department, city: resolvedCityForShipping }
+      ).available;
+    });
+
+    const allVendorsCoveredBySD = items.every(item => {
+      const storeKey = item.vendor_store_id || item.vendor_id || 'collectibles';
+      const v = vendorsData[storeKey];
+      return isMontevideo && v && isSoyDeliveryAvailableForVendor(
+        v.default_address, 
+        { department: form.department, city: resolvedCityForShipping }
+      ).available;
+    });
+
+    if (hasAnySD) {
+      const providerLabel = allVendorsCoveredBySD ? 'Soy Delivery' : 'Soy Delivery / DAC';
       const cutoffTime = settings['shipping_soydelivery_cutoff_time'] || '15:00';
       const cutoff = parseTimeStr(cutoffTime);
       const isBefore = curHour < cutoff.hour || (curHour === cutoff.hour && curMin < cutoff.minute);
 
-      // Mon-Sat: 1 to 6
+      let message = '';
       if (dayOfWeek >= 1 && dayOfWeek <= 6) {
         if (isBefore) {
-          return {
-            providerName: providerLabel,
-            message: `Recibilo hoy mismo comprando antes de las ${cutoffTime}`,
-            assignedProvider: 'soy_delivery'
-          };
+          message = `Recibilo hoy mismo comprando antes de las ${cutoffTime}`;
         } else {
-          return {
-            providerName: providerLabel,
-            message: 'Recibilo mañana mismo en tu domicilio',
-            assignedProvider: 'soy_delivery'
-          };
+          message = 'Recibilo mañana mismo en tu domicilio';
         }
       } else {
-        // Sunday: 0
-        return {
-          providerName: providerLabel,
-          message: 'Recibilo mañana lunes en tu domicilio',
-          assignedProvider: 'soy_delivery'
-        };
+        message = 'Recibilo mañana lunes en tu domicilio';
       }
+
+      if (!allVendorsCoveredBySD) {
+        message += ' (algunos artículos se despacharán por DAC)';
+      }
+
+      return {
+        providerName: providerLabel,
+        message,
+        assignedProvider: 'soy_delivery'
+      };
     } else {
       // DAC
+      const providerLabel = 'DAC';
       const cutoffTime = settings['shipping_dac_cutoff_time'] || '14:00';
       const cutoff = parseTimeStr(cutoffTime);
       const isBefore = curHour < cutoff.hour || (curHour === cutoff.hour && curMin < cutoff.minute);
@@ -1070,6 +1207,11 @@ export default function Checkout() {
   }
 
   const isPaymentBlocked = () => {
+    if (selectedShippingMethod === 'delivery') {
+      if (dacShippingCost === null) return true;
+      if (dacShippingError !== null) return true;
+      if (!form.department || !form.city || !form.street || !form.phone) return true;
+    }
     if (selectedShippingMethod === 'dac' || selectedShippingMethod === 'dac_home') {
       if (dacShippingCost === null) return true;
       if (dacShippingError !== null) return true;
@@ -1129,6 +1271,7 @@ export default function Checkout() {
           product_id: item.product_id,
           variant_id: item.variant_id,
           vendor_id: item.vendor_id === 'platform' || !item.vendor_id ? undefined : item.vendor_id,
+          vendor_store_id: item.vendor_store_id || undefined,
           quantity: item.quantity,
           price: item.price,
           title: item.title,
@@ -2202,33 +2345,48 @@ export default function Checkout() {
                 <div className="space-y-4 mb-6">
                   {Object.entries(
                     items.reduce((acc: Record<string, { name: string; items: any[] }>, item: any) => {
-                      const vendorId = item.vendor_id || 'collectibles';
-                      const vendorName = item.vendor_name || (vendorId === 'collectibles' ? 'Collectibles' : 'Vendedor');
-                      if (!acc[vendorId]) {
-                        acc[vendorId] = { name: vendorName, items: [] };
+                      const storeKey = item.vendor_store_id || item.vendor_id || 'collectibles';
+                      const storeName = item.vendor_name || (storeKey === 'collectibles' ? 'Collectibles' : 'Vendedor');
+                      if (!acc[storeKey]) {
+                        acc[storeKey] = { name: storeName, items: [] };
                       }
-                      acc[vendorId].items.push(item);
+                      acc[storeKey].items.push(item);
                       return acc;
                     }, {})
-                  ).map(([vendorId, group]) => {
+                  ).map(([storeKey, group]) => {
                     // Calculate vendor group shipping cost dynamically
-                    let groupShippingCost = 0;
-                    if (shippingMethod === 'delivery') {
-                      if (total < freeShippingThreshold) {
-                        if (form.department === 'Montevideo') {
-                          if (form.barrio !== '') {
-                            const groupSubtotal = group.items.reduce((sum, it) => sum + it.price * it.quantity, 0);
-                            groupShippingCost = calculateShipping(resolvedCityForShipping, form.department, groupSubtotal, freeShippingThreshold);
-                          }
-                        } else {
-                          groupShippingCost = vendorShippingCosts[vendorId] ?? 0;
-                        }
+                    const groupShippingCost = vendorShippingCosts[storeKey] ?? 0;
+
+                    const v = vendorsData[storeKey];
+                    const hasSD = isMontevideo && v && isSoyDeliveryAvailableForVendor(
+                      v.default_address, 
+                      { department: form.department, city: resolvedCityForShipping }
+                    ).available;
+                    
+                    let providerLabel = 'DAC';
+                    if (hasSD) {
+                      providerLabel = 'Soy Delivery';
+                    } else {
+                      const isDacActive = v?.shipping_settings?.dac?.active && globalProviders['dac'];
+                      const isUesActive = v?.shipping_settings?.ues?.active && globalProviders['ues'];
+                      const isCorreoActive = v?.shipping_settings?.correo_uruguayo?.active;
+                      const isManualActive = v?.shipping_settings?.manual?.active;
+
+                      if (isDacActive) {
+                        providerLabel = 'DAC';
+                      } else if (isUesActive) {
+                        providerLabel = 'UES';
+                      } else if (isCorreoActive) {
+                        providerLabel = 'Correo Uruguayo';
+                      } else if (isManualActive) {
+                        providerLabel = 'Envío manual';
+                      } else {
+                        providerLabel = 'Sin método disponible';
                       }
                     }
-                    const providerLabel = form.department === 'Montevideo' ? 'Soy Delivery' : 'DAC';
 
                     return (
-                      <div key={vendorId} className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-3">
+                      <div key={storeKey} className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-3">
                         <div className="flex items-center justify-between border-b border-white/5 pb-2">
                           <span className="text-xs font-black uppercase text-[#f00856] tracking-wider">{group.name}</span>
                           {shippingMethod === 'delivery' && isLocationSelected && form.department && (

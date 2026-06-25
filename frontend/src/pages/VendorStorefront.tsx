@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Store, MapPin, Mail, ExternalLink, ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Store, MapPin, Mail, Phone, ExternalLink, ShieldCheck, Award, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ProductGridCard } from '../components/ProductGridCard';
 import { useCartContext } from '../contexts/CartContext';
 import { getProductImage } from '../lib/imageUtils';
@@ -9,7 +9,10 @@ import { Helmet } from 'react-helmet-async';
 
 export default function VendorStorefront() {
   const { slug } = useParams<{ slug: string }>();
-  const [vendor, setVendor] = useState<any>(null);
+  const [store, setStore] = useState<any>(null);
+  const [kycStatus, setKycStatus] = useState<string | null>(null);
+  const [pickupAddress, setPickupAddress] = useState<string>('');
+  const [storeBrands, setStoreBrands] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [totalProducts, setTotalProducts] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -35,9 +38,10 @@ export default function VendorStorefront() {
       category_id: p.category_id, 
       brand_id: p.brand_id, 
       vendor_id: p.vendor_id, 
-      vendor_name: p.vendor?.store_name || vendor?.store_name,
-      vendor_slug: p.vendor?.slug || vendor?.slug,
-      vendor_logo: p.vendor?.logo_url || vendor?.logo_url,
+      vendor_store_id: p.vendor_store_id || store?.id || null,
+      vendor_name: store?.store_name || p.vendor?.store_name || 'Vendedor',
+      vendor_slug: store?.slug || p.vendor?.slug || slug,
+      vendor_logo: store?.logo_url || p.vendor?.logo_url,
       tag_ids: p.product_tags?.map((pt: any) => pt.tag_id) || [] 
     });
   }
@@ -45,38 +49,87 @@ export default function VendorStorefront() {
   useEffect(() => {
     if (!slug) return;
     setPage(1);
-    loadVendor();
+    loadStoreData();
   }, [slug]);
 
   useEffect(() => {
-    if (vendor) {
+    if (store) {
       loadProducts();
     }
-  }, [vendor, page]);
+  }, [store, page]);
 
-  async function loadVendor() {
+  async function loadStoreData() {
     setLoading(true);
     try {
-      const { data: vendorData, error: vendorErr } = await supabase
-        .from('vendors')
-        .select('id, slug, status, banner_url, store_name, logo_url, description, pickup_address, contact_email, social_links, kyc_status')
+      // 1. Fetch store from vendor_stores
+      const { data: storeData, error: storeErr } = await supabase
+        .from('vendor_stores')
+        .select('*')
         .eq('slug', slug)
         .eq('status', 'active')
         .single();
 
-      if (vendorErr || !vendorData) {
-        setVendor(null);
-      } else {
-        setVendor(vendorData);
+      if (storeErr || !storeData) {
+        setStore(null);
+        setLoading(false);
+        return;
       }
+
+      setStore(storeData);
+
+      // 2. Fetch KYC status from parent vendor account
+      const { data: vendorKyc } = await supabase
+        .from('vendors')
+        .select('kyc_status')
+        .eq('id', storeData.vendor_id)
+        .maybeSingle();
+
+      if (vendorKyc) {
+        setKycStatus(vendorKyc.kyc_status);
+      }
+
+      // 3. Fetch dispatch address (store specific with fallback to vendor default)
+      const { data: storeAddr } = await supabase
+        .from('vendor_dispatch_addresses')
+        .select('address, city, state')
+        .eq('vendor_store_id', storeData.id)
+        .eq('is_default', true)
+        .maybeSingle();
+
+      let finalAddr = storeAddr;
+      if (!finalAddr) {
+        const { data: vendorAddr } = await supabase
+          .from('vendor_dispatch_addresses')
+          .select('address, city, state')
+          .eq('vendor_id', storeData.vendor_id)
+          .is('vendor_store_id', null)
+          .eq('is_default', true)
+          .maybeSingle();
+        finalAddr = vendorAddr;
+      }
+
+      if (finalAddr) {
+        setPickupAddress(`${finalAddr.address}, ${finalAddr.city}, ${finalAddr.state}`);
+      }
+
+      // 4. Fetch approved store brands
+      const { data: assocBrands } = await supabase
+        .from('vendor_store_brands')
+        .select('brands(id, name, logo_url)')
+        .eq('vendor_store_id', storeData.id)
+        .eq('status', 'approved');
+
+      const brandsList = assocBrands?.map((ab: any) => ab.brands).filter(Boolean) || [];
+      setStoreBrands(brandsList);
+
     } catch (err) {
-      console.error('Error loading vendor:', err);
+      console.error('Error loading store data:', err);
     }
     setLoading(false);
   }
 
   async function loadProducts() {
-    if (!vendor) return;
+    if (!store) return;
     setLoadingProducts(true);
     try {
       const from = (page - 1) * pageSize;
@@ -85,11 +138,11 @@ export default function VendorStorefront() {
       const { data: productsData, count, error } = await supabase
         .from('products')
         .select(`
-          id, title, slug, base_price, compare_at_price, category_id, brand_id, vendor_id,
+          id, title, slug, base_price, compare_at_price, category_id, brand_id, vendor_id, vendor_store_id,
           product_images(url, is_primary),
           product_variants(id, price, stock, options, price_adjustment)
         `, { count: 'exact' })
-        .eq('vendor_id', vendor.id)
+        .eq('vendor_store_id', store.id)
         .eq('is_active', true)
         .order('created_at', { ascending: false })
         .range(from, to);
@@ -118,12 +171,12 @@ export default function VendorStorefront() {
     );
   }
 
-  if (!vendor) {
+  if (!store) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4 bg-[#05070f]">
         <Store className="w-16 h-16 text-gray-700" />
         <h1 className="text-2xl font-black text-white">Tienda no encontrada</h1>
-        <p className="text-gray-500">El vendedor que buscas no existe o está inactivo.</p>
+        <p className="text-gray-500">La tienda oficial que buscas no existe o está inactiva.</p>
         <Link to="/shop" className="mt-4 bg-white text-black px-6 py-3 rounded-full font-bold hover:bg-[#f00856] hover:text-white transition-colors">
           Volver al Catálogo
         </Link>
@@ -133,8 +186,8 @@ export default function VendorStorefront() {
 
   const totalPages = Math.ceil(totalProducts / pageSize);
 
-  const seoTitle = `${vendor.store_name} | Collectibles Marketplace`;
-  const seoDesc = vendor.description || `Productos de ${vendor.store_name} disponibles en Uruguay. Descubrí artículos de colección con envío a todo el país.`;
+  const seoTitle = store.seo_title || `${store.store_name} - Tienda Oficial | Collectibles`;
+  const seoDesc = store.seo_description || store.description || `Productos de ${store.store_name} en Collectibles Uruguay. Encontrá figuras de acción y coleccionables con envío a todo el país.`;
   const canonicalUrl = `https://collectibles.uy/store/${slug}`;
 
   return (
@@ -147,30 +200,30 @@ export default function VendorStorefront() {
         <meta property="og:description" content={seoDesc} />
         <meta property="og:url" content={canonicalUrl} />
         <meta property="og:type" content="website" />
-        {vendor.logo_url && <meta property="og:image" content={vendor.logo_url} />}
+        {store.logo_url && <meta property="og:image" content={store.logo_url} />}
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={seoTitle} />
         <meta name="twitter:description" content={seoDesc} />
-        {vendor.logo_url && <meta name="twitter:image" content={vendor.logo_url} />}
+        {store.logo_url && <meta name="twitter:image" content={store.logo_url} />}
         
         {/* Schema.org for Store */}
         <script type="application/ld+json">
           {JSON.stringify({
             "@context": "https://schema.org",
             "@type": "Store",
-            "name": vendor.store_name,
+            "name": store.store_name,
             "description": seoDesc,
             "url": canonicalUrl,
-            "image": vendor.logo_url || "https://collectibles.uy/logo.png"
+            "image": store.logo_url || "https://collectibles.uy/logo.png"
           })}
         </script>
       </Helmet>
 
       {/* Banner / Header */}
       <div className="bg-[#05070f] border-b border-white/5 relative z-10">
-        {vendor.banner_url ? (
+        {store.banner_url ? (
           <div className="h-64 md:h-80 w-full overflow-hidden relative">
-            <img src={vendor.banner_url} alt={vendor.store_name} className="w-full h-full object-cover" />
+            <img src={store.banner_url} alt={store.store_name} className="w-full h-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t from-[#05070f] via-[#05070f]/50 to-transparent" />
           </div>
         ) : (
@@ -181,45 +234,72 @@ export default function VendorStorefront() {
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="flex flex-col md:flex-row items-start md:items-end gap-6 -mt-16 md:-mt-20 pb-8">
-            <div className="w-32 h-32 md:w-40 md:h-40 rounded-[2rem] border border-white/10 bg-[#0a0d16] overflow-hidden shadow-2xl flex-shrink-0 relative z-20">
-              {vendor.logo_url ? (
-                <img src={vendor.logo_url} alt={vendor.store_name} className="w-full h-full object-cover" />
+            <div className="w-32 h-32 md:w-40 md:h-40 rounded-[2rem] border border-white/10 bg-[#0a0d16] overflow-hidden shadow-2xl flex-shrink-0 relative z-20 flex items-center justify-center">
+              {store.logo_url ? (
+                <img src={store.logo_url} alt={store.store_name} className="w-full h-full object-contain p-2" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <Store className="w-12 h-12 text-white/20" />
-                </div>
+                <Store className="w-12 h-12 text-white/20" />
               )}
             </div>
+            
             <div className="flex-1 pb-2">
-              <h1 className="text-3xl md:text-5xl font-black text-white flex items-center gap-4 tracking-tighter">
-                {vendor.store_name}
-                {vendor.kyc_status === 'approved' && (
-                  <span className="flex items-center gap-1 text-[10px] bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-3 py-1.5 rounded-full uppercase tracking-[0.2em] font-black" title="Vendedor Verificado">
-                    <ShieldCheck className="w-4 h-4" /> Verificado
-                  </span>
-                )}
-              </h1>
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter">
+                  {store.store_name}
+                </h1>
+                
+                <div className="flex gap-2">
+                  {store.is_official && (
+                    <span className="flex items-center gap-1 text-[9px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-3 py-1 rounded-full uppercase tracking-[0.15em] font-black">
+                      <Award className="w-3.5 h-3.5" /> {store.official_badge_text || 'OFICIAL'}
+                    </span>
+                  )}
+                  {kycStatus === 'approved' && (
+                    <span className="flex items-center gap-1 text-[9px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded-full uppercase tracking-[0.15em] font-black" title="Vendedor Verificado">
+                      <ShieldCheck className="w-3.5 h-3.5" /> Verificado
+                    </span>
+                  )}
+                </div>
+              </div>
+
               <p className="text-slate-400 mt-3 max-w-2xl text-sm leading-relaxed font-bold">
-                {vendor.description || 'Tienda oficial en Collectibles.'}
+                {store.description || 'Tienda oficial en Collectibles.'}
               </p>
+
+              {/* Mapped Brands badges */}
+              {storeBrands.length > 0 && (
+                <div className="mt-4 flex flex-wrap gap-2 items-center">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mr-1">Marcas Oficiales:</span>
+                  {storeBrands.map((brand: any) => (
+                    <span key={brand.id} className="text-[10px] bg-white/5 border border-white/10 text-slate-300 px-2.5 py-1 rounded-md font-bold">
+                      {brand.name}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
             
             {/* Contact Info Widget */}
             <div className="w-full md:w-auto glass rounded-2xl p-6 border border-white/5 flex flex-col gap-3 shadow-xl">
-              {vendor.pickup_address && (
+              {pickupAddress && (
                 <div className="flex items-center gap-3 text-xs text-slate-400 font-bold uppercase tracking-widest">
-                  <MapPin className="w-4 h-4 text-[#f00856]" /> {vendor.pickup_address}
+                  <MapPin className="w-4 h-4 text-[#f00856]" /> {pickupAddress}
                 </div>
               )}
-              {vendor.contact_email && (
+              {store.contact_email && (
                 <div className="flex items-center gap-3 text-xs text-slate-400 font-bold uppercase tracking-widest">
-                  <Mail className="w-4 h-4 text-[#f00856]" /> <a href={`mailto:${vendor.contact_email}`} className="hover:text-white transition-colors">{vendor.contact_email}</a>
+                  <Mail className="w-4 h-4 text-[#f00856]" /> <a href={`mailto:${store.contact_email}`} className="hover:text-white transition-colors">{store.contact_email}</a>
                 </div>
               )}
-              {vendor.social_links?.instagram && (
+              {store.contact_phone && (
+                <div className="flex items-center gap-3 text-xs text-slate-400 font-bold uppercase tracking-widest">
+                  <Phone className="w-4 h-4 text-[#f00856]" /> <a href={`tel:${store.contact_phone}`} className="hover:text-white transition-colors">{store.contact_phone}</a>
+                </div>
+              )}
+              {store.social_links?.instagram && (
                 <div className="flex items-center gap-3 text-xs text-slate-400 font-bold uppercase tracking-widest">
                   <ExternalLink className="w-4 h-4 text-[#f00856]" /> 
-                  <a href={vendor.social_links.instagram} target="_blank" rel="noreferrer" className="hover:text-white transition-colors">Instagram</a>
+                  <a href={`https://instagram.com/${store.social_links.instagram.replace('@','')}`} target="_blank" rel="noreferrer" className="hover:text-white transition-colors">Instagram</a>
                 </div>
               )}
             </div>
@@ -231,8 +311,8 @@ export default function VendorStorefront() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 relative z-10">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-12 gap-4">
           <div>
-             <h3 className="text-[11px] text-[#f00856] font-black uppercase tracking-[0.4em] mb-2">Vendor Collection</h3>
-             <h2 className="text-4xl font-black text-white tracking-tighter">Catálogo de Productos <span className="text-slate-600">({totalProducts})</span></h2>
+             <h3 className="text-[11px] text-[#f00856] font-black uppercase tracking-[0.4em] mb-2">Store Collection</h3>
+             <h2 className="text-4xl font-black text-white tracking-tighter">Catálogo de la Tienda <span className="text-slate-600">({totalProducts})</span></h2>
           </div>
           
           {/* Top Pagination Controls */}
@@ -268,7 +348,7 @@ export default function VendorStorefront() {
           <div className="text-center py-24 glass rounded-[3rem] border border-white/5 shadow-2xl">
             <Store className="w-20 h-20 text-white/10 mx-auto mb-6" />
             <h3 className="text-2xl font-black text-white mb-3">No hay productos disponibles</h3>
-            <p className="text-slate-500 max-w-md mx-auto font-bold">Este vendedor aún no ha publicado productos o están temporalmente sin stock.</p>
+            <p className="text-slate-500 max-w-md mx-auto font-bold">Esta tienda oficial aún no tiene productos activos o están sin stock.</p>
           </div>
         ) : (
           <>

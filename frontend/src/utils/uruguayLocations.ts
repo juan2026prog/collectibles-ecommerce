@@ -86,3 +86,112 @@ export function calculateShipping(city: string, department: string, total: numbe
 
   return price;
 }
+
+export function normalizeLocationString(str: string): string {
+  return str
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+/**
+ * TODO: Migrate this geographic coverage checker to use a database table (e.g. `shipping_zones`)
+ * configured by the Administrator, rather than hardcoding constants.
+ * 
+ * Checks if a given Uruguayan department and city are covered by the SoyDelivery/Flex delivery zone.
+ * Covered areas:
+ * - Montevideo (all cities/neighborhoods)
+ * - San José (Ciudad del Plata only)
+ * - Canelones (specific metropolitan cities)
+ */
+export function isLocationInSoyDeliveryZone(department?: string | null, city?: string | null): boolean {
+  if (!department || !city) return false;
+  
+  const normDept = normalizeLocationString(department);
+  const normCity = normalizeLocationString(city);
+  
+  if (normDept === 'montevideo') {
+    return true;
+  }
+  
+  if (normDept === 'san jose') {
+    return normCity === 'ciudad del plata';
+  }
+  
+  if (normDept === 'canelones') {
+    const coveredCanelones = [
+      'ciudad de la costa', 'colinas de carrasco', 'el pinar', 'lagomar', 'lomas de solymar',
+      'parque carrasco', 'paso de carrasco', 'shangrila', 'solymar',
+      'la paz', 'las piedras', 'progreso', 'barros blancos', 'joaquin suarez', 'pando', 'toledo',
+      'ciudad de canelones', 'canelones'
+    ];
+    return coveredCanelones.includes(normCity);
+  }
+  
+  return false;
+}
+
+export interface LocationAddress {
+  department?: string | null;
+  city?: string | null;
+  address?: string | null;
+}
+
+export interface CoverageResult {
+  available: boolean;
+  reason?: string;
+  fallback_methods: ('dac' | 'ues' | 'correo_uruguayo')[];
+}
+
+export function isSoyDeliveryAvailableForVendor(
+  vendorDispatchAddress?: LocationAddress | null,
+  customerAddress?: LocationAddress | null,
+  options?: {
+    globalEnabled?: boolean;
+    cutoffTime?: string;
+    currentTime?: { hour: number; minute: number; dayOfWeek: number };
+  }
+): CoverageResult {
+  const fallback_methods: ('dac' | 'ues' | 'correo_uruguayo')[] = ['dac', 'ues', 'correo_uruguayo'];
+
+  if (options?.globalEnabled === false) {
+    return {
+      available: false,
+      reason: 'El método SoyDelivery/Flex está desactivado de forma global por la plataforma.',
+      fallback_methods
+    };
+  }
+
+  if (!vendorDispatchAddress || !vendorDispatchAddress.department || !vendorDispatchAddress.city) {
+    return {
+      available: false,
+      reason: 'El vendedor no tiene configurada una dirección de despacho predeterminada.',
+      fallback_methods
+    };
+  }
+
+  if (!isLocationInSoyDeliveryZone(vendorDispatchAddress.department, vendorDispatchAddress.city)) {
+    return {
+      available: false,
+      reason: `La dirección de despacho del vendedor (${vendorDispatchAddress.city}, ${vendorDispatchAddress.department}) está fuera de la zona de cobertura de SoyDelivery.`,
+      fallback_methods
+    };
+  }
+
+  if (customerAddress) {
+    if (!isLocationInSoyDeliveryZone(customerAddress.department, customerAddress.city)) {
+      return {
+        available: false,
+        reason: `La dirección de envío del cliente (${customerAddress.city || 'no especificada'}, ${customerAddress.department || 'no especificada'}) está fuera de la zona de cobertura de SoyDelivery.`,
+        fallback_methods
+      };
+    }
+  }
+
+  return {
+    available: true,
+    fallback_methods
+  };
+}
+

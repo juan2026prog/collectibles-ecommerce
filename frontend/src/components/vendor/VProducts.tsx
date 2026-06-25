@@ -131,11 +131,14 @@ export default function VProducts() {
   const [categories, setCategories] = useState<any[]>([]);
   const [brands, setBrands] = useState<any[]>([]);
   const [tags, setTags] = useState<any[]>([]);
+  const [activeStores, setActiveStores] = useState<any[]>([]);
+  const [storeBrands, setStoreBrands] = useState<any[]>([]);
   
   const [form, setForm] = useState({
     title: '', slug: '', description: '', short_description: '',
     base_price: '', compare_at_price: '', sku: '', stock: '10', status: 'published',
     badge: '', is_featured: false, is_active: true, category_id: '', brand_id: '',
+    vendor_store_id: '',
     image_url: '', video_url: '',
     // Many-to-many
     categories: [] as string[],
@@ -162,19 +165,29 @@ export default function VProducts() {
   }
 
   async function fetchMeta() {
-    const [{ data: cats }, { data: brs }, { data: tgs }] = await Promise.all([
+    const [{ data: cats }, { data: brs }, { data: tgs }, { data: strs }, { data: stBrs }] = await Promise.all([
       supabase.from('categories').select('id, name, status, parent_id').or(`owner_vendor_id.eq.${user?.id},status.eq.approved`).order('sort_order'),
       supabase.from('brands').select('id, name, status').or(`owner_vendor_id.eq.${user?.id},status.eq.approved`).order('sort_order'),
       supabase.from('tags').select('id, name').order('name'),
+      supabase.from('vendor_stores').select('id, store_name, status').eq('vendor_id', user?.id).eq('status', 'active'),
+      supabase.from('vendor_store_brands').select('vendor_store_id, brand_id').eq('vendor_id', user?.id).eq('status', 'approved')
     ]);
     setCategories(cats || []);
     setBrands(brs || []);
     setTags(tgs || []);
+    setActiveStores(strs || []);
+    setStoreBrands(stBrs || []);
   }
 
   function openCreate() {
     setEditing(null);
-    setForm({ title: '', slug: '', description: '', short_description: '', base_price: '', compare_at_price: '', sku: `${Date.now()}`, stock: '10', status: 'published', badge: '', is_featured: false, is_active: true, category_id: '', brand_id: '', image_url: '', video_url: '', categories: [], tags: [], brands: [], gallery: [] });
+    setForm({ 
+      title: '', slug: '', description: '', short_description: '', base_price: '', compare_at_price: '', 
+      sku: `${Date.now()}`, stock: '10', status: 'published', badge: '', is_featured: false, is_active: true, 
+      category_id: '', brand_id: '', 
+      vendor_store_id: activeStores.length === 1 ? activeStores[0].id : '',
+      image_url: '', video_url: '', categories: [], tags: [], brands: [], gallery: [] 
+    });
     setShowForm(true);
   }
 
@@ -202,6 +215,7 @@ export default function VProducts() {
       is_active: product.is_active !== false,
       category_id: product.category?.id || '', 
       brand_id: product.brand?.id || '',
+      vendor_store_id: (product as any).vendor_store_id || '',
       image_url: product.images?.[0]?.url || '', 
       video_url: '',
       categories: pCats?.map(c => c.category_id) || [],
@@ -237,7 +251,8 @@ export default function VProducts() {
         base_price: parseFloat(form.base_price) || 0, compare_at_price: form.compare_at_price ? parseFloat(form.compare_at_price) : null,
         status: finalStatus, badge: form.badge || null, is_featured: form.is_featured,
         is_active: (isBrandPending || isAnyCategoryPending) ? false : form.is_active,
-        brand_id: selectedBrandId, category_id: form.categories[0] || null
+        brand_id: selectedBrandId, category_id: form.categories[0] || null,
+        vendor_store_id: form.vendor_store_id || null
       };
 
         let productId = editing?.id;
@@ -325,10 +340,24 @@ export default function VProducts() {
   };
 
   const toggleBrand = (id: string) => {
-    setForm(prev => ({
-      ...prev,
-      brands: prev.brands.includes(id) ? prev.brands.filter(bid => bid !== id) : [id] 
-    }));
+    setForm(prev => {
+      const isSelecting = !prev.brands.includes(id);
+      const nextBrands = isSelecting ? [id] : [];
+      let nextStoreId = prev.vendor_store_id;
+
+      if (isSelecting) {
+        const matchedAssociation = storeBrands.find(sb => sb.brand_id === id);
+        if (matchedAssociation) {
+          nextStoreId = matchedAssociation.vendor_store_id;
+        }
+      }
+
+      return {
+        ...prev,
+        brands: nextBrands,
+        vendor_store_id: nextStoreId
+      };
+    });
   };
 
   const handleAddCategory = async () => {
@@ -1266,8 +1295,26 @@ export default function VProducts() {
                              </div>
                           </div>
                        </SidebarWidget>
+                        {/* WIDGET: TIENDAS (VENDIDO POR) */}
+                        <SidebarWidget title="Tienda / Vendido por">
+                           <div className="space-y-3">
+                              <select 
+                                 value={form.vendor_store_id} 
+                                 onChange={e => setForm(prev => ({ ...prev, vendor_store_id: e.target.value }))}
+                                 className="w-full text-xs p-2 border rounded bg-white outline-none focus:border-blue-500"
+                              >
+                                 <option value="">Ninguna (Collectibles)</option>
+                                 {activeStores.map(store => (
+                                    <option key={store.id} value={store.id}>{store.store_name}</option>
+                                 ))}
+                              </select>
+                              <p className="text-[10px] text-gray-400">
+                                 Define con qué identidad pública se venderá este producto.
+                              </p>
+                           </div>
+                        </SidebarWidget>
 
-                       {/* WIDGET: MARCAS */}
+                        {/* WIDGET: MARCAS */}
                        <SidebarWidget title="Marcas (Brands)">
                           <div className="space-y-3">
                              <div className="border rounded-md max-h-48 overflow-y-auto p-2 bg-gray-50/30">

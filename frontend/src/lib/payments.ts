@@ -4,6 +4,8 @@ interface CreateOrderParams {
   items: Array<{
     product_id: string;
     variant_id?: string;
+    vendor_id?: string;
+    vendor_store_id?: string;
     quantity: number;
     price: number;
     title?: string;

@@ -142,7 +142,7 @@ export default function ProductDetail() {
     
   const winnerIsCollectibles = bbWinner ? bbWinner.is_collectibles : (!product?.vendor_id);
   const winnerVendorId = hideVendors ? null : (bbWinner ? bbWinner.vendor_id : product?.vendor_id);
-  const winnerVendorName = hideVendors ? 'Collectibles Uruguay' : (bbWinner ? bbWinner.vendor_name : (product?.vendor?.store_name || 'Collectibles Uruguay'));
+  const winnerVendorName = hideVendors ? 'Collectibles' : (bbWinner ? bbWinner.vendor_name : (product?.vendor_store?.store_name || product?.vendor?.store_name || 'Collectibles'));
   const winnerHasLogistics = hideVendors ? false : (bbWinner ? bbWinner.has_logistics : false);
 
   const avgRating = reviews.length > 0 ? reviews.reduce((s: number, r: any) => s + r.rating, 0) / reviews.length : 0;
@@ -251,9 +251,10 @@ export default function ProductDetail() {
       category_id: product.category?.id,
       brand_id: product.brand?.id,
       vendor_id: targetVendorId,
-      vendor_name: targetVendorName,
-      vendor_slug: product.vendor?.slug,
-      vendor_logo: product.vendor?.logo_url,
+      vendor_store_id: product.vendor_store_id || null,
+      vendor_name: product.vendor_store?.store_name || targetVendorName,
+      vendor_slug: product.vendor_store?.slug || product.vendor?.slug,
+      vendor_logo: product.vendor_store?.logo_url || product.vendor?.logo_url,
       tag_ids: product.product_tags?.map((pt: any) => pt.tag_id) || [],
       is_international: product.source_provider === 'zinc',
       urubox_estimate: product.international_products?.urubox_estimated_cost_usd || 0,

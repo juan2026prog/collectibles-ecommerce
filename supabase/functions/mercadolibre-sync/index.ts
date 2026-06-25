@@ -1831,7 +1831,7 @@ Deno.serve(async (req) => {
 
     // ═══ ACTION: CURATE CREATE ═══
     if (action === 'curate_create') {
-        const { raw_item_id, title, description, price, stock, category_id, universe, brand_id, line, selected_image } = body;
+        const { raw_item_id, title, description, price, stock, category_id, universe, brand_id, line, selected_image, vendor_store_id } = body;
         if (!raw_item_id || !title || !category_id) {
           throw new Error("Missing raw_item_id, title or category_id");
         }
@@ -1905,10 +1905,37 @@ Deno.serve(async (req) => {
         const initialProductStatus = (isBrandPending || isCategoryPending) ? 'pending_taxonomy_review' : 'published';
         const initialIsActive = (isBrandPending || isCategoryPending) ? false : true;
 
+        // Resolve vendor_store_id
+        let resolvedStoreId = vendor_store_id || null;
+        if (!resolvedStoreId && vendorId) {
+          const { data: activeStores } = await supabase
+            .from('vendor_stores')
+            .select('id')
+            .eq('vendor_id', vendorId)
+            .eq('status', 'active');
+          
+          if (activeStores && activeStores.length === 1) {
+            resolvedStoreId = activeStores[0].id;
+          } else if (activeStores && activeStores.length > 1 && resolvedBrandId) {
+            const storeIds = activeStores.map((s: any) => s.id);
+            const { data: storeBrandMatches } = await supabase
+              .from('vendor_store_brands')
+              .select('vendor_store_id')
+              .eq('brand_id', resolvedBrandId)
+              .eq('status', 'approved')
+              .in('vendor_store_id', storeIds);
+            
+            if (storeBrandMatches && storeBrandMatches.length === 1) {
+              resolvedStoreId = storeBrandMatches[0].vendor_store_id;
+            }
+          }
+        }
+
         const { data: newProd, error: prodErr } = await supabase
           .from('products')
           .insert({
             vendor_id: vendorId,
+            vendor_store_id: resolvedStoreId,
             title,
             description: description || title,
             slug: uniqueSlug,

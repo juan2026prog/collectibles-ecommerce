@@ -10,6 +10,7 @@ const itemSchema = z.object({
   id: z.string().uuid().optional(),
   variant_id: z.string().uuid().optional(),
   vendor_id: z.string().uuid().nullable().optional(),
+  vendor_store_id: z.string().uuid().nullable().optional(),
   quantity: z.number().int().min(1),
   price: z.number().min(0),
   title: z.string().optional(),
@@ -97,6 +98,34 @@ function calculateShipping(city: string, department: string, subtotal: number, f
   if (normalizedDepartment === "Montevideo") return 200;
   return 350;
 }
+
+function isLocationInSoyDeliveryZone(department?: string | null, city?: string | null): boolean {
+  if (!department || !city) return false;
+  
+  const normDept = normalizeLocation(department).toLowerCase();
+  const normCity = normalizeLocation(city).toLowerCase();
+  
+  if (normDept === "montevideo") {
+    return true;
+  }
+  
+  if (normDept === "san jose") {
+    return normCity === "ciudad del plata";
+  }
+  
+  if (normDept === "canelones") {
+    const coveredCanelones = new Set([
+      "ciudad de la costa", "colinas de carrasco", "el pinar", "lagomar", "lomas de solymar",
+      "parque carrasco", "paso de carrasco", "shangrila", "solymar",
+      "la paz", "las piedras", "progreso", "barros blancos", "joaquin suarez", "pando", "toledo",
+      "ciudad de canelones", "canelones"
+    ]);
+    return coveredCanelones.has(normCity);
+  }
+  
+  return false;
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -195,7 +224,7 @@ Deno.serve(async (req) => {
     // 3. Consulta segura y correcta a la tabla real 'products' (columna 'base_price')
     const { data: products, error: productError } = await supabase
       .from("products")
-      .select("id, title, base_price, category_id, brand_id, vendor_id, vendors(store_name), product_tags(tag_id)")
+      .select("id, title, base_price, category_id, brand_id, vendor_id, vendor_store_id, vendors(store_name), product_tags(tag_id)")
       .in("id", productIds);
 
     if (productError) {
@@ -375,9 +404,13 @@ Deno.serve(async (req) => {
         });
       }
 
+      const dbProduct = products?.find(p => p.id === productId);
+      const resolvedStoreId = item.vendor_store_id || dbProduct?.vendor_store_id || null;
+
       verifiedItems.push({
         ...item,
         product_id: productId, // Garantizar que se guarde como product_id
+        vendor_store_id: resolvedStoreId,
         price: serverPrice     // Usar precio del servidor
       });
     }
@@ -642,14 +675,23 @@ Deno.serve(async (req) => {
       ? (payload.shipping_address.barrio || "")
       : (payload.shipping_address.city || "");
 
-    // Fetch free shipping threshold setting from DB
-    const { data: thresholdSetting } = await supabase
+    // Fetch free shipping threshold and global SoyDelivery setting from DB
+    const { data: settingsList } = await supabase
       .from('site_settings')
-      .select('value')
-      .eq('key', 'free_shipping_threshold')
-      .maybeSingle();
+      .select('key, value')
+      .in('key', ['free_shipping_threshold', 'shipping_soydelivery_enabled']);
 
-    const freeShippingThreshold = thresholdSetting?.value ? Number(thresholdSetting.value) : 4000;
+    const settingsMap = Object.fromEntries((settingsList || []).map(s => [s.key, s.value]));
+    const freeShippingThreshold = settingsMap['free_shipping_threshold'] ? Number(settingsMap['free_shipping_threshold']) : 4000;
+    const isSoyDeliveryEnabledGlobally = settingsMap['shipping_soydelivery_enabled'] !== 'false';
+
+    // Fetch global active status of delivery providers
+    const { data: globalProvidersList } = await supabase
+      .from('delivery_providers')
+      .select('provider_key, is_active');
+    const globalProvidersMap = Object.fromEntries(
+      (globalProvidersList || []).map(p => [p.provider_key, p.is_active])
+    );
 
     // Map variants for easy lookup of SKU and name
     const variantMap = new Map<string, any>();
@@ -664,24 +706,26 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Group items by vendor
+    // Group items by vendor store
     const groups = new Map<string | null, any[]>();
     for (const item of verifiedItems) {
       const dbProduct = products?.find(p => p.id === item.product_id);
-      const vendorId = item.vendor_id || dbProduct?.vendor_id || null;
-      if (!groups.has(vendorId)) {
-        groups.set(vendorId, []);
+      const storeId = item.vendor_store_id || dbProduct?.vendor_store_id || null;
+      const groupKey = storeId || item.vendor_id || dbProduct?.vendor_id || null;
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, []);
       }
       
       const variantObj = item.variant_id ? variantMap.get(item.variant_id) : null;
       const productName = variantObj ? `${dbProduct?.title} (${variantObj.name})` : (dbProduct?.title || item.title || "Producto");
       const itemSku = variantObj?.sku || null;
 
-      groups.get(vendorId)!.push({
+      groups.get(groupKey)!.push({
         ...item,
         product_name: productName,
         sku: itemSku,
-        vendor_id: vendorId,
+        vendor_id: item.vendor_id || dbProduct?.vendor_id || null,
+        vendor_store_id: storeId,
       });
     }
 
@@ -689,33 +733,129 @@ Deno.serve(async (req) => {
     const subordersList = [];
     let totalShippingCost = 0;
 
-    // Process each vendor group
-    for (const [vendorId, groupItems] of groups.entries()) {
-      const dbProduct = products?.find(p => p.vendor_id === vendorId || (vendorId === null && !p.vendor_id));
-      const vendorName = vendorId === null ? "Collectibles" : (dbProduct?.vendors?.store_name || "Vendor");
+    // Process each vendor store group
+    for (const [groupKey, groupItems] of groups.entries()) {
+      let vendorId: string | null = null;
+      let vendorStoreId: string | null = null;
+      let vendorName = "Vendor";
+
+      if (groupKey === null) {
+        vendorName = "Collectibles";
+      } else {
+        const { data: storeData } = await supabase
+          .from('vendor_stores')
+          .select('id, vendor_id, store_name')
+          .eq('id', groupKey)
+          .maybeSingle();
+
+        if (storeData) {
+          vendorStoreId = storeData.id;
+          vendorId = storeData.vendor_id;
+          vendorName = storeData.store_name;
+        } else {
+          vendorId = groupKey;
+          const { data: vendorData } = await supabase
+            .from('vendors')
+            .select('store_name')
+            .eq('id', vendorId)
+            .maybeSingle();
+          vendorName = vendorData?.store_name || "Vendor";
+        }
+      }
+
       const groupSubtotal = groupItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
       const groupDiscount = subtotal > 0 ? (totalDiscounts * groupSubtotal / subtotal) : 0;
       
-      let groupShippingCost = 0;
-      if (payload.shipping_method === "delivery" || payload.shipping_method === "dac" || payload.shipping_method === "dac_home" || payload.shipping_method === "dac_agency") {
-        const isMontevideo = payload.shipping_address.department === "Montevideo";
-        if (isMontevideo) {
-          groupShippingCost = calculateShipping(shippingCity, "Montevideo", groupSubtotal, freeShippingThreshold);
+      // 1. Get vendor dispatch address
+      let vendorAddress = null;
+      if (vendorId === null) {
+        vendorAddress = {
+          department: "Montevideo",
+          city: "Montevideo",
+          address: "Vázquez 1418"
+        };
+      } else {
+        let storeAddr = null;
+        if (vendorStoreId) {
+          const { data: defaultStoreAddr } = await supabase
+            .from('vendor_dispatch_addresses')
+            .select('department, city, address, phone')
+            .eq('vendor_id', vendorId)
+            .eq('vendor_store_id', vendorStoreId)
+            .order('is_default', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          storeAddr = defaultStoreAddr;
+        }
+
+        if (storeAddr) {
+          vendorAddress = storeAddr;
         } else {
+          const { data: defaultAddr } = await supabase
+            .from('vendor_dispatch_addresses')
+            .select('department, city, address, phone')
+            .eq('vendor_id', vendorId)
+            .is('vendor_store_id', null)
+            .order('is_default', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          
+          if (defaultAddr) {
+            vendorAddress = defaultAddr;
+          } else {
+            const { data: anyAddr } = await supabase
+              .from('vendor_dispatch_addresses')
+              .select('department, city, address, phone')
+              .eq('vendor_id', vendorId)
+              .limit(1)
+              .maybeSingle();
+            vendorAddress = anyAddr || null;
+          }
+        }
+      }
+
+      // 2. Get vendor shipping settings
+      let shippingSettings: any = {};
+      if (vendorId === null) {
+        shippingSettings = { soydelivery: { active: true }, dac: { active: true } };
+      } else {
+        const { data: vendorData } = await supabase
+          .from('vendors')
+          .select('shipping_settings')
+          .eq('id', vendorId)
+          .maybeSingle();
+        if (vendorData?.shipping_settings) {
+          shippingSettings = vendorData.shipping_settings;
+        }
+      }
+
+      // Check coverage
+      const isClientMontevideo = payload.shipping_address.department === "Montevideo";
+      const isClientCovered = isClientMontevideo && isLocationInSoyDeliveryZone(payload.shipping_address.department, shippingCity);
+      const isVendorCovered = vendorAddress ? isLocationInSoyDeliveryZone(vendorAddress.department, vendorAddress.city) : false;
+      const isSoyDeliveryAvailable = isSoyDeliveryEnabledGlobally && isClientCovered && isVendorCovered;
+
+      let shippingProvider = "DAC";
+      let groupShippingCost = 0;
+
+      if (payload.shipping_method === "pickup") {
+        shippingProvider = "Retiro en local";
+        groupShippingCost = 0;
+      } else if (payload.shipping_method === "delivery" && isSoyDeliveryAvailable) {
+        shippingProvider = "SoyDelivery";
+        groupShippingCost = calculateShipping(shippingCity, "Montevideo", groupSubtotal, freeShippingThreshold);
+      } else {
+        const isDacActive = shippingSettings.dac?.active && globalProvidersMap['dac'] === true;
+        const isUesActive = shippingSettings.ues?.active && globalProvidersMap['ues'] === true;
+        const isCorreoActive = shippingSettings.correo_uruguayo?.active === true;
+        const isManualActive = shippingSettings.manual?.active === true;
+
+        if (isDacActive) {
+          shippingProvider = "DAC";
           if (groupSubtotal >= freeShippingThreshold) {
             groupShippingCost = 0;
           } else {
-            // DAC cost per vendor package
-            const { data: provider } = await supabase
-              .from('delivery_providers')
-              .select('is_active')
-              .eq('provider_key', 'dac')
-              .single();
-
-            if (!provider || !provider.is_active) {
-              throw new Error("El servicio de envío DAC no está disponible. Consultanos por WhatsApp.");
-            }
-
+            const dacMode = (payload.shipping_method === "dac_agency") ? "agency" : "home";
             const dacCostResponse = await fetch(`${supabaseUrl}/functions/v1/dac-get-cost`, {
               method: 'POST',
               headers: {
@@ -723,9 +863,9 @@ Deno.serve(async (req) => {
                 'Authorization': `Bearer ${supabaseServiceKey}`
               },
               body: JSON.stringify({
-                mode: payload.shipping_method === "dac_agency" ? "agency" : "home",
+                mode: dacMode,
                 department: payload.shipping_address.department,
-                city: payload.shipping_address.city,
+                city: payload.shipping_address.department === "Montevideo" ? "Montevideo" : payload.shipping_address.city,
                 address: payload.shipping_address.street || '',
                 dac_office_id: payload.shipping_address.dac_office_id,
                 k_oficina_destino: payload.shipping_address.dac_k_oficina_destino,
@@ -745,6 +885,17 @@ Deno.serve(async (req) => {
             
             groupShippingCost = dacCostResult.cost;
           }
+        } else if (isUesActive) {
+          shippingProvider = "UES";
+          groupShippingCost = (groupSubtotal >= freeShippingThreshold) ? 0 : 220;
+        } else if (isCorreoActive) {
+          shippingProvider = "Correo Uruguayo";
+          groupShippingCost = (groupSubtotal >= freeShippingThreshold) ? 0 : 180;
+        } else if (isManualActive) {
+          shippingProvider = "Envío manual";
+          groupShippingCost = Number(shippingSettings.manual?.fixed_cost || 0);
+        } else {
+          throw new Error("Este vendedor no tiene métodos de envío disponibles para tu dirección. Probá coordinar envío manual o contactanos.");
         }
       }
 
@@ -767,10 +918,12 @@ Deno.serve(async (req) => {
       subordersList.push({
         vendor_id: vendorId,
         vendor_name: vendorName,
+        vendor_store_id: vendorStoreId,
+        vendor_store_name: vendorStoreId ? vendorName : null,
         is_collectibles_order: vendorId === null,
         product_subtotal: groupSubtotal,
         shipping_method: payload.shipping_method,
-        shipping_provider: vendorId === null ? "SoyDelivery" : "DAC",
+        shipping_provider: shippingProvider,
         shipping_cost: groupShippingCost,
         marketplace_commission_rate: commissionRate,
         marketplace_fee: marketplaceFee,
@@ -783,13 +936,14 @@ Deno.serve(async (req) => {
     const totalAmount = Math.max(subtotal - totalDiscounts + totalShippingCost, 0);
 
     const orderItems = [];
-    for (const [vendorId, groupItems] of groups.entries()) {
+    for (const [groupKey, groupItems] of groups.entries()) {
       for (const item of groupItems) {
         const itemDiscount = subtotal > 0 ? (totalDiscounts * (item.price * item.quantity) / subtotal) : 0;
         orderItems.push({
           product_id: item.product_id,
           variant_id: item.variant_id || "",
-          vendor_id: vendorId || "",
+          vendor_id: item.vendor_id || "",
+          vendor_store_id: item.vendor_store_id || "",
           quantity: item.quantity,
           unit_price: item.price,
           product_name: item.product_name,

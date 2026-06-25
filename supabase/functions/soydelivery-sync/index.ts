@@ -3,6 +3,41 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import { corsHeaders, handleOptions } from "../_shared/cors.ts";
 
+function normalizeLocation(value?: string | null) {
+  return (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function isLocationInSoyDeliveryZone(department?: string | null, city?: string | null): boolean {
+  if (!department || !city) return false;
+  
+  const normDept = normalizeLocation(department).toLowerCase();
+  const normCity = normalizeLocation(city).toLowerCase();
+  
+  if (normDept === "montevideo") {
+    return true;
+  }
+  
+  if (normDept === "san jose") {
+    return normCity === "ciudad del plata";
+  }
+  
+  if (normDept === "canelones") {
+    const coveredCanelones = new Set([
+      "ciudad de la costa", "colinas de carrasco", "el pinar", "lagomar", "lomas de solymar",
+      "parque carrasco", "paso de carrasco", "shangrila", "solymar",
+      "la paz", "las piedras", "progreso", "barros blancos", "joaquin suarez", "pando", "toledo",
+      "ciudad de canelones", "canelones"
+    ]);
+    return coveredCanelones.has(normCity);
+  }
+  
+  return false;
+}
+
+
 serve(async (req) => {
   const optionsResponse = handleOptions(req);
   if (optionsResponse) return optionsResponse;
@@ -140,6 +175,7 @@ serve(async (req) => {
     let originAddress = "Retiro Defecto";
     let originCity = "Montevideo";
     let originPhone = "099000000";
+    let originDepartment = "Montevideo";
 
     if (resolvedVendorId) {
       const { data: defaultAddr } = await supabase
@@ -153,6 +189,7 @@ serve(async (req) => {
         originAddress = defaultAddr.address;
         originCity = defaultAddr.city;
         originPhone = defaultAddr.phone || originPhone;
+        originDepartment = defaultAddr.department;
       } else {
         const { data: anyAddr } = await supabase
           .from('vendor_dispatch_addresses')
@@ -164,8 +201,70 @@ serve(async (req) => {
           originAddress = anyAddr.address;
           originCity = anyAddr.city;
           originPhone = anyAddr.phone || originPhone;
+          originDepartment = anyAddr.department;
         }
       }
+    }
+
+    // Validate geographic coverage
+    const isOriginCovered = isLocationInSoyDeliveryZone(originDepartment, originCity);
+    const isDestinationCovered = isLocationInSoyDeliveryZone(addr.department, addr.city);
+
+    if (!isOriginCovered || !isDestinationCovered) {
+      const errorMsg = "SoyDelivery no disponible para origen/destino";
+      
+      const shipmentPayload = {
+        order_id: isSuborder ? parentOrderId : order_id,
+        suborder_id: isSuborder ? order_id : null,
+        provider_key: 'soydelivery',
+        tracking_code: null,
+        shipping_label_url: null,
+        shipping_status: 'failed',
+        error_message: errorMsg,
+        customer_name: `${addr.first_name || ''} ${addr.last_name || ''}`.trim(),
+        customer_phone: resolvedCustomerPhone || "099000000",
+        customer_address: addr.street || '',
+        customer_city: addr.city || "Montevideo",
+        customer_department: addr.department || "",
+        package_weight: 1.0,
+        package_quantity: 1,
+        provider_response: { 
+          success: false, 
+          error: "Geographic coverage validation failed",
+          origin: { city: originCity, department: originDepartment },
+          destination: { city: addr.city, department: addr.department },
+          fallback_suggestions: ["DAC", "UES"]
+        }
+      };
+      
+      await supabase.from('shipments').insert(shipmentPayload);
+
+      if (isSuborder) {
+        await supabase
+          .from("order_suborders")
+          .update({ 
+               shipping_status: "failed",
+               updated_at: new Date().toISOString()
+          })
+          .eq("id", order_id);
+      } else {
+        await supabase
+          .from("orders")
+          .update({ 
+               shipping_status: "failed",
+               updated_at: new Date().toISOString()
+          })
+          .eq("id", order_id);
+      }
+
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: errorMsg, 
+        fallback_suggestions: ["DAC", "UES"] 
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400
+      });
     }
 
     if (!apiId || !apiKey || !negocioId || !negocioClave) {
