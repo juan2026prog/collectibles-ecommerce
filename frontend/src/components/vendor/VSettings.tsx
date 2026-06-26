@@ -32,6 +32,7 @@ export default function VSettings() {
     contact_email: '',
     contact_phone: '',
     social_links: { facebook: '', instagram: '', twitter: '' } as Record<string, string>,
+    promotions_opt_in: false,
     
     // Cobros (vendor_payment_settings)
     vendor_payment_settings: {
@@ -183,6 +184,7 @@ export default function VSettings() {
             contact_email: data.contact_email || '',
             contact_phone: data.contact_phone || '',
             social_links: data.social_links || { facebook: '', instagram: '', twitter: '' },
+            promotions_opt_in: data.promotions_opt_in || false,
             vendor_payment_settings: data.vendor_payment_settings || {
               account_name: '', bank_name: '', account_number: '', currency: 'UYU', payment_notes: ''
             },
@@ -265,6 +267,7 @@ export default function VSettings() {
           contact_email: formData.contact_email,
           contact_phone: formData.contact_phone,
           social_links: formData.social_links,
+          promotions_opt_in: formData.promotions_opt_in,
           vendor_payment_settings: formData.vendor_payment_settings,
           vendor_settings: formData.vendor_settings
         };
@@ -487,6 +490,25 @@ export default function VSettings() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Twitter URL</label>
                   <input type="text" value={formData.social_links?.twitter || ''} onChange={(e) => updateNested('social_links', 'twitter', e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-black focus:border-black" />
                </div>
+            </div>
+
+            <h3 className="text-lg font-bold text-gray-900 mt-8 mb-4 border-b border-gray-100 pb-2">Promociones de Collectibles</h3>
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex items-start gap-3">
+              <input
+                type="checkbox"
+                id="promotions_opt_in"
+                checked={formData.promotions_opt_in || false}
+                onChange={(e) => updateField('promotions_opt_in', e.target.checked)}
+                className="mt-1 rounded border-gray-300 text-primary-600 focus:ring-primary-500 w-4 h-4 cursor-pointer"
+              />
+              <div>
+                <label htmlFor="promotions_opt_in" className="font-bold text-gray-800 cursor-pointer text-sm block">
+                  Participar en promociones de Collectibles
+                </label>
+                <span className="text-xs text-gray-500 block mt-1">
+                  Permitir que mis productos participen en promociones generales de Collectibles.
+                </span>
+              </div>
             </div>
           </div>
         )}

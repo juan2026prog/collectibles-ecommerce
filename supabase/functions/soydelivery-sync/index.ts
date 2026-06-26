@@ -123,6 +123,67 @@ serve(async (req) => {
       return new Response(JSON.stringify({ skipped: true, reason: "No shipping address (might be pickup)" }), { headers: corsHeaders });
     }
 
+    // Validate that SoyDelivery is still active for the vendor/platform
+    if (resolvedVendorId) {
+      const { data: vendorData, error: vendorErr } = await supabase
+        .from('vendors')
+        .select('shipping_settings')
+        .eq('id', resolvedVendorId)
+        .maybeSingle();
+
+      if (vendorErr) {
+        throw new Error(`Error al consultar configuración del vendedor: ${vendorErr.message}`);
+      }
+
+      if (vendorData) {
+        const isSdActive = vendorData.shipping_settings?.soydelivery?.active === true;
+        if (!isSdActive) {
+          console.log(`[SoyDelivery] SoyDelivery method is disabled for vendor ${resolvedVendorId}. Failing shipment.`);
+          if (isSuborder) {
+            await supabase
+              .from("order_suborders")
+              .update({ 
+                   shipping_status: "failed",
+                   updated_at: new Date().toISOString()
+              })
+              .eq("id", order_id);
+          }
+          
+          const shipmentPayload = {
+              order_id: isSuborder ? parentOrderId : order_id,
+              suborder_id: isSuborder ? order_id : null,
+              provider_key: 'soydelivery',
+              tracking_code: null,
+              shipping_label_url: null,
+              shipping_status: 'failed',
+              error_message: 'método no disponible',
+              customer_name: `${addr.first_name || ''} ${addr.last_name || ''}`.trim(),
+              customer_phone: resolvedCustomerPhone || "099000000",
+              customer_address: addr.street || "",
+              customer_city: addr.city || "Montevideo",
+              customer_department: addr.department || "",
+              package_weight: 1.0,
+              package_quantity: 1,
+              provider_response: { 
+                status: "failed", 
+                error: "método no disponible",
+                created_at: new Date().toISOString() 
+              }
+          };
+          await supabase.from('shipments').insert(shipmentPayload);
+
+          return new Response(JSON.stringify({ 
+            success: false, 
+            status: "failed",
+            error_message: "método no disponible" 
+          }), {
+            headers: corsHeaders,
+            status: 200,
+          });
+        }
+      }
+    }
+
     // 3. Fetch SoyDelivery credentials (Vendor or Global Fallback)
     let apiId = '';
     let apiKey = '';

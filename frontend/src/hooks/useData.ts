@@ -17,6 +17,8 @@ interface ProductFilters {
   group?: string;
   isInternational?: boolean;
   includeDrafts?: boolean;
+  vendor_store_id?: string;
+  collection_id?: string;
 }
 
 export function useProducts(filters: ProductFilters = {}) {
@@ -87,6 +89,33 @@ export function useProducts(filters: ProductFilters = {}) {
       if (!brandId) { setProducts([]); setCount(0); setLoading(false); return; }
     }
 
+    if (filters.collection_id) {
+      const { data: colProds } = await supabase
+        .from('vendor_store_collection_products')
+        .select('product_id')
+        .eq('collection_id', filters.collection_id);
+      
+      const collectionProductIds = colProds?.map(x => x.product_id) || [];
+      if (collectionProductIds.length === 0) {
+        setProducts([]);
+        setCount(0);
+        setLoading(false);
+        return;
+      }
+
+      if (productIds) {
+        productIds = productIds.filter(x => collectionProductIds.includes(x));
+        if (productIds.length === 0) {
+          setProducts([]);
+          setCount(0);
+          setLoading(false);
+          return;
+        }
+      } else {
+        productIds = collectionProductIds;
+      }
+    }
+
     // ── Step 2: main product query ──
     if (filters.isInternational) {
       let query = supabase
@@ -146,8 +175,8 @@ export function useProducts(filters: ProductFilters = {}) {
         images:product_images(id, url, alt_text, sort_order, is_primary),
         variants:product_variants(id, sku, name, price_adjustment, inventory_count),
         product_tags:product_tags(tag_id),
-        vendor:vendors(id, store_name, slug, logo_url),
-        vendor_store:vendor_stores(id, store_name, slug, logo_url)
+        vendor:vendors(id, store_name, slug, logo_url, promotions_opt_in),
+        vendor_store:vendor_stores(id, store_name, slug, logo_url, vendor_store_badge_assignments(status, approved_by, approved_at, vendor_store_badges(*)))
         ${categoryId ? ', product_categories!inner(category_id)' : ''}
     `;
 
@@ -160,6 +189,7 @@ export function useProducts(filters: ProductFilters = {}) {
     if (categoryId) query = query.eq('product_categories.category_id', categoryId);
     if (brandId) query = query.eq('brand_id', brandId);
     if (productIds) query = query.in('id', productIds);
+    if (filters.vendor_store_id) query = query.eq('vendor_store_id', filters.vendor_store_id);
     if (filters.badge) query = query.eq('badge', filters.badge);
     if (filters.featured) query = query.eq('is_featured', true);
     if (filters.minPrice) query = query.gte('base_price', filters.minPrice);
@@ -168,6 +198,9 @@ export function useProducts(filters: ProductFilters = {}) {
       // Use ilike for simple search, fallback from textSearch if vector unavailable
       query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
     }
+
+    // Muestra los productos publicados por Collectibles (vendor_id IS NULL) primero
+    query = query.order('vendor_id', { ascending: true, nullsFirst: true });
 
     // Sort
     switch (filters.sortBy) {
@@ -213,8 +246,8 @@ export function useProduct(slug: string | undefined) {
           images:product_images(id, url, alt_text, sort_order, is_primary),
           variants:product_variants(id, sku, name, price_adjustment, inventory_count),
           product_tags:product_tags(tag_id),
-          vendor:vendors(id, store_name, slug, logo_url),
-          vendor_store:vendor_stores(id, store_name, slug, logo_url),
+          vendor:vendors(id, store_name, slug, logo_url, promotions_opt_in, company_name),
+          vendor_store:vendor_stores(id, store_name, slug, logo_url, status, is_official, vendor_store_badge_assignments(status, approved_by, approved_at, vendor_store_badges(*))),
           reviews:reviews(id, rating, title, body, created_at, user:profiles(first_name, last_name))
         `)
         .eq('slug', slug)
@@ -386,6 +419,15 @@ export interface CartItem {
   urubox_estimate?: number;
   weight_kg?: number;
   category_name?: string;
+  // Hotfix Fields
+  vendor_store_id?: string;
+  vendor_store_name?: string;
+  vendor_store_slug?: string;
+  sku?: string;
+  unit_price?: number;
+  image_url?: string;
+  vendor_store_badges?: any[];
+  promotions_opt_in?: boolean;
 }
 
 export function useCart() {
@@ -433,24 +475,24 @@ export function useCart() {
     }
 
     setItems(prev => {
-      const existing = prev.find(i => i.variant_id === safeItem.variant_id);
+      const existing = prev.find(i => i.variant_id === safeItem.variant_id && i.vendor_id === safeItem.vendor_id);
       if (existing) {
-        return prev.map(i => i.variant_id === safeItem.variant_id ? { ...i, quantity: i.quantity + safeItem.quantity } : i);
+        return prev.map(i => i.variant_id === safeItem.variant_id && i.vendor_id === safeItem.vendor_id ? { ...i, quantity: i.quantity + safeItem.quantity } : i);
       }
       return [...prev, safeItem];
     });
   };
 
-  const updateQuantity = (variantId: string, quantity: number) => {
+  const updateQuantity = (variantId: string, vendorId: string | undefined, quantity: number) => {
     if (quantity <= 0) {
-      setItems(prev => prev.filter(i => i.variant_id !== variantId));
+      setItems(prev => prev.filter(i => !(i.variant_id === variantId && i.vendor_id === vendorId)));
     } else {
-      setItems(prev => prev.map(i => i.variant_id === variantId ? { ...i, quantity } : i));
+      setItems(prev => prev.map(i => i.variant_id === variantId && i.vendor_id === vendorId ? { ...i, quantity } : i));
     }
   };
 
-  const removeItem = (variantId: string) => {
-    setItems(prev => prev.filter(i => i.variant_id !== variantId));
+  const removeItem = (variantId: string, vendorId?: string) => {
+    setItems(prev => prev.filter(i => !(i.variant_id === variantId && i.vendor_id === vendorId)));
   };
 
   const clearCart = () => setItems([]);
@@ -604,4 +646,142 @@ export function useFilterMappings() {
   }, []);
 
   return mappings;
+}
+
+// ═══ useStoreCollections ═══
+export function useStoreCollections(storeId: string | undefined) {
+  const [collections, setCollections] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!storeId) {
+      setCollections([]);
+      setLoading(false);
+      return;
+    }
+
+    async function fetchCollections() {
+      setLoading(true);
+      const { data } = await supabase
+        .from('vendor_store_collections')
+        .select('*')
+        .eq('vendor_store_id', storeId)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+      
+      setCollections(data || []);
+      setLoading(false);
+    }
+    fetchCollections();
+  }, [storeId]);
+
+  return { collections, loading };
+}
+
+// ═══ useStoreFollowers ═══
+export function useStoreFollowers(storeId: string | undefined) {
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followersCount, setFollowersCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  const fetchFollowState = useCallback(async () => {
+    if (!storeId) return;
+    setLoading(true);
+    try {
+      // 1. Get total follower count directly from store
+      const { data: store } = await supabase
+        .from('vendor_stores')
+        .select('followers_count')
+        .eq('id', storeId)
+        .single();
+      
+      if (store) {
+        setFollowersCount(store.followers_count);
+      }
+
+      // 2. Check if current user is following
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const { data } = await supabase
+          .from('vendor_store_followers')
+          .select('id')
+          .eq('vendor_store_id', storeId)
+          .eq('customer_id', session.user.id)
+          .maybeSingle();
+        
+        setIsFollowing(!!data);
+      } else {
+        setIsFollowing(false);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [storeId]);
+
+  useEffect(() => {
+    fetchFollowState();
+  }, [fetchFollowState]);
+
+  const toggleFollow = async () => {
+    if (!storeId) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) {
+      throw new Error("Debes iniciar sesión para seguir esta tienda.");
+    }
+
+    if (isFollowing) {
+      await supabase
+        .from('vendor_store_followers')
+        .delete()
+        .eq('vendor_store_id', storeId)
+        .eq('customer_id', session.user.id);
+      setIsFollowing(false);
+      setFollowersCount(prev => Math.max(0, prev - 1));
+    } else {
+      await supabase
+        .from('vendor_store_followers')
+        .insert({
+          vendor_store_id: storeId,
+          customer_id: session.user.id
+        });
+      setIsFollowing(true);
+      setFollowersCount(prev => prev + 1);
+    }
+  };
+
+  return { isFollowing, followersCount, loading, toggleFollow, refetch: fetchFollowState };
+}
+
+// ═══ useStoreBadges ═══
+export function useStoreBadges(storeId: string | undefined) {
+  const [badges, setBadges] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!storeId) {
+      setBadges([]);
+      setLoading(false);
+      return;
+    }
+
+    async function fetchBadges() {
+      setLoading(true);
+      const { data } = await supabase
+        .from('vendor_store_badge_assignments')
+        .select('status, approved_by, approved_at, vendor_store_badges(*)')
+        .eq('vendor_store_id', storeId);
+
+      const list = data
+        ?.filter((x: any) => x.status === 'active' && x.approved_by && x.approved_at)
+        ?.map((x: any) => x.vendor_store_badges)
+        .filter(Boolean) || [];
+      setBadges(list);
+      setLoading(false);
+    }
+    fetchBadges();
+  }, [storeId]);
+
+  return { badges, loading };
 }

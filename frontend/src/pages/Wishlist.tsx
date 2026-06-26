@@ -35,7 +35,7 @@ export default function Wishlist() {
           product_images(*),
           variants:product_variants(*),
           reviews:product_reviews(*),
-          vendor:vendors(id, store_name, slug, logo_url),
+          vendor:vendors(id, store_name, slug, logo_url, promotions_opt_in),
           vendor_store:vendor_stores(id, store_name, slug, logo_url)
         `)
         .in('id', wishlist)
@@ -65,8 +65,14 @@ export default function Wishlist() {
       vendor_id: p.vendor_id,
       vendor_store_id: p.vendor_store_id || null,
       vendor_name: p.vendor_store?.store_name || p.vendor?.store_name || 'Collectibles',
+      vendor_store_name: p.vendor_store?.store_name || p.vendor?.store_name || 'Collectibles',
       vendor_slug: p.vendor_store?.slug || p.vendor?.slug,
+      vendor_store_slug: p.vendor_store?.slug || p.vendor?.slug,
       vendor_logo: p.vendor_store?.logo_url || p.vendor?.logo_url,
+      sku: variant.sku || null,
+      unit_price: p.base_price + (variant.price_adjustment || 0),
+      image_url: getProductImage(p),
+      promotions_opt_in: p.vendor?.promotions_opt_in || false,
       tag_ids: p.product_tags?.map((pt: any) => pt.tag_id) || []
     });
   }

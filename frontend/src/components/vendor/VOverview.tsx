@@ -4,12 +4,20 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   DollarSign, ShoppingCart, Package, AlertTriangle, Clock, 
-  ArrowRight, CreditCard, Truck, UploadCloud, Settings, Link2, PlusCircle
+  ArrowRight, CreditCard, Truck, UploadCloud, Settings, Link2, PlusCircle,
+  Store
 } from 'lucide-react';
+import { resolveImage } from '../../lib/imageUtils';
 
-export default function VOverview() {
+interface VOverviewProps {
+  onChangeTab?: (tab: string) => void;
+  activeStoreId?: string;
+}
+
+export default function VOverview({ onChangeTab, activeStoreId }: VOverviewProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [storeStats, setStoreStats] = useState<any>(null);
   
   const [stats, setStats] = useState({
     salesMonth: 0,
@@ -35,43 +43,83 @@ export default function VOverview() {
   useEffect(() => {
     if (!user) return;
     loadDashboardData();
-  }, [user]);
+  }, [user, activeStoreId]);
 
   async function loadDashboardData() {
     setLoading(true);
     try {
       const vendorId = user!.id;
       
-      // 1. Fetch Payouts (for pending balance and sales of the month)
-      const now = new Date();
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      // Load store stats if store is selected
+      let currentStore: any = null;
+      if (activeStoreId) {
+        const { data } = await supabase
+          .from('vendor_stores')
+          .select('*')
+          .eq('id', activeStoreId)
+          .single();
+        currentStore = data;
+      }
+      setStoreStats(currentStore);
       
+      // 1. Fetch Payouts (for pending balance)
       const { data: payouts } = await supabase
         .from('vendor_payouts')
         .select('amount, status, created_at')
         .eq('vendor_id', vendorId);
 
       const pList = payouts || [];
-      const salesM = pList.filter(p => p.created_at >= startOfMonth && (p.status === 'paid' || p.status === 'settlable' || p.status === 'pending')).reduce((sum, p) => sum + Number(p.amount), 0);
       const pendingF = pList.filter(p => p.status === 'pending' || p.status === 'settlable').reduce((sum, p) => sum + Number(p.amount), 0);
 
+      // Fetch Sales of the Month (order_items filtered by activeStoreId if present)
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+      let salesQuery = supabase
+        .from('order_items')
+        .select('price, quantity, created_at, order:orders(status)')
+        .eq('vendor_id', vendorId);
+
+      if (activeStoreId) {
+        salesQuery = salesQuery.eq('vendor_store_id', activeStoreId);
+      }
+
+      const { data: allItems } = await salesQuery;
+      const salesM = (allItems || [])
+        .filter(item => item.created_at >= startOfMonth && item.order?.status !== 'cancelled')
+        .reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0);
+
       // 2. Fetch Active Products
-      const { count: prodCount } = await supabase
-        .from('vendor_products')
+      let activeProductsQuery = supabase
+        .from('products')
         .select('*', { count: 'exact', head: true })
         .eq('vendor_id', vendorId)
-        .eq('status', 'active');
+        .eq('status', 'published')
+        .eq('is_active', true);
+        
+      if (activeStoreId) {
+        activeProductsQuery = activeProductsQuery.eq('vendor_store_id', activeStoreId);
+      }
+      
+      const { count: prodCount } = await activeProductsQuery;
 
       // 3. Fetch Recent Orders (by joining order_items)
-      const { data: orderItems } = await supabase
+      let orderItemsQuery = supabase
         .from('order_items')
         .select(`
           order_id,
           price,
           quantity,
+          vendor_store_id,
           order:orders(id, created_at, status, customer:profiles(first_name, last_name, email))
         `)
-        .eq('vendor_id', vendorId)
+        .eq('vendor_id', vendorId);
+
+      if (activeStoreId) {
+        orderItemsQuery = orderItemsQuery.eq('vendor_store_id', activeStoreId);
+      }
+
+      const { data: orderItems } = await orderItemsQuery
         .order('created_at', { ascending: false })
         .limit(20);
 
@@ -92,16 +140,33 @@ export default function VOverview() {
       const uniqueOrders = Array.from(uniqueOrdersMap.values()).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
       // 4. Fetch Low Stock
-      const { data: lowStockData } = await supabase
+      let lowStockQuery = supabase
         .from('vendor_product_variants')
         .select(`
           id, sku, inventory_count, 
-          product:vendor_products!inner(id, title, vendor_id)
+          product:vendor_products!inner(id, title, vendor_id, product_id)
         `)
         .eq('product.vendor_id', vendorId)
-        .lt('inventory_count', 5)
+        .lt('inventory_count', 5);
+
+      const { data: rawLowStock } = await lowStockQuery
         .order('inventory_count', { ascending: true })
-        .limit(5);
+        .limit(50);
+        
+      let filteredLowStock = rawLowStock || [];
+      if (activeStoreId && filteredLowStock.length > 0) {
+        const prodIds = filteredLowStock.map(x => x.product.product_id).filter(Boolean);
+        const { data: storeProds } = await supabase
+          .from('products')
+          .select('id, vendor_store_id')
+          .in('id', prodIds);
+          
+        const validProdIds = new Set(
+          storeProds?.filter(p => p.vendor_store_id === activeStoreId).map(p => p.id) || []
+        );
+        filteredLowStock = filteredLowStock.filter(x => validProdIds.has(x.product.product_id));
+      }
+      const lowStockData = filteredLowStock.slice(0, 5);
 
       // 5. Build Alerts (KYC, ML, Logistics) & Onboarding
       const { data: vendorData } = await supabase
@@ -129,8 +194,11 @@ export default function VOverview() {
         );
       }
       
+      const s = vendorData?.shipping_settings as any;
+      const hasDac = !!s?.dac?.active;
+      const hasSoyDelivery = !!s?.soydelivery?.active;
+      
       const obProfile = !!vendorData?.store_name;
-      const obKyc = !!vendorData?.tax_id && vendorData?.kyc_status !== 'pending'; // or just checking if they submitted documents
       const obBilling = !!vendorData?.vendor_payment_settings?.account_number;
       const obShipping = hasShipping;
       const obML = mlConn?.status === 'active';
@@ -160,7 +228,7 @@ export default function VOverview() {
 
       setStats({
         salesMonth: salesM,
-        ordersCount: uniqueOrders.length, // total history we fetched or similar
+        ordersCount: uniqueOrders.length,
         pendingBalance: pendingF,
         activeProducts: prodCount || 0
       });
@@ -200,6 +268,47 @@ export default function VOverview() {
   return (
     <div className="space-y-6 animate-fade-in">
       
+      {activeStoreId && storeStats && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-205 p-6 flex flex-wrap gap-6 items-center justify-between">
+          <div className="flex items-center gap-4">
+            {storeStats.logo_url ? (
+              <img src={resolveImage(storeStats.logo_url)} alt="" className="w-12 h-12 rounded-xl object-cover border border-gray-100 shadow-sm" />
+            ) : (
+              <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center border border-gray-200">
+                <Store className="w-6 h-6 text-gray-400" />
+              </div>
+            )}
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-black text-gray-900 leading-none">{storeStats.store_name}</h2>
+                <span className="bg-primary-50 text-primary-700 text-[10px] font-black uppercase px-2 py-0.5 rounded-full border border-primary-100">
+                  Tienda Oficial
+                </span>
+              </div>
+              <p className="text-sm text-gray-500 mt-1.5">{storeStats.description || 'Ecosistema de Tiendas Oficiales en Collectibles.'}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-8 text-center bg-gray-50/80 border border-gray-150 rounded-xl p-4">
+            <div>
+              <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Seguidores</span>
+              <span className="text-base font-black text-gray-900 mt-1 block">{storeStats.followers_count}</span>
+            </div>
+            <div className="border-l border-gray-200 pl-8">
+              <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Calificación</span>
+              <span className="text-base font-black text-gray-900 mt-1 block">⭐ {Number(storeStats.rating || 0.0).toFixed(1)}</span>
+            </div>
+            <div className="border-l border-gray-200 pl-8">
+              <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Entregas</span>
+              <span className="text-base font-black text-emerald-600 mt-1 block">{Number(storeStats.response_rate || 100).toFixed(0)}%</span>
+            </div>
+            <div className="border-l border-gray-200 pl-8">
+              <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Resp. Promedio</span>
+              <span className="text-base font-black text-gray-900 mt-1 block">{storeStats.response_time_minutes || '--'} min</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {!onboarding.isComplete && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
           <h2 className="text-xl font-bold text-gray-900 mb-2">Comienza a vender en Collectibles</h2>

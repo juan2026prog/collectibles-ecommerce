@@ -64,7 +64,7 @@ export default function CustomerPortal() {
     async function loadData() {
       const orderSelect = `
         id, total_amount, currency, status, created_at, payment_method, customer_email,
-        order_items (quantity, unit_price, total_price, product_id, variant_id, vendor_id, vendor_store_id, vendor:vendors(store_name), vendor_store:vendor_stores(store_name), products (title, slug, images:product_images(url)))
+        order_items (quantity, unit_price, total_price, product_id, variant_id, vendor_id, vendor_store_id, sku, vendor:vendors(store_name, slug, logo_url, promotions_opt_in, company_name), vendor_store:vendor_stores(store_name, slug, logo_url), products (title, slug, images:product_images(url)))
       `;
 
       const { data: ordersData } = await supabase
@@ -167,6 +167,17 @@ export default function CustomerPortal() {
           price: item.unit_price,
           image: getOrderItemImage(item),
           variant_name: '',
+          vendor_id: item.vendor_id,
+          vendor_store_id: item.vendor_store_id,
+          vendor_name: item.vendor_store?.store_name || item.vendor?.store_name || 'Collectibles',
+          vendor_store_name: item.vendor_store?.store_name || item.vendor?.store_name || 'Collectibles',
+          vendor_slug: item.vendor_store?.slug || item.vendor?.slug,
+          vendor_store_slug: item.vendor_store?.slug || item.vendor?.slug,
+          vendor_logo: item.vendor_store?.logo_url || item.vendor?.logo_url,
+          sku: item.sku || null,
+          unit_price: item.unit_price,
+          image_url: getOrderItemImage(item),
+          promotions_opt_in: item.vendor?.promotions_opt_in || false,
         });
       }
     }
@@ -299,7 +310,7 @@ export default function CustomerPortal() {
                         <div className="flex-1 min-w-0">
                           <Link to={item.products?.slug ? `/p/${item.products.slug}` : '#'} className="font-bold text-white hover:text-primary-600 transition-colors line-clamp-1">{item.products?.title}</Link>
                           <p className="text-[10px] font-black text-[#f00856] uppercase tracking-widest mt-0.5">
-                            Vendido por: {item.vendor_store?.store_name || item.vendor?.store_name || 'Collectibles'}
+                            Vendido por: {item.vendor_id ? (item.vendor_store?.display_name || item.vendor_store?.store_name || item.vendor_store?.name || item.vendor?.company_name || item.vendor?.store_name || 'Vendedor') : 'Collectibles.uy'}
                           </p>
                           <p className="text-sm text-slate-400">Cant: {item.quantity} · {formatCurrencyPrice(item.unit_price)} c/u</p>
                         </div>

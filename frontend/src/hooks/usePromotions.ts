@@ -92,6 +92,7 @@ export function evaluateItemDiscount(item: { product_id: string, category_id?: s
   let itemDiscount = 0;
   for (const promo of promotions) {
     if (promo.owner_vendor_id && promo.owner_vendor_id !== item.vendor_id) continue;
+    if (!promo.owner_vendor_id && item.vendor_id && !item.promotions_opt_in) continue;
 
     let isExcluded = false;
     for (const exc of promo.exclusions) {
@@ -160,6 +161,7 @@ export function evaluateItemDiscountDetailed(item: { product_id: string, categor
   
   for (const promo of promotions) {
     if (promo.owner_vendor_id && promo.owner_vendor_id !== item.vendor_id) continue;
+    if (!promo.owner_vendor_id && item.vendor_id && !item.promotions_opt_in) continue;
 
     let isExcluded = false;
     for (const exc of promo.exclusions) {
@@ -233,6 +235,7 @@ export function getApplicablePromotions(item: { product_id: string, category_id?
   
   for (const promo of promotions) {
     if (promo.owner_vendor_id && promo.owner_vendor_id !== item.vendor_id) continue;
+    if (!promo.owner_vendor_id && item.vendor_id && !item.promotions_opt_in) continue;
 
     let isExcluded = false;
     for (const exc of promo.exclusions) {

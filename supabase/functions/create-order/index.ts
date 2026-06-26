@@ -224,7 +224,7 @@ Deno.serve(async (req) => {
     // 3. Consulta segura y correcta a la tabla real 'products' (columna 'base_price')
     const { data: products, error: productError } = await supabase
       .from("products")
-      .select("id, title, base_price, category_id, brand_id, vendor_id, vendor_store_id, vendors(store_name), product_tags(tag_id)")
+      .select("id, title, base_price, category_id, brand_id, vendor_id, vendor_store_id, vendors(store_name, promotions_opt_in), product_tags(tag_id)")
       .in("id", productIds);
 
     if (productError) {
@@ -275,7 +275,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 6, 7, 8, 9. Verificación robusta de precios
+    // 6, 7, 8, 9. Verificación robusta de precios, vendor_id y stock
     const verifiedItems = [];
     for (const item of payload.items) {
       const productId = item.product_id || item.id;
@@ -292,43 +292,48 @@ Deno.serve(async (req) => {
         });
       }
 
+      const dbProduct = products?.find(p => p.id === productId);
+      if (!dbProduct) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: `Producto no encontrado en el catálogo: ${productId}`,
+          details: {
+            product_id: productId,
+            reason: "product_not_found"
+          }
+        }), {
+          status: 200,
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
+        });
+      }
+
+      let resolvedVendorId: string | null = null;
+      let resolvedStoreId: string | null = null;
       let serverPrice = 0;
-      if (item.vendor_id) {
+      let serverStock = 0;
+      let promotionsOptIn = false;
+
+      // Case A: Vendor-owned product
+      if (dbProduct.vendor_id) {
+        resolvedVendorId = dbProduct.vendor_id;
+        resolvedStoreId = dbProduct.vendor_store_id || null;
+        promotionsOptIn = dbProduct.vendors?.promotions_opt_in || false;
+
         const { data: vProduct, error: vpError } = await supabase
           .from("vendor_products")
           .select("id, price")
           .eq("product_id", productId)
-          .eq("vendor_id", item.vendor_id)
+          .eq("vendor_id", resolvedVendorId)
           .eq("status", "active")
           .maybeSingle();
 
-        if (vpError) {
-          console.error("Error fetching vendor product price:", vpError);
-        }
-
-        if (vProduct) {
-          let adjustment = 0;
-          if (item.variant_id) {
-            const { data: vVariant, error: vvError } = await supabase
-              .from("vendor_product_variants")
-              .select("price_adjustment")
-              .eq("vendor_product_id", vProduct.id)
-              .eq("variant_id", item.variant_id)
-              .maybeSingle();
-
-            if (vvError) {
-              console.error("Error fetching vendor product variant adjustment:", vvError);
-            }
-            adjustment = Number(vVariant?.price_adjustment || 0);
-          }
-          serverPrice = Number(vProduct.price) + adjustment;
-        } else {
+        if (vpError || !vProduct) {
           return new Response(JSON.stringify({
             success: false,
             error: `El vendedor no tiene este producto activo.`,
             details: {
               product_id: productId,
-              vendor_id: item.vendor_id,
+              vendor_id: resolvedVendorId,
               reason: "vendor_product_not_found"
             }
           }), {
@@ -336,7 +341,99 @@ Deno.serve(async (req) => {
             headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
           });
         }
-      } else {
+
+        let adjustment = 0;
+        if (item.variant_id) {
+          const { data: vVariant, error: vvError } = await supabase
+            .from("vendor_product_variants")
+            .select("price_adjustment, inventory_count")
+            .eq("vendor_product_id", vProduct.id)
+            .eq("variant_id", item.variant_id)
+            .maybeSingle();
+
+          if (vvError || !vVariant) {
+            return new Response(JSON.stringify({
+              success: false,
+              error: `La variante solicitada del vendedor no está activa.`,
+              details: {
+                product_id: productId,
+                variant_id: item.variant_id,
+                reason: "vendor_variant_not_found"
+              }
+            }), {
+              status: 200,
+              headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
+            });
+          }
+          adjustment = Number(vVariant.price_adjustment || 0);
+          serverStock = Number(vVariant.inventory_count || 0);
+        }
+        serverPrice = Number(vProduct.price) + adjustment;
+      }
+      // Case B: Platform product offered by a vendor (Buy Box variant)
+      else if (item.vendor_id) {
+        resolvedVendorId = item.vendor_id;
+
+        const { data: vProduct, error: vpError } = await supabase
+          .from("vendor_products")
+          .select("id, price, vendor_store_id, vendors(promotions_opt_in)")
+          .eq("product_id", productId)
+          .eq("vendor_id", resolvedVendorId)
+          .eq("status", "active")
+          .maybeSingle();
+
+        if (vpError || !vProduct) {
+          return new Response(JSON.stringify({
+            success: false,
+            error: `El vendedor no ofrece este producto de forma activa.`,
+            details: {
+              product_id: productId,
+              vendor_id: resolvedVendorId,
+              reason: "vendor_product_not_found"
+            }
+          }), {
+            status: 200,
+            headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
+          });
+        }
+
+        resolvedStoreId = vProduct.vendor_store_id || null;
+        promotionsOptIn = vProduct.vendors?.promotions_opt_in || false;
+
+        let adjustment = 0;
+        if (item.variant_id) {
+          const { data: vVariant, error: vvError } = await supabase
+            .from("vendor_product_variants")
+            .select("price_adjustment, inventory_count")
+            .eq("vendor_product_id", vProduct.id)
+            .eq("variant_id", item.variant_id)
+            .maybeSingle();
+
+          if (vvError || !vVariant) {
+            return new Response(JSON.stringify({
+              success: false,
+              error: `La variante del vendedor no está disponible.`,
+              details: {
+                product_id: productId,
+                variant_id: item.variant_id,
+                reason: "vendor_variant_not_found"
+              }
+            }), {
+              status: 200,
+              headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
+            });
+          }
+          adjustment = Number(vVariant.price_adjustment || 0);
+          serverStock = Number(vVariant.inventory_count || 0);
+        }
+        serverPrice = Number(vProduct.price) + adjustment;
+      }
+      // Case C: Platform/Collectibles product
+      else {
+        resolvedVendorId = null;
+        resolvedStoreId = null;
+        promotionsOptIn = false;
+
         const dbBasePrice = productPriceMap.get(productId);
         if (dbBasePrice === undefined) {
           return new Response(JSON.stringify({
@@ -354,40 +451,33 @@ Deno.serve(async (req) => {
 
         serverPrice = dbBasePrice;
         if (item.variant_id) {
-          if (!variantPriceAdjustmentMap.has(item.variant_id)) {
+          const { data: pvVariant, error: pvError } = await supabase
+            .from("product_variants")
+            .select("price_adjustment, inventory_count")
+            .eq("id", item.variant_id)
+            .maybeSingle();
+
+          if (pvError || !pvVariant) {
             return new Response(JSON.stringify({
               success: false,
-              error: `No se pudo verificar el precio de la variante ${item.variant_id}`,
+              error: `La variante de la plataforma no existe.`,
               details: {
                 product_id: productId,
                 variant_id: item.variant_id,
-                reason: "not_found"
+                reason: "variant_not_found"
               }
             }), {
               status: 200,
               headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
             });
           }
-          const adjustment = variantPriceAdjustmentMap.get(item.variant_id) || 0;
+          const adjustment = pvVariant.price_adjustment || 0;
           serverPrice = dbBasePrice + adjustment;
+          serverStock = Number(pvVariant.inventory_count || 0);
         }
       }
 
-      if (serverPrice === undefined || isNaN(serverPrice)) {
-        return new Response(JSON.stringify({
-          success: false,
-          error: `No se pudo verificar el precio del producto ${productId}`,
-          details: {
-            product_id: productId,
-            reason: "missing_price"
-          }
-        }), {
-          status: 200,
-          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
-        });
-      }
-
-      // Comparación segura de precios. Si difiere, error claro.
+      // Safe price checks
       if (Math.abs(item.price - serverPrice) > 1) {
         return new Response(JSON.stringify({
           success: false,
@@ -404,14 +494,31 @@ Deno.serve(async (req) => {
         });
       }
 
-      const dbProduct = products?.find(p => p.id === productId);
-      const resolvedStoreId = item.vendor_store_id || dbProduct?.vendor_store_id || null;
+      // Safe stock check
+      if (item.quantity > serverStock) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: `Stock insuficiente. Solicitado: ${item.quantity}, Disponible: ${serverStock}`,
+          details: {
+            product_id: productId,
+            variant_id: item.variant_id,
+            reason: "insufficient_stock",
+            requested: item.quantity,
+            available: serverStock
+          }
+        }), {
+          status: 200,
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
+        });
+      }
 
       verifiedItems.push({
         ...item,
-        product_id: productId, // Garantizar que se guarde como product_id
+        product_id: productId,
+        vendor_id: resolvedVendorId,
         vendor_store_id: resolvedStoreId,
-        price: serverPrice     // Usar precio del servidor
+        promotions_opt_in: promotionsOptIn,
+        price: serverPrice
       });
     }
 
@@ -435,10 +542,19 @@ Deno.serve(async (req) => {
         throw new Error("El cupon ha expirado.");
       }
 
+      // Restrict coupon subtotal base calculation to eligible items only
+      let eligibleForCouponSubtotal = 0;
+      for (const item of verifiedItems) {
+        const isCollectibles = !item.vendor_id || item.vendor_id === "platform";
+        if (isCollectibles || item.promotions_opt_in === true) {
+          eligibleForCouponSubtotal += item.price * item.quantity;
+        }
+      }
+
       couponId = coupon.id;
       discountAmount = coupon.discount_type === "percentage"
-        ? subtotal * (Number(coupon.discount_value) / 100)
-        : Number(coupon.discount_value);
+        ? eligibleForCouponSubtotal * (Number(coupon.discount_value) / 100)
+        : Math.min(Number(coupon.discount_value), eligibleForCouponSubtotal);
     }
 
     let affiliateId: string | null = null;
@@ -494,6 +610,12 @@ Deno.serve(async (req) => {
           for (const promo of autoPromotions) {
             const itemVendorId = item.vendor_id || product.vendor_id || null;
             if (promo.owner_vendor_id && promo.owner_vendor_id !== itemVendorId) {
+              continue;
+            }
+
+            // Global auto promotion and vendor has not opted in
+            if (itemVendorId && !promo.owner_vendor_id && !item.promotions_opt_in) {
+              console.log(`Skipping global promotion ${promo.name} for vendor product due to vendor_opt_out`);
               continue;
             }
 
@@ -833,7 +955,25 @@ Deno.serve(async (req) => {
       const isClientMontevideo = payload.shipping_address.department === "Montevideo";
       const isClientCovered = isClientMontevideo && isLocationInSoyDeliveryZone(payload.shipping_address.department, shippingCity);
       const isVendorCovered = vendorAddress ? isLocationInSoyDeliveryZone(vendorAddress.department, vendorAddress.city) : false;
-      const isSoyDeliveryAvailable = isSoyDeliveryEnabledGlobally && isClientCovered && isVendorCovered;
+      const isSoyDeliveryAvailable = isSoyDeliveryEnabledGlobally && 
+        isClientCovered && 
+        isVendorCovered && 
+        (vendorId === null || shippingSettings.soydelivery?.active === true);
+
+      // Strict backend validation of explicit selection
+      if (payload.shipping_method === "pickup") {
+        if (vendorId !== null) {
+          const isPickupActive = shippingSettings.pickup?.active === true;
+          const pickupAddress = shippingSettings.pickup?.address?.trim() || vendorAddress;
+          if (!isPickupActive || !pickupAddress) {
+            throw new Error("El método de envío seleccionado no está disponible para este vendedor.");
+          }
+        }
+      } else if (payload.shipping_method === "dac" || payload.shipping_method === "dac_home" || payload.shipping_method === "dac_agency") {
+        if (vendorId !== null && shippingSettings.dac?.active !== true) {
+          throw new Error("El método de envío seleccionado no está disponible para este vendedor.");
+        }
+      }
 
       let shippingProvider = "DAC";
       let groupShippingCost = 0;
@@ -841,7 +981,7 @@ Deno.serve(async (req) => {
       if (payload.shipping_method === "pickup") {
         shippingProvider = "Retiro en local";
         groupShippingCost = 0;
-      } else if (payload.shipping_method === "delivery" && isSoyDeliveryAvailable) {
+      } else if ((payload.shipping_method === "delivery" || payload.shipping_method === "dac" || payload.shipping_method === "dac_home" || payload.shipping_method === "dac_agency") && isSoyDeliveryAvailable && payload.shipping_method === "delivery") {
         shippingProvider = "SoyDelivery";
         groupShippingCost = calculateShipping(shippingCity, "Montevideo", groupSubtotal, freeShippingThreshold);
       } else {
@@ -893,9 +1033,13 @@ Deno.serve(async (req) => {
           groupShippingCost = (groupSubtotal >= freeShippingThreshold) ? 0 : 180;
         } else if (isManualActive) {
           shippingProvider = "Envío manual";
-          groupShippingCost = Number(shippingSettings.manual?.fixed_cost || 0);
+          // Support both fixed_cost and fixed_price to be safe
+          const manualFixedCost = shippingSettings.manual?.fixed_cost !== undefined && shippingSettings.manual?.fixed_cost !== null && shippingSettings.manual?.fixed_cost !== ''
+            ? Number(shippingSettings.manual.fixed_cost)
+            : (shippingSettings.manual?.fixed_price !== undefined && shippingSettings.manual?.fixed_price !== null && shippingSettings.manual?.fixed_price !== '' ? Number(shippingSettings.manual.fixed_price) : 0);
+          groupShippingCost = manualFixedCost;
         } else {
-          throw new Error("Este vendedor no tiene métodos de envío disponibles para tu dirección. Probá coordinar envío manual o contactanos.");
+          throw new Error("El método de envío seleccionado no está disponible para este vendedor.");
         }
       }
 

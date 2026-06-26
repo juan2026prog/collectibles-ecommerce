@@ -1,6 +1,6 @@
 import { Link, useSearchParams, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { ChevronRight, ChevronLeft, SlidersHorizontal, X, Search } from 'lucide-react';
+import { ChevronRight, ChevronLeft, SlidersHorizontal, X, Search, Store, ExternalLink } from 'lucide-react';
 import { useProducts, useCategories, useBrands, useFilterMappings, useProductGroupMetadata } from '../hooks/useData';
 import { usePromotions, getApplicablePromotions } from '../hooks/usePromotions';
 import { useCartContext } from '../contexts/CartContext';
@@ -46,6 +46,44 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   const [priceMax, setPriceMax] = useState('');
   const [searchInput, setSearchInput] = useState(searchQ);
   const limit = gridCols === 5 ? 15 : 12;
+
+  const [matchedStore, setMatchedStore] = useState<any>(null);
+
+  useEffect(() => {
+    if (!searchQ) {
+      setMatchedStore(null);
+      return;
+    }
+
+    async function searchStores() {
+      try {
+        const { data } = await supabase
+          .from('vendor_stores')
+          .select('id, store_name, slug, logo_url, description, vendor_store_badge_assignments(status, approved_by, approved_at, vendor_store_badges(*))')
+          .eq('status', 'active')
+          .or(`store_name.ilike.%${searchQ}%,slug.ilike.%${searchQ}%`)
+          .limit(1);
+        
+        if (data && data.length > 0) {
+          const store = data[0];
+          const assignments = store.vendor_store_badge_assignments || [];
+          const activeBadges = assignments
+            .filter((x: any) => x.status === 'active' && x.approved_by && x.approved_at)
+            .map((x: any) => x.vendor_store_badges)
+            .filter(Boolean);
+          setMatchedStore({
+            ...store,
+            badges: activeBadges
+          });
+        } else {
+          setMatchedStore(null);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    searchStores();
+  }, [searchQ]);
 
   const { categories, loading: catsLoading } = useCategories();
   const { brands, loading: brandsLoading } = useBrands();
@@ -479,6 +517,42 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                 ))}
               </div>
             </div>
+
+          {matchedStore && (
+            <div className="mt-6 glass p-6 rounded-3xl border border-[#f00856]/20 bg-gradient-to-r from-[#f00856]/10 to-indigo-500/5 flex flex-col md:flex-row items-center justify-between gap-6 hover:border-[#f00856]/40 transition-colors animate-fade-in">
+              <div className="flex items-center gap-4 text-left">
+                <div className="w-16 h-16 rounded-2xl bg-[#0a0d16] border border-white/10 overflow-hidden flex-shrink-0 flex items-center justify-center p-1">
+                  {matchedStore.logo_url ? (
+                    <img src={matchedStore.logo_url} alt={matchedStore.store_name} className="w-full h-full object-contain" />
+                  ) : (
+                    <Store className="w-8 h-8 text-white/20" />
+                  )}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                  {matchedStore.badges && matchedStore.badges.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {matchedStore.badges.map((b: any) => (
+                        <span key={b.id || b.badge_key} className={`text-[9px] border px-2 py-0.5 rounded-full uppercase tracking-wider font-extrabold ${b.color_class || 'bg-red-500/20 text-[#f00856] border-red-500/30'}`} title={b.description}>
+                          {b.label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  </div>
+                  <h3 className="text-xl font-black text-white mt-1 uppercase tracking-tight">{matchedStore.store_name}</h3>
+                  <p className="text-xs text-slate-400 font-semibold line-clamp-1 mt-0.5">{matchedStore.description || 'Visita la tienda oficial para ver todo su catálogo.'}</p>
+                </div>
+              </div>
+              <Link
+                to={`/store/${matchedStore.slug}`}
+                className="bg-white hover:bg-[#f00856] text-black hover:text-white font-black text-xs uppercase tracking-widest px-6 py-3 rounded-xl transition-all shadow-md flex items-center gap-2 w-full md:w-auto justify-center"
+              >
+                Visitar Tienda Oficial <ExternalLink className="w-4 h-4" />
+              </Link>
+            </div>
+          )}
+
             {/* Barra secundaria: count + sort */}
             <div className="hidden lg:flex items-center gap-3 mt-4">
               <span className="text-sm font-bold text-slate-500">{count} productos encontrados</span>

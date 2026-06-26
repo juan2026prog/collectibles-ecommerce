@@ -231,26 +231,13 @@ export default function VProducts() {
       if (!form.title) throw new Error("El título es obligatorio");
       let titleSlug = form.slug || form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'); if (!editing && !form.slug) { titleSlug = `${titleSlug.replace(/-+$/, '')}-`; }
 
-      // Check if selected brand is pending review
       const selectedBrandId = form.brands[0] || null;
-      const isBrandPending = selectedBrandId ? brands.find(b => b.id === selectedBrandId)?.status === 'pending_review' : false;
-
-      // Check if any of selected categories is pending review
-      const isAnyCategoryPending = form.categories.some(cid => {
-        const cat = categories.find(c => c.id === cid);
-        return cat?.status === 'pending_review';
-      });
-
-      let finalStatus = form.status;
-      if (isBrandPending || isAnyCategoryPending) {
-        finalStatus = 'pending_taxonomy_review';
-      }
 
       const payload = {
         title: form.title, slug: titleSlug, description: form.description, short_description: form.short_description,
         base_price: parseFloat(form.base_price) || 0, compare_at_price: form.compare_at_price ? parseFloat(form.compare_at_price) : null,
-        status: finalStatus, badge: form.badge || null, is_featured: form.is_featured,
-        is_active: (isBrandPending || isAnyCategoryPending) ? false : form.is_active,
+        status: form.status, badge: form.badge || null, is_featured: form.is_featured,
+        is_active: form.is_active,
         brand_id: selectedBrandId, category_id: form.categories[0] || null,
         vendor_store_id: form.vendor_store_id || null
       };
@@ -397,21 +384,11 @@ export default function VProducts() {
         const { error } = await supabase.from('product_categories').delete().eq('product_id', id);
         if (error) throw error;
         
-        let newStatus = undefined;
         if (value) {
-          const cat = categories.find(c => c.id === value);
-          if (cat?.status === 'pending_review') {
-            newStatus = 'pending_taxonomy_review';
-          }
           const { error: insErr } = await supabase.from('product_categories').insert({ product_id: id, category_id: value });
           if (insErr) throw insErr;
           
           const productUpdates: any = { category_id: value };
-          if (newStatus === 'pending_taxonomy_review') {
-            productUpdates.status = newStatus;
-            productUpdates.is_active = false;
-          }
-          
           const { error: updErr } = await supabase.from('products').update(productUpdates).eq('id', id).select().single();
           if (updErr) throw updErr;
         } else {
@@ -428,14 +405,6 @@ export default function VProducts() {
         }
       } else {
         updates[field] = value === '' ? null : value;
-        // If updating brand_id, check if it's pending review
-        if (field === 'brand_id' && value) {
-          const br = brands.find(b => b.id === value);
-          if (br?.status === 'pending_review') {
-            updates.status = 'pending_taxonomy_review';
-            updates.is_active = false;
-          }
-        }
         const { error } = await supabase.from('products').update(updates).eq('id', id).select().single();
         if (error) throw error;
       }
@@ -518,9 +487,6 @@ export default function VProducts() {
 
       const brandId = product.brand?.id || product.brand_id || null;
       const catId = product.category?.id || product.category_id || null;
-      const isBrandPending = brandId ? brands.find(b => b.id === brandId)?.status === 'pending_review' : false;
-      const isCatPending = catId ? categories.find(c => c.id === catId)?.status === 'pending_review' : false;
-
       const payload = {
         vendor_id: user.id,
         title: newTitle,
@@ -529,8 +495,8 @@ export default function VProducts() {
         short_description: product.short_description,
         base_price: product.base_price,
         compare_at_price: product.compare_at_price,
-        status: (isBrandPending || isCatPending) ? 'pending_taxonomy_review' : 'draft',
-        is_active: (isBrandPending || isCatPending) ? false : (product.is_active !== false),
+        status: 'draft',
+        is_active: product.is_active !== false,
         badge: product.badge,
         is_featured: product.is_featured,
         brand_id: brandId,

@@ -1893,17 +1893,8 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Check if category is pending review
-        let isCategoryPending = false;
-        if (finalCategoryId) {
-          const { data: catData } = await supabase.from('categories').select('status').eq('id', finalCategoryId).maybeSingle();
-          if (catData?.status === 'pending_review') {
-            isCategoryPending = true;
-          }
-        }
-
-        const initialProductStatus = (isBrandPending || isCategoryPending) ? 'pending_taxonomy_review' : 'published';
-        const initialIsActive = (isBrandPending || isCategoryPending) ? false : true;
+        const initialProductStatus = 'published';
+        const initialIsActive = true;
 
         // Resolve vendor_store_id
         let resolvedStoreId = vendor_store_id || null;

@@ -91,6 +91,68 @@ serve(async (req) => {
       return new Response(JSON.stringify({ skipped: true, reason: "No shipping address" }), { headers: corsHeaders });
     }
 
+    // Validate that UES is still active for the vendor/platform
+    if (resolvedVendorId) {
+      const { data: vendorData, error: vendorErr } = await supabase
+        .from('vendors')
+        .select('shipping_settings')
+        .eq('id', resolvedVendorId)
+        .maybeSingle();
+
+      if (vendorErr) {
+        throw new Error(`Error al consultar configuración del vendedor: ${vendorErr.message}`);
+      }
+
+      if (vendorData) {
+        const isUesActive = vendorData.shipping_settings?.ues?.active === true;
+        if (!isUesActive) {
+          console.log(`[UES] UES method is disabled for vendor ${resolvedVendorId}. Failing shipment.`);
+          if (isSuborder) {
+            await supabase
+              .from("order_suborders")
+              .update({ 
+                   shipping_provider: "UES",
+                   shipping_status: "failed",
+                   updated_at: new Date().toISOString()
+              })
+              .eq("id", order_id);
+          }
+          
+          const shipmentPayload = {
+              order_id: isSuborder ? parentOrderId : order_id,
+              suborder_id: isSuborder ? order_id : null,
+              provider_key: 'ues',
+              tracking_code: null,
+              shipping_label_url: null,
+              shipping_status: 'failed',
+              error_message: 'método no disponible',
+              customer_name: `${addr.first_name || ''} ${addr.last_name || ''}`.trim(),
+              customer_phone: resolvedCustomerPhone || "099000000",
+              customer_address: addr.street || "",
+              customer_city: addr.city || "",
+              customer_department: addr.department || "",
+              package_weight: 1.0,
+              package_quantity: 1,
+              provider_response: { 
+                status: "failed", 
+                error: "método no disponible",
+                created_at: new Date().toISOString() 
+              }
+          };
+          await supabase.from('shipments').insert(shipmentPayload);
+
+          return new Response(JSON.stringify({ 
+            success: false, 
+            status: "failed",
+            error_message: "método no disponible" 
+          }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          });
+        }
+      }
+    }
+
     // 3. Fetch UES credentials (Vendor or Global Fallback)
     let username = '';
     let password = '';

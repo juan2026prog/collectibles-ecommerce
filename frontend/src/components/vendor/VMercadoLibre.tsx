@@ -23,6 +23,8 @@ export default function VMercadoLibre() {
   const [account, setAccount] = useState<any>(cachedAccount);
   const [loadingAccount, setLoadingAccount] = useState(!cachedAccount);
   const [dbClientId, setDbClientId] = useState(cachedClientId);
+  const [stores, setStores] = useState<any[]>([]);
+  const [selectedTargetStoreId, setSelectedTargetStoreId] = useState<string>('');
   
   // Staging items and links state
   const [items, setItems] = useState<any[]>(cachedItems);
@@ -90,6 +92,19 @@ export default function VMercadoLibre() {
       loadAccountDetails();
       loadClientId();
       loadCategories();
+
+      // Load vendor stores
+      supabase
+        .from('vendor_stores')
+        .select('id, store_name')
+        .eq('vendor_id', user.id)
+        .order('store_name')
+        .then(({ data }) => {
+          setStores(data || []);
+          if (data && data.length > 0) {
+            setSelectedTargetStoreId(data[0].id);
+          }
+        });
     }
   }, [user]);
 
@@ -537,6 +552,14 @@ export default function VMercadoLibre() {
         toast.success(`Importación iniciada para ${data.total_items} publicaciones.`);
       }
       
+      // Update target store on import job if selected
+      if (data.job_id && selectedTargetStoreId) {
+        await supabase
+          .from('ml_import_jobs')
+          .update({ vendor_store_id: selectedTargetStoreId })
+          .eq('id', data.job_id);
+      }
+
       // Load and poll job
       const { data: jobData } = await supabase
         .from('ml_import_jobs')
@@ -609,6 +632,24 @@ export default function VMercadoLibre() {
               }
               return (
                 <div className="flex flex-col sm:flex-row items-center gap-3">
+                  {stores.length > 1 && (
+                    <div className="flex items-center gap-1.5 bg-white border border-gray-200 px-3 py-2 rounded-lg">
+                      <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Importar en:</span>
+                      <select
+                        value={selectedTargetStoreId}
+                        onChange={(e) => setSelectedTargetStoreId(e.target.value)}
+                        className="text-xs font-black text-[#f00856] bg-transparent outline-none focus:ring-0 cursor-pointer"
+                        disabled={actionLoading}
+                      >
+                        {stores.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.store_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   <select
                     value={importStatusFilter}
                     onChange={(e) => setImportStatusFilter(e.target.value)}

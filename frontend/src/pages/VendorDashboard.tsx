@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useOutletContext } from 'react-router-dom';
 import { Store, RefreshCw, AlertTriangle, ShieldAlert } from 'lucide-react';
 
 import VOverview from '../components/vendor/VOverview';
@@ -32,6 +32,7 @@ import VCollections from '../components/vendor/VCollections';
 export default function VendorDashboard() {
   const { user, profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { activeStoreId, stores } = useOutletContext<any>() || {};
   const activeTab = searchParams.get('tab') || 'overview';
   const setActiveTab = (tab: string) => setSearchParams({ tab });
 
@@ -191,21 +192,21 @@ export default function VendorDashboard() {
 
   return (
     <div className="animation-fade-in">
-      {activeTab === 'overview' && <VOverview onChangeTab={setActiveTab} />}
-      {activeTab === 'products' && <VProducts />}
-      {activeTab === 'imports' && <VImports />}
-      {activeTab === 'mercadolibre' && <VMercadoLibre />}
-      {activeTab === 'inventory' && <VInventory mode="inventory" />}
-      {activeTab === 'orders' && <VOrders />}
-      {activeTab === 'shipping' && <VShipping />}
-      {activeTab === 'sla' && <VSLA />}
-      {activeTab === 'finances' && <VFinances mode="finances" />}
-      {activeTab === 'settlements' && <VFinances mode="settlements" />}
-      {activeTab === 'analytics' && <VAnalytics />}
+      {activeTab === 'overview' && <VOverview onChangeTab={setActiveTab} activeStoreId={activeStoreId} />}
+      {activeTab === 'products' && <VProducts activeStoreId={activeStoreId} />}
+      {activeTab === 'imports' && <VImports activeStoreId={activeStoreId} />}
+      {activeTab === 'mercadolibre' && <VMercadoLibre activeStoreId={activeStoreId} />}
+      {activeTab === 'inventory' && <VInventory mode="inventory" activeStoreId={activeStoreId} />}
+      {activeTab === 'orders' && <VOrders activeStoreId={activeStoreId} />}
+      {activeTab === 'shipping' && <VShipping activeStoreId={activeStoreId} />}
+      {activeTab === 'sla' && <VSLA activeStoreId={activeStoreId} />}
+      {activeTab === 'finances' && <VFinances mode="finances" activeStoreId={activeStoreId} />}
+      {activeTab === 'settlements' && <VFinances mode="settlements" activeStoreId={activeStoreId} />}
+      {activeTab === 'analytics' && <VAnalytics activeStoreId={activeStoreId} />}
       {activeTab === 'incidents' && <VIncidents />}
       {activeTab === 'audit' && <VAudit />}
       {activeTab === 'rules' && <VRules />}
-      {activeTab === 'warehouses' && <VInventory mode="warehouses" />}
+      {activeTab === 'warehouses' && <VInventory mode="warehouses" activeStoreId={activeStoreId} />}
       {activeTab === 'team' && <VTeam />}
       {activeTab === 'settings' && <VSettings />}
       {activeTab === 'kyc' && <VKyc />}
@@ -213,10 +214,10 @@ export default function VendorDashboard() {
 
       {activeTab === 'categories' && <VCategories />}
       {activeTab === 'brands' && <VBrands />}
-      {activeTab === 'stores' && <VStores />}
+      {activeTab === 'stores' && <VStores activeStoreId={activeStoreId} />}
       {activeTab === 'promotions' && <VPromotions />}
       {activeTab === 'media' && <VMedia />}
-      {activeTab === 'collections' && <VCollections />}
+      {activeTab === 'collections' && <VCollections activeStoreId={activeStoreId} />}
     </div>
   );
 }

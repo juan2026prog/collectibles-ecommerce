@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRight, ChevronLeft, ChevronDown, Truck, Store, Tag, Sparkles, X, Home, Ticket, Share2, Clock, AlertCircle, MapPin, Building2, Search, Check, Trash2, Plus, Minus } from 'lucide-react';
+import { ChevronRight, ChevronLeft, ChevronDown, Truck, Store, Tag, Sparkles, X, Home, Ticket, Share2, Clock, AlertCircle, MapPin, Building2, Search, Check, Trash2, Plus, Minus, XCircle } from 'lucide-react';
 import { useCartContext } from '../contexts/CartContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -231,6 +231,227 @@ export default function Checkout() {
   }>>({});
   const [globalProviders, setGlobalProviders] = useState<Record<string, boolean>>({ dac: true, ues: false, soydelivery: false });
 
+  const getVendorName = (storeKey: string) => {
+    if (storeKey === 'collectibles' || storeKey === 'platform') return 'Collectibles.uy';
+    return items.find(item => (item.vendor_store_id || item.vendor_id || 'collectibles') === storeKey)?.vendor_name || 'Vendedor';
+  };
+
+  const getVendorShippingOptions = (storeKey: string, groupTotal: number) => {
+    const v = vendorsData[storeKey];
+    const options: Array<{
+      id: string;
+      name: string;
+      available: boolean;
+      cost?: number;
+      reason?: string;
+      show: boolean;
+    }> = [];
+
+    if (!v) return options;
+
+    const isPlatform = storeKey === 'collectibles' || storeKey === 'platform';
+    const s = v.shipping_settings || {};
+    const defaultAddr = v.default_address;
+    const isMontevideo = form.department === 'Montevideo';
+    const resolvedCityForShipping = form.department === 'Montevideo' ? form.barrio : form.city;
+
+    // 1. Pickup
+    const pickupActive = isPlatform ? true : !!s.pickup?.active;
+    const pickupAddress = s.pickup?.address?.trim() || defaultAddr?.address?.trim();
+    if (pickupActive) {
+      if (!pickupAddress) {
+        options.push({
+          id: 'pickup',
+          name: 'Retiro en local',
+          available: false,
+          reason: 'Retiro no disponible: el vendedor no configuró dirección.',
+          show: true
+        });
+      } else {
+        options.push({
+          id: 'pickup',
+          name: 'Retiro en local',
+          available: true,
+          cost: 0,
+          show: true
+        });
+      }
+    } else {
+      options.push({
+        id: 'pickup',
+        name: 'Retiro en local',
+        available: false,
+        reason: 'No habilitado por el vendedor.',
+        show: false
+      });
+    }
+
+    // 2. SoyDelivery
+    const sdActive = isPlatform ? true : !!s.soydelivery?.active;
+    const sdGlobalActive = !!globalProviders['soydelivery'];
+    if (sdActive && sdGlobalActive) {
+      const cov = isSoyDeliveryAvailableForVendor(
+        defaultAddr,
+        { department: form.department, city: resolvedCityForShipping }
+      );
+      if (!isMontevideo || !cov.available) {
+        options.push({
+          id: 'soydelivery',
+          name: 'Soy Delivery / Flex',
+          available: false,
+          reason: 'SoyDelivery no disponible para esta dirección.',
+          show: true
+        });
+      } else {
+        options.push({
+          id: 'soydelivery',
+          name: 'Soy Delivery',
+          available: true,
+          cost: calculateShipping(resolvedCityForShipping, form.department, groupTotal, freeShippingThreshold),
+          show: true
+        });
+      }
+    } else {
+      options.push({
+        id: 'soydelivery',
+        name: 'Soy Delivery',
+        available: false,
+        reason: 'No habilitado por el vendedor.',
+        show: false
+      });
+    }
+
+    // 3. DAC
+    const dacActive = isPlatform ? true : !!s.dac?.active;
+    const dacGlobalActive = !!globalProviders['dac'];
+    if (dacActive && dacGlobalActive) {
+      const isDacCalculable = form.department && (isMontevideo ? form.barrio !== '' : (dacDeliveryMode === 'dac_agency' ? !!selectedAgency : !!form.city));
+      if (!isDacCalculable) {
+        options.push({
+          id: 'dac',
+          name: 'DAC',
+          available: false,
+          reason: 'Falta dirección o ciudad/agencia de destino.',
+          show: true
+        });
+      } else if (dacShippingError && !vendorShippingCosts[storeKey] && !options.some(o => o.id === 'soydelivery' && o.available)) {
+        options.push({
+          id: 'dac',
+          name: 'DAC',
+          available: false,
+          reason: dacShippingError || 'No pudimos calcular el costo de envío.',
+          show: true
+        });
+      } else {
+        options.push({
+          id: 'dac',
+          name: 'DAC',
+          available: true,
+          cost: vendorShippingCosts[storeKey] ?? 180,
+          show: true
+        });
+      }
+    } else {
+      options.push({
+        id: 'dac',
+        name: 'DAC',
+        available: false,
+        reason: 'No habilitado por el vendedor.',
+        show: false
+      });
+    }
+
+    // 4. UES
+    const uesActive = isPlatform ? false : !!s.ues?.active;
+    const uesGlobalActive = !!globalProviders['ues'];
+    if (uesActive && uesGlobalActive) {
+      options.push({
+        id: 'ues',
+        name: 'UES',
+        available: true,
+        cost: (groupTotal >= freeShippingThreshold ? 0 : 220),
+        show: true
+      });
+    } else {
+      options.push({
+        id: 'ues',
+        name: 'UES',
+        available: false,
+        reason: 'No habilitado por el vendedor.',
+        show: false
+      });
+    }
+
+    // 5. Correo Uruguayo
+    const correoActive = isPlatform ? false : !!s.correo_uruguayo?.active;
+    if (correoActive) {
+      options.push({
+        id: 'correo_uruguayo',
+        name: 'Correo Uruguayo',
+        available: true,
+        cost: (groupTotal >= freeShippingThreshold ? 0 : 180),
+        show: true
+      });
+    } else {
+      options.push({
+        id: 'correo_uruguayo',
+        name: 'Correo Uruguayo',
+        available: false,
+        reason: 'No habilitado por el vendedor.',
+        show: false
+      });
+    }
+
+    // 6. Manual
+    const manualActive = isPlatform ? false : !!s.manual?.active;
+    const fixedCost = s.manual?.fixed_cost !== undefined && s.manual?.fixed_cost !== null && s.manual?.fixed_cost !== ''
+      ? Number(s.manual.fixed_cost)
+      : (s.manual?.fixed_price !== undefined && s.manual?.fixed_price !== null && s.manual?.fixed_price !== '' ? Number(s.manual.fixed_price) : null);
+    const hasFixed = fixedCost !== null && !isNaN(fixedCost);
+    const hasCoordinar = JSON.stringify(s.manual || {}).toLowerCase().includes('coordinar') || String(s.manual?.fixed_cost || '').toLowerCase().includes('coordinar') || String(s.manual?.fixed_price || '').toLowerCase().includes('coordinar');
+    
+    if (manualActive && (hasFixed || hasCoordinar)) {
+      options.push({
+        id: 'manual',
+        name: s.manual?.method_name || 'Envío manual / propio',
+        available: true,
+        cost: hasFixed ? fixedCost : 0,
+        reason: hasCoordinar && !hasFixed ? 'A coordinar con el vendedor' : undefined,
+        show: true
+      });
+    } else {
+      options.push({
+        id: 'manual',
+        name: 'Envío manual / propio',
+        available: false,
+        reason: 'No habilitado por el vendedor.',
+        show: false
+      });
+    }
+
+    return options;
+  };
+
+  const uniqueStoreKeys = Array.from(new Set(items.map(item => item.vendor_store_id || item.vendor_id || 'collectibles')));
+
+  const cannotPickupVendors = uniqueStoreKeys.filter(storeKey => {
+    if (storeKey === 'collectibles' || storeKey === 'platform') return false;
+    const v = vendorsData[storeKey];
+    if (!v) return false;
+    return !v.shipping_settings?.pickup?.active;
+  });
+
+  const pickupActiveButNoAddressVendors = uniqueStoreKeys.filter(storeKey => {
+    if (storeKey === 'collectibles' || storeKey === 'platform') return false;
+    const v = vendorsData[storeKey];
+    if (!v) return false;
+    if (!v.shipping_settings?.pickup?.active) return false;
+    const hasAddress = v.shipping_settings?.pickup?.address?.trim() || v.default_address;
+    return !hasAddress;
+  });
+
+  const hasPickupError = cannotPickupVendors.length > 0 || pickupActiveButNoAddressVendors.length > 0;
+
   useEffect(() => {
     if (!items.length) return;
     
@@ -262,6 +483,7 @@ export default function Checkout() {
             id: 'collectibles',
             vendor_id: 'collectibles',
             shipping_settings: { soydelivery: { active: true }, dac: { active: true } },
+            promotions_opt_in: false,
             default_address: {
               department: 'Montevideo',
               city: 'Montevideo',
@@ -279,7 +501,7 @@ export default function Checkout() {
           // 1. Fetch vendor shipping settings
           const { data: vendor } = await supabase
             .from('vendors')
-            .select('id, shipping_settings')
+            .select('id, shipping_settings, promotions_opt_in')
             .eq('id', vendorId)
             .maybeSingle();
 
@@ -310,6 +532,7 @@ export default function Checkout() {
             vendor_id: vendorId,
             vendor_store_id: vendorStoreId,
             shipping_settings: vendor?.shipping_settings || {},
+            promotions_opt_in: vendor?.promotions_opt_in || false,
             default_address: dispatchAddress || null
           };
         } catch (e) {
@@ -351,6 +574,12 @@ export default function Checkout() {
   const [dacAgencies, setDacAgencies] = useState<any[]>([]);
   const [selectedAgency, setSelectedAgency] = useState<any | null>(null);
   const [agencySearchTerm, setAgencySearchTerm] = useState('');
+
+  useEffect(() => {
+    if (shippingMethod === 'pickup' && hasPickupError) {
+      setShippingMethod('delivery');
+    }
+  }, [hasPickupError, shippingMethod]);
 
   // Synchronize selectedShippingMethod
   useEffect(() => {
@@ -465,36 +694,27 @@ export default function Checkout() {
 
         for (const [storeKey, groupItems] of Object.entries(groups)) {
           const groupTotal = groupItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
-          
-          if (isFreeShipping) {
-            costsByVendor[storeKey] = 0;
-            continue;
-          }
 
           // Check if SoyDelivery is available for this vendor group (only in Montevideo)
           const v = vendorsData[storeKey];
-          const hasSD = isMontevideo && v && isSoyDeliveryAvailableForVendor(
+          const hasSD = isMontevideo && v && v.shipping_settings?.soydelivery?.active && globalProviders['soydelivery'] && isSoyDeliveryAvailableForVendor(
             v.default_address, 
             { department: form.department, city: resolvedCityForShipping }
           ).available;
 
+          const isDacActive = v?.shipping_settings?.dac?.active && globalProviders['dac'];
+          const isUesActive = v?.shipping_settings?.ues?.active && globalProviders['ues'];
+          const isCorreoActive = v?.shipping_settings?.correo_uruguayo?.active;
+          const isManualActive = v?.shipping_settings?.manual?.active;
+
           if (isMontevideo && hasSD) {
-            const cost = calculateShipping(resolvedCityForShipping, form.department, groupTotal, freeShippingThreshold);
+            const cost = isFreeShipping ? 0 : calculateShipping(resolvedCityForShipping, form.department, groupTotal, freeShippingThreshold);
             costsByVendor[storeKey] = cost;
             totalCost += cost;
-          } else {
-            // Apply fallback ordered list:
-            // 1. DAC, if active for the vendor and globally.
-            // 2. UES, if active for the vendor and globally.
-            // 3. Correo Uruguayo, if active.
-            // 4. Envío manual, if active.
-            // 5. Block.
-            const isDacActive = v?.shipping_settings?.dac?.active && globalProviders['dac'];
-            const isUesActive = v?.shipping_settings?.ues?.active && globalProviders['ues'];
-            const isCorreoActive = v?.shipping_settings?.correo_uruguayo?.active;
-            const isManualActive = v?.shipping_settings?.manual?.active;
-
-            if (isDacActive) {
+          } else if (isDacActive) {
+            if (isFreeShipping) {
+              costsByVendor[storeKey] = 0;
+            } else {
               const mode = isMontevideo ? 'home' : (dacDeliveryMode === 'dac_agency' ? 'agency' : 'home');
               const bodyPayload: any = {
                 mode,
@@ -538,22 +758,24 @@ export default function Checkout() {
               } else {
                 throw new Error(data?.error || "Error al calcular costo DAC.");
               }
-            } else if (isUesActive) {
-              console.log(`[Checkout Debug] Fallback to UES for ${storeKey}`);
-              costsByVendor[storeKey] = 220; // standard UES flat fee
-              totalCost += 220;
-            } else if (isCorreoActive) {
-              console.log(`[Checkout Debug] Fallback to Correo Uruguayo for ${storeKey}`);
-              costsByVendor[storeKey] = 180; // standard Correo Uruguayo flat fee
-              totalCost += 180;
-            } else if (isManualActive) {
-              const fixedCost = Number(v.shipping_settings?.manual?.fixed_cost || 0);
-              console.log(`[Checkout Debug] Fallback to Envío manual for ${storeKey}: cost ${fixedCost}`);
-              costsByVendor[storeKey] = fixedCost;
-              totalCost += fixedCost;
-            } else {
-              throw new Error("Este vendedor no tiene métodos de envío disponibles para tu dirección. Probá coordinar envío manual o contactanos.");
             }
+          } else if (isUesActive) {
+            const cost = isFreeShipping ? 0 : 220;
+            console.log(`[Checkout Debug] Fallback to UES for ${storeKey}: cost ${cost}`);
+            costsByVendor[storeKey] = cost;
+            totalCost += cost;
+          } else if (isCorreoActive) {
+            const cost = isFreeShipping ? 0 : 180;
+            console.log(`[Checkout Debug] Fallback to Correo Uruguayo for ${storeKey}: cost ${cost}`);
+            costsByVendor[storeKey] = cost;
+            totalCost += cost;
+          } else if (isManualActive) {
+            const fixedCost = Number(v.shipping_settings?.manual?.fixed_cost || v.shipping_settings?.manual?.fixed_price || 0);
+            console.log(`[Checkout Debug] Fallback to Envío manual for ${storeKey}: cost ${fixedCost}`);
+            costsByVendor[storeKey] = fixedCost;
+            totalCost += fixedCost;
+          } else {
+            throw new Error("Este vendedor no tiene métodos de envío disponibles para tu dirección. Probá coordinar envío manual o contactanos.");
           }
         }
 
@@ -598,7 +820,6 @@ export default function Checkout() {
     vendorsData
   ]);
 
-  const uniqueStoreKeys = Array.from(new Set(items.map(item => item.vendor_store_id || item.vendor_id || 'collectibles')));
   const isLocationSelected = 
     shippingMethod === 'pickup' || 
     (shippingMethod === 'delivery' && (
@@ -843,10 +1064,21 @@ export default function Checkout() {
 
   let couponDiscount = 0;
   if (activeCoupon) {
-    const baseForCoupon = Math.max(total - autoDiscountAmount, 0);
+    let baseForCoupon = 0;
+    items.forEach(item => {
+      const isCollectibles = !item.vendor_id || item.vendor_id === 'platform';
+      const storeKey = item.vendor_store_id || item.vendor_id || 'collectibles';
+      const isOptedIn = vendorsData[storeKey]?.promotions_opt_in || false;
+      
+      if (isCollectibles || isOptedIn) {
+        const itemDiscount = evaluateItemDiscount(item as any, promotions);
+        baseForCoupon += Math.max(0, (item.price * item.quantity) - itemDiscount);
+      }
+    });
+
     couponDiscount = activeCoupon.discount_type === 'percentage'
       ? Math.round(baseForCoupon * Number(activeCoupon.discount_value) / 100)
-      : Number(activeCoupon.discount_value);
+      : Math.min(Number(activeCoupon.discount_value), baseForCoupon);
   }
 
   const grandTotal = Math.max(subtotalWithShipping - bankDiscount - couponDiscount, 0);
@@ -1207,6 +1439,9 @@ export default function Checkout() {
   }
 
   const isPaymentBlocked = () => {
+    if (selectedShippingMethod === 'pickup') {
+      if (hasPickupError) return true;
+    }
     if (selectedShippingMethod === 'delivery') {
       if (dacShippingCost === null) return true;
       if (dacShippingError !== null) return true;
@@ -1712,14 +1947,36 @@ export default function Checkout() {
                         </div>
                       </label>
                     )}
-                    <label className={`flex items-start gap-4 p-4 border-2 cursor-pointer transition-all ${shippingMethod === 'pickup' ? 'border-primary-500 bg-primary-500/10' : 'border-white/10 hover:border-white/10 bg-white/5'}`}>
-                      <input type="radio" checked={shippingMethod === 'pickup'} onChange={() => setShippingMethod('pickup')} className="sr-only" />
-                      <div className={`p-2 ${shippingMethod === 'pickup' ? 'bg-primary-500/100 text-white' : 'glass text-slate-400 shadow-sm'}`}>
+                    <label className={`flex items-start gap-4 p-4 border-2 transition-all ${
+                      hasPickupError 
+                        ? 'border-red-500/20 bg-red-500/5 opacity-60 cursor-not-allowed' 
+                        : (shippingMethod === 'pickup' ? 'border-primary-500 bg-primary-500/10 cursor-pointer' : 'border-white/10 hover:border-white/10 bg-white/5 cursor-pointer')
+                    }`}>
+                      <input 
+                        type="radio" 
+                        checked={shippingMethod === 'pickup'} 
+                        disabled={hasPickupError} 
+                        onChange={() => {
+                          if (!hasPickupError) setShippingMethod('pickup');
+                        }} 
+                        className="sr-only" 
+                      />
+                      <div className={`p-2 ${shippingMethod === 'pickup' && !hasPickupError ? 'bg-primary-500/100 text-white' : 'glass text-slate-400 shadow-sm'}`}>
                         <Store className="w-5 h-5" />
                       </div>
                       <div>
                         <div className="font-bold text-white">Retiro en local</div>
-                        <div className="text-sm text-green-600 font-medium mt-1">GRATIS</div>
+                        {hasPickupError ? (
+                          <div className="text-xs text-red-400 font-medium mt-1 leading-normal">
+                            {cannotPickupVendors.length > 0 ? (
+                              `No disponible: ${cannotPickupVendors.map(k => getVendorName(k)).join(', ')} no admite retiro en local.`
+                            ) : (
+                              'Retiro no disponible: el vendedor no configuró dirección.'
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-green-600 font-medium mt-1">GRATIS</div>
+                        )}
                       </div>
                     </label>
                   </div>
@@ -2346,7 +2603,7 @@ export default function Checkout() {
                   {Object.entries(
                     items.reduce((acc: Record<string, { name: string; items: any[] }>, item: any) => {
                       const storeKey = item.vendor_store_id || item.vendor_id || 'collectibles';
-                      const storeName = item.vendor_name || (storeKey === 'collectibles' ? 'Collectibles' : 'Vendedor');
+                      const storeName = item.vendor_name || (storeKey === 'collectibles' ? 'Collectibles.uy' : 'Vendedor');
                       if (!acc[storeKey]) {
                         acc[storeKey] = { name: storeName, items: [] };
                       }
@@ -2358,7 +2615,7 @@ export default function Checkout() {
                     const groupShippingCost = vendorShippingCosts[storeKey] ?? 0;
 
                     const v = vendorsData[storeKey];
-                    const hasSD = isMontevideo && v && isSoyDeliveryAvailableForVendor(
+                    const hasSD = isMontevideo && v && v.shipping_settings?.soydelivery?.active && globalProviders['soydelivery'] && isSoyDeliveryAvailableForVendor(
                       v.default_address, 
                       { department: form.department, city: resolvedCityForShipping }
                     ).available;
@@ -2385,13 +2642,44 @@ export default function Checkout() {
                       }
                     }
 
+                    const storeBadges = group.items[0]?.vendor_store_badges || [];
+                    const groupTotal = group.items.reduce((sum, it) => sum + it.price * it.quantity, 0);
+                    const options = getVendorShippingOptions(storeKey, groupTotal);
+                    const availableOptions = options.filter(o => o.available);
+                    const unavailableOptions = options.filter(o => !o.available && o.show);
+
+                    const assignedMethod = options.find(o => o.available && (
+                      (shippingMethod === 'pickup' && o.id === 'pickup') ||
+                      (shippingMethod === 'delivery' && (
+                        (providerLabel === 'Soy Delivery' && o.id === 'soydelivery') ||
+                        (providerLabel === 'DAC' && o.id === 'dac') ||
+                        (providerLabel === 'UES' && o.id === 'ues') ||
+                        (providerLabel === 'Correo Uruguayo' && o.id === 'correo_uruguayo') ||
+                        (providerLabel === 'Envío manual' && o.id === 'manual')
+                      ))
+                    ));
+
                     return (
                       <div key={storeKey} className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-3">
                         <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                          <span className="text-xs font-black uppercase text-[#f00856] tracking-wider">{group.name}</span>
-                          {shippingMethod === 'delivery' && isLocationSelected && form.department && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-black uppercase text-[#f00856] tracking-wider">{group.name}</span>
+                            {storeBadges && storeBadges.length > 0 && (
+                              <div className="flex items-center gap-1">
+                                {storeBadges.map((b: any) => (
+                                  <span key={b.id || b.badge_key} className={`text-[8px] px-1 font-semibold leading-none uppercase rounded ${b.color_class || 'bg-blue-600 text-white'}`} title={b.description}>
+                                    {b.label}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          {isLocationSelected && form.department && (
                             <span className="text-[10px] font-bold text-slate-400">
-                              Envío ({providerLabel}): {groupShippingCost === 0 ? 'GRATIS' : formatCurrencyPrice(groupShippingCost)}
+                              {shippingMethod === 'pickup' 
+                                ? 'Retiro en local: GRATIS'
+                                : `Envío (${providerLabel}): ${groupShippingCost === 0 ? 'GRATIS' : formatCurrencyPrice(groupShippingCost)}`
+                              }
                             </span>
                           )}
                         </div>
@@ -2421,7 +2709,7 @@ export default function Checkout() {
                                   <div className="flex items-center border border-white/10 rounded bg-white/5 overflow-hidden">
                                     <button
                                       type="button"
-                                      onClick={() => updateQuantity(item.variant_id, item.quantity - 1)}
+                                      onClick={() => updateQuantity(item.variant_id, item.vendor_id, item.quantity - 1)}
                                       className="p-1 px-1.5 hover:bg-white/5 text-slate-400 hover:text-white transition-colors border-r border-white/10"
                                     >
                                       <Minus className="w-2.5 h-2.5" />
@@ -2431,7 +2719,7 @@ export default function Checkout() {
                                     </span>
                                     <button
                                       type="button"
-                                      onClick={() => updateQuantity(item.variant_id, item.quantity + 1)}
+                                      onClick={() => updateQuantity(item.variant_id, item.vendor_id, item.quantity + 1)}
                                       className="p-1 px-1.5 hover:bg-white/5 text-slate-400 hover:text-white transition-colors border-l border-white/10"
                                     >
                                       <Plus className="w-2.5 h-2.5" />
@@ -2450,7 +2738,7 @@ export default function Checkout() {
                                   <div className="flex items-center">
                                     <button
                                       type="button"
-                                      onClick={() => removeItem(item.variant_id)}
+                                      onClick={() => removeItem(item.variant_id, item.vendor_id)}
                                       className="text-slate-500 hover:text-red-500 transition-colors p-1"
                                       title="Eliminar"
                                     >
@@ -2462,6 +2750,51 @@ export default function Checkout() {
                             );
                           })}
                         </div>
+
+                        {/* Shipping Info for Package */}
+                        {isLocationSelected && (
+                          <div className="mt-3 pt-3 border-t border-white/5 space-y-2 text-xs">
+                            {assignedMethod ? (
+                              <div className="bg-white/5 p-2 rounded-lg border border-white/5">
+                                <div className="font-bold text-white flex items-center gap-1.5">
+                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                  {assignedMethod.name}
+                                </div>
+                                {assignedMethod.id === 'pickup' && (
+                                  <p className="text-slate-400 mt-1">
+                                    Dirección: {v?.shipping_settings?.pickup?.address || v?.default_address?.address || 'No configurada'}
+                                    {v?.shipping_settings?.pickup?.hours && ` (${v.shipping_settings.pickup.hours})`}
+                                  </p>
+                                )}
+                                {assignedMethod.id === 'manual' && assignedMethod.reason && (
+                                  <p className="text-slate-400 mt-1">{assignedMethod.reason}</p>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="bg-red-500/10 p-2 rounded-lg border border-red-500/20 text-red-400 font-semibold flex items-center gap-1.5">
+                                <XCircle className="w-3.5 h-3.5 text-red-500" />
+                                No hay método de envío disponible
+                              </div>
+                            )}
+
+                            {/* Collapsible Unavailable Methods */}
+                            {unavailableOptions.length > 0 && (
+                              <details className="group mt-2">
+                                <summary className="text-[10px] text-slate-500 hover:text-slate-400 cursor-pointer select-none font-bold uppercase tracking-wider flex items-center gap-1">
+                                  <span>Otros métodos no disponibles ({unavailableOptions.length})</span>
+                                </summary>
+                                <ul className="mt-1.5 space-y-1 pl-2 border-l border-white/5">
+                                  {unavailableOptions.map(opt => (
+                                    <li key={opt.id} className="text-[10px] text-slate-500 flex items-start gap-1">
+                                      <span className="font-semibold text-slate-400">{opt.name}:</span>
+                                      <span>{opt.reason}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </details>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}

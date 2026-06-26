@@ -465,8 +465,14 @@ export default function Home() {
       vendor_id: p.vendor_id,
       vendor_store_id: p.vendor_store_id || null,
       vendor_name: p.vendor_store?.store_name || p.vendor?.store_name || 'Collectibles',
+      vendor_store_name: p.vendor_store?.store_name || p.vendor?.store_name || 'Collectibles',
       vendor_slug: p.vendor_store?.slug || p.vendor?.slug,
+      vendor_store_slug: p.vendor_store?.slug || p.vendor?.slug,
       vendor_logo: p.vendor_store?.logo_url || p.vendor?.logo_url,
+      sku: variant.sku || null,
+      unit_price: p.base_price + (variant.price_adjustment || 0),
+      image_url: getProductImage(p),
+      promotions_opt_in: p.vendor?.promotions_opt_in || false,
       tag_ids: p.product_tags?.map((pt: any) => pt.tag_id) || []
     });
   }

@@ -86,6 +86,26 @@ serve(async (req) => {
       resolvedCustomerEmail = orderData.customer_email;
     }
 
+    // Validate that the shipping method is still active for the vendor/platform
+    if (resolvedVendorId) {
+      const { data: vendorData, error: vendorErr } = await supabase
+        .from('vendors')
+        .select('shipping_settings')
+        .eq('id', resolvedVendorId)
+        .maybeSingle();
+      
+      if (vendorErr) {
+        throw new Error(`Error al consultar configuración del vendedor: ${vendorErr.message}`);
+      }
+
+      if (vendorData) {
+        const isDacActive = vendorData.shipping_settings?.dac?.active === true;
+        if (!isDacActive) {
+          throw new Error("método no disponible");
+        }
+      }
+    }
+
     // 2. Idempotency / Duplicate Check
     // A. Check tracking number
     if (resolvedTrackingNumber) {
@@ -459,17 +479,31 @@ serve(async (req) => {
         const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
         const supabase = createClient(supabaseUrl, supabaseKey);
 
-        // Delete any existing shipments for this order and provider key to avoid duplicates/errors
-        await supabase
+        const { data: subData } = await supabase
+          .from('order_suborders')
+          .select('parent_order_id')
+          .eq('id', order_id)
+          .maybeSingle();
+
+        const resolvedParentId = subData ? subData.parent_order_id : order_id;
+        const resolvedSuborderId = subData ? order_id : null;
+
+        // Delete any existing shipments for this order/suborder and provider key to avoid duplicates/errors
+        const delQuery = supabase
           .from('shipments')
           .delete()
-          .eq('order_id', order_id)
           .eq('provider_key', 'dac');
+        if (resolvedSuborderId) {
+          delQuery.eq('suborder_id', resolvedSuborderId);
+        } else {
+          delQuery.eq('order_id', order_id).is('suborder_id', null);
+        }
+        await delQuery;
 
         const { data: orderData } = await supabase
           .from('orders')
           .select('shipping_address, customer_phone')
-          .eq('id', order_id)
+          .eq('id', resolvedParentId)
           .single();
 
         const shippingAddress = orderData?.shipping_address || {};
@@ -483,9 +517,11 @@ serve(async (req) => {
         await supabase
           .from('shipments')
           .insert({
-            order_id: order_id,
+            order_id: resolvedParentId,
+            suborder_id: resolvedSuborderId,
             provider_key: 'dac',
-            shipping_status: 'error',
+            shipping_status: error.message === 'método no disponible' ? 'failed' : 'error',
+            error_message: error.message || String(error),
             customer_name: resolvedName,
             customer_phone: resolvedPhone,
             customer_address: dacDeliveryMode === "agency"

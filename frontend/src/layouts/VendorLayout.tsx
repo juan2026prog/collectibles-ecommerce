@@ -22,14 +22,36 @@ export default function VendorLayout() {
   const currentTab = searchParams.get('tab') || 'overview';
   
   const [vendorData, setVendorData] = useState<any>(null);
+  const [stores, setStores] = useState<any[]>([]);
+  const [activeStoreId, setActiveStoreId] = useState<string>('');
 
   useEffect(() => {
     if (!user) return;
-    async function loadVendor() {
-      const { data } = await supabase.from('vendors').select('store_name').eq('id', user!.id).single();
-      if (data) setVendorData(data);
+    async function loadVendorAndStores() {
+      const { data: vendor } = await supabase.from('vendors').select('*').eq('id', user!.id).single();
+      if (vendor) {
+        setVendorData(vendor);
+        // Load official stores
+        const { data: storeList } = await supabase
+          .from('vendor_stores')
+          .select('*')
+          .eq('vendor_id', user!.id)
+          .order('store_name');
+        
+        const list = storeList || [];
+        setStores(list);
+        
+        // Initialize active store
+        const savedStoreId = localStorage.getItem(`active_store_${user!.id}`);
+        if (savedStoreId && list.some(s => s.id === savedStoreId)) {
+          setActiveStoreId(savedStoreId);
+        } else if (list.length > 0) {
+          setActiveStoreId(list[0].id);
+          localStorage.setItem(`active_store_${user!.id}`, list[0].id);
+        }
+      }
     }
-    loadVendor();
+    loadVendorAndStores();
   }, [user]);
 
   const navItems = [
@@ -144,10 +166,34 @@ export default function VendorLayout() {
           <main className="flex-1 flex flex-col relative overflow-hidden">
             <header className="bg-white shadow-sm border-b border-gray-200 h-16 flex items-center justify-between px-8 z-20">
               <div className="flex flex-col">
-                <h1 className="text-xl font-bold text-gray-900">
-                  Buenos días, {vendorData?.store_name || 'Seller'}
+                <h1 className="text-xl font-bold text-gray-900 leading-none">
+                  {vendorData?.store_name || 'Seller Center'}
                 </h1>
-                <span className="text-xs text-gray-500 font-medium hidden sm:block">Gestiona tu tienda y monitorea tus ventas.</span>
+                {stores.length > 1 ? (
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Tienda:</span>
+                    <select
+                      value={activeStoreId}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setActiveStoreId(val);
+                        localStorage.setItem(`active_store_${user!.id}`, val);
+                        window.dispatchEvent(new CustomEvent('vendorActiveStoreChange', { detail: val }));
+                      }}
+                      className="text-xs font-black text-primary-600 bg-primary-50 hover:bg-primary-100/80 border border-primary-200 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary-500 cursor-pointer"
+                    >
+                      {stores.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.store_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <span className="text-xs text-gray-500 font-medium hidden sm:block mt-1">
+                    {stores[0]?.store_name || 'Gestiona tu tienda y monitorea tus ventas.'}
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-3">
                 <button
@@ -168,7 +214,7 @@ export default function VendorLayout() {
               </div>
             </header>
             <div className="flex-1 overflow-auto p-8 bg-gray-50">
-              <Outlet />
+              <Outlet context={{ activeStoreId, stores, setActiveStoreId }} />
             </div>
           </main>
         </div>

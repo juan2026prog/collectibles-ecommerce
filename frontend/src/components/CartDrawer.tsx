@@ -255,13 +255,13 @@ export default function CartDrawer() {
                           )}
                           {item.vendor_name && item.vendor_id !== 'platform' && (
                              <div className="mt-1">
-                               <p className="text-[9px] font-black uppercase text-[#f00856]">Vendido por</p>
+                               <p className="text-[9px] font-black uppercase text-[#f00856]">Tienda</p>
                                <p className="text-[10px] font-bold text-slate-300">{item.vendor_name}</p>
                              </div>
                           )}
                         </div>
                         <button 
-                          onClick={() => removeItem(item.variant_id)}
+                          onClick={() => removeItem(item.variant_id, item.vendor_id)}
                           className="p-1 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-500/5 transition-colors shrink-0"
                           title="Eliminar"
                         >
@@ -273,7 +273,7 @@ export default function CartDrawer() {
                         {/* Quantity Selector */}
                         <div className="flex items-center border border-white/10 rounded-lg bg-black/40 overflow-hidden">
                           <button 
-                            onClick={() => updateQuantity(item.variant_id, item.quantity - 1)}
+                            onClick={() => updateQuantity(item.variant_id, item.vendor_id, item.quantity - 1)}
                             className="p-1.5 hover:bg-white/5 text-slate-400 hover:text-white transition-colors"
                           >
                             <Minus className="w-3.5 h-3.5" />
@@ -282,7 +282,7 @@ export default function CartDrawer() {
                             {item.quantity}
                           </span>
                           <button 
-                            onClick={() => updateQuantity(item.variant_id, item.quantity + 1)}
+                            onClick={() => updateQuantity(item.variant_id, item.vendor_id, item.quantity + 1)}
                             className="p-1.5 hover:bg-white/5 text-slate-400 hover:text-white transition-colors"
                           >
                             <Plus className="w-3.5 h-3.5" />

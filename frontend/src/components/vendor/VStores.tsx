@@ -103,6 +103,11 @@ export default function VStores() {
           id,
           status,
           created_at,
+          is_official,
+          exclusive,
+          priority,
+          display_order,
+          brand_page_enabled,
           brands (
             id,
             name,
@@ -117,6 +122,21 @@ export default function VStores() {
       toast.error('Error al cargar marcas de la tienda: ' + err.message);
     }
     setLoadingStoreBrands(false);
+  }
+
+  async function handleUpdateStoreBrand(id: string, updates: any) {
+    try {
+      const { error } = await supabase
+        .from('vendor_store_brands')
+        .update(updates)
+        .eq('id', id);
+
+      if (error) throw error;
+      toast.success('Marca oficial actualizada exitosamente');
+      if (selectedStore) fetchStoreBrands(selectedStore.id);
+    } catch (err: any) {
+      toast.error('Error al actualizar marca oficial: ' + err.message);
+    }
   }
 
   async function uploadImage(file: File, type: 'logo' | 'banner'): Promise<string> {
@@ -744,38 +764,94 @@ export default function VStores() {
                     ) : (
                       <div className="space-y-2">
                         {storeBrands.map(sb => (
-                          <div key={sb.id} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 hover:border-gray-200 transition-all">
-                            <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded bg-white border flex items-center justify-center overflow-hidden flex-shrink-0">
-                                {sb.brands.logo_url ? <img src={sb.brands.logo_url} alt={sb.brands.name} className="w-full h-full object-contain" /> : <ImageIcon className="w-4 h-4 text-gray-300" />}
-                              </div>
-                              <div>
-                                <div className="text-sm font-semibold text-gray-900">{sb.brands.name}</div>
-                                <div className="flex items-center gap-1.5 mt-0.5">
-                                  {sb.status === 'approved' ? (
-                                    <span className="text-[8px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded uppercase tracking-wider flex items-center gap-0.5">
-                                      <CheckCircle className="w-2.5 h-2.5" /> Aprobada
-                                    </span>
-                                  ) : sb.status === 'rejected' ? (
-                                    <span className="text-[8px] font-black text-red-600 bg-red-50 px-1.5 py-0.5 rounded uppercase tracking-wider flex items-center gap-0.5">
-                                      <AlertTriangle className="w-2.5 h-2.5" /> Rechazada
-                                    </span>
-                                  ) : (
-                                    <span className="text-[8px] font-black text-yellow-600 bg-yellow-50 px-1.5 py-0.5 rounded uppercase tracking-wider flex items-center gap-0.5">
-                                      <Clock className="w-2.5 h-2.5" /> En Revisión
-                                    </span>
-                                  )}
+                          <div key={sb.id} className="p-4 rounded-xl bg-gray-50 border border-gray-100 hover:border-gray-200 transition-all space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded bg-white border flex items-center justify-center overflow-hidden flex-shrink-0">
+                                  {sb.brands.logo_url ? <img src={sb.brands.logo_url} alt={sb.brands.name} className="w-full h-full object-contain" /> : <ImageIcon className="w-4 h-4 text-gray-300" />}
+                                </div>
+                                <div>
+                                  <div className="text-sm font-semibold text-gray-900">{sb.brands.name}</div>
+                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                    {sb.status === 'approved' ? (
+                                      <span className="text-[8px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded uppercase tracking-wider flex items-center gap-0.5">
+                                        <CheckCircle className="w-2.5 h-2.5" /> Aprobada
+                                      </span>
+                                    ) : sb.status === 'rejected' ? (
+                                      <span className="text-[8px] font-black text-red-600 bg-red-50 px-1.5 py-0.5 rounded uppercase tracking-wider flex items-center gap-0.5">
+                                        <AlertTriangle className="w-2.5 h-2.5" /> Rechazada
+                                      </span>
+                                    ) : (
+                                      <span className="text-[8px] font-black text-yellow-600 bg-yellow-50 px-1.5 py-0.5 rounded uppercase tracking-wider flex items-center gap-0.5">
+                                        <Clock className="w-2.5 h-2.5" /> En Revisión
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
+
+                              <button
+                                onClick={() => handleRemoveBrand(sb.id)}
+                                className="text-gray-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                                title="Remover asociación"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             </div>
 
-                            <button
-                              onClick={() => handleRemoveBrand(sb.id)}
-                              className="text-gray-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
-                              title="Remover asociación"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {sb.status === 'approved' && (
+                              <div className="mt-2 space-y-2 border-t border-gray-200/50 pt-2 text-[11px] text-gray-600">
+                                <div className="flex items-center gap-4 flex-wrap">
+                                  <label className="flex items-center gap-1.5 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={sb.is_official || false}
+                                      onChange={(e) => handleUpdateStoreBrand(sb.id, { is_official: e.target.checked })}
+                                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 w-3.5 h-3.5"
+                                    />
+                                    <span className="font-bold text-gray-800">Distribuidor Oficial</span>
+                                  </label>
+                                  <label className="flex items-center gap-1.5 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={sb.exclusive || false}
+                                      onChange={(e) => handleUpdateStoreBrand(sb.id, { exclusive: e.target.checked })}
+                                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 w-3.5 h-3.5"
+                                    />
+                                    <span className="font-bold text-gray-800">Exclusivo</span>
+                                  </label>
+                                  <label className="flex items-center gap-1.5 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={sb.brand_page_enabled || false}
+                                      onChange={(e) => handleUpdateStoreBrand(sb.id, { brand_page_enabled: e.target.checked })}
+                                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 w-3.5 h-3.5"
+                                    />
+                                    <span className="font-bold text-gray-800">Página de Marca</span>
+                                  </label>
+                                </div>
+                                <div className="flex items-center gap-4 mt-1">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-gray-500 font-medium">Prioridad:</span>
+                                    <input
+                                      type="number"
+                                      value={sb.priority || 0}
+                                      onChange={(e) => handleUpdateStoreBrand(sb.id, { priority: parseInt(e.target.value) || 0 })}
+                                      className="w-12 border border-gray-200 rounded px-1.5 py-0.5 text-center bg-white text-gray-900 font-bold focus:ring-1 focus:ring-primary-500 focus:border-transparent outline-none"
+                                    />
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-gray-500 font-medium">Orden Visual:</span>
+                                    <input
+                                      type="number"
+                                      value={sb.display_order || 0}
+                                      onChange={(e) => handleUpdateStoreBrand(sb.id, { display_order: parseInt(e.target.value) || 0 })}
+                                      className="w-12 border border-gray-200 rounded px-1.5 py-0.5 text-center bg-white text-gray-900 font-bold focus:ring-1 focus:ring-primary-500 focus:border-transparent outline-none"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

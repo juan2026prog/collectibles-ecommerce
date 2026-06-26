@@ -7,9 +7,10 @@ interface SoldByCardProps {
   vendorName?: string;
   vendorLogo?: string;
   vendorSlug?: string;
+  badges?: any[];
 }
 
-export default function SoldByCard({ vendorId, vendorName, vendorLogo, vendorSlug }: SoldByCardProps) {
+export default function SoldByCard({ vendorId, vendorName, vendorLogo, vendorSlug, badges }: SoldByCardProps) {
   if (!vendorId && !vendorName) return null;
 
   const isPlatform = !vendorId || vendorId === 'platform' || vendorName === 'Collectibles';
@@ -25,17 +26,28 @@ export default function SoldByCard({ vendorId, vendorName, vendorLogo, vendorSlu
       )}
       <div>
         <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Vendido y despachado por</p>
-        {isPlatform ? (
-          <p className="text-sm font-black text-white uppercase tracking-wider">Collectibles.uy</p>
-        ) : (
-          vendorSlug ? (
-            <Link to={`/store/${vendorSlug}`} className="text-sm font-black text-[#f00856] uppercase tracking-wider hover:underline">
-              {vendorName}
-            </Link>
+        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+          {isPlatform ? (
+            <p className="text-sm font-black text-white uppercase tracking-wider">Collectibles.uy</p>
           ) : (
-             <p className="text-sm font-black text-white uppercase tracking-wider">{vendorName}</p>
-          )
-        )}
+            vendorSlug ? (
+              <Link to={`/store/${vendorSlug}`} className="text-sm font-black text-[#f00856] uppercase tracking-wider hover:underline">
+                {vendorName}
+              </Link>
+            ) : (
+               <p className="text-sm font-black text-white uppercase tracking-wider">{vendorName}</p>
+            )
+          )}
+          {badges && badges.length > 0 && (
+            <div className="flex items-center gap-1">
+              {badges.map((b: any) => (
+                <span key={b.id || b.badge_key} className={`text-[8px] px-1 font-semibold leading-none uppercase rounded ${b.color_class || 'bg-blue-600 text-white'}`} title={b.description}>
+                  {b.label}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

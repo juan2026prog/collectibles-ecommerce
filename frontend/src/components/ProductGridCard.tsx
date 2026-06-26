@@ -5,6 +5,7 @@ import { getProductImage } from '../lib/imageUtils';
 import { evaluateItemDiscountDetailed } from '../hooks/usePromotions';
 import { useWishlistContext } from '../contexts/WishlistContext';
 import { useAdminMode } from '../contexts/AdminModeContext';
+import { useLocale } from '../contexts/LocaleContext';
 
 interface ProductGridCardProps {
   product: any;
@@ -20,6 +21,7 @@ interface ProductGridCardProps {
 export function ProductGridCard({ product, onAddToCart, formatPrice, applicablePromos = [] }: ProductGridCardProps) {
   const { toggleWishlist, isInWishlist } = useWishlistContext();
   const { isAdminMode } = useAdminMode();
+  const { language } = useLocale();
   const img = getProductImage(product);
   const finalPrice = product.base_price + (product.variants?.[0]?.price_adjustment || 0);
   
@@ -131,8 +133,29 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
           <div className="text-[10px] text-blue-400 font-bold uppercase mb-1">Vendido en Amazon</div>
         )}
 
-        <div className="text-[10px] text-[#f00856] font-black uppercase tracking-wider mb-1">
-          Vendido por: {product.vendor_store?.store_name || product.vendor?.store_name || 'Collectibles'}
+        <div className="text-[10px] text-[#f00856] font-black uppercase tracking-wider mb-1 flex items-center flex-wrap gap-1">
+          <span>Vendido por: {product.vendor_id ? (product.vendor_store?.display_name || product.vendor_store?.store_name || product.vendor_store?.name || product.vendor?.company_name || product.vendor?.store_name || 'Vendedor') : 'Collectibles.uy'}</span>
+          {(() => {
+            if (!product.vendor_id || !product.vendor_store) return null;
+            if (product.vendor_store.status !== 'active') return null;
+            const assignments = product.vendor_store.vendor_store_badge_assignments || [];
+            const isApproved = assignments.some((assignment: any) => {
+              const badge = assignment.vendor_store_badges;
+              return (
+                badge &&
+                badge.badge_key === 'official_store' &&
+                assignment.status === 'active' &&
+                assignment.approved_by &&
+                assignment.approved_at
+              );
+            });
+            if (!isApproved) return null;
+            return (
+              <span className="text-[8px] px-1 font-semibold leading-none uppercase rounded bg-red-500 text-white border border-red-400">
+                {language === 'en' ? 'Official Store' : 'TIENDA OFICIAL'}
+              </span>
+            );
+          })()}
         </div>
         
         <Link to={`/p/${product.slug}`}>

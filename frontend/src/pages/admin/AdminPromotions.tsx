@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Percent, Plus, Trash2, Save, X, Calendar, CreditCard, Tag, Building2, ChevronDown } from 'lucide-react';
+import { Percent, Plus, Trash2, Save, X, Calendar, CreditCard, Tag, Building2, ChevronDown, AlertTriangle } from 'lucide-react';
 
 // ═══ URUGUAYAN BANK CARDS ═══
 const UY_CARDS = [
@@ -304,6 +304,13 @@ export default function AdminPromotions() {
         <div className="flex gap-2">
           {saved && <span className="text-sm font-bold text-green-600 bg-green-50 px-3 py-1.5 rounded-lg border border-green-200 flex items-center gap-1"><Save className="w-4 h-4" /> Guardado</span>}
           <button onClick={startNew} className="btn-primary flex items-center gap-2"><Plus className="w-4 h-4" /> Nueva Promoción</button>
+        </div>
+      </div>
+
+      <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl flex items-start gap-2.5">
+        <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+        <div className="text-sm">
+          <span className="font-bold">Aviso sobre Promociones y Vendors:</span> Las promociones globales no aplican a los productos de vendors externos a menos que el vendor haya activado la opción "Participar en promociones de Collectibles" en su configuración de perfil.
         </div>
       </div>
 

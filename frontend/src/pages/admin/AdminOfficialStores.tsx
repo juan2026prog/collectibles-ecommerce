@@ -26,11 +26,16 @@ export default function AdminOfficialStores() {
   const [storeBrands, setStoreBrands] = useState<any[]>([]);
   const [loadingBrands, setLoadingBrands] = useState(false);
 
+  const [allBadges, setAllBadges] = useState<any[]>([]);
+  const [storeBadgeIds, setStoreBadgeIds] = useState<string[]>([]);
+  const [badgeAssignments, setBadgeAssignments] = useState<any[]>([]);
+
   const { toast } = useToast();
   const { confirm } = useConfirmModal();
 
   useEffect(() => {
     fetchStores();
+    fetchSystemBadges();
   }, []);
 
   async function fetchStores() {
@@ -131,7 +136,96 @@ export default function AdminOfficialStores() {
       toast.error('Error al actualizar slug: ' + err.message);
     }
   }
+  async function fetchSystemBadges() {
+    try {
+      const { data } = await supabase.from('vendor_store_badges').select('*').order('label');
+      setAllBadges(data || []);
+    } catch (e) {
+      console.error(e);
+    }
+  }
 
+  async function fetchStoreBadgeAssignments(storeId: string) {
+    try {
+      const { data } = await supabase
+        .from('vendor_store_badge_assignments')
+        .select('badge_id, status, approved_by, approved_at')
+        .eq('vendor_store_id', storeId);
+      setBadgeAssignments(data || []);
+      setStoreBadgeIds(data?.map(x => x.badge_id) || []);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async function handleAssignBadge(badgeId: string, autoApprove = false) {
+    if (!selectedStore) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const status = autoApprove ? 'active' : 'pending_review';
+      const approvedBy = autoApprove ? user?.id : null;
+      const approvedAt = autoApprove ? new Date().toISOString() : null;
+
+      const { error } = await supabase
+        .from('vendor_store_badge_assignments')
+        .insert({
+          vendor_store_id: selectedStore.id,
+          badge_id: badgeId,
+          status,
+          approved_by: approvedBy,
+          approved_at: approvedAt
+        });
+
+      if (error) throw error;
+      toast.success(autoApprove ? 'Insignia asignada y aprobada' : 'Insignia solicitada (pendiente)');
+      fetchStoreBadgeAssignments(selectedStore.id);
+    } catch (err: any) {
+      toast.error('Error al asignar insignia: ' + err.message);
+    }
+  }
+
+  async function handleUpdateBadgeStatus(badgeId: string, status: 'active' | 'rejected' | 'revoked') {
+    if (!selectedStore) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const approvedBy = status === 'active' ? user?.id : null;
+      const approvedAt = status === 'active' ? new Date().toISOString() : null;
+
+      const { error } = await supabase
+        .from('vendor_store_badge_assignments')
+        .update({
+          status,
+          approved_by: approvedBy,
+          approved_at: approvedAt
+        })
+        .eq('vendor_store_id', selectedStore.id)
+        .eq('badge_id', badgeId);
+
+      if (error) throw error;
+      toast.success(`Estado de insignia actualizado a: ${status}`);
+      fetchStoreBadgeAssignments(selectedStore.id);
+    } catch (err: any) {
+      toast.error('Error al actualizar insignia: ' + err.message);
+    }
+  }
+
+  async function handleDeleteBadgeAssignment(badgeId: string) {
+    if (!selectedStore) return;
+    if (!(await confirm('¿Estás seguro de que deseas eliminar esta asignación por completo?'))) return;
+    try {
+      const { error } = await supabase
+        .from('vendor_store_badge_assignments')
+        .delete()
+        .eq('vendor_store_id', selectedStore.id)
+        .eq('badge_id', badgeId);
+
+      if (error) throw error;
+      toast.success('Asignación eliminada');
+      fetchStoreBadgeAssignments(selectedStore.id);
+    } catch (err: any) {
+      toast.error('Error al eliminar asignación: ' + err.message);
+    }
+  }
   async function fetchStoreBrands(storeId: string) {
     setLoadingBrands(true);
     try {
@@ -160,8 +254,11 @@ export default function AdminOfficialStores() {
   useEffect(() => {
     if (selectedStore) {
       fetchStoreBrands(selectedStore.id);
+      fetchStoreBadgeAssignments(selectedStore.id);
     } else {
       setStoreBrands([]);
+      setStoreBadgeIds([]);
+      setBadgeAssignments([]);
     }
   }, [selectedStore]);
 
@@ -552,6 +649,129 @@ export default function AdminOfficialStores() {
                     ))}
                   </div>
                 )}
+
+                {/* Official Badges Assignment */}
+                <div className="border-t border-gray-150 pt-6 space-y-4">
+                  <h4 className="text-xs font-black text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
+                    <Award className="w-4 h-4 text-primary-600" /> Insignias de la Tienda
+                  </h4>
+                  
+                  <div className="space-y-3">
+                    {allBadges.map((b) => {
+                      const assignment = badgeAssignments.find(x => x.badge_id === b.id);
+                      const isAssigned = !!assignment;
+                      
+                      return (
+                        <div 
+                          key={b.id} 
+                          className={`p-4 rounded-xl border text-xs flex flex-col gap-3 transition-all ${
+                            isAssigned 
+                              ? 'border-gray-200 bg-gray-50/50' 
+                              : 'border-gray-200 bg-white hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase inline-block ${b.color_class || 'bg-blue-600 text-white'}`}>
+                              {b.label}
+                            </span>
+                            
+                            {isAssigned && (
+                              <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${
+                                assignment.status === 'active' ? 'bg-emerald-100 text-emerald-800' :
+                                assignment.status === 'pending_review' ? 'bg-yellow-100 text-yellow-800' :
+                                assignment.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {assignment.status}
+                              </span>
+                            )}
+                          </div>
+                          
+                          <p className="text-[10px] text-gray-400 font-semibold">{b.description || 'Sin descripción'}</p>
+                          
+                          {/* Metadata */}
+                          {isAssigned && assignment.status === 'active' && assignment.approved_at && (
+                            <div className="text-[9px] text-gray-400 font-semibold">
+                              Aprobada el {new Date(assignment.approved_at).toLocaleDateString()}
+                            </div>
+                          )}
+
+                          {/* Actions */}
+                          <div className="flex gap-1.5 justify-end mt-1">
+                            {!isAssigned ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAssignBadge(b.id, false)}
+                                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded font-bold text-[10px] transition-colors"
+                                >
+                                  Solicitar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAssignBadge(b.id, true)}
+                                  className="bg-primary-600 hover:bg-primary-700 text-white px-2 py-1 rounded font-bold text-[10px] transition-colors"
+                                >
+                                  Asignar y Aprobar
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                {assignment.status === 'pending_review' && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateBadgeStatus(b.id, 'active')}
+                                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded font-bold text-[10px] transition-colors"
+                                    >
+                                      Aprobar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateBadgeStatus(b.id, 'rejected')}
+                                      className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 px-2.5 py-1 rounded font-bold text-[10px] transition-colors"
+                                    >
+                                      Rechazar
+                                    </button>
+                                  </>
+                                )}
+                                
+                                {assignment.status === 'active' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateBadgeStatus(b.id, 'revoked')}
+                                    className="bg-yellow-50 hover:bg-yellow-100 text-yellow-700 border border-yellow-100 px-2.5 py-1 rounded font-bold text-[10px] transition-colors"
+                                  >
+                                    Revocar
+                                  </button>
+                                )}
+                                
+                                {(assignment.status === 'rejected' || assignment.status === 'revoked') && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateBadgeStatus(b.id, 'active')}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded font-bold text-[10px] transition-colors"
+                                  >
+                                    Re-Aprobar
+                                  </button>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteBadgeAssignment(b.id)}
+                                  className="text-gray-400 hover:text-red-500 p-1 transition-colors ml-auto"
+                                  title="Eliminar asignación"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="text-gray-400 text-center py-12 border-2 border-dashed border-gray-100 rounded-2xl">

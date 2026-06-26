@@ -5,8 +5,8 @@ import { trackAddToCart, generateMetaEventId } from '../lib/meta/metaPixel';
 interface CartContextType {
   items: CartItem[];
   addItem: (item: CartItem) => void;
-  updateQuantity: (variantId: string, quantity: number) => void;
-  removeItem: (variantId: string) => void;
+  updateQuantity: (variantId: string, vendorId: string | undefined, quantity: number) => void;
+  removeItem: (variantId: string, vendorId?: string) => void;
   clearCart: () => void;
   total: number;
   count: number;

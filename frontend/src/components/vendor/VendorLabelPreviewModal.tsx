@@ -16,7 +16,7 @@ export default function VendorLabelPreviewModal({ vendor, defaultAddress, onClos
   const containerRef = useRef<HTMLDivElement>(null);
 
   // 1. Resolve Vendor Details
-  const storeName = vendor?.store_name || 'Mi Tienda';
+  const storeName = vendor?.company_name || vendor?.store_name || 'Mi Tienda';
   const logoUrl = vendor?.logo_url || null;
   const slug = vendor?.slug || 'tienda-slug';
   

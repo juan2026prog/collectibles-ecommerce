@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useWishlistContext } from '../contexts/WishlistContext';
 import { usePromotions, getApplicablePromotions, evaluateItemDiscountDetailed } from '../hooks/usePromotions';
 import { useCurrency } from '../contexts/CurrencyContext';
+import { useLocale } from '../contexts/LocaleContext';
 import { ProductBadge } from '../components/ProductBadge';
 import { getProductImage, resolveImage, FALLBACK_IMAGE } from '../lib/imageUtils';
 import { analytics } from '../lib/analytics';
@@ -28,6 +29,7 @@ export default function ProductDetail() {
   const internationalCart = useInternationalCartContext();
   const { user } = useAuth();
   const { formatCurrencyPrice } = useCurrency();
+  const { language } = useLocale();
   const { promotions } = usePromotions();
   const { toggleWishlist, isInWishlist } = useWishlistContext();
   
@@ -130,20 +132,21 @@ export default function ProductDetail() {
   const { images = [], variants = [], reviews = [] } = product || {};
   const selectedVariant = variants[selectedVariantIdx] || variants[0];
   
-  const activeBuyBox = buyBox?.[selectedVariant?.id];
-  const bbWinner = activeBuyBox?.winner;
-  const hideVendors = activeBuyBox?.hide_vendors || false;
-  const bbOtherOptions = hideVendors ? [] : (activeBuyBox?.other_options || []);
+  const activeBuyBox = null;
+  const bbWinner = null;
+  const hideVendors = false;
+  const bbOtherOptions = [];
 
-  const stock = bbWinner ? bbWinner.stock : (selectedVariant?.inventory_count || 0);
-  const finalPrice = bbWinner 
-    ? (bbWinner.is_collectibles ? product.base_price + bbWinner.price_adjustment : Number(bbWinner.price)) 
-    : (product.base_price + (selectedVariant?.price_adjustment || 0));
+  const stock = selectedVariant?.inventory_count || 0;
+  const finalPrice = product ? (product.base_price + (selectedVariant?.price_adjustment || 0)) : 0;
     
-  const winnerIsCollectibles = bbWinner ? bbWinner.is_collectibles : (!product?.vendor_id);
-  const winnerVendorId = hideVendors ? null : (bbWinner ? bbWinner.vendor_id : product?.vendor_id);
-  const winnerVendorName = hideVendors ? 'Collectibles' : (bbWinner ? bbWinner.vendor_name : (product?.vendor_store?.store_name || product?.vendor?.store_name || 'Collectibles'));
-  const winnerHasLogistics = hideVendors ? false : (bbWinner ? bbWinner.has_logistics : false);
+  const winnerIsCollectibles = !product?.vendor_id;
+  const winnerVendorId = product?.vendor_id || null;
+  const storeName = product?.vendor_id 
+    ? (product.vendor_store?.display_name || product.vendor_store?.store_name || product.vendor_store?.name || product.vendor?.company_name || product.vendor?.store_name || 'Vendedor')
+    : 'Collectibles.uy';
+  const winnerVendorName = winnerIsCollectibles ? 'Collectibles.uy' : storeName;
+  const winnerHasLogistics = false;
 
   const avgRating = reviews.length > 0 ? reviews.reduce((s: number, r: any) => s + r.rating, 0) / reviews.length : 0;
   const currentImage = images[selectedImage]?.url;
@@ -153,7 +156,8 @@ export default function ProductDetail() {
     product_id: product.id,
     category_id: product.category?.id,
     brand_id: product.brand?.id,
-    vendor_id: winnerVendorId,
+    vendor_id: product.vendor_id,
+    promotions_opt_in: product.vendor?.promotions_opt_in || false,
     tag_ids: product.product_tags?.map((pt: any) => pt.tag_id) || []
   }, promotions) : [];
 
@@ -163,7 +167,8 @@ export default function ProductDetail() {
       product_id: product.id,
       category_id: product.category?.id,
       brand_id: product.brand?.id,
-      vendor_id: winnerVendorId,
+      vendor_id: product.vendor_id,
+      promotions_opt_in: product.vendor?.promotions_opt_in || false,
       tag_ids: product.product_tags?.map((pt: any) => pt.tag_id) || [],
       price: finalPrice,
       quantity: 1
@@ -215,6 +220,28 @@ export default function ProductDetail() {
     const targetVendorName = selectedOption ? selectedOption.vendor_name : winnerVendorName;
     const targetVpvId = selectedOption ? selectedOption.vpv_id : (bbWinner && !bbWinner.is_collectibles ? bbWinner.vpv_id : null);
 
+    const targetStoreId = selectedOption 
+      ? selectedOption.vendor_store_id 
+      : (bbWinner && !bbWinner.is_collectibles ? bbWinner.vendor_store_id : (product.vendor_store_id || null));
+      
+    const targetStoreName = selectedOption 
+      ? selectedOption.vendor_name 
+      : (bbWinner ? bbWinner.vendor_name : (product.vendor_store?.store_name || product.vendor?.store_name || 'Collectibles'));
+
+    const targetStoreSlug = selectedOption 
+      ? selectedOption.vendor_store_slug 
+      : (bbWinner && !bbWinner.is_collectibles ? bbWinner.vendor_store_slug : (product.vendor_store?.slug || product.vendor?.slug));
+
+    const targetStoreLogo = selectedOption 
+      ? selectedOption.vendor_store_logo 
+      : (bbWinner && !bbWinner.is_collectibles ? bbWinner.vendor_store_logo : (product.vendor_store?.logo_url || product.vendor?.logo_url));
+
+    const targetStoreBadges = selectedOption 
+      ? (selectedOption.vendor_store_badges || []) 
+      : (bbWinner && !bbWinner.is_collectibles 
+          ? (bbWinner.vendor_store_badges || []) 
+          : (product.vendor_store?.vendor_store_badge_assignments?.filter((x: any) => x.status === 'active' && x.approved_by && x.approved_at).map((x: any) => x.vendor_store_badges).filter(Boolean) || []));
+
     if (targetStock <= 0) return;
     if (quantity > targetStock) return;
 
@@ -251,10 +278,19 @@ export default function ProductDetail() {
       category_id: product.category?.id,
       brand_id: product.brand?.id,
       vendor_id: targetVendorId,
-      vendor_store_id: product.vendor_store_id || null,
-      vendor_name: product.vendor_store?.store_name || targetVendorName,
-      vendor_slug: product.vendor_store?.slug || product.vendor?.slug,
-      vendor_logo: product.vendor_store?.logo_url || product.vendor?.logo_url,
+      vendor_store_id: targetStoreId,
+      vendor_name: targetStoreName,
+      vendor_store_name: targetStoreName,
+      vendor_slug: targetStoreSlug,
+      vendor_store_slug: targetStoreSlug,
+      vendor_logo: targetStoreLogo,
+      vendor_store_badges: targetStoreBadges,
+      sku: selectedVariant.sku || null,
+      unit_price: targetPrice,
+      image_url: productImage,
+      promotions_opt_in: selectedOption
+        ? (selectedOption.promotions_opt_in || false)
+        : (product.vendor?.promotions_opt_in || false),
       tag_ids: product.product_tags?.map((pt: any) => pt.tag_id) || [],
       is_international: product.source_provider === 'zinc',
       urubox_estimate: product.international_products?.urubox_estimated_cost_usd || 0,
@@ -630,70 +666,55 @@ export default function ProductDetail() {
             </div>
           </div>
 
-          {/* SELLER INFO — real data, no Math.random */}
+          {/* MARCA CARD */}
           {product.brand?.name && (
             <div className="glass rounded-[2rem] p-6 mt-4">
-              <div className="text-[10px] uppercase text-slate-500 font-black tracking-[0.2em]">{settings['product_sold_by_label'] || 'Vendido por'}</div>
+              <div className="text-[10px] uppercase text-slate-500 font-black tracking-[0.2em]">MARCA</div>
               <div className="flex items-center justify-between gap-4 mt-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-full bg-[#f00856] flex items-center justify-center font-black text-xl shadow-lg shadow-[#f00856]/20">
-                    {product.brand.name[0]}
-                  </div>
-                  <div>
-                     <div className="font-black text-xl text-white">{product.brand.name}</div>
-                  </div>
+                <div className="flex items-center gap-3">
+                  {product.brand.logo_url && (
+                    <img 
+                      src={resolveImage(product.brand.logo_url)} 
+                      alt={product.brand.name} 
+                      className="w-10 h-10 rounded-xl object-contain border border-white/10"
+                    />
+                  )}
+                  <span className="font-black text-xl text-white">{product.brand.name}</span>
                 </div>
-                <span className="badge hidden sm:inline-flex items-center gap-1.5">
-                  <ShieldCheck className="w-3 h-3 text-green-400" /> {settings['product_distributor_label'] || 'Distribuidor oficial'}
-                </span>
+                {/* Official Store Badge under strict conditions */}
+                {(() => {
+                  if (!product.vendor_store) return null;
+                  if (product.vendor_store.status !== 'active') return null;
+                  const assignments = product.vendor_store.vendor_store_badge_assignments || [];
+                  const isApproved = assignments.some((assignment: any) => {
+                    const badge = assignment.vendor_store_badges;
+                    return (
+                      badge &&
+                      badge.badge_key === 'official_store' &&
+                      assignment.status === 'active' &&
+                      assignment.approved_by &&
+                      assignment.approved_at
+                    );
+                  });
+                  if (!isApproved) return null;
+                  return (
+                    <span className="text-[10px] px-2 py-1 font-black leading-none uppercase rounded bg-red-500 text-white border border-red-400 tracking-wider">
+                      {language === 'en' ? 'Official Store' : 'TIENDA OFICIAL'}
+                    </span>
+                  );
+                })()}
               </div>
             </div>
           )}
 
-          {!hideVendors && (
-            <SoldByCard 
-              vendorId={winnerVendorId} 
-              vendorName={winnerVendorName} 
-              vendorLogo={(!winnerIsCollectibles && product.vendor?.id === winnerVendorId) ? (product.vendor?.logo_url ? resolveImage(product.vendor.logo_url) : undefined) : undefined}
-              vendorSlug={(!winnerIsCollectibles && product.vendor?.id === winnerVendorId) ? product.vendor?.slug : undefined}
-            />
-          )}
-
-          {/* OTRAS OPCIONES DE COMPRA (BUY BOX) */}
-          {!hideVendors && bbOtherOptions.length > 0 && (
-            <div className="glass rounded-[2rem] p-6 mt-4">
-              <div className="text-[10px] uppercase text-slate-500 font-black tracking-[0.2em] mb-4">
-                Otras opciones de compra
-              </div>
-              <div className="flex flex-col gap-3">
-                {bbOtherOptions.map((opt: any) => (
-                  <div key={opt.vpv_id} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 hover:border-white/20 transition-colors">
-                    <div className="flex flex-col">
-                      <span className="text-white font-bold text-sm">{formatCurrencyPrice(opt.price)}</span>
-                      <span className="text-slate-400 text-xs">Vendido por <b>{opt.vendor_name}</b></span>
-                    </div>
-                    <button 
-                      onClick={() => addToCart(opt)}
-                      className="btn-primary py-2 px-4 rounded-full text-xs"
-                    >
-                      Comprar
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* AUDITORÍA DE BUY BOX */}
-          {bbWinner?.decision_reason && (
-            <div className="mt-4 p-4 rounded-2xl bg-[#05070f]/50 border border-slate-700/50 flex items-start gap-3">
-              <Trophy className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Buy Box Winner</p>
-                <p className="text-sm text-slate-300">{bbWinner.decision_reason}</p>
-              </div>
-            </div>
-          )}
+          {/* VENDIDO Y DESPACHADO POR */}
+          <SoldByCard 
+            vendorId={product.vendor_id || undefined} 
+            vendorName={product.vendor_id ? storeName : 'Collectibles.uy'} 
+            vendorLogo={product.vendor_id ? (product.vendor_store?.logo_url || product.vendor?.logo_url) : undefined}
+            vendorSlug={product.vendor_id ? (product.vendor_store?.slug || product.vendor?.slug) : undefined}
+            badges={[]}
+          />
 
           <div className="grid grid-cols-3 gap-3 mt-4">
             <div className="soft rounded-2xl p-4 transition-colors hover:bg-white/5">

@@ -17,6 +17,7 @@ export default function ShipmentLabelModal({ suborderId, onClose, initialTab = '
   const [suborder, setSuborder] = useState<any>(null);
   const [shipment, setShipment] = useState<any>(null);
   const [vendor, setVendor] = useState<any>(null);
+  const [vendorStore, setVendorStore] = useState<any>(null);
   const [dispatchAddress, setDispatchAddress] = useState<any>(null);
   const [orderItems, setOrderItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,7 +64,7 @@ export default function ShipmentLabelModal({ suborderId, onClose, initialTab = '
       if (subData.vendor_id) {
         const { data: vData } = await supabase
           .from('vendors')
-          .select('id, store_name, logo_url, shipping_settings')
+          .select('id, store_name, logo_url, company_name, shipping_settings')
           .eq('id', subData.vendor_id)
           .single();
         setVendor(vData || null);
@@ -76,6 +77,18 @@ export default function ShipmentLabelModal({ suborderId, onClose, initialTab = '
           .eq('is_default', true)
           .maybeSingle();
         setDispatchAddress(addrData || null);
+      }
+
+      // Fetch vendor store info if vendor_store_id exists
+      if (subData.vendor_store_id) {
+        const { data: vsData } = await supabase
+          .from('vendor_stores')
+          .select('id, store_name, logo_url')
+          .eq('id', subData.vendor_store_id)
+          .maybeSingle();
+        setVendorStore(vsData || null);
+      } else {
+        setVendorStore(null);
       }
 
       // 3. Fetch suborder items
@@ -320,7 +333,7 @@ export default function ShipmentLabelModal({ suborderId, onClose, initialTab = '
   }
 
   // Resolve vendor dispatch address fields
-  const senderName = vendor?.store_name || 'Tienda';
+  const senderName = vendorStore?.display_name || vendorStore?.name || vendorStore?.store_name || vendor?.company_name || vendor?.store_name || 'Tienda';
   const senderAddress = dispatchAddress ? `${dispatchAddress.address}, ${dispatchAddress.city}` : 'Despacho principal';
   const senderPhone = dispatchAddress?.phone || '';
 
