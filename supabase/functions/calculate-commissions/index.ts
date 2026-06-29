@@ -121,6 +121,7 @@ serve(async (req) => {
           vendor_id: vendorId,
           order_id: order_id,
           amount: vendorPayout,
+          fee_percentage: platformFeeRate,
           status: 'pending'
         });
 

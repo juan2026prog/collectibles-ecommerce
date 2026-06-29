@@ -258,3 +258,32 @@ function getFallbackProviders(): PublicPaymentProvider[] {
     }
   ];
 }
+
+export function isRealPaidOrder(order: any): boolean {
+  if (!order) return false;
+  
+  // 1. Check payment status
+  const validPaymentStatuses = ['approved', 'paid', 'accredited'];
+  if (!order.payment_status || !validPaymentStatuses.includes(order.payment_status)) return false;
+  
+  // 2. Check main status
+  const invalidStatuses = ['cancelled', 'cancelada', 'refunded', 'partially_refunded', 'failed', 'rejected', 'pending'];
+  if (order.status && invalidStatuses.includes(order.status)) return false;
+  
+  // 3. Check test order flag
+  if (order.is_test_order) return false;
+  
+  // 4. Check mock references
+  const checkMock = (val: string | null | undefined) => {
+    if (!val) return false;
+    const lower = val.toLowerCase();
+    return lower.includes('mock') || lower.includes('test') || lower.includes('demo') || lower.includes('sandbox');
+  };
+  
+  if (checkMock(order.payment_provider_reference)) return false;
+  if (checkMock(order.payment_provider)) return false;
+  if (checkMock(order.payment_method)) return false;
+  if (checkMock(order.payment_id)) return false;
+  
+  return true;
+}

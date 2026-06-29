@@ -8,6 +8,7 @@ import {
   Store
 } from 'lucide-react';
 import { resolveImage } from '../../lib/imageUtils';
+import { isRealPaidOrder } from '../../lib/payments';
 
 interface VOverviewProps {
   onChangeTab?: (tab: string) => void;
@@ -77,7 +78,7 @@ export default function VOverview({ onChangeTab, activeStoreId }: VOverviewProps
 
       let salesQuery = supabase
         .from('order_items')
-        .select('price, quantity, created_at, order:orders(status)')
+        .select('price, quantity, created_at, order:orders(status, payment_status, is_test_order, payment_provider, payment_provider_reference, payment_id)')
         .eq('vendor_id', vendorId);
 
       if (activeStoreId) {
@@ -86,7 +87,7 @@ export default function VOverview({ onChangeTab, activeStoreId }: VOverviewProps
 
       const { data: allItems } = await salesQuery;
       const salesM = (allItems || [])
-        .filter(item => item.created_at >= startOfMonth && item.order?.status !== 'cancelled')
+        .filter(item => item.created_at >= startOfMonth && isRealPaidOrder(item.order))
         .reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0);
 
       // 2. Fetch Active Products
