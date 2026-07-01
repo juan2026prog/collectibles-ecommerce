@@ -82,6 +82,8 @@ export interface ValidatorResult {
 
 export interface QualityEngineReport {
   qualityScore: number;
+  catalogQualityScore: number;
+  importQualityScore: number;
   result: 'Excelente' | 'Alta' | 'Media' | 'Baja' | 'Crítica';
   isBlocked: boolean;
   isPublicable: boolean;
@@ -96,6 +98,12 @@ export interface QualityEngineReport {
     consistency: ValidatorResult;
     similar: ValidatorResult;
     duplicate: ValidatorResult;
+    // Import validators
+    mlCategory: ValidatorResult;
+    mlBrand: ValidatorResult;
+    iaConfidence: ValidatorResult;
+    metadata: ValidatorResult;
+    vendor: ValidatorResult;
   };
 }
 
@@ -268,33 +276,53 @@ export function runQualityEngineCheck(
     duplicateError = 'Detectado como posible producto duplicado';
   }
 
-  // Calculate General Quality Score
-  let totalScore = brandScore + categoryScore + rulesScore + dictScore + consistencyScore + similarScore + duplicateScore;
+  // A. Calculate Catalog Quality Score (0-100)
+  const catalogQualityScore = brandScore + categoryScore + rulesScore + dictScore + consistencyScore + similarScore + duplicateScore;
 
-  // Apply Caps:
-  // - If brand_id and category_id are both missing -> qualityScore capped at 40
-  // - If either is missing -> qualityScore capped at 69
+  // Apply Caps to catalog score:
+  let finalCatalogScore = catalogQualityScore;
   if (!assignedBrandId && !assignedCategoryId) {
-    totalScore = Math.min(totalScore, 40);
+    finalCatalogScore = Math.min(finalCatalogScore, 40);
   } else if (!assignedBrandId || !assignedCategoryId) {
-    totalScore = Math.min(totalScore, 69);
+    finalCatalogScore = Math.min(finalCatalogScore, 69);
+  } else if (brandResult === 'Conflicto' || rulesResult === 'Conflicto' || duplicateResult === 'Duplicado') {
+    finalCatalogScore = Math.min(finalCatalogScore, 49);
   }
 
-  // Determine state based on score (Fase 4)
+  // Determine state based on catalog score
   let qualityResult: 'Excelente' | 'Alta' | 'Media' | 'Baja' | 'Crítica' = 'Crítica';
-  if (totalScore >= 95) {
+  if (finalCatalogScore >= 95) {
     qualityResult = 'Excelente';
-  } else if (totalScore >= 85) {
+  } else if (finalCatalogScore >= 85) {
     qualityResult = 'Alta';
-  } else if (totalScore >= 70) {
+  } else if (finalCatalogScore >= 70) {
     qualityResult = 'Media';
-  } else if (totalScore >= 50) {
+  } else if (finalCatalogScore >= 50) {
     qualityResult = 'Baja';
   } else {
     qualityResult = 'Crítica';
   }
 
-  const isBlocked = totalScore < 50 || brandResult === 'Conflicto' || rulesResult === 'Conflicto' || duplicateResult === 'Duplicado';
+  // Blocked state depends exclusively on catalog conflicts/duplication
+  const isBlocked = finalCatalogScore < 50 || brandResult === 'Conflicto' || rulesResult === 'Conflicto' || duplicateResult === 'Duplicado';
+
+  // B. Calculate Import Quality Score (0-100)
+  const hasMlCategory = !!p.ml_category;
+  const mlCategoryScore = hasMlCategory ? 20 : 0;
+  
+  const hasMlBrand = !!(p.ml_brand && p.ml_brand !== '—');
+  const mlBrandScore = hasMlBrand ? 20 : 0;
+  
+  const confidenceVal = typeof p.confidence === 'number' ? p.confidence : 40;
+  const iaConfidenceScore = Math.round(confidenceVal * 0.25);
+  
+  const hasImportedMetadata = !!(p.metadata && typeof p.metadata === 'object' && Array.isArray(p.metadata.attributes) && p.metadata.attributes.length > 0);
+  const metadataScore = hasImportedMetadata ? 20 : 0;
+  
+  const hasVendor = !!p.vendor_id;
+  const vendorScore = hasVendor ? 15 : 0;
+  
+  const importQualityScore = mlCategoryScore + mlBrandScore + iaConfidenceScore + metadataScore + vendorScore;
 
   // Build motives list for audit / log
   const motives: string[] = [];
@@ -323,12 +351,14 @@ export function runQualityEngineCheck(
   const executionTimeMs = Math.round(t1 - t0);
 
   return {
-    qualityScore: totalScore,
+    qualityScore: finalCatalogScore,
+    catalogQualityScore: finalCatalogScore,
+    importQualityScore,
     result: qualityResult,
     isBlocked,
-    isPublicable: !!assignedBrandId && !!assignedCategoryId && totalScore >= 85 && !isBlocked,
+    isPublicable: !!assignedBrandId && !!assignedCategoryId && finalCatalogScore >= 85 && !isBlocked,
     executionTimeMs,
-    engineVersion: '1.0.0',
+    engineVersion: '1.1.0',
     motives,
     validators: {
       brand: { name: 'Validador de Marca', score: brandScore, max: 20, result: brandResult, error: brandError },
@@ -337,7 +367,13 @@ export function runQualityEngineCheck(
       dictionary: { name: 'Validador de Diccionario', score: dictScore, max: 10, result: dictResult, error: dictError },
       consistency: { name: 'Validador de Consistencia', score: consistencyScore, max: 15, result: consistencyResult, error: consistencyError },
       similar: { name: 'Validador de Productos Similares', score: similarScore, max: 10, result: similarResult, error: similarError },
-      duplicate: { name: 'Validador de Duplicados', score: duplicateScore, max: 10, result: duplicateResult, error: duplicateError }
+      duplicate: { name: 'Validador de Duplicados', score: duplicateScore, max: 10, result: duplicateResult, error: duplicateError },
+      // Import validators
+      mlCategory: { name: 'Categoría ML', score: mlCategoryScore, max: 20, result: hasMlCategory ? 'Detectada' : 'No detectada', error: hasMlCategory ? '' : 'Falta categoría original de Mercado Libre' },
+      mlBrand: { name: 'Marca ML', score: mlBrandScore, max: 20, result: hasMlBrand ? 'Detectada' : 'No detectada', error: hasMlBrand ? '' : 'Falta marca original de Mercado Libre' },
+      iaConfidence: { name: 'Confianza IA', score: iaConfidenceScore, max: 25, result: `${confidenceVal}%`, error: confidenceVal < 70 ? 'Confianza menor al 70%' : '' },
+      metadata: { name: 'Metadatos importados', score: metadataScore, max: 20, result: hasImportedMetadata ? 'Con atributos' : 'Sin atributos', error: hasImportedMetadata ? '' : 'No se importaron atributos técnicos' },
+      vendor: { name: 'Proveedor asignado', score: vendorScore, max: 15, result: hasVendor ? 'Válido' : 'No asignado', error: hasVendor ? '' : 'Falta asociar proveedor de origen' }
     }
   };
 }

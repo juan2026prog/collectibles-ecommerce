@@ -49,17 +49,19 @@ export function calculateHomologationStatus(p: any, mlMappings: any[] = [], loca
 
   const isConfirmed = p.status !== 'Curation Queue';
 
-  // Quality Score Calculation
+  // Quality Score Calculation (Catalog Quality V1.1)
   let qualityScore = 0;
   if (hasCategory) qualityScore += 30;
   if (hasBrand && !brandInconsistency) qualityScore += 30;
-  if (detection.detectedLicense) qualityScore += 20;
-  if (noConflicts && noDuplicates && !brandInconsistency) qualityScore += 20;
+  if (noConflicts && !brandInconsistency) qualityScore += 20;
+  if (noDuplicates) qualityScore += 20;
 
   if (!hasCategory && !hasBrand) {
     qualityScore = Math.min(qualityScore, 40);
   } else if (!hasCategory || !hasBrand) {
     qualityScore = Math.min(qualityScore, 69);
+  } else if (!noConflicts || !noDuplicates || brandInconsistency) {
+    qualityScore = Math.min(qualityScore, 49);
   }
 
   // Publicable ONLY if both brand_id and category_id are present, without brand inconsistency, conflicts, or duplicates.
@@ -1653,69 +1655,64 @@ export default function AdminCatalogCenter() {
                 </div>
                 
                 {/* Custom Tooltip */}
-                <div className="absolute z-30 hidden group-hover:block bg-slate-900 border border-slate-800 text-white rounded-xl p-3.5 shadow-xl w-64 -top-2 right-full mr-2 space-y-1.5 text-[11px] pointer-events-none text-left">
-                  <span className="font-bold block border-b border-slate-800 pb-1 text-slate-400">Estado de Homologación</span>
+                <div className="absolute z-30 hidden group-hover:block bg-slate-900 border border-slate-800 text-white rounded-xl p-3.5 shadow-xl w-64 -top-2 right-full mr-2 space-y-2 text-[11px] pointer-events-none text-left">
+                  <span className="font-extrabold block border-b border-slate-800 pb-1 text-slate-450 tracking-wider uppercase text-[9px]">Validación Collectibles</span>
                   
                   <div className="flex justify-between items-center font-medium">
-                    <span className="text-slate-200">Categoría Collectibles</span>
-                    <span className={hStatus.details[0].success ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
-                      {hStatus.details[0].success ? '✔ Asignada' : '✗ Sin asignar'}
+                    <span className="text-slate-350">Categoría homologada</span>
+                    <span className={p.category_id ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
+                      {p.category_id ? '✔ Asignada' : '✗ Sin asignar'}
                     </span>
                   </div>
 
                   <div className="flex justify-between items-center font-medium">
-                    <span className="text-slate-200">Marca Collectibles</span>
-                    <span className={hStatus.details[1].success ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
-                      {hStatus.details[1].success ? '✔ Asignada' : '✗ Sin asignar'}
+                    <span className="text-slate-350">Marca homologada</span>
+                    <span className={(p.brand_id && !hStatus.brandInconsistency) ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
+                      {(p.brand_id && !hStatus.brandInconsistency) ? '✔ Asignada' : '✗ Sin asignar'}
                     </span>
                   </div>
 
                   <div className="flex justify-between items-center font-medium">
-                    <span className="text-slate-200">Categoría ML</span>
-                    <span className={p.ml_category ? 'text-green-400 font-bold' : 'text-slate-400 font-bold'}>
-                      {p.ml_category ? '✔ Detectada' : '✗ No detectada'}
+                    <span className="text-slate-350">Sin conflictos</span>
+                    <span className={(!p.is_exception && !p.has_conflict && !hStatus.brandInconsistency) ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
+                      {(!p.is_exception && !p.has_conflict && !hStatus.brandInconsistency) ? '✔ Coherente' : '✗ Con conflicto'}
                     </span>
                   </div>
 
                   <div className="flex justify-between items-center font-medium">
-                    <span className="text-slate-200">Marca ML</span>
-                    <span className={p.ml_brand && p.ml_brand !== '—' ? 'text-green-400 font-bold' : 'text-slate-400 font-bold'}>
-                      {p.ml_brand && p.ml_brand !== '—' ? '✔ Detectada' : '✗ No detectada'}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-center font-medium">
-                    <span className="text-slate-200">Categoría sugerida</span>
-                    <span className={p.suggested_category_name ? 'text-green-400 font-bold' : 'text-slate-400 font-bold'}>
-                      {p.suggested_category_name ? `✔ ${p.suggested_category_name}` : '✗ No sugerida'}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-center font-medium">
-                    <span className="text-slate-200">Marca detectada</span>
-                    <span className={hStatus.detection.detectedBrand ? 'text-green-400 font-bold' : 'text-slate-400 font-bold'}>
-                      {hStatus.detection.detectedBrand ? `✔ ${hStatus.detection.detectedBrand}` : '✗ No detectada'}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-center font-medium">
-                    <span className="text-slate-200">Sin conflictos</span>
-                    <span className={hStatus.details[3].success ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
-                      {hStatus.details[3].success ? '✔' : '✗'}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-center font-medium">
-                    <span className="text-slate-200">Sin duplicados</span>
+                    <span className="text-slate-350">Sin duplicados</span>
                     <span className={hStatus.details[4].success ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
-                      {hStatus.details[4].success ? '✔' : '✗'}
+                      {hStatus.details[4].success ? '✔ Único' : '✗ Duplicado'}
                     </span>
                   </div>
 
-                  <div className="border-t border-slate-800 pt-1.5 text-[10px] text-slate-400 font-bold flex justify-between items-center">
-                    <span>Resultado:</span>
-                    <span className={hStatus.status === 'completa' ? 'text-green-400' : 'text-amber-400'}>
-                      {hStatus.status === 'completa' ? 'Homologación completa (Publicable)' : 'Homologación incompleta (No publicable)'}
+                  <div className="flex justify-between items-center font-medium border-t border-slate-800/50 pt-1.5 pb-1">
+                    <span className="text-slate-300 font-bold">Publicable</span>
+                    <span className={hStatus.isPublicable ? 'text-green-400 font-black' : 'text-amber-400 font-black'}>
+                      {hStatus.isPublicable ? '✔ Sí' : '✗ No'}
+                    </span>
+                  </div>
+
+                  <span className="font-extrabold block border-b border-slate-800 pb-1 pt-1 text-slate-450 tracking-wider uppercase text-[9px]">Importación ML</span>
+
+                  <div className="flex justify-between items-center font-medium">
+                    <span className="text-slate-350">Categoría ML</span>
+                    <span className={p.ml_category ? 'text-green-400 font-bold' : 'text-amber-400 font-bold'}>
+                      {p.ml_category ? '✔ Detectada' : '⚠ No detectada'}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center font-medium">
+                    <span className="text-slate-350">Marca ML</span>
+                    <span className={(p.ml_brand && p.ml_brand !== '—') ? 'text-green-400 font-bold' : 'text-amber-400 font-bold'}>
+                      {(p.ml_brand && p.ml_brand !== '—') ? '✔ Detectada' : '⚠ No detectada'}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center font-medium border-b border-slate-800/50 pb-1.5">
+                    <span className="text-slate-350">Confidence</span>
+                    <span className={(p.confidence || 0) >= 70 ? 'text-green-400 font-bold' : 'text-amber-400 font-bold'}>
+                      {p.confidence ? `${p.confidence}%` : '0%'}
                     </span>
                   </div>
                 </div>
@@ -2352,11 +2349,9 @@ export default function AdminCatalogCenter() {
                           </span>
                         </div>
                       </div>
-
-                      {/* Quality Engine Widget (Fase 5) */}
-                      <div className="bg-slate-900 text-white rounded-xl p-3 space-y-2 border border-slate-800">
+                      <div className="bg-slate-900 text-white rounded-xl p-3.5 space-y-2.5 border border-slate-800 shadow-lg">
                         <div className="flex justify-between items-center">
-                          <span className="text-[9px] text-slate-450 font-black uppercase tracking-widest">Quality Engine</span>
+                          <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-widest">Calidad del Catálogo</span>
                           <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
                             qCheck.result === 'Excelente' ? 'bg-green-500/20 text-green-400' :
                             qCheck.result === 'Alta' ? 'bg-emerald-500/20 text-emerald-400' :
@@ -2365,49 +2360,112 @@ export default function AdminCatalogCenter() {
                             'bg-red-500/20 text-red-400'
                           }`}>{qCheck.result.toUpperCase()}</span>
                         </div>
-                        <div className="flex items-center gap-1.5 font-black text-lg text-white">
-                          <span className="text-2xl font-black">{qCheck.qualityScore}%</span>
-                          <span className="text-[10px] text-slate-400 font-semibold">(Calidad General)</span>
+                        <div className="flex items-baseline gap-1.5 font-black text-white">
+                          <span className="text-3xl font-black tracking-tight">{qCheck.catalogQualityScore}%</span>
+                          <span className="text-[9px] text-slate-450 font-bold uppercase tracking-wider">Score Catálogo</span>
                         </div>
 
-                        {/* Breakdown list */}
-                        <div className="grid grid-cols-2 gap-1.5 pt-2 border-t border-slate-800 text-[10px] font-bold text-slate-350">
-                          {Object.entries(qCheck.validators).map(([key, validator]) => (
-                            <div key={key} className="flex justify-between items-center bg-slate-950/40 p-1.5 rounded border border-slate-800">
-                              <span>{validator.name.replace('Validador de ', '')}</span>
-                              <span className={validator.score > 0 ? 'text-green-400' : 'text-red-400'}>
-                                {validator.score > 0 ? '✔' : '❌'}
-                              </span>
-                            </div>
-                          ))}
+                        {/* Breakdown list for Catalog */}
+                        <div className="grid grid-cols-2 gap-1.5 pt-2 border-t border-slate-800 text-[10px] font-bold text-slate-355">
+                          {Object.entries(qCheck.validators)
+                            .filter(([key]) => ['brand', 'category', 'rules', 'dictionary', 'consistency', 'similar', 'duplicate'].includes(key))
+                            .map(([key, validator]) => (
+                              <div key={key} className="flex justify-between items-center bg-slate-950/40 p-1.5 rounded border border-slate-805/40">
+                                <span>{validator.name.replace('Validador de ', '')}</span>
+                                <span className={validator.score > 0 ? 'text-green-400' : 'text-red-450'}>
+                                  {validator.score > 0 ? '✔' : '❌'}
+                                </span>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+
+                      {/* Quality Engine Widget — Calidad de Importación (Fase 5) */}
+                      <div className="bg-slate-900 text-white rounded-xl p-3.5 space-y-2.5 border border-slate-800 shadow-lg">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-widest">Calidad de Importación</span>
+                          <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
+                            qCheck.importQualityScore >= 90 ? 'bg-green-500/20 text-green-400' :
+                            qCheck.importQualityScore >= 70 ? 'bg-emerald-500/20 text-emerald-400' :
+                            qCheck.importQualityScore >= 50 ? 'bg-amber-500/20 text-amber-400' :
+                            'bg-red-500/20 text-red-400'
+                          }`}>{qCheck.importQualityScore >= 90 ? 'EXCELENTE' : qCheck.importQualityScore >= 70 ? 'ALTA' : qCheck.importQualityScore >= 50 ? 'MEDIA' : 'CRÍTICA'}</span>
+                        </div>
+                        <div className="flex items-baseline gap-1.5 font-black text-white">
+                          <span className="text-3xl font-black tracking-tight">{qCheck.importQualityScore}%</span>
+                          <span className="text-[9px] text-slate-450 font-bold uppercase tracking-wider">Score Importación</span>
+                        </div>
+
+                        {/* Breakdown list for Import */}
+                        <div className="grid grid-cols-2 gap-1.5 pt-2 border-t border-slate-800 text-[10px] font-bold text-slate-355">
+                          {Object.entries(qCheck.validators)
+                            .filter(([key]) => ['mlCategory', 'mlBrand', 'iaConfidence', 'metadata', 'vendor'].includes(key))
+                            .map(([key, validator]) => (
+                              <div key={key} className="flex justify-between items-center bg-slate-950/40 p-1.5 rounded border border-slate-805/40">
+                                <span>{validator.name}</span>
+                                <span className={validator.score > 0 ? 'text-green-400' : 'text-amber-450'}>
+                                  {validator.score > 0 ? '✔' : '⚠'}
+                                </span>
+                              </div>
+                            ))}
                         </div>
                       </div>
 
                       {/* Score explanation accordion (Fase 6) */}
-                      <details className="group border border-slate-205 rounded-xl bg-white overflow-hidden transition-all duration-300">
+                      <details className="group border border-slate-205 rounded-xl bg-white overflow-hidden transition-all duration-300 shadow-sm">
                         <summary className="flex justify-between items-center p-2.5 text-xs font-bold text-slate-700 cursor-pointer hover:bg-slate-50 select-none outline-none">
-                          <span>¿Por qué obtuvo este Score?</span>
+                          <span>¿Cómo se calculan los Scores?</span>
                           <ChevronDown className="w-4 h-4 text-slate-400 group-open:rotate-180 transition-transform" />
                         </summary>
-                        <div className="p-3 border-t border-slate-100 bg-slate-50/50 space-y-2 text-[11px] font-semibold text-slate-650">
-                          {Object.entries(qCheck.validators).map(([key, val]) => (
-                            <div key={key} className="flex justify-between items-start border-b border-slate-100 pb-1.5 last:border-0 last:pb-0">
-                              <div>
-                                <span className="text-slate-900 block font-bold">{val.name}</span>
-                                {val.error && <span className="text-red-500 text-[10px] block mt-0.5">{val.error}</span>}
-                              </div>
-                              <div className="text-right">
-                                <span className={val.score > 0 ? 'text-green-600 font-bold' : 'text-red-500 font-bold'}>
-                                  {val.score > 0 ? `+${val.score}` : `-${val.max}`}
-                                </span>
-                                <span className="text-slate-400 block text-[9px]">máx: {val.max}</span>
-                              </div>
+                        <div className="p-3 border-t border-slate-100 bg-slate-50/50 space-y-3 text-[11px] font-semibold text-slate-655 font-sans">
+                          {/* Catalog Validators Explanations */}
+                          <div className="space-y-1.5">
+                            <span className="text-[9px] text-slate-450 font-black uppercase tracking-wider block mb-1">Métricas de Catálogo</span>
+                            {Object.entries(qCheck.validators)
+                              .filter(([key]) => ['brand', 'category', 'rules', 'dictionary', 'consistency', 'similar', 'duplicate'].includes(key))
+                              .map(([key, val]) => (
+                                <div key={key} className="flex justify-between items-start border-b border-slate-100/50 pb-1.5 last:border-0 last:pb-0">
+                                  <div>
+                                    <span className="text-slate-900 block font-bold">{val.name}</span>
+                                    {val.error && <span className="text-red-500 text-[10px] block mt-0.5">{val.error}</span>}
+                                  </div>
+                                  <div className="text-right">
+                                    <span className={val.score > 0 ? 'text-green-600 font-bold' : 'text-red-500 font-bold'}>
+                                      {val.score > 0 ? `+${val.score}` : `-${val.max}`}
+                                    </span>
+                                    <span className="text-slate-400 block text-[9px]">máx: {val.max}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            <div className="pt-2 flex justify-between items-center text-xs font-black text-slate-900 border-t border-slate-200">
+                              <span>Total Catálogo</span>
+                              <span className="text-indigo-650 font-black">{qCheck.catalogQualityScore} / 100</span>
                             </div>
-                          ))}
-                          
-                          <div className="border-t border-slate-200 pt-2 flex justify-between items-center text-xs font-black text-slate-900">
-                            <span>Score Total</span>
-                            <span className="text-indigo-600 font-black">{qCheck.qualityScore} / 100</span>
+                          </div>
+
+                          {/* Import Validators Explanations */}
+                          <div className="space-y-1.5 pt-2 border-t border-slate-200">
+                            <span className="text-[9px] text-slate-450 font-black uppercase tracking-wider block mb-1">Métricas de Importación</span>
+                            {Object.entries(qCheck.validators)
+                              .filter(([key]) => ['mlCategory', 'mlBrand', 'iaConfidence', 'metadata', 'vendor'].includes(key))
+                              .map(([key, val]) => (
+                                <div key={key} className="flex justify-between items-start border-b border-slate-100/50 pb-1.5 last:border-0 last:pb-0">
+                                  <div>
+                                    <span className="text-slate-900 block font-bold">{val.name}</span>
+                                    {val.error && <span className="text-amber-600 text-[10px] block mt-0.5">{val.error}</span>}
+                                  </div>
+                                  <div className="text-right">
+                                    <span className={val.score > 0 ? 'text-green-600 font-bold' : 'text-amber-600 font-bold'}>
+                                      {val.score > 0 ? `+${val.score}` : `-${val.max}`}
+                                    </span>
+                                    <span className="text-slate-400 block text-[9px]">máx: {val.max}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            <div className="pt-2 flex justify-between items-center text-xs font-black text-slate-900 border-t border-slate-200">
+                              <span>Total Importación</span>
+                              <span className="text-slate-600 font-black">{qCheck.importQualityScore} / 100</span>
+                            </div>
                           </div>
                         </div>
                       </details>
