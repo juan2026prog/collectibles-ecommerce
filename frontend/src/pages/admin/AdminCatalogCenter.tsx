@@ -20,8 +20,8 @@ import {
 } from '../../lib/qualityEngine';
 
 export function calculateHomologationStatus(p: any, mlMappings: any[] = [], localDuplicates: any[] = []) {
-  const hasCategory = !!(p.suggested_category_id || p.category_id);
-  const hasBrand = !!p.brand_name || !!p.brand_id || (p.ml_brand && p.ml_brand !== '—');
+  const hasCategory = !!p.category_id;
+  const hasBrand = !!p.brand_id;
   const isMlCategoryMapped = Array.isArray(mlMappings) && mlMappings.some(m => m.ml_category_id === p.ml_category);
   const noConflicts = !p.is_exception && !p.has_conflict;
   const noDuplicates = !Array.isArray(localDuplicates) || !localDuplicates.some(d => d.id === p.id || d.duplicate_product_id === p.id);
@@ -48,23 +48,31 @@ export function calculateHomologationStatus(p: any, mlMappings: any[] = [], loca
   }
 
   const isConfirmed = p.status !== 'Curation Queue';
-  const isConfidenceHigh = p.confidence >= 70;
 
-  // Quality Score Calculation (Fase 4)
+  // Quality Score Calculation
   let qualityScore = 0;
   if (hasCategory) qualityScore += 30;
   if (hasBrand && !brandInconsistency) qualityScore += 30;
   if (detection.detectedLicense) qualityScore += 20;
   if (noConflicts && noDuplicates && !brandInconsistency) qualityScore += 20;
 
+  if (!hasCategory && !hasBrand) {
+    qualityScore = Math.min(qualityScore, 40);
+  } else if (!hasCategory || !hasBrand) {
+    qualityScore = Math.min(qualityScore, 69);
+  }
+
+  // Publicable ONLY if both brand_id and category_id are present, without brand inconsistency, conflicts, or duplicates.
   const isPublicable = hasCategory && hasBrand && !brandInconsistency && noConflicts && noDuplicates;
 
   let status: 'completa' | 'parcial' | 'revision' | 'sin_homologar' = 'sin_homologar';
   
-  if (isPublicable && (isConfidenceHigh || isConfirmed)) {
-    status = 'completa';
-  } else if (p.is_exception || p.has_conflict || !noDuplicates || brandInconsistency || (p.applied_rule === 'IA Auto-Classification (Default fallback)' && p.confidence < 55 && !isConfirmed)) {
-    status = 'revision';
+  if (hasCategory && hasBrand) {
+    if (isPublicable) {
+      status = 'completa';
+    } else {
+      status = 'revision';
+    }
   } else if (hasCategory || hasBrand) {
     status = 'parcial';
   } else {
@@ -1235,6 +1243,10 @@ export default function AdminCatalogCenter() {
         if (!assignedBrandName || !LICENSES_LIST.includes(assignedBrandName.toLowerCase())) return false;
       }
       if (homologationFilter === 'conflicto_fabricante' && !hStatus.detection.detectedBrand) return false;
+      if (homologationFilter === 'publicados_inconsistencias') {
+        const qualifies = qCheck.isPublicable;
+        if (p.status !== 'published' || qualifies) return false;
+      }
     }
 
     // 3. Dropdown Filters
@@ -1438,6 +1450,28 @@ export default function AdminCatalogCenter() {
   const qNoPublicablesCount = productsWithHStatus.filter(p => !p.qCheck.isPublicable).length;
   const qBlockedCount = productsWithHStatus.filter(p => p.qCheck.isBlocked).length;
   
+  const noBrandCount = productsWithHStatus.filter(p => !p.brand_id).length;
+  const noCategoryCount = productsWithHStatus.filter(p => !p.category_id).length;
+  
+  const pendingBrandCount = productsWithHStatus.filter(p => {
+    const detected = detectBrandLicenceCollection(p.title, p.ml_brand, p.manufacturer).detectedBrand;
+    return !!detected && !p.brand_id;
+  }).length;
+  
+  const pendingCategoryCount = productsWithHStatus.filter(p => {
+    return !!p.suggested_category_id && !p.category_id;
+  }).length;
+  
+  const publishedWithInconsistenciesCount = productsWithHStatus.filter(p => {
+    if (p.status !== 'published') return false;
+    const qualifies = p.hStatus.isPublicable;
+    return !qualifies;
+  }).length;
+
+  const homologadosCompletosCount = productsWithHStatus.filter(p => p.hStatus.status === 'completa').length;
+  const parcialmenteHomologadosCount = productsWithHStatus.filter(p => p.hStatus.status === 'parcial').length;
+  const sinHomologarCount = productsWithHStatus.filter(p => p.hStatus.status === 'sin_homologar').length;
+  
   const qBrandConflicts = productsWithHStatus.filter(p => p.qCheck.validators.brand.result === 'Conflicto').length;
   const qCategoryConflicts = productsWithHStatus.filter(p => p.qCheck.validators.category.result === 'Conflicto').length;
   const qRuleConflicts = productsWithHStatus.filter(p => p.qCheck.validators.rules.result === 'Conflicto').length;
@@ -1559,7 +1593,7 @@ export default function AdminCatalogCenter() {
               }
             } else {
               return (
-                <span className="inline-flex px-2 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200 font-extrabold text-[11px]">
+                <span className="inline-flex px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 font-extrabold text-[11px]">
                   Sin marca
                 </span>
               );
@@ -1579,7 +1613,7 @@ export default function AdminCatalogCenter() {
               {categoriesList.find(c => c.id === p.category_id)?.name || getCategoryPath(p.category_id)}
             </span>
           ) : (
-            <span className="text-slate-400 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-[11px] font-bold block w-max">
+            <span className="text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded text-[11px] font-extrabold block w-max">
               Sin categoría
             </span>
           )}
@@ -1619,18 +1653,70 @@ export default function AdminCatalogCenter() {
                 </div>
                 
                 {/* Custom Tooltip */}
-                <div className="absolute z-30 hidden group-hover:block bg-slate-900 border border-slate-800 text-white rounded-xl p-3 shadow-xl w-60 -top-2 right-full mr-2 space-y-1.5 text-[11px] pointer-events-none text-left">
+                <div className="absolute z-30 hidden group-hover:block bg-slate-900 border border-slate-800 text-white rounded-xl p-3.5 shadow-xl w-64 -top-2 right-full mr-2 space-y-1.5 text-[11px] pointer-events-none text-left">
                   <span className="font-bold block border-b border-slate-800 pb-1 text-slate-400">Estado de Homologación</span>
-                  {hStatus.details.map((detail, idx) => (
-                    <div key={idx} className="flex justify-between items-center font-medium">
-                      <span className={detail.success ? 'text-slate-200' : 'text-slate-400'}>{detail.label}</span>
-                      <span className={detail.success ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
-                        {detail.success ? '✓' : '✗'}
-                      </span>
-                    </div>
-                  ))}
-                  <div className="border-t border-slate-800 pt-1.5 text-[10px] text-slate-400 font-bold">
-                    {hStatus.status === 'completa' ? '✅ Listo para publicar' : '❌ No se puede publicar todavía'}
+                  
+                  <div className="flex justify-between items-center font-medium">
+                    <span className="text-slate-200">Categoría Collectibles</span>
+                    <span className={hStatus.details[0].success ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
+                      {hStatus.details[0].success ? '✔ Asignada' : '✗ Sin asignar'}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center font-medium">
+                    <span className="text-slate-200">Marca Collectibles</span>
+                    <span className={hStatus.details[1].success ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
+                      {hStatus.details[1].success ? '✔ Asignada' : '✗ Sin asignar'}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center font-medium">
+                    <span className="text-slate-200">Categoría ML</span>
+                    <span className={p.ml_category ? 'text-green-400 font-bold' : 'text-slate-400 font-bold'}>
+                      {p.ml_category ? '✔ Detectada' : '✗ No detectada'}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center font-medium">
+                    <span className="text-slate-200">Marca ML</span>
+                    <span className={p.ml_brand && p.ml_brand !== '—' ? 'text-green-400 font-bold' : 'text-slate-400 font-bold'}>
+                      {p.ml_brand && p.ml_brand !== '—' ? '✔ Detectada' : '✗ No detectada'}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center font-medium">
+                    <span className="text-slate-200">Categoría sugerida</span>
+                    <span className={p.suggested_category_name ? 'text-green-400 font-bold' : 'text-slate-400 font-bold'}>
+                      {p.suggested_category_name ? `✔ ${p.suggested_category_name}` : '✗ No sugerida'}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center font-medium">
+                    <span className="text-slate-200">Marca detectada</span>
+                    <span className={hStatus.detection.detectedBrand ? 'text-green-400 font-bold' : 'text-slate-400 font-bold'}>
+                      {hStatus.detection.detectedBrand ? `✔ ${hStatus.detection.detectedBrand}` : '✗ No detectada'}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center font-medium">
+                    <span className="text-slate-200">Sin conflictos</span>
+                    <span className={hStatus.details[3].success ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
+                      {hStatus.details[3].success ? '✔' : '✗'}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center font-medium">
+                    <span className="text-slate-200">Sin duplicados</span>
+                    <span className={hStatus.details[4].success ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
+                      {hStatus.details[4].success ? '✔' : '✗'}
+                    </span>
+                  </div>
+
+                  <div className="border-t border-slate-800 pt-1.5 text-[10px] text-slate-400 font-bold flex justify-between items-center">
+                    <span>Resultado:</span>
+                    <span className={hStatus.status === 'completa' ? 'text-green-400' : 'text-amber-400'}>
+                      {hStatus.status === 'completa' ? 'Homologación completa (Publicable)' : 'Homologación incompleta (No publicable)'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1642,14 +1728,24 @@ export default function AdminCatalogCenter() {
         <td className="px-6 py-4">
           {(() => {
             const hStatus = calculateHomologationStatus(p, mlMappings, localDuplicates);
+            const qualifies = hStatus.isPublicable;
+            
             if (p.status === 'published') {
-              return (
-                <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-700 border border-blue-200">
-                  Publicado
-                </span>
-              );
+              if (qualifies) {
+                return (
+                  <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-700 border border-blue-200">
+                    Publicado
+                  </span>
+                );
+              } else {
+                return (
+                  <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-black bg-orange-100 text-orange-700 border border-orange-200" title="El producto está publicado pero actualmente no cumple los requisitos mínimos">
+                    Publicado con inconsistencias
+                  </span>
+                );
+              }
             }
-            if (hStatus.isPublicable) {
+            if (qualifies) {
               return (
                 <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-black bg-green-100 text-green-700 border border-green-200">
                   ✓ Publicable
@@ -1881,23 +1977,17 @@ export default function AdminCatalogCenter() {
                     className="w-full border border-slate-200 rounded-xl px-3 py-2.5 bg-slate-50/50 hover:bg-white hover:border-indigo-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all text-xs outline-none cursor-pointer shadow-xs font-black text-indigo-700"
                   >
                     <option value="all">Todos los estados</option>
-                    <option value="completo">🟢 Completos</option>
-                    <option value="parcial">🟡 Parciales</option>
-                    <option value="revision">🟠 Revisión</option>
-                    <option value="sin_homologar">🔴 Sin homologar</option>
+                    <option value="completo">🟢 Solo homologados</option>
+                    <option value="parcial">🟡 Solo parcialmente homologados</option>
+                    <option value="sin_homologar">🔴 Solo no homologados</option>
+                    <option value="publicados_inconsistencias">🟠 Solo publicados con inconsistencias</option>
+                    <option value="publicables">✓ Solo publicables</option>
+                    <option value="bloqueados">🔒 Solo bloqueados</option>
+                    <option value="sin_marca_collectibles">🚫 Solo sin marca</option>
+                    <option value="sin_categoria_collectibles">🚫 Solo sin categoría</option>
+                    <option value="revision">⚠️ Solo en revisión</option>
                     <option value="conflictos">⚠️ Solo conflictos generales</option>
                     <option value="duplicados">👥 Solo duplicados</option>
-                    <option value="excelente">⭐ Excelente (Score 95-100)</option>
-                    <option value="alta">📈 Alta (Score 85-94)</option>
-                    <option value="media">📊 Media (Score 70-84)</option>
-                    <option value="baja">📉 Baja (Score 50-69)</option>
-                    <option value="critica">🚨 Crítica (Score 0-49)</option>
-                    <option value="publicables">✓ Solo publicables (Score 85+)</option>
-                    <option value="bloqueados">🔒 Bloqueados (Score &lt; 50)</option>
-                    <option value="marca_conflicto">⚠ Marca con conflicto</option>
-                    <option value="categoria_conflicto">⚠ Categoría con conflicto</option>
-                    <option value="sin_marca_collectibles">🚫 Sin marca Collectibles</option>
-                    <option value="sin_categoria_collectibles">🚫 Sin categoría Collectibles</option>
                     <option value="marca_collectibles_asignada">✓ Marca Collectibles asignada</option>
                     <option value="categoria_collectibles_asignada">✓ Categoría Collectibles asignada</option>
                     <option value="conflicto_licencia">🚫 Solo conflictos de licencia</option>
@@ -2242,15 +2332,23 @@ export default function AdminCatalogCenter() {
                         <div className="bg-white p-2 rounded-lg border border-slate-100">
                           <span className="text-[8px] text-slate-400 font-bold uppercase block">Marca Asignada</span>
                           <span className="font-extrabold text-slate-900 block truncate">{assignedBrand}</span>
-                          <span className={`text-[9px] font-black ${qCheck.validators.brand.result === 'Consistente' ? 'text-green-600' : 'text-red-500'}`}>
-                            {qCheck.validators.brand.result === 'Consistente' ? '✔ Correcto' : '❌ Conflicto'}
+                          <span className={`text-[9px] font-black ${
+                            qCheck.validators.brand.result === 'Consistente' ? 'text-green-600' :
+                            qCheck.validators.brand.result === 'Incompleto' ? 'text-red-500' : 'text-red-500'
+                          }`}>
+                            {qCheck.validators.brand.result === 'Consistente' ? '✔ Correcto' :
+                             qCheck.validators.brand.result === 'Incompleto' ? '✗ Sin asignar' : '❌ Conflicto'}
                           </span>
                         </div>
                         <div className="bg-white p-2 rounded-lg border border-slate-100">
                           <span className="text-[8px] text-slate-400 font-bold uppercase block">Categoría Asignada</span>
                           <span className="font-extrabold text-indigo-600 block truncate" title={assignedCatName}>{assignedCatName}</span>
-                          <span className={`text-[9px] font-black ${qCheck.validators.category.result === 'Consistente' ? 'text-green-600' : 'text-red-500'}`}>
-                            {qCheck.validators.category.result === 'Consistente' ? '✔ Correcto' : '❌ Conflicto'}
+                          <span className={`text-[9px] font-black ${
+                            qCheck.validators.category.result === 'Consistente' ? 'text-green-600' :
+                            qCheck.validators.category.result === 'Incompleto' ? 'text-red-500' : 'text-red-500'
+                          }`}>
+                            {qCheck.validators.category.result === 'Consistente' ? '✔ Correcto' :
+                             qCheck.validators.category.result === 'Incompleto' ? '✗ Sin asignar' : '❌ Conflicto'}
                           </span>
                         </div>
                       </div>
@@ -3019,6 +3117,56 @@ export default function AdminCatalogCenter() {
               <p className="text-[11px] text-slate-450 mt-2">Productos bloqueados automáticamente por conflictos de marcas o reglas.</p>
             </div>
 
+          </div>
+
+          {/* Coverage & Homologation KPIs Grid */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+            <h3 className="text-sm font-black text-slate-950 border-b pb-2 border-slate-100 uppercase tracking-wider flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-indigo-500" />
+              Indicadores de Datos Oficiales y Cobertura de Homologación
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Productos sin marca</span>
+                <span className="text-xl font-black text-slate-800 block mt-1.5">{noBrandCount}</span>
+                <span className="text-[9px] text-slate-400 font-medium mt-0.5 block">Carecen de brand_id oficial</span>
+              </div>
+              <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Productos sin categoría</span>
+                <span className="text-xl font-black text-slate-800 block mt-1.5">{noCategoryCount}</span>
+                <span className="text-[9px] text-slate-400 font-medium mt-0.5 block">Carecen de category_id oficial</span>
+              </div>
+              <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Marca Pendiente</span>
+                <span className="text-xl font-black text-amber-700 block mt-1.5">{pendingBrandCount}</span>
+                <span className="text-[9px] text-slate-400 font-medium mt-0.5 block">IA detectó marca pero falta brand_id</span>
+              </div>
+              <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Categoría Pendiente</span>
+                <span className="text-xl font-black text-amber-700 block mt-1.5">{pendingCategoryCount}</span>
+                <span className="text-[9px] text-slate-400 font-medium mt-0.5 block">IA sugirió categoría pero falta category_id</span>
+              </div>
+              <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Publicados con Inconsistencias</span>
+                <span className="text-xl font-black text-orange-650 block mt-1.5">{publishedWithInconsistenciesCount}</span>
+                <span className="text-[9px] text-slate-400 font-medium mt-0.5 block">Publicados sin cumplir requisitos</span>
+              </div>
+              <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Homologados Completos</span>
+                <span className="text-xl font-black text-green-700 block mt-1.5">{homologadosCompletosCount}</span>
+                <span className="text-[9px] text-slate-400 font-medium mt-0.5 block">Marca y categoría oficial correctas</span>
+              </div>
+              <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Parcialmente Homologados</span>
+                <span className="text-xl font-black text-blue-700 block mt-1.5">{parcialmenteHomologadosCount}</span>
+                <span className="text-[9px] text-slate-400 font-medium mt-0.5 block">Solo marca o categoría asignada</span>
+              </div>
+              <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Sin Homologar</span>
+                <span className="text-xl font-black text-slate-500 block mt-1.5">{sinHomologarCount}</span>
+                <span className="text-[9px] text-slate-400 font-medium mt-0.5 block">Sin marca ni categoría oficial</span>
+              </div>
+            </div>
           </div>
 
           {/* Quality Levels Detailed List */}

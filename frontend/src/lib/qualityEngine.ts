@@ -87,6 +87,7 @@ export interface QualityEngineReport {
   isPublicable: boolean;
   executionTimeMs: number;
   engineVersion: string;
+  motives?: string[];
   validators: {
     brand: ValidatorResult;
     category: ValidatorResult;
@@ -112,6 +113,7 @@ export function runQualityEngineCheck(
   const mlBrandLower = (p.ml_brand || '').toLowerCase();
   const mfrLower = (p.manufacturer || '').toLowerCase();
   const assignedBrandName = p.brand_name || '';
+  const assignedBrandId = p.brand_id || '';
   const assignedCategoryId = p.category_id || '';
 
   // 1. Brand Validator (20 pts)
@@ -122,9 +124,10 @@ export function runQualityEngineCheck(
   const detection = detectBrandLicenceCollection(p.title || '', p.ml_brand || '', p.manufacturer || '');
   const detectedBrand = detection.detectedBrand;
 
-  if (!assignedBrandName) {
+  if (!assignedBrandId) {
     brandResult = 'Incompleto';
-    brandError = 'Falta asignar marca en Collectibles';
+    brandError = 'Falta marca en Collectibles (No existen datos oficiales asignados)';
+    brandScore = 0;
   } else {
     let brandInconsistent = false;
     if (detectedBrand) {
@@ -158,7 +161,8 @@ export function runQualityEngineCheck(
 
   if (!assignedCategoryId) {
     categoryResult = 'Incompleto';
-    categoryError = 'Falta asignar categoría en Collectibles';
+    categoryError = 'Falta categoría en Collectibles (No existen datos oficiales asignados)';
+    categoryScore = 0;
   } else {
     const mlMap = mlMappings.find(m => m.ml_category_id === p.ml_category);
     if (mlMap && mlMap.internal_category_id !== assignedCategoryId) {
@@ -265,7 +269,16 @@ export function runQualityEngineCheck(
   }
 
   // Calculate General Quality Score
-  const totalScore = brandScore + categoryScore + rulesScore + dictScore + consistencyScore + similarScore + duplicateScore;
+  let totalScore = brandScore + categoryScore + rulesScore + dictScore + consistencyScore + similarScore + duplicateScore;
+
+  // Apply Caps:
+  // - If brand_id and category_id are both missing -> qualityScore capped at 40
+  // - If either is missing -> qualityScore capped at 69
+  if (!assignedBrandId && !assignedCategoryId) {
+    totalScore = Math.min(totalScore, 40);
+  } else if (!assignedBrandId || !assignedCategoryId) {
+    totalScore = Math.min(totalScore, 69);
+  }
 
   // Determine state based on score (Fase 4)
   let qualityResult: 'Excelente' | 'Alta' | 'Media' | 'Baja' | 'Crítica' = 'Crítica';
@@ -283,6 +296,29 @@ export function runQualityEngineCheck(
 
   const isBlocked = totalScore < 50 || brandResult === 'Conflicto' || rulesResult === 'Conflicto' || duplicateResult === 'Duplicado';
 
+  // Build motives list for audit / log
+  const motives: string[] = [];
+  if (!assignedBrandId) {
+    motives.push('- Falta marca Collectibles');
+  }
+  if (!assignedCategoryId) {
+    motives.push('- Falta categoría Collectibles');
+  }
+  if (!assignedBrandId || !assignedCategoryId) {
+    if (detectedBrand) motives.push(`- Marca detectada ${detectedBrand}`);
+    if (p.ml_brand && p.ml_brand !== '—') motives.push(`- Marca ML ${p.ml_brand}`);
+    if (p.suggested_category_name) motives.push(`- Categoría sugerida ${p.suggested_category_name}`);
+    motives.push('No existen datos oficiales asignados');
+  } else {
+    if (brandResult === 'Conflicto') motives.push(`- ${brandError}`);
+    if (categoryResult === 'Conflicto') motives.push(`- ${categoryError}`);
+    if (rulesResult === 'Conflicto') motives.push(`- ${rulesError}`);
+    if (dictResult === 'Conflicto') motives.push(`- ${dictError}`);
+    if (consistencyResult === 'Inconsistente') motives.push(`- ${consistencyError}`);
+    if (similarResult === 'Inusual') motives.push(`- ${similarError}`);
+    if (duplicateResult === 'Duplicado') motives.push(`- ${duplicateError}`);
+  }
+
   const t1 = performance.now();
   const executionTimeMs = Math.round(t1 - t0);
 
@@ -290,9 +326,10 @@ export function runQualityEngineCheck(
     qualityScore: totalScore,
     result: qualityResult,
     isBlocked,
-    isPublicable: totalScore >= 85 && !isBlocked,
+    isPublicable: !!assignedBrandId && !!assignedCategoryId && totalScore >= 85 && !isBlocked,
     executionTimeMs,
     engineVersion: '1.0.0',
+    motives,
     validators: {
       brand: { name: 'Validador de Marca', score: brandScore, max: 20, result: brandResult, error: brandError },
       category: { name: 'Validador de Categoría', score: categoryScore, max: 20, result: categoryResult, error: categoryError },
