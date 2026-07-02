@@ -1,5 +1,5 @@
 import { Link, useSearchParams, useNavigate, useParams, useLocation } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { ChevronRight, ChevronLeft, SlidersHorizontal, X, Search, Store, ExternalLink } from 'lucide-react';
 import { useProducts, useCategories, useBrands, useFilterMappings, useProductGroupMetadata } from '../hooks/useData';
 import { usePromotions, getApplicablePromotions } from '../hooks/usePromotions';
@@ -88,6 +88,12 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   const { categories, loading: catsLoading } = useCategories();
   const { brands, loading: brandsLoading } = useBrands();
   const mappings = useFilterMappings();
+
+  const totalCatalogProducts = useMemo(() => {
+    return categories
+      .filter(c => c.parent_id === null && c.status === 'approved')
+      .reduce((sum, c) => sum + (c.published_products_count || 0), 0);
+  }, [categories]);
 
   const currentCategory = categories.find(c => c.slug === categorySlug);
   const currentBrand = brands.find(b => b.slug === brandSlug);
@@ -225,7 +231,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   const FilterContent = () => (
     <div className="space-y-6">
       {/* Search */}
-      <form onSubmit={handleSearch}>
+      <form onSubmit={handleSearch} className="sticky top-0 bg-[#05070f] lg:bg-[#0e1525] backdrop-blur-md z-20 pb-4 pt-1">
         <label className="font-bold text-white uppercase text-xs tracking-widest mb-2 block">Buscar</label>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
@@ -233,26 +239,38 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
             value={searchInput}
             onChange={e => setSearchInput(e.target.value)}
             placeholder="Buscar productos..."
-            className="w-full pl-9 pr-3 py-2 text-sm border border-white/10 bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-primary-400 placeholder:text-slate-500 rounded-xl"
+            className="w-full pl-9 pr-3 py-2.5 text-sm border border-white/10 bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-primary-400 placeholder:text-slate-500 rounded-xl transition-all duration-200 focus:bg-white/10"
           />
         </div>
       </form>
 
       {/* Categories */}
       <div>
-        <h3 className="font-bold text-white uppercase text-xs tracking-widest mb-3">Categoría</h3>
-        <div className="grid gap-2">
-          <button
-            onClick={() => handleCategorySelect('')}
-            className={`filter-btn-animate w-full flex items-center justify-between rounded-xl p-3 text-left text-sm font-bold transition-all ${
-              !categorySlug 
-                ? 'border-[#f00856] bg-[#f00856]/10 text-white filter-btn-animate--active' 
-                : 'border-white/5 bg-white/5 text-slate-450 hover:text-white border'
-            }`}
-          >
-            <span>Todos los productos</span>
-          </button>
-          
+        <h3 className="font-bold text-white uppercase text-xs tracking-widest mb-4">Categoría</h3>
+        <div className="flex flex-col gap-4">
+          {/* Todos los productos Card */}
+          <div className={`group/card flex flex-col rounded-2xl border transition-all duration-300 p-4 ${
+            !categorySlug
+              ? 'border-[#f00856]/30 bg-[#f00856]/5 shadow-[inset_0_0_12px_rgba(255,255,255,0.02)] border-l-2 border-l-[#f00856]'
+              : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/10 hover:shadow-lg'
+          }`}>
+            <button
+              onClick={() => handleCategorySelect('')}
+              className="w-full flex items-center justify-between text-left transition-all duration-150 group-hover/card:translate-x-1"
+            >
+              <div className="flex flex-col min-w-0 pr-2">
+                <span className={`font-black tracking-tight text-sm uppercase ${
+                  !categorySlug ? 'text-white' : 'text-slate-300 group-hover/card:text-white'
+                }`}>
+                  Todos los productos
+                </span>
+                <span className="text-[10px] text-slate-500 font-bold mt-0.5">
+                  {totalCatalogProducts} productos
+                </span>
+              </div>
+            </button>
+          </div>
+
           {catsLoading
             ? [...Array(5)].map((_, i) => <div key={i} className="h-10 bg-white/5 rounded-xl animate-pulse" />)
             : (() => {
@@ -265,48 +283,78 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                   const isAnySubActive = subcategories.some(sub => categorySlug === sub.slug);
                   const showSubtree = isParentActive || isAnySubActive;
                   
+                  const percentage = totalCatalogProducts > 0 
+                    ? Math.round(((parent.published_products_count || 0) / totalCatalogProducts) * 100) 
+                    : 0;
+
                   return (
-                    <div key={parent.id} className="flex flex-col gap-1.5">
+                    <div 
+                      key={parent.id} 
+                      className={`group/card flex flex-col rounded-2xl border transition-all duration-300 p-4 ${
+                        isParentActive || isAnySubActive
+                          ? 'border-[#f00856]/30 bg-[#f00856]/5 shadow-[inset_0_0_12px_rgba(255,255,255,0.02)] border-l-2 border-l-[#f00856]'
+                          : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/10 hover:shadow-lg'
+                      }`}
+                    >
+                      {/* Parent Row Button */}
                       <button
                         onClick={() => handleCategorySelect(parent.slug)}
-                        className={`filter-btn-animate w-full flex items-center justify-between rounded-xl p-3 text-left text-sm font-bold transition-all border ${
-                          isParentActive 
-                            ? 'border-[#f00856] bg-[#f00856]/10 text-white filter-btn-animate--active' 
-                            : 'border-white/5 bg-white/5 text-slate-400 hover:text-white'
-                        }`}
+                        className="w-full flex items-center justify-between text-left transition-all duration-150 group-hover/card:translate-x-1"
                       >
-                        <span className="truncate">{parent.name}</span>
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex flex-col min-w-0 pr-2">
+                          <span className={`font-black tracking-tight text-sm uppercase ${
+                            isParentActive || isAnySubActive ? 'text-white' : 'text-slate-300 group-hover/card:text-white'
+                          }`}>
+                            {parent.name}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-bold mt-0.5">
+                            {parent.published_products_count} productos
+                          </span>
+                        </div>
+                        <div className="shrink-0 flex items-center justify-center w-6 h-6 rounded-lg bg-white/5 text-slate-500 group-hover/card:text-white transition-colors">
                           {subcategories.length > 0 && (
                             <ChevronRight 
-                              className={`w-4 h-4 transition-transform duration-300 ${
-                                showSubtree ? 'rotate-90 text-white' : 'text-slate-500'
+                              className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                                showSubtree ? 'rotate-90 text-white' : ''
                               }`} 
                             />
                           )}
                         </div>
                       </button>
-                      
-                      {/* Accordion slide-down container */}
+
+                      {/* Progress Bar */}
+                      <div className="w-full mt-3">
+                        <div className="w-full bg-white/5 rounded-full h-[3px] overflow-hidden">
+                          <div 
+                            className="bg-[#f00856] h-full rounded-full transition-all duration-500 ease-out" 
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                        <div className="text-[9px] text-slate-500 mt-1 font-semibold tracking-wider">
+                          {percentage}% del catálogo
+                        </div>
+                      </div>
+
+                      {/* Accordion container */}
                       <div className={`category-accordion-wrapper ${showSubtree ? 'category-accordion-wrapper--open' : ''}`}>
                         <div className="category-accordion-content">
                           {subcategories.length > 0 && (
-                            <div className="pl-4 flex flex-col gap-1.5 border-l border-white/10 ml-3 py-1 mb-1">
+                            <div className="pl-3 flex flex-col gap-1 border-l border-white/5 ml-1 mt-4 mb-1">
                               {subcategories.map((sub, index) => {
                                 const isSubActive = categorySlug === sub.slug;
                                 return (
                                   <button
                                     key={sub.id}
                                     onClick={() => handleCategorySelect(sub.slug)}
-                                    className={`subcategory-stagger-item filter-btn-animate w-full flex items-center justify-between text-left text-xs py-2.5 px-3 rounded-lg font-semibold transition-all ${
+                                    className={`subcategory-stagger-item w-full flex items-center justify-between text-left text-xs py-2 px-2.5 rounded-lg font-semibold transition-all duration-150 ${
                                       isSubActive
-                                        ? 'bg-white/10 text-white filter-btn-animate--active'
-                                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                        ? 'bg-[#f00856]/10 text-white border-l border-l-[#f00856]'
+                                        : 'text-slate-400 hover:text-white hover:bg-white/5 hover:translate-x-1'
                                     }`}
-                                    style={{ animationDelay: `${index * 45}ms` }}
+                                    style={{ animationDelay: `${index * 25}ms` }}
                                   >
-                                    <span className="truncate">{sub.name}</span>
-                                    <span className="filter-counter-badge text-[9px] font-black text-slate-400 px-1.5 py-0.5 rounded-md min-w-5 text-center">
+                                    <span className="truncate pr-2">{sub.name}</span>
+                                    <span className="filter-counter-badge text-[9px] font-black text-[#f00856] bg-[#f00856]/5 border border-[#f00856]/20 px-2 py-0.5 rounded-full tracking-tighter shadow-sm shrink-0">
                                       {sub.published_products_count}
                                     </span>
                                   </button>
@@ -549,14 +597,16 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
 
       <main className="max-w-[1500px] mx-auto px-6 py-10 grid lg:grid-cols-[240px_1fr] gap-10 overflow-hidden">
         {/* FILTERS ASIDE — hidden on mobile, shown on desktop */}
-        <aside className="hidden lg:block glass rounded-[2rem] p-6 h-fit sticky top-24 z-10">
-          <div className="flex items-center justify-between mb-6">
+        <aside className="hidden lg:block glass rounded-[2.5rem] p-6 h-[calc(100vh-130px)] sticky top-24 z-10 flex flex-col">
+          <div className="flex items-center justify-between mb-4 shrink-0">
             <h2 className="font-black text-2xl tracking-tight">Filtros</h2>
             {(categorySlug || brandSlug || searchQ || groupSlug) && (
               <button onClick={() => navigate('/shop')} className="text-xs font-black text-[#f00856] uppercase hover:underline">Limpiar</button>
             )}
           </div>
-          <FilterContent />
+          <div className="flex-1 overflow-y-auto pr-1 premium-scrollbar pb-2">
+            <FilterContent />
+          </div>
         </aside>
 
         {/* PRODUCTS GRID */}
