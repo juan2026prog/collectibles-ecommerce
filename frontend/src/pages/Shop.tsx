@@ -244,10 +244,15 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
         <div className="grid gap-2">
           <button
             onClick={() => handleCategorySelect('')}
-            className={`soft rounded-xl p-3 text-left text-sm font-bold transition-all ${!categorySlug ? 'border-[#f00856] bg-[#f00856]/10 text-white' : 'text-slate-400 hover:text-white'}`}
+            className={`filter-btn-animate w-full flex items-center justify-between rounded-xl p-3 text-left text-sm font-bold transition-all ${
+              !categorySlug 
+                ? 'border-[#f00856] bg-[#f00856]/10 text-white filter-btn-animate--active' 
+                : 'border-white/5 bg-white/5 text-slate-450 hover:text-white border'
+            }`}
           >
-            Todos los productos
+            <span>Todos los productos</span>
           </button>
+          
           {catsLoading
             ? [...Array(5)].map((_, i) => <div key={i} className="h-10 bg-white/5 rounded-xl animate-pulse" />)
             : (() => {
@@ -261,38 +266,56 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                   const showSubtree = isParentActive || isAnySubActive;
                   
                   return (
-                    <div key={parent.id} className="flex flex-col gap-1">
+                    <div key={parent.id} className="flex flex-col gap-1.5">
                       <button
                         onClick={() => handleCategorySelect(parent.slug)}
-                        className={`soft rounded-xl p-3 text-left text-sm font-bold transition-all ${
+                        className={`filter-btn-animate w-full flex items-center justify-between rounded-xl p-3 text-left text-sm font-bold transition-all border ${
                           isParentActive 
-                            ? 'border-[#f00856] bg-[#f00856]/10 text-white' 
-                            : 'text-slate-400 hover:text-white'
+                            ? 'border-[#f00856] bg-[#f00856]/10 text-white filter-btn-animate--active' 
+                            : 'border-white/5 bg-white/5 text-slate-400 hover:text-white'
                         }`}
                       >
-                        {parent.name}
+                        <span className="truncate">{parent.name}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {subcategories.length > 0 && (
+                            <ChevronRight 
+                              className={`w-4 h-4 transition-transform duration-300 ${
+                                showSubtree ? 'rotate-90 text-white' : 'text-slate-500'
+                              }`} 
+                            />
+                          )}
+                        </div>
                       </button>
                       
-                      {showSubtree && subcategories.length > 0 && (
-                        <div className="pl-4 flex flex-col gap-1 border-l border-white/10 ml-3 py-1">
-                          {subcategories.map(sub => {
-                            const isSubActive = categorySlug === sub.slug;
-                            return (
-                              <button
-                                key={sub.id}
-                                onClick={() => handleCategorySelect(sub.slug)}
-                                className={`text-left text-xs py-2 px-3 rounded-lg font-semibold transition-all ${
-                                  isSubActive
-                                    ? 'bg-white/10 text-white'
-                                    : 'text-slate-400 hover:text-white hover:bg-white/5'
-                                }`}
-                              >
-                                {sub.name} ({sub.published_products_count})
-                              </button>
-                            );
-                          })}
+                      {/* Accordion slide-down container */}
+                      <div className={`category-accordion-wrapper ${showSubtree ? 'category-accordion-wrapper--open' : ''}`}>
+                        <div className="category-accordion-content">
+                          {subcategories.length > 0 && (
+                            <div className="pl-4 flex flex-col gap-1.5 border-l border-white/10 ml-3 py-1 mb-1">
+                              {subcategories.map((sub, index) => {
+                                const isSubActive = categorySlug === sub.slug;
+                                return (
+                                  <button
+                                    key={sub.id}
+                                    onClick={() => handleCategorySelect(sub.slug)}
+                                    className={`subcategory-stagger-item filter-btn-animate w-full flex items-center justify-between text-left text-xs py-2.5 px-3 rounded-lg font-semibold transition-all ${
+                                      isSubActive
+                                        ? 'bg-white/10 text-white filter-btn-animate--active'
+                                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                    }`}
+                                    style={{ animationDelay: `${index * 45}ms` }}
+                                  >
+                                    <span className="truncate">{sub.name}</span>
+                                    <span className="filter-counter-badge text-[9px] font-black text-slate-400 px-1.5 py-0.5 rounded-md min-w-5 text-center">
+                                      {sub.published_products_count}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
                     </div>
                   );
                 });

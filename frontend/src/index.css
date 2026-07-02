@@ -553,3 +553,85 @@
   }
 }
 
+/* ═══ FILTER SIDEBAR DYNAMIC ANIMATIONS & EFFECTS ═══ */
+
+/* Slide Accordion for Subcategories */
+.category-accordion-wrapper {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.category-accordion-wrapper--open {
+  grid-template-rows: 1fr;
+}
+
+.category-accordion-content {
+  overflow: hidden;
+}
+
+/* Staggered Slide-up and Fade-in Keyframe */
+@keyframes slideUpFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.subcategory-stagger-item {
+  animation: slideUpFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  opacity: 0;
+}
+
+/* Sidebar Button Micro-interactions */
+.filter-btn-animate {
+  position: relative;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Left Pink Glow Border on Hover */
+.filter-btn-animate::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%) scaleY(0);
+  width: 3px;
+  height: 60%;
+  background-color: #f00856;
+  border-radius: 0 4px 4px 0;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 10px rgba(240, 8, 86, 0.8);
+}
+
+.filter-btn-animate:hover::after {
+  transform: translateY(-50%) scaleY(1);
+}
+
+/* Hover shifts text and adds slight glow */
+.filter-btn-animate:hover {
+  padding-left: 1.25rem !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.02);
+}
+
+.filter-btn-animate--active:hover {
+  padding-left: 1.25rem !important;
+}
+
+/* Styled Counter Tags */
+.filter-counter-badge {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.25s ease;
+}
+
+.filter-btn-animate:hover .filter-counter-badge {
+  background: rgba(240, 8, 86, 0.1);
+  border-color: rgba(240, 8, 86, 0.2);
+  color: #fff;
+}
