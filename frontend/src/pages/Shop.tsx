@@ -124,6 +124,16 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
 
   const totalPages = Math.ceil(count / limit);
 
+  // Redirect to /shop if categorySlug is present but not found in categories list (meaning it's empty or inactive)
+  useEffect(() => {
+    if (categorySlug && !catsLoading && categories.length > 0) {
+      const found = categories.some(c => c.slug === categorySlug);
+      if (!found) {
+        navigate('/shop', { replace: true });
+      }
+    }
+  }, [categorySlug, catsLoading, categories, navigate]);
+
   useEffect(() => {
     if (searchQ) {
       try {
@@ -240,15 +250,53 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
           </button>
           {catsLoading
             ? [...Array(5)].map((_, i) => <div key={i} className="h-10 bg-white/5 rounded-xl animate-pulse" />)
-            : visibleCategories.map(c => (
-              <button
-                key={c.id}
-                onClick={() => handleCategorySelect(c.slug)}
-                className={`soft rounded-xl p-3 text-left text-sm font-bold transition-all ${categorySlug === c.slug ? 'border-[#f00856] bg-[#f00856]/10 text-white' : 'text-slate-400 hover:text-white'}`}
-              >
-                {c.name}
-              </button>
-            ))
+            : (() => {
+                const parentCategories = visibleCategories.filter(c => c.parent_id === null && c.published_products_count > 0 && c.status === 'approved');
+                return parentCategories.map(parent => {
+                  const subcategories = visibleCategories.filter(
+                    sub => sub.parent_id === parent.id && sub.published_products_count > 0 && sub.status === 'approved'
+                  );
+                  const isParentActive = categorySlug === parent.slug;
+                  const isAnySubActive = subcategories.some(sub => categorySlug === sub.slug);
+                  const showSubtree = isParentActive || isAnySubActive;
+                  
+                  return (
+                    <div key={parent.id} className="flex flex-col gap-1">
+                      <button
+                        onClick={() => handleCategorySelect(parent.slug)}
+                        className={`soft rounded-xl p-3 text-left text-sm font-bold transition-all ${
+                          isParentActive 
+                            ? 'border-[#f00856] bg-[#f00856]/10 text-white' 
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {parent.name}
+                      </button>
+                      
+                      {showSubtree && subcategories.length > 0 && (
+                        <div className="pl-4 flex flex-col gap-1 border-l border-white/10 ml-3 py-1">
+                          {subcategories.map(sub => {
+                            const isSubActive = categorySlug === sub.slug;
+                            return (
+                              <button
+                                key={sub.id}
+                                onClick={() => handleCategorySelect(sub.slug)}
+                                className={`text-left text-xs py-2 px-3 rounded-lg font-semibold transition-all ${
+                                  isSubActive
+                                    ? 'bg-white/10 text-white'
+                                    : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                }`}
+                              >
+                                {sub.name} ({sub.published_products_count})
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                });
+              })()
           }
         </div>
       </div>

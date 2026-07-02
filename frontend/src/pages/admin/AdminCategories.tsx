@@ -17,7 +17,9 @@ async function uploadCategoryImage(file: File): Promise<string> {
 
 export default function AdminCategories() {
   const [categories, setCategories] = useState<any[]>([]);
+  const [previewItems, setPreviewItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showEmpty, setShowEmpty] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
@@ -45,15 +47,22 @@ export default function AdminCategories() {
 
   async function fetch() {
     setLoading(true);
-    const { data } = await supabase
-      .from('categories')
-      .select('*, product_categories(count)')
-      .order('sort_order', { ascending: true })
-      .order('name', { ascending: true });
-    
-    // Sort categories into a hierarchy
-    const sorted = sortHierarchically(data || []);
-    setCategories(sorted);
+    try {
+      const { data: cats } = await supabase
+        .from('categories_with_published_counts')
+        .select('*')
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true });
+        
+      const { data: preview, error } = await supabase.rpc('get_batch_classification_preview');
+      if (error) throw error;
+      
+      const sorted = sortHierarchically(cats || []);
+      setCategories(sorted);
+      setPreviewItems(preview || []);
+    } catch (err: any) {
+      toast.error('Error al cargar datos: ' + err.message);
+    }
     setLoading(false);
   }
 
@@ -72,12 +81,46 @@ export default function AdminCategories() {
 
     const flattened: any[] = [];
     const traverse = (node: any, level: number) => {
-      flattened.push({ ...node, level });
+      const childIds: string[] = [];
+      const collectIds = (n: any) => {
+        n.children.forEach((child: any) => {
+          childIds.push(child.id);
+          collectIds(child);
+        });
+      };
+      collectIds(node);
+
+      flattened.push({ ...node, level, subcategoryIds: childIds });
       node.children.forEach((child: any) => traverse(child, level + 1));
     };
     
     roots.forEach(root => traverse(root, 0));
     return flattened;
+  }
+
+  function getCategoryStats(catId: string, childrenIds: string[] = []) {
+    const allIds = [catId, ...childrenIds];
+    
+    const publishedCount = categories
+      .filter(c => allIds.includes(c.id))
+      .reduce((sum, c) => sum + (c.published_products_count || 0), 0);
+    
+    const pendingCount = previewItems.filter(p => 
+      p.status === 'Curation Queue' && 
+      allIds.includes(p.suggested_category_id) && 
+      !p.is_exception
+    ).length;
+    
+    const conflictsCount = previewItems.filter(p => 
+      p.is_exception && 
+      (allIds.includes(p.category_id) || allIds.includes(p.suggested_category_id))
+    ).length;
+    
+    return {
+      publishedCount,
+      pendingCount,
+      conflictsCount
+    };
   }
 
   function openCreate() { setEditing(null); setForm({ name: '', slug: '', image_url: '', sort_order: 0, ml_category_id: '', parent_id: '', is_active: true, subtitle: '', badge: '', mobile_image_url: '' }); setShowForm(true); }
@@ -112,15 +155,30 @@ export default function AdminCategories() {
     toast.success('Categoría eliminada');
   }
 
+  const filteredCategories = categories.filter(c => {
+    if (showEmpty) return true;
+    const stats = getCategoryStats(c.id, c.subcategoryIds || []);
+    return stats.publishedCount > 0;
+  });
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
         <div>
            <h2 className="text-2xl font-bold dark:text-white">Categorías</h2>
            <p className="text-sm text-gray-500 mt-1">Administra las agrupaciones de productos ({categories.length} totales)</p>
         </div>
-        <div className="flex gap-2">
-          <div className="flex bg-gray-100 rounded-lg p-1">
+        <div className="flex flex-wrap items-center gap-4">
+          <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300 cursor-pointer bg-white dark:bg-slate-800 px-3 py-2 rounded-lg border border-gray-200 dark:border-slate-700 shadow-sm hover:bg-gray-50 transition-colors">
+            <input 
+              type="checkbox" 
+              checked={showEmpty} 
+              onChange={e => setShowEmpty(e.target.checked)} 
+              className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+            />
+            <span>Mostrar vacías</span>
+          </label>
+          <div className="flex bg-gray-100 rounded-lg p-1 border">
             <button onClick={() => setViewMode('list')} className={`p-2 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white shadow-sm text-primary-600' : 'text-gray-500 hover:text-gray-700'}`} title="Vista de lista">
               <List className="w-4 h-4" />
             </button>
@@ -133,7 +191,7 @@ export default function AdminCategories() {
       </div>
 
       {viewMode === 'list' ? (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -141,7 +199,7 @@ export default function AdminCategories() {
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Nombre</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Productos</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Slug</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Estado</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Estado / Curación</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Mercado Libre</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Orden</th>
                 <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">Acciones</th>
@@ -149,89 +207,205 @@ export default function AdminCategories() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400">Cargando...</td></tr>
-              ) : categories.length === 0 ? (
-                <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400">No hay categorías</td></tr>
-              ) : categories.map(c => (
-                <tr key={c.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    <div className="w-12 h-12 rounded-lg bg-gray-50 border overflow-hidden flex items-center justify-center">
-                      {c.image_url ? <img src={c.image_url} alt={c.name} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-gray-300" />}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      {c.level > 0 && <span className="text-gray-300 ml-2">└─</span>}
-                      <span className={`font-semibold ${c.level > 0 ? 'text-gray-600' : 'text-gray-900'}`}>{c.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-gray-500"><span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">{c.product_categories?.[0]?.count || 0}</span></td>
-                  <td className="px-6 py-4 font-mono text-sm text-gray-500">/{c.slug}</td>
-                  <td className="px-6 py-4">
-                    {c.is_active !== false ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Visible</span>
-                    ) : (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">Oculta</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    {c.metadata?.ml_category_id ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-                        {c.metadata.ml_category_id}
+                <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-400">Cargando...</td></tr>
+              ) : filteredCategories.length === 0 ? (
+                <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-400">No hay categorías que coincidan</td></tr>
+              ) : filteredCategories.map(c => {
+                const stats = getCategoryStats(c.id, c.subcategoryIds || []);
+                
+                // Progress Bar Math
+                const subTotal = c.subcategoryIds?.length || 0;
+                const subWithStock = categories.filter(sub => sub.parent_id === c.id && (sub.published_products_count || 0) > 0).length;
+                const subEmptyCount = subTotal - subWithStock;
+                const progress = subTotal > 0 ? (subWithStock / subTotal) * 100 : 0;
+
+                // Status Badges
+                let badge = (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mr-1.5"></span>⚪ Vacía
+                  </span>
+                );
+                if (stats.conflictsCount > 0) {
+                  badge = (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200 animate-pulse">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 mr-1.5"></span>🔴 Conflictos ({stats.conflictsCount})
+                    </span>
+                  );
+                } else if (stats.pendingCount > 0) {
+                  badge = (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>🟡 Pendiente ({stats.pendingCount})
+                    </span>
+                  );
+                } else if (stats.publishedCount > 0) {
+                  badge = (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>🟢 Con productos
+                    </span>
+                  );
+                }
+
+                return (
+                  <tr key={c.id} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="w-12 h-12 rounded-lg bg-gray-50 border overflow-hidden flex items-center justify-center">
+                        {c.image_url ? <img src={c.image_url} alt={c.name} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-gray-300" />}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 max-w-xs">
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          {c.level > 0 && <span className="text-gray-300 ml-2">└─</span>}
+                          <span className={`font-bold ${c.level > 0 ? 'text-gray-600 text-sm' : 'text-gray-900 text-base'}`}>{c.name}</span>
+                        </div>
+                        {c.level === 0 && subTotal > 0 && (
+                          <div className="mt-2 text-xs text-gray-500 space-y-1 bg-gray-50/80 p-2 rounded-lg border border-gray-150">
+                            <div className="flex justify-between items-center text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                              <span>Subcats: {subTotal} (Con stock: {subWithStock} | Vacías: {subEmptyCount})</span>
+                              <span className="text-primary-600 font-bold">{Math.round(progress)}%</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                              <div 
+                                className="bg-primary-500 h-full rounded-full transition-all duration-500" 
+                                style={{ width: `${progress}%` }} 
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                        {stats.publishedCount}
                       </span>
-                    ) : (
-                      <span className="text-xs text-gray-400">Sin mapear</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-gray-500">{c.sort_order}</td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex justify-end gap-1">
-                      <button onClick={() => openEdit(c)} className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg"><Pencil className="w-4 h-4" /></button>
-                      <button onClick={() => handleDelete(c.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-6 py-4 font-mono text-xs text-gray-500">/{c.slug}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-1.5 items-start">
+                        {badge}
+                        <span className={`text-[10px] font-bold uppercase tracking-wider ${c.is_active !== false ? 'text-green-600' : 'text-red-500'}`}>
+                          {c.is_active !== false ? 'Visible en tienda' : 'Oculto en tienda'}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {c.metadata?.ml_category_id ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-100">
+                          {c.metadata.ml_category_id}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">Sin mapear</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-gray-500 font-medium">{c.sort_order}</td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex justify-end gap-1">
+                        <button onClick={() => openEdit(c)} className="p-2 text-gray-450 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"><Pencil className="w-4 h-4" /></button>
+                        <button onClick={() => handleDelete(c.id)} className="p-2 text-gray-450 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {loading ? <p className="text-gray-400 col-span-4 text-center py-12">Cargando categorías...</p> :
-          categories.map(c => (
-            <div key={c.id} className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-[0_4px_20px_rgba(0,0,0,0.05)] hover:-translate-y-1 transition-all group flex flex-col">
-              <div className="w-full h-32 bg-gray-50 border border-gray-100 rounded-lg mb-3 flex items-center justify-center overflow-hidden relative">
-                 <div className="absolute top-2 right-2 bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded shadow-sm z-10">
-                   {c.product_categories?.[0]?.count || 0}
-                 </div>
-                 {c.image_url ? (
-                    <img src={c.image_url} alt={c.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                 ) : (
-                    <ImageIcon className="w-8 h-8 text-gray-300" />
-                 )}
+          filteredCategories.length === 0 ? <p className="text-gray-400 col-span-4 text-center py-12">No hay categorías que coincidan</p> :
+          filteredCategories.map(c => {
+            const stats = getCategoryStats(c.id, c.subcategoryIds || []);
+            
+            // Progress Bar Math
+            const subTotal = c.subcategoryIds?.length || 0;
+            const subWithStock = categories.filter(sub => sub.parent_id === c.id && (sub.published_products_count || 0) > 0).length;
+            const subEmptyCount = subTotal - subWithStock;
+            const progress = subTotal > 0 ? (subWithStock / subTotal) * 100 : 0;
+
+            // Status Badges
+            let badge = (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                ⚪ Vacía
+              </span>
+            );
+            if (stats.conflictsCount > 0) {
+              badge = (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200 animate-pulse">
+                  🔴 Conflictos ({stats.conflictsCount})
+                </span>
+              );
+            } else if (stats.pendingCount > 0) {
+              badge = (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                  🟡 Pendiente ({stats.pendingCount})
+                </span>
+              );
+            } else if (stats.publishedCount > 0) {
+              badge = (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  🟢 Con productos
+                </span>
+              );
+            }
+
+            return (
+              <div key={c.id} className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-[0_4px_20px_rgba(0,0,0,0.05)] hover:-translate-y-1 transition-all group flex flex-col relative overflow-hidden">
+                <div className="w-full h-32 bg-gray-50 border border-gray-100 rounded-lg mb-3 flex items-center justify-center overflow-hidden relative">
+                   <div className="absolute top-2 right-2 bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded shadow-sm z-10">
+                     {stats.publishedCount} uds.
+                   </div>
+                   {c.image_url ? (
+                      <img src={c.image_url} alt={c.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                   ) : (
+                      <ImageIcon className="w-8 h-8 text-gray-300" />
+                   )}
+                </div>
+                
+                <div className="flex items-center justify-between gap-2 border-b pb-2 mb-2">
+                  <h3 className="font-bold text-gray-900 truncate">{c.name}</h3>
+                  {c.level > 0 && <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-bold border">Subcat</span>}
+                </div>
+                <div className="flex-1 space-y-2 mb-4">
+                   <div className="flex justify-between items-center text-xs">
+                     <span className="font-semibold text-gray-400">Estado:</span>
+                     {badge}
+                   </div>
+                   <p className="text-xs text-gray-500 flex justify-between"><span className="font-semibold text-gray-400">Visibilidad:</span> {c.is_active !== false ? <span className="text-[10px] bg-green-100 text-green-800 px-1.5 rounded font-bold border border-green-200">Visible</span> : <span className="text-[10px] bg-red-150 text-red-800 px-1.5 rounded font-bold border border-red-200">Oculta</span>}</p>
+                   <p className="text-xs text-gray-500 flex justify-between"><span className="font-semibold text-gray-400">URL / Slug:</span> <span className="font-mono text-[10px] bg-gray-100 px-1 rounded truncate ml-2">/{c.slug}</span></p>
+                   <p className="text-xs text-gray-500 flex justify-between items-center">
+                      <span className="font-semibold text-gray-400">ML ID:</span> 
+                      {c.metadata?.ml_category_id ? (
+                        <span className="font-mono text-[10px] bg-purple-50 text-purple-800 px-1.5 py-0.5 rounded border border-purple-100 truncate ml-2">{c.metadata.ml_category_id}</span>
+                      ) : (
+                        <span className="text-[10px] text-gray-450 font-medium font-semibold">Sin mapear</span>
+                      )}
+                   </p>
+                   <p className="text-xs text-gray-500 flex justify-between"><span className="font-semibold text-gray-400">Orden:</span> <span>{c.sort_order}</span></p>
+                   
+                   {c.level === 0 && subTotal > 0 && (
+                     <div className="mt-2 pt-2 border-t text-xs text-gray-500 space-y-1">
+                       <div className="flex justify-between items-center text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                         <span>Subcats: {subTotal} ({subWithStock} activas)</span>
+                         <span className="text-primary-600 font-bold">{Math.round(progress)}%</span>
+                       </div>
+                       <div className="w-full bg-gray-205 rounded-full h-1 overflow-hidden">
+                         <div 
+                           className="bg-primary-500 h-full rounded-full transition-all duration-300" 
+                           style={{ width: `${progress}%` }} 
+                         />
+                       </div>
+                     </div>
+                   )}
+                </div>
+                
+                <div className="flex gap-2 pt-2 border-t">
+                  <button onClick={() => openEdit(c)} className="btn-secondary flex-1 py-1.5 px-3 text-xs gap-1 border-gray-200 text-gray-700 hover:bg-gray-100 shadow-none"><Pencil className="w-3 h-3" /> Editar</button>
+                  <button onClick={() => handleDelete(c.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg border border-transparent hover:border-red-100 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                </div>
               </div>
-              
-              <h3 className="font-bold text-gray-900 border-b pb-2 mb-2">{c.name}</h3>
-              <div className="flex-1 space-y-1 mb-4">
-                 <p className="text-xs text-gray-500 flex justify-between items-center"><span className="font-medium text-gray-400">Estado:</span> {c.is_active !== false ? <span className="text-[10px] bg-green-100 text-green-800 px-1 rounded">Visible</span> : <span className="text-[10px] bg-red-100 text-red-800 px-1 rounded">Oculta</span>}</p>
-                 <p className="text-xs text-gray-500 flex justify-between"><span className="font-medium text-gray-400">URL / Slug:</span> <span className="font-mono text-[10px] bg-gray-100 px-1 rounded truncate ml-2">/{c.slug}</span></p>
-                 <p className="text-xs text-gray-500 flex justify-between items-center">
-                    <span className="font-medium text-gray-400">ML ID:</span> 
-                    {c.metadata?.ml_category_id ? (
-                      <span className="font-mono text-[10px] bg-yellow-100 text-yellow-800 px-1 rounded truncate ml-2">{c.metadata.ml_category_id}</span>
-                    ) : (
-                      <span className="text-[10px] text-gray-400">N/A</span>
-                    )}
-                 </p>
-                 <p className="text-xs text-gray-500 flex justify-between"><span className="font-medium text-gray-400">Orden:</span> <span>{c.sort_order}</span></p>
-              </div>
-              
-              <div className="flex gap-2">
-                <button onClick={() => openEdit(c)} className="btn-secondary flex-1 py-1.5 px-3 text-xs gap-1 border-gray-200 text-gray-700 hover:bg-gray-100 shadow-none"><Pencil className="w-3 h-3" /> Editar</button>
-                <button onClick={() => handleDelete(c.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg border border-transparent hover:border-red-100 transition-colors"><Trash2 className="w-4 h-4" /></button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

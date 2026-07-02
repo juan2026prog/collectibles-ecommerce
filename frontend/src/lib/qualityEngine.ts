@@ -1,4 +1,5 @@
 export const MANUFACTURERS_DICT = [
+  { id: 'takaratomy', name: 'Takara Tomy', synonyms: ['takara tomy', 'takaratomy', 'takara-tomy', 'takara', 'tomy'] },
   { id: 'banpresto', name: 'Banpresto', synonyms: ['banpresto', 'bp', 'bandai banpresto'] },
   { id: 'funko', name: 'Funko', synonyms: ['funko', 'pop', 'funko pop', 'funko llc'] },
   { id: 'good smile', name: 'Good Smile', synonyms: ['good smile', 'gsc', 'goodsmile', 'good smile company'] },
@@ -15,6 +16,122 @@ export const MANUFACTURERS_DICT = [
   { id: 'loungefly', name: 'Loungefly', synonyms: ['loungefly'] },
   { id: 'funrise', name: 'Funrise', synonyms: ['funrise'] }
 ];
+
+export const BRAND_ALIASES: Record<string, string[]> = {
+  'takaratomy': ['takara tomy', 'takaratomy', 'takara-tomy', 'takara', 'tomy'],
+  'takara tomy': ['takara tomy', 'takaratomy', 'takara-tomy', 'takara', 'tomy'],
+  'bandai': ['bandai', 'bandai spirits', 'tamashii nations', 'tamashii', 'banpresto'],
+  'bandai spirits': ['bandai', 'bandai spirits', 'tamashii nations', 'tamashii', 'banpresto'],
+  'banpresto': ['banpresto', 'bandai', 'bandai spirits', 'tamashii nations', 'tamashii'],
+  'hasbro': ['hasbro', 'kenner', 'marvel legends', 'star wars black series'],
+  'funko': ['funko', 'funko pop', 'pop!', 'pop']
+};
+
+export function matchesSynonym(text: string, synonym: string): boolean {
+  const textLower = text.toLowerCase();
+  const synLower = synonym.toLowerCase();
+  const index = textLower.indexOf(synLower);
+  if (index === -1) return false;
+  
+  // Check start boundary
+  if (index > 0) {
+    const charBefore = textLower.charAt(index - 1);
+    if (/[a-z0-9]/i.test(charBefore)) return false;
+  }
+  
+  // Check end boundary
+  const indexAfter = index + synLower.length;
+  if (indexAfter < textLower.length) {
+    const charAfter = textLower.charAt(indexAfter);
+    if (/[a-z0-9]/i.test(charAfter)) return false;
+  }
+  
+  return true;
+}
+
+export function checkBrandConsistency(
+  assignedBrandName: string,
+  detectedBrand: string,
+  title: string,
+  mlBrand: string,
+  manufacturer: string
+): { isConsistent: boolean; detectedBrandName: string } {
+  const assLower = assignedBrandName.toLowerCase().trim();
+  const titleLower = title.toLowerCase();
+
+  // Strip spaces, hyphens, and other punctuation for loose comparison
+  const cleanStr = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const assClean = cleanStr(assignedBrandName);
+
+  // If a brand is explicitly detected from the title, it takes precedence.
+  let detectedFromTitle = '';
+  for (const mfr of MANUFACTURERS_DICT) {
+    const matchedSynonym = mfr.synonyms.find(syn => matchesSynonym(title, syn));
+    if (matchedSynonym) {
+      detectedFromTitle = mfr.name;
+      break;
+    }
+  }
+
+  if (detectedFromTitle) {
+    const detClean = cleanStr(detectedFromTitle);
+    if (assClean !== detClean) {
+      // Check if they are aliases
+      let assAliases = BRAND_ALIASES[assLower] || BRAND_ALIASES[assClean] || [assLower];
+      const isAliasMatch = assAliases.some(alias => cleanStr(alias) === detClean);
+      if (!isAliasMatch) {
+        return { isConsistent: false, detectedBrandName: detectedFromTitle };
+      }
+    }
+  }
+
+  // 1. Direct loose comparison
+  if (
+    (detectedBrand && assClean === cleanStr(detectedBrand)) ||
+    (mlBrand && assClean === cleanStr(mlBrand)) ||
+    (manufacturer && assClean === cleanStr(manufacturer))
+  ) {
+    return { isConsistent: true, detectedBrandName: detectedBrand || mlBrand || manufacturer };
+  }
+
+  // 2. Resolve aliases
+  let aliases = BRAND_ALIASES[assLower] || BRAND_ALIASES[assClean];
+  if (!aliases) {
+    for (const [key, val] of Object.entries(BRAND_ALIASES)) {
+      if (assLower.includes(key) || key.includes(assLower)) {
+        aliases = val;
+        break;
+      }
+    }
+  }
+
+  if (!aliases) {
+    aliases = [assLower];
+  }
+
+  for (const alias of aliases) {
+    // Special condition for Star Wars Black Series
+    if (alias === 'star wars black series') {
+      if (titleLower.includes('star wars black series') && titleLower.includes('hasbro')) {
+        return { isConsistent: true, detectedBrandName: 'Hasbro' };
+      }
+      continue;
+    }
+
+    if (matchesSynonym(title, alias)) {
+      return { isConsistent: true, detectedBrandName: assignedBrandName };
+    }
+    if (mlBrand && matchesSynonym(mlBrand, alias)) {
+      return { isConsistent: true, detectedBrandName: assignedBrandName };
+    }
+    if (manufacturer && matchesSynonym(manufacturer, alias)) {
+      return { isConsistent: true, detectedBrandName: assignedBrandName };
+    }
+  }
+
+  return { isConsistent: false, detectedBrandName: detectedBrand || 'desconocida' };
+}
+
 
 export const LICENSES_LIST = [
   'saint seiya', 'batman', 'dc comics', 'marvel', 'iron fist', 'star wars', 'dragon ball', 'naruto', 'one piece', 'pokemon', 'lego', 'stranger things', 'zombies', 'zelda', 'ghostbusters', 'sonic', 'bob esponja'
@@ -36,9 +153,9 @@ export function detectBrandLicenceCollection(title: string = '', mlBrand: string
   // 1. Detect Brand/Manufacturer
   for (const mfr of MANUFACTURERS_DICT) {
     const matchedSynonym = mfr.synonyms.find(syn => 
-      titleLower.includes(syn) || 
-      mlBrandLower.includes(syn) || 
-      mfrLower.includes(syn)
+      matchesSynonym(title, syn) || 
+      matchesSynonym(mlBrand || '', syn) || 
+      matchesSynonym(manufacturer || '', syn)
     );
     if (matchedSynonym) {
       detectedBrand = mfr.name;
@@ -90,6 +207,7 @@ export interface QualityEngineReport {
   executionTimeMs: number;
   engineVersion: string;
   motives?: string[];
+  capApplied?: '49%' | '69%' | '40%' | null;
   validators: {
     brand: ValidatorResult;
     category: ValidatorResult;
@@ -138,22 +256,28 @@ export function runQualityEngineCheck(
     brandScore = 0;
   } else {
     let brandInconsistent = false;
-    if (detectedBrand) {
-      const devLower = detectedBrand.toLowerCase();
-      const assLower = assignedBrandName.toLowerCase();
-      if (assLower !== devLower && !assLower.includes(devLower) && !devLower.includes(assLower)) {
-        brandInconsistent = true;
-      }
+    const consistencyCheck = checkBrandConsistency(
+      assignedBrandName,
+      detectedBrand,
+      p.title || '',
+      p.ml_brand || '',
+      p.manufacturer || ''
+    );
+    if (!consistencyCheck.isConsistent) {
+      brandInconsistent = true;
     }
     if (LICENSES_LIST.includes(assignedBrandName.toLowerCase())) {
       brandInconsistent = true;
       brandError = `${assignedBrandName} es una Licencia, no un Fabricante`;
     }
 
+    const assLower = assignedBrandName.toLowerCase().trim();
     if (brandInconsistent) {
       brandResult = 'Conflicto';
       brandScore = 0;
-      if (!brandError) {
+      if (assLower === 'hasbro' && (titleLower.includes('bandai') || titleLower.includes('banpresto'))) {
+        brandError = 'El título contiene Bandai/Banpresto, pero la marca asignada es Hasbro.';
+      } else if (!brandError) {
         brandError = `Conflicto: Marca asignada "${assignedBrandName}" difiere de marca detectada "${detectedBrand || 'desconocida'}"`;
       }
     } else {
@@ -172,15 +296,8 @@ export function runQualityEngineCheck(
     categoryError = 'Falta categoría en Collectibles (No existen datos oficiales asignados)';
     categoryScore = 0;
   } else {
-    const mlMap = mlMappings.find(m => m.ml_category_id === p.ml_category);
-    if (mlMap && mlMap.internal_category_id !== assignedCategoryId) {
-      categoryResult = 'Conflicto';
-      categoryError = `Mapeo ML (${mlMap.ml_category_id}) no coincide con Categoría asignada`;
-      categoryScore = 5;
-    } else {
-      categoryResult = 'Consistente';
-      categoryScore = 20;
-    }
+    categoryResult = 'Consistente';
+    categoryScore = 20;
   }
 
   // 3. Rules Validator (15 pts)
@@ -269,11 +386,20 @@ export function runQualityEngineCheck(
   let duplicateResult = 'Sin duplicados';
   let duplicateError = '';
 
-  const isDuplicate = localDuplicates.some(d => d.id === p.id || d.duplicate_product_id === p.id);
-  if (isDuplicate) {
+  const activeDup = localDuplicates.find(d => 
+    (d.product_id === p.id || d.related_product_id === p.id) && 
+    d.status === 'confirmado'
+  );
+
+  if (activeDup) {
     duplicateResult = 'Duplicado';
     duplicateScore = 0;
-    duplicateError = 'Detectado como posible producto duplicado';
+    const relatedId = activeDup.product_id === p.id ? activeDup.related_product_id : activeDup.product_id;
+    duplicateError = `Duplicado confirmado con producto relacionado: ${relatedId}`;
+  } else {
+    duplicateResult = 'Sin duplicados';
+    duplicateScore = 10;
+    duplicateError = '';
   }
 
   // A. Calculate Catalog Quality Score (0-100)
@@ -281,12 +407,16 @@ export function runQualityEngineCheck(
 
   // Apply Caps to catalog score:
   let finalCatalogScore = catalogQualityScore;
+  let capApplied: '49%' | '69%' | '40%' | null = null;
   if (!assignedBrandId && !assignedCategoryId) {
     finalCatalogScore = Math.min(finalCatalogScore, 40);
+    capApplied = '40%';
   } else if (!assignedBrandId || !assignedCategoryId) {
     finalCatalogScore = Math.min(finalCatalogScore, 69);
+    capApplied = '69%';
   } else if (brandResult === 'Conflicto' || rulesResult === 'Conflicto' || duplicateResult === 'Duplicado') {
     finalCatalogScore = Math.min(finalCatalogScore, 49);
+    capApplied = '49%';
   }
 
   // Determine state based on catalog score
@@ -308,8 +438,17 @@ export function runQualityEngineCheck(
 
   // B. Calculate Import Quality Score (0-100)
   const hasMlCategory = !!p.ml_category;
-  const mlCategoryScore = hasMlCategory ? 20 : 0;
-  
+  const mlMap = mlMappings.find(m => m.ml_category_id === p.ml_category);
+  let mlCategoryScore = hasMlCategory ? 20 : 0;
+  let mlCategoryResult = hasMlCategory ? 'Detectada' : 'No detectada';
+  let mlCategoryError = hasMlCategory ? '' : 'Falta categoría original de Mercado Libre';
+
+  if (hasMlCategory && mlMap && mlMap.internal_category_id !== assignedCategoryId) {
+    mlCategoryScore = 5;
+    mlCategoryResult = 'Conflicto Mapeo';
+    mlCategoryError = `Mapeo ML (${mlMap.ml_category_id}) no coincide con Categoría asignada`;
+  }
+
   const hasMlBrand = !!(p.ml_brand && p.ml_brand !== '—');
   const mlBrandScore = hasMlBrand ? 20 : 0;
   
@@ -358,8 +497,9 @@ export function runQualityEngineCheck(
     isBlocked,
     isPublicable: !!assignedBrandId && !!assignedCategoryId && finalCatalogScore >= 85 && !isBlocked,
     executionTimeMs,
-    engineVersion: '1.1.0',
+    engineVersion: '2.0.0',
     motives,
+    capApplied,
     validators: {
       brand: { name: 'Validador de Marca', score: brandScore, max: 20, result: brandResult, error: brandError },
       category: { name: 'Validador de Categoría', score: categoryScore, max: 20, result: categoryResult, error: categoryError },
@@ -369,7 +509,7 @@ export function runQualityEngineCheck(
       similar: { name: 'Validador de Productos Similares', score: similarScore, max: 10, result: similarResult, error: similarError },
       duplicate: { name: 'Validador de Duplicados', score: duplicateScore, max: 10, result: duplicateResult, error: duplicateError },
       // Import validators
-      mlCategory: { name: 'Categoría ML', score: mlCategoryScore, max: 20, result: hasMlCategory ? 'Detectada' : 'No detectada', error: hasMlCategory ? '' : 'Falta categoría original de Mercado Libre' },
+      mlCategory: { name: 'Categoría ML', score: mlCategoryScore, max: 20, result: mlCategoryResult, error: mlCategoryError },
       mlBrand: { name: 'Marca ML', score: mlBrandScore, max: 20, result: hasMlBrand ? 'Detectada' : 'No detectada', error: hasMlBrand ? '' : 'Falta marca original de Mercado Libre' },
       iaConfidence: { name: 'Confianza IA', score: iaConfidenceScore, max: 25, result: `${confidenceVal}%`, error: confidenceVal < 70 ? 'Confianza menor al 70%' : '' },
       metadata: { name: 'Metadatos importados', score: metadataScore, max: 20, result: hasImportedMetadata ? 'Con atributos' : 'Sin atributos', error: hasImportedMetadata ? '' : 'No se importaron atributos técnicos' },

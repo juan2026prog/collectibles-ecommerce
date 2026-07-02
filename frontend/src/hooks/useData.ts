@@ -64,6 +64,7 @@ export function useProducts(filters: ProductFilters = {}) {
       }
     }
 
+    let categoryIds: string[] | null = null;
     if (filters.category) {
       const { data } = await supabase
         .from('categories')
@@ -72,8 +73,20 @@ export function useProducts(filters: ProductFilters = {}) {
         .eq('is_active', true)
         .single();
       categoryId = data?.id ?? null;
-      // If slug not found → no results
       if (!categoryId) { setProducts([]); setCount(0); setLoading(false); return; }
+      
+      // Fetch subcategories
+      const { data: subcats } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('parent_id', categoryId)
+        .eq('is_active', true);
+      
+      if (subcats && subcats.length > 0) {
+        categoryIds = [categoryId, ...subcats.map(x => x.id)];
+      } else {
+        categoryIds = [categoryId];
+      }
     }
 
     if (filters.brand) {
@@ -176,7 +189,7 @@ export function useProducts(filters: ProductFilters = {}) {
         variants:product_variants(id, sku, name, price_adjustment, inventory_count),
         product_tags:product_tags(tag_id),
         vendor:vendors(id, store_name, slug, logo_url, promotions_opt_in),
-        vendor_store:vendor_stores(id, store_name, slug, logo_url, vendor_store_badge_assignments(status, approved_by, approved_at, vendor_store_badges(*)))
+        vendor_store:vendor_stores(id, store_name, slug, logo_url, status, is_official, approved_by, approved_at, vendor_store_badge_assignments(status, approved_by, approved_at, vendor_store_badges(*)))
         ${categoryId ? ', product_categories!inner(category_id)' : ''}
     `;
 
@@ -186,7 +199,7 @@ export function useProducts(filters: ProductFilters = {}) {
       .eq('status', 'published')
       .eq('is_active', true);
 
-    if (categoryId) query = query.eq('product_categories.category_id', categoryId);
+    if (categoryIds && categoryIds.length > 0) query = query.in('product_categories.category_id', categoryIds);
     if (brandId) query = query.eq('brand_id', brandId);
     if (productIds) query = query.in('id', productIds);
     if (filters.vendor_store_id) query = query.eq('vendor_store_id', filters.vendor_store_id);
@@ -247,7 +260,7 @@ export function useProduct(slug: string | undefined) {
           variants:product_variants(id, sku, name, price_adjustment, inventory_count),
           product_tags:product_tags(tag_id),
           vendor:vendors(id, store_name, slug, logo_url, promotions_opt_in, company_name),
-          vendor_store:vendor_stores(id, store_name, slug, logo_url, status, is_official, vendor_store_badge_assignments(status, approved_by, approved_at, vendor_store_badges(*))),
+          vendor_store:vendor_stores(id, store_name, slug, logo_url, status, is_official, approved_by, approved_at, vendor_store_badge_assignments(status, approved_by, approved_at, vendor_store_badges(*))),
           reviews:reviews(id, rating, title, body, created_at, user:profiles(first_name, last_name))
         `)
         .eq('slug', slug)
@@ -341,9 +354,11 @@ export function useCategories() {
   useEffect(() => {
     async function fetch() {
       const { data } = await supabase
-        .from('categories')
+        .from('categories_with_published_counts')
         .select('*')
         .eq('is_active', true)
+        .eq('status', 'approved')
+        .gt('published_products_count', 0)
         .order('sort_order')
         .order('name');
       setCategories(data || []);
@@ -452,8 +467,9 @@ export function useCart() {
 
   const addItem = (item: CartItem) => {
     const numericPrice = Number(item.price);
-    if (isNaN(numericPrice) || item.price === null || item.price === undefined) {
+    if (isNaN(numericPrice) || item.price === null || item.price === undefined || numericPrice <= 0) {
       console.warn('[Cart] Rejected item with invalid price:', item);
+      alert("Este producto no tiene precio configurado.");
       return; // Do not add broken items
     }
     

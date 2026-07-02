@@ -24,7 +24,10 @@ export function calculateHomologationStatus(p: any, mlMappings: any[] = [], loca
   const hasBrand = !!p.brand_id;
   const isMlCategoryMapped = Array.isArray(mlMappings) && mlMappings.some(m => m.ml_category_id === p.ml_category);
   const noConflicts = !p.is_exception && !p.has_conflict;
-  const noDuplicates = !Array.isArray(localDuplicates) || !localDuplicates.some(d => d.id === p.id || d.duplicate_product_id === p.id);
+  const noDuplicates = !Array.isArray(localDuplicates) || !localDuplicates.some(d => 
+    (d.product_id === p.id || d.related_product_id === p.id) && 
+    d.status === 'confirmado'
+  );
   
   // Brand inconsistencies check (Fase 3)
   const detection = detectBrandLicenceCollection(p.title, p.ml_brand || '', p.manufacturer || '');
@@ -181,6 +184,23 @@ export default function AdminCatalogCenter() {
   const [sortField, setSortField] = useState<'title' | 'brand' | 'category' | 'confidence' | 'vendor' | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
+  // Duplicate Engine V2 state hooks
+  const [dupHistory, setDupHistory] = useState<any[]>([]);
+  const [mergeModal, setMergeModal] = useState<{
+    isOpen: boolean;
+    dup: any;
+    keepProductId: string;
+  } | null>(null);
+  const [deleteWarningModal, setDeleteWarningModal] = useState<{
+    isOpen: boolean;
+    product: any;
+    associatedOrders: number;
+    stock: number;
+    variants: number;
+    historyEvents: number;
+    loading: boolean;
+  } | null>(null);
+
   // Selected Products for Bulk Actions
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   
@@ -316,47 +336,8 @@ export default function AdminCatalogCenter() {
     fetchInitialData();
   }, []);
 
-  // Recalculate duplicates client-side for all products (Problem 15)
-  const localDuplicates = (() => {
-    const dupMap = new Map<string, any[]>();
-    allProducts.forEach(p => {
-      if (p.sku && p.sku !== '—' && p.sku.trim() !== '') {
-        const key = `sku:${p.sku.trim().toLowerCase()}`;
-        if (!dupMap.has(key)) dupMap.set(key, []);
-        dupMap.get(key)!.push(p);
-      }
-      const cleanTitle = (p.title || '').trim().toLowerCase();
-      if (cleanTitle.length > 5) {
-        const titleKey = `title:${cleanTitle}`;
-        if (!dupMap.has(titleKey)) dupMap.set(titleKey, []);
-        dupMap.get(titleKey)!.push(p);
-      }
-    });
-
-    const dupList: any[] = [];
-    dupMap.forEach((items, key) => {
-      if (items.length > 1) {
-        const base = items[0];
-        for (let i = 1; i < items.length; i++) {
-          if (items[i].id !== base.id) {
-            dupList.push({
-              id: items[i].id,
-              title: items[i].title,
-              sku: items[i].sku,
-              match_reason: key.startsWith('sku:') ? 'Mismo SKU' : 'Título idéntico',
-              duplicate_title: base.title,
-              duplicate_sku: base.sku,
-              duplicate_product_id: base.id,
-              vendor_name: items[i].vendor_name,
-              status: items[i].status,
-              thumbnail: items[i].thumbnail
-            });
-          }
-        }
-      }
-    });
-    return dupList;
-  })();
+  // Duplicate Engine V2 backed duplicates state
+  const [localDuplicates, setLocalDuplicates] = useState<any[]>([]);
 
   async function fetchInitialData() {
     setLoading(true);
@@ -381,6 +362,14 @@ export default function AdminCatalogCenter() {
       // 5. Fetch History
       const { data: histData } = await supabase.from('taxonomy_history').select('*').order('applied_at', { ascending: false }).limit(20);
       setHistory(histData || []);
+
+      // Fetch product duplicates (Duplicate Engine V2)
+      const { data: dupData } = await supabase.from('product_duplicates').select('*');
+      setLocalDuplicates(dupData || []);
+
+      // Fetch product duplicate history (Duplicate Engine V2)
+      const { data: dupHistData } = await supabase.from('product_duplicate_history').select('*').order('created_at', { ascending: false });
+      setDupHistory(dupHistData || []);
 
       // 6. Fetch Vendors, Categories, Brands
       const [vList, cList, bList] = await Promise.all([
@@ -1175,25 +1164,135 @@ export default function AdminCatalogCenter() {
     return cat.name;
   }
 
-  // Merge/delete duplicates (Problem 15)
-  async function handleMergeDuplicate(dup: any, action: 'merge' | 'delete' | 'ignore') {
+  // Duplicate Engine V2 Helper Functions
+  function getProductDetails(productId: string) {
+    const prod = allProducts.find(p => p.id === productId);
+    if (prod) return prod;
+    return {
+      title: 'Producto no encontrado',
+      sku: '—',
+      vendor_name: 'Desconocido',
+      thumbnail: '',
+      id: productId,
+      status: 'Desconocido'
+    };
+  }
+
+  async function handleUpdateDuplicateStatus(dupId: string, status: string) {
     setActionLoading(true);
     try {
-      if (action === 'delete') {
-        await supabase.from('products').delete().eq('id', dup.id);
-        toast.success('Producto duplicado eliminado');
-      } else if (action === 'merge') {
-        const base = allProducts.find(p => p.id === dup.duplicate_product_id);
-        if (base && base.suggested_category_id) {
-          await supabase.from('products').update({ category_id: base.suggested_category_id }).eq('id', dup.id);
-        }
-        toast.success('Productos fusionados y taxonomía unificada');
-      } else {
-        toast.success('Duplicado ignorado');
-      }
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase.rpc('update_duplicate_status', {
+        p_dup_id: dupId,
+        p_status: status,
+        p_admin_id: user?.id || null,
+        p_action_performed: `Cambio de estado manual a ${status} por administrador`
+      });
+      if (error) throw error;
+      toast.success(`Estado del duplicado actualizado a ${status}`);
       fetchInitialData();
     } catch (err: any) {
-      toast.error('Error al resolver duplicado: ' + err.message);
+      toast.error('Error al actualizar estado: ' + err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  function handleOpenMergeModal(dup: any) {
+    setMergeModal({
+      isOpen: true,
+      dup,
+      keepProductId: dup.product_id
+    });
+  }
+
+  async function handleConfirmMerge() {
+    if (!mergeModal) return;
+    const { dup, keepProductId } = mergeModal;
+    const discardProductId = keepProductId === dup.product_id ? dup.related_product_id : dup.product_id;
+    
+    setActionLoading(true);
+    try {
+      const { error } = await supabase.rpc('merge_products', {
+        p_keep_id: keepProductId,
+        p_discard_id: discardProductId
+      });
+      if (error) throw error;
+      
+      toast.success('Productos fusionados exitosamente');
+      setMergeModal(null);
+      fetchInitialData();
+    } catch (err: any) {
+      toast.error('Error al fusionar productos: ' + err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleOpenDeleteModal(product: any) {
+    setDeleteWarningModal({
+      isOpen: true,
+      product,
+      associatedOrders: 0,
+      stock: 0,
+      variants: 0,
+      historyEvents: 0,
+      loading: true
+    });
+
+    try {
+      const { data: variantsData } = await supabase
+        .from('product_variants')
+        .select('id, inventory_count')
+        .eq('product_id', product.id);
+      
+      const vCount = variantsData?.length || 0;
+      const totalStock = (variantsData || []).reduce((acc, curr) => acc + (curr.inventory_count || 0), 0);
+
+      let ordersCount = 0;
+      if (variantsData && variantsData.length > 0) {
+        const variantIds = variantsData.map(v => v.id);
+        const { count } = await supabase
+          .from('order_items')
+          .select('id', { count: 'exact', head: true })
+          .in('variant_id', variantIds);
+        ordersCount = count || 0;
+      }
+
+      const { count: histCount } = await supabase
+        .from('taxonomy_history')
+        .select('id', { count: 'exact', head: true })
+        .eq('product_id', product.id.toString());
+
+      setDeleteWarningModal(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          variants: vCount,
+          stock: totalStock,
+          associatedOrders: ordersCount,
+          historyEvents: histCount || 0,
+          loading: false
+        };
+      });
+    } catch (err) {
+      console.error('Error fetching deletion warnings:', err);
+      setDeleteWarningModal(prev => prev ? { ...prev, loading: false } : null);
+    }
+  }
+
+  async function handleConfirmDeleteProduct() {
+    if (!deleteWarningModal) return;
+    const { product } = deleteWarningModal;
+    setActionLoading(true);
+    try {
+      const { error } = await supabase.from('products').delete().eq('id', product.id);
+      if (error) throw error;
+      toast.success('Producto eliminado del catálogo');
+      setDeleteWarningModal(null);
+      fetchInitialData();
+    } catch (err: any) {
+      toast.error('Error al eliminar producto: ' + err.message);
     } finally {
       setActionLoading(false);
     }
@@ -1786,7 +1885,8 @@ export default function AdminCatalogCenter() {
               { id: 'ml_categories', label: 'Equivalencias ML' },
               { id: 'conflicts', label: 'Conflictos' },
               { id: 'history', label: 'Auditoría' },
-              { id: 'quality_dashboard', label: 'Quality Dashboard' }
+              { id: 'quality_dashboard', label: 'Quality Dashboard' },
+              { id: 'duplicates', label: 'Duplicate Engine' }
             ].map(tab => (
               <button 
                 key={tab.id}
@@ -2441,6 +2541,11 @@ export default function AdminCatalogCenter() {
                               <span>Total Catálogo</span>
                               <span className="text-indigo-650 font-black">{qCheck.catalogQualityScore} / 100</span>
                             </div>
+                            {qCheck.capApplied && (
+                              <div className="mt-1 bg-red-50 border border-red-200 rounded px-2 py-1 text-[9.5px] font-bold text-red-700 leading-snug">
+                                ⚠️ Puntuación máxima limitada al {qCheck.capApplied} debido a conflictos o campos incompletos.
+                              </div>
+                            )}
                           </div>
 
                           {/* Import Validators Explanations */}
@@ -2469,6 +2574,85 @@ export default function AdminCatalogCenter() {
                           </div>
                         </div>
                       </details>
+
+                      {/* Duplicate Engine Sidebar Card */}
+                      {(() => {
+                        const duplicateRelation = localDuplicates.find(d => 
+                          d.product_id === selectedProduct.id || d.related_product_id === selectedProduct.id
+                        );
+                        if (!duplicateRelation) return null;
+
+                        const relatedId = duplicateRelation.product_id === selectedProduct.id 
+                          ? duplicateRelation.related_product_id 
+                          : duplicateRelation.product_id;
+                        const relatedProd = getProductDetails(relatedId);
+
+                        return (
+                          <div className="bg-rose-50 border border-rose-200 rounded-xl p-3.5 space-y-2.5 shadow-sm mt-3">
+                            <span className="text-[9px] text-rose-800 font-extrabold uppercase tracking-widest block">Duplicate Engine V2</span>
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-slate-500 font-bold">Estado:</span>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
+                                duplicateRelation.status === 'confirmado' ? 'bg-red-500/20 text-red-700' :
+                                duplicateRelation.status === 'probable' ? 'bg-orange-500/20 text-orange-700' :
+                                duplicateRelation.status === 'posible' ? 'bg-yellow-500/20 text-yellow-700' :
+                                'bg-slate-500/20 text-slate-700'
+                              }`}>
+                                {duplicateRelation.status}
+                              </span>
+                            </div>
+                            <div className="text-[11px] leading-snug">
+                              <span className="text-slate-500 font-bold block">Motivo:</span>
+                              <span className="text-slate-900 font-medium block mt-0.5">{duplicateRelation.match_reason} ({duplicateRelation.match_percentage}% coincidencia)</span>
+                            </div>
+                            <div className="text-[11px] leading-snug">
+                              <span className="text-slate-500 font-bold block">Producto Relacionado:</span>
+                              <span className="text-slate-900 font-extrabold block truncate mt-0.5">{relatedProd.title}</span>
+                              <span className="text-[9px] text-slate-400 block mt-0.5">SKU: {relatedProd.sku || '—'}</span>
+                            </div>
+                            
+                            {/* Actions in Sidebar */}
+                            <div className="flex flex-wrap gap-1.5 pt-1.5 border-t border-rose-200">
+                              <button
+                                onClick={() => handleUpdateDuplicateStatus(duplicateRelation.id, 'confirmado')}
+                                disabled={duplicateRelation.status === 'confirmado'}
+                                className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-black disabled:opacity-50 transition-all"
+                              >
+                                Confirmar
+                              </button>
+                              <button
+                                onClick={() => handleUpdateDuplicateStatus(duplicateRelation.id, 'ignorado')}
+                                disabled={duplicateRelation.status === 'ignorado'}
+                                className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-[10px] font-black disabled:opacity-50 transition-all"
+                              >
+                                Ignorar
+                              </button>
+                              <button
+                                onClick={() => handleOpenMergeModal(duplicateRelation)}
+                                className="px-2 py-1 bg-violet-600 hover:bg-violet-750 text-white rounded text-[10px] font-black transition-all"
+                              >
+                                Fusionar
+                              </button>
+                            </div>
+
+                            {/* Duplicate History block in sidebar */}
+                            <div className="pt-2 border-t border-rose-200 text-[10px] text-slate-550 font-semibold space-y-1.5 max-h-24 overflow-y-auto">
+                              <span className="text-[8.5px] text-slate-400 font-black uppercase tracking-wider block font-black">Historial de Decisiones</span>
+                              {dupHistory
+                                .filter(h => 
+                                  (h.product_id === duplicateRelation.product_id && h.related_product_id === duplicateRelation.related_product_id) ||
+                                  (h.product_id === duplicateRelation.related_product_id && h.related_product_id === duplicateRelation.product_id)
+                                )
+                                .map((h, i) => (
+                                  <div key={i} className="flex justify-between items-start border-b border-rose-100 last:border-0 pb-1 last:pb-0 text-[9px] font-medium text-slate-700">
+                                    <span className="capitalize">{h.action_type}: {h.details}</span>
+                                    <span className="text-[8px] text-slate-400 shrink-0 ml-1">{new Date(h.created_at).toLocaleDateString()}</span>
+                                  </div>
+                                ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })()}
@@ -2634,7 +2818,7 @@ export default function AdminCatalogCenter() {
                       Filtrar Similares
                     </button>
                     
-                    {localDuplicates.some(d => d.id === selectedProduct.id || d.duplicate_product_id === selectedProduct.id) && (
+                    {localDuplicates.some(d => d.product_id === selectedProduct.id || d.related_product_id === selectedProduct.id) && (
                       <button 
                         onClick={() => {
                           setHomologationFilter('duplicados');
@@ -3297,7 +3481,148 @@ export default function AdminCatalogCenter() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
 
+      {/* --- TAB 8: DUPLICATE ENGINE --- */}
+      {activeSubTab === 'duplicates' && (
+        <div className="space-y-6">
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                <Layers className="w-5 h-5 text-pink-500" />
+                Duplicate Engine Dashboard
+              </h2>
+              <p className="text-xs text-slate-500 mt-1">Gestión centralizada y auditoría de posibles duplicados en tiempo real.</p>
+            </div>
+          </div>
+
+          {/* Table list of duplicates */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                    <th className="p-4">Producto Origen</th>
+                    <th className="p-4">Producto Relacionado</th>
+                    <th className="p-4">Motivo de Coincidencia</th>
+                    <th className="p-4">Confianza</th>
+                    <th className="p-4">Estado</th>
+                    <th className="p-4">Fecha Detección</th>
+                    <th className="p-4 text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs">
+                  {localDuplicates.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="p-8 text-center text-slate-400 font-bold">
+                        No se detectaron duplicados activos en la base de datos.
+                      </td>
+                    </tr>
+                  ) : (
+                    localDuplicates.map((dup) => {
+                      const p1 = getProductDetails(dup.product_id);
+                      const p2 = getProductDetails(dup.related_product_id);
+                      return (
+                        <tr key={dup.id} className="hover:bg-slate-50/50">
+                          <td className="p-4">
+                            <div className="flex items-center gap-3">
+                              {p1.thumbnail && (
+                                <img src={p1.thumbnail} className="w-10 h-10 object-cover rounded-lg border animate-fade-in" alt="" />
+                              )}
+                              <div>
+                                <span className="font-extrabold text-slate-900 block max-w-[200px] truncate">{p1.title}</span>
+                                <span className="text-[10px] text-slate-400 block mt-0.5">SKU: {p1.sku || '—'} | Vendor: {p1.vendor_name || 'Desconocido'}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-center gap-3">
+                              {p2.thumbnail && (
+                                <img src={p2.thumbnail} className="w-10 h-10 object-cover rounded-lg border animate-fade-in" alt="" />
+                              )}
+                              <div>
+                                <span className="font-extrabold text-slate-900 block max-w-[200px] truncate">{p2.title}</span>
+                                <span className="text-[10px] text-slate-400 block mt-0.5">SKU: {p2.sku || '—'} | Vendor: {p2.vendor_name || 'Desconocido'}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-4 font-bold text-slate-700">{dup.match_reason}</td>
+                          <td className="p-4 font-mono font-black text-slate-900">{dup.match_percentage}%</td>
+                          <td className="p-4">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
+                              dup.status === 'confirmado' ? 'bg-red-500/10 text-red-700' :
+                              dup.status === 'probable' ? 'bg-orange-500/10 text-orange-700' :
+                              dup.status === 'posible' ? 'bg-yellow-500/10 text-yellow-700' :
+                              dup.status === 'ignorado' ? 'bg-slate-500/10 text-slate-700' :
+                              dup.status === 'falso_positivo' ? 'bg-slate-500/10 text-slate-700' :
+                              'bg-green-500/10 text-green-700'
+                            }`}>
+                              {dup.status}
+                            </span>
+                          </td>
+                          <td className="p-4 text-slate-455">{new Date(dup.created_at).toLocaleDateString()}</td>
+                          <td className="p-4 text-right space-x-1.5 whitespace-nowrap">
+                            <button
+                              onClick={() => {
+                                const prod = allProducts.find(p => p.id === dup.product_id);
+                                if (prod) setSelectedProduct(prod);
+                              }}
+                              className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-705 rounded font-black transition-all"
+                            >
+                              Ver Origen
+                            </button>
+                            <button
+                              onClick={() => {
+                                const prod = allProducts.find(p => p.id === dup.related_product_id);
+                                if (prod) setSelectedProduct(prod);
+                              }}
+                              className="px-2 py-1 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded font-black border transition-all"
+                            >
+                              Ver Relacionado
+                            </button>
+                            <button
+                              onClick={() => handleUpdateDuplicateStatus(dup.id, 'confirmado')}
+                              disabled={dup.status === 'confirmado'}
+                              className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded font-black transition-all disabled:opacity-50"
+                            >
+                              Confirmar
+                            </button>
+                            <button
+                              onClick={() => handleUpdateDuplicateStatus(dup.id, 'ignorado')}
+                              disabled={dup.status === 'ignorado'}
+                              className="px-2 py-1 bg-slate-105 hover:bg-slate-200 text-slate-600 rounded font-black transition-all disabled:opacity-50"
+                            >
+                              Ignorar
+                            </button>
+                            <button
+                              onClick={() => handleUpdateDuplicateStatus(dup.id, 'falso_positivo')}
+                              disabled={dup.status === 'falso_positivo'}
+                              className="px-2 py-1 bg-slate-105 hover:bg-slate-200 text-slate-600 rounded font-black transition-all disabled:opacity-50"
+                            >
+                              Falso Positivo
+                            </button>
+                            <button
+                              onClick={() => handleOpenMergeModal(dup)}
+                              className="px-2 py-1 bg-violet-600 hover:bg-violet-700 text-white rounded font-black transition-all"
+                            >
+                              Fusionar
+                            </button>
+                            <button
+                              onClick={() => handleOpenDeleteModal(dup.product_id === p1.id ? p2 : p1)}
+                              className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded font-black transition-all"
+                            >
+                              Eliminar
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -3793,6 +4118,160 @@ export default function AdminCatalogCenter() {
                 <Check className="w-4 h-4" /> Resolver Conflicto
               </button>
             </div>
+          </div>
+        </>
+      )}
+
+      {/* --- DUPLICATE ENGINE: MERGE MODAL --- */}
+      {mergeModal?.isOpen && (
+        <>
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs" onClick={() => setMergeModal(null)} />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white z-50 rounded-2xl shadow-2xl p-6 space-y-6 text-xs text-slate-800">
+            <div>
+              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                <Layers className="w-5 h-5 text-violet-600" />
+                Fusión de Productos Duplicados
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">Selecciona qué producto conservar. El otro será eliminado y todas sus variantes, stock, imágenes e historial serán transferidos.</p>
+            </div>
+
+            {(() => {
+              const p1 = getProductDetails(mergeModal.dup.product_id);
+              const p2 = getProductDetails(mergeModal.dup.related_product_id);
+              return (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Option Product A */}
+                    <div 
+                      onClick={() => setMergeModal(prev => prev ? { ...prev, keepProductId: p1.id } : null)}
+                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                        mergeModal.keepProductId === p1.id 
+                          ? 'border-violet-600 bg-violet-50/20' 
+                          : 'border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <span className="text-[9px] text-violet-850 font-black uppercase tracking-wider block mb-2">CONSERVAR PRODUCTO A</span>
+                      {p1.thumbnail && (
+                        <img src={p1.thumbnail} className="w-16 h-16 object-cover rounded-lg border mb-2 animate-fade-in" alt="" />
+                      )}
+                      <span className="font-extrabold text-slate-900 block truncate">{p1.title}</span>
+                      <span className="text-[10px] text-slate-400 block mt-1">SKU: {p1.sku || '—'} | Vendor: {p1.vendor_name}</span>
+                    </div>
+
+                    {/* Option Product B */}
+                    <div 
+                      onClick={() => setMergeModal(prev => prev ? { ...prev, keepProductId: p2.id } : null)}
+                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                        mergeModal.keepProductId === p2.id 
+                          ? 'border-violet-600 bg-violet-50/20' 
+                          : 'border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <span className="text-[9px] text-violet-850 font-black uppercase tracking-wider block mb-2">CONSERVAR PRODUCTO B</span>
+                      {p2.thumbnail && (
+                        <img src={p2.thumbnail} className="w-16 h-16 object-cover rounded-lg border mb-2 animate-fade-in" alt="" />
+                      )}
+                      <span className="font-extrabold text-slate-900 block truncate">{p2.title}</span>
+                      <span className="text-[10px] text-slate-400 block mt-1">SKU: {p2.sku || '—'} | Vendor: {p2.vendor_name}</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-amber-850 text-[11px] leading-relaxed font-semibold">
+                    <strong>⚠️ ATENCIÓN:</strong> La fusión es irreversible. El producto descartado se eliminará de forma permanente, y todas sus relaciones (como órdenes de venta, variantes de stock, imágenes e historial) se reasignarán al producto conservado.
+                  </div>
+
+                  <div className="flex gap-3 pt-3 border-t">
+                    <button
+                      onClick={() => setMergeModal(null)}
+                      className="flex-1 py-2 font-bold border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-650"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleConfirmMerge}
+                      disabled={actionLoading}
+                      className="flex-1 py-2 font-bold bg-violet-600 hover:bg-violet-750 text-white rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-violet-500/10 disabled:opacity-50"
+                    >
+                      Confirmar Fusión
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </>
+      )}
+
+      {/* --- DUPLICATE ENGINE: DELETE WARNING MODAL --- */}
+      {deleteWarningModal?.isOpen && (
+        <>
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs" onClick={() => setDeleteWarningModal(null)} />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white z-50 rounded-2xl shadow-2xl p-6 space-y-6 text-xs text-slate-800">
+            <div>
+              <h3 className="text-base font-black text-red-650 flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-red-500" />
+                Advertencia de Eliminación de Producto
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">Estás a punto de eliminar un producto de forma permanente. Audita sus dependencias activas a continuación.</p>
+            </div>
+
+            {deleteWarningModal.loading ? (
+              <div className="py-8 text-center text-slate-400 font-bold">
+                Cargando dependencias del producto...
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="bg-slate-50 border rounded-xl p-4 space-y-2">
+                  <span className="font-extrabold text-slate-900 block truncate">{deleteWarningModal.product.title}</span>
+                  <span className="text-[10px] text-slate-400 block">ID: {deleteWarningModal.product.id}</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                    <span className="text-slate-400 text-[10px] uppercase font-bold block">Publicado</span>
+                    <span className={`text-xs font-black block mt-1 ${deleteWarningModal.product.status === 'published' ? 'text-green-600' : 'text-slate-500'}`}>
+                      {deleteWarningModal.product.status === 'published' ? 'SÍ (Activo)' : 'NO (Queue)'}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                    <span className="text-slate-400 text-[10px] uppercase font-bold block">Proveedor</span>
+                    <span className="text-xs font-black text-slate-900 block mt-1 truncate">{deleteWarningModal.product.vendor_name || 'Desconocido'}</span>
+                  </div>
+                  <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                    <span className="text-slate-400 text-[10px] uppercase font-bold block">Variantes / Stock</span>
+                    <span className="text-xs font-black text-slate-900 block mt-1">{deleteWarningModal.variants} var / {deleteWarningModal.stock} unidades</span>
+                  </div>
+                  <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                    <span className="text-slate-400 text-[10px] uppercase font-bold block">Pedidos Históricos</span>
+                    <span className={`text-xs font-black block mt-1 ${deleteWarningModal.associatedOrders > 0 ? 'text-red-500 font-black' : 'text-slate-900'}`}>
+                      {deleteWarningModal.associatedOrders} órdenes
+                    </span>
+                  </div>
+                </div>
+
+                {deleteWarningModal.associatedOrders > 0 && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-red-800 text-[11px] leading-relaxed font-semibold">
+                    <strong>⚠️ CRÍTICO:</strong> Este producto tiene {deleteWarningModal.associatedOrders} pedidos asociados. Si lo eliminas, los pedidos podrían quedar inconsistentes. Se recomienda utilizar la opción de **Fusión** en su lugar.
+                  </div>
+                )}
+
+                <div className="flex gap-3 pt-3 border-t">
+                  <button
+                    onClick={() => setDeleteWarningModal(null)}
+                    className="flex-1 py-2 font-bold border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-650"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleConfirmDeleteProduct}
+                    disabled={actionLoading}
+                    className="flex-1 py-2 font-bold bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-red-500/10 disabled:opacity-50"
+                  >
+                    Confirmar Eliminación
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}

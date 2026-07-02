@@ -181,7 +181,7 @@ export default function StorefrontLayout() {
 
 
 
-  const topLevel = useMemo(() => allCategories.filter(c => !c.parent_id), [allCategories]);
+  const topLevel = useMemo(() => allCategories.filter(c => !c.parent_id && c.published_products_count > 0 && c.status === 'approved'), [allCategories]);
 
   // Inyector de Pixels/Head Code respetando privacidad
   useEffect(() => {
