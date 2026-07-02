@@ -45,6 +45,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   const [priceMin, setPriceMin] = useState('');
   const [priceMax, setPriceMax] = useState('');
   const [searchInput, setSearchInput] = useState(searchQ);
+  const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null);
   const limit = gridCols === 5 ? 15 : 12;
 
   const [matchedStore, setMatchedStore] = useState<any>(null);
@@ -97,6 +98,17 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
 
   const currentCategory = categories.find(c => c.slug === categorySlug);
   const currentBrand = brands.find(b => b.slug === brandSlug);
+
+  // Auto-expand active parent category on mount or when category is selected via URL
+  useEffect(() => {
+    if (currentCategory) {
+      if (currentCategory.parent_id) {
+        setExpandedCategoryId(currentCategory.parent_id);
+      } else {
+        setExpandedCategoryId(currentCategory.id);
+      }
+    }
+  }, [currentCategory]);
 
   const visibleCategories = currentBrand && mappings.length > 0
     ? categories.filter(c => mappings.some(m => m.category_id === c.id && m.brand_id === currentBrand.id) || c.id === currentCategory?.id)
@@ -249,22 +261,22 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
         <h3 className="font-bold text-white uppercase text-xs tracking-widest mb-4">Categoría</h3>
         <div className="flex flex-col gap-4">
           {/* Todos los productos Card */}
-          <div className={`group/card flex flex-col rounded-2xl border transition-all duration-300 p-4 ${
+          <div className={`group/card flex flex-col rounded-2xl border transition-all duration-300 p-3.5 ${
             !categorySlug
-              ? 'border-[#f00856]/30 bg-[#f00856]/5 shadow-[inset_0_0_12px_rgba(255,255,255,0.02)] border-l-2 border-l-[#f00856]'
-              : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/10 hover:shadow-lg'
+              ? 'border-[#f00856]/20 bg-[#f00856]/5 shadow-[inset_0_0_12px_rgba(255,255,255,0.01)] border-l-2 border-l-[#f00856]'
+              : 'border-white/5 bg-white/[0.01] hover:bg-white/[0.03] hover:border-white/10'
           }`}>
             <button
               onClick={() => handleCategorySelect('')}
-              className="w-full flex items-center justify-between text-left transition-all duration-150 group-hover/card:translate-x-1"
+              className="w-full flex items-center justify-between text-left transition-all duration-150 group-hover/card:translate-x-0.5"
             >
               <div className="flex flex-col min-w-0 pr-2">
-                <span className={`font-black tracking-tight text-sm uppercase ${
+                <span className={`font-black tracking-tight text-xs uppercase ${
                   !categorySlug ? 'text-white' : 'text-slate-300 group-hover/card:text-white'
                 }`}>
                   Todos los productos
                 </span>
-                <span className="text-[10px] text-slate-500 font-bold mt-0.5">
+                <span className="text-[9px] text-slate-500 font-bold mt-0.5">
                   {totalCatalogProducts} productos
                 </span>
               </div>
@@ -281,7 +293,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                   );
                   const isParentActive = categorySlug === parent.slug;
                   const isAnySubActive = subcategories.some(sub => categorySlug === sub.slug);
-                  const showSubtree = isParentActive || isAnySubActive;
+                  const isExpanded = expandedCategoryId === parent.id;
                   
                   const percentage = totalCatalogProducts > 0 
                     ? Math.round(((parent.published_products_count || 0) / totalCatalogProducts) * 100) 
@@ -290,32 +302,35 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                   return (
                     <div 
                       key={parent.id} 
-                      className={`group/card flex flex-col rounded-2xl border transition-all duration-300 p-4 ${
+                      className={`group/card flex flex-col rounded-2xl border transition-all duration-300 p-3.5 ${
                         isParentActive || isAnySubActive
-                          ? 'border-[#f00856]/30 bg-[#f00856]/5 shadow-[inset_0_0_12px_rgba(255,255,255,0.02)] border-l-2 border-l-[#f00856]'
-                          : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/10 hover:shadow-lg'
+                          ? 'border-[#f00856]/20 bg-[#f00856]/5 shadow-[inset_0_0_12px_rgba(255,255,255,0.01)] border-l-2 border-l-[#f00856]'
+                          : 'border-white/5 bg-white/[0.01] hover:bg-white/[0.03] hover:border-white/10'
                       }`}
                     >
                       {/* Parent Row Button */}
                       <button
-                        onClick={() => handleCategorySelect(parent.slug)}
-                        className="w-full flex items-center justify-between text-left transition-all duration-150 group-hover/card:translate-x-1"
+                        onClick={() => {
+                          setExpandedCategoryId(prev => prev === parent.id ? null : parent.id);
+                          handleCategorySelect(parent.slug);
+                        }}
+                        className="w-full flex items-center justify-between text-left transition-all duration-150 group-hover/card:translate-x-0.5"
                       >
                         <div className="flex flex-col min-w-0 pr-2">
-                          <span className={`font-black tracking-tight text-sm uppercase ${
+                          <span className={`font-black tracking-tight text-xs uppercase ${
                             isParentActive || isAnySubActive ? 'text-white' : 'text-slate-300 group-hover/card:text-white'
                           }`}>
                             {parent.name}
                           </span>
-                          <span className="text-[10px] text-slate-500 font-bold mt-0.5">
+                          <span className="text-[9px] text-slate-500 font-bold mt-0.5">
                             {parent.published_products_count} productos
                           </span>
                         </div>
-                        <div className="shrink-0 flex items-center justify-center w-6 h-6 rounded-lg bg-white/5 text-slate-500 group-hover/card:text-white transition-colors">
+                        <div className="shrink-0 flex items-center justify-center w-5 h-5 rounded-lg bg-white/5 text-slate-500 group-hover/card:text-white transition-colors">
                           {subcategories.length > 0 && (
                             <ChevronRight 
-                              className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                                showSubtree ? 'rotate-90 text-white' : ''
+                              className={`w-3 h-3 transition-transform duration-200 ${
+                                isExpanded ? 'rotate-90 text-white' : ''
                               }`} 
                             />
                           )}
@@ -323,38 +338,38 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                       </button>
 
                       {/* Progress Bar */}
-                      <div className="w-full mt-3">
-                        <div className="w-full bg-white/5 rounded-full h-[3px] overflow-hidden">
+                      <div className="w-full mt-2.5">
+                        <div className="w-full bg-white/5 rounded-full h-[2px] overflow-hidden">
                           <div 
-                            className="bg-[#f00856] h-full rounded-full transition-all duration-500 ease-out" 
+                            className="bg-[#f00856] h-full rounded-full transition-all duration-300 ease-out" 
                             style={{ width: `${percentage}%` }}
                           />
                         </div>
-                        <div className="text-[9px] text-slate-500 mt-1 font-semibold tracking-wider">
+                        <div className="text-[8px] text-slate-600 mt-1 font-semibold tracking-wider">
                           {percentage}% del catálogo
                         </div>
                       </div>
 
                       {/* Accordion container */}
-                      <div className={`category-accordion-wrapper ${showSubtree ? 'category-accordion-wrapper--open' : ''}`}>
+                      <div className={`category-accordion-wrapper ${isExpanded ? 'category-accordion-wrapper--open' : ''}`}>
                         <div className="category-accordion-content">
-                          {subcategories.length > 0 && (
-                            <div className="pl-3 flex flex-col gap-1 border-l border-white/5 ml-1 mt-4 mb-1">
+                          {isExpanded && subcategories.length > 0 && (
+                            <div className="pl-2 flex flex-col gap-1 border-l border-white/5 ml-1 mt-3 mb-1">
                               {subcategories.map((sub, index) => {
                                 const isSubActive = categorySlug === sub.slug;
                                 return (
                                   <button
                                     key={sub.id}
                                     onClick={() => handleCategorySelect(sub.slug)}
-                                    className={`subcategory-stagger-item w-full flex items-center justify-between text-left text-xs py-2 px-2.5 rounded-lg font-semibold transition-all duration-150 ${
+                                    className={`subcategory-stagger-item w-full flex items-center justify-between text-left text-xs py-1.5 px-2 rounded-lg font-semibold transition-all duration-150 ${
                                       isSubActive
-                                        ? 'bg-[#f00856]/10 text-white border-l border-l-[#f00856]'
-                                        : 'text-slate-400 hover:text-white hover:bg-white/5 hover:translate-x-1'
+                                        ? 'bg-white/5 text-[#f00856]'
+                                        : 'text-slate-400 hover:text-white hover:bg-white/5'
                                     }`}
                                     style={{ animationDelay: `${index * 25}ms` }}
                                   >
-                                    <span className="truncate pr-2">{sub.name}</span>
-                                    <span className="filter-counter-badge text-[9px] font-black text-[#f00856] bg-[#f00856]/5 border border-[#f00856]/20 px-2 py-0.5 rounded-full tracking-tighter shadow-sm shrink-0">
+                                    <span className="text-[11px] font-medium truncate pr-2">{sub.name}</span>
+                                    <span className="filter-counter-badge text-[8px] font-bold text-[#f00856] bg-[#f00856]/5 border border-[#f00856]/15 px-1.5 py-0.5 rounded-full tracking-tighter shadow-sm shrink-0">
                                       {sub.published_products_count}
                                     </span>
                                   </button>
