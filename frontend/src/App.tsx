@@ -94,6 +94,7 @@ import { useReferralTracking } from './hooks/useReferralTracking';
 import MetaPixelTracker from './components/MetaPixelTracker';
 import MarketplaceGuard from './components/MarketplaceGuard';
 import { usePromotions } from './hooks/usePromotions';
+import { ProductGridCard } from './components/ProductGridCard';
 
 function ReferralTracker() {
   useReferralTracking();
@@ -102,8 +103,9 @@ function ReferralTracker() {
 
 function App() {
   // Force inclusion in the main bundle to prevent Vite/Rolldown TDZ circular dependency issues
-  if (false as boolean) {
-    console.log(usePromotions);
+  if (typeof window !== 'undefined') {
+    (window as any).__usePromotions = usePromotions;
+    (window as any).__ProductGridCard = ProductGridCard;
   }
   return (
     <ErrorBoundary>
