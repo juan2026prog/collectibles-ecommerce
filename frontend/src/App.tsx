@@ -87,11 +87,13 @@ const AdminMarketplace = lazy(() => import('./pages/admin/AdminMarketplace'));
 const AdminInternationalAmazon = lazy(() => import('./pages/admin/AdminInternationalAmazon'));
 const AdminInternationalProducts = lazy(() => import('./pages/admin/AdminInternationalProducts'));
 const AdminInternationalSync = lazy(() => import('./pages/admin/AdminInternationalSync'));
+const AdminRefunds = lazy(() => import('./pages/admin/AdminRefunds'));
 
 // GodMode removed from production — SEC-CRIT-01 (hardcoded credentials)
 import { useReferralTracking } from './hooks/useReferralTracking';
 import MetaPixelTracker from './components/MetaPixelTracker';
 import MarketplaceGuard from './components/MarketplaceGuard';
+import { usePromotions } from './hooks/usePromotions';
 
 function ReferralTracker() {
   useReferralTracking();
@@ -99,6 +101,10 @@ function ReferralTracker() {
 }
 
 function App() {
+  // Force inclusion in the main bundle to prevent Vite/Rolldown TDZ circular dependency issues
+  if (false as boolean) {
+    console.log(usePromotions);
+  }
   return (
     <ErrorBoundary>
     <BrowserRouter>
@@ -248,6 +254,7 @@ function App() {
                   <Route path="settings" element={<AdminSettings />} />
                   <Route path="users" element={<AdminUsers />} />
                   <Route path="finances" element={<AdminFinances />} />
+                  <Route path="refunds" element={<AdminRefunds />} />
                   <Route path="logistics" element={<AdminLogistics />} />
                   <Route path="logistics-connections" element={<Navigate to="/admin/marketplace?tab=conexiones" replace />} />
                   <Route path="artists" element={<AdminArtists />} />
