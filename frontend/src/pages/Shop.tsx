@@ -259,9 +259,9 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
       {/* Categories */}
       <div>
         <h3 className="font-bold text-white uppercase text-xs tracking-widest mb-4">Categoría</h3>
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
           {/* Todos los productos Card */}
-          <div className={`group/card flex flex-col rounded-2xl border transition-all duration-300 p-3.5 ${
+          <div className={`group/card flex flex-col rounded-2xl border transition-all duration-300 py-2.5 px-3 ${
             !categorySlug
               ? 'border-[#f00856]/20 bg-[#f00856]/5 shadow-[inset_0_0_12px_rgba(255,255,255,0.01)] border-l-2 border-l-[#f00856]'
               : 'border-white/5 bg-white/[0.01] hover:bg-white/[0.03] hover:border-white/10'
@@ -270,16 +270,16 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
               onClick={() => handleCategorySelect('')}
               className="w-full flex items-center justify-between text-left transition-all duration-150 group-hover/card:translate-x-0.5"
             >
-              <div className="flex flex-col min-w-0 pr-2">
-                <span className={`font-black tracking-tight text-xs uppercase ${
-                  !categorySlug ? 'text-white' : 'text-slate-300 group-hover/card:text-white'
-                }`}>
-                  Todos los productos
-                </span>
-                <span className="text-[9px] text-slate-500 font-bold mt-0.5">
-                  {totalCatalogProducts} productos
-                </span>
-              </div>
+              <span className={`font-black tracking-tight text-xs uppercase ${
+                !categorySlug ? 'text-white' : 'text-slate-300 group-hover/card:text-white'
+              }`}>
+                Todos los productos
+              </span>
+              <span className={`text-[10px] font-bold shrink-0 ${
+                !categorySlug ? 'text-[#f00856]' : 'text-slate-500 group-hover/card:text-slate-300'
+              }`}>
+                {totalCatalogProducts}
+              </span>
             </button>
           </div>
 
@@ -294,15 +294,11 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                   const isParentActive = categorySlug === parent.slug;
                   const isAnySubActive = subcategories.some(sub => categorySlug === sub.slug);
                   const isExpanded = expandedCategoryId === parent.id;
-                  
-                  const percentage = totalCatalogProducts > 0 
-                    ? Math.round(((parent.published_products_count || 0) / totalCatalogProducts) * 100) 
-                    : 0;
 
                   return (
                     <div 
                       key={parent.id} 
-                      className={`group/card flex flex-col rounded-2xl border transition-all duration-300 p-3.5 ${
+                      className={`group/card flex flex-col rounded-2xl border transition-all duration-300 py-2.5 px-3 ${
                         isParentActive || isAnySubActive
                           ? 'border-[#f00856]/20 bg-[#f00856]/5 shadow-[inset_0_0_12px_rgba(255,255,255,0.01)] border-l-2 border-l-[#f00856]'
                           : 'border-white/5 bg-white/[0.01] hover:bg-white/[0.03] hover:border-white/10'
@@ -316,39 +312,26 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                         }}
                         className="w-full flex items-center justify-between text-left transition-all duration-150 group-hover/card:translate-x-0.5"
                       >
-                        <div className="flex flex-col min-w-0 pr-2">
-                          <span className={`font-black tracking-tight text-xs uppercase ${
+                        <div className="flex items-center gap-2 min-w-0 pr-2">
+                          <span className={`font-black tracking-tight text-xs uppercase truncate ${
                             isParentActive || isAnySubActive ? 'text-white' : 'text-slate-300 group-hover/card:text-white'
                           }`}>
                             {parent.name}
                           </span>
-                          <span className="text-[9px] text-slate-500 font-bold mt-0.5">
-                            {parent.published_products_count} productos
-                          </span>
-                        </div>
-                        <div className="shrink-0 flex items-center justify-center w-5 h-5 rounded-lg bg-white/5 text-slate-500 group-hover/card:text-white transition-colors">
                           {subcategories.length > 0 && (
                             <ChevronRight 
-                              className={`w-3 h-3 transition-transform duration-200 ${
+                              className={`w-3 h-3 text-slate-500 shrink-0 transition-transform duration-200 ${
                                 isExpanded ? 'rotate-90 text-white' : ''
                               }`} 
                             />
                           )}
                         </div>
+                        <span className={`text-[10px] font-bold shrink-0 ${
+                          isParentActive || isAnySubActive ? 'text-[#f00856]' : 'text-slate-500 group-hover/card:text-slate-300'
+                        }`}>
+                          {parent.published_products_count}
+                        </span>
                       </button>
-
-                      {/* Progress Bar */}
-                      <div className="w-full mt-2.5">
-                        <div className="w-full bg-white/5 rounded-full h-[2px] overflow-hidden">
-                          <div 
-                            className="bg-[#f00856] h-full rounded-full transition-all duration-300 ease-out" 
-                            style={{ width: `${percentage}%` }}
-                          />
-                        </div>
-                        <div className="text-[8px] text-slate-600 mt-1 font-semibold tracking-wider">
-                          {percentage}% del catálogo
-                        </div>
-                      </div>
 
                       {/* Accordion container */}
                       <div className={`category-accordion-wrapper ${isExpanded ? 'category-accordion-wrapper--open' : ''}`}>
