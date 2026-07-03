@@ -786,12 +786,6 @@ export default function VendorStorefront() {
                     <span>Miembro desde {memberSinceYear}</span>
                     <span>•</span>
                     <span>{totalProducts} productos disponibles</span>
-                    {pickupAddress && (
-                      <>
-                        <span>•</span>
-                        <span className="text-[#f00856] truncate max-w-xs">{pickupAddress}</span>
-                      </>
-                    )}
                   </div>
                 </div>
 
@@ -858,40 +852,6 @@ export default function VendorStorefront() {
 
             {/* Navigation Tabs & Toolbar */}
             <div className="space-y-4">
-              {/* Internal navigation */}
-              <div className="flex gap-6 border-b border-white/5 pb-0">
-                <button
-                  onClick={() => { setActiveFilterTab('all'); setSearchParams({}); }}
-                  className={`pb-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all ${
-                    activeFilterTab === 'all'
-                      ? 'text-[#f00856] border-[#f00856]'
-                      : 'text-slate-400 hover:text-white border-transparent'
-                  }`}
-                >
-                  Productos
-                </button>
-                <button
-                  onClick={() => { setActiveFilterTab('featured'); setSearchParams({}); }}
-                  className={`pb-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all ${
-                    activeFilterTab === 'featured'
-                      ? 'text-[#f00856] border-[#f00856]'
-                      : 'text-slate-400 hover:text-white border-transparent'
-                  }`}
-                >
-                  Destacados
-                </button>
-                <button
-                  onClick={() => { setActiveFilterTab('new'); setSearchParams({}); }}
-                  className={`pb-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all ${
-                    activeFilterTab === 'new'
-                      ? 'text-[#f00856] border-[#f00856]'
-                      : 'text-slate-400 hover:text-white border-transparent'
-                  }`}
-                >
-                  Novedades
-                </button>
-              </div>
-
               {/* Mobile Filter Trigger & Counter */}
               <div className="lg:hidden flex items-center justify-between gap-4">
                 <button
