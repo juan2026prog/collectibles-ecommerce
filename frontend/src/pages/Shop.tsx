@@ -25,105 +25,60 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   const [searchParams, setSearchParams] = useSearchParams();
   const { categorySlug: catParam, brandSlug: brandParam, slug: groupSlug } = useParams<{ categorySlug?: string; brandSlug?: string; slug?: string }>();
   const location = useLocation();
+  const navigate = useNavigate();
+  const cart = useCartContext();
+  const { t } = useLocale();
+  const { formatCurrencyPrice } = useCurrency();
+
+  // Variables derivadas de URL/Ruta
   const isCategoryRoute = location.pathname.startsWith('/categoria');
   const isBrandRoute = location.pathname.startsWith('/marca');
-
   const categorySlug = isCategoryRoute ? catParam : (searchParams.get('category') || '');
   const brandSlug = isBrandRoute ? brandParam : (searchParams.get('brand') || '');
   const badge = searchParams.get('badge') || '';
   const searchQ = searchParams.get('q') || '';
+
+  // React States
   const [sortBy, setSortBy] = useState('default');
   const [mobileFilters, setMobileFilters] = useState(false);
   const [gridCols, setGridCols] = useState<number>(() => {
     try { const saved = localStorage.getItem('shop_grid_cols'); return saved ? Number(saved) : 5; } catch { return 5; }
   });
-
-  useEffect(() => {
-    try { localStorage.setItem('shop_grid_cols', String(gridCols)); } catch {}
-  }, [gridCols]);
   const [page, setPage] = useState(0);
   const [priceMin, setPriceMin] = useState('');
   const [priceMax, setPriceMax] = useState('');
   const [searchInput, setSearchInput] = useState(searchQ);
   const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null);
-  const limit = gridCols === 5 ? 15 : 12;
-
   const [matchedStore, setMatchedStore] = useState<any>(null);
 
-  useEffect(() => {
-    if (!searchQ) {
-      setMatchedStore(null);
-      return;
-    }
-
-    async function searchStores() {
-      try {
-        const { data } = await supabase
-          .from('vendor_stores')
-          .select('id, store_name, slug, logo_url, description, vendor_store_badge_assignments(status, approved_by, approved_at, vendor_store_badges(*))')
-          .eq('status', 'active')
-          .or(`store_name.ilike.%${searchQ}%,slug.ilike.%${searchQ}%`)
-          .limit(1);
-        
-        if (data && data.length > 0) {
-          const store = data[0];
-          const assignments = store.vendor_store_badge_assignments || [];
-          const activeBadges = assignments
-            .filter((x: any) => x.status === 'active' && x.approved_by && x.approved_at)
-            .map((x: any) => x.vendor_store_badges)
-            .filter(Boolean);
-          setMatchedStore({
-            ...store,
-            badges: activeBadges
-          });
-        } else {
-          setMatchedStore(null);
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    searchStores();
-  }, [searchQ]);
-
+  // Custom hooks que obtienen datos fuente
   const { categories, loading: catsLoading } = useCategories();
   const { brands, loading: brandsLoading } = useBrands();
+  const { promotions } = usePromotions();
+  const { group, loading: groupLoading } = useProductGroupMetadata(groupSlug);
+
+  // Variables derivadas de datos fuente (definidas ANTES de usarse en hooks dependientes)
+  const currentCategory = useMemo(() => categories.find(c => c.slug === categorySlug), [categories, categorySlug]);
+  const currentBrand = useMemo(() => brands.find(b => b.slug === brandSlug), [brands, brandSlug]);
+
+  // Custom hooks dependientes
   const mappings = useFilterMappings(currentBrand?.id);
 
+  // Más variables derivadas
+  const limit = gridCols === 5 ? 15 : 12;
   const totalCatalogProducts = useMemo(() => {
     return categories
       .filter(c => c.parent_id === null && c.status === 'approved')
       .reduce((sum, c) => sum + (c.published_products_count || 0), 0);
   }, [categories]);
 
-  const currentCategory = categories.find(c => c.slug === categorySlug);
-  const currentBrand = brands.find(b => b.slug === brandSlug);
-
-  // Auto-expand active parent category on mount or when category is selected via URL
-  useEffect(() => {
-    if (currentCategory) {
-      if (currentCategory.parent_id) {
-        setExpandedCategoryId(currentCategory.parent_id);
-      } else {
-        setExpandedCategoryId(currentCategory.id);
-      }
-    }
-  }, [currentCategory]);
-
   const visibleCategories = currentBrand && mappings.length > 0
     ? categories.filter(c => mappings.some(m => m.category_id === c.id && m.brand_id === currentBrand.id) || c.id === currentCategory?.id)
     : categories;
 
   const visibleBrands = brands;
-  
-  const { group, loading: groupLoading } = useProductGroupMetadata(groupSlug);
-  const cart = useCartContext();
-  const { promotions } = usePromotions();
-  const { t } = useLocale();
-  const { formatCurrencyPrice } = useCurrency();
-  const navigate = useNavigate();
 
-  // ✅ Fully server-side — useProducts now resolves slug → id internally
+  // Hook de consulta de productos
   const { products, count, loading } = useProducts({
     category: categorySlug || undefined,
     brand: brandSlug || undefined,
@@ -135,7 +90,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
     sortBy,
     limit,
     offset: page * limit,
-    isInternational,
+    isInternational
   });
 
   const totalPages = Math.ceil(count / limit);
