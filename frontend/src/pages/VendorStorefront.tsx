@@ -86,45 +86,26 @@ export default function VendorStorefront() {
       }
 
       setStore(storeData);
+      setLoading(false);
 
-      const { data: vendorKyc } = await supabase
+      // Fetch KYC asynchronously without blocking store load
+      supabase
         .from('vendors')
         .select('kyc_status, promotions_opt_in')
         .eq('id', storeData.vendor_id)
-        .maybeSingle();
-
-      if (vendorKyc) {
-        setKycStatus(vendorKyc.kyc_status);
-        setPromotionsOptIn(vendorKyc.promotions_opt_in || false);
-      }
-
-      const { data: storeAddr } = await supabase
-        .from('vendor_dispatch_addresses')
-        .select('address, city, department')
-        .eq('vendor_store_id', storeData.id)
-        .eq('is_default', true)
-        .maybeSingle();
-
-      let finalAddr = storeAddr;
-      if (!finalAddr) {
-        const { data: vendorAddr } = await supabase
-          .from('vendor_dispatch_addresses')
-          .select('address, city, department')
-          .eq('vendor_id', storeData.vendor_id)
-          .is('vendor_store_id', null)
-          .eq('is_default', true)
-          .maybeSingle();
-        finalAddr = vendorAddr;
-      }
-
-      if (finalAddr) {
-        setPickupAddress(`${finalAddr.address}, ${finalAddr.city}, ${finalAddr.department}`);
-      }
+        .maybeSingle()
+        .then(({ data: vendorKyc }) => {
+          if (vendorKyc) {
+            setKycStatus(vendorKyc.kyc_status);
+            setPromotionsOptIn(vendorKyc.promotions_opt_in || false);
+          }
+        })
+        .catch(err => console.error('Error fetching vendor KYC:', err));
 
     } catch (err) {
       console.error('Error loading store data:', err);
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   // Follow State
@@ -246,10 +227,10 @@ export default function VendorStorefront() {
 
   // Fetch Products using official useProducts hook
   const productFilters = useMemo(() => ({
-    vendor_store_id: store?.id,
+    vendor_store_id: store?.id || '00000000-0000-0000-0000-000000000000',
     search: searchQ || undefined,
-    category_id: currentCategory?.id || undefined,
-    brand_id: currentBrand?.brand_id || undefined,
+    category: categorySlug || undefined,
+    brand: brandSlug || undefined,
     minPrice: priceMin ? Number(priceMin) : undefined,
     maxPrice: priceMax ? Number(priceMax) : undefined,
     sortBy: sortBy === 'default' ? undefined : sortBy,
@@ -257,7 +238,7 @@ export default function VendorStorefront() {
     offset: (page - 1) * pageSize,
     featured: activeFilterTab === 'featured' ? true : undefined,
     badge: activeFilterTab === 'new' ? 'new' : undefined
-  }), [store?.id, searchQ, currentCategory?.id, currentBrand?.brand_id, priceMin, priceMax, sortBy, page, activeFilterTab]);
+  }), [store?.id, searchQ, categorySlug, brandSlug, priceMin, priceMax, sortBy, page, activeFilterTab]);
 
   const { products, count: totalProducts, loading: loadingProducts } = useProducts(productFilters);
 
