@@ -6,7 +6,7 @@ import { evaluateItemDiscountDetailed } from '../hooks/usePromotions';
 import { useWishlistContext } from '../contexts/WishlistContext';
 import { useAdminMode } from '../contexts/AdminModeContext';
 import { useLocale } from '../contexts/LocaleContext';
-
+import { isCollectiblesOfficialSeller } from '../lib/sellerIdentity';
 interface ProductGridCardProps {
   product: any;
   onAddToCart: (product: any) => void;
@@ -45,7 +45,7 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
   const displayOldPrice = promoDiscount > 0 ? finalPrice : product.compare_at_price;
   
   const reviewsCount = product.reviews?.length || 0;
-  const isCollectibles = !product.vendor_id;
+  const isCollectibles = isCollectiblesOfficialSeller(product);
 
   return (
     <article className={`grid-card group relative ${

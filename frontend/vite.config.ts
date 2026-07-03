@@ -13,16 +13,33 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: (id) => {
-          if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) return 'vendor-react';
-            if (id.includes('@supabase')) return 'vendor-supabase';
-            if (id.includes('lucide-react')) return 'vendor-icons';
-            return 'vendor-libs';
+          const normalizedId = id.replace(/\\/g, '/');
+          if (normalizedId.includes('node_modules')) {
+            if (normalizedId.includes('react') || normalizedId.includes('react-dom') || normalizedId.includes('react-router-dom')) return 'vendor-react';
+            else if (normalizedId.includes('@supabase')) return 'vendor-supabase';
+            else if (normalizedId.includes('lucide-react')) return 'vendor-icons';
+            else return 'vendor-libs';
           }
-          if (id.includes('/src/pages/admin/') || id.includes('/src/layouts/AdminLayout')) return 'admin-chunk';
-          if (id.includes('/src/pages/Vendor') || id.includes('/src/pages/Artist') || id.includes('/src/pages/Affiliate') || id.includes('/src/pages/Star2Fan')) return 'portal-chunk';
-          if (id.includes('/src/pages/Login') || id.includes('/src/pages/Auth')) return 'auth-chunk';
-          if (id.includes('/src/pages/Home') || id.includes('/src/pages/Shop') || id.includes('/src/layouts/StorefrontLayout')) return 'storefront-chunk';
+          if (
+            normalizedId.includes('/src/hooks/') ||
+            normalizedId.includes('/src/contexts/') ||
+            normalizedId.includes('/src/lib/') ||
+            normalizedId.includes('/src/components/')
+          ) {
+            return 'storefront-chunk';
+          }
+          if (normalizedId.includes('/src/pages/admin/') || normalizedId.includes('/src/layouts/AdminLayout')) {
+            return 'admin-chunk';
+          }
+          if (normalizedId.includes('/src/pages/Vendor') || normalizedId.includes('/src/pages/Artist') || normalizedId.includes('/src/pages/Affiliate') || normalizedId.includes('/src/pages/Star2Fan')) {
+            return 'portal-chunk';
+          }
+          if (normalizedId.includes('/src/pages/Login') || normalizedId.includes('/src/pages/Auth')) {
+            return 'auth-chunk';
+          }
+          if (normalizedId.includes('/src/pages/Home') || normalizedId.includes('/src/pages/Shop') || normalizedId.includes('/src/layouts/StorefrontLayout')) {
+            return 'storefront-chunk';
+          }
         },
       },
     },
