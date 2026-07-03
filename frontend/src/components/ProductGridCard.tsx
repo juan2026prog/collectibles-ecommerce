@@ -6,7 +6,7 @@ import { evaluateItemDiscountDetailed } from '../hooks/usePromotions';
 import { useWishlistContext } from '../contexts/WishlistContext';
 import { useAdminMode } from '../contexts/AdminModeContext';
 import { useLocale } from '../contexts/LocaleContext';
-import { isCollectiblesOfficialSeller } from '../lib/sellerIdentity';
+
 interface ProductGridCardProps {
   product: any;
   onAddToCart: (product: any) => void;
@@ -45,7 +45,7 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
   const displayOldPrice = promoDiscount > 0 ? finalPrice : product.compare_at_price;
   
   const reviewsCount = product.reviews?.length || 0;
-  const isCollectibles = isCollectiblesOfficialSeller(product);
+  const isCollectibles = !product.vendor_id;
 
   return (
     <article className={`grid-card group relative ${
@@ -144,7 +144,7 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
         )}
 
         {isCollectibles ? (
-          <div className="flex items-center justify-between p-2.5 rounded-xl border border-[#ff0f6d] bg-[#121829] shadow-[0_0_8px_rgba(255,15,109,0.08)] group-hover:shadow-[0_0_12px_rgba(255,15,109,0.18)] transition-all duration-200 mb-2 mt-1">
+          <div className="flex items-center p-2.5 rounded-xl border border-[#ff0f6d] bg-[#121829] shadow-[0_0_8px_rgba(255,15,109,0.08)] group-hover:shadow-[0_0_12px_rgba(255,15,109,0.18)] transition-all duration-200 mb-2 mt-1">
             <div className="flex items-center gap-2">
               {/* Shield Star Logo */}
               <div className="relative flex items-center justify-center w-8 h-8 rounded-lg bg-[#ff0f6d] text-white shrink-0">
@@ -156,25 +156,7 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
               {/* Text */}
               <div className="flex flex-col">
                 <span className="text-[8px] font-black text-[#ff0f6d] uppercase tracking-wider leading-none">VENDIDO POR</span>
-                <span className="text-[11px] font-black text-white uppercase tracking-tight leading-tight mt-0.5">COLLECTIBLES.UY</span>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              {/* Separator line */}
-              <div className="h-6 w-[1px] bg-white/10" />
-              
-              {/* Tienda Oficial checkmark */}
-              <div className="flex items-center gap-1.5">
-                <div className="flex items-center justify-center w-5 h-5 rounded-full border border-[#ff0f6d]/80 bg-[#ff0f6d]/10 shrink-0">
-                  <svg className="w-3 h-3 text-[#ff0f6d]" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                </div>
-                <div className="flex flex-col leading-none">
-                  <span className="text-[7.5px] font-black text-[#ff0f6d] tracking-wider">TIENDA</span>
-                  <span className="text-[7.5px] font-black text-[#ff0f6d] tracking-wider">OFICIAL</span>
-                </div>
+                <span className="text-[11px] font-black text-white uppercase tracking-tight leading-tight mt-0.5">COLLECTIBLES</span>
               </div>
             </div>
           </div>
