@@ -593,9 +593,9 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
         </div>
       )}
 
-      <main className="max-w-[1500px] mx-auto px-6 py-10 grid lg:grid-cols-[240px_1fr] gap-10 overflow-hidden">
+      <main className="max-w-[1500px] mx-auto px-6 py-10 grid lg:grid-cols-[240px_1fr] gap-10">
         {/* FILTERS ASIDE — hidden on mobile, shown on desktop */}
-        <aside className="hidden lg:block glass rounded-none p-6 h-[calc(100vh-130px)] sticky top-24 z-10 flex flex-col overflow-hidden">
+        <aside className="hidden lg:block glass rounded-none p-6 h-[calc(100vh-130px)] max-h-[calc(100vh-130px)] min-h-0 sticky top-24 z-10 flex flex-col overflow-hidden">
           <div className="flex items-center justify-between mb-4 shrink-0">
             <h2 className="font-black text-2xl tracking-tight">Filtros</h2>
             {(categorySlug || brandSlug || searchQ || groupSlug) && (
