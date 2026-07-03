@@ -45,12 +45,22 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
   const displayOldPrice = promoDiscount > 0 ? finalPrice : product.compare_at_price;
   
   const reviewsCount = product.reviews?.length || 0;
+  const isCollectibles = !product.vendor_id;
 
   return (
-    <article className="grid-card group relative">
+    <article className={`grid-card group relative ${
+      isCollectibles 
+        ? 'p-3 bg-[#0a0f1d]/60 border border-[#ff0f6d] shadow-[0_0_10px_rgba(255,15,109,0.1)] hover:shadow-[0_0_18px_rgba(255,15,109,0.25)] rounded-[20px] transition-all duration-200' 
+        : ''
+    }`}>
       {/* 1. IMAGEN */}
       <div className="relative">
-        <Link to={`/p/${product.slug}`} className="flex bg-white w-full aspect-square rounded-sm overflow-hidden p-6 items-center justify-center border border-white/5 group-hover:border-[#f00856]/20 transition-colors">
+        <Link 
+          to={`/p/${product.slug}`} 
+          className={`flex bg-white w-full aspect-square overflow-hidden p-6 items-center justify-center border border-white/5 group-hover:border-[#f00856]/20 transition-colors ${
+            isCollectibles ? 'rounded-[14px]' : 'rounded-sm'
+          }`}
+        >
           <img
             src={img}
             alt={product.title}
@@ -133,30 +143,62 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
           <div className="text-[10px] text-blue-400 font-bold uppercase mb-1">Vendido en Amazon</div>
         )}
 
-        <div className="text-[10px] text-[#f00856] font-black uppercase tracking-wider mb-1 flex items-center flex-wrap gap-1">
-          <span>Vendido por: {product.vendor_id ? (product.vendor_store?.display_name || product.vendor_store?.store_name || product.vendor_store?.name || product.vendor?.company_name || product.vendor?.store_name || 'Vendedor') : 'Collectibles.uy'}</span>
-          {(() => {
-            if (!product.vendor_id || !product.vendor_store) return null;
-            if (product.vendor_store.status !== 'active') return null;
-            const assignments = product.vendor_store.vendor_store_badge_assignments || [];
-            const isApproved = assignments.some((assignment: any) => {
-              const badge = assignment.vendor_store_badges;
-              return (
-                badge &&
-                badge.badge_key === 'official_store' &&
-                assignment.status === 'active' &&
-                assignment.approved_by &&
-                assignment.approved_at
-              );
-            });
-            if (!isApproved) return null;
-            return (
-              <span className="text-[8px] px-1 font-semibold leading-none uppercase rounded bg-red-500 text-white border border-red-400">
-                {language === 'en' ? 'Official Store' : 'TIENDA OFICIAL'}
-              </span>
-            );
-          })()}
-        </div>
+        {isCollectibles ? (
+          <div className="flex items-center justify-between p-2.5 rounded-xl border border-[#ff0f6d] bg-[#121829] shadow-[0_0_8px_rgba(255,15,109,0.08)] group-hover:shadow-[0_0_12px_rgba(255,15,109,0.18)] transition-all duration-200 mb-2 mt-1">
+            <div className="flex items-center gap-2">
+              {/* Shield Star Logo */}
+              <div className="relative flex items-center justify-center w-8 h-8 rounded-lg bg-[#ff0f6d] text-white shrink-0">
+                <svg className="w-5 h-5 fill-white text-white" viewBox="0 0 24 24">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="#ff0f6d" stroke="#ff0f6d" strokeWidth="2" />
+                  <polygon points="12,7.5 13.5,10.5 17,11 14.5,13.5 15,17 12,15.2 9,17 9.5,13.5 7,11 10.5,10.5" fill="#ffffff" />
+                </svg>
+              </div>
+              {/* Text */}
+              <div className="flex flex-col">
+                <span className="text-[8px] font-black text-[#ff0f6d] uppercase tracking-wider leading-none">VENDIDO POR</span>
+                <span className="text-[11px] font-black text-white uppercase tracking-tight leading-tight mt-0.5">COLLECTIBLES.UY</span>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              {/* Separator line */}
+              <div className="h-6 w-[1px] bg-white/10" />
+              
+              {/* Tienda Oficial checkmark */}
+              <div className="flex items-center gap-1.5">
+                <div className="flex items-center justify-center w-5 h-5 rounded-full border border-[#ff0f6d]/80 bg-[#ff0f6d]/10 shrink-0">
+                  <svg className="w-3 h-3 text-[#ff0f6d]" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </div>
+                <div className="flex flex-col leading-none">
+                  <span className="text-[7.5px] font-black text-[#ff0f6d] tracking-wider">TIENDA</span>
+                  <span className="text-[7.5px] font-black text-[#ff0f6d] tracking-wider">OFICIAL</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-[10px] text-[#f00856] font-black uppercase tracking-wider mb-1 flex items-center flex-wrap gap-1">
+            <span>Vendido por: {product.vendor_id ? (product.vendor_store?.display_name || product.vendor_store?.store_name || product.vendor_store?.name || product.vendor?.company_name || product.vendor?.store_name || 'Vendedor') : 'Collectibles.uy'}</span>
+            {(() => {
+              if (!product.vendor_id || !product.vendor_store) return null;
+              if (
+                product.vendor_store.is_official &&
+                product.vendor_store.status === 'active' &&
+                product.vendor_store.approved_by &&
+                product.vendor_store.approved_at
+              ) {
+                return (
+                  <span className="text-[8px] px-1 font-semibold leading-none uppercase rounded bg-red-500 text-white border border-red-400">
+                    {language === 'en' ? 'Official Store' : 'TIENDA OFICIAL'}
+                  </span>
+                );
+              }
+              return null;
+            })()}
+          </div>
+        )}
         
         <Link to={`/p/${product.slug}`}>
           <h3 className="text-xs md:text-sm font-bold leading-tight line-clamp-2 min-h-[34px] text-white hover:text-[#f00856] transition-colors">
