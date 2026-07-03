@@ -610,3 +610,23 @@
   background: #f00856;
   box-shadow: 0 0 8px rgba(240, 8, 86, 0.6);
 }
+
+/* Slide Accordion for Brands */
+.brand-accordion-wrapper {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: grid-template-rows 250ms ease-in-out, opacity 250ms ease-in-out, transform 250ms ease-in-out;
+}
+
+.brand-accordion-wrapper--open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.brand-accordion-content {
+  overflow: hidden;
+}
+

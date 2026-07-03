@@ -393,6 +393,66 @@ export function useBrands() {
   return { brands, loading };
 }
 
+// ═══ useBrandFacets ═══
+interface BrandFacetFilters {
+  category?: string;
+  search?: string;
+  vendor_store_id?: string;
+  group?: string;
+  isInternational?: boolean;
+}
+
+export function useBrandFacets(filters: BrandFacetFilters = {}) {
+  const [brandFacets, setBrandFacets] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    async function fetchFacets() {
+      setLoading(true);
+      try {
+        const { data, error } = await supabase.rpc('get_brand_facets', {
+          p_category_slug: filters.category || null,
+          p_search_query: filters.search || null,
+          p_vendor_store_id: filters.vendor_store_id || null,
+          p_group_slug: filters.group || null,
+          p_is_international: filters.isInternational || false
+        });
+
+        if (active) {
+          if (!error && data) {
+            setBrandFacets(data);
+          } else {
+            console.error('Error fetching brand facets:', error);
+            setBrandFacets([]);
+          }
+          setLoading(false);
+        }
+      } catch (e) {
+        console.error('Exception fetching brand facets:', e);
+        if (active) {
+          setBrandFacets([]);
+          setLoading(false);
+        }
+      }
+    }
+
+    fetchFacets();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    filters.category,
+    filters.search,
+    filters.vendor_store_id,
+    filters.group,
+    filters.isInternational
+  ]);
+
+  return { brandFacets, loading };
+}
+
 // ═══ useBanners ═══
 export function useBanners() {
   const [banners, setBanners] = useState<any[]>([]);

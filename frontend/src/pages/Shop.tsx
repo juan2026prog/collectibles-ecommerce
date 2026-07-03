@@ -1,7 +1,7 @@
 import { Link, useSearchParams, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useState, useEffect, useMemo } from 'react';
 import { ChevronRight, ChevronLeft, SlidersHorizontal, X, Search, Store, ExternalLink } from 'lucide-react';
-import { useProducts, useCategories, useBrands, useFilterMappings, useProductGroupMetadata } from '../hooks/useData';
+import { useProducts, useCategories, useBrands, useFilterMappings, useProductGroupMetadata, useBrandFacets } from '../hooks/useData';
 import { usePromotions, getApplicablePromotions } from '../hooks/usePromotions';
 import { useCartContext } from '../contexts/CartContext';
 import { useLocale } from '../contexts/LocaleContext';
@@ -21,64 +21,127 @@ function getVisiblePages(currentPage: number, total: number) {
   return [0, '...', currentPage - 1, currentPage, currentPage + 1, '...', total - 1];
 }
 
+function normalizeText(str: string): string {
+  return str
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
 export default function Shop({ isInternational }: { isInternational?: boolean } = {}) {
   const [searchParams, setSearchParams] = useSearchParams();
   const { categorySlug: catParam, brandSlug: brandParam, slug: groupSlug } = useParams<{ categorySlug?: string; brandSlug?: string; slug?: string }>();
   const location = useLocation();
-  const navigate = useNavigate();
-  const cart = useCartContext();
-  const { t } = useLocale();
-  const { formatCurrencyPrice } = useCurrency();
-
-  // Variables derivadas de URL/Ruta
   const isCategoryRoute = location.pathname.startsWith('/categoria');
   const isBrandRoute = location.pathname.startsWith('/marca');
+
   const categorySlug = isCategoryRoute ? catParam : (searchParams.get('category') || '');
   const brandSlug = isBrandRoute ? brandParam : (searchParams.get('brand') || '');
   const badge = searchParams.get('badge') || '';
   const searchQ = searchParams.get('q') || '';
-
-  // React States
   const [sortBy, setSortBy] = useState('default');
   const [mobileFilters, setMobileFilters] = useState(false);
   const [gridCols, setGridCols] = useState<number>(() => {
     try { const saved = localStorage.getItem('shop_grid_cols'); return saved ? Number(saved) : 5; } catch { return 5; }
   });
+
+  useEffect(() => {
+    try { localStorage.setItem('shop_grid_cols', String(gridCols)); } catch {}
+  }, [gridCols]);
   const [page, setPage] = useState(0);
   const [priceMin, setPriceMin] = useState('');
   const [priceMax, setPriceMax] = useState('');
   const [searchInput, setSearchInput] = useState(searchQ);
   const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null);
+  const [brandsExpanded, setBrandsExpanded] = useState(false);
+  const [searchBrandQuery, setSearchBrandQuery] = useState('');
+  const limit = gridCols === 5 ? 15 : 12;
+
   const [matchedStore, setMatchedStore] = useState<any>(null);
 
-  // Custom hooks que obtienen datos fuente
+  useEffect(() => {
+    if (!searchQ) {
+      setMatchedStore(null);
+      return;
+    }
+
+    async function searchStores() {
+      try {
+        const { data } = await supabase
+          .from('vendor_stores')
+          .select('id, store_name, slug, logo_url, description, vendor_store_badge_assignments(status, approved_by, approved_at, vendor_store_badges(*))')
+          .eq('status', 'active')
+          .or(`store_name.ilike.%${searchQ}%,slug.ilike.%${searchQ}%`)
+          .limit(1);
+        
+        if (data && data.length > 0) {
+          const store = data[0];
+          const assignments = store.vendor_store_badge_assignments || [];
+          const activeBadges = assignments
+            .filter((x: any) => x.status === 'active' && x.approved_by && x.approved_at)
+            .map((x: any) => x.vendor_store_badges)
+            .filter(Boolean);
+          setMatchedStore({
+            ...store,
+            badges: activeBadges
+          });
+        } else {
+          setMatchedStore(null);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    searchStores();
+  }, [searchQ]);
+
   const { categories, loading: catsLoading } = useCategories();
   const { brands, loading: brandsLoading } = useBrands();
-  const { promotions } = usePromotions();
-  const { group, loading: groupLoading } = useProductGroupMetadata(groupSlug);
+  const currentCategory = categories.find(c => c.slug === categorySlug);
+  const currentBrand = brands.find(b => b.slug === brandSlug);
 
-  // Variables derivadas de datos fuente (definidas ANTES de usarse en hooks dependientes)
-  const currentCategory = useMemo(() => categories.find(c => c.slug === categorySlug), [categories, categorySlug]);
-  const currentBrand = useMemo(() => brands.find(b => b.slug === brandSlug), [brands, brandSlug]);
+  const brandFacetsFilters = useMemo(() => ({
+    category: categorySlug || undefined,
+    search: searchQ || undefined,
+    group: groupSlug || undefined,
+    isInternational: isInternational || false
+  }), [categorySlug, searchQ, groupSlug, isInternational]);
 
-  // Custom hooks dependientes
+  const { brandFacets, loading: facetsLoading } = useBrandFacets(brandFacetsFilters);
+
   const mappings = useFilterMappings(currentBrand?.id);
 
-  // Más variables derivadas
-  const limit = gridCols === 5 ? 15 : 12;
   const totalCatalogProducts = useMemo(() => {
     return categories
       .filter(c => c.parent_id === null && c.status === 'approved')
       .reduce((sum, c) => sum + (c.published_products_count || 0), 0);
   }, [categories]);
 
+  // Auto-expand active parent category on mount or when category is selected via URL
+  useEffect(() => {
+    if (currentCategory) {
+      if (currentCategory.parent_id) {
+        setExpandedCategoryId(currentCategory.parent_id);
+      } else {
+        setExpandedCategoryId(currentCategory.id);
+      }
+    }
+  }, [currentCategory]);
+
   const visibleCategories = currentBrand && mappings.length > 0
     ? categories.filter(c => mappings.some(m => m.category_id === c.id && m.brand_id === currentBrand.id) || c.id === currentCategory?.id)
     : categories;
 
   const visibleBrands = brands;
+  
+  const { group, loading: groupLoading } = useProductGroupMetadata(groupSlug);
+  const cart = useCartContext();
+  const { promotions } = usePromotions();
+  const { t } = useLocale();
+  const { formatCurrencyPrice } = useCurrency();
+  const navigate = useNavigate();
 
-  // Hook de consulta de productos
+  // ✅ Fully server-side — useProducts now resolves slug → id internally
   const { products, count, loading } = useProducts({
     category: categorySlug || undefined,
     brand: brandSlug || undefined,
@@ -90,7 +153,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
     sortBy,
     limit,
     offset: page * limit,
-    isInternational
+    isInternational,
   });
 
   const totalPages = Math.ceil(count / limit);
@@ -153,28 +216,47 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   }
 
   function handleCategorySelect(slug: string) {
-    const params = new URLSearchParams(searchParams);
-    params.delete('category');
-    params.delete('brand');
     setPage(0);
-    if (slug) {
-      navigate(`/categoria/${slug}?${params.toString()}`);
+    const params = new URLSearchParams(searchParams);
+    
+    if (isBrandRoute && brandParam) {
+      if (slug) {
+        params.set('category', slug);
+      } else {
+        params.delete('category');
+      }
+      navigate(`/marca/${brandParam}?${params.toString()}`);
     } else {
-      navigate(`/shop?${params.toString()}`);
+      params.delete('category');
+      if (slug) {
+        navigate(`/categoria/${slug}?${params.toString()}`);
+      } else {
+        navigate(`/shop?${params.toString()}`);
+      }
     }
   }
 
   function handleBrandSelect(slug: string) {
-    const params = new URLSearchParams(searchParams);
-    params.delete('category');
-    params.delete('brand');
     setPage(0);
-    if (slug) {
-      navigate(`/marca/${slug}?${params.toString()}`);
+    const params = new URLSearchParams(searchParams);
+    
+    if (isCategoryRoute && catParam) {
+      if (slug) {
+        params.set('brand', slug);
+      } else {
+        params.delete('brand');
+      }
+      navigate(`/categoria/${catParam}?${params.toString()}`);
     } else {
-      navigate(`/shop?${params.toString()}`);
+      params.delete('brand');
+      if (slug) {
+        navigate(`/marca/${slug}?${params.toString()}`);
+      } else {
+        navigate(`/shop?${params.toString()}`);
+      }
     }
   }
+
 
   function clearAllFilters() {
     if (groupSlug || isCategoryRoute || isBrandRoute) {
@@ -308,6 +390,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
       <div>
         <h3 className="font-bold text-slate-400 uppercase text-[10px] tracking-widest mb-2 block">Marca</h3>
         <div className="flex flex-col gap-1">
+          {/* Todas las marcas */}
           <button
             onClick={() => handleBrandSelect('')}
             className={`w-full flex items-center justify-between text-left py-1 text-xs transition-all ${
@@ -318,25 +401,119 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
           >
             <span>Todas las marcas</span>
           </button>
-          {brandsLoading
-            ? [...Array(4)].map((_, i) => <div key={i} className="h-6 bg-white/5 rounded animate-pulse" />)
-            : visibleBrands.map(b => {
-                const isBrandActive = brandSlug === b.slug;
-                return (
-                  <button
-                    key={b.id}
-                    onClick={() => handleBrandSelect(b.slug)}
-                    className={`w-full flex items-center justify-between text-left py-1 text-xs transition-all ${
-                      isBrandActive
-                        ? 'text-[#f00856] font-bold'
-                        : 'text-slate-400 hover:text-white font-medium'
-                    }`}
-                  >
-                    <span>{b.name}</span>
-                  </button>
-                );
-              })
-          }
+
+          {facetsLoading ? (
+            [...Array(4)].map((_, i) => <div key={i} className="h-6 bg-white/5 rounded animate-pulse" />)
+          ) : (
+            (() => {
+              const activeFacet = brandFacets.find(f => f.brand_slug === brandSlug);
+              
+              // Collapsed view: Top 8 plus the active one if not already in the top 8
+              let topFacets = brandFacets.slice(0, 8);
+              if (activeFacet && !topFacets.some(f => f.brand_id === activeFacet.brand_id)) {
+                topFacets.push(activeFacet);
+              }
+
+              // Normalizing function for client-side search
+              const normalizedSearch = normalizeText(searchBrandQuery);
+              const filteredFacets = brandFacets.filter(f => 
+                normalizeText(f.brand_name).includes(normalizedSearch)
+              );
+
+              return (
+                <div className="flex flex-col">
+                  {/* Facet List (Top list or search results) */}
+                  {!brandsExpanded ? (
+                    <div className="flex flex-col gap-1">
+                      {topFacets.map(b => {
+                        const isBrandActive = brandSlug === b.brand_slug;
+                        return (
+                          <button
+                            key={b.brand_id}
+                            onClick={() => handleBrandSelect(b.brand_slug)}
+                            className={`w-full flex items-center justify-between text-left py-1 text-xs transition-all ${
+                              isBrandActive
+                                ? 'text-[#f00856] font-bold'
+                                : 'text-slate-400 hover:text-white font-medium'
+                            }`}
+                          >
+                            <span className="truncate pr-2">{b.brand_name}</span>
+                            <span className={`text-[10px] font-mono shrink-0 ml-2 ${isBrandActive ? 'text-[#f00856]' : 'text-slate-500'}`}>
+                              [{b.product_count}]
+                            </span>
+                          </button>
+                        );
+                      })}
+                      
+                      {brandFacets.length > 8 && (
+                        <button
+                          onClick={() => setBrandsExpanded(true)}
+                          className="text-[11px] font-bold text-[#f00856] hover:underline text-left mt-1 py-0.5"
+                        >
+                          Ver todas las marcas ({brandFacets.length})
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col">
+                      {/* Search Bar */}
+                      <div className="relative mb-2 mt-1">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500" />
+                        <input
+                          type="text"
+                          placeholder="Buscar marca..."
+                          value={searchBrandQuery}
+                          onChange={e => setSearchBrandQuery(e.target.value)}
+                          className="w-full pl-7 pr-3 py-1.5 text-[11px] border border-white/10 bg-white/5 text-white focus:outline-none focus:ring-1 focus:ring-[#f00856] placeholder:text-slate-500 rounded-lg transition-all duration-200 focus:bg-white/10"
+                        />
+                      </div>
+
+                      {/* Accordion slide animation for scrollable list */}
+                      <div className="brand-accordion-wrapper brand-accordion-wrapper--open">
+                        <div className="brand-accordion-content">
+                          <div className="max-h-[320px] overflow-y-auto pr-1 flex flex-col gap-1 premium-scrollbar">
+                            {filteredFacets.length === 0 ? (
+                              <span className="text-[11px] text-slate-500 py-2 block">No se encontraron marcas</span>
+                            ) : (
+                              filteredFacets.map(b => {
+                                const isBrandActive = brandSlug === b.brand_slug;
+                                return (
+                                  <button
+                                    key={b.brand_id}
+                                    onClick={() => handleBrandSelect(b.brand_slug)}
+                                    className={`w-full flex items-center justify-between text-left py-1 text-xs transition-all ${
+                                      isBrandActive
+                                        ? 'text-[#f00856] font-bold'
+                                        : 'text-slate-400 hover:text-white font-medium'
+                                    }`}
+                                  >
+                                    <span className="truncate pr-2">{b.brand_name}</span>
+                                    <span className={`text-[10px] font-mono shrink-0 ml-2 ${isBrandActive ? 'text-[#f00856]' : 'text-slate-500'}`}>
+                                      [{b.product_count}]
+                                    </span>
+                                  </button>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setBrandsExpanded(false);
+                          setSearchBrandQuery('');
+                        }}
+                        className="text-[11px] font-bold text-slate-500 hover:text-white text-left mt-2 py-0.5"
+                      >
+                        Mostrar menos
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()
+          )}
         </div>
       </div>
 
