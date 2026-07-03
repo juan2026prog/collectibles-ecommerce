@@ -114,9 +114,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
     ? categories.filter(c => mappings.some(m => m.category_id === c.id && m.brand_id === currentBrand.id) || c.id === currentCategory?.id)
     : categories;
 
-  const visibleBrands = currentCategory && mappings.length > 0
-    ? brands.filter(b => mappings.some(m => m.brand_id === b.id && m.category_id === currentCategory.id) || b.id === currentBrand?.id)
-    : brands;
+  const visibleBrands = brands;
   
   const { group, loading: groupLoading } = useProductGroupMetadata(groupSlug);
   const cart = useCartContext();
