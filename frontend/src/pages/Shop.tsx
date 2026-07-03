@@ -88,7 +88,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
 
   const { categories, loading: catsLoading } = useCategories();
   const { brands, loading: brandsLoading } = useBrands();
-  const mappings = useFilterMappings();
+  const mappings = useFilterMappings(currentBrand?.id);
 
   const totalCatalogProducts = useMemo(() => {
     return categories

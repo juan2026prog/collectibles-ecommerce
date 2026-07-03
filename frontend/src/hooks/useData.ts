@@ -634,24 +634,30 @@ export function useProductGroupMetadata(slug: string | undefined) {
 }
 
 // ═══ useFilterMappings ═══
-export function useFilterMappings() {
+export function useFilterMappings(brandId?: string) {
   const [mappings, setMappings] = useState<{ category_id: string; brand_id: string }[]>([]);
 
   useEffect(() => {
+    if (!brandId) {
+      setMappings([]);
+      return;
+    }
+
     async function fetchMappings() {
       const { data } = await supabase
-        .from('products')
-        .select('brand_id, product_categories!inner(category_id)')
-        .eq('status', 'published')
-        .eq('is_active', true);
+        .from('product_categories')
+        .select('category_id, products!inner(brand_id)')
+        .eq('products.brand_id', brandId)
+        .eq('products.status', 'published')
+        .eq('products.is_active', true);
         
       if (data) {
         const pairs: { category_id: string; brand_id: string }[] = [];
-        data.forEach((p: any) => {
-          if (p.brand_id && p.product_categories) {
-            const cats = Array.isArray(p.product_categories) ? p.product_categories : [p.product_categories];
-            cats.forEach((c: any) => {
-              if (c.category_id) pairs.push({ category_id: c.category_id, brand_id: p.brand_id });
+        data.forEach((item: any) => {
+          if (item.category_id && item.products?.brand_id) {
+            pairs.push({
+              category_id: item.category_id,
+              brand_id: item.products.brand_id
             });
           }
         });
@@ -659,7 +665,7 @@ export function useFilterMappings() {
       }
     }
     fetchMappings();
-  }, []);
+  }, [brandId]);
 
   return mappings;
 }
