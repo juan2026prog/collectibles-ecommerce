@@ -239,50 +239,40 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   }
 
   const FilterContent = () => (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Search */}
-      <form onSubmit={handleSearch} className="sticky top-0 bg-[#05070f] lg:bg-[#0e1525] backdrop-blur-md z-20 pb-4 pt-1">
-        <label className="font-bold text-white uppercase text-xs tracking-widest mb-2 block">Buscar</label>
+      <form onSubmit={handleSearch} className="pb-1">
+        <label className="font-bold text-slate-400 uppercase text-[10px] tracking-widest mb-1.5 block">Buscar</label>
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
           <input
             value={searchInput}
             onChange={e => setSearchInput(e.target.value)}
             placeholder="Buscar productos..."
-            className="w-full pl-9 pr-3 py-2.5 text-sm border border-white/10 bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-primary-400 placeholder:text-slate-500 rounded-xl transition-all duration-200 focus:bg-white/10"
+            className="w-full pl-8 pr-3 py-1.5 text-xs border border-white/10 bg-white/5 text-white focus:outline-none focus:ring-1 focus:ring-[#f00856] placeholder:text-slate-500 rounded-lg transition-all duration-200 focus:bg-white/10"
           />
         </div>
       </form>
 
       {/* Categories */}
       <div>
-        <h3 className="font-bold text-white uppercase text-xs tracking-widest mb-4">Categoría</h3>
-        <div className="flex flex-col gap-2">
-          {/* Todos los productos Card */}
-          <div className={`group/card flex flex-col rounded-2xl border transition-all duration-300 py-2.5 px-3 ${
-            !categorySlug
-              ? 'border-[#f00856]/20 bg-[#f00856]/5 shadow-[inset_0_0_12px_rgba(255,255,255,0.01)] border-l-2 border-l-[#f00856]'
-              : 'border-white/5 bg-white/[0.01] hover:bg-white/[0.03] hover:border-white/10'
-          }`}>
-            <button
-              onClick={() => handleCategorySelect('')}
-              className="w-full flex items-center justify-between text-left transition-all duration-150 group-hover/card:translate-x-0.5"
-            >
-              <span className={`font-black tracking-tight text-xs uppercase ${
-                !categorySlug ? 'text-white' : 'text-slate-300 group-hover/card:text-white'
-              }`}>
-                Todos los productos
-              </span>
-              <span className={`text-[10px] font-bold shrink-0 ${
-                !categorySlug ? 'text-[#f00856]' : 'text-slate-500 group-hover/card:text-slate-300'
-              }`}>
-                {totalCatalogProducts}
-              </span>
-            </button>
-          </div>
+        <h3 className="font-bold text-slate-400 uppercase text-[10px] tracking-widest mb-2 block">Categoría</h3>
+        <div className="flex flex-col gap-1">
+          {/* Todos los productos */}
+          <button
+            onClick={() => handleCategorySelect('')}
+            className={`w-full flex items-center justify-between text-left py-1 text-xs transition-all ${
+              !categorySlug
+                ? 'text-[#f00856] font-bold'
+                : 'text-slate-400 hover:text-white font-medium'
+            }`}
+          >
+            <span className="truncate pr-2">Todos los productos</span>
+            <span className="text-[10px] font-mono shrink-0 ml-2">[{totalCatalogProducts}]</span>
+          </button>
 
           {catsLoading
-            ? [...Array(5)].map((_, i) => <div key={i} className="h-10 bg-white/5 rounded-xl animate-pulse" />)
+            ? [...Array(5)].map((_, i) => <div key={i} className="h-6 bg-white/5 rounded animate-pulse" />)
             : (() => {
                 const parentCategories = visibleCategories.filter(c => c.parent_id === null && c.published_products_count > 0 && c.status === 'approved');
                 return parentCategories.map(parent => {
@@ -294,28 +284,21 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                   const isExpanded = expandedCategoryId === parent.id;
 
                   return (
-                    <div 
-                      key={parent.id} 
-                      className={`group/card flex flex-col rounded-2xl border transition-all duration-300 py-2.5 px-3 ${
-                        isParentActive || isAnySubActive
-                          ? 'border-[#f00856]/20 bg-[#f00856]/5 shadow-[inset_0_0_12px_rgba(255,255,255,0.01)] border-l-2 border-l-[#f00856]'
-                          : 'border-white/5 bg-white/[0.01] hover:bg-white/[0.03] hover:border-white/10'
-                      }`}
-                    >
-                      {/* Parent Row Button */}
+                    <div key={parent.id} className="flex flex-col">
+                      {/* Parent Row */}
                       <button
                         onClick={() => {
                           setExpandedCategoryId(prev => prev === parent.id ? null : parent.id);
                           handleCategorySelect(parent.slug);
                         }}
-                        className="w-full flex items-center justify-between text-left transition-all duration-150 group-hover/card:translate-x-0.5"
+                        className={`w-full flex items-center justify-between text-left py-1 text-xs transition-all ${
+                          isParentActive || isAnySubActive
+                            ? 'text-white font-bold'
+                            : 'text-slate-400 hover:text-white font-medium'
+                        }`}
                       >
-                        <div className="flex items-center gap-2 min-w-0 pr-2">
-                          <span className={`font-black tracking-tight text-xs uppercase truncate ${
-                            isParentActive || isAnySubActive ? 'text-white' : 'text-slate-300 group-hover/card:text-white'
-                          }`}>
-                            {parent.name}
-                          </span>
+                        <div className="flex items-center gap-1 min-w-0 pr-2">
+                          <span className="truncate">{parent.name}</span>
                           {subcategories.length > 0 && (
                             <ChevronRight 
                               className={`w-3 h-3 text-slate-500 shrink-0 transition-transform duration-200 ${
@@ -324,10 +307,8 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                             />
                           )}
                         </div>
-                        <span className={`text-[10px] font-bold shrink-0 ${
-                          isParentActive || isAnySubActive ? 'text-[#f00856]' : 'text-slate-500 group-hover/card:text-slate-300'
-                        }`}>
-                          {parent.published_products_count}
+                        <span className={`text-[10px] font-mono shrink-0 ml-2 ${isParentActive || isAnySubActive ? 'text-[#f00856]' : 'text-slate-500'}`}>
+                          [{parent.published_products_count}]
                         </span>
                       </button>
 
@@ -335,23 +316,23 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                       <div className={`category-accordion-wrapper ${isExpanded ? 'category-accordion-wrapper--open' : ''}`}>
                         <div className="category-accordion-content">
                           {isExpanded && subcategories.length > 0 && (
-                            <div className="pl-2 flex flex-col gap-1 border-l border-white/5 ml-1 mt-3 mb-1">
+                            <div className="pl-3 flex flex-col gap-1 border-l border-white/5 ml-1.5 mt-0.5 mb-1">
                               {subcategories.map((sub, index) => {
                                 const isSubActive = categorySlug === sub.slug;
                                 return (
                                   <button
                                     key={sub.id}
                                     onClick={() => handleCategorySelect(sub.slug)}
-                                    className={`subcategory-stagger-item w-full flex items-center justify-between text-left text-xs py-1.5 px-2 rounded-lg font-semibold transition-all duration-150 ${
+                                    className={`subcategory-stagger-item w-full flex items-center justify-between text-left text-xs py-0.5 transition-all ${
                                       isSubActive
-                                        ? 'bg-white/5 text-[#f00856]'
-                                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                        ? 'text-[#f00856] font-bold'
+                                        : 'text-slate-400 hover:text-white font-medium'
                                     }`}
-                                    style={{ animationDelay: `${index * 25}ms` }}
+                                    style={{ animationDelay: `${index * 15}ms` }}
                                   >
-                                    <span className="text-[11px] font-medium truncate pr-2">{sub.name}</span>
-                                    <span className="filter-counter-badge text-[8px] font-bold text-[#f00856] bg-[#f00856]/5 border border-[#f00856]/15 px-1.5 py-0.5 rounded-full tracking-tighter shadow-sm shrink-0">
-                                      {sub.published_products_count}
+                                    <span className="text-[11px] truncate pr-2">{sub.name}</span>
+                                    <span className="text-[10px] font-mono shrink-0">
+                                      [{sub.published_products_count}]
                                     </span>
                                   </button>
                                 );
@@ -370,51 +351,62 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
 
       {/* Brands */}
       <div>
-        <h3 className="font-bold text-white uppercase text-xs tracking-widest mb-3">Marca</h3>
-        <div className="grid gap-2">
+        <h3 className="font-bold text-slate-400 uppercase text-[10px] tracking-widest mb-2 block">Marca</h3>
+        <div className="flex flex-col gap-1">
           <button
             onClick={() => handleBrandSelect('')}
-            className={`soft rounded-xl p-3 text-left text-sm font-bold transition-all ${!brandSlug ? 'border-[#f00856] bg-[#f00856]/10 text-white' : 'text-slate-400 hover:text-white'}`}
+            className={`w-full flex items-center justify-between text-left py-1 text-xs transition-all ${
+              !brandSlug
+                ? 'text-[#f00856] font-bold'
+                : 'text-slate-400 hover:text-white font-medium'
+            }`}
           >
-            Todas las marcas
+            <span>Todas las marcas</span>
           </button>
           {brandsLoading
-            ? [...Array(4)].map((_, i) => <div key={i} className="h-10 bg-white/5 rounded-xl animate-pulse" />)
-            : visibleBrands.map(b => (
-              <button
-                key={b.id}
-                onClick={() => handleBrandSelect(b.slug)}
-                className={`soft rounded-xl p-3 text-left text-sm font-bold transition-all ${brandSlug === b.slug ? 'border-[#f00856] bg-[#f00856]/10 text-white' : 'text-slate-400 hover:text-white'}`}
-              >
-                {b.name}
-              </button>
-            ))
+            ? [...Array(4)].map((_, i) => <div key={i} className="h-6 bg-white/5 rounded animate-pulse" />)
+            : visibleBrands.map(b => {
+                const isBrandActive = brandSlug === b.slug;
+                return (
+                  <button
+                    key={b.id}
+                    onClick={() => handleBrandSelect(b.slug)}
+                    className={`w-full flex items-center justify-between text-left py-1 text-xs transition-all ${
+                      isBrandActive
+                        ? 'text-[#f00856] font-bold'
+                        : 'text-slate-400 hover:text-white font-medium'
+                    }`}
+                  >
+                    <span>{b.name}</span>
+                  </button>
+                );
+              })
           }
         </div>
       </div>
 
       {/* Price Range — functional inputs */}
       <div>
-        <h3 className="font-bold text-white uppercase text-xs tracking-widest mb-3">Precio</h3>
+        <h3 className="font-bold text-slate-400 uppercase text-[10px] tracking-widest mb-2 block">Precio</h3>
         <div className="flex gap-2">
           <input
             type="number"
             placeholder="Mín"
             value={priceMin}
             onChange={e => setPriceMin(e.target.value)}
-            className="w-1/2 border border-white/10 px-3 py-2 text-sm bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-primary-400 placeholder:text-slate-500 rounded-xl"
+            className="w-1/2 border border-white/10 px-2 py-1.5 text-xs bg-white/5 text-white focus:outline-none focus:ring-1 focus:ring-[#f00856] placeholder:text-slate-500 rounded-lg"
           />
           <input
             type="number"
             placeholder="Máx"
             value={priceMax}
             onChange={e => setPriceMax(e.target.value)}
-            className="w-1/2 border border-white/10 px-3 py-2 text-sm bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-primary-400 placeholder:text-slate-500 rounded-xl"
+            className="w-1/2 border border-white/10 px-2 py-1.5 text-xs bg-white/5 text-white focus:outline-none focus:ring-1 focus:ring-[#f00856] placeholder:text-slate-500 rounded-lg"
           />
         </div>
         <button
           onClick={applyPriceFilter}
-          className="mt-2 w-full py-2 text-xs font-bold bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-colors"
+          className="mt-2 w-full py-1.5 text-xs font-bold bg-[#f00856] text-white rounded-lg hover:bg-[#d0074a] transition-colors"
         >
           Aplicar
         </button>
@@ -424,7 +416,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
       {(categorySlug || brandSlug || searchQ || priceMin || priceMax || groupSlug) && (
         <button
           onClick={clearAllFilters}
-          className="w-full py-2 text-xs font-bold text-red-400 border border-red-500/30 rounded-xl hover:bg-red-500/10 transition-colors"
+          className="w-full py-1.5 text-xs font-bold text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/5 transition-colors"
         >
           Limpiar filtros
         </button>
@@ -591,11 +583,11 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
         </div>
       )}
 
-      <main className="max-w-[1500px] mx-auto px-6 py-10 grid lg:grid-cols-[240px_1fr] gap-10">
+      <main className="max-w-[1500px] mx-auto px-6 py-10 grid lg:grid-cols-[260px_1fr] gap-8">
         {/* FILTERS ASIDE — hidden on mobile, shown on desktop */}
-        <aside className="hidden lg:block glass rounded-none p-6 h-[calc(100vh-130px)] max-h-[calc(100vh-130px)] min-h-0 sticky top-24 z-10 flex flex-col overflow-hidden">
+        <aside className="hidden lg:block glass rounded-none p-5 h-[calc(100vh-120px)] max-h-[calc(100vh-120px)] min-h-0 sticky top-24 z-10 flex flex-col overflow-hidden">
           <div className="flex items-center justify-between mb-4 shrink-0">
-            <h2 className="font-black text-2xl tracking-tight">Filtros</h2>
+            <h2 className="font-black text-xl tracking-tight">Filtros</h2>
             {(categorySlug || brandSlug || searchQ || groupSlug) && (
               <button onClick={() => navigate('/shop')} className="text-xs font-black text-[#f00856] uppercase hover:underline">Limpiar</button>
             )}
