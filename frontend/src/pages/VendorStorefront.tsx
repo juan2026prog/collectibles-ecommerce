@@ -51,6 +51,7 @@ export default function VendorStorefront() {
   const [brandsExpanded, setBrandsExpanded] = useState(false);
   const [searchBrandQuery, setSearchBrandQuery] = useState('');
   const [mobileFilters, setMobileFilters] = useState(false);
+  const [hoverFollow, setHoverFollow] = useState(false);
 
   const pageSize = 24;
   const cart = useCartContext();
@@ -378,6 +379,7 @@ export default function VendorStorefront() {
                 ? 'text-[#f00856] font-bold'
                 : 'text-slate-400 hover:text-white font-medium'
             }`}
+            style={!categorySlug && isOfficial ? { color: accentColor } : undefined}
           >
             <span className="truncate pr-2">Todos los productos</span>
             <span className="text-[10px] font-mono shrink-0 ml-2">[{totalProducts}]</span>
@@ -418,11 +420,11 @@ export default function VendorStorefront() {
                           />
                         )}
                       </div>
-                      <span className={`text-[10px] font-mono shrink-0 ml-2 ${isParentActive || isAnySubActive ? 'text-[#f00856]' : 'text-slate-500'}`}>
+                      <span className={`text-[10px] font-mono shrink-0 ml-2 ${isParentActive || isAnySubActive ? 'text-[#f00856]' : 'text-slate-500'}`} style={(isParentActive || isAnySubActive) && isOfficial ? { color: accentColor } : undefined}>
                         [{count}]
                       </span>
                     </button>
-
+ 
                     <div className={`category-accordion-wrapper ${isExpanded ? 'category-accordion-wrapper--open' : ''}`}>
                       <div className="category-accordion-content">
                         {isExpanded && subcategories.length > 0 && (
@@ -438,7 +440,10 @@ export default function VendorStorefront() {
                                       ? 'text-[#f00856] font-bold'
                                       : 'text-slate-400 hover:text-white font-medium'
                                   }`}
-                                  style={{ animationDelay: `${index * 15}ms` }}
+                                  style={{ 
+                                    animationDelay: `${index * 15}ms`,
+                                    color: isSubActive && isOfficial ? accentColor : undefined
+                                  }}
                                 >
                                   <span className="text-[11px] truncate pr-2">{sub.name}</span>
                                   <span className="text-[10px] font-mono shrink-0 text-slate-500">
@@ -470,6 +475,7 @@ export default function VendorStorefront() {
                 ? 'text-[#f00856] font-bold'
                 : 'text-slate-400 hover:text-white font-medium'
             }`}
+            style={!brandSlug && isOfficial ? { color: accentColor } : undefined}
           >
             <span>Todas las marcas</span>
           </button>
@@ -497,20 +503,21 @@ export default function VendorStorefront() {
                       {topFacets.map(b => {
                         const isBrandActive = brandSlug === b.brand_slug;
                         return (
-                          <button
-                            key={b.brand_id}
-                            onClick={() => handleBrandSelect(b.brand_slug)}
-                            className={`w-full flex items-center justify-between text-left py-1 text-xs transition-all ${
-                              isBrandActive
-                                ? 'text-[#f00856] font-bold'
-                                : 'text-slate-400 hover:text-white font-medium'
-                            }`}
-                          >
-                            <span className="truncate pr-2">{b.brand_name}</span>
-                            <span className={`text-[10px] font-mono shrink-0 ml-2 ${isBrandActive ? 'text-[#f00856]' : 'text-slate-500'}`}>
-                              [{b.product_count}]
-                            </span>
-                          </button>
+                           <button
+                             key={b.brand_id}
+                             onClick={() => handleBrandSelect(b.brand_slug)}
+                             className={`w-full flex items-center justify-between text-left py-1 text-xs transition-all ${
+                               isBrandActive
+                                 ? 'text-[#f00856] font-bold'
+                                 : 'text-slate-400 hover:text-white font-medium'
+                             }`}
+                             style={isBrandActive && isOfficial ? { color: accentColor } : undefined}
+                           >
+                             <span className="truncate pr-2">{b.brand_name}</span>
+                             <span className={`text-[10px] font-mono shrink-0 ml-2 ${isBrandActive ? 'text-[#f00856]' : 'text-slate-500'}`} style={isBrandActive && isOfficial ? { color: accentColor } : undefined}>
+                               [{b.product_count}]
+                             </span>
+                           </button>
                         );
                       })}
                       
@@ -518,6 +525,7 @@ export default function VendorStorefront() {
                         <button
                           onClick={() => setBrandsExpanded(true)}
                           className="text-[11px] font-bold text-[#f00856] hover:underline text-left mt-1 py-0.5"
+                          style={isOfficial ? { color: accentColor } : undefined}
                         >
                           Ver todas las marcas ({brandFacets.length})
                         </button>
@@ -553,9 +561,10 @@ export default function VendorStorefront() {
                                         ? 'text-[#f00856] font-bold'
                                         : 'text-slate-400 hover:text-white font-medium'
                                     }`}
+                                    style={isBrandActive && isOfficial ? { color: accentColor } : undefined}
                                   >
                                     <span className="truncate pr-2">{b.brand_name}</span>
-                                    <span className={`text-[10px] font-mono shrink-0 ml-2 ${isBrandActive ? 'text-[#f00856]' : 'text-slate-500'}`}>
+                                    <span className={`text-[10px] font-mono shrink-0 ml-2 ${isBrandActive ? 'text-[#f00856]' : 'text-slate-500'}`} style={isBrandActive && isOfficial ? { color: accentColor } : undefined}>
                                       [{b.product_count}]
                                     </span>
                                   </button>
@@ -607,6 +616,7 @@ export default function VendorStorefront() {
           <button
             type="submit"
             className="w-full py-1.5 text-xs font-bold bg-[#f00856] text-white rounded-lg hover:bg-[#d0074a] transition-colors"
+            style={isOfficial ? { backgroundColor: accentColor } : undefined}
           >
             Aplicar
           </button>
@@ -658,6 +668,11 @@ export default function VendorStorefront() {
   const showRating = store.reviews_count > 0;
   const showResponseRate = store.response_rate > 0;
   const showCompletedOrders = store.completed_orders > 0 || store.sales_count > 0;
+
+  // Custom accent and design helpers
+  const isOfficial = !!store?.is_official;
+  const accentColor = isOfficial && store?.accent_color ? store.accent_color : '#f00856';
+  const hasBanner = isOfficial && !!store?.banner_url;
 
   return (
     <div className="min-h-screen bg-[#05070f] pb-20 pt-20">
@@ -714,82 +729,197 @@ export default function VendorStorefront() {
           {/* Main Storefront Area */}
           <main className="flex-1 min-w-0 space-y-6">
             
-            {/* Store Header Card */}
-            <div className="glass rounded-[24px] border border-white/5 p-6 relative overflow-hidden shadow-2xl">
-              {/* Background Glow */}
-              <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-bl from-[#f00856]/5 to-indigo-500/5 rounded-full blur-3xl -z-10" />
-              
-              <div className="flex flex-col md:flex-row gap-6 items-start md:items-center">
-                {/* Store Logo */}
-                <div className="w-24 h-24 rounded-2xl border border-white/10 bg-[#0a0d16] overflow-hidden flex-shrink-0 flex items-center justify-center p-2">
-                  {store.logo_url ? (
-                    <img src={store.logo_url} alt={store.store_name} className="w-full h-full object-contain" />
-                  ) : (
-                    <Store className="w-10 h-10 text-white/20" />
-                  )}
+             {isOfficial ? (
+              <>
+                {/* Banner Container */}
+                {hasBanner && (
+                  <div className="w-full relative overflow-hidden rounded-[24px] border border-white/5 mb-6 aspect-[2.5/1] md:aspect-[5/1] bg-[#0a0d16] shadow-2xl">
+                    <picture>
+                      {store.banner_mobile_url && (
+                        <source media="(max-width: 767px)" srcSet={store.banner_mobile_url} />
+                      )}
+                      <img
+                        src={store.banner_url}
+                        alt={store.store_name}
+                        className="w-full h-full object-cover"
+                        style={{
+                          objectPosition: store.banner_position || 'center'
+                        }}
+                        loading="lazy"
+                      />
+                    </picture>
+                  </div>
+                )}
+
+                {/* Premium Store Header Card */}
+                <div className="glass rounded-[24px] border border-white/5 p-6 relative overflow-hidden shadow-2xl">
+                  {/* Decorative accent color line */}
+                  <div 
+                    className="absolute top-0 left-0 right-0 h-[3px]" 
+                    style={{ backgroundColor: accentColor }} 
+                  />
+                  
+                  <div className="flex flex-col md:flex-row gap-6 items-center md:items-center relative z-10">
+                    {/* Store Logo */}
+                    <div 
+                      className={`w-20 h-20 md:w-28 md:h-28 rounded-2xl border-2 border-white/10 bg-[#0a0d16] overflow-hidden flex-shrink-0 flex items-center justify-center p-2 relative shadow-lg transition-all duration-300 ${
+                        hasBanner ? '-mt-12 md:-mt-16 border-white/20' : ''
+                      }`}
+                    >
+                      {store.logo_url ? (
+                        <img src={store.logo_url} alt={store.store_name} className="w-full h-full object-contain" />
+                      ) : (
+                        <Store className="w-10 h-10 text-white/20" />
+                      )}
+                    </div>
+
+                    {/* Info Text */}
+                    <div className="flex-grow min-w-0 text-center md:text-left space-y-2">
+                      <div className="flex flex-col md:flex-row flex-wrap items-center gap-2.5 justify-center md:justify-start">
+                        <h1 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight">
+                          {store.store_name}
+                        </h1>
+
+                        {/* Official Store Badge */}
+                        <span 
+                          className="text-[9px] px-3 py-1 rounded-full uppercase tracking-wider font-black border transition-all duration-300 shadow-sm"
+                          style={{ 
+                            backgroundColor: `${accentColor}15`, 
+                            borderColor: `${accentColor}30`, 
+                            color: accentColor 
+                          }}
+                        >
+                          {store.official_badge_text || 'TIENDA OFICIAL'}
+                        </span>
+
+                        {kycStatus === 'approved' && (
+                          <span className="text-[8px] bg-white/5 border border-white/10 text-slate-300 px-2.5 py-1 rounded-full uppercase tracking-wider font-black">
+                            VERIFICADO
+                          </span>
+                        )}
+
+                        {badges && badges.map((b: any) => (
+                          <span key={b.id} className="text-[8px] bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 px-2.5 py-1 rounded-full uppercase tracking-wider font-black">
+                            {b.name}
+                          </span>
+                        ))}
+                      </div>
+
+                      {store.description && (
+                        <p className="text-slate-300 text-xs font-semibold leading-relaxed max-w-2xl mx-auto md:mx-0 line-clamp-3 md:line-clamp-none">
+                          {store.description}
+                        </p>
+                      )}
+
+                      <div className="flex flex-wrap justify-center md:justify-start gap-x-4 gap-y-1 mt-2 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                        <span>Miembro desde {memberSinceYear}</span>
+                        <span>•</span>
+                        <span>{totalProducts} productos disponibles</span>
+                      </div>
+                    </div>
+
+                    {/* Follow Button */}
+                    <div className="w-full md:w-auto self-stretch md:self-center flex flex-col justify-center">
+                      <button
+                        onClick={handleFollowClick}
+                        disabled={followLoading}
+                        onMouseEnter={() => setHoverFollow(true)}
+                        onMouseLeave={() => setHoverFollow(false)}
+                        className={`w-full md:w-auto py-3 px-6 rounded-xl font-black text-xs uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 ${
+                          isFollowing 
+                            ? 'bg-white/10 hover:bg-red-500/20 text-red-500 border border-red-500/30' 
+                            : 'bg-white text-black'
+                        }`}
+                        style={!isFollowing ? {
+                          backgroundColor: hoverFollow ? accentColor : '#ffffff',
+                          color: hoverFollow ? '#ffffff' : '#000000'
+                        } : undefined}
+                      >
+                        <Users className="w-3.5 h-3.5" />
+                        {isFollowing ? 'Siguiendo' : 'Seguir tienda'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
-
-                {/* Info Text */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <h1 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight">
-                      {store.store_name}
-                    </h1>
-
-                    {/* Official & Verification Badges */}
-                    {store.is_official &&
-                     store.status === 'active' &&
-                     store.approved_by &&
-                     store.approved_at && (
-                      <span className="text-[8px] bg-red-500 border border-red-400 text-white px-2.5 py-1 rounded-full uppercase tracking-wider font-black">
-                        TIENDA OFICIAL
-                      </span>
+              </>
+            ) : (
+              /* Store Header Card */
+              <div className="glass rounded-[24px] border border-white/5 p-6 relative overflow-hidden shadow-2xl">
+                {/* Background Glow */}
+                <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-bl from-[#f00856]/5 to-indigo-500/5 rounded-full blur-3xl -z-10" />
+                
+                <div className="flex flex-col md:flex-row gap-6 items-start md:items-center">
+                  {/* Store Logo */}
+                  <div className="w-24 h-24 rounded-2xl border border-white/10 bg-[#0a0d16] overflow-hidden flex-shrink-0 flex items-center justify-center p-2">
+                    {store.logo_url ? (
+                      <img src={store.logo_url} alt={store.store_name} className="w-full h-full object-contain" />
+                    ) : (
+                      <Store className="w-10 h-10 text-white/20" />
                     )}
-
-                    {kycStatus === 'approved' && (
-                      <span className="text-[8px] bg-[#f00856]/10 border border-[#f00856]/20 text-[#f00856] px-2.5 py-1 rounded-full uppercase tracking-wider font-black">
-                        VERIFICADO
-                      </span>
-                    )}
-
-                    {badges && badges.map((b: any) => (
-                      <span key={b.id} className="text-[8px] bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 px-2.5 py-1 rounded-full uppercase tracking-wider font-black">
-                        {b.name}
-                      </span>
-                    ))}
                   </div>
 
-                  <p className="text-slate-400 mt-2 text-xs font-semibold leading-relaxed max-w-xl">
-                    {store.description || 'Tienda oficial certificada en el ecosistema de Collectibles Uruguay.'}
-                  </p>
+                  {/* Info Text */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <h1 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight">
+                        {store.store_name}
+                      </h1>
 
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                    <span>Miembro desde {memberSinceYear}</span>
-                    <span>•</span>
-                    <span>{totalProducts} productos disponibles</span>
+                      {/* Official & Verification Badges */}
+                      {store.is_official &&
+                       store.status === 'active' &&
+                       store.approved_by &&
+                       store.approved_at && (
+                        <span className="text-[8px] bg-red-500 border border-red-400 text-white px-2.5 py-1 rounded-full uppercase tracking-wider font-black">
+                          TIENDA OFICIAL
+                        </span>
+                      )}
+
+                      {kycStatus === 'approved' && (
+                        <span className="text-[8px] bg-[#f00856]/10 border border-[#f00856]/20 text-[#f00856] px-2.5 py-1 rounded-full uppercase tracking-wider font-black">
+                          VERIFICADO
+                        </span>
+                      )}
+
+                      {badges && badges.map((b: any) => (
+                        <span key={b.id} className="text-[8px] bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 px-2.5 py-1 rounded-full uppercase tracking-wider font-black">
+                          {b.name}
+                        </span>
+                      ))}
+                    </div>
+
+                    <p className="text-slate-400 mt-2 text-xs font-semibold leading-relaxed max-w-xl">
+                      {store.description || 'Tienda oficial certificada en el ecosistema de Collectibles Uruguay.'}
+                    </p>
+
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                      <span>Miembro desde {memberSinceYear}</span>
+                      <span>•</span>
+                      <span>{totalProducts} productos disponibles</span>
+                    </div>
                   </div>
-                </div>
 
-                {/* Follow Button */}
-                <div className="w-full md:w-auto self-stretch md:self-center flex flex-col justify-center">
-                  <button
-                    onClick={handleFollowClick}
-                    disabled={followLoading}
-                    className={`w-full md:w-auto py-3 px-6 rounded-xl font-black text-xs uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 ${
-                      isFollowing 
-                        ? 'bg-white/10 hover:bg-red-500/20 text-red-500 border border-red-500/30' 
-                        : 'bg-white hover:bg-[#f00856] text-black hover:text-white'
-                    }`}
-                  >
-                    <Users className="w-3.5 h-3.5" />
-                    {isFollowing ? 'Siguiendo' : 'Seguir tienda'}
-                  </button>
+                  {/* Follow Button */}
+                  <div className="w-full md:w-auto self-stretch md:self-center flex flex-col justify-center">
+                    <button
+                      onClick={handleFollowClick}
+                      disabled={followLoading}
+                      className={`w-full md:w-auto py-3 px-6 rounded-xl font-black text-xs uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 ${
+                        isFollowing 
+                          ? 'bg-white/10 hover:bg-red-500/20 text-red-500 border border-red-500/30' 
+                          : 'bg-white hover:bg-[#f00856] text-black hover:text-white'
+                      }`}
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      {isFollowing ? 'Siguiendo' : 'Seguir tienda'}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Trust Metrics Section */}
-            <div className="bg-[#0b0e17] border border-white/5 rounded-2xl p-4 flex flex-wrap divide-x divide-white/5 items-center justify-between text-center shadow-md">
+            <div className="bg-[#0b0e17] border border-white/5 rounded-2xl p-4 flex overflow-x-auto md:overflow-x-visible no-scrollbar divide-x divide-white/5 items-center justify-between text-center shadow-md">
               {showRating ? (
                 <div className="flex-1 min-w-[120px] py-1">
                   <div className="flex items-center justify-center gap-1 text-amber-400 font-bold mb-0.5">
@@ -818,7 +948,7 @@ export default function VendorStorefront() {
 
               {showCompletedOrders && (
                 <div className="flex-1 min-w-[120px] py-1">
-                  <div className="text-[#f00856] text-sm font-black mb-0.5">
+                  <div className="text-[#f00856] text-sm font-black mb-0.5" style={isOfficial ? { color: accentColor } : undefined}>
                     {(store.completed_orders || store.sales_count).toLocaleString()}
                   </div>
                   <div className="text-[9px] text-slate-500 uppercase tracking-widest font-bold">Ventas completadas</div>
@@ -826,8 +956,10 @@ export default function VendorStorefront() {
               )}
 
               <div className="flex-1 min-w-[120px] py-1">
-                <div className="text-white text-sm font-black mb-0.5">{totalProducts}</div>
-                <div className="text-[9px] text-slate-500 uppercase tracking-widest font-bold">Productos disponibles</div>
+                <div className="text-white text-sm font-black mb-0.5" style={isOfficial ? { color: accentColor } : undefined}>{totalProducts}</div>
+                <div className="text-[9px] text-slate-500 uppercase tracking-widest font-bold">
+                  {isOfficial ? 'Productos oficiales' : 'Productos disponibles'}
+                </div>
               </div>
             </div>
 
@@ -842,7 +974,7 @@ export default function VendorStorefront() {
                   <SlidersHorizontal className="w-3.5 h-3.5" />
                   Filtros
                   {(categorySlug || brandSlug || searchQ || priceMin || priceMax) && (
-                    <span className="w-2 h-2 rounded-full bg-[#f00856]" />
+                    <span className="w-2 h-2 rounded-full bg-[#f00856]" style={isOfficial ? { backgroundColor: accentColor } : undefined} />
                   )}
                 </button>
 
@@ -883,7 +1015,7 @@ export default function VendorStorefront() {
             {/* Product Grid & Loader */}
             {loadingProducts ? (
               <div className="text-center py-24 glass rounded-[24px] border border-white/5 shadow-2xl">
-                <Store className="w-10 h-10 text-[#f00856] mx-auto mb-4 animate-pulse" />
+                <Store className="w-10 h-10 text-[#f00856] mx-auto mb-4 animate-pulse" style={isOfficial ? { color: accentColor } : undefined} />
                 <h3 className="text-xs font-black text-white tracking-widest uppercase">Cargando catálogo...</h3>
               </div>
             ) : products.length === 0 ? (

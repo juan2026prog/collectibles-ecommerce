@@ -27,6 +27,10 @@ export default function VStores() {
     social_instagram: '',
     social_facebook: '',
     social_twitter: '',
+    is_official: false,
+    banner_mobile_url: '',
+    accent_color: '',
+    banner_position: 'center',
   });
 
   // Store Brands management
@@ -37,6 +41,7 @@ export default function VStores() {
 
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [uploadingBannerMobile, setUploadingBannerMobile] = useState(false);
 
   const { toast } = useToast();
   const { confirm } = useConfirmModal();
@@ -154,22 +159,31 @@ export default function VStores() {
     return data.publicUrl;
   }
 
-  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'banner') {
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'banner' | 'banner_mobile') {
     if (!e.target.files?.[0]) return;
     const file = e.target.files[0];
     
     if (type === 'logo') setUploadingLogo(true);
-    else setUploadingBanner(true);
+    else if (type === 'banner') setUploadingBanner(true);
+    else setUploadingBannerMobile(true);
 
     try {
       const url = await uploadImage(file, type);
-      setForm(prev => ({ ...prev, [type === 'logo' ? 'logo_url' : 'banner_url']: url }));
-      toast.success(type === 'logo' ? 'Logo subido exitosamente' : 'Banner subido exitosamente');
+      setForm(prev => ({ 
+        ...prev, 
+        [type === 'logo' ? 'logo_url' : type === 'banner' ? 'banner_url' : 'banner_mobile_url']: url 
+      }));
+      toast.success(
+        type === 'logo' ? 'Logo subido exitosamente' 
+        : type === 'banner' ? 'Banner subido exitosamente' 
+        : 'Banner móvil subido exitosamente'
+      );
     } catch (err: any) {
       toast.error('Error al subir imagen: ' + err.message);
     } finally {
       if (type === 'logo') setUploadingLogo(false);
-      else setUploadingBanner(false);
+      else if (type === 'banner') setUploadingBanner(false);
+      else setUploadingBannerMobile(false);
     }
   }
 
@@ -203,6 +217,10 @@ export default function VStores() {
       social_instagram: '',
       social_facebook: '',
       social_twitter: '',
+      is_official: false,
+      banner_mobile_url: '',
+      accent_color: '',
+      banner_position: 'center',
     });
     setShowForm(true);
   }
@@ -223,6 +241,10 @@ export default function VStores() {
       social_instagram: social.instagram || '',
       social_facebook: social.facebook || '',
       social_twitter: social.twitter || '',
+      is_official: store.is_official || false,
+      banner_mobile_url: store.banner_mobile_url || '',
+      accent_color: store.accent_color || '',
+      banner_position: store.banner_position || 'center',
     });
     setShowForm(true);
   }
@@ -257,6 +279,10 @@ export default function VStores() {
       social_links: socialLinks,
       seo_title: form.seo_title.trim() || null,
       seo_description: form.seo_description.trim() || null,
+      is_official: form.is_official,
+      banner_mobile_url: form.banner_mobile_url.trim() || null,
+      accent_color: form.accent_color.trim() || null,
+      banner_position: form.banner_position || 'center',
     };
 
     try {
@@ -412,7 +438,7 @@ export default function VStores() {
           </div>
 
           <form onSubmit={handleSave} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Nombre Comercial de la Tienda *</label>
                 <input
@@ -436,6 +462,18 @@ export default function VStores() {
                   required
                 />
                 <p className="text-[10px] text-gray-400 mt-1">Se verá como: /store/slug</p>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Tipo de Tienda</label>
+                <select
+                  value={form.is_official ? 'official' : 'vendor'}
+                  onChange={e => setForm(prev => ({ ...prev, is_official: e.target.value === 'official' }))}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:outline-none focus:border-primary-600 transition-colors"
+                >
+                  <option value="vendor">Vendor Común</option>
+                  <option value="official">Tienda Oficial</option>
+                </select>
               </div>
             </div>
 
@@ -587,6 +625,162 @@ export default function VStores() {
                 </div>
               </div>
             </div>
+
+            {/* Personalización de Tienda Oficial (Premium Customizations) */}
+            {form.is_official && (
+              <div className="border-t border-gray-100 pt-6 space-y-6">
+                <h4 className="text-xs font-black text-gray-700 uppercase tracking-widest">Personalización de Tienda Oficial</h4>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Banner Móvil (Opcional)</label>
+                    <div className="flex gap-3 items-center">
+                      <div className="w-20 h-12 rounded-lg bg-gray-50 border overflow-hidden flex items-center justify-center flex-shrink-0">
+                        {form.banner_mobile_url ? (
+                          <img src={form.banner_mobile_url} alt="Mobile Banner" className="w-full h-full object-cover" />
+                        ) : (
+                          <ImageIcon className="w-5 h-5 text-gray-300" />
+                        )}
+                      </div>
+                      <div className="flex-1 space-y-1">
+                        <input
+                          type="text"
+                          value={form.banner_mobile_url}
+                          onChange={e => setForm(prev => ({ ...prev, banner_mobile_url: e.target.value }))}
+                          className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-[11px] text-gray-900 focus:outline-none focus:border-primary-600 transition-colors"
+                          placeholder="https://..."
+                        />
+                        <label className="inline-flex items-center justify-center px-3 py-1 border border-gray-200 rounded-lg text-[10px] font-bold text-gray-700 bg-white hover:bg-gray-50 cursor-pointer transition-colors w-full">
+                          {uploadingBannerMobile ? 'Subiendo...' : 'Subir archivo'}
+                          <input type="file" accept="image/*" className="hidden" onChange={e => handleFileUpload(e, 'banner_mobile')} disabled={uploadingBannerMobile} />
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Color de Acento (Hex)</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="color"
+                        value={form.accent_color || '#ff0f6d'}
+                        onChange={e => setForm(prev => ({ ...prev, accent_color: e.target.value }))}
+                        className="w-10 h-10 border border-gray-200 rounded-lg cursor-pointer bg-white"
+                      />
+                      <input
+                        type="text"
+                        value={form.accent_color}
+                        onChange={e => setForm(prev => ({ ...prev, accent_color: e.target.value }))}
+                        className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-900 focus:outline-none focus:border-primary-600 transition-colors"
+                        placeholder="#ff0f6d"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Posición del Banner Desktop</label>
+                    <select
+                      value={form.banner_position || 'center'}
+                      onChange={e => setForm(prev => ({ ...prev, banner_position: e.target.value }))}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-xs text-gray-900 focus:outline-none focus:border-primary-600 transition-colors"
+                    >
+                      <option value="center">Centro</option>
+                      <option value="top">Arriba</option>
+                      <option value="bottom">Abajo</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Previews */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-4">
+                  {/* Desktop Preview */}
+                  <div className="space-y-2">
+                    <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Previsualización Escritorio</h5>
+                    <div className="bg-[#05070f] border border-white/10 rounded-xl p-4 overflow-hidden shadow-inner text-white select-none">
+                      {/* Banner Mock */}
+                      <div className="w-full aspect-[5/1] rounded-lg bg-slate-900/50 border border-white/5 relative overflow-hidden flex items-center justify-center">
+                        {form.banner_url ? (
+                          <img src={form.banner_url} alt="Banner Preview" className="w-full h-full object-cover" style={{ objectPosition: form.banner_position || 'center' }} />
+                        ) : (
+                          <span className="text-[10px] text-slate-600 font-bold uppercase tracking-wider">Sin Banner Configurado</span>
+                        )}
+                      </div>
+                      {/* Header Mock */}
+                      <div className="flex gap-4 items-center mt-3 relative pt-2">
+                        {/* Accent line mock */}
+                        <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ backgroundColor: form.accent_color || '#ff0f6d' }} />
+                        
+                        <div className="w-12 h-12 rounded-lg bg-[#0a0d16] border border-white/10 overflow-hidden flex items-center justify-center p-1 -mt-6">
+                          {form.logo_url ? (
+                            <img src={form.logo_url} alt="Logo Preview" className="w-full h-full object-contain" />
+                          ) : (
+                            <Store className="w-5 h-5 text-white/20" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold truncate uppercase">{form.store_name || 'Nombre Tienda'}</span>
+                            <span className="text-[7px] px-1.5 py-0.5 rounded-full font-black border" style={{ backgroundColor: `${form.accent_color || '#ff0f6d'}15`, borderColor: `${form.accent_color || '#ff0f6d'}30`, color: form.accent_color || '#ff0f6d' }}>
+                              OFICIAL
+                            </span>
+                          </div>
+                          {form.description ? (
+                            <p className="text-[9px] text-slate-400 line-clamp-1">{form.description}</p>
+                          ) : (
+                            <p className="text-[9px] text-slate-600 italic">Sin descripción</p>
+                          )}
+                        </div>
+                        <button type="button" className="px-3 py-1.5 bg-white text-black font-black text-[8px] rounded uppercase tracking-wider">
+                          Seguir
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Mobile Preview */}
+                  <div className="space-y-2">
+                    <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Previsualización Móvil</h5>
+                    <div className="bg-[#05070f] border border-white/10 rounded-xl p-4 overflow-hidden shadow-inner text-white max-w-[320px] mx-auto select-none">
+                      {/* Banner Mock */}
+                      <div className="w-full aspect-[2.5/1] rounded-lg bg-slate-900/50 border border-white/5 relative overflow-hidden flex items-center justify-center">
+                        {(form.banner_mobile_url || form.banner_url) ? (
+                          <img src={form.banner_mobile_url || form.banner_url} alt="Banner Preview Mobile" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-[10px] text-slate-600 font-bold uppercase tracking-wider">Sin Banner Configurado</span>
+                        )}
+                      </div>
+                      {/* Header Mock */}
+                      <div className="flex flex-col items-center text-center mt-2 relative pt-2">
+                        {/* Accent line mock */}
+                        <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ backgroundColor: form.accent_color || '#ff0f6d' }} />
+
+                        <div className="w-10 h-10 rounded-lg bg-[#0a0d16] border border-white/10 overflow-hidden flex items-center justify-center p-1 -mt-6">
+                          {form.logo_url ? (
+                            <img src={form.logo_url} alt="Logo Preview" className="w-full h-full object-contain" />
+                          ) : (
+                            <Store className="w-5 h-5 text-white/20" />
+                          )}
+                        </div>
+                        <div className="mt-1">
+                          <span className="text-xs font-bold block uppercase">{form.store_name || 'Nombre Tienda'}</span>
+                          <span className="text-[7px] px-1.5 py-0.5 rounded-full font-black border inline-block mt-0.5" style={{ backgroundColor: `${form.accent_color || '#ff0f6d'}15`, borderColor: `${form.accent_color || '#ff0f6d'}30`, color: form.accent_color || '#ff0f6d' }}>
+                            OFICIAL
+                          </span>
+                        </div>
+                        {form.description ? (
+                          <p className="text-[9px] text-slate-400 line-clamp-2 mt-1 leading-normal px-2">{form.description}</p>
+                        ) : (
+                          <p className="text-[9px] text-slate-600 italic mt-1">Sin descripción</p>
+                        )}
+                        <button type="button" className="w-full mt-2 py-1.5 bg-white text-black font-black text-[8px] rounded uppercase tracking-wider">
+                          Seguir
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="pt-6 border-t border-gray-100 flex gap-4">
               <button
