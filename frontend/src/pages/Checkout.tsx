@@ -12,6 +12,7 @@ import { createCheckoutOrder, getPublicPaymentProviders, startCheckoutPayment, t
 import { URUGUAY_LOCATIONS, DEPARTAMENTOS, calculateShipping, isLocationInSoyDeliveryZone, isSoyDeliveryAvailableForVendor } from '../utils/uruguayLocations';
 import { getProductImage, resolveImage } from '../lib/imageUtils';
 import { usePromotions, evaluateItemDiscount, evaluateItemDiscountDetailed } from '../hooks/usePromotions';
+import { trackGA4Event, trackClarityEvent, mapCartItemsToGA4 } from '../lib/analyticsTracker';
 import { generateMetaEventId, trackInitiateCheckout, trackAddPaymentInfo } from '../lib/meta/metaPixel';
 import { calculateUruboxEstimate, getEstimatedWeightKg } from '../lib/urubox';
 
@@ -103,6 +104,13 @@ export default function Checkout() {
   const initiateCheckoutTrackedRef = useRef(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'mercadopago' | 'dlocalgo' | 'paypal' | 'handy'>('mercadopago');
+  const prevPaymentMethodRef = useRef(paymentMethod);
+  useEffect(() => {
+    if (paymentMethod && paymentMethod !== prevPaymentMethodRef.current) {
+      trackClarityEvent('payment_method_selected');
+      prevPaymentMethodRef.current = paymentMethod;
+    }
+  }, [paymentMethod]);
   const [shippingMethod, setShippingMethod] = useState<'delivery' | 'pickup'>('delivery');
   const [publicPaymentProviders, setPublicPaymentProviders] = useState<PublicPaymentProvider[]>([]);
   const [bankPromos, setBankPromos] = useState<BankPromo[]>([]);
@@ -217,6 +225,11 @@ export default function Checkout() {
   const [vendorShippingCosts, setVendorShippingCosts] = useState<Record<string, number>>({});
   const [dacShippingLoading, setDacShippingLoading] = useState(false);
   const [dacShippingError, setDacShippingError] = useState<string | null>(null);
+  
+  type DacCalculationStatus = 'idle' | 'missing_data' | 'loading' | 'success' | 'error';
+  const [dacCalculationStatus, setDacCalculationStatus] = useState<DacCalculationStatus>('idle');
+  const [recalculateTrigger, setRecalculateTrigger] = useState(0);
+  const [step2Errors, setStep2Errors] = useState<Record<string, string>>({});
   const [selectedShippingMethod, setSelectedShippingMethod] = useState<'delivery' | 'pickup' | 'dac' | 'dac_home' | 'dac_agency'>('delivery');
   const [detectedKOficina, setDetectedKOficina] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -384,7 +397,8 @@ export default function Checkout() {
 
     // 5. Correo Uruguayo
     const correoActive = isPlatform ? false : !!s.correo_uruguayo?.active;
-    if (correoActive) {
+    const correoGlobalActive = !!globalProviders['correo_uruguayo'];
+    if (correoActive && correoGlobalActive) {
       options.push({
         id: 'correo_uruguayo',
         name: 'Correo Uruguayo',
@@ -461,12 +475,12 @@ export default function Checkout() {
       // Load global active status of delivery providers
       try {
         const { data: provs } = await supabase
-          .from('delivery_providers')
-          .select('provider_key, is_active');
+          .from('shipping_providers')
+          .select('code, is_active, status');
         if (provs) {
           const mapped: Record<string, boolean> = {};
           provs.forEach(p => {
-            mapped[p.provider_key] = p.is_active;
+            mapped[p.code] = p.is_active && p.status === 'active';
           });
           setGlobalProviders(prev => ({ ...prev, ...mapped }));
         }
@@ -646,6 +660,7 @@ export default function Checkout() {
       setDacShippingError(null);
       setDetectedKOficina(null);
       setVendorShippingCosts({});
+      setDacCalculationStatus('idle');
       return;
     }
 
@@ -655,6 +670,7 @@ export default function Checkout() {
         setDacShippingError(null);
         setDetectedKOficina(null);
         setVendorShippingCosts({});
+        setDacCalculationStatus('missing_data');
         return;
       }
       if (dacDeliveryMode === 'dac_home' && !form.city) {
@@ -662,6 +678,7 @@ export default function Checkout() {
         setDacShippingError(null);
         setDetectedKOficina(null);
         setVendorShippingCosts({});
+        setDacCalculationStatus('missing_data');
         return;
       }
     } else {
@@ -670,16 +687,28 @@ export default function Checkout() {
         setDacShippingError(null);
         setDetectedKOficina(null);
         setVendorShippingCosts({});
+        setDacCalculationStatus('missing_data');
         return;
       }
     }
 
     const isFreeShipping = total >= freeShippingThreshold;
-
     let active = true;
+    const controller = new AbortController();
+
     async function fetchDacCost() {
       setDacShippingLoading(true);
       setDacShippingError(null);
+      setDacCalculationStatus('loading');
+
+      // Technical event: shipping_calculation_started (Phase 5)
+      trackGA4Event('shipping_calculation_started', {
+        department: form.department,
+        city: resolvedCityForShipping,
+        shipping_method: selectedShippingMethod,
+        dac_mode: dacDeliveryMode
+      });
+
       try {
         let totalCost = 0;
         let lastKOficina = null;
@@ -695,7 +724,6 @@ export default function Checkout() {
         for (const [storeKey, groupItems] of Object.entries(groups)) {
           const groupTotal = groupItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
 
-          // Check if SoyDelivery is available for this vendor group (only in Montevideo)
           const v = vendorsData[storeKey];
           const hasSD = isMontevideo && v && v.shipping_settings?.soydelivery?.active && globalProviders['soydelivery'] && isSoyDeliveryAvailableForVendor(
             v.default_address, 
@@ -704,7 +732,7 @@ export default function Checkout() {
 
           const isDacActive = v?.shipping_settings?.dac?.active && globalProviders['dac'];
           const isUesActive = v?.shipping_settings?.ues?.active && globalProviders['ues'];
-          const isCorreoActive = v?.shipping_settings?.correo_uruguayo?.active;
+          const isCorreoActive = v?.shipping_settings?.correo_uruguayo?.active && globalProviders['correo_uruguayo'];
           const isManualActive = v?.shipping_settings?.manual?.active;
 
           if (isMontevideo && hasSD) {
@@ -743,7 +771,8 @@ export default function Checkout() {
               console.log(`[Checkout Debug] Fallback to DAC for ${storeKey} con payload:`, bodyPayload);
 
               const { data, error } = await supabase.functions.invoke('dac-get-cost', {
-                body: bodyPayload
+                body: bodyPayload,
+                signal: controller.signal
               });
 
               if (!active) return;
@@ -761,21 +790,18 @@ export default function Checkout() {
             }
           } else if (isUesActive) {
             const cost = isFreeShipping ? 0 : 220;
-            console.log(`[Checkout Debug] Fallback to UES for ${storeKey}: cost ${cost}`);
             costsByVendor[storeKey] = cost;
             totalCost += cost;
           } else if (isCorreoActive) {
             const cost = isFreeShipping ? 0 : 180;
-            console.log(`[Checkout Debug] Fallback to Correo Uruguayo for ${storeKey}: cost ${cost}`);
             costsByVendor[storeKey] = cost;
             totalCost += cost;
           } else if (isManualActive) {
             const fixedCost = Number(v.shipping_settings?.manual?.fixed_cost || v.shipping_settings?.manual?.fixed_price || 0);
-            console.log(`[Checkout Debug] Fallback to Envío manual for ${storeKey}: cost ${fixedCost}`);
             costsByVendor[storeKey] = fixedCost;
             totalCost += fixedCost;
           } else {
-            throw new Error("Este vendedor no tiene métodos de envío disponibles para tu dirección. Probá coordinar envío manual o contactanos.");
+            throw new Error("Este vendedor no tiene métodos de envío disponibles para tu dirección.");
           }
         }
 
@@ -783,12 +809,37 @@ export default function Checkout() {
         setVendorShippingCosts(costsByVendor);
         setDacShippingCost(isFreeShipping ? 0 : totalCost);
         setDetectedKOficina(lastKOficina);
+        setDacCalculationStatus('success');
+
+        // Technical event: shipping_calculation_success (Phase 5)
+        trackGA4Event('shipping_calculation_success', {
+          department: form.department,
+          city: resolvedCityForShipping,
+          shipping_cost: isFreeShipping ? 0 : totalCost,
+          is_free: isFreeShipping
+        });
       } catch (err: any) {
+        if (err.name === 'AbortError') {
+          console.log('[Checkout Debug] Aborted previous DAC cost fetch.');
+          return;
+        }
         console.error("Error fetching shipping cost:", err);
         if (active) {
-          setDacShippingError(err.message || "No pudimos calcular el costo de envío para esta localidad.");
+          const errorMessage = err.message || "No pudimos calcular el costo de envío para esta localidad.";
+          setDacShippingError(errorMessage);
           setDacShippingCost(null);
           setDetectedKOficina(null);
+          setDacCalculationStatus('error');
+
+          // Technical event: shipping_calculation_error (Phase 5)
+          trackGA4Event('shipping_calculation_error', {
+            department: form.department,
+            city: resolvedCityForShipping,
+            error_message: errorMessage
+          });
+
+          // Clarity Custom Event: shipping_calculation_error (Phase 6)
+          trackClarityEvent('shipping_calculation_error');
         }
       } finally {
         if (active) {
@@ -803,6 +854,7 @@ export default function Checkout() {
 
     return () => {
       active = false;
+      controller.abort();
       clearTimeout(timer);
     };
   }, [
@@ -817,7 +869,8 @@ export default function Checkout() {
     selectedAgency?.k_oficina,
     items.length,
     total,
-    vendorsData
+    vendorsData,
+    recalculateTrigger
   ]);
 
   const isLocationSelected = 
@@ -1414,6 +1467,20 @@ export default function Checkout() {
   async function processPaymentFlow(orderId: string, provider: string, email: string) {
     console.log("create-order processPaymentFlow started:", orderId, provider, email);
 
+    const normalizedProvider = 
+      provider === 'mercadopago' ? 'mercado_pago' :
+      provider === 'dlocalgo' ? 'dlocal_go' :
+      provider;
+
+    // GA4 & Clarity Redirect Telemetry (Phase 5 & 6)
+    trackGA4Event('payment_redirect_started', {
+      order_id: orderId,
+      gateway: normalizedProvider,
+      device_context: window.matchMedia('(max-width: 768px)').matches ? 'mobile' : 'desktop'
+    });
+
+    trackClarityEvent('payment_redirect_started');
+
     try {
       const paymentResult = await startCheckoutPayment({
         provider: provider as any,
@@ -1432,6 +1499,14 @@ export default function Checkout() {
       throw new Error("El proveedor no devolvió URL de redirección");
     } catch (err: any) {
       console.error("create-order processPaymentFlow error:", err);
+
+      // GA4 Redirect Error Telemetry (Phase 5)
+      trackGA4Event('payment_redirect_error', {
+        gateway: normalizedProvider,
+        error_code: err.message || String(err),
+        error_stage: 'payment_redirect'
+      });
+
       setCheckoutError("Error en el pago: " + (err.message || String(err)));
       setIsSubmitting(false);
       submitLockRef.current = false;
@@ -1441,20 +1516,33 @@ export default function Checkout() {
   const isPaymentBlocked = () => {
     if (selectedShippingMethod === 'pickup') {
       if (hasPickupError) return true;
+      return false;
     }
+
+    // Delivery check: block if calculations are not ready or errored
+    if (dacCalculationStatus === 'loading' || dacCalculationStatus === 'error' || dacCalculationStatus === 'missing_data') {
+      return true;
+    }
+    if (dacShippingCost === null) {
+      return true;
+    }
+
+    const isMvd = form.department === 'Montevideo';
+
     if (selectedShippingMethod === 'delivery') {
-      if (dacShippingCost === null) return true;
       if (dacShippingError !== null) return true;
-      if (!form.department || !form.city || !form.street || !form.phone) return true;
+      if (!form.department || !form.street || !form.phone) return true;
+      if (isMvd && !form.barrio) return true;
+      if (!isMvd && !form.city) return true;
     }
     if (selectedShippingMethod === 'dac' || selectedShippingMethod === 'dac_home') {
-      if (dacShippingCost === null) return true;
       if (dacShippingError !== null) return true;
-      if (!form.department || !form.city || !form.street || !form.phone) return true;
+      if (!form.department || !form.street || !form.phone) return true;
+      if (isMvd && !form.barrio) return true;
+      if (!isMvd && !form.city) return true;
       if (!form.ci || !validateUruguayanCI(form.ci)) return true;
     }
     if (selectedShippingMethod === 'dac_agency') {
-      if (dacShippingCost === null) return true;
       if (dacShippingError !== null) return true;
       if (!form.department || !form.phone) return true;
       if (!selectedAgency) return true;
@@ -1475,6 +1563,25 @@ export default function Checkout() {
       setCheckoutError('Debe aceptar los Términos y Condiciones para continuar.');
       return;
     }
+
+    // VALIDACIÓN DEFENSIVA: antes de crear la orden (Phase 1.5)
+    if (!validateStep2() || isPaymentBlocked()) {
+      setCheckoutError('Los datos de envío no son válidos o falta calcular el costo de DAC. Por favor revisá la sección de envío.');
+      return;
+    }
+
+    const normalizedPaymentType = 
+      paymentMethod === 'mercadopago' ? 'mercado_pago' :
+      paymentMethod === 'dlocalgo' ? 'dlocal_go' :
+      paymentMethod;
+
+    // GA4 standard Add Payment Info event
+    trackGA4Event('add_payment_info', {
+      currency: 'UYU',
+      value: subtotalWithShipping,
+      payment_type: normalizedPaymentType,
+      items: mapCartItemsToGA4(items)
+    });
 
     submitLockRef.current = true;
     setIsSubmitting(true);
@@ -1574,6 +1681,15 @@ export default function Checkout() {
       console.log("create-order processPaymentFlow returned without redirect");
     } catch (err: any) {
       console.error("create-order handlePlaceOrder error:", err);
+
+      // Technical event: checkout_order_creation_error (no PII!)
+      trackGA4Event('checkout_order_creation_error', {
+        payment_method: normalizedPaymentType,
+        checkout_step: 3,
+        error_code: err.message || String(err),
+        error_stage: 'order_creation'
+      });
+
       setCheckoutError("Error creando la orden: " + (err.message || String(err)));
       setIsSubmitting(false);
       submitLockRef.current = false;
@@ -1595,24 +1711,147 @@ export default function Checkout() {
     { id: 3, label: 'Pago' },
   ];
 
+  const validateStep2 = (): boolean => {
+    const errors: Record<string, string> = {};
+    const isMvd = form.department === 'Montevideo';
+
+    // 1. Mandatory base fields
+    if (!form.department) {
+      errors.department = 'El departamento es obligatorio.';
+    }
+    if (shippingMethod === 'delivery') {
+      if (isMvd) {
+        if (!form.barrio) {
+          errors.barrio = 'El barrio es obligatorio para Montevideo.';
+        }
+      } else {
+        if (!form.city) {
+          errors.city = 'La ciudad es obligatoria.';
+        }
+      }
+      if (!form.street || !form.street.trim()) {
+        errors.street = 'La dirección (calle y número) es obligatoria.';
+      }
+      if (!form.phone || !form.phone.trim()) {
+        errors.phone = 'El teléfono es obligatorio para coordinar el envío.';
+      }
+
+      // 2. Agency checking
+      if (selectedShippingMethod === 'dac_agency' && !selectedAgency) {
+        errors.agency = 'Debe seleccionar una agencia DAC de destino.';
+      }
+
+      // 3. Calculation state checking
+      if (dacCalculationStatus === 'loading') {
+        errors.calculation = 'Por favor, espere a que termine de calcularse el costo de envío.';
+      } else if (dacCalculationStatus === 'missing_data') {
+        errors.calculation = 'Faltan ingresar datos para calcular el costo de envío.';
+      } else if (dacCalculationStatus === 'error') {
+        errors.calculation = dacShippingError || 'Ocurrió un error al calcular el costo de envío. Por favor intente de nuevo.';
+      } else if (dacCalculationStatus === 'idle') {
+        errors.calculation = 'Es necesario calcular el costo de envío.';
+      } else if (dacShippingCost === null) {
+        errors.calculation = 'El costo de envío es desconocido. No es posible completar la compra.';
+      }
+    }
+
+    setStep2Errors(errors);
+
+    const keys = Object.keys(errors);
+    if (keys.length > 0) {
+      // Trigger checkout_validation_error technical event (Phase 5)
+      trackGA4Event('checkout_validation_error', {
+        step: 2,
+        error_fields: keys,
+        error_messages: Object.values(errors)
+      });
+
+      // Smooth scroll to the first element with an error
+      const firstErrorKey = keys[0];
+      let elementId = '';
+      if (firstErrorKey === 'department') elementId = 'shipping-department';
+      else if (firstErrorKey === 'city') elementId = 'shipping-city';
+      else if (firstErrorKey === 'barrio') elementId = 'shipping-barrio';
+      else if (firstErrorKey === 'street') elementId = 'shipping-street';
+      else if (firstErrorKey === 'phone') elementId = 'shipping-phone';
+      else if (firstErrorKey === 'agency') elementId = 'shipping-agency-selector';
+      else if (firstErrorKey === 'calculation') elementId = 'shipping-calculation-block';
+
+      if (elementId) {
+        const el = document.getElementById(elementId);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // Focus in desktop
+          if (window.matchMedia('(min-width: 1024px)').matches) {
+            const input = el.querySelector('input, select') as HTMLInputElement | HTMLSelectElement | null;
+            if (input) input.focus();
+          }
+        }
+      }
+      return false;
+    }
+
+    return true;
+  };
+
   const canAdvanceStep = (step: number): boolean => {
     if (step === 1) {
-      return !!(form.email && form.first_name && form.last_name);
+      return !!(form.email && form.first_name && form.last_name && form.phone);
     }
     if (step === 2) {
       if (shippingMethod === 'pickup') return true;
       if (shippingMethod === 'delivery') {
-        if (isMontevideo) return !!(form.street && form.department && form.barrio);
-        return !!(form.street && form.department && form.city);
+        const isMvd = form.department === 'Montevideo';
+        const baseFieldsValid = isMvd
+          ? !!(form.street && form.department && form.barrio)
+          : !!(form.street && form.department && form.city);
+        
+        if (!baseFieldsValid) return false;
+        
+        // CI check (required for DAC methods)
+        const isDac = selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency' || selectedShippingMethod === 'dac';
+        if (isDac && (!form.ci || !validateUruguayanCI(form.ci))) {
+          return false;
+        }
+
+        // Agency check
+        if (selectedShippingMethod === 'dac_agency' && !selectedAgency) {
+          return false;
+        }
+
+        // DAC Shipping calculation state checks (for delivery mode)
+        if (dacCalculationStatus !== 'success' || dacShippingCost === null) {
+          return false;
+        }
+
+        return true;
       }
     }
     return true;
   };
 
   const goNext = () => {
-    if (currentStep < 3 && canAdvanceStep(currentStep)) {
-      setCurrentStep(currentStep + 1);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (currentStep === 1) {
+      if (canAdvanceStep(1)) {
+        setCurrentStep(2);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    } else if (currentStep === 2) {
+      if (validateStep2() && canAdvanceStep(2)) {
+        // GA4 event: add_shipping_info (Phase 2)
+        trackGA4Event('add_shipping_info', {
+          currency: 'UYU',
+          value: subtotalWithShipping,
+          shipping_tier: selectedShippingMethod,
+          items: mapCartItemsToGA4(items)
+        });
+
+        // Clarity event: shipping_selected (Phase 6)
+        trackClarityEvent('shipping_selected');
+
+        setCurrentStep(3);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
     }
   };
 
@@ -1775,7 +2014,11 @@ export default function Checkout() {
                       <div><label className="form-label">Nombre *</label><input required className="form-input" value={form.first_name} onChange={e => setForm({ ...form, first_name: e.target.value })} /></div>
                       <div><label className="form-label">Apellido *</label><input required className="form-input" value={form.last_name} onChange={e => setForm({ ...form, last_name: e.target.value })} /></div>
                     </div>
-                    <div><label className="form-label">Teléfono</label><input className="form-input" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
+                    <div id="shipping-phone">
+                      <label className="form-label">Teléfono *</label>
+                      <input required className="form-input" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
+                      {step2Errors.phone && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.phone}</p>}
+                    </div>
 
                     {(selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') && (
                       <div className="space-y-1">
@@ -2033,7 +2276,7 @@ export default function Checkout() {
 
                       {/* Agency Selector (visible only in agency mode) */}
                       {dacDeliveryMode === 'dac_agency' && (
-                        <div className="px-1 space-y-3">
+                        <div className="px-1 space-y-3" id="shipping-agency-selector">
                           <label className="form-label text-xs flex items-center gap-1.5">
                             <MapPin className="w-3.5 h-3.5 text-amber-500" />
                             Seleccioná una agencia DAC en {form.department || 'tu departamento'}
@@ -2107,6 +2350,7 @@ export default function Checkout() {
                               {form.department ? `No hay agencias DAC activas para retiro en ${form.department}.` : 'Seleccioná un departamento para ver agencias disponibles.'}
                             </div>
                           )}
+                          {step2Errors.agency && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.agency}</p>}
                         </div>
                       )}
 
@@ -2223,21 +2467,22 @@ export default function Checkout() {
 
                       {(savedAddresses.length === 0 || selectedAddress === -2) && (
                         <>
-                          <div>
+                          <div id="shipping-street">
                             <label className="form-label">Dirección (calle y número) *</label>
                             <AddressAutocomplete
                               value={form.street}
                               onChange={value => setForm({ ...form, street: value })}
                               onSelect={handleAddressSelect}
                             />
+                            {step2Errors.street && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.street}</p>}
                           </div>
 
                           <div className="grid grid-cols-2 gap-4">
-                            <div>
+                            <div id="shipping-department">
                               <label className="form-label">Departamento *</label>
                               <select
                                 required={shippingMethod === 'delivery'}
-                                className="form-input"
+                                className={`form-input ${step2Errors.department ? 'border-red-500' : ''}`}
                                 value={form.department}
                                 onChange={e => handleDepartmentChange(e.target.value)}
                               >
@@ -2246,9 +2491,10 @@ export default function Checkout() {
                                   <option key={department} value={department}>{department}</option>
                                 ))}
                               </select>
+                              {step2Errors.department && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.department}</p>}
                             </div>
 
-                            <div>
+                            <div id="shipping-city">
                               <label className="form-label">Ciudad / Localidad *</label>
                               {form.department === 'Montevideo' ? (
                                 <input
@@ -2260,7 +2506,7 @@ export default function Checkout() {
                               ) : (
                                 <select
                                   required={shippingMethod === 'delivery'}
-                                  className="form-input"
+                                  className={`form-input ${step2Errors.city ? 'border-red-500' : ''}`}
                                   value={form.city}
                                   onChange={e => setForm({ ...form, city: e.target.value })}
                                   disabled={!form.department}
@@ -2271,16 +2517,17 @@ export default function Checkout() {
                                   ))}
                                 </select>
                               )}
+                              {step2Errors.city && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.city}</p>}
                             </div>
                           </div>
 
                           <div className="grid grid-cols-1 gap-4">
-                            <div>
+                            <div id="shipping-barrio">
                               <label className="form-label">Barrio {form.department === 'Montevideo' ? '*' : '(Opcional)'}</label>
                               {form.department === 'Montevideo' ? (
                                 <select
                                   required={shippingMethod === 'delivery'}
-                                  className="form-input"
+                                  className={`form-input ${step2Errors.barrio ? 'border-red-500' : ''}`}
                                   value={form.barrio}
                                   onChange={e => setForm({ ...form, barrio: e.target.value })}
                                 >
@@ -2298,6 +2545,7 @@ export default function Checkout() {
                                   onChange={e => setForm({ ...form, barrio: e.target.value })}
                                 />
                               )}
+                              {step2Errors.barrio && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.barrio}</p>}
                             </div>
                           </div>
 
@@ -2346,53 +2594,65 @@ export default function Checkout() {
                         </>
                       )}
 
-                        {shippingMethod === 'delivery' && isLocationSelected && form.department && logistics.providerName && (
-                         <div className="space-y-3 mt-4">
-                          <div className="p-4 rounded-xl border border-primary-500/30 bg-primary-500/5 flex items-start gap-3 shadow-lg">
-                            <Clock className="w-5 h-5 text-primary-500 shrink-0 mt-0.5 animate-pulse" />
-                            <div>
-                              <h4 className="text-xs font-bold uppercase tracking-wider text-primary-400">
-                                Información de entrega ({logistics.providerName})
-                              </h4>
-                              <p className="text-sm font-semibold text-white mt-1">
-                                {logistics.message}
-                              </p>
+                      {form.department && (
+                        <div className="space-y-3 mt-4" id="shipping-calculation-block">
+                          {isLocationSelected && logistics.providerName && (
+                            <div className="p-4 rounded-xl border border-primary-500/30 bg-primary-500/5 flex items-start gap-3 shadow-lg">
+                              <Clock className="w-5 h-5 text-primary-500 shrink-0 mt-0.5 animate-pulse" />
+                              <div>
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-primary-400">
+                                  Información de entrega ({logistics.providerName})
+                                </h4>
+                                <p className="text-sm font-semibold text-white mt-1">
+                                  {logistics.message}
+                                </p>
+                              </div>
                             </div>
-                          </div>
+                          )}
 
-                          {dacShippingLoading && (
+                          {dacCalculationStatus === 'loading' && (
                             <div className="p-3 rounded-lg bg-white/5 border border-white/10 flex items-center gap-3">
                               <div className="w-4 h-4 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
                               <span className="text-xs text-slate-300">Calculando costo de envío en tiempo real con DAC...</span>
                             </div>
                           )}
 
-                          {dacShippingError && (
+                          {dacCalculationStatus === 'error' && dacShippingError && (
                             <div className="p-4 rounded-lg bg-orange-950/20 border border-orange-500/30 space-y-3">
                               <div className="flex items-start gap-2.5">
-                                <AlertCircle className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+                                <AlertCircle className="w-4 h-4 text-orange-400 shrink-0 mt-0.5 animate-bounce" />
                                 <div className="text-xs text-orange-200 leading-relaxed">
                                   <strong className="block font-bold text-orange-300 mb-0.5">No fue posible calcular el costo automáticamente</strong>
                                   {dacShippingError}
                                 </div>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const productsList = items.map(item => `- ${item.title} x${item.quantity}`).join('%0A');
-                                  const waNum = settings['whatsapp'] || '59899000000';
-                                  const formattedNum = waNum.replace(/[^0-9]/g, '');
-                                  const msg = `¡Hola! Quería realizar una compra desde la web pero no pudimos calcular el costo de envío automáticamente para ${form.city}, ${form.department}.%0A%0A*Productos:*%0A${productsList}%0A%0A*Dirección de envío:*%0A${form.street}%0A%0A¿Me podrían ayudar a coordinarlo?`;
-                                  window.open(`https://wa.me/${formattedNum}?text=${msg}`, '_blank');
-                                }}
-                                className="w-full py-2 px-3 rounded bg-green-600 hover:bg-green-700 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md"
-                              >
-                                <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                                  <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.963C16.588 2.016 14.12 1 11.487 1 6.052 1 1.628 5.372 1.624 10.8c-.001 1.73.46 3.42 1.336 4.927L1.983 20.89l5.326-1.396zM17.91 14.3c-.336-.169-1.991-.983-2.299-1.096-.309-.113-.534-.169-.758.169-.224.338-.868 1.096-1.064 1.322-.196.225-.392.253-.729.084-.336-.168-1.42-.523-2.705-1.67-.999-.89-1.673-1.99-1.869-2.327-.196-.338-.021-.52.148-.687.151-.15.336-.394.504-.59.168-.198.224-.338.336-.563.112-.225.056-.422-.028-.59-.084-.169-.758-1.83-1.038-2.505-.272-.656-.547-.567-.758-.578-.196-.01-.42-.01-.645-.01-.224 0-.589.084-.897.422-.309.337-1.179 1.153-1.179 2.812 0 1.66 1.207 3.262 1.375 3.487.168.225 2.376 3.628 5.756 5.087.804.347 1.433.555 1.922.712.808.257 1.543.221 2.124.135.647-.096 1.992-.816 2.272-1.605.28-.79.28-1.464.196-1.605-.084-.14-.309-.225-.645-.394z"/>
-                                </svg>
-                                Coordinar y comprar por WhatsApp
-                              </button>
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setRecalculateTrigger(prev => prev + 1)}
+                                  className="flex-1 py-2 px-3 rounded bg-primary-600 hover:bg-primary-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md"
+                                >
+                                  <RefreshCcw className="w-3.5 h-3.5" /> Reintentar cálculo
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const productsList = items.map(item => `- ${item.title} x${item.quantity}`).join('%0A');
+                                    const waNum = settings['whatsapp'] || '59899000000';
+                                    const formattedNum = waNum.replace(/[^0-9]/g, '');
+                                    const msg = `¡Hola! Quería realizar una compra desde la web pero no pudimos calcular el costo de envío automáticamente para ${form.city}, ${form.department}.%0A%0A*Productos:*%0A${productsList}%0A%0A*Dirección de envío:*%0A${form.street}%0A%0A¿Me podrían ayudar a coordinarlo?`;
+                                    window.open(`https://wa.me/${formattedNum}?text=${msg}`, '_blank');
+                                  }}
+                                  className="flex-1 py-2 px-3 rounded bg-green-600 hover:bg-green-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md"
+                                >
+                                  Coordinar por WhatsApp
+                                </button>
+                              </div>
                             </div>
+                          )}
+
+                          {step2Errors.calculation && (
+                            <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.calculation}</p>
                           )}
                         </div>
                       )}
@@ -2626,7 +2886,7 @@ export default function Checkout() {
                     } else {
                       const isDacActive = v?.shipping_settings?.dac?.active && globalProviders['dac'];
                       const isUesActive = v?.shipping_settings?.ues?.active && globalProviders['ues'];
-                      const isCorreoActive = v?.shipping_settings?.correo_uruguayo?.active;
+                      const isCorreoActive = v?.shipping_settings?.correo_uruguayo?.active && globalProviders['correo_uruguayo'];
                       const isManualActive = v?.shipping_settings?.manual?.active;
 
                       if (isDacActive) {
@@ -2738,7 +2998,22 @@ export default function Checkout() {
                                   <div className="flex items-center">
                                     <button
                                       type="button"
-                                      onClick={() => removeItem(item.variant_id, item.vendor_id)}
+                                      onClick={() => {
+                                        trackGA4Event('remove_from_cart', {
+                                          currency: 'UYU',
+                                          value: Number(item.price) * Number(item.quantity),
+                                          items: [{
+                                            item_id: String(item.product_id || item.id || ''),
+                                            item_name: String(item.product_name || item.title || ''),
+                                            item_brand: item.brand_name || item.brand || undefined,
+                                            item_category: item.category_name || item.category || undefined,
+                                            item_variant: item.variant_name || item.variant || undefined,
+                                            price: Number(item.price),
+                                            quantity: Number(item.quantity)
+                                          }]
+                                        });
+                                        removeItem(item.variant_id, item.vendor_id);
+                                      }}
                                       className="text-slate-500 hover:text-red-500 transition-colors p-1"
                                       title="Eliminar"
                                     >
@@ -2813,17 +3088,17 @@ export default function Checkout() {
                     {selectedShippingMethod === 'dac_home' ? 'Envío DAC a domicilio' : selectedShippingMethod === 'dac_agency' ? (selectedAgency ? `Retiro en agencia - ${selectedAgency.office_name}` : 'Retiro en agencia DAC') : selectedShippingMethod === 'dac' ? 'Envío DAC al interior' : 'Envío'}
                   </span>
                   <span className="font-bold flex items-center gap-1.5">
-                    {dacShippingLoading ? (
+                    {dacCalculationStatus === 'loading' ? (
                       <>
                         <span className="w-3.5 h-3.5 border-2 border-primary-500 border-t-transparent rounded-full animate-spin inline-block" />
                         <span className="text-xs text-slate-400 font-normal">Calculando...</span>
                       </>
+                    ) : dacCalculationStatus === 'error' ? (
+                      <span className="text-xs text-red-400 font-bold">Error al calcular</span>
+                    ) : !isLocationSelected && total < freeShippingThreshold ? (
+                      <span className="text-xs text-slate-400 font-normal">-</span>
                     ) : (
-                      !isLocationSelected && total < freeShippingThreshold ? (
-                        <span className="text-xs text-slate-400 font-normal">-</span>
-                      ) : (
-                        shipping === 0 ? 'GRATIS' : formatCurrencyPrice(shipping)
-                      )
+                      shipping === 0 ? 'GRATIS' : formatCurrencyPrice(shipping)
                     )}
                   </span>
                 </div>

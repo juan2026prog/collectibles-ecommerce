@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { trackAddToWishlist, generateMetaEventId } from '../lib/meta/metaPixel';
+import { trackGA4Event } from '../lib/analyticsTracker';
 
 interface WishlistContextType {
   wishlist: string[];
@@ -81,6 +82,25 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
     );
 
     if (isAdding) {
+      // GA4 standard Add To Wishlist event
+      try {
+        const finalPrice = product.base_price + (product.variants?.[0]?.price_adjustment || 0);
+        trackGA4Event('add_to_wishlist', {
+          currency: 'UYU',
+          value: finalPrice,
+          items: [{
+            item_id: String(productId),
+            item_name: String(product.title),
+            item_brand: product.brand?.name || undefined,
+            item_category: product.category?.name || undefined,
+            price: Number(finalPrice),
+            quantity: 1
+          }]
+        });
+      } catch (e) {
+        console.warn('GA4 Wishlist Error', e);
+      }
+
       // Meta Pixel
       try {
         const finalPrice = product.base_price + (product.variants?.[0]?.price_adjustment || 0);

@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useCartContext } from '../contexts/CartContext';
 import { analytics } from '../lib/analytics';
 import { generateMetaEventId, trackPurchase } from '../lib/meta/metaPixel';
+import { trackGA4Event, trackClarityEvent, mapCartItemsToGA4, hasPurchaseBeenTracked, markPurchaseAsTracked } from '../lib/analyticsTracker';
 
 export default function CheckoutSuccess() {
   const [searchParams] = useSearchParams();
@@ -64,6 +65,23 @@ export default function CheckoutSuccess() {
   useEffect(() => {
     if (!shouldTrackPurchase || !orderId) return;
 
+    // Check if order status is confirmed (paid, entregado, or en_preparacion)
+    const allowedStatuses = ['paid', 'entregado', 'en_preparacion'];
+    const currentStatus = order?.status || '';
+    if (!allowedStatuses.includes(currentStatus)) {
+      console.log(`[CheckoutSuccess] Skipping purchase tracking: status is "${currentStatus}" (needs to be one of ${allowedStatuses.join(', ')})`);
+      return;
+    }
+
+    if (hasPurchaseBeenTracked(orderId)) {
+      console.log(`[CheckoutSuccess] Skipping purchase tracking: order ${orderId} already tracked in localStorage.`);
+      // Clear cart anyway for good UX
+      clearCart();
+      sessionStorage.setItem(`purchase_tracked_${orderId}`, 'true');
+      sessionStorage.removeItem('pending_checkout_order');
+      return;
+    }
+
     analytics.track({
       eventName: 'Purchase',
       eventData: {
@@ -92,10 +110,47 @@ export default function CheckoutSuccess() {
       user_email: order?.customer_email || undefined
     });
 
+    // GA4 & Clarity Purchase Tracking (Phase 2, 4, 6)
+    trackGA4Event('purchase', {
+      transaction_id: orderId,
+      value: Number(order?.total_amount || total),
+      currency: order?.currency || 'UYU',
+      shipping: Number(order?.shipping_cost || 0),
+      tax: Number(order?.tax_amount || 0),
+      items: mapCartItemsToGA4(items)
+    });
+
+    trackClarityEvent('purchase_completed');
+
+    // ONLY mark as tracked after successful event dispatching
+    markPurchaseAsTracked(orderId);
+
     clearCart();
     sessionStorage.setItem(`purchase_tracked_${orderId}`, 'true');
     sessionStorage.removeItem('pending_checkout_order');
-  }, [clearCart, items, order?.currency, order?.customer_email, order?.status, order?.total_amount, orderId, shouldTrackPurchase, total]);
+  }, [clearCart, items, order?.currency, order?.customer_email, order?.status, order?.total_amount, order?.shipping_cost, order?.tax_amount, orderId, shouldTrackPurchase, total]);
+
+  // Technical event: payment_returned (Phase 5)
+  useEffect(() => {
+    if (orderId) {
+      trackGA4Event('payment_returned', {
+        order_id: orderId,
+        gateway: provider || 'unknown',
+        status: statusParam || 'unknown'
+      });
+    }
+  }, [orderId, provider, statusParam]);
+
+  // Technical event: purchase_confirmation_error (Phase 5)
+  useEffect(() => {
+    if (error) {
+      trackGA4Event('purchase_confirmation_error', {
+        order_id: orderId || 'unknown',
+        error_message: error,
+        gateway: provider || 'unknown'
+      });
+    }
+  }, [error, orderId, provider]);
 
   function copyOrderNumber() {
     navigator.clipboard.writeText(orderNumber);
