@@ -28,7 +28,17 @@ export default function VShipping() {
 
   // 1. Settings en vendors.shipping_settings (Centralized Collectibles Envíos + Pickup/Manual)
   const [shippingData, setShippingData] = useState({
-    dac: { active: false },
+    dac: {
+      active: false,
+      dispatch_address: '',
+      city: '',
+      department: 'Montevideo',
+      phone: '',
+      hours: '',
+      preferred_agency: '',
+      allow_pickup_agency: true,
+      allow_home_delivery: true
+    },
     ues: { active: false },
     soydelivery: { active: false },
     correo_uruguayo: { active: false },
@@ -37,6 +47,8 @@ export default function VShipping() {
     cutoff_time: '14:00',
     dispatch_days: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']
   });
+  const [globalProviders, setGlobalProviders] = useState<any[]>([]);
+  const [dacOffices, setDacOffices] = useState<any[]>([]);
 
   // 2. Direcciones de Despacho (Remitente)
   const [dispatchAddresses, setDispatchAddresses] = useState<DispatchAddress[]>([]);
@@ -62,6 +74,7 @@ export default function VShipping() {
   const [showMlWizard, setShowMlWizard] = useState(false);
   const [wizardLoading, setWizardLoading] = useState(false);
   const [wizardResult, setWizardResult] = useState<any>(null);
+  const [mlNickname, setMlNickname] = useState('');
 
   // 4. Vendor settings preview states
   const [vendorObj, setVendorObj] = useState<any>(null);
@@ -78,7 +91,7 @@ export default function VShipping() {
     if (!user) return;
     try {
       // Run queries in parallel
-      const [vendorRes, addrRes, mlRes] = await Promise.all([
+      const [vendorRes, addrRes, mlRes, provRes] = await Promise.all([
         supabase
           .from('vendors')
           .select('store_name, logo_url, slug, contact_phone, pickup_address, shipping_settings')
@@ -102,8 +115,19 @@ export default function VShipping() {
           .eq('vendor_id', user.id)
           .maybeSingle()
           .then(res => ({ success: true, data: res.data, error: res.error }))
+          .catch(err => ({ success: false, data: null, error: err })),
+
+        supabase
+          .from('shipping_providers')
+          .select('code, name, is_active, status')
+          .then(res => ({ success: true, data: res.data, error: res.error }))
           .catch(err => ({ success: false, data: null, error: err }))
       ]);
+
+      // Process providers result
+      if (provRes.success && provRes.data) {
+        setGlobalProviders(provRes.data);
+      }
 
       // Process dispatch addresses result first
       let loadedAddresses = [];
@@ -123,7 +147,17 @@ export default function VShipping() {
           const isSDAvail = defaultAddr ? isLocationInSoyDeliveryZone(defaultAddr.department, defaultAddr.city) : false;
 
           setShippingData({
-            dac: { active: s.dac?.active || false },
+            dac: {
+              active: s.dac?.active || false,
+              dispatch_address: s.dac?.dispatch_address || '',
+              city: s.dac?.city || '',
+              department: s.dac?.department || 'Montevideo',
+              phone: s.dac?.phone || '',
+              hours: s.dac?.hours || '',
+              preferred_agency: s.dac?.preferred_agency || '',
+              allow_pickup_agency: s.dac?.allow_pickup_agency !== undefined ? s.dac.allow_pickup_agency : true,
+              allow_home_delivery: s.dac?.allow_home_delivery !== undefined ? s.dac.allow_home_delivery : true
+            },
             ues: { active: s.ues?.active || false },
             soydelivery: { active: isSDAvail ? (s.soydelivery?.active || false) : false },
             correo_uruguayo: { active: s.correo_uruguayo?.active || false },
@@ -150,6 +184,16 @@ export default function VShipping() {
       } else if (vendorRes.error) {
         console.error("Error loading vendor profile:", vendorRes.error);
         toast.error("Error al cargar perfil de vendedor");
+      }
+
+      // Fetch active dac offices
+      const { data: offices } = await supabase
+        .from('dac_offices')
+        .select('k_oficina, office_name, city, department')
+        .eq('is_active', true)
+        .order('office_name', { ascending: true });
+      if (offices) {
+        setDacOffices(offices);
       }
 
       // Process ML account result
@@ -195,7 +239,15 @@ export default function VShipping() {
     }
   };
 
+  const isProviderActive = (code: string) => {
+    return globalProviders.some(p => p.code === code && p.is_active && p.status === 'active');
+  };
+
   const toggleMethod = (method: 'dac' | 'ues' | 'soydelivery' | 'correo_uruguayo' | 'pickup' | 'manual') => {
+    if (!isProviderActive(method)) {
+      toast.error("Este transportista no está activo globalmente.");
+      return;
+    }
     if (method === 'soydelivery' && !isSoyDeliveryAvailable) {
       toast.error("SoyDelivery/Flex no está disponible fuera de la zona de cobertura.");
       return;
@@ -206,7 +258,7 @@ export default function VShipping() {
     }));
   };
 
-  const updateSection = (section: 'pickup' | 'manual', field: string, value: any) => {
+  const updateSection = (section: 'dac' | 'pickup' | 'manual', field: string, value: any) => {
     setShippingData(prev => ({ 
       ...prev, 
       [section]: { ...prev[section], [field]: value } 
@@ -416,160 +468,275 @@ export default function VShipping() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           
           {/* DAC */}
-          <div 
-            onClick={() => toggleMethod('dac')}
-            className={`p-4 border rounded-xl cursor-pointer transition-all flex items-start gap-3 hover:bg-slate-50 ${shippingData.dac.active ? 'border-blue-500 bg-blue-50/20' : 'border-gray-200 bg-white'}`}
-          >
-            <input 
-              type="checkbox" 
-              checked={shippingData.dac.active} 
-              onChange={() => {}} 
-              className="mt-1 rounded text-blue-600 focus:ring-blue-500 pointer-events-none" 
-            />
-            <div>
-              <div className="font-bold text-sm text-gray-900 flex items-center gap-2">
-                DAC
-                <span className="bg-blue-100 text-blue-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
-                  Collectibles Envíos
-                </span>
+          {isProviderActive('dac') && (
+            <div 
+              onClick={() => toggleMethod('dac')}
+              className={`p-4 border rounded-xl cursor-pointer transition-all flex items-start gap-3 hover:bg-slate-50 ${shippingData.dac.active ? 'border-blue-500 bg-blue-50/20' : 'border-gray-200 bg-white'}`}
+            >
+              <input 
+                type="checkbox" 
+                checked={shippingData.dac.active} 
+                onChange={() => {}} 
+                className="mt-1 rounded text-blue-600 focus:ring-blue-500 pointer-events-none" 
+              />
+              <div>
+                <div className="font-bold text-sm text-gray-900 flex items-center gap-2">
+                  DAC
+                  <span className="bg-blue-100 text-blue-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
+                    Collectibles Envíos
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Despacho nacional interdepartamental. Las tarifas se cotizan de forma automática.</p>
               </div>
-              <p className="text-xs text-gray-500 mt-1">Despacho nacional interdepartamental. Las tarifas se cotizan de forma automática.</p>
             </div>
-          </div>
+          )}
 
           {/* UES */}
-          <div 
-            onClick={() => toggleMethod('ues')}
-            className={`p-4 border rounded-xl cursor-pointer transition-all flex items-start gap-3 hover:bg-slate-50 ${shippingData.ues.active ? 'border-teal-500 bg-teal-50/20' : 'border-gray-200 bg-white'}`}
-          >
-            <input 
-              type="checkbox" 
-              checked={shippingData.ues.active} 
-              onChange={() => {}} 
-              className="mt-1 rounded text-teal-600 focus:ring-teal-500 pointer-events-none" 
-            />
-            <div>
-              <div className="font-bold text-sm text-gray-900 flex items-center gap-2">
-                UES
-                <span className="bg-teal-100 text-teal-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
-                  Collectibles Envíos
-                </span>
+          {isProviderActive('ues') && (
+            <div 
+              onClick={() => toggleMethod('ues')}
+              className={`p-4 border rounded-xl cursor-pointer transition-all flex items-start gap-3 hover:bg-slate-50 ${shippingData.ues.active ? 'border-teal-500 bg-teal-50/20' : 'border-gray-200 bg-white'}`}
+            >
+              <input 
+                type="checkbox" 
+                checked={shippingData.ues.active} 
+                onChange={() => {}} 
+                className="mt-1 rounded text-teal-600 focus:ring-teal-500 pointer-events-none" 
+              />
+              <div>
+                <div className="font-bold text-sm text-gray-900 flex items-center gap-2">
+                  UES
+                  <span className="bg-teal-100 text-teal-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
+                    Collectibles Envíos
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Entregas a domicilio y red de pick centers nacionales.</p>
               </div>
-              <p className="text-xs text-gray-500 mt-1">Entregas a domicilio y red de pick centers nacionales.</p>
             </div>
-          </div>
+          )}
 
           {/* SOYDELIVERY */}
-          <div 
-            onClick={() => {
-              if (!isSoyDeliveryAvailable) {
-                toast.error("SoyDelivery/Flex solo está disponible para vendedores dentro de la zona de cobertura.");
-                return;
-              }
-              toggleMethod('soydelivery');
-            }}
-            className={`p-4 border rounded-xl transition-all flex items-start gap-3 ${
-              !isSoyDeliveryAvailable 
-                ? 'opacity-65 cursor-not-allowed border-gray-200 bg-gray-50' 
-                : shippingData.soydelivery.active 
-                  ? 'border-orange-500 bg-orange-50/20 cursor-pointer hover:bg-slate-50' 
-                  : 'border-gray-200 bg-white cursor-pointer hover:bg-slate-50'
-            }`}
-          >
-            <input 
-              type="checkbox" 
-              checked={shippingData.soydelivery.active} 
-              disabled={!isSoyDeliveryAvailable}
-              onChange={() => {}} 
-              className="mt-1 rounded text-orange-600 focus:ring-orange-500 pointer-events-none" 
-            />
-            <div>
-              <div className="font-bold text-sm text-gray-900 flex items-center gap-2">
-                SoyDelivery
-                <span className="bg-orange-100 text-orange-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
-                  Collectibles Envíos
-                </span>
-                {!isSoyDeliveryAvailable && (
-                  <span className="bg-red-100 text-red-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
-                    {dispatchAddresses.length === 0 ? "Sin dirección" : "Fuera de zona"}
+          {isProviderActive('soydelivery') && (
+            <div 
+              onClick={() => {
+                if (!isSoyDeliveryAvailable) {
+                  toast.error("SoyDelivery/Flex solo está disponible para vendedores dentro de la zona de cobertura.");
+                  return;
+                }
+                toggleMethod('soydelivery');
+              }}
+              className={`p-4 border rounded-xl transition-all flex items-start gap-3 ${
+                !isSoyDeliveryAvailable 
+                  ? 'opacity-65 cursor-not-allowed border-gray-200 bg-gray-50' 
+                  : shippingData.soydelivery.active 
+                    ? 'border-orange-500 bg-orange-50/20 cursor-pointer hover:bg-slate-50' 
+                    : 'border-gray-200 bg-white cursor-pointer hover:bg-slate-50'
+              }`}
+            >
+              <input 
+                type="checkbox" 
+                checked={shippingData.soydelivery.active} 
+                disabled={!isSoyDeliveryAvailable}
+                onChange={() => {}} 
+                className="mt-1 rounded text-orange-600 focus:ring-orange-500 pointer-events-none" 
+              />
+              <div>
+                <div className="font-bold text-sm text-gray-900 flex items-center gap-2">
+                  SoyDelivery
+                  <span className="bg-orange-100 text-orange-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
+                    Collectibles Envíos
                   </span>
+                  {!isSoyDeliveryAvailable && (
+                    <span className="bg-red-100 text-red-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
+                      {dispatchAddresses.length === 0 ? "Sin dirección" : "Fuera de zona"}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Envíos express en el día (Flex) para Montevideo y zonas metropolitanas.</p>
+                {!isSoyDeliveryAvailable && (
+                  <p className="text-[10px] text-red-600 mt-1 font-medium flex items-center gap-1">
+                    <Info className="w-3.5 h-3.5 shrink-0" />
+                    {dispatchAddresses.length === 0 
+                      ? "Configurá tu dirección de despacho para calcular envíos."
+                      : "SoyDelivery/Flex solo está disponible para vendedores dentro de la zona cubierta."}
+                  </p>
                 )}
               </div>
-              <p className="text-xs text-gray-500 mt-1">Envíos express en el día (Flex) para Montevideo y zonas metropolitanas.</p>
-              {!isSoyDeliveryAvailable && (
-                <p className="text-[10px] text-red-600 mt-1 font-medium flex items-center gap-1">
-                  <Info className="w-3.5 h-3.5 shrink-0" />
-                  {dispatchAddresses.length === 0 
-                    ? "Configurá tu dirección de despacho para calcular envíos."
-                    : "SoyDelivery/Flex solo está disponible para vendedores dentro de la zona cubierta."}
-                </p>
-              )}
             </div>
-          </div>
+          )}
 
           {/* CORREO URUGUAYO */}
-          <div 
-            onClick={() => toggleMethod('correo_uruguayo')}
-            className={`p-4 border rounded-xl cursor-pointer transition-all flex items-start gap-3 hover:bg-slate-50 ${shippingData.correo_uruguayo.active ? 'border-yellow-600 bg-yellow-50/20' : 'border-gray-200 bg-white'}`}
-          >
-            <input 
-              type="checkbox" 
-              checked={shippingData.correo_uruguayo.active} 
-              onChange={() => {}} 
-              className="mt-1 rounded text-yellow-600 focus:ring-yellow-500 pointer-events-none" 
-            />
-            <div>
-              <div className="font-bold text-sm text-gray-900 flex items-center gap-2">
-                Correo Uruguayo
-                <span className="bg-yellow-100 text-yellow-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
-                  Collectibles Envíos
-                </span>
+          {isProviderActive('correo_uruguayo') && (
+            <div 
+              onClick={() => toggleMethod('correo_uruguayo')}
+              className={`p-4 border rounded-xl cursor-pointer transition-all flex items-start gap-3 hover:bg-slate-50 ${shippingData.correo_uruguayo.active ? 'border-yellow-600 bg-yellow-50/20' : 'border-gray-200 bg-white'}`}
+            >
+              <input 
+                type="checkbox" 
+                checked={shippingData.correo_uruguayo.active} 
+                onChange={() => {}} 
+                className="mt-1 rounded text-yellow-600 focus:ring-yellow-500 pointer-events-none" 
+              />
+              <div>
+                <div className="font-bold text-sm text-gray-900 flex items-center gap-2">
+                  Correo Uruguayo
+                  <span className="bg-yellow-100 text-yellow-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
+                    Collectibles Envíos
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Envíos nacionales con cobertura de oficinas postales públicas.</p>
               </div>
-              <p className="text-xs text-gray-500 mt-1">Envíos nacionales con cobertura de oficinas postales públicas.</p>
             </div>
-          </div>
+          )}
 
           {/* RETIRO EN LOCAL */}
-          <div 
-            onClick={() => toggleMethod('pickup')}
-            className={`p-4 border rounded-xl cursor-pointer transition-all flex items-start gap-3 hover:bg-slate-50 ${shippingData.pickup.active ? 'border-black bg-gray-50/20' : 'border-gray-200 bg-white'}`}
-          >
-            <input 
-              type="checkbox" 
-              checked={shippingData.pickup.active} 
-              onChange={() => {}} 
-              className="mt-1 rounded text-black focus:ring-black pointer-events-none" 
-            />
-            <div>
-              <div className="font-bold text-sm text-gray-900">Retiro en Local</div>
-              <p className="text-xs text-gray-500 mt-1">Habilitá a tus compradores a retirar el artículo directamente en tu tienda física.</p>
+          {isProviderActive('pickup') && (
+            <div 
+              onClick={() => toggleMethod('pickup')}
+              className={`p-4 border rounded-xl cursor-pointer transition-all flex items-start gap-3 hover:bg-slate-50 ${shippingData.pickup.active ? 'border-black bg-gray-50/20' : 'border-gray-200 bg-white'}`}
+            >
+              <input 
+                type="checkbox" 
+                checked={shippingData.pickup.active} 
+                onChange={() => {}} 
+                className="mt-1 rounded text-black focus:ring-black pointer-events-none" 
+              />
+              <div>
+                <div className="font-bold text-sm text-gray-900">Retiro en Local</div>
+                <p className="text-xs text-gray-500 mt-1">Habilitá a tus compradores a retirar el artículo directamente en tu tienda física.</p>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* ENVIO PROPIO */}
-          <div 
-            onClick={() => toggleMethod('manual')}
-            className={`p-4 border rounded-xl cursor-pointer transition-all flex items-start gap-3 hover:bg-slate-50 ${shippingData.manual.active ? 'border-black bg-gray-50/20' : 'border-gray-200 bg-white'}`}
-          >
-            <input 
-              type="checkbox" 
-              checked={shippingData.manual.active} 
-              onChange={() => {}} 
-              className="mt-1 rounded text-black focus:ring-black pointer-events-none" 
-            />
-            <div>
-              <div className="font-bold text-sm text-gray-900">Envío Propio</div>
-              <p className="text-xs text-gray-500 mt-1">Configurá tarifas personalizadas, cadetería directa o métodos manuales a coordinar.</p>
+          {isProviderActive('manual') && (
+            <div 
+              onClick={() => toggleMethod('manual')}
+              className={`p-4 border rounded-xl cursor-pointer transition-all flex items-start gap-3 hover:bg-slate-50 ${shippingData.manual.active ? 'border-black bg-gray-50/20' : 'border-gray-200 bg-white'}`}
+            >
+              <input 
+                type="checkbox" 
+                checked={shippingData.manual.active} 
+                onChange={() => {}} 
+                className="mt-1 rounded text-black focus:ring-black pointer-events-none" 
+              />
+              <div>
+                <div className="font-bold text-sm text-gray-900">Envío Propio</div>
+                <p className="text-xs text-gray-500 mt-1">Configurá tarifas personalizadas, cadetería directa o métodos manuales a coordinar.</p>
+              </div>
             </div>
-          </div>
+          )}
 
         </div>
       </div>
 
       {/* CONFIGURACIÓN ADICIONAL DE RETIRO / ENVÍO PROPIO */}
-      {(shippingData.pickup.active || shippingData.manual.active) && (
+      {(shippingData.dac.active || shippingData.pickup.active || shippingData.manual.active) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           
+          {/* DAC CONFIGURATION FIELDS */}
+          {shippingData.dac.active && (
+            <div className="border border-blue-500 rounded-xl p-6 bg-white shadow-sm space-y-4 animate-fade-in">
+              <div className="flex items-center gap-2 pb-2 border-b border-blue-100">
+                <Truck className="w-5 h-5 text-blue-600" />
+                <h4 className="font-bold text-sm text-gray-900">Configuración de DAC (Collectibles Envíos)</h4>
+              </div>
+              <p className="text-xs text-slate-500 font-semibold">
+                Activá DAC sin cuenta propia. Collectibles genera la guía oficial, vos imprimís la etiqueta y despachás el paquete.
+              </p>
+              <div className="space-y-4 text-xs">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Dirección de Despacho (Remitente)</label>
+                  <input
+                    type="text"
+                    value={shippingData.dac.dispatch_address}
+                    onChange={(e) => updateSection('dac', 'dispatch_address', e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-1 focus:ring-blue-500"
+                    placeholder="Calle y Nro de donde retira el courier o desde donde despachás"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">Ciudad</label>
+                    <input
+                      type="text"
+                      value={shippingData.dac.city}
+                      onChange={(e) => updateSection('dac', 'city', e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">Departamento</label>
+                    <select
+                      value={shippingData.dac.department}
+                      onChange={(e) => updateSection('dac', 'department', e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg bg-white focus:ring-1 focus:ring-blue-500"
+                    >
+                      {departments.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">Teléfono de Despacho</label>
+                    <input
+                      type="text"
+                      value={shippingData.dac.phone}
+                      onChange={(e) => updateSection('dac', 'phone', e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">Horario de Despacho</label>
+                    <input
+                      type="text"
+                      value={shippingData.dac.hours}
+                      onChange={(e) => updateSection('dac', 'hours', e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg focus:ring-1 focus:ring-blue-500"
+                      placeholder="Ej: Lun a Vie 10:00 a 18:00"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Sucursal DAC de Origen Preferida (si aplica)</label>
+                  <select
+                    value={shippingData.dac.preferred_agency}
+                    onChange={(e) => updateSection('dac', 'preferred_agency', e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg bg-white focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">-- Seleccionar Agencia --</option>
+                    {dacOffices.map(o => (
+                      <option key={o.k_oficina} value={String(o.k_oficina)}>
+                        {o.office_name} ({o.department} - {o.city})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="pt-2 border-t flex flex-col gap-2">
+                  <span className="block font-bold text-gray-700 mb-1">Modalidades de Envío Habilitadas</span>
+                  <label className="flex items-center gap-2 font-semibold text-gray-750">
+                    <input
+                      type="checkbox"
+                      checked={shippingData.dac.allow_home_delivery}
+                      onChange={(e) => updateSection('dac', 'allow_home_delivery', e.target.checked)}
+                      className="rounded text-blue-605 focus:ring-blue-500"
+                    />
+                    Entrega a Domicilio (DAC Domicilio)
+                  </label>
+                  <label className="flex items-center gap-2 font-semibold text-gray-755">
+                    <input
+                      type="checkbox"
+                      checked={shippingData.dac.allow_pickup_agency}
+                      onChange={(e) => updateSection('dac', 'allow_pickup_agency', e.target.checked)}
+                      className="rounded text-blue-605 focus:ring-blue-500"
+                    />
+                    Retiro en Agencia DAC (Agencia)
+                  </label>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* RETIRO / PICKUP FIELDS */}
           {shippingData.pickup.active && (
             <div className="border border-black rounded-xl p-6 bg-white shadow-sm space-y-4 animate-fade-in">

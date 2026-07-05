@@ -27,6 +27,8 @@ export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | '
   const { user } = useAuth();
   const [suborders, setSuborders] = useState<any[]>([]);
   const [liquidations, setLiquidations] = useState<any[]>([]);
+  const [refunds, setRefunds] = useState<any[]>([]);
+  const [disputes, setDisputes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -62,6 +64,34 @@ export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | '
 
         if (liqError) throw liqError;
         setLiquidations(liqData || []);
+
+        // 3. Fetch refunds
+        const { data: refData, error: refError } = await supabase
+          .from('refunds')
+          .select(`
+            *,
+            order:orders(order_number),
+            suborder:order_suborders(suborder_number)
+          `)
+          .eq('vendor_id', user!.id)
+          .order('created_at', { ascending: false });
+
+        if (refError) throw refError;
+        setRefunds(refData || []);
+
+        // 4. Fetch disputes
+        const { data: dispData, error: dispError } = await supabase
+          .from('payment_disputes')
+          .select(`
+            *,
+            order:orders(order_number),
+            suborder:order_suborders(suborder_number)
+          `)
+          .eq('vendor_id', user!.id)
+          .order('created_at', { ascending: false });
+
+        if (dispError) throw dispError;
+        setDisputes(dispData || []);
       } catch (err) {
         console.error('Error fetching vendor finances:', err);
       } finally {
@@ -283,6 +313,118 @@ export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | '
               )}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Refunds and Devolutions section */}
+      <div className="bg-white rounded-[2rem] border border-gray-200 overflow-hidden shadow-sm">
+        <div className="p-10 md:p-12 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+           <div>
+              <h3 className="text-[11px] text-red-500 font-black uppercase tracking-[0.4em] mb-1">Refund & Dispute Log</h3>
+              <h4 className="text-2xl font-black text-gray-900 uppercase tracking-widest">Reembolsos y Contracargos (Solo Lectura)</h4>
+           </div>
+        </div>
+        
+        {/* Refunds List */}
+        <div className="p-8 border-b border-gray-100">
+          <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Reembolsos de Pasarela</h5>
+          <div className="overflow-x-auto no-scrollbar">
+            <table className="w-full text-left border-collapse">
+              <thead className="border-b border-gray-100">
+                <tr className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em]">
+                  <th className="pb-4">Fecha</th>
+                  <th className="pb-4">Pedido / Suborden</th>
+                  <th className="pb-4 text-right">Importe Devuelto</th>
+                  <th className="pb-4">Estado</th>
+                  <th className="pb-4">Motivo</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 text-sm">
+                {refunds.map(r => (
+                  <tr key={r.id} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="py-4 text-gray-500 text-[11px] font-black uppercase tracking-widest">
+                      {r.created_at ? new Date(r.created_at).toLocaleDateString('es-UY') : '-'}
+                    </td>
+                    <td className="py-4 font-black text-gray-900 text-[15px] uppercase">
+                      {r.order?.order_number || 'Pedido General'}
+                      {r.suborder?.suborder_number && (
+                        <span className="block text-[10px] text-gray-400 font-normal mt-0.5">Suborden: {r.suborder.suborder_number}</span>
+                      )}
+                    </td>
+                    <td className="py-4 text-right font-black text-red-500 text-[17px] tracking-tighter">
+                      -${Number(r.amount).toFixed(2)}
+                    </td>
+                    <td className="py-4">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        r.status === 'completed' ? 'text-green-600 bg-green-500/10' :
+                        r.status === 'pending' ? 'text-yellow-600 bg-yellow-500/10' :
+                        'text-red-500 bg-red-500/10'
+                      }`}>
+                        {r.status}
+                      </span>
+                    </td>
+                    <td className="py-4 text-gray-600 max-w-xs truncate" title={r.reason}>
+                      {r.reason || 'Sin motivo registrado'}
+                    </td>
+                  </tr>
+                ))}
+                {refunds.length === 0 && (
+                  <tr><td colSpan={5} className="py-4 text-center text-gray-400">No hay reembolsos registrados.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Disputes List */}
+        <div className="p-8 bg-red-50/10">
+          <h5 className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-4">Contracargos y Disputas</h5>
+          <div className="overflow-x-auto no-scrollbar">
+            <table className="w-full text-left border-collapse">
+              <thead className="border-b border-red-100">
+                <tr className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em]">
+                  <th className="pb-4">Fecha</th>
+                  <th className="pb-4">Pedido / Suborden</th>
+                  <th className="pb-4 text-right">Importe en Disputa</th>
+                  <th className="pb-4">Estado</th>
+                  <th className="pb-4">Motivo / Disputa</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 text-sm">
+                {disputes.map(d => (
+                  <tr key={d.id} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="py-4 text-gray-500 text-[11px] font-black uppercase tracking-widest">
+                      {d.created_at ? new Date(d.created_at).toLocaleDateString('es-UY') : '-'}
+                    </td>
+                    <td className="py-4 font-black text-gray-900 text-[15px] uppercase">
+                      {d.order?.order_number || 'Pedido General'}
+                      {d.suborder?.suborder_number && (
+                        <span className="block text-[10px] text-gray-400 font-normal mt-0.5">Suborden: {d.suborder.suborder_number}</span>
+                      )}
+                    </td>
+                    <td className="py-4 text-right font-black text-red-600 text-[17px] tracking-tighter">
+                      -${Number(d.amount).toFixed(2)}
+                    </td>
+                    <td className="py-4">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        d.status === 'open' ? 'text-red-600 bg-red-500/10 animate-pulse' :
+                        d.status === 'won' ? 'text-green-600 bg-green-500/10' :
+                        'text-gray-500 bg-gray-500/10'
+                      }`}>
+                        {d.status}
+                      </span>
+                    </td>
+                    <td className="py-4 text-gray-600 max-w-xs truncate" title={d.dispute_reason}>
+                      {d.dispute_reason || 'Sin motivo registrado'}
+                    </td>
+                  </tr>
+                ))}
+                {disputes.length === 0 && (
+                  <tr><td colSpan={5} className="py-4 text-center text-gray-400">No hay disputas registradas.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

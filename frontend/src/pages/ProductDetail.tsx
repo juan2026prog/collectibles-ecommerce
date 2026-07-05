@@ -1,5 +1,5 @@
 import { useParams, Link } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ShoppingCart, Minus, Plus, Truck, ShieldCheck, Star, ChevronDown, Heart, Trophy } from 'lucide-react';
 import { useProduct, useProductBuyBox } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
@@ -13,7 +13,9 @@ import { ProductBadge } from '../components/ProductBadge';
 import { getProductImage, resolveImage, FALLBACK_IMAGE } from '../lib/imageUtils';
 import { analytics } from '../lib/analytics';
 import { trackViewContent, trackAddToCart, generateMetaEventId } from '../lib/meta/metaPixel';
+import { trackGA4Event, trackClarityEvent } from '../lib/analyticsTracker';
 import SEO from '../components/SEO';
+import { resolveCartItemPrice } from '../lib/priceResolver';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { formatUSD } from '../lib/formatters';
 import SoldByCard from '../components/SoldByCard';
@@ -21,6 +23,7 @@ import AdminTechnicalPanel from '../components/AdminTechnicalPanel';
 import { calculateUruboxEstimate, getEstimatedWeightKg } from '../lib/urubox';
 
 export default function ProductDetail() {
+  const viewTrackedRef = useRef('');
   const { settings } = useSiteSettings();
   const { slug } = useParams();
   const { product, loading } = useProduct(slug);
@@ -105,6 +108,26 @@ export default function ProductDetail() {
       } catch (e) {
         console.warn("Meta tracking error", e);
       }
+
+      // GA4 & Clarity Tracking (Phase 2 & 6)
+      if (viewTrackedRef.current !== product.id) {
+        viewTrackedRef.current = product.id;
+
+        trackGA4Event('view_item', {
+          currency: 'UYU',
+          value: product.base_price,
+          items: [{
+            item_id: String(product.id),
+            item_name: String(product.title),
+            item_brand: product.brand?.name || undefined,
+            item_category: product.category?.name || undefined,
+            price: Number(product.base_price),
+            quantity: 1
+          }]
+        });
+
+        trackClarityEvent('product_viewed');
+      }
     }
   }, [product, user]);
 
@@ -132,21 +155,23 @@ export default function ProductDetail() {
   const { images = [], variants = [], reviews = [] } = product || {};
   const selectedVariant = variants[selectedVariantIdx] || variants[0];
   
-  const activeBuyBox = null;
-  const bbWinner = null;
+  const activeBuyBox = buyBox?.[selectedVariant?.id] || null;
+  const bbWinner = activeBuyBox?.winner || null;
   const hideVendors = false;
-  const bbOtherOptions = [];
+  const bbOtherOptions = activeBuyBox?.other_options || [];
 
-  const stock = selectedVariant?.inventory_count || 0;
-  const finalPrice = product ? (product.base_price + (selectedVariant?.price_adjustment || 0)) : 0;
+  const stock = bbWinner ? Number(bbWinner.stock) : (selectedVariant?.inventory_count || 0);
+  const finalPrice = bbWinner && !bbWinner.is_collectibles && bbWinner.price !== undefined ? Number(bbWinner.price) : (product ? (Number(product.base_price || 0) + Number((bbWinner ? bbWinner.price_adjustment : selectedVariant?.price_adjustment) || 0)) : 0);
     
-  const winnerIsCollectibles = !product?.vendor_id;
-  const winnerVendorId = product?.vendor_id || null;
-  const storeName = product?.vendor_id 
-    ? (product.vendor_store?.display_name || product.vendor_store?.store_name || product.vendor_store?.name || product.vendor?.company_name || product.vendor?.store_name || 'Vendedor')
-    : 'Collectibles.uy';
+  const winnerIsCollectibles = bbWinner ? bbWinner.is_collectibles : !product?.vendor_id;
+  const winnerVendorId = bbWinner ? bbWinner.vendor_id : (product?.vendor_id || null);
+  const storeName = bbWinner 
+    ? bbWinner.vendor_name 
+    : (product?.vendor_id 
+        ? (product.vendor_store?.display_name || product.vendor_store?.store_name || product.vendor_store?.name || product.vendor?.company_name || product.vendor?.store_name || 'Vendedor')
+        : 'Collectibles.uy');
   const winnerVendorName = winnerIsCollectibles ? 'Collectibles.uy' : storeName;
-  const winnerHasLogistics = false;
+  const winnerHasLogistics = bbWinner ? bbWinner.has_logistics : false;
 
   const avgRating = reviews.length > 0 ? reviews.reduce((s: number, r: any) => s + r.rating, 0) / reviews.length : 0;
   const currentImage = images[selectedImage]?.url;
@@ -211,33 +236,43 @@ export default function ProductDetail() {
   const totalEstimatedCost = Number(((intlProduct?.final_price_usd || product?.base_price) + uruboxEstimatedCost).toFixed(2));
 
   function addToCart(selectedOption?: any) {
+    // Filter out browser events/MouseEvents passed as variant/selectedOption
+    const isEvent = selectedOption && (
+      selectedOption instanceof Event ||
+      (typeof Event !== 'undefined' && selectedOption instanceof Event) ||
+      selectedOption.nativeEvent ||
+      selectedOption.target ||
+      typeof selectedOption.preventDefault === 'function'
+    );
+    const option = isEvent ? undefined : selectedOption;
+
     if (!selectedVariant) return;
     
-    // If a specific option from "Other Options" was clicked, use it instead of winner
-    const targetPrice = selectedOption ? selectedOption.price : finalPrice;
-    const targetStock = selectedOption ? selectedOption.stock : stock;
-    const targetVendorId = selectedOption ? selectedOption.vendor_id : winnerVendorId;
-    const targetVendorName = selectedOption ? selectedOption.vendor_name : winnerVendorName;
-    const targetVpvId = selectedOption ? selectedOption.vpv_id : (bbWinner && !bbWinner.is_collectibles ? bbWinner.vpv_id : null);
+    // Resolve price using central helper
+    const targetPrice = resolveCartItemPrice(product, option || selectedVariant);
+    const targetStock = option ? option.stock : stock;
+    const targetVendorId = option ? option.vendor_id : winnerVendorId;
+    const targetVendorName = option ? option.vendor_name : winnerVendorName;
+    const targetVpvId = option ? option.vpv_id : (bbWinner && !bbWinner.is_collectibles ? bbWinner.vpv_id : null);
 
-    const targetStoreId = selectedOption 
-      ? selectedOption.vendor_store_id 
+    const targetStoreId = option 
+      ? option.vendor_store_id 
       : (bbWinner && !bbWinner.is_collectibles ? bbWinner.vendor_store_id : (product.vendor_store_id || null));
       
-    const targetStoreName = selectedOption 
-      ? selectedOption.vendor_name 
+    const targetStoreName = option 
+      ? option.vendor_name 
       : (bbWinner ? bbWinner.vendor_name : (product.vendor_store?.store_name || product.vendor?.store_name || 'Collectibles'));
 
-    const targetStoreSlug = selectedOption 
-      ? selectedOption.vendor_store_slug 
+    const targetStoreSlug = option 
+      ? option.vendor_store_slug 
       : (bbWinner && !bbWinner.is_collectibles ? bbWinner.vendor_store_slug : (product.vendor_store?.slug || product.vendor?.slug));
 
-    const targetStoreLogo = selectedOption 
-      ? selectedOption.vendor_store_logo 
+    const targetStoreLogo = option 
+      ? option.vendor_store_logo 
       : (bbWinner && !bbWinner.is_collectibles ? bbWinner.vendor_store_logo : (product.vendor_store?.logo_url || product.vendor?.logo_url));
 
-    const targetStoreBadges = selectedOption 
-      ? (selectedOption.vendor_store_badges || []) 
+    const targetStoreBadges = option 
+      ? (option.vendor_store_badges || []) 
       : (bbWinner && !bbWinner.is_collectibles 
           ? (bbWinner.vendor_store_badges || []) 
           : (product.vendor_store?.vendor_store_badge_assignments?.filter((x: any) => x.status === 'active' && x.approved_by && x.approved_at).map((x: any) => x.vendor_store_badges).filter(Boolean) || []));
@@ -270,7 +305,7 @@ export default function ProductDetail() {
       product_id: product.id,
       variant_id: selectedVariant.id,
       vendor_product_variant_id: targetVpvId, // Will be null for Collectibles
-      quantity: selectedOption ? 1 : quantity,
+      quantity: option ? 1 : quantity,
       title: product.title,
       price: targetPrice,
       image: productImage,
@@ -288,8 +323,8 @@ export default function ProductDetail() {
       sku: selectedVariant.sku || null,
       unit_price: targetPrice,
       image_url: productImage,
-      promotions_opt_in: selectedOption
-        ? (selectedOption.promotions_opt_in || false)
+      promotions_opt_in: option
+        ? (option.promotions_opt_in || false)
         : (product.vendor?.promotions_opt_in || false),
       tag_ids: product.product_tags?.map((pt: any) => pt.tag_id) || [],
       is_international: product.source_provider === 'zinc',
@@ -298,7 +333,7 @@ export default function ProductDetail() {
       category_name: product.category?.name
     });
 
-    if (!selectedOption) {
+    if (!option) {
       setAddedToCart(true);
       setTimeout(() => setAddedToCart(false), 2000);
     }
@@ -309,18 +344,35 @@ export default function ProductDetail() {
         content_name: product.title,
         content_ids: [product.id],
         content_type: 'product',
-        value: targetPrice * (selectedOption ? 1 : quantity),
+        value: targetPrice * (option ? 1 : quantity),
         currency: 'UYU'
       }
     });
 
-    trackAddToCart({
-      content_name: product.title,
+    const metaEventId = generateMetaEventId('AddToCart', product.id);
+    trackAddToCart(metaEventId, {
       content_ids: [product.id],
-      content_type: 'product',
-      value: targetPrice * (selectedOption ? 1 : quantity),
+      contents: [{ id: product.id, quantity: option ? 1 : quantity, item_price: targetPrice }],
+      value: targetPrice * (option ? 1 : quantity),
       currency: 'UYU'
-    }, generateMetaEventId('AddToCart', product.id));
+    });
+
+    // GA4 & Clarity Tracking (Phase 2 & 6)
+    trackGA4Event('add_to_cart', {
+      currency: 'UYU',
+      value: targetPrice * (option ? 1 : quantity),
+      items: [{
+        item_id: String(product.id),
+        item_name: String(product.title),
+        item_brand: product.brand?.name || undefined,
+        item_category: product.category?.name || undefined,
+        item_variant: option ? option.name : undefined,
+        price: Number(targetPrice),
+        quantity: option ? 1 : quantity
+      }]
+    });
+
+    trackClarityEvent('product_added_to_cart');
   }
 
 
@@ -656,7 +708,24 @@ export default function ProductDetail() {
                   {addedToCart ? 'Agregado' : stock <= 0 ? 'Agotado' : 'Comprar Ahora'}
                 </button>
                 <button
-                  onClick={() => toggleWishlist(product)}
+                  onClick={() => {
+                    const isAdding = !isInWishlist(product.id);
+                    toggleWishlist(product);
+                    if (isAdding) {
+                      trackGA4Event('add_to_wishlist', {
+                        currency: 'UYU',
+                        value: product.base_price,
+                        items: [{
+                          item_id: String(product.id),
+                          item_name: String(product.title),
+                          item_brand: product.brand?.name || undefined,
+                          item_category: product.category?.name || undefined,
+                          price: Number(product.base_price),
+                          quantity: 1
+                        }]
+                      });
+                    }
+                  }}
                   className={`w-12 h-12 sm:w-12 sm:h-12 shrink-0 flex items-center justify-center rounded-full border transition-all ${isInWishlist(product.id) ? 'bg-[#f00856]/10 border-[#f00856]' : 'border-white/10 hover:border-white/30 bg-white/5'}`}
                   title={isInWishlist(product.id) ? 'Quitar de favoritos' : 'Agregar a favoritos'}
                 >
@@ -684,24 +753,19 @@ export default function ProductDetail() {
                 {/* Official Store Badge under strict conditions */}
                 {(() => {
                   if (!product.vendor_store) return null;
-                  if (product.vendor_store.status !== 'active') return null;
-                  const assignments = product.vendor_store.vendor_store_badge_assignments || [];
-                  const isApproved = assignments.some((assignment: any) => {
-                    const badge = assignment.vendor_store_badges;
+                  if (
+                    product.vendor_store.is_official &&
+                    product.vendor_store.status === 'active' &&
+                    product.vendor_store.approved_by &&
+                    product.vendor_store.approved_at
+                  ) {
                     return (
-                      badge &&
-                      badge.badge_key === 'official_store' &&
-                      assignment.status === 'active' &&
-                      assignment.approved_by &&
-                      assignment.approved_at
+                      <span className="text-[10px] px-2 py-1 font-black leading-none uppercase rounded bg-red-500 text-white border border-red-400 tracking-wider">
+                        {language === 'en' ? 'Official Store' : 'TIENDA OFICIAL'}
+                      </span>
                     );
-                  });
-                  if (!isApproved) return null;
-                  return (
-                    <span className="text-[10px] px-2 py-1 font-black leading-none uppercase rounded bg-red-500 text-white border border-red-400 tracking-wider">
-                      {language === 'en' ? 'Official Store' : 'TIENDA OFICIAL'}
-                    </span>
-                  );
+                  }
+                  return null;
                 })()}
               </div>
             </div>

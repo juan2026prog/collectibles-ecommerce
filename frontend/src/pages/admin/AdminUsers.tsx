@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Shield, ShieldCheck, Store, Star, Share2, Search, RefreshCw, UserCog, Clock, ChevronDown } from 'lucide-react';
+import { Shield, ShieldCheck, Store, Star, Share2, Search, RefreshCw, UserCog, Clock, ChevronDown, Trash2, Lock, Unlock } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
 import CustomerFileModal from '../../components/admin/crm/CustomerFileModal';
@@ -56,6 +56,57 @@ export default function AdminUsers() {
       toast.error('Error al actualizar rol');
     }
     setSaving(null);
+  }
+
+  async function handleBlockToggle(userId: string, isBlocked: boolean, email: string) {
+    const action = isBlocked ? 'unblock' : 'block';
+    const message = isBlocked 
+      ? `¿Estás seguro de que deseas desbloquear al usuario ${email}?` 
+      : `¿Estás seguro de que deseas bloquear al usuario ${email}? No podrá iniciar sesión ni realizar compras.`;
+      
+    if (!(await confirm(message, { danger: !isBlocked }))) return;
+    
+    setSaving(userId + 'block');
+    try {
+      const { data, error } = await supabase.functions.invoke('block-user', {
+        body: { userId, action }
+      });
+      
+      if (error || data?.error) {
+        throw new Error(data?.error || error?.message || `Error al ${isBlocked ? 'desbloquear' : 'bloquear'} usuario`);
+      }
+      
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_blocked: !isBlocked } : u));
+      toast.success(isBlocked ? 'Usuario desbloqueado con éxito' : 'Usuario bloqueado con éxito');
+    } catch (err: any) {
+      toast.error('Error: ' + err.message);
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function handleDeleteUser(userId: string, email: string) {
+    const message = `¿Estás SEGURO de que deseas ELIMINAR permanentemente al usuario ${email}? Esta acción es irreversible y eliminará todos sus perfiles asociados.`;
+    
+    if (!(await confirm(message, { danger: true }))) return;
+    
+    setSaving(userId + 'delete');
+    try {
+      const { data, error } = await supabase.functions.invoke('delete-user', {
+        body: { userId }
+      });
+      
+      if (error || data?.error) {
+        throw new Error(data?.error || error?.message || 'Error al eliminar usuario');
+      }
+      
+      setUsers(prev => prev.filter(u => u.id !== userId));
+      toast.success('Usuario eliminado permanentemente');
+    } catch (err: any) {
+      toast.error('Error: ' + err.message);
+    } finally {
+      setSaving(null);
+    }
   }
 
   async function handleCreateUser(e: React.FormEvent) {
@@ -184,7 +235,14 @@ export default function AdminUsers() {
                               {(u.first_name?.[0] || u.email?.[0] || '?').toUpperCase()}
                             </div>
                             <div>
-                              <p className="text-sm font-bold text-gray-900">{u.first_name || ''} {u.last_name || ''}</p>
+                              <p className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                                {u.first_name || ''} {u.last_name || ''}
+                                {u.is_blocked && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black bg-red-100 text-red-700 border border-red-200 uppercase tracking-wider">
+                                    Bloqueado
+                                  </span>
+                                )}
+                              </p>
                               <p className="text-xs text-gray-400 font-mono">{u.email}</p>
                             </div>
                           </div>
@@ -201,7 +259,7 @@ export default function AdminUsers() {
                           {u.created_at ? new Date(u.created_at).toLocaleDateString('es') : '-'}
                         </td>
                         <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex justify-center gap-1">
+                          <div className="flex justify-center items-center gap-1">
                             {[
                               { role: 'is_admin', icon: ShieldCheck, label: 'Admin', active: u.is_admin, color: 'text-blue-600 bg-blue-50 hover:bg-blue-100' },
                               { role: 'is_vendor', icon: Store, label: 'Vendor', active: u.is_vendor, color: 'text-purple-600 bg-purple-50 hover:bg-purple-100' },
@@ -209,11 +267,35 @@ export default function AdminUsers() {
                               { role: 'is_affiliate', icon: Share2, label: 'Affiliate', active: u.is_affiliate, color: 'text-pink-600 bg-pink-50 hover:bg-pink-100' },
                             ].map(r => (
                               <button key={r.role} onClick={() => toggleRole(u.id, r.role, r.active)} title={`Toggle ${r.label}`}
-                                disabled={saving === u.id + r.role}
+                                disabled={!!saving}
                                 className={`p-1.5 rounded-lg transition-all ${r.active ? r.color + ' ring-2 ring-offset-1 ring-current' : 'text-gray-300 bg-gray-50 hover:bg-gray-100 hover:text-gray-500'}`}>
                                 <r.icon className="w-4 h-4" />
                               </button>
                             ))}
+                            
+                            <div className="w-px h-5 bg-gray-200 mx-1" />
+
+                            <button 
+                              onClick={() => handleBlockToggle(u.id, !!u.is_blocked, u.email)}
+                              title={u.is_blocked ? 'Desbloquear usuario' : 'Bloquear usuario'}
+                              disabled={!!saving}
+                              className={`p-1.5 rounded-lg transition-all ${
+                                u.is_blocked 
+                                  ? 'text-red-600 bg-red-50 hover:bg-red-100 ring-2 ring-offset-1 ring-red-600' 
+                                  : 'text-gray-400 bg-gray-50 hover:bg-red-50 hover:text-red-500'
+                              }`}
+                            >
+                              {u.is_blocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                            </button>
+
+                            <button 
+                              onClick={() => handleDeleteUser(u.id, u.email)}
+                              title="Eliminar usuario"
+                              disabled={!!saving}
+                              className="p-1.5 rounded-lg text-gray-400 bg-gray-50 hover:bg-red-100 hover:text-red-600 transition-all"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
                         </td>
                       </tr>

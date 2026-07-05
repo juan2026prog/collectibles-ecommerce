@@ -37,16 +37,18 @@ A través de la auditoría del sistema, se identificaron las subórdenes y payou
 
 ---
 
-## 3. RPCs CORREGIDAS Y AGREGADAS
+## 3. RPCs Y CLAVES FORÁNEAS CORREGIDAS
 
-Se aplicó la migración [20261108000000_vendor_gmv_real_metrics_hotfix.sql](file:///c:/Projects/Collectibles2026/supabase/migrations/20261108000000_vendor_gmv_real_metrics_hotfix.sql) para actualizar los procedimientos de base de datos:
+Se aplicaron las siguientes migraciones para actualizar la base de datos:
 
-1. **`get_vendor_sales_metrics(p_vendor_id uuid)` [NUEVO]**:
-   Calcula por vendedor todas sus métricas con un filtrado estricto.
-2. **`get_marketplace_kpis()` [REEMPLAZADO]**:
-   Suma las métricas confirmadas desde `get_vendor_sales_metrics()`.
-3. **`get_top_vendors()` [REEMPLAZADO]**:
-   Obtiene los top 5 vendedores ordenados por el GMV confirmado real.
+1. **Procedimientos SQL ([20261108000000_vendor_gmv_real_metrics_hotfix.sql](file:///c:/Projects/Collectibles2026/supabase/migrations/20261108000000_vendor_gmv_real_metrics_hotfix.sql))**:
+   * **`get_vendor_sales_metrics(p_vendor_id uuid)` [NUEVO]**: Calcula por vendedor todas sus métricas con un filtrado estricto.
+   * **`get_marketplace_kpis()` [REEMPLAZADO]**: Suma las métricas confirmadas desde `get_vendor_sales_metrics()`.
+   * **`get_top_vendors()` [REEMPLAZADO]**: Obtiene los top 5 vendedores ordenados por el GMV confirmado real.
+2. **Clave foránea de Vendedor en `order_items` ([20261110000000_fix_order_items_vendor_fkey_cascade.sql](file:///c:/Projects/Collectibles2026/supabase/migrations/20261110000000_fix_order_items_vendor_fkey_cascade.sql))**:
+   * Modificada a `ON DELETE SET NULL` para evitar que la existencia de registros de venta impida la eliminación del vendedor.
+3. **Clave foránea de Variante en `order_items` ([20261111000000_fix_order_items_variant_fkey_cascade.sql](file:///c:/Projects/Collectibles2026/supabase/migrations/20261111000000_fix_order_items_variant_fkey_cascade.sql))**:
+   * Modificada a `ON DELETE SET NULL` para evitar que las variantes de productos de un vendedor impidan la eliminación en cascada.
 
 ---
 

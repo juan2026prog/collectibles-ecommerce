@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useFeatures } from '../contexts/FeatureToggleContext';
 import {
   DollarSign, ArrowUpRight, ShoppingCart, Users, Package, TrendingUp,
-  AlertTriangle, Clock, Eye, Star, Store, FileText, Settings as SettingsIcon
+  AlertTriangle, Clock, Eye, Star, Store, FileText, Settings as SettingsIcon, RefreshCw
 } from 'lucide-react';
 
 export default function AdminDashboard() {
@@ -197,6 +197,7 @@ export default function AdminDashboard() {
               {[
                 { name: 'Productos', href: '/admin/products', icon: Package, color: 'bg-purple-50 text-purple-600 hover:bg-purple-100' },
                 { name: 'Pedidos', href: '/admin/orders', icon: ShoppingCart, color: 'bg-blue-50 text-blue-600 hover:bg-blue-100' },
+                { name: 'Reembolsos', href: '/admin/refunds', icon: RefreshCw, color: 'bg-rose-50 text-rose-600 hover:bg-rose-100' },
                 { name: 'Marcas', href: '/admin/brands', icon: Star, color: 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100' },
                 { name: 'Banners', href: '/admin/banners', icon: Eye, color: 'bg-pink-50 text-pink-600 hover:bg-pink-100' },
                 { name: 'Afiliados', href: '/admin/affiliates', icon: Users, color: 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100' },

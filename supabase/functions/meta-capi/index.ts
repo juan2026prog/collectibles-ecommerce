@@ -75,15 +75,38 @@ serve(async (req) => {
       hashedUserData[key] === undefined && delete hashedUserData[key]
     );
 
+    // Normalize Event name and ID
+    const eventName = payload.event_name || "CustomEvent";
+    const eventId = payload.event_id ? String(payload.event_id) : `capi_${crypto.randomUUID()}`;
+    const eventSourceUrl = payload.event_source_url || "https://collectibles.uy/";
+
+    // Normalize Custom Data to prevent Meta 400 Bad Request
+    const customData = payload.custom_data || {};
+    if (customData.value !== undefined && customData.value !== null) {
+      customData.value = Number(customData.value);
+      if (isNaN(customData.value)) {
+        delete customData.value;
+      } else {
+        customData.currency = customData.currency || 'UYU';
+      }
+    }
+    if (customData.content_ids) {
+      if (!Array.isArray(customData.content_ids)) {
+        customData.content_ids = [String(customData.content_ids)];
+      } else {
+        customData.content_ids = customData.content_ids.map(String);
+      }
+    }
+
     const fbPayload: any = {
       data: [{
-        event_name: payload.event_name,
+        event_name: eventName,
         event_time: payload.event_time || Math.floor(Date.now() / 1000),
         action_source: payload.action_source || "website",
-        event_id: payload.event_id,
-        event_source_url: payload.event_source_url,
+        event_id: eventId,
+        event_source_url: eventSourceUrl,
         user_data: hashedUserData,
-        custom_data: payload.custom_data || {}
+        custom_data: customData
       }]
     };
 
@@ -91,7 +114,7 @@ serve(async (req) => {
       fbPayload.test_event_code = TEST_EVENT_CODE;
     }
 
-    console.log(`[Meta CAPI] Sending event: ${payload.event_name} (ID: ${payload.event_id})`);
+    console.log(`[Meta CAPI] Sending event: ${eventName} (ID: ${eventId})`);
     
     const response = await fetch(`https://graph.facebook.com/v17.0/${PIXEL_ID}/events?access_token=${META_ACCESS_TOKEN}`, {
       method: 'POST',

@@ -1,46 +1,16 @@
+// supabase/functions/soydelivery-sync/index.ts
+
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
-import { corsHeaders, handleOptions } from "../_shared/cors.ts";
-
-function normalizeLocation(value?: string | null) {
-  return (value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim();
-}
-
-function isLocationInSoyDeliveryZone(department?: string | null, city?: string | null): boolean {
-  if (!department || !city) return false;
-  
-  const normDept = normalizeLocation(department).toLowerCase();
-  const normCity = normalizeLocation(city).toLowerCase();
-  
-  if (normDept === "montevideo") {
-    return true;
-  }
-  
-  if (normDept === "san jose") {
-    return normCity === "ciudad del plata";
-  }
-  
-  if (normDept === "canelones") {
-    const coveredCanelones = new Set([
-      "ciudad de la costa", "colinas de carrasco", "el pinar", "lagomar", "lomas de solymar",
-      "parque carrasco", "paso de carrasco", "shangrila", "solymar",
-      "la paz", "las piedras", "progreso", "barros blancos", "joaquin suarez", "pando", "toledo",
-      "ciudad de canelones", "canelones"
-    ]);
-    return coveredCanelones.has(normCity);
-  }
-  
-  return false;
-}
-
+import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
+import { SoyDeliveryAdapter } from "../_shared/adapters/shipping-adapter.ts";
 
 serve(async (req) => {
   const optionsResponse = handleOptions(req);
   if (optionsResponse) return optionsResponse;
+
+  const corsHeaders = getCorsHeaders(req);
 
   try {
     const { order_id } = await req.json();
@@ -53,13 +23,12 @@ serve(async (req) => {
     // 1. Fetch order/suborder polymorphically
     let resolvedVendorId = null;
     let resolvedShippingMethod = null;
-    let resolvedTrackingNumber = null;
     let resolvedShippingAddress = null;
     let resolvedCustomerPhone = null;
     let resolvedCustomerEmail = null;
     let isSuborder = false;
     let parentOrderId = order_id;
-    let orderNumber = "";
+    let suborderNumber = "";
 
     const { data: suborderData } = await supabase
       .from('order_suborders')
@@ -72,8 +41,7 @@ serve(async (req) => {
       parentOrderId = suborderData.parent_order_id;
       resolvedVendorId = suborderData.vendor_id;
       resolvedShippingMethod = suborderData.shipping_method;
-      resolvedTrackingNumber = suborderData.tracking_number;
-      orderNumber = suborderData.suborder_number;
+      suborderNumber = suborderData.suborder_number || "";
       
       const { data: parentOrder, error: parentErr } = await supabase
         .from('orders')
@@ -88,7 +56,6 @@ serve(async (req) => {
       resolvedCustomerPhone = parentOrder.customer_phone;
       resolvedCustomerEmail = parentOrder.customer_email;
     } else {
-      // Fallback: It's a parent order
       const { data: orderData, error: orderErr } = await supabase
         .from('orders')
         .select('*')
@@ -100,96 +67,15 @@ serve(async (req) => {
       }
       resolvedVendorId = orderData.vendor_id;
       resolvedShippingMethod = orderData.shipping_method;
-      resolvedTrackingNumber = orderData.tracking_number;
       resolvedShippingAddress = orderData.shipping_address || {};
       resolvedCustomerPhone = orderData.customer_phone;
       resolvedCustomerEmail = orderData.customer_email;
-      orderNumber = String(orderData.id);
     }
 
-    // 2. Idempotency / Duplicate Check
-    if (resolvedTrackingNumber) {
-      console.log(`[SoyDelivery] Already has a tracking number: ${resolvedTrackingNumber}. Skipping.`);
-      return new Response(JSON.stringify({
-        success: true,
-        already_exists: true,
-        trackingId: resolvedTrackingNumber
-      }), { headers: corsHeaders });
-    }
+    const addr = resolvedShippingAddress || {};
 
-    // Only process if shipping to an address (not pickup)
-    const addr = resolvedShippingAddress;
-    if (!addr || typeof addr === 'string' || !addr.street) {
-      return new Response(JSON.stringify({ skipped: true, reason: "No shipping address (might be pickup)" }), { headers: corsHeaders });
-    }
-
-    // Validate that SoyDelivery is still active for the vendor/platform
-    if (resolvedVendorId) {
-      const { data: vendorData, error: vendorErr } = await supabase
-        .from('vendors')
-        .select('shipping_settings')
-        .eq('id', resolvedVendorId)
-        .maybeSingle();
-
-      if (vendorErr) {
-        throw new Error(`Error al consultar configuración del vendedor: ${vendorErr.message}`);
-      }
-
-      if (vendorData) {
-        const isSdActive = vendorData.shipping_settings?.soydelivery?.active === true;
-        if (!isSdActive) {
-          console.log(`[SoyDelivery] SoyDelivery method is disabled for vendor ${resolvedVendorId}. Failing shipment.`);
-          if (isSuborder) {
-            await supabase
-              .from("order_suborders")
-              .update({ 
-                   shipping_status: "failed",
-                   updated_at: new Date().toISOString()
-              })
-              .eq("id", order_id);
-          }
-          
-          const shipmentPayload = {
-              order_id: isSuborder ? parentOrderId : order_id,
-              suborder_id: isSuborder ? order_id : null,
-              provider_key: 'soydelivery',
-              tracking_code: null,
-              shipping_label_url: null,
-              shipping_status: 'failed',
-              error_message: 'método no disponible',
-              customer_name: `${addr.first_name || ''} ${addr.last_name || ''}`.trim(),
-              customer_phone: resolvedCustomerPhone || "099000000",
-              customer_address: addr.street || "",
-              customer_city: addr.city || "Montevideo",
-              customer_department: addr.department || "",
-              package_weight: 1.0,
-              package_quantity: 1,
-              provider_response: { 
-                status: "failed", 
-                error: "método no disponible",
-                created_at: new Date().toISOString() 
-              }
-          };
-          await supabase.from('shipments').insert(shipmentPayload);
-
-          return new Response(JSON.stringify({ 
-            success: false, 
-            status: "failed",
-            error_message: "método no disponible" 
-          }), {
-            headers: corsHeaders,
-            status: 200,
-          });
-        }
-      }
-    }
-
-    // 3. Fetch SoyDelivery credentials (Vendor or Global Fallback)
-    let apiId = '';
-    let apiKey = '';
-    let negocioId = '';
-    let negocioClave = '';
-    let isSandbox = false;
+    // 2. Fetch SoyDelivery credentials (Vendor or Global Fallback)
+    let sdCreds: any = null;
     let usedVendor = false;
 
     if (resolvedVendorId) {
@@ -202,269 +88,132 @@ serve(async (req) => {
       
       if (vConn && vConn.connection_status === 'connected' && vConn.credentials_encrypted) {
         try {
-           const { decryptData } = await import("../_shared/crypto.ts");
-           const secret = Deno.env.get("SHIPPING_ENCRYPTION_KEY") || supabaseKey.substring(0, 32);
-           const decryptedJson = await decryptData(vConn.credentials_encrypted, secret);
-           const creds = JSON.parse(decryptedJson);
-           apiKey = creds.apiKey;
-           apiId = creds.clientId;
-           negocioId = creds.clientId; 
-           negocioClave = creds.secret;
-           usedVendor = true;
+          const { decryptData } = await import("../_shared/crypto.ts");
+          const secret = Deno.env.get("SHIPPING_ENCRYPTION_KEY") || supabaseKey.substring(0, 32);
+          const decryptedJson = await decryptData(vConn.credentials_encrypted, secret);
+          const creds = JSON.parse(decryptedJson);
+          
+          sdCreds = {
+            apiKey: creds.apiKey,
+            clientId: creds.clientId,
+            negocioId: creds.clientId,
+            secret: creds.secret,
+            negocioClave: creds.secret,
+            isSandbox: vConn.environment === 'uat'
+          };
+          usedVendor = true;
         } catch (e) {
-           console.log("[SoyDelivery] Fallo al desencriptar credenciales del vendor, ignorando.");
+          console.log("[SoyDelivery] Failed to decrypt vendor credentials, falling back to global.");
         }
       }
     }
 
     if (!usedVendor) {
-      const { data: settingsData } = await supabase.from('site_settings').select('key, value');
-      const settings = Object.fromEntries((settingsData || []).map((s: any) => [s.key, s.value]));
-
-      if (settings['shipping_soydelivery_enabled'] !== 'true') {
-        return new Response(JSON.stringify({ skipped: true, reason: "SoyDelivery disabled in global settings" }), { headers: corsHeaders });
-      }
-
-      apiId = settings['shipping_soydelivery_api_id'];
-      apiKey = settings['shipping_soydelivery_api_key'];
-      negocioId = settings['shipping_soydelivery_negocio_id'];
-      negocioClave = settings['shipping_soydelivery_negocio_clave'];
-      isSandbox = settings['shipping_soydelivery_sandbox'] === 'true';
-    }
-
-    // Centralized Logistics: Retrieve vendor's dispatch address as origin/remitente if possible
-    let originAddress = "Retiro Defecto";
-    let originCity = "Montevideo";
-    let originPhone = "099000000";
-    let originDepartment = "Montevideo";
-
-    if (resolvedVendorId) {
-      const { data: defaultAddr } = await supabase
-        .from('vendor_dispatch_addresses')
+      const { data: provider, error: providerErr } = await supabase
+        .from('shipping_providers')
         .select('*')
-        .eq('vendor_id', resolvedVendorId)
-        .eq('is_default', true)
-        .maybeSingle();
+        .eq('code', 'soydelivery')
+        .single();
 
-      if (defaultAddr) {
-        originAddress = defaultAddr.address;
-        originCity = defaultAddr.city;
-        originPhone = defaultAddr.phone || originPhone;
-        originDepartment = defaultAddr.department;
-      } else {
-        const { data: anyAddr } = await supabase
-          .from('vendor_dispatch_addresses')
-          .select('*')
-          .eq('vendor_id', resolvedVendorId)
-          .limit(1)
-          .maybeSingle();
-        if (anyAddr) {
-          originAddress = anyAddr.address;
-          originCity = anyAddr.city;
-          originPhone = anyAddr.phone || originPhone;
-          originDepartment = anyAddr.department;
-        }
+      if (providerErr || !provider) {
+        throw new Error("No hay credenciales SoyDelivery globales configuradas en la plataforma.");
       }
+
+      if (provider.status !== 'active' || !provider.is_active) {
+        return new Response(JSON.stringify({ skipped: true, reason: "SoyDelivery is not active globally" }), { headers: corsHeaders });
+      }
+
+      sdCreds = {
+        apiKey: provider.settings?.apiKey || provider.settings?.shipping_soydelivery_api_key || "",
+        clientId: provider.settings?.clientId || provider.settings?.shipping_soydelivery_api_id || "",
+        negocioId: provider.settings?.negocioId || provider.settings?.shipping_soydelivery_negocio_id || "",
+        secret: provider.settings?.secret || provider.settings?.shipping_soydelivery_negocio_clave || "",
+        negocioClave: provider.settings?.negocioClave || provider.settings?.shipping_soydelivery_negocio_clave || "",
+        isSandbox: provider.environment === 'uat' || provider.settings?.sandbox === 'true'
+      };
     }
 
-    // Validate geographic coverage
-    const isOriginCovered = isLocationInSoyDeliveryZone(originDepartment, originCity);
-    const isDestinationCovered = isLocationInSoyDeliveryZone(addr.department, addr.city);
+    const adapter = new SoyDeliveryAdapter();
+    if (!adapter.validateConfig(sdCreds)) {
+      throw new Error("Credenciales de SoyDelivery incompletas.");
+    }
 
-    if (!isOriginCovered || !isDestinationCovered) {
-      const errorMsg = "SoyDelivery no disponible para origen/destino";
-      
-      const shipmentPayload = {
-        order_id: isSuborder ? parentOrderId : order_id,
-        suborder_id: isSuborder ? order_id : null,
-        provider_key: 'soydelivery',
-        tracking_code: null,
-        shipping_label_url: null,
-        shipping_status: 'failed',
-        error_message: errorMsg,
-        customer_name: `${addr.first_name || ''} ${addr.last_name || ''}`.trim(),
-        customer_phone: resolvedCustomerPhone || "099000000",
-        customer_address: addr.street || '',
-        customer_city: addr.city || "Montevideo",
-        customer_department: addr.department || "",
-        package_weight: 1.0,
-        package_quantity: 1,
-        provider_response: { 
-          success: false, 
-          error: "Geographic coverage validation failed",
-          origin: { city: originCity, department: originDepartment },
-          destination: { city: addr.city, department: addr.department },
-          fallback_suggestions: ["DAC", "UES"]
-        }
-      };
-      
-      await supabase.from('shipments').insert(shipmentPayload);
+    // Call Adapter
+    const result = await adapter.createShipment(
+      supabase,
+      order_id,
+      sdCreds,
+      addr,
+      1.0, // Default weight
+      1,   // Default quantity
+      "",
+      {
+        name: `${addr.first_name || ''} ${addr.last_name || ''}`.trim() || "Cliente",
+        phone: resolvedCustomerPhone || addr.phone || "099000000"
+      }
+    );
 
+    if (result.success && result.trackingCode) {
+      const trackingId = result.trackingCode;
+
+      // Update suborder / order tracking info
       if (isSuborder) {
         await supabase
           .from("order_suborders")
           .update({ 
-               shipping_status: "failed",
-               updated_at: new Date().toISOString()
+            tracking_number: String(trackingId),
+            shipping_provider: "SoyDelivery",
+            shipping_status: "ready_to_ship",
+            updated_at: new Date().toISOString()
           })
           .eq("id", order_id);
       } else {
         await supabase
           .from("orders")
           .update({ 
-               shipping_status: "failed",
-               updated_at: new Date().toISOString()
+            tracking_number: String(trackingId),
+            shipping_provider: "SoyDelivery",
+            shipping_status: "ready_to_ship",
+            updated_at: new Date().toISOString()
           })
           .eq("id", order_id);
       }
 
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: errorMsg, 
-        fallback_suggestions: ["DAC", "UES"] 
-      }), {
+      // Clear any existing shipments to prevent duplicates
+      const delQuery = supabase.from('shipments').delete().eq('provider_key', 'soydelivery');
+      if (isSuborder) {
+        delQuery.eq('suborder_id', order_id);
+      } else {
+        delQuery.eq('order_id', order_id).is('suborder_id', null);
+      }
+      await delQuery;
+
+      // Insert shipment record
+      const shipmentPayload = {
+        order_id: isSuborder ? parentOrderId : order_id,
+        suborder_id: isSuborder ? order_id : null,
+        provider_key: 'soydelivery',
+        tracking_code: String(trackingId), // Only real tracking here
+        internal_reference: isSuborder ? `COL-${suborderNumber}` : `COL-${order_id}`,
+        shipping_label_url: null,
+        shipping_status: 'ready_to_ship',
+        customer_name: `${addr.first_name || ''} ${addr.last_name || ''}`.trim() || "Cliente",
+        customer_phone: resolvedCustomerPhone || addr.phone || "099000000",
+        customer_address: `${addr.street || ''} ${addr.apartment || ''}`.trim() || "N/A",
+        customer_city: addr.city || "Montevideo",
+        customer_department: addr.department || "",
+        package_weight: 1.0,
+        package_quantity: 1,
+        provider_response: result.rawResponse
+      };
+      await supabase.from('shipments').insert(shipmentPayload);
+
+      return new Response(JSON.stringify({ success: true, trackingId }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 400
       });
+    } else {
+      throw new Error(result.error || "Fallo al crear envío en SoyDelivery");
     }
-
-    if (!apiId || !apiKey || !negocioId || !negocioClave) {
-      throw new Error("Faltan credenciales de SoyDelivery.");
-    }
-
-    // Determine base URL
-    const baseUrl = isSandbox 
-        ? "http://testing.soydelivery.com.uy/rest" 
-        : "https://soydelivery.com.uy/rest";
-
-    // 4. Authenticate with SoyDelivery
-    const authRes = await fetch(`${baseUrl}/sdws_autenticar`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            ApiId: Number(apiId),
-            ApiKey: apiKey
-        })
-    });
-    
-    const authData = await authRes.json();
-    if (authData.ErrId && authData.ErrId !== "0") {
-        throw new Error(`SoyDelivery Auth Error: ${authData.ErrDescription}`);
-    }
-    const token = authData.AccessToken;
-    if (!token) throw new Error("No token returned from SoyDelivery");
-
-    // 5. Create the delivery order
-    // Parse street and number from addr.street
-    const streetMatches = addr.street.match(/^(.*?)([\d].*)$/);
-    const street = streetMatches ? streetMatches[1].trim() : addr.street;
-    const number = streetMatches ? streetMatches[2].trim() : "S/N";
-
-    // Set delivery date to tomorrow
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const deliveryDate = tomorrow.toISOString().split('T')[0];
-
-    // Build the payload
-    const payload = {
-        Negocio_id: Number(negocioId),
-        Negocio_clave: Number(negocioClave),
-        Negocio_RepartidoId: 0,
-        Nombre_cliente: `${addr.first_name || ''} ${addr.last_name || ''}`.trim(),
-        Telefono_cliente: resolvedCustomerPhone || "099000000",
-        Email_cliente: resolvedCustomerEmail || "",
-        Negocio_sucursal_external_id: "1",
-        Ciudad_origen: originCity,
-        Calle_origen: originAddress,
-        Numero_origen: "S/N",
-        Apto_origen: "",
-        Esquina_origen: "",
-        Observacion_origen: "",
-        Location_origen: "",
-        Ciudad_destino: addr.city || "Montevideo",
-        Calle_destino: street,
-        Numero_destino: number,
-        Apto_destino: addr.apartment || "",
-        Esquina_destino: "",
-        Observacion_destino: "",
-        Location_destino: "",
-        Fecha_entrega: deliveryDate,
-        Franja_horaria: 4, // 4 = Todo el dia (10 a 18hs)
-        Cantidad_bultos: 1,
-        Detalle: `Orden #${orderNumber}`,
-        Pedido_external_id: order_id,
-        Nro_Factura: "",
-        Servicio: "Express",
-        Tipo_Vehiculo_Nombre: "MOTO",
-        Tipo_Producto: 1, // CHICO
-        Complejidad: "NORMAL",
-        Productos: []
-    };
-
-    const createRes = await fetch(`${baseUrl}/awsnuevopedido1`, {
-        method: 'POST',
-        headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify(payload)
-    });
-
-    const createData = await createRes.json();
-    console.log("SoyDelivery Create Response:", createData);
-
-    if (createData.Error_code !== 0) {
-        throw new Error(`SoyDelivery Create Error: ${createData.Error_desc}`);
-    }
-
-    // 6. Update order/suborder with tracking ID
-    const trackingId = createData.Pedido_id;
-    if (trackingId) {
-        if (isSuborder) {
-            await supabase
-              .from("order_suborders")
-              .update({ 
-                   tracking_number: String(trackingId),
-                   shipping_provider: "SoyDelivery",
-                   shipping_status: "ready_to_ship",
-                   updated_at: new Date().toISOString()
-              })
-              .eq("id", order_id);
-        } else {
-            await supabase
-              .from("orders")
-              .update({ 
-                   tracking_number: String(trackingId),
-                   shipping_provider: "SoyDelivery",
-                   shipping_status: "ready_to_ship",
-                   updated_at: new Date().toISOString()
-              })
-              .eq("id", order_id);
-        }
-
-        // 7. Insert into shipments table using correct schema columns
-        const shipmentPayload = {
-            order_id: isSuborder ? parentOrderId : order_id,
-            suborder_id: isSuborder ? order_id : null,
-            provider_key: 'soydelivery',
-            tracking_code: String(trackingId),
-            shipping_label_url: null,
-            shipping_status: 'ready_to_ship',
-            customer_name: `${addr.first_name || ''} ${addr.last_name || ''}`.trim(),
-            customer_phone: resolvedCustomerPhone || "099000000",
-            customer_address: `${street} ${number}`,
-            customer_city: addr.city || "Montevideo",
-            customer_department: addr.department || "",
-            package_weight: 1.0,
-            package_quantity: 1,
-            provider_response: createData
-        };
-        await supabase.from('shipments').insert(shipmentPayload);
-    }
-
-    return new Response(JSON.stringify({ success: true, trackingId }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
 
   } catch (error: any) {
     console.error("SoyDelivery Sync Error:", error);

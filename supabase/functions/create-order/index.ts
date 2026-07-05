@@ -319,42 +319,21 @@ Deno.serve(async (req) => {
         resolvedStoreId = dbProduct.vendor_store_id || null;
         promotionsOptIn = dbProduct.vendors?.promotions_opt_in || false;
 
-        const { data: vProduct, error: vpError } = await supabase
-          .from("vendor_products")
-          .select("id, price")
-          .eq("product_id", productId)
-          .eq("vendor_id", resolvedVendorId)
-          .eq("status", "active")
-          .maybeSingle();
+        serverPrice = Number(dbProduct.base_price || 0);
+        serverStock = 0;
 
-        if (vpError || !vProduct) {
-          return new Response(JSON.stringify({
-            success: false,
-            error: `El vendedor no tiene este producto activo.`,
-            details: {
-              product_id: productId,
-              vendor_id: resolvedVendorId,
-              reason: "vendor_product_not_found"
-            }
-          }), {
-            status: 200,
-            headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
-          });
-        }
-
-        let adjustment = 0;
         if (item.variant_id) {
-          const { data: vVariant, error: vvError } = await supabase
-            .from("vendor_product_variants")
+          const { data: pvVariant, error: pvError } = await supabase
+            .from("product_variants")
             .select("price_adjustment, inventory_count")
-            .eq("vendor_product_id", vProduct.id)
-            .eq("variant_id", item.variant_id)
+            .eq("id", item.variant_id)
+            .eq("product_id", productId)
             .maybeSingle();
 
-          if (vvError || !vVariant) {
+          if (pvError || !pvVariant) {
             return new Response(JSON.stringify({
               success: false,
-              error: `La variante solicitada del vendedor no está activa.`,
+              error: `La variante del producto del vendedor no existe.`,
               details: {
                 product_id: productId,
                 variant_id: item.variant_id,
@@ -365,10 +344,12 @@ Deno.serve(async (req) => {
               headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
             });
           }
-          adjustment = Number(vVariant.price_adjustment || 0);
-          serverStock = Number(vVariant.inventory_count || 0);
+          const adjustment = Number(pvVariant.price_adjustment || 0);
+          serverPrice = Number(dbProduct.base_price) + adjustment;
+          serverStock = Number(pvVariant.inventory_count || 0);
+        } else {
+          serverStock = 9999; // Fallback if no variant
         }
-        serverPrice = Number(vProduct.price) + adjustment;
       }
       // Case B: Platform product offered by a vendor (Buy Box variant)
       else if (item.vendor_id) {
@@ -807,12 +788,14 @@ Deno.serve(async (req) => {
     const freeShippingThreshold = settingsMap['free_shipping_threshold'] ? Number(settingsMap['free_shipping_threshold']) : 4000;
     const isSoyDeliveryEnabledGlobally = settingsMap['shipping_soydelivery_enabled'] !== 'false';
 
-    // Fetch global active status of delivery providers
+    // Fetch global active status of shipping providers
     const { data: globalProvidersList } = await supabase
-      .from('delivery_providers')
-      .select('provider_key, is_active');
+      .from('shipping_providers')
+      .select('code, is_active, status');
     const globalProvidersMap = Object.fromEntries(
-      (globalProvidersList || []).map(p => [p.provider_key, p.is_active])
+      (globalProvidersList || [])
+        .filter(p => p.status === 'active')
+        .map(p => [p.code, p.is_active])
     );
 
     // Map variants for easy lookup of SKU and name
@@ -1059,6 +1042,13 @@ Deno.serve(async (req) => {
         marketplaceFee = groupSubtotal * (commissionRate / 100);
       }
 
+      const isCollectiblesEnvios = shippingProvider === 'dac' || shippingProvider === 'soydelivery';
+      const billingMode = isCollectiblesEnvios ? 'collectibles_envios' : 'vendor_own_account';
+      const paidBy = isCollectiblesEnvios ? 'collectibles' : 'vendor';
+      
+      const suborderGross = isCollectiblesEnvios ? groupSubtotal : (groupSubtotal + groupShippingCost);
+      const suborderNet = isCollectiblesEnvios ? (groupSubtotal - marketplaceFee) : (groupSubtotal + groupShippingCost - marketplaceFee);
+
       subordersList.push({
         vendor_id: vendorId,
         vendor_name: vendorName,
@@ -1071,9 +1061,16 @@ Deno.serve(async (req) => {
         shipping_cost: groupShippingCost,
         marketplace_commission_rate: commissionRate,
         marketplace_fee: marketplaceFee,
-        vendor_gross_amount: groupSubtotal + groupShippingCost,
-        vendor_net_amount: groupSubtotal + groupShippingCost - marketplaceFee,
-        discount_total: groupDiscount
+        vendor_gross_amount: suborderGross,
+        vendor_net_amount: suborderNet,
+        discount_total: groupDiscount,
+        // Collectibles Envíos financial tracking fields
+        shipping_charged_to_customer: groupShippingCost,
+        shipping_provider_cost: 0.00, // To be updated by worker or adapter upon guide creation
+        shipping_paid_by: paidBy,
+        shipping_billing_mode: billingMode,
+        shipping_margin: 0.00,
+        shipping_provider_invoice_status: 'pending'
       });
     }
 
@@ -1179,7 +1176,7 @@ Deno.serve(async (req) => {
         subtotal,
         discount: discountAmount,
         bank_discount: bankDiscount,
-        shipping: shippingRate,
+        shipping: totalShippingCost,
         status: orderResult.status,
         payment_status: orderResult.payment_status,
         items_count: orderResult.items_count,

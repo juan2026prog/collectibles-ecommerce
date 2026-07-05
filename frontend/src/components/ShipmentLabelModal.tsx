@@ -13,9 +13,46 @@ interface ShipmentLabelModalProps {
 }
 
 export default function ShipmentLabelModal({ suborderId, onClose, initialTab = 'label' }: ShipmentLabelModalProps) {
-  const [activeTab, setActiveTab] = useState<'label' | 'slip'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'official' | 'label' | 'slip'>(initialTab as any);
   const [suborder, setSuborder] = useState<any>(null);
-  const [shipment, setShipment] = useState<any>(null);
+  
+  const [shipments, setShipments] = useState<any[]>([]);
+  const [selectedShipmentIndex, setSelectedShipmentIndex] = useState<number>(0);
+  const [shipmentEvents, setShipmentEvents] = useState<any[]>([]);
+  
+  const shipment = shipments[selectedShipmentIndex] || null;
+  const setShipment = (val: any) => {
+    setShipments(prev => {
+      const next = [...prev];
+      if (typeof val === 'function') {
+        next[selectedShipmentIndex] = val(next[selectedShipmentIndex]);
+      } else {
+        next[selectedShipmentIndex] = val;
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    const activeShip = shipments[selectedShipmentIndex];
+    if (activeShip) {
+      supabase
+        .from('shipment_events')
+        .select('*')
+        .eq('shipment_id', activeShip.id)
+        .order('created_at', { ascending: false })
+        .then(({ data }) => {
+          setShipmentEvents(data || []);
+        });
+
+      if (activeShip.shipping_label_url) {
+        setActiveTab('official');
+      } else if (activeTab === 'official') {
+        setActiveTab('label');
+      }
+    }
+  }, [selectedShipmentIndex, shipments]);
+
   const [vendor, setVendor] = useState<any>(null);
   const [vendorStore, setVendorStore] = useState<any>(null);
   const [dispatchAddress, setDispatchAddress] = useState<any>(null);
@@ -114,15 +151,27 @@ export default function ShipmentLabelModal({ suborderId, onClose, initialTab = '
         .eq('suborder_id', suborderId);
       setOrderItems(itemsData || []);
 
-      // 4. Fetch or create shipment record
+      // 4. Fetch or create shipment records (might be multiple)
       const { data: shipData, error: shipErr } = await supabase
         .from('shipments')
         .select('*')
         .eq('suborder_id', suborderId)
-        .maybeSingle();
+        .order('package_number', { ascending: true });
 
-      if (shipData) {
-        setShipment(shipData);
+      if (shipData && shipData.length > 0) {
+        setShipments(shipData);
+        const activeShip = shipData[0];
+        if (activeShip.shipping_label_url) {
+          setActiveTab('official');
+        }
+        
+        // Load events for the first shipment
+        const { data: evData } = await supabase
+          .from('shipment_events')
+          .select('*')
+          .eq('shipment_id', activeShip.id)
+          .order('created_at', { ascending: false });
+        setShipmentEvents(evData || []);
       } else {
         // Create a shipment row on-the-fly
         const addr = subData.parentOrder?.shipping_address || {};
@@ -133,7 +182,8 @@ export default function ShipmentLabelModal({ suborderId, onClose, initialTab = '
         const customerDepartment = addr.department || '';
 
         const provider = (subData.shipping_provider || subData.shipping_method || 'manual').toLowerCase();
-        const tracking = subData.tracking_number || `COL-${subData.suborder_number}`;
+        const tracking = subData.tracking_number || null;
+        const internalRef = `COL-${subData.suborder_number}`;
 
         // Determine label type
         let labelType = 'courier';
@@ -148,14 +198,15 @@ export default function ShipmentLabelModal({ suborderId, onClose, initialTab = '
           suborder_id: suborderId,
           provider_key: provider,
           tracking_code: tracking,
-          shipping_status: 'ready_to_ship',
+          internal_reference: internalRef,
+          shipping_status: tracking ? 'ready_to_ship' : 'pending_real_tracking',
           customer_name: customerName,
           customer_phone: customerPhone,
           customer_address: customerAddress,
           customer_city: customerCity,
           customer_department: customerDepartment,
-          barcode_value: tracking,
-          qr_value: tracking,
+          barcode_value: internalRef,
+          qr_value: internalRef,
           label_type: labelType,
           label_version: 1,
           label_generated_at: new Date().toISOString()
@@ -170,7 +221,8 @@ export default function ShipmentLabelModal({ suborderId, onClose, initialTab = '
         if (createErr) {
           console.error("Error creating shipment automatically:", createErr.message);
         } else {
-          setShipment(createdShip);
+          setShipments([createdShip]);
+          setShipmentEvents([]);
         }
       }
     } catch (err: any) {
@@ -194,6 +246,13 @@ export default function ShipmentLabelModal({ suborderId, onClose, initialTab = '
   // Print function
   async function handlePrint(isRePrint = false) {
     if (!suborder || !shipment) return;
+
+    if (activeTab === 'official') {
+      if (shipment.shipping_label_url) {
+        window.open(shipment.shipping_label_url, '_blank');
+      }
+      return;
+    }
 
     let targetElement = activeTab === 'label' ? labelRef.current : slipRef.current;
     if (!targetElement) return;
@@ -254,6 +313,14 @@ export default function ShipmentLabelModal({ suborderId, onClose, initialTab = '
   // Load html2pdf dynamically and download PDF
   async function handleDownloadPDF() {
     if (!suborder || !shipment) return;
+
+    if (activeTab === 'official') {
+      if (shipment.shipping_label_url) {
+        window.open(shipment.shipping_label_url, '_blank');
+      }
+      return;
+    }
+
     setSaving(true);
 
     const targetElement = activeTab === 'label' ? labelRef.current : slipRef.current;
@@ -350,6 +417,24 @@ export default function ShipmentLabelModal({ suborderId, onClose, initialTab = '
             <Eye className="w-3.5 h-3.5 text-blue-500" /> Vista Previa ({printSize})
           </div>
 
+          {shipments.length > 1 && (
+            <div className="mb-4 flex gap-1.5 p-1 bg-slate-200/50 rounded-lg w-fit border border-slate-250/30">
+              {shipments.map((s, idx) => (
+                <button
+                  key={s.id}
+                  onClick={() => setSelectedShipmentIndex(idx)}
+                  className={`px-3 py-1.5 text-[10px] font-black rounded-md transition-all ${
+                    selectedShipmentIndex === idx
+                      ? 'bg-slate-900 text-white shadow-sm'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Bulto {idx + 1} de {shipments.length}
+                </button>
+              ))}
+            </div>
+          )}
+
           {loading ? (
             <div className="flex flex-col items-center justify-center gap-2">
               <RefreshCw className="w-8 h-8 text-primary-600 animate-spin" />
@@ -357,7 +442,32 @@ export default function ShipmentLabelModal({ suborderId, onClose, initialTab = '
             </div>
           ) : (
             <div className="w-full flex justify-center">
-              {activeTab === 'label' ? (
+              {activeTab === 'official' ? (
+                <div className="w-full h-full min-h-[450px] flex flex-col gap-3 bg-white border border-gray-200 rounded-xl p-4 shadow-inner">
+                  <div className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex justify-between items-center border-b pb-2">
+                    <span>Pegote Oficial del Courier</span>
+                    <a 
+                      href={shipment?.shipping_label_url} 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      className="text-xs text-indigo-600 font-bold hover:underline flex items-center gap-1"
+                    >
+                      <Download className="w-3.5 h-3.5" /> Descargar PDF Oficial
+                    </a>
+                  </div>
+                  {shipment?.shipping_label_url ? (
+                    <iframe 
+                      src={shipment.shipping_label_url} 
+                      className="w-full flex-1 min-h-[400px] border rounded" 
+                      title="Etiqueta Oficial Courier" 
+                    />
+                  ) : (
+                    <div className="flex-1 min-h-[400px] flex flex-col items-center justify-center text-slate-400 gap-2 font-medium">
+                      <span>No hay etiqueta oficial disponible</span>
+                    </div>
+                  )}
+                </div>
+              ) : activeTab === 'label' ? (
                 /* LABEL CONTENT CONTAINER */
                 <div 
                   ref={labelRef} 
@@ -671,16 +781,24 @@ export default function ShipmentLabelModal({ suborderId, onClose, initialTab = '
             </div>
 
             {/* Tab Toggles */}
-            <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 rounded-lg">
+            <div className={`grid ${shipment?.shipping_label_url ? 'grid-cols-3' : 'grid-cols-2'} gap-1.5 p-1 bg-slate-100 rounded-lg`}>
+              {shipment?.shipping_label_url && (
+                <button
+                  onClick={() => setActiveTab('official')}
+                  className={`py-1.5 text-[10px] font-bold rounded-md transition-all flex items-center justify-center gap-1 ${activeTab === 'official' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                >
+                  <FileText className="w-3.5 h-3.5 text-green-600" /> Etiqueta Oficial
+                </button>
+              )}
               <button
                 onClick={() => setActiveTab('label')}
-                className={`py-1.5 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-1.5 ${activeTab === 'label' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                className={`py-1.5 text-[10px] font-bold rounded-md transition-all flex items-center justify-center gap-1 ${activeTab === 'label' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
               >
-                <Truck className="w-3.5 h-3.5" /> Etiqueta
+                <Truck className="w-3.5 h-3.5" /> Etiqueta Interna
               </button>
               <button
                 onClick={() => setActiveTab('slip')}
-                className={`py-1.5 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-1.5 ${activeTab === 'slip' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                className={`py-1.5 text-[10px] font-bold rounded-md transition-all flex items-center justify-center gap-1 ${activeTab === 'slip' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
               >
                 <FileText className="w-3.5 h-3.5" /> Packing Slip
               </button>
@@ -722,6 +840,26 @@ export default function ShipmentLabelModal({ suborderId, onClose, initialTab = '
                 </button>
               </div>
             </div>
+
+            {/* Shipment Events History List */}
+            {shipmentEvents.length > 0 && (
+              <div className="space-y-2 border-t border-slate-100 pt-4">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Historial del Envío (Bulto {selectedShipmentIndex + 1})</span>
+                <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                  {shipmentEvents.map((ev) => (
+                    <div key={ev.id} className="text-[10px] border-b border-slate-50 pb-1.5 last:border-0 last:pb-0">
+                      <div className="flex justify-between font-bold text-slate-700">
+                        <span className="capitalize">{ev.event_type.replace('_', ' ')}</span>
+                        <span className="text-slate-400 font-mono text-[9px]">
+                          {new Date(ev.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <p className="text-slate-500 mt-0.5 leading-tight">{ev.description}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Action buttons */}

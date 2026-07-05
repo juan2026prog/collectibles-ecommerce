@@ -72,7 +72,7 @@ Deno.serve(async (req: Request) => {
     const { data: order, error: orderError } = await supabaseAdmin
       .from("orders")
       .select(
-        "id, customer_id, customer_email, customer_phone, total_amount, currency, status, payment_status, payment_method, payment_id, payment_processed_at, shipping_address, created_at"
+        "id, customer_id, customer_email, customer_phone, total_amount, currency, status, payment_status, payment_method, payment_id, payment_processed_at, shipping_address, created_at, order_number"
       )
       .eq("id", orderId)
       .single();
@@ -175,14 +175,30 @@ Deno.serve(async (req: Request) => {
     const finalTotalAmount = isTesting ? Math.max(amount, sumProductsAmount, 5.00) : amount;
     const currencyCode = order.currency?.toUpperCase() === "USD" ? 840 : 858;
 
-    const orderTime = order.created_at ? new Date(order.created_at).getTime() : Date.now();
-    const invoiceNumber = Math.floor(orderTime / 1000);
+    const numPart = order.order_number ? order.order_number.replace(/\D/g, '') : '';
+    const invoiceNumber = Number(numPart);
 
     console.log("Handy InvoiceNumber:", invoiceNumber);
     console.log("Handy TransactionExternalId:", order.id);
 
-    if (!Number.isInteger(invoiceNumber)) {
-      throw new Error("InvoiceNumber debe ser integer");
+    // Defensive validation: Order Items
+    if (!orderItems || orderItems.length === 0) {
+      throw new Error("HANDY_ORDER_WITHOUT_ITEMS");
+    }
+
+    // Defensive validation: InvoiceNumber
+    if (isNaN(invoiceNumber) || !Number.isInteger(invoiceNumber) || invoiceNumber <= 0 || invoiceNumber > 2147483647) {
+      throw new Error("HANDY_INVALID_INVOICE_NUMBER");
+    }
+
+    // Defensive validation: Amount
+    if (!Number.isFinite(finalTotalAmount) || finalTotalAmount <= 0) {
+      throw new Error("HANDY_INVALID_AMOUNT");
+    }
+
+    // Defensive validation: Currency
+    if (currencyCode !== 840 && currencyCode !== 858) {
+      throw new Error("HANDY_INVALID_CURRENCY");
     }
 
     // Ensure we do not use localhost for SiteUrl

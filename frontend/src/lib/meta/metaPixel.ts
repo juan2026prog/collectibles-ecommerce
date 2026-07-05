@@ -54,12 +54,31 @@ export function initPixel(userData?: any) {
 }
 
 /**
+ * Normalizes any event ID parameter to guarantee it is a valid string,
+ * avoiding object/array serialization and providing a solid fallback
+ * if the ID is missing or invalid.
+ */
+export function normalizeEventId(eventId?: unknown, fallbackPrefix?: string): string {
+  if (eventId !== undefined && eventId !== null && eventId !== '') {
+    if (typeof eventId === 'string' || typeof eventId === 'number') {
+      return String(eventId).trim();
+    }
+  }
+
+  const prefix = fallbackPrefix ? `meta_${fallbackPrefix.toLowerCase()}` : 'meta_evt';
+  const timestamp = Date.now();
+  const randomStr = Math.random().toString(36).slice(2, 7);
+  return `${prefix}_${timestamp}_${randomStr}`;
+}
+
+/**
  * Generates a unique Meta event ID for deduplication
  */
-export function generateMetaEventId(eventName: string, entityId?: string): string {
-  const prefix = `meta_${eventName.toLowerCase()}`;
+export function generateMetaEventId(eventName?: string, entityId?: string): string {
+  const name = eventName || 'event';
+  const prefix = `meta_${name.toLowerCase()}`;
   if (entityId) {
-    if (eventName === 'Purchase') return `${prefix}_${entityId}`;
+    if (name === 'Purchase') return `${prefix}_${entityId}`;
     return `${prefix}_${entityId}_${Math.random().toString(36).slice(2, 7)}`;
   }
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -73,11 +92,12 @@ export function generateMetaEventId(eventName: string, entityId?: string): strin
 function trackEvent(eventName: string, data: any = {}, eventId?: string) {
   if (!canTrackMeta() || !window.fbq) return;
   
-  const options = eventId ? { eventID: eventId } : undefined;
+  const cleanEventId = normalizeEventId(eventId, eventName);
+  const options = { eventID: cleanEventId };
   window.fbq('track', eventName, data, options);
   
   if (IS_DEBUG) {
-    console.log(`[Meta] Track: ${eventName} | ID: ${eventId}`, data);
+    console.log(`[Meta] Track: ${eventName} | ID: ${cleanEventId}`, data);
   }
 }
 
@@ -88,8 +108,9 @@ export function trackPageView(eventId?: string, userData?: any) {
   if (window._metaPageViewTracked) return; // Basic dedup for strict mode / re-renders
   window._metaPageViewTracked = true;
   
-  trackEvent('PageView', undefined, eventId);
-  sendMetaCapiEvent(eventId || '', 'PageView', undefined, userData);
+  const cleanEventId = normalizeEventId(eventId, 'PageView');
+  trackEvent('PageView', undefined, cleanEventId);
+  sendMetaCapiEvent(cleanEventId, 'PageView', undefined, userData);
   
   // Reset after a short delay in case we navigated (SPA)
   setTimeout(() => {
@@ -108,17 +129,19 @@ export function trackViewContent(
     currency?: string;
   }
 ) {
+  const cleanEventId = normalizeEventId(eventId, 'ViewContent');
   const customData = {
     ...data,
     currency: data.currency || 'UYU',
     content_type: 'product'
   };
-  trackEvent('ViewContent', customData, eventId);
-  sendMetaCapiEvent(eventId, 'ViewContent', customData);
+  trackEvent('ViewContent', customData, cleanEventId);
+  sendMetaCapiEvent(cleanEventId, 'ViewContent', customData);
 }
 
 export function trackSearch(eventId: string, search_string: string) {
-  trackEvent('Search', { search_string }, eventId);
+  const cleanEventId = normalizeEventId(eventId, 'Search');
+  trackEvent('Search', { search_string }, cleanEventId);
 }
 
 export function trackAddToCart(
@@ -130,13 +153,14 @@ export function trackAddToCart(
     currency?: string;
   }
 ) {
+  const cleanEventId = normalizeEventId(eventId, 'AddToCart');
   const customData = {
     ...data,
     currency: data.currency || 'UYU',
     content_type: 'product'
   };
-  trackEvent('AddToCart', customData, eventId);
-  sendMetaCapiEvent(eventId, 'AddToCart', customData);
+  trackEvent('AddToCart', customData, cleanEventId);
+  sendMetaCapiEvent(cleanEventId, 'AddToCart', customData);
 }
 
 export function trackAddToWishlist(
@@ -148,10 +172,11 @@ export function trackAddToWishlist(
     currency?: string;
   }
 ) {
+  const cleanEventId = normalizeEventId(eventId, 'AddToWishlist');
   trackEvent('AddToWishlist', {
     ...data,
     currency: data.currency || 'UYU'
-  }, eventId);
+  }, cleanEventId);
 }
 
 export function trackInitiateCheckout(
@@ -163,12 +188,13 @@ export function trackInitiateCheckout(
     currency?: string;
   }
 ) {
+  const cleanEventId = normalizeEventId(eventId, 'InitiateCheckout');
   const customData = {
     ...data,
     currency: data.currency || 'UYU'
   };
-  trackEvent('InitiateCheckout', customData, eventId);
-  sendMetaCapiEvent(eventId, 'InitiateCheckout', customData);
+  trackEvent('InitiateCheckout', customData, cleanEventId);
+  sendMetaCapiEvent(cleanEventId, 'InitiateCheckout', customData);
 }
 
 export function trackAddPaymentInfo(
@@ -179,12 +205,13 @@ export function trackAddPaymentInfo(
     currency?: string;
   }
 ) {
+  const cleanEventId = normalizeEventId(eventId, 'AddPaymentInfo');
   const customData = {
     ...data,
     currency: data.currency || 'UYU'
   };
-  trackEvent('AddPaymentInfo', customData, eventId);
-  sendMetaCapiEvent(eventId, 'AddPaymentInfo', customData);
+  trackEvent('AddPaymentInfo', customData, cleanEventId);
+  sendMetaCapiEvent(cleanEventId, 'AddPaymentInfo', customData);
 }
 
 export function trackPurchase(
@@ -199,6 +226,7 @@ export function trackPurchase(
     user_email?: string;
   }
 ) {
+  const cleanEventId = normalizeEventId(eventId, 'Purchase');
   const customData = {
     ...data,
     currency: data.currency || 'UYU',
@@ -208,8 +236,8 @@ export function trackPurchase(
   // Remove user_email from customData to keep it clean, but pass it to CAPI user_data
   const { user_email, ...pixelData } = customData;
   
-  trackEvent('Purchase', pixelData, eventId);
-  sendMetaCapiEvent(eventId, 'Purchase', pixelData, { email: user_email });
+  trackEvent('Purchase', pixelData, cleanEventId);
+  sendMetaCapiEvent(cleanEventId, 'Purchase', pixelData, { email: user_email });
 }
 
 export function trackCompleteRegistration(
@@ -219,9 +247,10 @@ export function trackCompleteRegistration(
     user_email?: string;
   }
 ) {
+  const cleanEventId = normalizeEventId(eventId, 'CompleteRegistration');
   const { user_email, ...pixelData } = data;
-  trackEvent('CompleteRegistration', pixelData, eventId);
-  sendMetaCapiEvent(eventId, 'CompleteRegistration', pixelData, { email: user_email });
+  trackEvent('CompleteRegistration', pixelData, cleanEventId);
+  sendMetaCapiEvent(cleanEventId, 'CompleteRegistration', pixelData, { email: user_email });
 }
 
 export function trackLead(
@@ -232,9 +261,10 @@ export function trackLead(
     user_email?: string;
   }
 ) {
+  const cleanEventId = normalizeEventId(eventId, 'Lead');
   const { user_email, ...pixelData } = data;
-  trackEvent('Lead', pixelData, eventId);
-  sendMetaCapiEvent(eventId, 'Lead', pixelData, { email: user_email });
+  trackEvent('Lead', pixelData, cleanEventId);
+  sendMetaCapiEvent(cleanEventId, 'Lead', pixelData, { email: user_email });
 }
 
 export function trackContact(
@@ -243,8 +273,9 @@ export function trackContact(
     contact_method?: string; // e.g. whatsapp, email, instagram
   }
 ) {
-  trackEvent('Contact', data, eventId);
-  sendMetaCapiEvent(eventId, 'Contact', data);
+  const cleanEventId = normalizeEventId(eventId, 'Contact');
+  trackEvent('Contact', data, cleanEventId);
+  sendMetaCapiEvent(cleanEventId, 'Contact', data);
 }
 
 export function trackFindLocation(
@@ -254,6 +285,7 @@ export function trackFindLocation(
     location?: string;
   }
 ) {
-  trackEvent('FindLocation', data, eventId);
-  sendMetaCapiEvent(eventId, 'FindLocation', data);
+  const cleanEventId = normalizeEventId(eventId, 'FindLocation');
+  trackEvent('FindLocation', data, cleanEventId);
+  sendMetaCapiEvent(cleanEventId, 'FindLocation', data);
 }

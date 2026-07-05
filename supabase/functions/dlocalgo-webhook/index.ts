@@ -62,6 +62,8 @@ serve(async (req) => {
     let dbStatus = "pending";
     if (status === "PAID" || status === "APPROVED") dbStatus = "paid";
     if (status === "REJECTED" || status === "CANCELLED") dbStatus = "cancelled";
+    if (status === "REFUNDED") dbStatus = "refunded";
+    if (status === "CHARGEBACK") dbStatus = "chargeback";
 
     const { data: existingOrder } = await supabase
       .from("orders")
@@ -71,6 +73,131 @@ serve(async (req) => {
 
     if (existingOrder?.payment_processed_at && dbStatus === "paid") {
       return new Response(JSON.stringify({ received: true, skipped: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (dbStatus === "refunded") {
+      // Revert status and stock
+      await supabase
+        .from("orders")
+        .update({
+          status: "cancelada",
+          payment_status: "refunded",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", order_id);
+
+      await supabase
+        .from("order_suborders")
+        .update({
+          status: "refunded",
+          liquidation_status: "cancelled",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("parent_order_id", order_id)
+        .neq("liquidation_status", "paid");
+
+      const { data: dbPayment } = await supabase
+        .from("payments")
+        .select("id, amount")
+        .eq("order_id", order_id)
+        .eq("provider", "dlocalgo")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const paymentUuid = dbPayment?.id || null;
+      const paymentAmount = dbPayment?.amount || 0;
+
+      if (paymentUuid) {
+        await supabase
+          .from("payments")
+          .update({
+            status: "refunded",
+            refund_amount: paymentAmount,
+            refund_date: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", paymentUuid);
+      }
+
+      // Create refunds record if not exists
+      const { data: existingRefund } = await supabase
+        .from("refunds")
+        .select("id")
+        .eq("order_id", order_id)
+        .eq("status", "completed")
+        .maybeSingle();
+
+      if (!existingRefund) {
+        await supabase.from("refunds").insert({
+          order_id: order_id,
+          payment_id: paymentUuid,
+          provider: "dlocalgo",
+          amount: paymentAmount,
+          reason: "Reembolso notificado por webhook de dLocal Go",
+          status: "completed",
+          processed_at: new Date().toISOString(),
+          api_response: dlocalData
+        });
+      }
+
+      return new Response(JSON.stringify({ received: true, mappedStatus: dbStatus }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (dbStatus === "chargeback") {
+      await supabase
+        .from("orders")
+        .update({
+          payment_status: "charged_back",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", order_id);
+
+      await supabase
+        .from("order_suborders")
+        .update({
+          status: "claim_open",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("parent_order_id", order_id);
+
+      const { data: dbPayment } = await supabase
+        .from("payments")
+        .select("id, amount")
+        .eq("order_id", order_id)
+        .eq("provider", "dlocalgo")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const paymentUuid = dbPayment?.id || null;
+      const paymentAmount = dbPayment?.amount || 0;
+
+      if (paymentUuid) {
+        await supabase
+          .from("payments")
+          .update({
+            status: "failed",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", paymentUuid);
+      }
+
+      // Create dispute record
+      await supabase.from("payment_disputes").insert({
+        provider: "dlocalgo",
+        payment_id: paymentUuid,
+        order_id: order_id,
+        dispute_reason: "charged_back",
+        status: "open",
+        amount: paymentAmount
+      });
+
+      return new Response(JSON.stringify({ received: true, mappedStatus: dbStatus }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

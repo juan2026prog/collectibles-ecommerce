@@ -6,6 +6,7 @@ import { evaluateItemDiscountDetailed } from '../hooks/usePromotions';
 import { useWishlistContext } from '../contexts/WishlistContext';
 import { useAdminMode } from '../contexts/AdminModeContext';
 import { useLocale } from '../contexts/LocaleContext';
+import { trackGA4Event } from '../lib/analyticsTracker';
 
 interface ProductGridCardProps {
   product: any;
@@ -23,7 +24,22 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
   const { isAdminMode } = useAdminMode();
   const { language } = useLocale();
   const img = getProductImage(product);
-  const finalPrice = product.base_price + (product.variants?.[0]?.price_adjustment || 0);
+  const finalPrice = Number(product.base_price || 0) + Number(product.variants?.[0]?.price_adjustment || 0);
+
+  const handleCardClick = () => {
+    trackGA4Event('select_item', {
+      item_list_id: 'product_catalog_grid',
+      item_list_name: 'Product Catalog Grid',
+      items: [{
+        item_id: String(product.id),
+        item_name: String(product.title),
+        item_brand: product.brand?.name || undefined,
+        item_category: product.category?.name || undefined,
+        price: Number(finalPrice - promoDiscount),
+        quantity: 1
+      }]
+    });
+  };
   
   let promoDiscount = 0;
   if (applicablePromos && applicablePromos.length > 0) {
@@ -57,6 +73,7 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
       <div className="relative">
         <Link 
           to={`/p/${product.slug}`} 
+          onClick={handleCardClick}
           className={`flex bg-white w-full aspect-square overflow-hidden p-6 items-center justify-center border border-white/5 group-hover:border-[#f00856]/20 transition-colors ${
             isCollectibles ? 'rounded-[14px]' : 'rounded-sm'
           }`}
@@ -182,7 +199,7 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
           </div>
         )}
         
-        <Link to={`/p/${product.slug}`}>
+        <Link to={`/p/${product.slug}`} onClick={handleCardClick}>
           <h3 className="text-xs md:text-sm font-bold leading-tight line-clamp-2 min-h-[34px] text-white hover:text-[#f00856] transition-colors">
             {product.title}
           </h3>

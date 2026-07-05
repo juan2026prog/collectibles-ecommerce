@@ -8,6 +8,7 @@ import { ProductGridCard } from '../components/ProductGridCard';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { useCartContext } from '../contexts/CartContext';
 import { getProductImage } from '../lib/imageUtils';
+import { resolveCartItemPrice } from '../lib/priceResolver';
 
 export default function Wishlist() {
   const { user } = useAuth();
@@ -52,12 +53,13 @@ export default function Wishlist() {
   function handleAddToCart(p: any) {
     const variant = p.variants?.[0];
     if (!variant) return;
+    const resolvedPrice = resolveCartItemPrice(p, variant);
     cart.addItem({ 
       product_id: p.id, 
       variant_id: variant.id, 
       quantity: 1, 
       title: p.title, 
-      price: p.base_price + (variant.price_adjustment || 0), 
+      price: resolvedPrice, 
       image: getProductImage(p), 
       variant_name: variant.name,
       category_id: p.category_id,
@@ -70,7 +72,7 @@ export default function Wishlist() {
       vendor_store_slug: p.vendor_store?.slug || p.vendor?.slug,
       vendor_logo: p.vendor_store?.logo_url || p.vendor?.logo_url,
       sku: variant.sku || null,
-      unit_price: p.base_price + (variant.price_adjustment || 0),
+      unit_price: resolvedPrice,
       image_url: getProductImage(p),
       promotions_opt_in: p.vendor?.promotions_opt_in || false,
       tag_ids: p.product_tags?.map((pt: any) => pt.tag_id) || []

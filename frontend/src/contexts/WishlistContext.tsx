@@ -84,7 +84,7 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
     if (isAdding) {
       // GA4 standard Add To Wishlist event
       try {
-        const finalPrice = product.base_price + (product.variants?.[0]?.price_adjustment || 0);
+        const finalPrice = Number(product.base_price || 0) + Number(product.variants?.[0]?.price_adjustment || 0);
         trackGA4Event('add_to_wishlist', {
           currency: 'UYU',
           value: finalPrice,
@@ -103,7 +103,7 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
 
       // Meta Pixel
       try {
-        const finalPrice = product.base_price + (product.variants?.[0]?.price_adjustment || 0);
+        const finalPrice = Number(product.base_price || 0) + Number(product.variants?.[0]?.price_adjustment || 0);
         const eventId = generateMetaEventId('AddToWishlist', productId);
         trackAddToWishlist(eventId, {
           content_name: product.title,

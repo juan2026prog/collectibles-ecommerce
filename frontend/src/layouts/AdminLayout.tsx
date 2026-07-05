@@ -46,6 +46,7 @@ export default function AdminLayout() {
     { name: 'Automatizaciones', path: '/admin/automations', icon: Bot },
     { name: 'Mailing', path: '/admin/mailing', icon: Mail },
     { name: 'Finanzas & Facturas', path: '/admin/finances', icon: CreditCard },
+    { name: 'Reembolsos', path: '/admin/refunds', icon: RefreshCw },
     { name: 'Logistica & Envios', path: '/admin/logistics', icon: Package },
     { name: 'Artistas & Cameo', path: '/admin/artists', icon: Star },
     { name: 'Reportes', path: '/admin/reports', icon: BarChart3 },

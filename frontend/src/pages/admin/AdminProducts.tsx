@@ -213,6 +213,36 @@ export default function AdminProducts() {
   async function handleSave() {
     try {
       if (!form.title) throw new Error("El título es obligatorio");
+
+      if (form.status === 'published') {
+        const errors = [];
+        if (!form.categories[0]) errors.push("Falta categoría válida");
+        if (!form.brands[0]) errors.push("Falta marca válida");
+        if ((parseFloat(form.base_price) || 0) <= 0) errors.push("Precio inválido (debe ser mayor a 0)");
+        if ((parseInt(form.stock) || 0) < 0) errors.push("Stock inválido (no puede ser negativo)");
+        if (!form.image_url) errors.push("Imágenes suficientes (se requiere al menos una imagen)");
+
+        // Duplicate check
+        const { data: dupData } = await supabase.rpc('check_duplicate_product', {
+          p_title: form.title,
+          p_brand_id: form.brands[0] || null,
+          p_sku: form.sku || null,
+          p_gtin: null,
+          p_asin: null
+        });
+
+        if (dupData && dupData.length > 0) {
+          const otherDup = dupData.find((d: any) => d.matched_product_id !== editing?.id && d.similarity_score >= 0.95);
+          if (otherDup) {
+            errors.push(`Conflicto de duplicado detectado (Similitud >= 95% con producto ID: ${otherDup.matched_product_id})`);
+          }
+        }
+
+        if (errors.length > 0) {
+          throw new Error("Reglas de Publicación no cumplidas:\n- " + errors.join("\n- "));
+        }
+      }
+
       let titleSlug = form.slug || form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'); if (!editing && !form.slug) { titleSlug = `${titleSlug.replace(/-+$/, '')}-`; }
 
       const payload = {
@@ -401,10 +431,53 @@ export default function AdminProducts() {
   const handleBulkPublish = async () => {
     if (!(await confirm(`¿Publicar ${selectedProducts.length} productos seleccionados?`))) return;
     try {
-       await supabase.from('products').update({ status: 'published' }).in('id', selectedProducts);
-       setSelectedProducts([]);
-       fetchProducts();
-       toast.success(`${selectedProducts.length} productos publicados`);
+      // Fetch products properties to validate
+      const { data: prodsToPub } = await supabase
+        .from('products')
+        .select('*, product_variants(sku, inventory_count), product_images(url)')
+        .in('id', selectedProducts);
+
+      if (prodsToPub) {
+        for (const p of prodsToPub) {
+          const errors = [];
+          if (!p.category_id) errors.push("Falta categoría");
+          if (!p.brand_id) errors.push("Falta marca");
+          if (Number(p.base_price) <= 0) errors.push("Precio inválido");
+          
+          const skuVal = p.product_variants?.[0]?.sku;
+          const stockVal = p.product_variants?.[0]?.inventory_count;
+          if (stockVal === undefined || stockVal < 0) errors.push("Stock inválido");
+          
+          const primaryImage = p.product_images?.find((img: any) => img.is_primary)?.url || p.product_images?.[0]?.url;
+          if (!primaryImage) errors.push("Imágenes suficientes");
+
+          // Duplicate check
+          const { data: dupData } = await supabase.rpc('check_duplicate_product', {
+            p_title: p.title,
+            p_brand_id: p.brand_id,
+            p_sku: skuVal || null,
+            p_gtin: null,
+            p_asin: null
+          });
+
+          if (dupData && dupData.length > 0) {
+            const otherDup = dupData.find((d: any) => d.matched_product_id !== p.id && d.similarity_score >= 0.95);
+            if (otherDup) {
+              errors.push("Conflicto de duplicado");
+            }
+          }
+
+          if (errors.length > 0) {
+            toast.error(`Producto "${p.title}" no cumple reglas de publicación: ${errors.join(', ')}`);
+            return;
+          }
+        }
+      }
+
+      await supabase.from('products').update({ status: 'published' }).in('id', selectedProducts);
+      setSelectedProducts([]);
+      fetchProducts();
+      toast.success(`${selectedProducts.length} productos publicados`);
     } catch (err: any) { toast.error(err.message); }
   };
 

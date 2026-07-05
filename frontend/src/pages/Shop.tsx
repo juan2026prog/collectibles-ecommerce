@@ -1,5 +1,5 @@
 import { Link, useSearchParams, useNavigate, useParams, useLocation } from 'react-router-dom';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { ChevronRight, ChevronLeft, SlidersHorizontal, X, Search, Store, ExternalLink } from 'lucide-react';
 import { useProducts, useCategories, useBrands, useFilterMappings, useProductGroupMetadata, useBrandFacets } from '../hooks/useData';
 import { usePromotions, getApplicablePromotions } from '../hooks/usePromotions';
@@ -12,7 +12,9 @@ import { ProductGridCard } from '../components/ProductGridCard';
 import { getProductImage } from '../lib/imageUtils';
 import { supabase } from '../lib/supabase';
 import { trackSearch, generateMetaEventId } from '../lib/meta/metaPixel';
+import { trackGA4Event, trackClarityEvent, mapCartItemsToGA4 } from '../lib/analyticsTracker';
 import SEO from '../components/SEO';
+import { resolveCartItemPrice } from '../lib/priceResolver';
 
 function getVisiblePages(currentPage: number, total: number) {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i);
@@ -29,6 +31,7 @@ function normalizeText(str: string): string {
 }
 
 export default function Shop({ isInternational }: { isInternational?: boolean } = {}) {
+  const lastTrackedProductsRef = useRef<string>('');
   const [searchParams, setSearchParams] = useSearchParams();
   const { categorySlug: catParam, brandSlug: brandParam, slug: groupSlug } = useParams<{ categorySlug?: string; brandSlug?: string; slug?: string }>();
   const location = useLocation();
@@ -168,8 +171,35 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
     }
   }, [categorySlug, catsLoading, categories, navigate]);
 
+  // GA4 event: view_item_list & view_search_results (Phase 2)
+  useEffect(() => {
+    if (loading || !products || products.length === 0) return;
+
+    const productsSignature = products.map(p => p.id).join(',');
+    if (lastTrackedProductsRef.current === productsSignature) return;
+    lastTrackedProductsRef.current = productsSignature;
+
+    if (searchQ) {
+      trackGA4Event('view_search_results', {
+        search_term: searchQ,
+        items: mapCartItemsToGA4(products)
+      });
+    } else {
+      trackGA4Event('view_item_list', {
+        item_list_id: categorySlug || brandSlug || 'shop_catalog',
+        item_list_name: currentCategory?.name || currentBrand?.name || 'Todos los Productos',
+        items: mapCartItemsToGA4(products)
+      });
+    }
+  }, [products, loading, searchQ, categorySlug, brandSlug, currentCategory, currentBrand]);
+
   useEffect(() => {
     if (searchQ) {
+      // GA4 event: search (Phase 2)
+      trackGA4Event('search', {
+        search_term: searchQ
+      });
+
       try {
         const eventId = generateMetaEventId('Search');
         trackSearch(eventId, searchQ);
@@ -184,12 +214,13 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   function handleAddToCart(p: any) {
     const variant = p.variants?.[0];
     if (!variant) return;
+    const resolvedPrice = resolveCartItemPrice(p, variant);
     cart.addItem({ 
       product_id: p.id, 
       variant_id: variant.id, 
       quantity: 1, 
       title: p.title, 
-      price: p.base_price + (variant.price_adjustment || 0), 
+      price: resolvedPrice, 
       image: getProductImage(p), 
       variant_name: variant.name, 
       category_id: p.category_id, 

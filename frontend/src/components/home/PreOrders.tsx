@@ -62,13 +62,18 @@ function PreorderCard({ item }: { item: PreorderItem }) {
   const [timeLeft, setTimeLeft] = useState<{ days: number; hours: number; minutes: number; seconds: number } | null>(null);
 
   useEffect(() => {
-    if (!item.countdown_date) return;
+    if (!item.countdown_date) {
+      setTimeLeft(null);
+      return;
+    }
 
+    const targetDate = new Date(item.countdown_date).getTime();
+    
     const calculateTime = () => {
-      const difference = +new Date(item.countdown_date!) - +new Date();
+      const difference = targetDate - Date.now();
       if (difference <= 0) {
         setTimeLeft(null);
-        return;
+        return false;
       }
 
       setTimeLeft({
@@ -77,10 +82,19 @@ function PreorderCard({ item }: { item: PreorderItem }) {
         minutes: Math.floor((difference / 1000 / 60) % 60),
         seconds: Math.floor((difference / 1000) % 60),
       });
+      return true;
     };
 
-    calculateTime();
-    const interval = setInterval(calculateTime, 1000);
+    const initialActive = calculateTime();
+    if (!initialActive) return;
+
+    const interval = setInterval(() => {
+      const active = calculateTime();
+      if (!active) {
+        clearInterval(interval);
+      }
+    }, 1000);
+
     return () => clearInterval(interval);
   }, [item.countdown_date]);
 

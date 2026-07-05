@@ -55,49 +55,113 @@ export async function triggerPostPaymentActions(
     body: JSON.stringify({ order_id: orderId }),
   }).catch((err: any) => console.error("Commissions error:", err));
 
-  // Trigger post-payment shipment automation per suborder (DAC, SoyDelivery, UES)
+  // Trigger post-payment shipment automation per suborder
   try {
+    const { data: fullOrder } = await supabaseClient
+      .from("orders")
+      .select("*")
+      .eq("id", orderId)
+      .single();
+
+    if (!fullOrder) throw new Error("Parent order not found");
+
     const { data: suborders } = await supabaseClient
       .from('order_suborders')
       .select('*')
       .eq('parent_order_id', orderId);
+
+    // Fetch dynamic active shipping providers
+    const { data: activeProviders } = await supabaseClient
+      .from('shipping_providers')
+      .select('code, is_active, status')
+      .eq('is_active', true)
+      .eq('status', 'active');
+
+    const activeCodes = (activeProviders || []).map((p: any) => p.code);
 
     if (suborders) {
       for (const sub of suborders) {
         const method = (sub.shipping_method || "").toLowerCase();
         const provider = (sub.shipping_provider || "").toLowerCase();
         
-        if (method.includes("dac") || provider.includes("dac")) {
-          console.log(`[Post-Payment] Triggering DAC shipment creation for suborder ${sub.suborder_number} (${sub.id})`);
-          await fetch(`${supabaseUrl}/functions/v1/dac-create-shipment`, {
-            method: "POST",
-            headers: functionHeaders,
-            body: JSON.stringify({ order_id: sub.id }),
-          }).then(async res => {
-            if (!res.ok) console.error(`[Post-Payment] DAC failed for suborder ${sub.suborder_number}:`, await res.text());
-          }).catch(err => console.error(`[Post-Payment] DAC trigger failed:`, err));
-        } 
+        // Resolve provider code
+        let resolvedCode = "";
+        if (provider.includes("dac") || method.includes("dac")) resolvedCode = "dac";
+        else if (provider.includes("soydelivery") || method.includes("soydelivery")) resolvedCode = "soydelivery";
+        else if (provider.includes("ues") || method.includes("ues")) resolvedCode = "ues";
         
-        else if (method.includes("soydelivery") || provider.includes("soydelivery")) {
-          console.log(`[Post-Payment] Triggering SoyDelivery shipment creation for suborder ${sub.suborder_number} (${sub.id})`);
-          await fetch(`${supabaseUrl}/functions/v1/soydelivery-sync`, {
-            method: "POST",
-            headers: functionHeaders,
-            body: JSON.stringify({ order_id: sub.id }),
-          }).then(async res => {
-            if (!res.ok) console.error(`[Post-Payment] SoyDelivery failed for suborder ${sub.suborder_number}:`, await res.text());
-          }).catch(err => console.error(`[Post-Payment] SoyDelivery trigger failed:`, err));
-        }
-        
-        else if (method.includes("ues") || provider.includes("ues")) {
-          console.log(`[Post-Payment] Triggering UES shipment creation for suborder ${sub.suborder_number} (${sub.id})`);
-          await fetch(`${supabaseUrl}/functions/v1/ues-create-shipment`, {
-            method: "POST",
-            headers: functionHeaders,
-            body: JSON.stringify({ order_id: sub.id }),
-          }).then(async res => {
-            if (!res.ok) console.error(`[Post-Payment] UES failed for suborder ${sub.suborder_number}:`, await res.text());
-          }).catch(err => console.error(`[Post-Payment] UES trigger failed:`, err));
+        // Only trigger if provider is active globally
+        if (resolvedCode && activeCodes.includes(resolvedCode)) {
+          console.log(`[Post-Payment] Enqueueing shipment for suborder ${sub.suborder_number} (${sub.id}) using ${resolvedCode}`);
+
+          // A. Build customer details
+          const addr = fullOrder.shipping_address || {};
+          const customerName = `${addr.first_name || ''} ${addr.last_name || ''}`.trim() || 'Cliente';
+          const customerPhone = fullOrder.customer_phone || addr.phone || '';
+          const customerAddress = addr.street || '';
+          const customerCity = addr.city || '';
+          const customerDepartment = addr.department || '';
+          
+          let labelType = 'courier';
+          if (resolvedCode === 'soydelivery') {
+            labelType = 'flex';
+          }
+
+          // B. Create the shipment row in state 'queued'
+          const { data: createdShip, error: createErr } = await supabaseClient
+            .from('shipments')
+            .insert({
+              order_id: orderId,
+              suborder_id: sub.id,
+              provider_key: resolvedCode,
+              tracking_code: null,
+              internal_reference: `COL-${sub.suborder_number}`,
+              shipping_status: 'queued',
+              customer_name: customerName,
+              customer_phone: customerPhone,
+              customer_address: customerAddress,
+              customer_city: customerCity,
+              customer_department: customerDepartment,
+              barcode_value: `COL-${sub.suborder_number}`,
+              qr_value: `COL-${sub.suborder_number}`,
+              label_type: labelType,
+              label_version: 1,
+              label_generated_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+
+          if (createErr || !createdShip) {
+            console.error(`[Post-Payment] Failed to create shipment row for suborder ${sub.suborder_number}:`, createErr?.message);
+            continue;
+          }
+
+          // C. Log the 'queued' event in shipment_events
+          await supabaseClient.from('shipment_events').insert({
+            shipment_id: createdShip.id,
+            event_type: 'queued',
+            description: `Envío encolado para registro automático en ${resolvedCode.toUpperCase()}`,
+            provider_status: 'queued'
+          });
+
+          // D. Insert into shipping_queue
+          const { error: queueErr } = await supabaseClient
+            .from('shipping_queue')
+            .insert({
+              shipment_id: createdShip.id,
+              provider_code: resolvedCode,
+              action: 'create_shipment',
+              priority: 0,
+              attempts: 0,
+              status: 'queued',
+              next_attempt_at: new Date().toISOString()
+            });
+
+          if (queueErr) {
+            console.error(`[Post-Payment] Failed to insert queue item for suborder ${sub.suborder_number}:`, queueErr.message);
+          } else {
+            console.log(`[Post-Payment] Shipment and queue item created for suborder ${sub.suborder_number}`);
+          }
         }
       }
     }

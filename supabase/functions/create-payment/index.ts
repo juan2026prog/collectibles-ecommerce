@@ -79,6 +79,9 @@ serve(async (req: Request) => {
     }
 
     const amount = Number(order.total_amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error("INVALID_CHECKOUT_TOTAL: La orden no tiene un total valido para cobrar.");
+    }
     const currency = order.currency || "UYU";
     const customer = {
       name: getCustomerName(order),

@@ -91,9 +91,25 @@ export default function AdminOfficialStores() {
 
   async function handleToggleOfficial(storeId: string, currentOfficial: boolean) {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const payload: any = {
+        is_official: !currentOfficial
+      };
+      
+      if (!currentOfficial) {
+        payload.official_badge_text = 'Tienda Oficial';
+        payload.approved_by = user?.id || null;
+        payload.approved_at = new Date().toISOString();
+        payload.status = 'active';
+      } else {
+        payload.official_badge_text = null;
+        payload.approved_by = null;
+        payload.approved_at = null;
+      }
+
       const { error } = await supabase
         .from('vendor_stores')
-        .update({ is_official: !currentOfficial })
+        .update(payload)
         .eq('id', storeId);
 
       if (error) throw error;

@@ -8,6 +8,7 @@ import { useCurrency } from '../contexts/CurrencyContext';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { resolveImage } from '../lib/imageUtils';
 import { usePromotions, evaluateItemDiscount } from '../hooks/usePromotions';
+import { trackGA4Event, trackClarityEvent, mapCartItemsToGA4 } from '../lib/analyticsTracker';
 
 export default function CartDrawer() {
   const navigate = useNavigate();
@@ -48,8 +49,11 @@ export default function CartDrawer() {
 
   // Timer Lifecycle & Extension on item additions
   useEffect(() => {
-    if (items.length === 0) {
-      sessionStorage.removeItem('cart_reservation_ends');
+    if (items.length === 0 || !isDrawerOpen) {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
       return;
     }
 
@@ -71,6 +75,7 @@ export default function CartDrawer() {
 
       if (remaining === 0 && timerRef.current) {
         clearInterval(timerRef.current);
+        timerRef.current = null;
       }
     };
 
@@ -78,9 +83,12 @@ export default function CartDrawer() {
     timerRef.current = setInterval(updateTimer, 1000);
 
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
     };
-  }, [items.length, count]);
+  }, [items.length, count, isDrawerOpen]);
 
   // Format Timer to MM:SS
   const formatTime = (seconds: number) => {
@@ -100,10 +108,54 @@ export default function CartDrawer() {
   const grandTotal = total - autoDiscountAmount + shipping;
   const freeShippingProgress = Math.min(100, ((total - autoDiscountAmount) / freeShippingThreshold) * 100);
 
+  // GA4: view_cart trigger (Phase 2)
+  const viewCartTrackedRef = useRef(false);
+  useEffect(() => {
+    if (isDrawerOpen && items.length > 0) {
+      if (viewCartTrackedRef.current) return;
+      viewCartTrackedRef.current = true;
+      
+      trackGA4Event('view_cart', {
+        currency: 'UYU',
+        value: total - autoDiscountAmount,
+        items: mapCartItemsToGA4(items)
+      });
+    } else if (!isDrawerOpen) {
+      viewCartTrackedRef.current = false;
+    }
+  }, [isDrawerOpen, items, total, autoDiscountAmount]);
+
   // Close drawer on navigate to checkout
   const handleCheckoutRedirect = () => {
+    // GA4 event: begin_checkout (Phase 2)
+    trackGA4Event('begin_checkout', {
+      currency: 'UYU',
+      value: total - autoDiscountAmount,
+      items: mapCartItemsToGA4(items)
+    });
+
+    // Clarity event: checkout_started (Phase 6)
+    trackClarityEvent('checkout_started');
+
     setIsDrawerOpen(false);
     navigate('/checkout');
+  };
+
+  const handleRemoveItem = (item: any) => {
+    trackGA4Event('remove_from_cart', {
+      currency: 'UYU',
+      value: Number(item.price) * Number(item.quantity),
+      items: [{
+        item_id: String(item.product_id || item.id || ''),
+        item_name: String(item.product_name || item.title || ''),
+        item_brand: item.brand_name || item.brand || undefined,
+        item_category: item.category_name || item.category || undefined,
+        item_variant: item.variant_name || item.variant || undefined,
+        price: Number(item.price),
+        quantity: Number(item.quantity)
+      }]
+    });
+    removeItem(item.variant_id, item.vendor_id);
   };
 
   return (
@@ -261,7 +313,7 @@ export default function CartDrawer() {
                           )}
                         </div>
                         <button 
-                          onClick={() => removeItem(item.variant_id, item.vendor_id)}
+                          onClick={() => handleRemoveItem(item)}
                           className="p-1 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-500/5 transition-colors shrink-0"
                           title="Eliminar"
                         >

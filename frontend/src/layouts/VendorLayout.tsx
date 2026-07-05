@@ -58,8 +58,9 @@ export default function VendorLayout() {
     { name: 'Dashboard', path: '/vendor?tab=overview', tab: 'overview', icon: LayoutDashboard },
     { name: 'Productos', path: '/vendor?tab=products', tab: 'products', icon: Package },
     { name: 'Pedidos', path: '/vendor?tab=orders', tab: 'orders', icon: ShoppingBag },
-    { name: 'Envíos', path: '/vendor?tab=shipping', tab: 'shipping', icon: Truck },
+    { name: 'Mis Envíos', path: '/vendor?tab=shipments', tab: 'shipments', icon: Truck },
     { name: 'Finanzas', path: '/vendor?tab=finances', tab: 'finances', icon: CreditCard },
+    { name: 'Ajustes de Envío', path: '/vendor?tab=shipping', tab: 'shipping', icon: Settings },
   ];
 
   const taxonomyItems = [

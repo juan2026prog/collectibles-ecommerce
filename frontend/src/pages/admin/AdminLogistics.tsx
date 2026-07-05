@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   Truck, MapPin, Save, QrCode, FileText, CheckCircle2, ChevronRight, X, Edit2, Check,
-  ToggleLeft, ToggleRight, Settings, Info, AlertCircle, RefreshCw, Calculator, Plus, Trash2
+  ToggleLeft, ToggleRight, Settings, Info, AlertCircle, RefreshCw, Calculator, Plus, Trash2,
+  Eye, Activity
 } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 import { supabase } from '../../lib/supabase';
@@ -28,7 +29,318 @@ const INITIAL_ZONES = {
 };
 
 export default function AdminLogistics() {
-  const [activeTab, setActiveTab] = useState<'soydelivery' | 'dac' | 'general' | 'ues'>('soydelivery');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'soydelivery' | 'dac' | 'general' | 'ues' | 'control-tower'>('dashboard');
+
+  // Dashboard Stats State
+  const [dbStats, setDbStats] = useState<{
+    statusCounts: Record<string, number>;
+    queuedCount: number;
+    failedQueueCount: number;
+    monitors: any[];
+    topCouriers: { provider: string; count: number }[];
+    topVendors: { vendor: string; count: number }[];
+    avgSla: { provider: string; avgMins: number }[];
+  }>({
+    statusCounts: {},
+    queuedCount: 0,
+    failedQueueCount: 0,
+    monitors: [],
+    topCouriers: [],
+    topVendors: [],
+    avgSla: []
+  });
+  const [loadingDashboard, setLoadingDashboard] = useState(false);
+
+  // Operational Dashboard Shipments & Queue Lists
+  const [adminShipments, setAdminShipments] = useState<any[]>([]);
+  const [adminQueue, setAdminQueue] = useState<any[]>([]);
+  const [latestEvents, setLatestEvents] = useState<Record<string, any>>({});
+  
+  // Card filter selection
+  const [selectedCardFilter, setSelectedCardFilter] = useState<string>('all');
+
+  // Filter toolbar inputs
+  const [filterSearch, setFilterSearch] = useState('');
+  const [filterCourier, setFilterCourier] = useState('all');
+  const [filterVendor, setFilterVendor] = useState('all');
+  const [filterSla, setFilterSla] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterDateRange, setFilterDateRange] = useState<'all' | 'today' | 'week'>('all');
+  
+  // Unique vendors list for filtering
+  const [uniqueVendors, setUniqueVendors] = useState<string[]>([]);
+
+  // Detailed Timeline modal state
+  const [selectedTimelineShipment, setSelectedTimelineShipment] = useState<any | null>(null);
+  const [timelineEvents, setTimelineEvents] = useState<any[]>([]);
+  const [loadingTimeline, setLoadingTimeline] = useState(false);
+  const [selectedRawResponse, setSelectedRawResponse] = useState<any | null>(null);
+
+  // Alertas visuales state
+  const [visualAlerts, setVisualAlerts] = useState<string[]>([]);
+
+  async function loadDashboardData() {
+    setLoadingDashboard(true);
+    try {
+      // 1. Fetch shipments with suborders details
+      const { data: shipData, error: shipErr } = await supabase
+        .from('shipments')
+        .select(`
+          *,
+          suborder:order_suborders(
+            id, suborder_number, vendor_id, shipping_method, shipping_provider, vendor_store_name,
+            order_items(quantity, products(title))
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (shipErr) throw shipErr;
+      const list = shipData || [];
+      setAdminShipments(list);
+
+      // Extract unique vendors for dropdown
+      const vendorsSet = new Set<string>();
+      list.forEach((s: any) => {
+        const vName = s.suborder?.vendor_store_name || 'Collectibles';
+        vendorsSet.add(vName);
+      });
+      setUniqueVendors(Array.from(vendorsSet));
+
+      // 2. Fetch shipping queue items
+      const { data: queueData } = await supabase
+        .from('shipping_queue')
+        .select('*');
+      setAdminQueue(queueData || []);
+
+      // 3. Fetch monitors
+      const { data: monitorData } = await supabase
+        .from('shipping_monitor')
+        .select('*')
+        .order('provider_code');
+
+      // 4. Fetch latest event per shipment
+      if (list.length > 0) {
+        const shipIds = list.map(s => s.id);
+        const { data: evData } = await supabase
+          .from('shipment_events')
+          .select('shipment_id, event_type, description, created_at')
+          .in('shipment_id', shipIds)
+          .order('created_at', { ascending: true }); // Chronological order
+        
+        const evMap: Record<string, any> = {};
+        if (evData) {
+          evData.forEach(e => {
+            evMap[e.shipment_id] = e; // Keep the latest event
+          });
+        }
+        setLatestEvents(evMap);
+      }
+
+      // Compute statistics counts
+      const statusMap: Record<string, number> = {};
+      const courierMap: Record<string, number> = {};
+      const slaTotals: Record<string, { sum: number; count: number }> = {};
+      let queuedCount = 0;
+      let failedQueueCount = 0;
+
+      list.forEach(s => {
+        const status = s.shipping_status || 'unknown';
+        statusMap[status] = (statusMap[status] || 0) + 1;
+
+        const prov = s.provider_key || 'unknown';
+        courierMap[prov] = (courierMap[prov] || 0) + 1;
+
+        if (s.guide_created_at && s.created_at) {
+          const diff = new Date(s.guide_created_at).getTime() - new Date(s.created_at).getTime();
+          const mins = Math.max(0, diff / 60000);
+          if (!slaTotals[prov]) {
+            slaTotals[prov] = { sum: 0, count: 0 };
+          }
+          slaTotals[prov].sum += mins;
+          slaTotals[prov].count += 1;
+        }
+      });
+
+      if (queueData) {
+        queueData.forEach(q => {
+          if (q.status === 'queued') queuedCount++;
+          if (q.status === 'failed' || q.status === 'retrying') failedQueueCount++;
+        });
+      }
+
+      const topVendors = Array.from(vendorsSet).map(vendor => {
+        const count = list.filter((s: any) => (s.suborder?.vendor_store_name || 'Collectibles') === vendor).length;
+        return { vendor, count };
+      }).sort((a, b) => b.count - a.count).slice(0, 5);
+
+      const topCouriers = Object.entries(courierMap)
+        .map(([provider, count]) => ({ provider, count }))
+        .sort((a, b) => b.count - a.count);
+
+      const avgSla = Object.entries(slaTotals).map(([provider, details]) => ({
+        provider,
+        avgMins: Math.round(details.sum / details.count)
+      }));
+
+      setDbStats({
+        statusCounts: statusMap,
+        queuedCount,
+        failedQueueCount,
+        monitors: monitorData || [],
+        topCouriers,
+        topVendors,
+        avgSla
+      });
+
+      // 5. Generate operational alerts dynamically
+      const alertsList: string[] = [];
+      
+      monitorData?.forEach(m => {
+        if (m.status === 'offline') {
+          alertsList.push(`Alerta: Courier ${m.provider_code.toUpperCase()} se encuentra CAÍDO (offline).`);
+        } else if (m.status === 'degraded' || (m.request_count > 0 && m.error_count / m.request_count > 0.3)) {
+          alertsList.push(`Alerta: Courier ${m.provider_code.toUpperCase()} presenta alta tasa de errores (${Math.round((m.error_count / m.request_count) * 100)}%).`);
+        }
+      });
+
+      const failedCount = list.filter(s => s.shipping_status === 'failed').length;
+      if (failedCount > 0) {
+        alertsList.push(`Advertencia: Existen ${failedCount} envíos con estado fallido (failed) permanente.`);
+      }
+
+      const fifteenMinsAgo = new Date(Date.now() - 15 * 60000);
+      const delayedQueue = (queueData || []).filter(q => q.status === 'queued' && new Date(q.created_at) < fifteenMinsAgo).length;
+      if (delayedQueue > 0) {
+        alertsList.push(`Advertencia: Hay ${delayedQueue} envíos retrasados en cola por más de 15 minutos.`);
+      }
+
+      let slaBreaches = 0;
+      list.forEach(s => {
+        if (!s.guide_created_at && (Date.now() - new Date(s.created_at).getTime()) > 4 * 3600000) {
+          slaBreaches++;
+        }
+      });
+      if (slaBreaches > 0) {
+        alertsList.push(`Advertencia: Se detectaron ${slaBreaches} guías pendientes de creación fuera del SLA de 4 horas.`);
+      }
+
+      setVisualAlerts(alertsList);
+
+    } catch (err: any) {
+      console.error("Error loading logistics dashboard data:", err.message);
+    } finally {
+      setLoadingDashboard(false);
+    }
+  }
+
+  async function handleRetryQueue(queueId: string, shipmentId: string) {
+    try {
+      const { error: queueErr } = await supabase
+        .from('shipping_queue')
+        .update({
+          status: 'queued',
+          attempts: 0,
+          next_attempt_at: new Date().toISOString(),
+          last_error: null
+        })
+        .eq('id', queueId);
+
+      if (queueErr) throw queueErr;
+
+      const { error: shipErr } = await supabase
+        .from('shipments')
+        .update({
+          shipping_status: 'queued',
+          error_message: null
+        })
+        .eq('id', shipmentId);
+
+      if (shipErr) throw shipErr;
+
+      await supabase.from('shipment_events').insert({
+        shipment_id: shipmentId,
+        event_type: 'queued',
+        description: 'Administrador reinició manualmente la cola para reintento de envío.',
+        provider_status: 'queued',
+        created_by: 'admin'
+      });
+
+      toast.success("Envío encolado para reintento correctamente");
+      loadDashboardData();
+    } catch (err: any) {
+      toast.error(`Error al reintentar: ${err.message}`);
+    }
+  }
+
+  async function handleMarkResolved(shipmentId: string) {
+    try {
+      const { error } = await supabase
+        .from('shipments')
+        .update({
+          shipping_status: 'ready_to_ship',
+          error_message: null
+        })
+        .eq('id', shipmentId);
+
+      if (error) throw error;
+
+      await supabase.from('shipment_events').insert({
+        shipment_id: shipmentId,
+        event_type: 'resolved',
+        description: 'Administrador marcó manualmente el envío como resuelto.',
+        provider_status: 'resolved',
+        created_by: 'admin'
+      });
+
+      toast.success("Envío marcado como resuelto");
+      loadDashboardData();
+    } catch (err: any) {
+      toast.error(`Error al marcar como resuelto: ${err.message}`);
+    }
+  }
+
+  async function viewTimeline(shipment: any) {
+    setSelectedTimelineShipment(shipment);
+    setLoadingTimeline(true);
+    try {
+      const { data, error } = await supabase
+        .from('shipment_events')
+        .select('*')
+        .eq('shipment_id', shipment.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setTimelineEvents(data || []);
+    } catch (err: any) {
+      toast.error(`Error al cargar el historial: ${err.message}`);
+    } finally {
+      setLoadingTimeline(false);
+    }
+  }
+
+  function copyDiagnostic(s: any) {
+    const qItem = adminQueue.find(q => q.shipment_id === s.id);
+    const diag = `[DIAGNÓSTICO TÉCNICO LOGÍSTICO]
+Shipment ID: ${s.id}
+Suborden: COL-${s.suborder?.suborder_number || 'N/A'}
+Vendor: ${s.suborder?.vendor_store_name || 'Collectibles'}
+Courier: ${s.provider_key.toUpperCase()}
+Estado: ${s.shipping_status}
+Tracking Real: ${s.tracking_code || 'PENDIENTE'}
+Referencia: ${s.internal_reference}
+Bulto: ${s.package_number} de ${s.total_packages}
+Intentos Cola: ${qItem?.attempts || 0}
+Último Error: ${s.error_message || qItem?.last_error || 'Ninguno'}`;
+
+    navigator.clipboard.writeText(diag);
+    toast.success("Diagnóstico copiado al portapapeles");
+  }
+
+  useEffect(() => {
+    if (activeTab === 'dashboard') {
+      loadDashboardData();
+    }
+  }, [activeTab]);
   
   // SoyDelivery state
   const [flexActive, setFlexActive] = useState(true);
@@ -530,6 +842,26 @@ export default function AdminLogistics() {
       {/* Tabs Switcher */}
       <div className="flex border-b border-gray-200">
         <button
+          onClick={() => setActiveTab('dashboard')}
+          className={`px-4 py-2.5 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${
+            activeTab === 'dashboard'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <FileText className="w-4 h-4" /> Dashboard Operativo
+        </button>
+        <button
+          onClick={() => setActiveTab('control-tower')}
+          className={`px-4 py-2.5 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${
+            activeTab === 'control-tower'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Activity className="w-4 h-4" /> Torre de Control
+        </button>
+        <button
           onClick={() => setActiveTab('soydelivery')}
           className={`px-4 py-2.5 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${
             activeTab === 'soydelivery'
@@ -570,6 +902,548 @@ export default function AdminLogistics() {
           <QrCode className="w-4 h-4" /> Formato de Etiquetas
         </button>
       </div>
+
+      {/* TAB CONTENT: DASHBOARD */}
+      {activeTab === 'dashboard' && (
+        <div className="space-y-6 animate-fade-in">
+          
+          {/* Visual Alerts Banner */}
+          {visualAlerts.length > 0 && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-xl space-y-2">
+              <h4 className="text-xs font-black text-red-800 uppercase tracking-widest flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" /> Alertas Operativas Críticas
+              </h4>
+              <ul className="list-disc pl-5 text-xs text-red-700 font-semibold space-y-1">
+                {visualAlerts.map((al, idx) => (
+                  <li key={idx}>{al}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Torre de Control - 10 Tarjetas Operativas */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            
+            <button 
+              onClick={() => setSelectedCardFilter('queued')} 
+              className={`p-4 rounded-xl border text-left transition-all bg-white hover:border-slate-350 ${selectedCardFilter === 'queued' ? 'border-blue-600 shadow-sm ring-1 ring-blue-650/10' : 'border-gray-250'}`}
+            >
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-blue-500">En Cola</div>
+              <div className="text-xl font-black text-blue-600 mt-1">{dbStats.queuedCount}</div>
+            </button>
+
+            <button 
+              onClick={() => setSelectedCardFilter('pending_tracking')} 
+              className={`p-4 rounded-xl border text-left transition-all bg-white hover:border-slate-350 ${selectedCardFilter === 'pending_tracking' ? 'border-blue-600 shadow-sm ring-1 ring-blue-650/10' : 'border-gray-250'}`}
+            >
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-amber-500">Esperando Tracking</div>
+              <div className="text-xl font-black text-amber-600 mt-1">{dbStats.statusCounts['pending_real_tracking'] || 0}</div>
+            </button>
+
+            <button 
+              onClick={() => setSelectedCardFilter('error')} 
+              className={`p-4 rounded-xl border text-left transition-all bg-white hover:border-slate-350 ${selectedCardFilter === 'error' ? 'border-blue-600 shadow-sm ring-1 ring-blue-650/10' : 'border-gray-250'}`}
+            >
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-red-500">Con Error</div>
+              <div className="text-xl font-black text-red-600 mt-1">{(dbStats.statusCounts['failed'] || 0) + dbStats.failedQueueCount}</div>
+            </button>
+
+            <button 
+              onClick={() => setSelectedCardFilter('courier_down')} 
+              className={`p-4 rounded-xl border text-left transition-all bg-white hover:border-slate-350 ${selectedCardFilter === 'courier_down' ? 'border-blue-600 shadow-sm ring-1 ring-blue-650/10' : 'border-gray-250'}`}
+            >
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-rose-500">Courier Caído</div>
+              <div className="text-xl font-black text-rose-600 mt-1">
+                {dbStats.monitors.filter(m => m.status === 'offline').length}
+              </div>
+            </button>
+
+            <button 
+              onClick={() => setSelectedCardFilter('ready_to_ship')} 
+              className={`p-4 rounded-xl border text-left transition-all bg-white hover:border-slate-350 ${selectedCardFilter === 'ready_to_ship' ? 'border-blue-600 shadow-sm ring-1 ring-blue-650/10' : 'border-gray-250'}`}
+            >
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-green-500">Listo para Retiro</div>
+              <div className="text-xl font-black text-green-600 mt-1">
+                {(dbStats.statusCounts['ready_to_ship'] || 0) + (dbStats.statusCounts['waiting_pickup'] || 0)}
+              </div>
+            </button>
+
+            <button 
+              onClick={() => setSelectedCardFilter('in_transit')} 
+              className={`p-4 rounded-xl border text-left transition-all bg-white hover:border-slate-350 ${selectedCardFilter === 'in_transit' ? 'border-blue-600 shadow-sm ring-1 ring-blue-650/10' : 'border-gray-250'}`}
+            >
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-indigo-500">En Tránsito</div>
+              <div className="text-xl font-black text-indigo-600 mt-1">
+                {(dbStats.statusCounts['in_transit'] || 0) + (dbStats.statusCounts['picked_up'] || 0) + (dbStats.statusCounts['out_for_delivery'] || 0)}
+              </div>
+            </button>
+
+            <button 
+              onClick={() => setSelectedCardFilter('delivered_today')} 
+              className={`p-4 rounded-xl border text-left transition-all bg-white hover:border-slate-350 ${selectedCardFilter === 'delivered_today' ? 'border-blue-600 shadow-sm ring-1 ring-blue-650/10' : 'border-gray-250'}`}
+            >
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-emerald-500">Entregados Hoy</div>
+              <div className="text-xl font-black text-emerald-600 mt-1">
+                {adminShipments.filter(s => s.shipping_status === 'delivered' && (s.delivered_at ? new Date(s.delivered_at).toDateString() === new Date().toDateString() : new Date().toDateString() === new Date().toDateString())).length}
+              </div>
+            </button>
+
+            <button 
+              onClick={() => setSelectedCardFilter('retry_needed')} 
+              className={`p-4 rounded-xl border text-left transition-all bg-white hover:border-slate-350 ${selectedCardFilter === 'retry_needed' ? 'border-blue-600 shadow-sm ring-1 ring-blue-650/10' : 'border-gray-250'}`}
+            >
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-violet-500">Requieren Reintento</div>
+              <div className="text-xl font-black text-violet-600 mt-1">
+                {adminQueue.filter(q => q.status === 'retrying').length}
+              </div>
+            </button>
+
+            <button 
+              onClick={() => setSelectedCardFilter('pending_label')} 
+              className={`p-4 rounded-xl border text-left transition-all bg-white hover:border-slate-350 ${selectedCardFilter === 'pending_label' ? 'border-blue-600 shadow-sm ring-1 ring-blue-650/10' : 'border-gray-250'}`}
+            >
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-orange-500">Sin Etiqueta</div>
+              <div className="text-xl font-black text-orange-600 mt-1">
+                {adminShipments.filter(s => s.shipping_status === 'created' && !s.shipping_label_url).length}
+              </div>
+            </button>
+
+            <button 
+              onClick={() => setSelectedCardFilter('manual')} 
+              className={`p-4 rounded-xl border text-left transition-all bg-white hover:border-slate-350 ${selectedCardFilter === 'manual' ? 'border-blue-600 shadow-sm ring-1 ring-blue-650/10' : 'border-gray-250'}`}
+            >
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-gray-500">Manual / Pickup</div>
+              <div className="text-xl font-black text-gray-700 mt-1">
+                {adminShipments.filter(s => ['manual', 'pickup'].includes(s.provider_key)).length}
+              </div>
+            </button>
+
+          </div>
+
+          {/* Secondary Filters Toolbar */}
+          <div className="bg-white p-4 border border-gray-200 rounded-xl shadow-sm grid grid-cols-1 md:grid-cols-6 gap-4">
+            <div className="col-span-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Buscar</label>
+              <input
+                type="text"
+                placeholder="N° orden, tracking, ref..."
+                value={filterSearch}
+                onChange={e => setFilterSearch(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Courier</label>
+              <select
+                value={filterCourier}
+                onChange={e => setFilterCourier(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+              >
+                <option value="all">Todos</option>
+                <option value="dac">DAC</option>
+                <option value="soydelivery">SoyDelivery</option>
+                <option value="pickup">Pickup</option>
+                <option value="manual">Manual</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Vendedor</label>
+              <select
+                value={filterVendor}
+                onChange={e => setFilterVendor(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+              >
+                <option value="all">Todos</option>
+                {uniqueVendors.map(v => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">SLA</label>
+              <select
+                value={filterSla}
+                onChange={e => setFilterSla(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+              >
+                <option value="all">Cualquiera</option>
+                <option value="ok">Dentro de SLA</option>
+                <option value="delayed">Vencido</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Fecha</label>
+              <select
+                value={filterDateRange}
+                onChange={e => setFilterDateRange(e.target.value as any)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+              >
+                <option value="all">Historico</option>
+                <option value="today">Hoy</option>
+                <option value="week">Esta semana</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Active Card Filter Indicator Banner */}
+          {selectedCardFilter !== 'all' && (
+            <div className="flex items-center justify-between bg-blue-50 border border-blue-200 text-blue-800 px-4 py-2 rounded-lg text-xs">
+              <span className="font-bold">Filtro activo por tarjeta: <span className="uppercase font-black text-blue-900">{selectedCardFilter.replace('_', ' ')}</span></span>
+              <button onClick={() => setSelectedCardFilter('all')} className="font-black hover:underline">Quitar filtro</button>
+            </div>
+          )}
+
+          {/* Table Operativa */}
+          <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-left text-sm">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-gray-150 text-[10px] font-black uppercase text-slate-500 tracking-wider">
+                    <th className="py-4 px-5">Pedido</th>
+                    <th className="py-4 px-5">Suborden</th>
+                    <th className="py-4 px-5">Vendedor</th>
+                    <th className="py-4 px-5">Courier</th>
+                    <th className="py-4 px-5">Bulto</th>
+                    <th className="py-4 px-5">Estado</th>
+                    <th className="py-4 px-5">Tracking</th>
+                    <th className="py-4 px-5">SLA</th>
+                    <th className="py-4 px-5">Intentos / Error</th>
+                    <th className="py-4 px-5 text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredShipments.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="py-10 text-center text-gray-400 font-medium">
+                        No hay despachos registrados o que coincidan con los filtros.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredShipments.map(s => {
+                      const qItem = adminQueue.find(q => q.shipment_id === s.id);
+                      const sla = getSlaStatus(s);
+
+                      return (
+                        <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-4 px-5">
+                            <div className="font-bold text-gray-900">#{s.order_id.slice(0, 8)}</div>
+                            <div className="text-[10px] text-gray-400 font-bold">{new Date(s.created_at).toLocaleDateString()}</div>
+                          </td>
+                          <td className="py-4 px-5">
+                            <div className="font-black text-gray-900">COL-{s.suborder?.suborder_number}</div>
+                            <div className="text-[10px] text-slate-400 font-mono">Ref: {s.internal_reference}</div>
+                            {s.shipping_charged_to_customer !== undefined && s.shipping_charged_to_customer !== null && (
+                              <div className="text-[9px] font-bold text-slate-500 mt-1 flex gap-1 items-center bg-slate-100/50 px-1.5 py-0.5 rounded w-fit border border-gray-150">
+                                <span>Costo: ${s.shipping_provider_cost}</span>
+                                <span className="text-gray-300">|</span>
+                                <span>Cobrado: ${s.shipping_charged_to_customer}</span>
+                                <span className="text-gray-300">|</span>
+                                <span className={Number(s.shipping_margin) >= 0 ? 'text-emerald-600 font-black' : 'text-rose-600 font-black'}>
+                                  Margen: ${s.shipping_margin}
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-4 px-5 font-bold text-gray-700">
+                            {s.suborder?.vendor_store_name || 'Collectibles'}
+                          </td>
+                          <td className="py-4 px-5 uppercase text-xs font-black text-slate-600">
+                            {s.provider_key}
+                            {s.shipping_billing_mode && (
+                              <div className="mt-1">
+                                <span className={`text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                                  s.shipping_billing_mode === 'collectibles_envios' 
+                                    ? 'bg-blue-50 text-blue-600 border border-blue-150' 
+                                    : 'bg-amber-50 text-amber-600 border border-amber-150'
+                                }`}>
+                                  {s.shipping_billing_mode === 'collectibles_envios' ? 'Collectibles Envíos' : 'Cuenta Propia'}
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-4 px-5 font-mono text-xs font-bold text-gray-800">
+                            {s.package_number} / {s.total_packages}
+                          </td>
+                          <td className="py-4 px-5">
+                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${
+                              s.shipping_status === 'delivered' ? 'bg-green-50 border-green-200 text-green-700' :
+                              ['in_transit', 'picked_up', 'out_for_delivery'].includes(s.shipping_status) ? 'bg-indigo-50 border-indigo-200 text-indigo-700' :
+                              ['queued', 'processing'].includes(s.shipping_status) ? 'bg-blue-50 border-blue-200 text-blue-700' :
+                              s.shipping_status === 'failed' ? 'bg-red-50 border-red-200 text-red-700' :
+                              'bg-amber-50 border-amber-200 text-amber-700'
+                            }`}>
+                              {s.shipping_status.replace('_', ' ')}
+                            </span>
+                          </td>
+                          <td className="py-4 px-5 font-mono text-xs font-bold text-gray-700">
+                            {s.tracking_code || 'PENDIENTE'}
+                          </td>
+                          <td className="py-4 px-5">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${sla.color}`}>
+                              {sla.label}
+                            </span>
+                          </td>
+                          <td className="py-4 px-5 max-w-[150px]">
+                            {qItem ? (
+                              <div>
+                                <span className="text-xs font-black text-gray-700">Cola: {qItem.attempts}</span>
+                                {qItem.last_error && (
+                                  <div className="text-[10px] text-red-500 truncate font-semibold mt-0.5" title={qItem.last_error}>
+                                    {qItem.last_error}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-gray-400">Directo</span>
+                            )}
+                          </td>
+                          <td className="py-4 px-5 text-right space-x-1.5 flex items-center justify-end">
+                            <button
+                              onClick={() => viewTimeline(s)}
+                              className="p-1.5 text-gray-400 hover:text-slate-700 rounded transition-colors inline-flex"
+                              title="Ver Timeline"
+                            >
+                              <Clock className="w-4 h-4" />
+                            </button>
+                            
+                            {qItem && qItem.status !== 'completed' && (
+                              <button
+                                onClick={() => handleRetryQueue(qItem.id, s.id)}
+                                className="p-1.5 text-blue-500 hover:text-blue-700 rounded transition-colors inline-flex animate-pulse"
+                                title="Reintentar despacho"
+                              >
+                                <RefreshCw className="w-4 h-4" />
+                              </button>
+                            )}
+
+                            {s.shipping_status === 'failed' && (
+                              <button
+                                onClick={() => handleMarkResolved(s.id)}
+                                className="p-1.5 text-green-655 hover:text-green-750 rounded transition-colors inline-flex"
+                                title="Marcar como resuelto"
+                              >
+                                <CheckCircle2 className="w-4 h-4" />
+                              </button>
+                            )}
+
+                            <button
+                              onClick={() => copyDiagnostic(s)}
+                              className="p-1.5 text-orange-500 hover:text-orange-700 rounded transition-colors inline-flex"
+                              title="Copiar Diagnóstico Técnico"
+                            >
+                              <FileText className="w-4 h-4" />
+                            </button>
+                            
+                            {s.provider_response && (
+                              <button
+                                onClick={() => setSelectedRawResponse(s.provider_response)}
+                                className="p-1.5 text-gray-500 hover:text-gray-800 rounded transition-colors inline-flex"
+                                title="Ver Raw Response"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Courier Performance & Monitors Panel */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* Courier API Monitor */}
+            <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 lg:col-span-2 space-y-4">
+              <h3 className="font-black text-gray-900 text-base flex items-center gap-2">
+                <RefreshCw className="w-5 h-5 text-gray-400" /> Monitoreo de APIs Logísticas
+              </h3>
+              <div className="divide-y divide-gray-100">
+                {dbStats.monitors.map(m => {
+                  const statusLabels = {
+                    active: 'Operativo',
+                    degraded: 'Degradado',
+                    offline: 'Caído'
+                  };
+                  return (
+                    <div key={m.id} className="py-3 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <span className={`w-2.5 h-2.5 rounded-full ${m.status === 'active' ? 'bg-green-500' : m.status === 'degraded' ? 'bg-yellow-500' : 'bg-red-500'}`} />
+                        <div>
+                          <div className="font-bold text-sm text-gray-800 uppercase">{m.provider_code}</div>
+                          <div className="text-xs text-gray-400">Última conexión: {new Date(m.last_ping_at).toLocaleTimeString()}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-6">
+                        <div className="text-right">
+                          <div className="text-xs text-gray-400 font-bold uppercase tracking-wider">Latencia</div>
+                          <div className="text-sm font-black text-gray-700">{m.latency_ms} ms</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs text-gray-400 font-bold uppercase tracking-wider">Llamadas (Errores)</div>
+                          <div className="text-sm font-black text-gray-700">{m.request_count} ({m.error_count})</div>
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                          m.status === 'active' ? 'bg-green-55/10 border-green-200 text-green-700' :
+                          m.status === 'degraded' ? 'bg-yellow-55/10 border-yellow-200 text-yellow-700' :
+                          'bg-red-55/10 border-red-200 text-red-700'
+                        }`}>
+                          {statusLabels[m.status as keyof typeof statusLabels] || m.status}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Performance por Courier */}
+            <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 space-y-4">
+              <h3 className="font-black text-gray-900 text-base flex items-center gap-2">
+                <Truck className="w-5 h-5 text-gray-400" /> Performance por Courier
+              </h3>
+              <div className="space-y-4">
+                {['dac', 'soydelivery'].map(code => {
+                  const m = dbStats.monitors.find(mon => mon.provider_code === code);
+                  const shipList = adminShipments.filter(s => s.provider_key === code);
+                  const errCount = m?.error_count || 0;
+                  const reqCount = m?.request_count || 1;
+                  const successRate = reqCount > 0 ? Math.round(((reqCount - errCount) / reqCount) * 100) : 100;
+                  
+                  return (
+                    <div key={code} className="p-3 bg-slate-50 rounded-lg border border-gray-250/30">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="font-black uppercase text-sm text-slate-800">{code}</span>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${m?.status === 'active' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                          {m?.status || 'offline'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <div className="text-gray-400 font-semibold">Envíos Totales</div>
+                          <div className="font-black text-gray-700">{shipList.length}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-400 font-semibold">Tasa de Éxito</div>
+                          <div className="font-black text-green-600">{successRate}%</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-400 font-semibold">Latencia Promedio</div>
+                          <div className="font-black text-gray-750">{m?.latency_ms || 0} ms</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-400 font-semibold">Errores API</div>
+                          <div className="font-black text-red-600">{errCount}</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+          </div>
+
+          {/* Detailed Timeline Modal */}
+          {selectedTimelineShipment && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+                  <div>
+                    <h3 className="font-black text-gray-900 text-lg">Historial de Eventos Logísticos</h3>
+                    <p className="text-xs text-gray-500">Ref: {selectedTimelineShipment.internal_reference} | Bulto {selectedTimelineShipment.package_number} de {selectedTimelineShipment.total_packages}</p>
+                  </div>
+                  <button onClick={() => setSelectedTimelineShipment(null)} className="p-1.5 hover:bg-slate-100 rounded-lg text-gray-400 hover:text-gray-600 transition-colors">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                
+                <div className="p-6 overflow-y-auto flex-1 space-y-6">
+                  {loadingTimeline ? (
+                    <div className="flex justify-center py-8">
+                      <RefreshCw className="w-6 h-6 text-blue-600 animate-spin" />
+                    </div>
+                  ) : timelineEvents.length === 0 ? (
+                    <div className="text-center text-gray-400 text-sm py-6">
+                      No hay eventos registrados para este envío todavía.
+                    </div>
+                  ) : (
+                    <div className="relative border-l-2 border-slate-100 ml-3 pl-6 space-y-6">
+                      {timelineEvents.map((ev) => (
+                        <div key={ev.id} className="relative">
+                          {/* Event point */}
+                          <span className="absolute -left-9 top-1 w-5 h-5 rounded-full bg-white border-2 border-slate-350 flex items-center justify-center">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                          </span>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black text-slate-800 capitalize">
+                              {ev.event_type.replace('_', ' ')}
+                            </span>
+                            <span className="text-[10px] text-gray-450 font-mono">
+                              {new Date(ev.created_at).toLocaleString()}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1 leading-relaxed">{ev.description}</p>
+                          <div className="flex gap-2 items-center mt-1">
+                            {ev.provider_status && (
+                              <span className="text-[9px] font-bold bg-slate-50 border border-slate-200 px-1.5 py-0.2 rounded font-mono text-gray-450">
+                                Status: {ev.provider_status}
+                              </span>
+                            )}
+                            <span className="text-[9px] text-gray-400">Registrado por: {ev.created_by || 'sistema'}</span>
+                          </div>
+                          {ev.raw_response && (
+                            <div className="mt-2">
+                              <button 
+                                onClick={() => setSelectedRawResponse(ev.raw_response)} 
+                                className="text-[10px] text-blue-500 font-bold hover:underline"
+                              >
+                                Ver respuesta JSON del Courier
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-4 bg-slate-50 border-t border-gray-100 flex justify-end">
+                  <button onClick={() => setSelectedTimelineShipment(null)} className="px-4 py-2 bg-slate-900 text-white rounded-xl font-bold text-xs hover:bg-slate-800 transition-colors">
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Prettified JSON Raw Response Modal */}
+          {selectedRawResponse && (
+            <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-55 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+                <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+                  <h3 className="font-black text-gray-900 text-base">Respuesta Raw del Transportista (JSON)</h3>
+                  <button onClick={() => setSelectedRawResponse(null)} className="p-1.5 hover:bg-slate-100 rounded-lg text-gray-400 hover:text-gray-600 transition-colors">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="p-6 overflow-y-auto flex-1 bg-slate-950 text-slate-200 font-mono text-xs p-4 rounded-inner select-all">
+                  <pre>{JSON.stringify(selectedRawResponse, null, 2)}</pre>
+                </div>
+                <div className="p-4 bg-slate-50 border-t border-gray-100 flex justify-end">
+                  <button onClick={() => setSelectedRawResponse(null)} className="px-4 py-2 bg-slate-900 text-white rounded-xl font-bold text-xs hover:bg-slate-800 transition-colors">
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      )}
 
       {/* TAB CONTENT: SOYDELIVERY */}
       {activeTab === 'soydelivery' && (
@@ -1267,13 +2141,23 @@ export default function AdminLogistics() {
                 <p className="text-xs text-gray-500 font-medium">Entregas a domicilio y pick centers a nivel nacional</p>
               </div>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" className="sr-only peer" checked={uesEnabled} onChange={() => setUesEnabled(!uesEnabled)} />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-600"></div>
-            </label>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded uppercase">Desactivado / Pendiente de integración</span>
+              <label className="relative inline-flex items-center cursor-not-allowed opacity-50">
+                <input type="checkbox" className="sr-only peer" checked={false} disabled />
+                <div className="w-11 h-6 bg-gray-200 rounded-full peer after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+              </label>
+            </div>
           </div>
 
-          {uesEnabled && (
+          <div className="p-6 bg-amber-50/20 border-b border-gray-100">
+            <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 flex gap-3 text-xs font-semibold">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <span>Este transportista se encuentra desactivado temporalmente en toda la plataforma hasta que se complete la integración de su API real. No aparecerá en el Checkout ni en la configuración de los vendedores.</span>
+            </div>
+          </div>
+
+          {false && uesEnabled && (
             <div className="p-6 space-y-6">
               <div className="bg-teal-50/50 p-6 rounded-xl border border-teal-100 space-y-4">
                 <h4 className="font-bold text-teal-900 text-sm">Credenciales de Integración UES</h4>
@@ -1396,6 +2280,180 @@ export default function AdminLogistics() {
                        </div>
                     </div>
                  </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB CONTENT: TORRE DE CONTROL */}
+      {activeTab === 'control-tower' && (
+        <div className="space-y-6 animate-fade-in">
+          <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+            <h3 className="font-black text-gray-900 text-lg mb-1 flex items-center gap-2">
+              <Activity className="w-5 h-5 text-blue-600" /> Torre de Control Logística
+            </h3>
+            <p className="text-sm text-gray-500 mb-6">
+              Monitorea el estado en tiempo real, latencia de API, tasa de éxito y volumen de envíos para cada transportista conectado.
+            </p>
+
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Courier Card: DAC */}
+              {(() => {
+                const code = 'dac';
+                const monitor = dbStats.monitors?.find(m => m.provider_code === code);
+                const status = monitor?.status || 'active';
+                const lastError = monitor?.last_error;
+                
+                const enviosHoy = adminShipments.filter(s => s.provider_key === code && new Date(s.created_at).toDateString() === new Date().toDateString()).length;
+                const enviosPendientes = adminQueue.filter(q => q.provider_code === code && ['queued', 'retry_scheduled', 'processing'].includes(q.status)).length;
+                const errores = adminQueue.filter(q => q.provider_code === code && q.status === 'failed').length;
+                const guiasCreadas = adminShipments.filter(s => s.provider_key === code && s.tracking_code).length;
+                const trackingPendiente = adminShipments.filter(s => s.provider_key === code && s.shipping_status === 'pending_real_tracking').length;
+                
+                const total = adminShipments.filter(s => s.provider_key === code).length;
+                const success = adminShipments.filter(s => s.provider_key === code && s.shipping_status !== 'failed').length;
+                const successRate = total > 0 ? ((success / total) * 100).toFixed(1) + '%' : '100%';
+
+                return (
+                  <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-4 hover:shadow-md transition-all">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="font-bold text-gray-900 text-base">DAC (Grupo Agencia)</h4>
+                        <p className="text-xs text-gray-500 mt-0.5">Servicio global corporativo de Collectibles</p>
+                      </div>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
+                        status === 'active' ? 'bg-green-100 text-green-800' :
+                        status === 'degraded' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
+                      }`}>
+                        {status === 'active' ? '● Activo' : status === 'degraded' ? '▲ Degradado' : '■ Caído'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-xs bg-gray-50 p-3 rounded-lg border border-gray-100 font-mono">
+                      <div><span className="text-gray-500 font-sans font-medium">Creados Hoy:</span> <strong className="text-gray-900">{enviosHoy}</strong></div>
+                      <div><span className="text-gray-500 font-sans font-medium">Tasa Éxito:</span> <strong className="text-green-700 font-black">{successRate}</strong></div>
+                      <div><span className="text-gray-500 font-sans font-medium">En Cola:</span> <strong className="text-amber-600 font-bold">{enviosPendientes}</strong></div>
+                      <div><span className="text-gray-500 font-sans font-medium">Errores Cola:</span> <strong className="text-rose-600 font-bold">{errores}</strong></div>
+                      <div><span className="text-gray-500 font-sans font-medium">Guías Emitidas:</span> <strong className="text-blue-600 font-bold">{guiasCreadas}</strong></div>
+                      <div><span className="text-gray-500 font-sans font-medium">Pend. Tracking:</span> <strong className="text-slate-600 font-bold">{trackingPendiente}</strong></div>
+                      <div className="col-span-2 border-t border-gray-200 pt-1.5 mt-0.5"><span className="text-gray-500 font-sans font-medium">Latencia API:</span> <strong className="text-gray-900">{monitor?.latency_ms || 0} ms</strong></div>
+                    </div>
+
+                    {lastError ? (
+                      <div className="p-2.5 bg-rose-50 border border-rose-100 rounded-lg text-[10px] leading-relaxed text-rose-700 font-semibold font-mono break-all max-h-20 overflow-y-auto">
+                        <span className="font-sans font-bold block mb-0.5">Último Error:</span>
+                        {lastError}
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-green-700 font-bold bg-green-50 border border-green-100 p-2 rounded-lg flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-green-500" /> API operando con normalidad.
+                      </div>
+                    )}
+
+                    <button onClick={() => setActiveTab('dac')} className="text-xs text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 transition-colors">
+                      Configuración DAC <ChevronRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                );
+              })()}
+
+              {/* Courier Card: SoyDelivery */}
+              {(() => {
+                const code = 'soydelivery';
+                const monitor = dbStats.monitors?.find(m => m.provider_code === code);
+                const status = monitor?.status || 'active';
+                const lastError = monitor?.last_error;
+                
+                const enviosHoy = adminShipments.filter(s => s.provider_key === code && new Date(s.created_at).toDateString() === new Date().toDateString()).length;
+                const enviosPendientes = adminQueue.filter(q => q.provider_code === code && ['queued', 'retry_scheduled', 'processing'].includes(q.status)).length;
+                const errores = adminQueue.filter(q => q.provider_code === code && q.status === 'failed').length;
+                const guiasCreadas = adminShipments.filter(s => s.provider_key === code && s.tracking_code).length;
+                const trackingPendiente = adminShipments.filter(s => s.provider_key === code && s.shipping_status === 'pending_real_tracking').length;
+                
+                const total = adminShipments.filter(s => s.provider_key === code).length;
+                const success = adminShipments.filter(s => s.provider_key === code && s.shipping_status !== 'failed').length;
+                const successRate = total > 0 ? ((success / total) * 100).toFixed(1) + '%' : '100%';
+
+                return (
+                  <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-4 hover:shadow-md transition-all">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="font-bold text-gray-900 text-base">SoyDelivery (Envíos Flex)</h4>
+                        <p className="text-xs text-gray-500 mt-0.5">Envíos express en Montevideo y Canelones</p>
+                      </div>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
+                        status === 'active' ? 'bg-green-100 text-green-800' :
+                        status === 'degraded' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
+                      }`}>
+                        {status === 'active' ? '● Activo' : status === 'degraded' ? '▲ Degradado' : '■ Caído'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-xs bg-gray-50 p-3 rounded-lg border border-gray-100 font-mono">
+                      <div><span className="text-gray-500 font-sans font-medium">Creados Hoy:</span> <strong className="text-gray-900">{enviosHoy}</strong></div>
+                      <div><span className="text-gray-500 font-sans font-medium">Tasa Éxito:</span> <strong className="text-green-700 font-black">{successRate}</strong></div>
+                      <div><span className="text-gray-500 font-sans font-medium">En Cola:</span> <strong className="text-amber-600 font-bold">{enviosPendientes}</strong></div>
+                      <div><span className="text-gray-500 font-sans font-medium">Errores Cola:</span> <strong className="text-rose-600 font-bold">{errores}</strong></div>
+                      <div><span className="text-gray-500 font-sans font-medium">Guías Emitidas:</span> <strong className="text-blue-600 font-bold">{guiasCreadas}</strong></div>
+                      <div><span className="text-gray-500 font-sans font-medium">Pend. Tracking:</span> <strong className="text-slate-600 font-bold">{trackingPendiente}</strong></div>
+                      <div className="col-span-2 border-t border-gray-200 pt-1.5 mt-0.5"><span className="text-gray-500 font-sans font-medium">Latencia API:</span> <strong className="text-gray-900">{monitor?.latency_ms || 0} ms</strong></div>
+                    </div>
+
+                    {lastError ? (
+                      <div className="p-2.5 bg-rose-50 border border-rose-100 rounded-lg text-[10px] leading-relaxed text-rose-700 font-semibold font-mono break-all max-h-20 overflow-y-auto">
+                        <span className="font-sans font-bold block mb-0.5">Último Error:</span>
+                        {lastError}
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-green-700 font-bold bg-green-50 border border-green-100 p-2 rounded-lg flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-green-500" /> API operando con normalidad.
+                      </div>
+                    )}
+
+                    <button onClick={() => setActiveTab('soydelivery')} className="text-xs text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 transition-colors">
+                      Configuración SoyDelivery <ChevronRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                );
+              })()}
+
+              {/* Courier Card: UES (Pending Integration) */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 opacity-75">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="font-bold text-slate-700 text-base">UES Envíos</h4>
+                    <p className="text-xs text-slate-500 mt-0.5">Logística nacional y casilleros inteligentes</p>
+                  </div>
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-200 text-slate-700">
+                    Pendiente Integración
+                  </span>
+                </div>
+
+                <div className="p-4 bg-white border border-slate-200 rounded-lg text-xs text-slate-600 text-center font-medium">
+                  UES se encuentra desactivado. No afectará las cotizaciones de checkout ni generará tareas de despacho.
+                </div>
+
+                <button onClick={() => setActiveTab('ues')} className="text-xs text-slate-600 hover:text-slate-800 font-bold flex items-center gap-1 transition-colors">
+                  Ver Detalles <ChevronRight className="w-3 h-3" />
+                </button>
+              </div>
+
+              {/* Courier Card: Correo Uruguayo (Pending Integration) */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 opacity-75">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="font-bold text-slate-700 text-base">Correo Uruguayo</h4>
+                    <p className="text-xs text-slate-500 mt-0.5">Envíos postales y casillas de correo nacionales</p>
+                  </div>
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-200 text-slate-700">
+                    Pendiente Integración
+                  </span>
+                </div>
+
+                <div className="p-4 bg-white border border-slate-200 rounded-lg text-xs text-slate-600 text-center font-medium">
+                  Correo Uruguayo se encuentra desactivado. No afectará las cotizaciones de checkout ni generará tareas de despacho.
+                </div>
               </div>
             </div>
           </div>

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useCartContext } from '../contexts/CartContext';
-import { Package, User, Settings, Save, Check, ShoppingCart, RotateCcw, MapPin, Phone, Plus, Trash2, Lock, Eye, EyeOff, Edit3, Store } from 'lucide-react';
+import { Package, User, Settings, Save, Check, ShoppingCart, RotateCcw, MapPin, Phone, Plus, Trash2, Lock, Eye, EyeOff, Edit3, Store, Truck } from 'lucide-react';
 import { useLocale } from '../contexts/LocaleContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { URUGUAY_LOCATIONS, DEPARTAMENTOS } from '../utils/uruguayLocations';
@@ -64,7 +64,8 @@ export default function CustomerPortal() {
     async function loadData() {
       const orderSelect = `
         id, total_amount, currency, status, created_at, payment_method, customer_email,
-        order_items (quantity, unit_price, total_price, product_id, variant_id, vendor_id, vendor_store_id, sku, vendor:vendors(store_name, slug, logo_url, promotions_opt_in, company_name), vendor_store:vendor_stores(store_name, slug, logo_url), products (title, slug, images:product_images(url)))
+        order_items (quantity, unit_price, total_price, product_id, variant_id, vendor_id, vendor_store_id, sku, vendor:vendors(store_name, slug, logo_url, promotions_opt_in, company_name), vendor_store:vendor_stores(store_name, slug, logo_url), products (title, slug, images:product_images(url))),
+        order_suborders (id, suborder_number, status, shipping_method, shipping_provider, shipping_cost, tracking_number, tracking_url, shipments(id, tracking_code, external_guide, shipping_status, package_number, total_packages), vendor:vendors(store_name, slug, logo_url), vendor_store:vendor_stores(store_name, slug, logo_url))
       `;
 
       const { data: ordersData } = await supabase
@@ -289,14 +290,96 @@ export default function CustomerPortal() {
                           {(order.status === 'cancelled' || order.status === 'cancelada') && 'Cancelado'}
                         </span>
                         
-                        {order.tracking_number && (
-                          <div className="text-right">
-                            <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{order.carrier || 'Logística'}</div>
-                            <div className="text-xs font-mono font-bold text-blue-400">{order.tracking_number}</div>
-                            {order.tracking_url && (
-                              <a href={order.tracking_url} target="_blank" rel="noreferrer" className="text-[10px] text-primary-500 hover:underline">Rastrear envío</a>
-                            )}
+                        {order.order_suborders && order.order_suborders.length > 0 ? (
+                          <div className="mt-4 space-y-2 text-right flex flex-col items-end w-full max-w-[200px]">
+                            {order.order_suborders.map((sub: any) => {
+                              const isPickup = ['pickup', 'local'].includes((sub.shipping_method || '').toLowerCase());
+                              const isManual = (sub.shipping_method || '').toLowerCase().includes('manual');
+                              
+                              // Sanitize and filter out internal/fake tracking codes (COL-, SHIP-, UUIDs, etc.)
+                              const cleanTrack = (sub.tracking_number || '').trim().toUpperCase();
+                              const isFake = cleanTrack.startsWith('COL-') || 
+                                             cleanTrack.startsWith('SHIP-') || 
+                                             cleanTrack.startsWith('ORDER-') || 
+                                             cleanTrack.startsWith('TRACK-') ||
+                                             /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i.test(cleanTrack);
+                              const realTracking = isFake ? null : sub.tracking_number;
+                              const carrier = sub.shipping_provider || 'Logística';
+                              const storeName = sub.vendor_store?.store_name || sub.vendor?.store_name || 'Vendedor';
+                              const shipmentsList = sub.shipments || [];
+
+                              return (
+                                <div key={sub.id} className="text-right text-[11px] border-b border-white/5 pb-2 last:border-0 last:pb-0 w-full">
+                                  <div className="text-[10px] text-slate-400 font-bold">Paquete: {storeName}</div>
+                                  {isPickup ? (
+                                    <span className="inline-block text-[9px] text-green-500 font-bold bg-green-500/10 px-2 py-0.5 rounded border border-green-500/20 uppercase mt-1">Listo para retiro</span>
+                                  ) : isManual ? (
+                                    <span className="inline-block text-[9px] text-slate-400 font-bold bg-white/5 px-2 py-0.5 rounded border border-white/10 uppercase mt-1">A coordinar</span>
+                                  ) : shipmentsList.length > 1 ? (
+                                    <div className="space-y-1.5 mt-1">
+                                      {shipmentsList.map((s: any, idx: number) => {
+                                        const cleanSTrack = (s.tracking_code || '').trim().toUpperCase();
+                                        const isSFake = cleanSTrack.startsWith('COL-') || 
+                                                       cleanSTrack.startsWith('SHIP-') || 
+                                                       cleanSTrack.startsWith('ORDER-') || 
+                                                       cleanSTrack.startsWith('TRACK-') ||
+                                                       /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i.test(cleanSTrack);
+                                        const sTracking = isSFake ? null : s.tracking_code;
+
+                                        let trackUrl = sub.tracking_url;
+                                        if (carrier.toLowerCase() === 'dac' && sTracking) {
+                                          trackUrl = `https://www.dac.com.uy/seguimiento-de-envio?guia=${sTracking}`;
+                                        } else if (carrier.toLowerCase() === 'soydelivery' && sTracking) {
+                                          trackUrl = `https://soydelivery.com.uy/tracking/${sTracking}`;
+                                        }
+                                        return (
+                                          <div key={s.id} className="flex flex-col items-end border-t border-white/5 pt-1 first:border-t-0 first:pt-0">
+                                            <span className="text-[8px] text-slate-400 uppercase font-black">Bulto {idx + 1} ({s.shipping_status || 'En cola'})</span>
+                                            {sTracking ? (
+                                              <>
+                                                <div className="text-[9px] text-blue-400 font-mono font-bold bg-blue-500/5 px-1.5 py-0.5 rounded border border-blue-500/10 mt-0.5">
+                                                  {carrier.toUpperCase()}: {sTracking}
+                                                </div>
+                                                {trackUrl && (
+                                                  <a href={trackUrl} target="_blank" rel="noreferrer" className="text-[9px] text-primary-500 hover:underline mt-0.5">Rastrear bulto</a>
+                                                )}
+                                              </>
+                                            ) : (
+                                              <span className="text-[8px] text-amber-500 font-bold uppercase mt-0.5">Procesando guía...</span>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : realTracking ? (
+                                    <div className="flex flex-col items-end mt-1">
+                                      <div className="flex items-center gap-1 text-[10px] text-blue-400 font-bold bg-blue-500/10 px-2 py-1 rounded w-fit border border-blue-500/20 font-mono">
+                                        <Truck className="w-3 h-3 text-blue-400" />
+                                        {carrier.toUpperCase()}: {realTracking}
+                                      </div>
+                                      {sub.tracking_url && (
+                                        <a href={sub.tracking_url} target="_blank" rel="noreferrer" className="text-[10px] text-primary-500 hover:underline mt-1">Rastrear envío</a>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="inline-block text-[9px] text-amber-500 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 uppercase mt-1">
+                                      {['dac', 'soydelivery'].includes(carrier.toLowerCase()) ? `Pendiente emisión ${carrier.toUpperCase()}` : 'Preparando envío'}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
+                        ) : (
+                          order.tracking_number && (
+                            <div className="text-right">
+                              <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{order.carrier || 'Logística'}</div>
+                              <div className="text-xs font-mono font-bold text-blue-400">{order.tracking_number}</div>
+                              {order.tracking_url && (
+                                <a href={order.tracking_url} target="_blank" rel="noreferrer" className="text-[10px] text-primary-500 hover:underline">Rastrear envío</a>
+                              )}
+                            </div>
+                          )
                         )}
                       </div>
                     </div>

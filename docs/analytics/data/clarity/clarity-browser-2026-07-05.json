@@ -1,0 +1,509 @@
+[
+  {
+    "metricName": "DeadClickCount",
+    "information": [
+      {
+        "sessionsCount": "49",
+        "sessionsWithMetricPercentage": 16.33,
+        "sessionsWithoutMetricPercentage": 83.67,
+        "pagesViews": "14",
+        "subTotal": "19",
+        "Browser": "Chrome"
+      },
+      {
+        "sessionsCount": "15",
+        "sessionsWithMetricPercentage": 6.67,
+        "sessionsWithoutMetricPercentage": 93.33,
+        "pagesViews": "1",
+        "subTotal": "1",
+        "Browser": "ChromeMobile"
+      },
+      {
+        "sessionsCount": "1",
+        "sessionsWithMetricPercentage": 100,
+        "sessionsWithoutMetricPercentage": 0,
+        "pagesViews": "1",
+        "subTotal": "2",
+        "Browser": "Edge"
+      },
+      {
+        "sessionsCount": "1",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "MobileSafari"
+      },
+      {
+        "sessionsCount": "1",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "SamsungInternet"
+      },
+      {
+        "sessionsCount": "12",
+        "sessionsWithMetricPercentage": 25,
+        "sessionsWithoutMetricPercentage": 75,
+        "pagesViews": "3",
+        "subTotal": "5",
+        "Browser": "InstagramApp"
+      },
+      {
+        "sessionsCount": "1",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "FacebookApp"
+      }
+    ]
+  },
+  {
+    "metricName": "ExcessiveScroll",
+    "information": [
+      {
+        "sessionsCount": "49",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "Chrome"
+      },
+      {
+        "sessionsCount": "15",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "ChromeMobile"
+      },
+      {
+        "sessionsCount": "1",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "Edge"
+      },
+      {
+        "sessionsCount": "1",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "MobileSafari"
+      },
+      {
+        "sessionsCount": "1",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "SamsungInternet"
+      },
+      {
+        "sessionsCount": "12",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "InstagramApp"
+      },
+      {
+        "sessionsCount": "1",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "FacebookApp"
+      }
+    ]
+  },
+  {
+    "metricName": "RageClickCount",
+    "information": [
+      {
+        "sessionsCount": "49",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "Chrome"
+      },
+      {
+        "sessionsCount": "15",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "ChromeMobile"
+      },
+      {
+        "sessionsCount": "1",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "Edge"
+      },
+      {
+        "sessionsCount": "1",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "MobileSafari"
+      },
+      {
+        "sessionsCount": "1",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "SamsungInternet"
+      },
+      {
+        "sessionsCount": "12",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "InstagramApp"
+      },
+      {
+        "sessionsCount": "1",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "FacebookApp"
+      }
+    ]
+  },
+  {
+    "metricName": "QuickbackClick",
+    "information": [
+      {
+        "sessionsCount": "49",
+        "sessionsWithMetricPercentage": 34.69,
+        "sessionsWithoutMetricPercentage": 65.31,
+        "pagesViews": "34",
+        "subTotal": "34",
+        "Browser": "Chrome"
+      },
+      {
+        "sessionsCount": "15",
+        "sessionsWithMetricPercentage": 40,
+        "sessionsWithoutMetricPercentage": 60,
+        "pagesViews": "8",
+        "subTotal": "8",
+        "Browser": "ChromeMobile"
+      },
+      {
+        "sessionsCount": "1",
+        "sessionsWithMetricPercentage": 100,
+        "sessionsWithoutMetricPercentage": 0,
+        "pagesViews": "5",
+        "subTotal": "5",
+        "Browser": "Edge"
+      },
+      {
+        "sessionsCount": "1",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "MobileSafari"
+      },
+      {
+        "sessionsCount": "1",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "SamsungInternet"
+      },
+      {
+        "sessionsCount": "12",
+        "sessionsWithMetricPercentage": 41.67,
+        "sessionsWithoutMetricPercentage": 58.33,
+        "pagesViews": "6",
+        "subTotal": "6",
+        "Browser": "InstagramApp"
+      },
+      {
+        "sessionsCount": "1",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "FacebookApp"
+      }
+    ]
+  },
+  {
+    "metricName": "ScriptErrorCount",
+    "information": [
+      {
+        "sessionsCount": "49",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "Chrome"
+      },
+      {
+        "sessionsCount": "15",
+        "sessionsWithMetricPercentage": 6.67,
+        "sessionsWithoutMetricPercentage": 93.33,
+        "pagesViews": "1",
+        "subTotal": "2",
+        "Browser": "ChromeMobile"
+      },
+      {
+        "sessionsCount": "1",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "Edge"
+      },
+      {
+        "sessionsCount": "1",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "MobileSafari"
+      },
+      {
+        "sessionsCount": "1",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "SamsungInternet"
+      },
+      {
+        "sessionsCount": "12",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "InstagramApp"
+      },
+      {
+        "sessionsCount": "1",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "FacebookApp"
+      }
+    ]
+  },
+  {
+    "metricName": "ErrorClickCount",
+    "information": [
+      {
+        "sessionsCount": "49",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "Chrome"
+      },
+      {
+        "sessionsCount": "15",
+        "sessionsWithMetricPercentage": 6.67,
+        "sessionsWithoutMetricPercentage": 93.33,
+        "pagesViews": "1",
+        "subTotal": "2",
+        "Browser": "ChromeMobile"
+      },
+      {
+        "sessionsCount": "1",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "Edge"
+      },
+      {
+        "sessionsCount": "1",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "MobileSafari"
+      },
+      {
+        "sessionsCount": "1",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "SamsungInternet"
+      },
+      {
+        "sessionsCount": "12",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "InstagramApp"
+      },
+      {
+        "sessionsCount": "1",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "Browser": "FacebookApp"
+      }
+    ]
+  },
+  {
+    "metricName": "ScrollDepth",
+    "information": [
+      {
+        "averageScrollDepth": 75.7,
+        "Browser": "Chrome"
+      },
+      {
+        "averageScrollDepth": 73.32,
+        "Browser": "ChromeMobile"
+      },
+      {
+        "averageScrollDepth": 63.59,
+        "Browser": "Edge"
+      },
+      {
+        "averageScrollDepth": 66,
+        "Browser": "MobileSafari"
+      },
+      {
+        "averageScrollDepth": 71,
+        "Browser": "SamsungInternet"
+      },
+      {
+        "averageScrollDepth": 60.14,
+        "Browser": "InstagramApp"
+      },
+      {
+        "averageScrollDepth": 44,
+        "Browser": "FacebookApp"
+      }
+    ]
+  },
+  {
+    "metricName": "Traffic",
+    "information": [
+      {
+        "totalSessionCount": "0",
+        "totalBotSessionCount": "64",
+        "distinctUserCount": "99",
+        "pagesPerSessionPercentage": 1,
+        "Browser": "Other"
+      },
+      {
+        "totalSessionCount": "49",
+        "totalBotSessionCount": "30",
+        "distinctUserCount": "41",
+        "pagesPerSessionPercentage": 3.597560975609756,
+        "Browser": "Chrome"
+      },
+      {
+        "totalSessionCount": "15",
+        "totalBotSessionCount": "3",
+        "distinctUserCount": "14",
+        "pagesPerSessionPercentage": 4.555555555555555,
+        "Browser": "ChromeMobile"
+      },
+      {
+        "totalSessionCount": "1",
+        "totalBotSessionCount": "0",
+        "distinctUserCount": "1",
+        "pagesPerSessionPercentage": 63,
+        "Browser": "Edge"
+      },
+      {
+        "totalSessionCount": "0",
+        "totalBotSessionCount": "8",
+        "distinctUserCount": "8",
+        "pagesPerSessionPercentage": 1,
+        "Browser": "HeadlessChrome"
+      },
+      {
+        "totalSessionCount": "1",
+        "totalBotSessionCount": "0",
+        "distinctUserCount": "1",
+        "pagesPerSessionPercentage": 1,
+        "Browser": "MobileSafari"
+      },
+      {
+        "totalSessionCount": "1",
+        "totalBotSessionCount": "0",
+        "distinctUserCount": "1",
+        "pagesPerSessionPercentage": 3,
+        "Browser": "SamsungInternet"
+      },
+      {
+        "totalSessionCount": "12",
+        "totalBotSessionCount": "0",
+        "distinctUserCount": "11",
+        "pagesPerSessionPercentage": 3.5833333333333335,
+        "Browser": "InstagramApp"
+      },
+      {
+        "totalSessionCount": "1",
+        "totalBotSessionCount": "0",
+        "distinctUserCount": "1",
+        "pagesPerSessionPercentage": 3,
+        "Browser": "FacebookApp"
+      }
+    ]
+  },
+  {
+    "metricName": "EngagementTime",
+    "information": [
+      {
+        "totalTime": "795",
+        "activeTime": "161",
+        "Browser": "Chrome"
+      },
+      {
+        "totalTime": "82",
+        "activeTime": "80",
+        "Browser": "ChromeMobile"
+      },
+      {
+        "totalTime": "863",
+        "activeTime": "863",
+        "Browser": "Edge"
+      },
+      {
+        "totalTime": "0",
+        "activeTime": "0",
+        "Browser": "MobileSafari"
+      },
+      {
+        "totalTime": "1068",
+        "activeTime": "1068",
+        "Browser": "SamsungInternet"
+      },
+      {
+        "totalTime": "71",
+        "activeTime": "69",
+        "Browser": "InstagramApp"
+      },
+      {
+        "totalTime": "34",
+        "activeTime": "34",
+        "Browser": "FacebookApp"
+      }
+    ]
+  }
+]

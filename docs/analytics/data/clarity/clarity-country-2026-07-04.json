@@ -1,0 +1,321 @@
+[
+  {
+    "metricName": "DeadClickCount",
+    "information": [
+      {
+        "sessionsCount": "79",
+        "sessionsWithMetricPercentage": 16.46,
+        "sessionsWithoutMetricPercentage": 83.53999999999999,
+        "pagesViews": "21",
+        "subTotal": "36"
+      }
+    ]
+  },
+  {
+    "metricName": "ExcessiveScroll",
+    "information": [
+      {
+        "sessionsCount": "79",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0"
+      }
+    ]
+  },
+  {
+    "metricName": "RageClickCount",
+    "information": [
+      {
+        "sessionsCount": "79",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0"
+      }
+    ]
+  },
+  {
+    "metricName": "QuickbackClick",
+    "information": [
+      {
+        "sessionsCount": "79",
+        "sessionsWithMetricPercentage": 36.71,
+        "sessionsWithoutMetricPercentage": 63.29,
+        "pagesViews": "71",
+        "subTotal": "71"
+      }
+    ]
+  },
+  {
+    "metricName": "ScriptErrorCount",
+    "information": [
+      {
+        "sessionsCount": "79",
+        "sessionsWithMetricPercentage": 1.27,
+        "sessionsWithoutMetricPercentage": 98.73,
+        "pagesViews": "1",
+        "subTotal": "2"
+      }
+    ]
+  },
+  {
+    "metricName": "ErrorClickCount",
+    "information": [
+      {
+        "sessionsCount": "79",
+        "sessionsWithMetricPercentage": 1.27,
+        "sessionsWithoutMetricPercentage": 98.73,
+        "pagesViews": "1",
+        "subTotal": "2"
+      }
+    ]
+  },
+  {
+    "metricName": "ScrollDepth",
+    "information": [
+      {
+        "averageScrollDepth": 72.27
+      }
+    ]
+  },
+  {
+    "metricName": "Traffic",
+    "information": [
+      {
+        "totalSessionCount": "79",
+        "totalBotSessionCount": "103",
+        "distinctUserCount": "176",
+        "pagesPerSessionPercentage": 2.8545454545454545
+      }
+    ]
+  },
+  {
+    "metricName": "EngagementTime",
+    "information": [
+      {
+        "totalTime": "567",
+        "activeTime": "171"
+      }
+    ]
+  },
+  {
+    "metricName": "Browser",
+    "information": [
+      {
+        "name": "Chrome",
+        "sessionsCount": "49"
+      },
+      {
+        "name": "ChromeMobile",
+        "sessionsCount": "15"
+      },
+      {
+        "name": "InstagramApp",
+        "sessionsCount": "11"
+      },
+      {
+        "name": "Edge",
+        "sessionsCount": "1"
+      },
+      {
+        "name": "MobileSafari",
+        "sessionsCount": "1"
+      },
+      {
+        "name": "SamsungInternet",
+        "sessionsCount": "1"
+      },
+      {
+        "name": "FacebookApp",
+        "sessionsCount": "1"
+      }
+    ]
+  },
+  {
+    "metricName": "Device",
+    "information": [
+      {
+        "name": "PC",
+        "sessionsCount": "50"
+      },
+      {
+        "name": "Mobile",
+        "sessionsCount": "29"
+      }
+    ]
+  },
+  {
+    "metricName": "OS",
+    "information": [
+      {
+        "name": "Windows",
+        "sessionsCount": "31"
+      },
+      {
+        "name": "Linux",
+        "sessionsCount": "19"
+      },
+      {
+        "name": "IOS",
+        "sessionsCount": "15"
+      },
+      {
+        "name": "Android",
+        "sessionsCount": "14"
+      }
+    ]
+  },
+  {
+    "metricName": "Country",
+    "information": [
+      {
+        "name": "Uruguay",
+        "sessionsCount": "76"
+      },
+      {
+        "name": "Portugal",
+        "sessionsCount": "2"
+      },
+      {
+        "name": "United Kingdom",
+        "sessionsCount": "1"
+      }
+    ]
+  },
+  {
+    "metricName": "PageTitle",
+    "information": [
+      {
+        "name": "Collectibles Store - Tu Tienda de Coleccionables Premium",
+        "sessionsCount": "75"
+      },
+      {
+        "name": "Catálogo — Collectibles | Collectibles",
+        "sessionsCount": "27"
+      },
+      {
+        "name": "Funko POP — Collectibles | Collectibles",
+        "sessionsCount": "8"
+      },
+      {
+        "name": "Tienda-collectibles01-3183 | Tienda Oficial",
+        "sessionsCount": "5"
+      },
+      {
+        "name": "Peluches — Collectibles | Collectibles",
+        "sessionsCount": "4"
+      },
+      {
+        "name": "Figuras de Acción — Collectibles | Collectibles",
+        "sessionsCount": "4"
+      },
+      {
+        "name": "Llaveros — Collectibles | Collectibles",
+        "sessionsCount": "2"
+      },
+      {
+        "name": "Esculturas y Estatuas — Collectibles | Collectibles",
+        "sessionsCount": "2"
+      },
+      {
+        "name": "Mezco Toyz — Collectibles | Collectibles",
+        "sessionsCount": "2"
+      },
+      {
+        "name": "Hasbro — Collectibles | Collectibles",
+        "sessionsCount": "2"
+      }
+    ]
+  },
+  {
+    "metricName": "ReferrerUrl",
+    "information": [
+      {
+        "name": null,
+        "sessionsCount": "29"
+      },
+      {
+        "name": "https://www.google.com/",
+        "sessionsCount": "23"
+      },
+      {
+        "name": "https://l.instagram.com/",
+        "sessionsCount": "9"
+      },
+      {
+        "name": "https://collectibles.uy/vendor?tab=orders",
+        "sessionsCount": "6"
+      },
+      {
+        "name": "https://collectibles.uy/vendor?tab=products",
+        "sessionsCount": "6"
+      },
+      {
+        "name": "https://collectibles.uy/",
+        "sessionsCount": "5"
+      },
+      {
+        "name": "https://collectibles.uy/categoria/peluches",
+        "sessionsCount": "4"
+      },
+      {
+        "name": "https://collectibles.uy/shop",
+        "sessionsCount": "3"
+      },
+      {
+        "name": "https://collectibles.uy/store/jorgitoys",
+        "sessionsCount": "2"
+      },
+      {
+        "name": "https://collectibles.uy/categoria/funko-pop",
+        "sessionsCount": "2"
+      }
+    ]
+  },
+  {
+    "metricName": "PopularPages",
+    "information": [
+      {
+        "url": "https://collectibles.uy/",
+        "visitsCount": "50"
+      },
+      {
+        "url": "https://collectibles.uy/shop",
+        "visitsCount": "23"
+      },
+      {
+        "url": "https://collectibles.uy/vendor",
+        "visitsCount": "12"
+      },
+      {
+        "url": "https://collectibles.uy/product-category/llaveros/",
+        "visitsCount": "11"
+      },
+      {
+        "url": "https://collectibles.uy/categoria/funko-pop",
+        "visitsCount": "11"
+      },
+      {
+        "url": "https://collectibles.uy/store/jorgitoys",
+        "visitsCount": "11"
+      },
+      {
+        "url": "https://collectibles.uy/categoria/peluches",
+        "visitsCount": "8"
+      },
+      {
+        "url": "https://collectibles.uy/product-category/funko-pop/funko-pop-games/",
+        "visitsCount": "7"
+      },
+      {
+        "url": "http://localhost:4173/store/jorgitoys",
+        "visitsCount": "7"
+      },
+      {
+        "url": "https://collectibles.uy/admin/products",
+        "visitsCount": "6"
+      }
+    ]
+  }
+]

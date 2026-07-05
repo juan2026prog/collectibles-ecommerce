@@ -304,6 +304,128 @@ Deno.serve(async (req: Request) => {
           })
           .eq("id", orderId);
       }
+      // REFUNDED STATUS
+      else if (paymentData.status === "refunded") {
+        const refundAmt = Number(paymentData.transaction_amount_refunded || paymentData.transaction_amount || 0);
+        
+        await supabaseAdmin
+          .from("orders")
+          .update({
+            status: "cancelada",
+            payment_status: "refunded",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", orderId);
+
+        await supabaseAdmin
+          .from("order_suborders")
+          .update({
+            status: "refunded",
+            liquidation_status: "cancelled",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("parent_order_id", orderId)
+          .neq("liquidation_status", "paid"); // Don't overwrite paid status
+
+        const { data: dbPayment } = await supabaseAdmin
+          .from("payments")
+          .select("id")
+          .eq("order_id", orderId)
+          .eq("provider", "mercadopago")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const paymentUuid = dbPayment?.id || null;
+
+        if (paymentUuid) {
+          await supabaseAdmin
+            .from("payments")
+            .update({
+              status: "refunded",
+              refund_amount: refundAmt,
+              refund_date: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", paymentUuid);
+        }
+
+        // Insert into refunds table if not exists
+        const { data: existingRefund } = await supabaseAdmin
+          .from("refunds")
+          .select("id")
+          .eq("order_id", orderId)
+          .eq("status", "completed")
+          .maybeSingle();
+
+        if (!existingRefund) {
+          await supabaseAdmin.from("refunds").insert({
+            order_id: orderId,
+            payment_id: paymentUuid,
+            provider: "mercadopago",
+            amount: refundAmt,
+            reason: "Reembolso notificado por webhook de Mercado Pago",
+            status: "completed",
+            processed_at: new Date().toISOString(),
+            api_response: paymentData
+          });
+        }
+      }
+      // CHARGEBACK / DISPUTE STATUS
+      else if (paymentData.status === "charged_back" || paymentData.status === "in_mediation") {
+        const isChargeback = paymentData.status === "charged_back";
+        const refundAmt = Number(paymentData.transaction_amount || 0);
+
+        await supabaseAdmin
+          .from("orders")
+          .update({
+            payment_status: isChargeback ? "charged_back" : "in_mediation",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", orderId);
+
+        if (!isChargeback) {
+          // mediation: flag claim_open to block liquidations
+          await supabaseAdmin
+            .from("order_suborders")
+            .update({
+              status: "claim_open",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("parent_order_id", orderId);
+        }
+
+        const { data: dbPayment } = await supabaseAdmin
+          .from("payments")
+          .select("id")
+          .eq("order_id", orderId)
+          .eq("provider", "mercadopago")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const paymentUuid = dbPayment?.id || null;
+
+        if (paymentUuid) {
+          await supabaseAdmin
+            .from("payments")
+            .update({
+              status: isChargeback ? "failed" : "pending", // mark as failed if chargeback
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", paymentUuid);
+        }
+
+        // Create dispute record
+        await supabaseAdmin.from("payment_disputes").insert({
+          provider: "mercadopago",
+          payment_id: paymentUuid,
+          order_id: orderId,
+          dispute_reason: isChargeback ? "charged_back" : "in_mediation",
+          status: "open",
+          amount: refundAmt
+        });
+      }
     }
 
     return new Response(JSON.stringify({ received: true }), {

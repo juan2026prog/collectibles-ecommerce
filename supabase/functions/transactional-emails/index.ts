@@ -191,6 +191,215 @@ serve(async (req: Request) => {
          return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
+
+    // 2.6 NEW PAYMENT AND REFUND NOTIFICATIONS
+    if (payload.type === 'client_refund_requested') {
+         const { email, phone, order_number } = payload;
+         if (!email) return new Response("No email", { status: 400, headers: corsHeaders });
+         
+         const subject = `Tu solicitud de reembolso ha sido recibida - Collectibles`;
+         const html = `
+           <div style="font-family: Arial, sans-serif; padding: 20px; background: #fafafa; border-radius: 8px;">
+             <h2 style="color: #111;">Solicitud de Reembolso Recibida</h2>
+             <p>Te informamos que hemos recibido tu solicitud de reembolso para el pedido <strong>#${order_number}</strong>.</p>
+             <p>Nuestros administradores de soporte están evaluando la solicitud. Si se requiere alguna validación adicional, te contactaremos.</p>
+             <p>Saludos,<br />El Equipo de Collectibles.</p>
+           </div>
+         `;
+         await sendEmailAndLog(email, subject, html, 'client_refund_requested');
+         if (phone) {
+            await sendWhatsAppMessage(phone, `⏳ *Reembolso Solicitado*\\n\\nHemos recibido tu solicitud de reembolso para el pedido #${order_number}. Está siendo revisada por soporte.`);
+         }
+         return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    if (payload.type === 'client_refund_completed') {
+         const { email, phone, order_number, amount } = payload;
+         if (!email) return new Response("No email", { status: 400, headers: corsHeaders });
+         
+         const subject = `Tu reembolso ha sido aprobado y procesado - Collectibles`;
+         const html = `
+           <div style="font-family: Arial, sans-serif; padding: 20px; background: #fafafa; border-radius: 8px;">
+             <h2 style="color: #16a34a;">Reembolso Aprobado 🎉</h2>
+             <p>Queremos informarte que el reembolso de tu pedido <strong>#${order_number}</strong> por un monto de <strong>$${amount}</strong> ha sido procesado con éxito.</p>
+             <p>El dinero debería verse reflejado en tu cuenta original de pago en los próximos días hábiles (dependiendo de la pasarela y tu entidad financiera).</p>
+             <p>Saludos,<br />El Equipo de Collectibles.</p>
+           </div>
+         `;
+         await sendEmailAndLog(email, subject, html, 'client_refund_completed');
+         if (phone) {
+            await sendWhatsAppMessage(phone, `✅ *Reembolso Aprobado*\\n\\nTu reembolso por $${amount} para el pedido #${order_number} ha sido completado con éxito.`);
+         }
+         return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    if (payload.type === 'client_refund_rejected') {
+         const { email, phone, order_number, reason } = payload;
+         if (!email) return new Response("No email", { status: 400, headers: corsHeaders });
+         
+         const subject = `Actualización sobre tu solicitud de reembolso - Collectibles`;
+         const html = `
+           <div style="font-family: Arial, sans-serif; padding: 20px; background: #fafafa; border-radius: 8px;">
+             <h2 style="color: #dc2626;">Solicitud de Reembolso Rechazada</h2>
+             <p>Te informamos que tu solicitud de reembolso para el pedido <strong>#${order_number}</strong> ha sido rechazada.</p>
+             <p><strong>Motivo indicado:</strong> ${reason || 'Políticas de devolución del marketplace'}</p>
+             <p>Si tienes alguna consulta, puedes responder directamente a este correo.</p>
+             <p>Saludos,<br />El Equipo de Collectibles.</p>
+           </div>
+         `;
+         await sendEmailAndLog(email, subject, html, 'client_refund_rejected');
+         if (phone) {
+            await sendWhatsAppMessage(phone, `❌ *Reembolso Rechazado*\\n\\nLa solicitud para el pedido #${order_number} fue rechazada. Motivo: ${reason || 'Políticas del marketplace'}`);
+         }
+         return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    if (payload.type === 'client_chargeback') {
+         const { email, phone, order_number, amount } = payload;
+         if (!email) return new Response("No email", { status: 400, headers: corsHeaders });
+         
+         const subject = `Disputa de pago registrada - Collectibles`;
+         const html = `
+           <div style="font-family: Arial, sans-serif; padding: 20px; background: #fafafa; border-radius: 8px;">
+             <h2 style="color: #ea580c;">Notificación de Disputa</h2>
+             <p>Se ha registrado un reporte de disputa o contracargo por un importe de <strong>$${amount}</strong> relacionado a tu pedido <strong>#${order_number}</strong>.</p>
+             <p>Nuestro equipo está en proceso de revisión de los comprobantes y la evidencia junto a la pasarela bancaria. Nos comunicaremos contigo a la brevedad.</p>
+             <p>Saludos,<br />El Equipo de Soporte.</p>
+           </div>
+         `;
+         await sendEmailAndLog(email, subject, html, 'client_chargeback');
+         if (phone) {
+            await sendWhatsAppMessage(phone, `⚠️ *Disputa Registrada*\\n\\nSe ha reportado un contracargo por $${amount} en tu orden #${order_number}. El caso está bajo revisión.`);
+         }
+         return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    if (payload.type === 'vendor_refund_applied') {
+         const { email, store_name, order_number, amount } = payload;
+         if (!email) return new Response("No email", { status: 400, headers: corsHeaders });
+         
+         const subject = `Reembolso aplicado a suborden - Collectibles`;
+         const html = `
+           <div style="font-family: Arial, sans-serif; padding: 20px; background: #fafafa; border-radius: 8px;">
+             <h2 style="color: #ea580c;">Reembolso Aplicado</h2>
+             <p>Estimado <strong>${store_name}</strong>,</p>
+             <p>Te notificamos que se ha procesado un reembolso en tu suborden vinculada al pedido <strong>#${order_number}</strong> por un monto de <strong>$${amount}</strong>.</p>
+             <p>Este importe ha sido devuelto al cliente comprador y las comisiones han sido actualizadas correspondientemente en tu panel.</p>
+             <p>Saludos,<br />Administración de Finanzas.</p>
+           </div>
+         `;
+         await sendEmailAndLog(email, subject, html, 'vendor_refund_applied');
+         return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    if (payload.type === 'vendor_adjustment_created') {
+         const { email, store_name, order_number, amount, type_adj, reason } = payload;
+         if (!email) return new Response("No email", { status: 400, headers: corsHeaders });
+         
+         const subject = `Nuevo ajuste financiero registrado - Collectibles`;
+         const html = `
+           <div style="font-family: Arial, sans-serif; padding: 20px; background: #fafafa; border-radius: 8px;">
+             <h2 style="color: #dc2626;">Ajuste Financiero Registrado</h2>
+             <p>Estimado <strong>${store_name}</strong>,</p>
+             <p>Se ha registrado un ajuste financiero de tipo <strong>${type_adj}</strong> en tu cuenta de vendedor:</p>
+             <ul>
+               <li><strong>Pedido/Referencia:</strong> #${order_number || 'Ajuste Manual'}</li>
+               <li><strong>Monto a deducir:</strong> $${amount}</li>
+               <li><strong>Razón:</strong> ${reason || 'Ajuste de reembolso post-liquidación'}</li>
+             </ul>
+             <p>⚠️ <strong>Aviso Importante:</strong> Este importe de <strong>$${amount}</strong> se descontará automáticamente de tu próxima liquidación de ganancias generada.</p>
+             <p>Saludos,<br />Administración de Finanzas.</p>
+           </div>
+         `;
+         await sendEmailAndLog(email, subject, html, 'vendor_adjustment_created');
+         return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    if (payload.type === 'vendor_chargeback') {
+         const { email, store_name, order_number, amount, reason } = payload;
+         if (!email) return new Response("No email", { status: 400, headers: corsHeaders });
+         
+         const subject = `Alerta de contracargo/disputa - Collectibles`;
+         const html = `
+           <div style="font-family: Arial, sans-serif; padding: 20px; background: #fafafa; border-radius: 8px;">
+             <h2 style="color: #dc2626; margin: 0 0 10px 0;">¡Alerta de Contracargo!</h2>
+             <p>Estimado <strong>${store_name}</strong>,</p>
+             <p>Hemos recibido una disputa o contracargo en la pasarela para el pedido <strong>#${order_number}</strong> por un monto de <strong>$${amount}</strong>.</p>
+             <p><strong>Razón de la disputa:</strong> ${reason || 'No especificada por el cliente'}</p>
+             <p>⚠️ <strong>Retención Financiera:</strong> Los fondos asociados a esta suborden quedan retenidos en tu balance y no serán liquidados hasta que se resuelva la disputa a favor de la plataforma.</p>
+             <p>Saludos,<br />Protección Financiera del Vendedor.</p>
+           </div>
+         `;
+         await sendEmailAndLog(email, subject, html, 'vendor_chargeback');
+         return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    if (payload.type === 'admin_chargeback_received') {
+         const { dispute, order, vendor } = payload;
+         
+         const subject = `[ADMIN] Alerta: Nuevo Contracargo Recibido`;
+         const html = `
+           <div style="font-family: Arial, sans-serif; padding: 20px; background: #fafafa; border-radius: 8px; border: 2px solid #dc2626;">
+             <h2 style="color: #dc2626; margin: 0 0 10px 0;">Contracargo Recibido (Urgente)</h2>
+             <p>Se ha recibido una disputa formal en la pasarela:</p>
+             <ul>
+               <li><strong>Disputa ID:</strong> ${dispute.id}</li>
+               <li><strong>Proveedor:</strong> ${dispute.provider}</li>
+               <li><strong>Importe:</strong> $${dispute.amount}</li>
+               <li><strong>Pedido:</strong> #${order.order_number}</li>
+               <li><strong>Cliente:</strong> ${order.customer_name} (${order.customer_email})</li>
+               <li><strong>Vendedor Afectado:</strong> ${vendor.store_name}</li>
+               <li><strong>Motivo reportado:</strong> ${dispute.dispute_reason}</li>
+             </ul>
+             <p>El sistema ha congelado automáticamente la liquidación de esta suborden. Por favor, ingresa al panel de control de reembolsos para adjuntar las pruebas de entrega.</p>
+           </div>
+         `;
+         await sendEmailAndLog('admin@collectibles.com', subject, html, 'admin_chargeback_received');
+         return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    if (payload.type === 'admin_refund_manual_required') {
+         const { order_number, amount, provider, reason } = payload;
+         
+         const subject = `[ADMIN] Reembolso Manual Requerido - Pasarela: ${provider}`;
+         const html = `
+           <div style="font-family: Arial, sans-serif; padding: 20px; background: #fafafa; border-radius: 8px; border: 2px solid #ea580c;">
+             <h2 style="color: #ea580c; margin: 0 0 10px 0;">Devolución Manual Requerida</h2>
+             <p>Se ha solicitado un reembolso que no puede ser procesado automáticamente:</p>
+             <ul>
+               <li><strong>Pedido:</strong> #${order_number}</li>
+               <li><strong>Importe:</strong> $${amount}</li>
+               <li><strong>Pasarela:</strong> ${provider}</li>
+               <li><strong>Razón de la solicitud:</strong> ${reason}</li>
+             </ul>
+             <p><strong>Instrucciones:</strong> Por favor, ingresa al portal de ${provider}, realiza la devolución de fondos y luego confirma la transacción en la interfaz administrativa para actualizar los estados del pedido.</p>
+           </div>
+         `;
+         await sendEmailAndLog('admin@collectibles.com', subject, html, 'admin_refund_manual_required');
+         return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
+    if (payload.type === 'admin_refund_failed') {
+         const { order_number, amount, provider, error_msg } = payload;
+         
+         const subject = `[ADMIN] ERROR: Falló Reembolso Automático`;
+         const html = `
+           <div style="font-family: Arial, sans-serif; padding: 20px; background: #fafafa; border-radius: 8px; border: 2px solid #dc2626;">
+             <h2 style="color: #dc2626; margin: 0 0 10px 0;">Error en la API de Reembolso</h2>
+             <p>Un intento de reembolso automático con el proveedor falló:</p>
+             <ul>
+               <li><strong>Pedido:</strong> #${order_number}</li>
+               <li><strong>Importe:</strong> $${amount}</li>
+               <li><strong>Proveedor de pago:</strong> ${provider}</li>
+               <li><strong>Mensaje de error:</strong> ${error_msg}</li>
+             </ul>
+             <p>Por favor, revisa el estado del pago directamente en el portal de la pasarela y gestiona la devolución manual.</p>
+           </div>
+         `;
+         await sendEmailAndLog('admin@collectibles.com', subject, html, 'admin_refund_failed');
+         return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+
     if (payload.type === 'abandoned_order_discount') {
          const { order, discountCode } = payload;
          const customerEmail = order.customer_email || order.customer?.email;

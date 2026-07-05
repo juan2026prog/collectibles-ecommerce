@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { RefreshCw, ImageIcon, FileIcon, X, Folder, ChevronRight, Upload, Check, Square, FolderPlus, Edit, Move, Trash2, Search } from 'lucide-react';
 import { useToast } from './admin/Toast';
 import { useConfirmModal } from './admin/ConfirmModal';
+import { useAuth } from '../contexts/AuthContext';
 
 interface MediaPickerModalProps {
   isOpen: boolean;
@@ -10,9 +11,18 @@ interface MediaPickerModalProps {
   onSelect: (url: string) => void;
   multiple?: boolean;
   onMultipleSelect?: (urls: string[]) => void;
+  rootPath?: string;
 }
 
-export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, onMultipleSelect }: MediaPickerModalProps) {
+export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, onMultipleSelect, rootPath }: MediaPickerModalProps) {
+  const { user, profile } = useAuth();
+  
+  const rootPathPrefix = rootPath !== undefined 
+    ? rootPath 
+    : (user && profile?.is_vendor && !profile?.is_admin) 
+      ? `vendors/${user.id}/` 
+      : '';
+
   const [files, setFiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPath, setCurrentPath] = useState('');
@@ -44,7 +54,7 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
     setLoading(true);
     setFiles([]); // Clear list to prevent double clicks on stale cards
     try {
-      const { data, error } = await supabase.storage.from(BUCKET_NAME).list(path, {
+      const { data, error } = await supabase.storage.from(BUCKET_NAME).list(rootPathPrefix + path, {
         limit: 500,
         offset: 0,
         sortBy: { column: 'name', order: 'asc' }
@@ -59,7 +69,7 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
   }
 
   function getFileUrl(fileName: string) {
-    const fullPath = currentPath ? `${currentPath}${fileName}` : fileName;
+    const fullPath = rootPathPrefix + (currentPath ? `${currentPath}${fileName}` : fileName);
     return supabase.storage.from(BUCKET_NAME).getPublicUrl(fullPath).data.publicUrl;
   }
 
@@ -101,7 +111,7 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
         const rawName = file.name.replace(`.${fileExt}`, '');
         const sanitizedName = rawName.toLowerCase().replace(/[^a-z0-9]/g, '-');
         const fileName = `${Date.now()}-${sanitizedName}.${fileExt}`;
-        const filePath = targetPath + fileName;
+        const filePath = rootPathPrefix + targetPath + fileName;
         
         const { error } = await supabase.storage.from(BUCKET_NAME).upload(filePath, file, { cacheControl: '3600', upsert: false });
         if (error) throw error;
@@ -150,11 +160,11 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
     setLoading(true);
     try {
       if (isFolder) {
-        await moveFolderRecursive(fromPath + '/', toPath + '/');
+        await moveFolderRecursive(rootPathPrefix + fromPath + '/', rootPathPrefix + toPath + '/');
       } else {
-        const { error } = await supabase.storage.from(BUCKET_NAME).move(fromPath, toPath);
+        const { error } = await supabase.storage.from(BUCKET_NAME).move(rootPathPrefix + fromPath, rootPathPrefix + toPath);
         if (error) throw error;
-        await updateDbReferences(fromPath, toPath);
+        await updateDbReferences(rootPathPrefix + fromPath, rootPathPrefix + toPath);
       }
       toast.success(isFolder ? 'Carpeta movida con éxito' : 'Archivo movido con éxito');
       fetchMedia(currentPath);
@@ -173,7 +183,7 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
     
     const sanitized = folderName.toLowerCase().replace(/[^a-z0-9_-]/g, '-');
     const folderPath = currentPath ? `${currentPath}${sanitized}` : sanitized;
-    const placeholderPath = `${folderPath}/.emptyFolderPlaceholder`;
+    const placeholderPath = `${rootPathPrefix}${folderPath}/.emptyFolderPlaceholder`;
 
     setUploading(true);
     try {
@@ -202,9 +212,9 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
     setLoading(true);
     try {
       if (isFolder) {
-        await deleteFolderRecursive(targetPath + '/');
+        await deleteFolderRecursive(rootPathPrefix + targetPath + '/');
       } else {
-        const { error } = await supabase.storage.from(BUCKET_NAME).remove([targetPath]);
+        const { error } = await supabase.storage.from(BUCKET_NAME).remove([rootPathPrefix + targetPath]);
         if (error) throw error;
       }
       fetchMedia(currentPath);
@@ -284,11 +294,11 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
     setLoading(true);
     try {
       if (isFolder) {
-        await moveFolderRecursive(fromPath + '/', toPath + '/');
+        await moveFolderRecursive(rootPathPrefix + fromPath + '/', rootPathPrefix + toPath + '/');
       } else {
-        const { error } = await supabase.storage.from(BUCKET_NAME).move(fromPath, toPath);
+        const { error } = await supabase.storage.from(BUCKET_NAME).move(rootPathPrefix + fromPath, rootPathPrefix + toPath);
         if (error) throw error;
-        await updateDbReferences(fromPath, toPath);
+        await updateDbReferences(rootPathPrefix + fromPath, rootPathPrefix + toPath);
       }
       toast.success(isFolder ? 'Carpeta renombrada' : 'Archivo renombrado');
       fetchMedia(currentPath);
@@ -340,11 +350,11 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
     setLoading(true);
     try {
       if (isFolder) {
-        await moveFolderRecursive(fromPath + '/', toPath + '/');
+        await moveFolderRecursive(rootPathPrefix + fromPath + '/', rootPathPrefix + toPath + '/');
       } else {
-        const { error } = await supabase.storage.from(BUCKET_NAME).move(fromPath, toPath);
+        const { error } = await supabase.storage.from(BUCKET_NAME).move(rootPathPrefix + fromPath, rootPathPrefix + toPath);
         if (error) throw error;
-        await updateDbReferences(fromPath, toPath);
+        await updateDbReferences(rootPathPrefix + fromPath, rootPathPrefix + toPath);
       }
       toast.success(isFolder ? 'Carpeta movida con éxito' : 'Archivo movido con éxito');
       fetchMedia(currentPath);

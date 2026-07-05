@@ -31,16 +31,16 @@ serve(async (req) => {
 
     // 1. Fetch DAC provider details
     const { data: provider, error: providerErr } = await supabase
-      .from('delivery_providers')
+      .from('shipping_providers')
       .select('*')
-      .eq('provider_key', 'dac')
+      .eq('code', 'dac')
       .single();
 
     if (providerErr || !provider) {
       throw new Error("No se encontró la configuración del proveedor DAC en la base de datos.");
     }
 
-    if (!provider.is_active) {
+    if (!provider.is_active || provider.status !== 'active') {
       return new Response(JSON.stringify({ 
         success: false, 
         error: "El servicio DAC no está activo.",
@@ -53,7 +53,7 @@ serve(async (req) => {
 
     const { username, password_encrypted, api_url, settings = {} } = provider;
     if (!username || !password_encrypted || !api_url) {
-      throw new Error("Credenciales de DAC incompletas en delivery_providers.");
+      throw new Error("Credenciales de DAC incompletas en shipping_providers.");
     }
 
     // 2. Resolve destination office (K_Oficina_Destino) — NO FALLBACKS

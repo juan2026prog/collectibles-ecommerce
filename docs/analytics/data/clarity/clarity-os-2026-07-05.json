@@ -1,0 +1,317 @@
+[
+  {
+    "metricName": "DeadClickCount",
+    "information": [
+      {
+        "sessionsCount": "15",
+        "sessionsWithMetricPercentage": 6.67,
+        "sessionsWithoutMetricPercentage": 93.33,
+        "pagesViews": "1",
+        "subTotal": "1",
+        "OS": "Android"
+      },
+      {
+        "sessionsCount": "15",
+        "sessionsWithMetricPercentage": 20,
+        "sessionsWithoutMetricPercentage": 80,
+        "pagesViews": "3",
+        "subTotal": "5",
+        "OS": "IOS"
+      },
+      {
+        "sessionsCount": "19",
+        "sessionsWithMetricPercentage": 5.26,
+        "sessionsWithoutMetricPercentage": 94.74,
+        "pagesViews": "1",
+        "subTotal": "2",
+        "OS": "Linux"
+      },
+      {
+        "sessionsCount": "31",
+        "sessionsWithMetricPercentage": 25.81,
+        "sessionsWithoutMetricPercentage": 74.19,
+        "pagesViews": "14",
+        "subTotal": "19",
+        "OS": "Windows"
+      }
+    ]
+  },
+  {
+    "metricName": "ExcessiveScroll",
+    "information": [
+      {
+        "sessionsCount": "15",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "OS": "Android"
+      },
+      {
+        "sessionsCount": "15",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "OS": "IOS"
+      },
+      {
+        "sessionsCount": "19",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "OS": "Linux"
+      },
+      {
+        "sessionsCount": "31",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "OS": "Windows"
+      }
+    ]
+  },
+  {
+    "metricName": "RageClickCount",
+    "information": [
+      {
+        "sessionsCount": "15",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "OS": "Android"
+      },
+      {
+        "sessionsCount": "15",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "OS": "IOS"
+      },
+      {
+        "sessionsCount": "19",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "OS": "Linux"
+      },
+      {
+        "sessionsCount": "31",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "OS": "Windows"
+      }
+    ]
+  },
+  {
+    "metricName": "QuickbackClick",
+    "information": [
+      {
+        "sessionsCount": "15",
+        "sessionsWithMetricPercentage": 40,
+        "sessionsWithoutMetricPercentage": 60,
+        "pagesViews": "9",
+        "subTotal": "9",
+        "OS": "Android"
+      },
+      {
+        "sessionsCount": "15",
+        "sessionsWithMetricPercentage": 33.33,
+        "sessionsWithoutMetricPercentage": 66.67,
+        "pagesViews": "5",
+        "subTotal": "5",
+        "OS": "IOS"
+      },
+      {
+        "sessionsCount": "19",
+        "sessionsWithMetricPercentage": 26.32,
+        "sessionsWithoutMetricPercentage": 73.68,
+        "pagesViews": "7",
+        "subTotal": "7",
+        "OS": "Linux"
+      },
+      {
+        "sessionsCount": "31",
+        "sessionsWithMetricPercentage": 41.94,
+        "sessionsWithoutMetricPercentage": 58.06,
+        "pagesViews": "32",
+        "subTotal": "32",
+        "OS": "Windows"
+      }
+    ]
+  },
+  {
+    "metricName": "ScriptErrorCount",
+    "information": [
+      {
+        "sessionsCount": "15",
+        "sessionsWithMetricPercentage": 6.67,
+        "sessionsWithoutMetricPercentage": 93.33,
+        "pagesViews": "1",
+        "subTotal": "2",
+        "OS": "Android"
+      },
+      {
+        "sessionsCount": "15",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "OS": "IOS"
+      },
+      {
+        "sessionsCount": "19",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "OS": "Linux"
+      },
+      {
+        "sessionsCount": "31",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "OS": "Windows"
+      }
+    ]
+  },
+  {
+    "metricName": "ErrorClickCount",
+    "information": [
+      {
+        "sessionsCount": "15",
+        "sessionsWithMetricPercentage": 6.67,
+        "sessionsWithoutMetricPercentage": 93.33,
+        "pagesViews": "1",
+        "subTotal": "2",
+        "OS": "Android"
+      },
+      {
+        "sessionsCount": "15",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "OS": "IOS"
+      },
+      {
+        "sessionsCount": "19",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "OS": "Linux"
+      },
+      {
+        "sessionsCount": "31",
+        "sessionsWithMetricPercentage": 0,
+        "sessionsWithoutMetricPercentage": 100,
+        "pagesViews": "0",
+        "subTotal": "0",
+        "OS": "Windows"
+      }
+    ]
+  },
+  {
+    "metricName": "ScrollDepth",
+    "information": [
+      {
+        "averageScrollDepth": 68.91,
+        "OS": "Android"
+      },
+      {
+        "averageScrollDepth": 65,
+        "OS": "IOS"
+      },
+      {
+        "averageScrollDepth": 87.22,
+        "OS": "Linux"
+      },
+      {
+        "averageScrollDepth": 70.21,
+        "OS": "Windows"
+      }
+    ]
+  },
+  {
+    "metricName": "Traffic",
+    "information": [
+      {
+        "totalSessionCount": "0",
+        "totalBotSessionCount": "60",
+        "distinctUserCount": "95",
+        "pagesPerSessionPercentage": 1,
+        "OS": "Other"
+      },
+      {
+        "totalSessionCount": "15",
+        "totalBotSessionCount": "3",
+        "distinctUserCount": "17",
+        "pagesPerSessionPercentage": 5.277777777777778,
+        "OS": "Android"
+      },
+      {
+        "totalSessionCount": "15",
+        "totalBotSessionCount": "0",
+        "distinctUserCount": "11",
+        "pagesPerSessionPercentage": 2.466666666666667,
+        "OS": "IOS"
+      },
+      {
+        "totalSessionCount": "19",
+        "totalBotSessionCount": "25",
+        "distinctUserCount": "31",
+        "pagesPerSessionPercentage": 1.6818181818181819,
+        "OS": "Linux"
+      },
+      {
+        "totalSessionCount": "0",
+        "totalBotSessionCount": "1",
+        "distinctUserCount": "2",
+        "pagesPerSessionPercentage": 1,
+        "OS": "MacOSX"
+      },
+      {
+        "totalSessionCount": "31",
+        "totalBotSessionCount": "16",
+        "distinctUserCount": "21",
+        "pagesPerSessionPercentage": 6,
+        "OS": "Windows"
+      }
+    ]
+  },
+  {
+    "metricName": "EngagementTime",
+    "information": [
+      {
+        "totalTime": "161",
+        "activeTime": "159",
+        "OS": "Android"
+      },
+      {
+        "totalTime": "51",
+        "activeTime": "50",
+        "OS": "IOS"
+      },
+      {
+        "totalTime": "94",
+        "activeTime": "35",
+        "OS": "Linux"
+      },
+      {
+        "totalTime": "1226",
+        "activeTime": "260",
+        "OS": "Windows"
+      }
+    ]
+  }
+]

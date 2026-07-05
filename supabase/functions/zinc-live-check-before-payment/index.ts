@@ -27,10 +27,9 @@ serve(async (req) => {
        throw new Error("Invalid payload: cart_items is required");
     }
 
-    const { data: settings } = await supabase.from('international_sync_settings').select('*').eq('id', 1).single();
-    if (!settings) throw new Error("Sync settings not found");
-
     const serviceClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "");
+    const { data: settings } = await serviceClient.from('international_sync_settings').select('*').eq('id', 1).single();
+    if (!settings) throw new Error("Sync settings not found");
     const results = [];
     let all_ok = true;
 
@@ -121,9 +120,15 @@ serve(async (req) => {
        }
     }
 
-    return new Response(JSON.stringify({ success: true, all_ok, results }), { headers: getCorsHeaders(), status: 200 });
+    return new Response(JSON.stringify({ success: true, all_ok, results }), {
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      status: 200
+    });
 
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message }), { headers: getCorsHeaders(), status: 500 });
+    return new Response(JSON.stringify({ error: error.message }), {
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      status: 500
+    });
   }
 });

@@ -9,6 +9,7 @@ import { ProductGridCard } from '../components/ProductGridCard';
 import { useCartContext } from '../contexts/CartContext';
 import { getProductImage } from '../lib/imageUtils';
 import { Helmet } from 'react-helmet-async';
+import { resolveCartItemPrice } from '../lib/priceResolver';
 import { 
   useStoreCollections, 
   useStoreFollowers, 
@@ -307,12 +308,13 @@ export default function VendorStorefront() {
   const handleAddToCart = (p: any) => {
     const variant = p.variants?.[0];
     if (!variant) return;
+    const resolvedPrice = resolveCartItemPrice(p, variant);
     cart.addItem({ 
       product_id: p.id, 
       variant_id: variant.id, 
       quantity: 1, 
       title: p.title, 
-      price: p.base_price + (variant.price_adjustment || 0), 
+      price: resolvedPrice, 
       image: getProductImage(p), 
       variant_name: variant.name || 'Única', 
       category_id: p.category_id, 
@@ -325,7 +327,7 @@ export default function VendorStorefront() {
       vendor_store_slug: store?.slug || p.vendor?.slug || slug,
       vendor_logo: store?.logo_url || p.vendor?.logo_url,
       sku: variant.sku || null,
-      unit_price: p.base_price + (variant.price_adjustment || 0),
+      unit_price: resolvedPrice,
       image_url: getProductImage(p),
       promotions_opt_in: promotionsOptIn,
       tag_ids: p.product_tags?.map((pt: any) => pt.tag_id) || [] 

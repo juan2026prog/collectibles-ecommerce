@@ -152,44 +152,49 @@ export async function wsInGuiaPeso(
   input: DacShipmentInput
 ): Promise<{ kGuia: string; trackingCode: string; destinationOffice: string }> {
   
-  const detailXml = input.packages.map(p => `
-    <Paquete>
-      <Cantidad>${p.cantidad}</Cantidad>
-      <Peso>${p.peso}</Peso>
-    </Paquete>
-  `).join('');
+  let remitente = "Collectibles";
+  if (input.observaciones && input.observaciones.startsWith("REMITENTE: ")) {
+    const match = input.observaciones.match(/REMITENTE:\s*([^(]+)/);
+    if (match && match[1]) {
+      remitente = match[1].trim();
+    }
+  }
 
   const soapEnvelope = `<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
   <soap:Body>
-    <wsInGuia_peso xmlns="http://www.dac.com.uy/">
+    <wsInGuia_Nuevo xmlns="http://www.dac.com.uy/">
       <ID_Sesion>${escapeXml(session.id_session)}</ID_Sesion>
-      <K_Cliente>${escapeXml(session.k_cliente)}</K_Cliente>
-      <K_Usuario>${escapeXml(session.k_usuario)}</K_Usuario>
-      <K_Tipo_Guia>${input.kTipoGuia ?? 2}</K_Tipo_Guia>
+      <K_Tipo_Guia>${input.kTipoGuia ?? 4}</K_Tipo_Guia>
       <K_Tipo_Envio>${input.kTipoEnvio ?? 1}</K_Tipo_Envio>
-      <Entrega>${input.entrega ?? 2}</Entrega>
-      ${input.kOficinaDestino !== undefined && input.kOficinaDestino !== null && input.kOficinaDestino !== '' ? `<K_Oficina_Destino>${escapeXml(String(input.kOficinaDestino))}</K_Oficina_Destino>` : ''}
+      <D_Cliente_Remitente>${escapeXml(remitente)}</D_Cliente_Remitente>
+      <K_Cliente_Destinatario>${escapeXml(session.k_cliente)}</K_Cliente_Destinatario>
+      <Cliente_Destinatario>${escapeXml(input.destinatario)}</Cliente_Destinatario>
+      <Direccion_Destinatario>${escapeXml(input.direccion)}</Direccion_Destinatario>
+      <K_Barrio></K_Barrio>
+      <K_Ciudad_Destinatario>${escapeXml(input.localidad)}</K_Ciudad_Destinatario>
+      <K_Estado_Destinatario>${escapeXml(input.departamento)}</K_Estado_Destinatario>
+      <K_Pais_Destinatario>Uruguay</K_Pais_Destinatario>
+      <CP_Destinatario>${escapeXml(input.cp || "11100")}</CP_Destinatario>
+      <Telefono>${escapeXml(input.telefono || input.celular)}</Telefono>
       <RUT>${escapeXml(session.rut)}</RUT>
-      <Celular>${escapeXml(input.celular)}</Celular>
-      <Destinatario>${escapeXml(input.destinatario)}</Destinatario>
-      <Direccion>${escapeXml(input.direccion)}</Direccion>
-      <CP>${escapeXml(input.cp)}</CP>
-      <Localidad>${escapeXml(input.localidad)}</Localidad>
-      <Departamento>${escapeXml(input.departamento)}</Departamento>
-      <Telefono>${escapeXml(input.telefono)}</Telefono>
-      <Email>${escapeXml(input.email)}</Email>
-      <Observaciones>${escapeXml(input.observaciones)}</Observaciones>
-      <CodigoPedido>${escapeXml(input.codigoPedido)}</CodigoPedido>
+      <K_Oficina_Destino>${input.kOficinaDestino !== undefined && input.kOficinaDestino !== null && input.kOficinaDestino !== '' ? escapeXml(String(input.kOficinaDestino)) : ''}</K_Oficina_Destino>
+      <Entrega>${input.entrega ?? 2}</Entrega>
       <Paquetes_Ampara>${input.paquetesAmpara}</Paquetes_Ampara>
-      <Detalle_Paquetes>
-        ${detailXml}
-      </Detalle_Paquetes>
-    </wsInGuia_peso>
+      <Detalle_Paquetes>${input.paquetesAmpara}</Detalle_Paquetes>
+      <Observaciones>${escapeXml(input.observaciones)}</Observaciones>
+      <CostoMercaderia>0</CostoMercaderia>
+      <Referencia_Pago></Referencia_Pago>
+      <CodigoPedido>${escapeXml(input.codigoPedido)}</CodigoPedido>
+      <Serv_DDF></Serv_DDF>
+      <Serv_Cita></Serv_Cita>
+      <Latitud_Destino></Latitud_Destino>
+      <Longitud_Destino></Longitud_Destino>
+    </wsInGuia_Nuevo>
   </soap:Body>
 </soap:Envelope>`;
 
-  const soapAction = 'http://www.dac.com.uy/wsInGuia_peso';
+  const soapAction = 'http://www.dac.com.uy/wsInGuia_Nuevo';
   if (isDebugEnabled()) {
     console.log(`[DAC DEBUG] SOAP Action: ${soapAction}`);
     console.log(`[DAC DEBUG] Request XML:\n${soapEnvelope}`);
@@ -208,7 +213,7 @@ export async function wsInGuiaPeso(
     if (isDebugEnabled()) {
       console.log(`[DAC DEBUG] Response HTTP Error Status: ${res.status}`);
     }
-    throw new Error(`DAC wsInGuia_peso HTTP error: ${res.status} ${res.statusText}`);
+    throw new Error(`DAC wsInGuia_Nuevo HTTP error: ${res.status} ${res.statusText}`);
   }
 
   const xml = await res.text();
@@ -533,4 +538,47 @@ export async function wsGetPegoteJson(
   }
 
   throw new Error("Invalid response format from wsGetPegote JSON service");
+}
+
+export async function wsObtieneGuiasCliente(
+  apiUrl: string,
+  session: DacSession,
+  kCliente: string | number,
+  busqueda: number,
+  fi: string,
+  ff: string,
+  rut: string
+): Promise<string> {
+  const soapEnvelope = `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <wsObtieneGuiasCliente xmlns="http://www.dac.com.uy/">
+      <K_Cliente>${kCliente}</K_Cliente>
+      <Busqueda>${busqueda}</Busqueda>
+      <FI>${fi}</FI>
+      <FF>${ff}</FF>
+      <RUT>${escapeXml(rut)}</RUT>
+      <ID_Sesion>${escapeXml(session.id_session)}</ID_Sesion>
+    </wsObtieneGuiasCliente>
+  </soap:Body>
+</soap:Envelope>`;
+
+  const soapAction = 'http://www.dac.com.uy/wsObtieneGuiasCliente';
+
+  const res = await fetch(apiUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'text/xml; charset=utf-8',
+      'SOAPAction': soapAction
+    },
+    body: soapEnvelope
+  });
+
+  if (!res.ok) {
+    throw new Error(`DAC wsObtieneGuiasCliente HTTP error: ${res.status} ${res.statusText}`);
+  }
+
+  const xml = await res.text();
+  checkSoapFault(xml);
+  return xml;
 }

@@ -229,6 +229,36 @@ export default function VProducts() {
   async function handleSave() {
     try {
       if (!form.title) throw new Error("El título es obligatorio");
+
+      if (form.status === 'published') {
+        const errors = [];
+        if (!form.categories[0]) errors.push("Falta categoría válida");
+        if (!form.brands[0]) errors.push("Falta marca válida");
+        if ((parseFloat(form.base_price) || 0) <= 0) errors.push("Precio inválido (debe ser mayor a 0)");
+        if ((parseInt(form.stock) || 0) < 0) errors.push("Stock inválido (no puede ser negativo)");
+        if (!form.image_url) errors.push("Imágenes suficientes (se requiere al menos una imagen)");
+
+        // Duplicate check
+        const { data: dupData } = await supabase.rpc('check_duplicate_product', {
+          p_title: form.title,
+          p_brand_id: form.brands[0] || null,
+          p_sku: form.sku || null,
+          p_gtin: null,
+          p_asin: null
+        });
+
+        if (dupData && dupData.length > 0) {
+          const otherDup = dupData.find((d: any) => d.matched_product_id !== editing?.id && d.similarity_score >= 0.95);
+          if (otherDup) {
+            errors.push(`Conflicto de duplicado detectado (Similitud >= 95% con producto ID: ${otherDup.matched_product_id})`);
+          }
+        }
+
+        if (errors.length > 0) {
+          throw new Error("Reglas de Publicación no cumplidas:\n- " + errors.join("\n- "));
+        }
+      }
+
       let titleSlug = form.slug || form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'); if (!editing && !form.slug) { titleSlug = `${titleSlug.replace(/-+$/, '')}-`; }
 
       const selectedBrandId = form.brands[0] || null;

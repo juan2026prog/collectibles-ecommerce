@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { 
   Check, X, GitMerge, AlertTriangle, ArrowRight, Eye, Tag, Folder, Layers, 
@@ -9,7 +9,27 @@ import {
 import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
 
-type TabType = 'inbox' | 'rules' | 'dictionary' | 'ml_categories' | 'history' | 'conflicts' | 'quality_dashboard';
+export interface CatalogStatus {
+  qualityScore: number;
+  qualityLevel: 'Excelente' | 'Alta' | 'Media' | 'Baja' | 'Crítica';
+  publicationStatus: string;
+  publicationReason: string;
+  isPublicable: boolean;
+  isBlocked: boolean;
+  homologationStatus: 'sin_homologar' | 'parcial' | 'completa' | 'revision';
+  duplicateStatus: string;
+  brandStatus: string;
+  categoryStatus: string;
+  qualityCatalogScore: number;
+  qualityImportScore: number;
+  lastCalculated: string;
+  engineVersion: string;
+  validators: any;
+  motives: string[];
+  capApplied: '49%' | '69%' | '40%' | null;
+}
+
+type TabType = 'inbox' | 'rules' | 'dictionary' | 'ml_categories' | 'history' | 'conflicts' | 'quality_dashboard' | 'duplicates';
 type ProductStatusType = 'all' | 'pending' | 'cataloged' | 'conflicts' | 'duplicates' | 'published';
 
 import { 
@@ -627,6 +647,9 @@ export default function AdminCatalogCenter() {
         if (rawItemIds.length > 0) {
           await supabase.from('ml_raw_items').update({ status: 'ignored' }).in('id', rawItemIds);
         }
+        if (catalogProdIds.length > 0) {
+          await supabase.from('products').update({ status: 'draft', is_active: false }).in('id', catalogProdIds);
+        }
       } else if (actionType === 'delete') {
         if (catalogProdIds.length > 0) {
           await supabase.from('products').delete().in('id', catalogProdIds);
@@ -836,6 +859,52 @@ export default function AdminCatalogCenter() {
       }
     } catch (err: any) {
       toast.error('Error al guardar producto: ' + err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handlePublishSingle(product: any) {
+    if (!product) return;
+    setActionLoading(true);
+    try {
+      if (product.status === 'Curation Queue') {
+        const { error: curErr } = await supabase.rpc('curate_raw_item_manually', { 
+          p_raw_item_id: product.id,
+          p_category_id: sidePanelData.categoryId || product.suggested_category_id || null,
+          p_brand_id: sidePanelData.brandId || product.brand_id || null
+        });
+        if (curErr) throw curErr;
+      } else {
+        const { error } = await supabase.from('products').update({ status: 'published', is_active: true }).eq('id', product.id);
+        if (error) throw error;
+      }
+      toast.success('Producto publicado con éxito');
+      setSelectedProduct(null);
+      fetchInitialData();
+    } catch (err: any) {
+      toast.error('Error al publicar producto: ' + err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleBlockSingle(product: any) {
+    if (!product) return;
+    setActionLoading(true);
+    try {
+      if (product.status === 'Curation Queue') {
+        const { error } = await supabase.from('ml_raw_items').update({ status: 'ignored' }).eq('id', product.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('products').update({ status: 'draft', is_active: false }).eq('id', product.id);
+        if (error) throw error;
+      }
+      toast.success('Producto bloqueado con éxito');
+      setSelectedProduct(null);
+      fetchInitialData();
+    } catch (err: any) {
+      toast.error('Error al bloquear producto: ' + err.message);
     } finally {
       setActionLoading(false);
     }
@@ -1298,131 +1367,6 @@ export default function AdminCatalogCenter() {
     }
   }
 
-  // Filter products list client-side (Problem 2)
-  const filteredProducts = allProducts.filter(p => {
-    // 1. Scope Filter (Fase 10)
-    if (showScopeFilter === 'pending' && p.status !== 'Curation Queue') return false;
-    if (showScopeFilter === 'homologated' && p.status === 'Curation Queue') return false;
-    if (showScopeFilter === 'published' && p.status !== 'published') return false;
-
-    // Calculate quality status and Quality Engine report for filtering
-    const hStatus = calculateHomologationStatus(p, mlMappings, localDuplicates);
-    const qCheck = runQualityEngineCheck(p, allProducts, mlMappings, localDuplicates, dictionaries, rules);
-
-    // 2. Homologation Status / Quality Engine Filter (Fase 8)
-    if (homologationFilter !== 'all') {
-      if (homologationFilter === 'completo' && hStatus.status !== 'completa') return false;
-      if (homologationFilter === 'parcial' && hStatus.status !== 'parcial') return false;
-      if (homologationFilter === 'revision' && hStatus.status !== 'revision') return false;
-      if (homologationFilter === 'sin_homologar' && hStatus.status !== 'sin_homologar') return false;
-      if (homologationFilter === 'conflictos' && !p.is_exception && !p.has_conflict) return false;
-      
-      // Quality Engine specific filters (Fase 8)
-      if (homologationFilter === 'excelente' && qCheck.result !== 'Excelente') return false;
-      if (homologationFilter === 'alta' && qCheck.result !== 'Alta') return false;
-      if (homologationFilter === 'media' && qCheck.result !== 'Media') return false;
-      if (homologationFilter === 'baja' && qCheck.result !== 'Baja') return false;
-      if (homologationFilter === 'critica' && qCheck.result !== 'Crítica') return false;
-      
-      if (homologationFilter === 'publicables' && !qCheck.isPublicable) return false;
-      if (homologationFilter === 'bloqueados' && !qCheck.isBlocked) return false;
-      if (homologationFilter === 'duplicados' && qCheck.validators.duplicate.result !== 'Duplicado') return false;
-      if (homologationFilter === 'marca_conflicto' && qCheck.validators.brand.result !== 'Conflicto') return false;
-      if (homologationFilter === 'categoria_conflicto' && qCheck.validators.category.result !== 'Conflicto') return false;
-      
-      if (homologationFilter === 'ia' && hStatus.origen !== 'ia') return false;
-      if (homologationFilter === 'reglas' && hStatus.origen !== 'ml_rule' && hStatus.origen !== 'dict_rule' && hStatus.origen !== 'keyword_rule' && hStatus.origen !== 'vendor_rule') return false;
-      if (homologationFilter === 'manuales' && hStatus.origen !== 'manual') return false;
-      
-      // Hotfix UI new filters (Filtros nuevos)
-      if (homologationFilter === 'sin_marca_collectibles' && (p.brand_id || p.brand_name)) return false;
-      if (homologationFilter === 'sin_categoria_collectibles' && p.category_id) return false;
-      if (homologationFilter === 'marca_collectibles_asignada' && !p.brand_id && !p.brand_name) return false;
-      if (homologationFilter === 'categoria_collectibles_asignada' && !p.category_id) return false;
-      if (homologationFilter === 'conflicto_licencia') {
-        const assignedBrandName = p.brand_name || '';
-        if (!assignedBrandName || !LICENSES_LIST.includes(assignedBrandName.toLowerCase())) return false;
-      }
-      if (homologationFilter === 'conflicto_fabricante' && !hStatus.detection.detectedBrand) return false;
-      if (homologationFilter === 'publicados_inconsistencias') {
-        const qualifies = qCheck.isPublicable;
-        if (p.status !== 'published' || qualifies) return false;
-      }
-    }
-
-    // 3. Dropdown Filters
-    if (vendorFilter !== 'all' && p.vendor_id !== vendorFilter) return false;
-    if (brandFilter !== 'all' && p.ml_brand !== brandFilter) return false;
-    if (mlCategoryFilter !== 'all' && p.ml_category !== mlCategoryFilter) return false;
-    if (collectiblesCategoryFilter !== 'all' && p.suggested_category_id !== collectiblesCategoryFilter) return false;
-    
-    // 4. Confidence Filter
-    if (confidenceFilter === 'high' && p.confidence < 80) return false;
-    if (confidenceFilter === 'medium' && (p.confidence < 50 || p.confidence >= 80)) return false;
-    if (confidenceFilter === 'low' && p.confidence >= 50) return false;
-
-    // 5. Source Filter
-    if (sourceFilter === 'mercadolibre' && p.ml_item_id === null) return false;
-
-    // 6. Search Text
-    if (searchQuery.trim()) {
-      const search = searchQuery.toLowerCase();
-      const matchesSearch = 
-        (p.title || '').toLowerCase().includes(search) || 
-        (p.sku || '').toLowerCase().includes(search) || 
-        (p.ml_brand || '').toLowerCase().includes(search);
-      if (!matchesSearch) return false;
-    }
-
-    return true;
-  });
-
-  // Sort products client-side
-  const sortedProducts = [...filteredProducts].sort((a, b) => {
-    if (!sortField) return 0;
-    let valA = '';
-    let valB = '';
-
-    if (sortField === 'title') {
-      valA = a.title || '';
-      valB = b.title || '';
-    } else if (sortField === 'brand') {
-      valA = a.ml_brand || '';
-      valB = b.ml_brand || '';
-    } else if (sortField === 'category') {
-      valA = a.suggested_category_name || '';
-      valB = b.suggested_category_name || '';
-    } else if (sortField === 'vendor') {
-      valA = a.vendor_name || '';
-      valB = b.vendor_name || '';
-    } else if (sortField === 'confidence') {
-      return sortDirection === 'asc' ? a.confidence - b.confidence : b.confidence - a.confidence;
-    }
-
-    return sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
-  });
-
-  // Pagination slice
-  const paginatedProducts = sortedProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  const totalPages = Math.ceil(sortedProducts.length / itemsPerPage);
-
-  // Grouping products list client-side (Problem 3)
-  const groupedProducts = (() => {
-    if (groupBy === 'none') return null;
-    const groups: Record<string, any[]> = {};
-    
-    sortedProducts.forEach(p => {
-      let key = 'Sin agrupar';
-      if (groupBy === 'vendor') key = p.vendor_name || 'Desconocido';
-      else if (groupBy === 'brand') key = p.ml_brand || 'Sin marca';
-      else if (groupBy === 'ml_category') key = p.ml_category || 'Sin categoría ML';
-      else if (groupBy === 'category') key = p.suggested_category_name || 'Sin clasificar';
-      
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(p);
-    });
-    return groups;
-  })();
 
   // Explanations system client-side (Problem 9 / 11)
   function getRulesBreakdown(product: any) {
@@ -1511,20 +1455,184 @@ export default function AdminCatalogCenter() {
   }
 
   // Calculate homologation stats for each product
-  const productsWithHStatus = allProducts.map(p => ({
-    ...p,
-    hStatus: calculateHomologationStatus(p, mlMappings, localDuplicates),
-    qCheck: runQualityEngineCheck(p, allProducts, mlMappings, localDuplicates, dictionaries, rules)
-  }));
+  const productsWithHStatus = useMemo(() => {
+    return allProducts.map(p => {
+      const hStatus = calculateHomologationStatus(p, mlMappings, localDuplicates);
+      const qCheck = runQualityEngineCheck(p, allProducts, mlMappings, localDuplicates, dictionaries, rules);
+      
+      const catalogStatus: CatalogStatus = {
+        qualityScore: qCheck.catalogQualityScore,
+        qualityLevel: qCheck.result,
+        publicationStatus: p.status,
+        publicationReason: qCheck.motives?.join(', ') || '',
+        isPublicable: qCheck.isPublicable,
+        isBlocked: qCheck.isBlocked,
+        homologationStatus: hStatus.status,
+        duplicateStatus: qCheck.validators.duplicate.result,
+        brandStatus: qCheck.validators.brand.result,
+        categoryStatus: qCheck.validators.category.result,
+        qualityCatalogScore: qCheck.catalogQualityScore,
+        qualityImportScore: qCheck.importQualityScore,
+        lastCalculated: p.updated_at || new Date().toISOString(),
+        engineVersion: qCheck.engineVersion || '2.0.0',
+        validators: qCheck.validators,
+        motives: qCheck.motives || [],
+        capApplied: qCheck.capApplied || null
+      };
 
-  const completeCount = productsWithHStatus.filter(p => p.hStatus.status === 'completa').length;
-  const partialCount = productsWithHStatus.filter(p => p.hStatus.status === 'parcial').length;
-  const revisionCount = productsWithHStatus.filter(p => p.hStatus.status === 'revision').length;
+      return {
+        ...p,
+        hStatus,
+        qCheck,
+        catalogStatus
+      };
+    });
+  }, [allProducts, mlMappings, localDuplicates, dictionaries, rules]);
+
+  const activeProduct = useMemo(() => {
+    if (!selectedProduct) return null;
+    return productsWithHStatus.find(p => p.id === selectedProduct.id) || null;
+  }, [selectedProduct, productsWithHStatus]);
+
+  // Filter products list client-side (Problem 2)
+  const filteredProducts = useMemo(() => {
+    return productsWithHStatus.filter(p => {
+      // 1. Scope Filter (Fase 10)
+      if (showScopeFilter === 'pending' && p.status !== 'Curation Queue') return false;
+      if (showScopeFilter === 'homologated' && p.status === 'Curation Queue') return false;
+      if (showScopeFilter === 'published' && p.status !== 'published') return false;
+
+      // 2. Homologation Status / Quality Engine Filter (Fase 8)
+      if (homologationFilter !== 'all') {
+        if (homologationFilter === 'completo' && p.catalogStatus.homologationStatus !== 'completa') return false;
+        if (homologationFilter === 'parcial' && p.catalogStatus.homologationStatus !== 'parcial') return false;
+        if (homologationFilter === 'revision' && p.catalogStatus.homologationStatus !== 'revision') return false;
+        if (homologationFilter === 'sin_homologar' && p.catalogStatus.homologationStatus !== 'sin_homologar') return false;
+        if (homologationFilter === 'conflictos' && !p.is_exception && !p.has_conflict) return false;
+        
+        // Quality Engine specific filters (Fase 8)
+        if (homologationFilter === 'excelente' && p.catalogStatus.qualityLevel !== 'Excelente') return false;
+        if (homologationFilter === 'alta' && p.catalogStatus.qualityLevel !== 'Alta') return false;
+        if (homologationFilter === 'media' && p.catalogStatus.qualityLevel !== 'Media') return false;
+        if (homologationFilter === 'baja' && p.catalogStatus.qualityLevel !== 'Baja') return false;
+        if (homologationFilter === 'critica' && p.catalogStatus.qualityLevel !== 'Crítica') return false;
+        
+        if (homologationFilter === 'publicables' && !p.catalogStatus.isPublicable) return false;
+        if (homologationFilter === 'bloqueados' && !p.catalogStatus.isBlocked) return false;
+        if (homologationFilter === 'duplicados' && p.catalogStatus.duplicateStatus !== 'Duplicado') return false;
+        if (homologationFilter === 'marca_conflicto' && p.catalogStatus.brandStatus !== 'Conflicto') return false;
+        if (homologationFilter === 'categoria_conflicto' && p.catalogStatus.categoryStatus !== 'Conflicto') return false;
+        
+        if (homologationFilter === 'ia' && p.hStatus.origen !== 'ia') return false;
+        if (homologationFilter === 'reglas' && p.hStatus.origen !== 'ml_rule' && p.hStatus.origen !== 'dict_rule' && p.hStatus.origen !== 'keyword_rule' && p.hStatus.origen !== 'vendor_rule') return false;
+        if (homologationFilter === 'manuales' && p.hStatus.origen !== 'manual') return false;
+        
+        // Hotfix UI new filters (Filtros nuevos)
+        if (homologationFilter === 'sin_marca_collectibles' && (p.brand_id || p.brand_name)) return false;
+        if (homologationFilter === 'sin_categoria_collectibles' && p.category_id) return false;
+        if (homologationFilter === 'marca_collectibles_asignada' && !p.brand_id && !p.brand_name) return false;
+        if (homologationFilter === 'categoria_collectibles_asignada' && !p.category_id) return false;
+        if (homologationFilter === 'conflicto_licencia') {
+          const assignedBrandName = p.brand_name || '';
+          if (!assignedBrandName || !LICENSES_LIST.includes(assignedBrandName.toLowerCase())) return false;
+        }
+        if (homologationFilter === 'conflicto_fabricante' && !p.hStatus.detection.detectedBrand) return false;
+        if (homologationFilter === 'publicados_inconsistencias') {
+          const qualifies = p.catalogStatus.isPublicable;
+          if (p.status !== 'published' || qualifies) return false;
+        }
+      }
+
+      // 3. Dropdown Filters
+      if (vendorFilter !== 'all' && p.vendor_id !== vendorFilter) return false;
+      if (brandFilter !== 'all' && p.ml_brand !== brandFilter) return false;
+      if (mlCategoryFilter !== 'all' && p.ml_category !== mlCategoryFilter) return false;
+      if (collectiblesCategoryFilter !== 'all' && p.suggested_category_id !== collectiblesCategoryFilter) return false;
+      
+      // 4. Confidence Filter
+      if (confidenceFilter === 'high' && p.confidence < 80) return false;
+      if (confidenceFilter === 'medium' && (p.confidence < 50 || p.confidence >= 80)) return false;
+      if (confidenceFilter === 'low' && p.confidence >= 50) return false;
+
+      // 5. Source Filter
+      if (sourceFilter === 'mercadolibre' && p.ml_item_id === null) return false;
+
+      // 6. Search Text
+      if (searchQuery.trim()) {
+        const search = searchQuery.toLowerCase();
+        const matchesSearch = 
+          (p.title || '').toLowerCase().includes(search) || 
+          (p.sku || '').toLowerCase().includes(search) || 
+          (p.ml_brand || '').toLowerCase().includes(search);
+        if (!matchesSearch) return false;
+      }
+
+      return true;
+    });
+  }, [productsWithHStatus, showScopeFilter, homologationFilter, vendorFilter, brandFilter, mlCategoryFilter, collectiblesCategoryFilter, confidenceFilter, sourceFilter, searchQuery]);
+
+  // Sort products client-side
+  const sortedProducts = useMemo(() => {
+    return [...filteredProducts].sort((a, b) => {
+      if (!sortField) return 0;
+      let valA = '';
+      let valB = '';
+
+      if (sortField === 'title') {
+        valA = a.title || '';
+        valB = b.title || '';
+      } else if (sortField === 'brand') {
+        valA = a.ml_brand || '';
+        valB = b.ml_brand || '';
+      } else if (sortField === 'category') {
+        valA = a.suggested_category_name || '';
+        valB = b.suggested_category_name || '';
+      } else if (sortField === 'vendor') {
+        valA = a.vendor_name || '';
+        valB = b.vendor_name || '';
+      } else if (sortField === 'confidence') {
+        return sortDirection === 'asc' ? a.confidence - b.confidence : b.confidence - a.confidence;
+      }
+
+      return sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+    });
+  }, [filteredProducts, sortField, sortDirection]);
+
+  // Pagination slice
+  const paginatedProducts = useMemo(() => {
+    return sortedProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  }, [sortedProducts, currentPage, itemsPerPage]);
+
+  const totalPages = useMemo(() => {
+    return Math.ceil(sortedProducts.length / itemsPerPage);
+  }, [sortedProducts, itemsPerPage]);
+
+  // Grouping products list client-side (Problem 3)
+  const groupedProducts = useMemo(() => {
+    if (groupBy === 'none') return null;
+    const groups: Record<string, any[]> = {};
+    
+    sortedProducts.forEach(p => {
+      let key = 'Sin agrupar';
+      if (groupBy === 'vendor') key = p.vendor_name || 'Desconocido';
+      else if (groupBy === 'brand') key = p.ml_brand || 'Sin marca';
+      else if (groupBy === 'ml_category') key = p.ml_category || 'Sin categoría ML';
+      else if (groupBy === 'category') key = p.suggested_category_name || 'Sin clasificar';
+      
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(p);
+    });
+    return groups;
+  }, [sortedProducts, groupBy]);
+
+  const completeCount = productsWithHStatus.filter(p => p.catalogStatus.homologationStatus === 'completa').length;
+  const partialCount = productsWithHStatus.filter(p => p.catalogStatus.homologationStatus === 'parcial').length;
+  const revisionCount = productsWithHStatus.filter(p => p.catalogStatus.homologationStatus === 'revision').length;
   
-  const publicablesCount = productsWithHStatus.filter(p => p.hStatus.isPublicable).length;
+  const publicablesCount = productsWithHStatus.filter(p => p.catalogStatus.isPublicable).length;
 
   const catalogQuality = allProducts.length > 0 
-    ? Math.round(productsWithHStatus.reduce((acc, p) => acc + p.hStatus.qualityScore, 0) / allProducts.length)
+    ? Math.round(productsWithHStatus.reduce((acc, p) => acc + p.catalogStatus.qualityScore, 0) / allProducts.length)
     : 100;
 
   const dashboardStats = {
@@ -1541,15 +1649,15 @@ export default function AdminCatalogCenter() {
   };
 
   // Quality Engine stats aggregates (Fase 7)
-  const qExcellentCount = productsWithHStatus.filter(p => p.qCheck.result === 'Excelente').length;
-  const qAltaCount = productsWithHStatus.filter(p => p.qCheck.result === 'Alta').length;
-  const qMediaCount = productsWithHStatus.filter(p => p.qCheck.result === 'Media').length;
-  const qBajaCount = productsWithHStatus.filter(p => p.qCheck.result === 'Baja').length;
-  const qCriticaCount = productsWithHStatus.filter(p => p.qCheck.result === 'Crítica').length;
+  const qExcellentCount = productsWithHStatus.filter(p => p.catalogStatus.qualityLevel === 'Excelente').length;
+  const qAltaCount = productsWithHStatus.filter(p => p.catalogStatus.qualityLevel === 'Alta').length;
+  const qMediaCount = productsWithHStatus.filter(p => p.catalogStatus.qualityLevel === 'Media').length;
+  const qBajaCount = productsWithHStatus.filter(p => p.catalogStatus.qualityLevel === 'Baja').length;
+  const qCriticaCount = productsWithHStatus.filter(p => p.catalogStatus.qualityLevel === 'Crítica').length;
 
-  const qPublicablesCount = productsWithHStatus.filter(p => p.qCheck.isPublicable).length;
-  const qNoPublicablesCount = productsWithHStatus.filter(p => !p.qCheck.isPublicable).length;
-  const qBlockedCount = productsWithHStatus.filter(p => p.qCheck.isBlocked).length;
+  const qPublicablesCount = productsWithHStatus.filter(p => p.catalogStatus.isPublicable).length;
+  const qNoPublicablesCount = productsWithHStatus.filter(p => !p.catalogStatus.isPublicable).length;
+  const qBlockedCount = productsWithHStatus.filter(p => p.catalogStatus.isBlocked).length;
   
   const noBrandCount = productsWithHStatus.filter(p => !p.brand_id).length;
   const noCategoryCount = productsWithHStatus.filter(p => !p.category_id).length;
@@ -1565,21 +1673,20 @@ export default function AdminCatalogCenter() {
   
   const publishedWithInconsistenciesCount = productsWithHStatus.filter(p => {
     if (p.status !== 'published') return false;
-    const qualifies = p.hStatus.isPublicable;
-    return !qualifies;
+    return !p.catalogStatus.isPublicable;
   }).length;
 
-  const homologadosCompletosCount = productsWithHStatus.filter(p => p.hStatus.status === 'completa').length;
-  const parcialmenteHomologadosCount = productsWithHStatus.filter(p => p.hStatus.status === 'parcial').length;
-  const sinHomologarCount = productsWithHStatus.filter(p => p.hStatus.status === 'sin_homologar').length;
+  const homologadosCompletosCount = productsWithHStatus.filter(p => p.catalogStatus.homologationStatus === 'completa').length;
+  const parcialmenteHomologadosCount = productsWithHStatus.filter(p => p.catalogStatus.homologationStatus === 'parcial').length;
+  const sinHomologarCount = productsWithHStatus.filter(p => p.catalogStatus.homologationStatus === 'sin_homologar').length;
   
-  const qBrandConflicts = productsWithHStatus.filter(p => p.qCheck.validators.brand.result === 'Conflicto').length;
-  const qCategoryConflicts = productsWithHStatus.filter(p => p.qCheck.validators.category.result === 'Conflicto').length;
-  const qRuleConflicts = productsWithHStatus.filter(p => p.qCheck.validators.rules.result === 'Conflicto').length;
-  const qDuplicatesCount = productsWithHStatus.filter(p => p.qCheck.validators.duplicate.result === 'Duplicado').length;
+  const qBrandConflicts = productsWithHStatus.filter(p => p.catalogStatus.brandStatus === 'Conflicto').length;
+  const qCategoryConflicts = productsWithHStatus.filter(p => p.catalogStatus.categoryStatus === 'Conflicto').length;
+  const qRuleConflicts = productsWithHStatus.filter(p => p.catalogStatus.validators.rules.result === 'Conflicto').length;
+  const qDuplicatesCount = productsWithHStatus.filter(p => p.catalogStatus.duplicateStatus === 'Duplicado').length;
 
   const qAverageScore = allProducts.length > 0
-    ? Math.round(productsWithHStatus.reduce((acc, p) => acc + p.qCheck.qualityScore, 0) / allProducts.length)
+    ? Math.round(productsWithHStatus.reduce((acc, p) => acc + p.catalogStatus.qualityScore, 0) / allProducts.length)
     : 100;
 
   async function handleDeleteRule(id: string) {
@@ -1671,17 +1778,17 @@ export default function AdminCatalogCenter() {
         {/* Marca Collectibles */}
         <td className="px-6 py-4 font-bold" onClick={e => e.stopPropagation()}>
           {(() => {
-            const hStatus = calculateHomologationStatus(p, mlMappings, localDuplicates);
+            const isBrandConflict = p.catalogStatus.brandStatus === 'Conflicto';
             const assignedBrand = p.brand_name || '';
             if (assignedBrand) {
-              if (hStatus.brandInconsistency) {
+              if (isBrandConflict) {
                 return (
                   <div className="relative group">
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-50 text-red-700 font-extrabold text-[11px] border border-red-200 cursor-help">
                       {assignedBrand} <AlertTriangle className="w-3 h-3 text-red-500" />
                     </span>
                     <div className="absolute z-30 hidden group-hover:block bg-slate-900 border border-slate-800 text-white rounded-xl p-3 shadow-xl w-60 -top-2 right-full mr-2 text-[11px] pointer-events-none text-left font-medium">
-                      {hStatus.inconsistencyReason}
+                      {p.catalogStatus.validators.brand.error}
                     </div>
                   </div>
                 );
@@ -1729,102 +1836,91 @@ export default function AdminCatalogCenter() {
         </td>
         
         <td className="px-6 py-4">
-          {(() => {
-            const hStatus = calculateHomologationStatus(p, mlMappings, localDuplicates);
-            return (
-              <span className={`inline-flex px-2.5 py-1 rounded-lg text-[10px] font-black border ${hStatus.origenColor}`}>
-                {hStatus.origenBadge}
-              </span>
-            );
-          })()}
+          <span className={`inline-flex px-2.5 py-1 rounded-lg text-[10px] font-black border ${p.hStatus.origenColor}`}>
+            {p.hStatus.origenBadge}
+          </span>
         </td>
 
         {/* Quality Score / Homologación */}
         <td className="px-6 py-4 relative group" onClick={e => e.stopPropagation()}>
-          {(() => {
-            const hStatus = calculateHomologationStatus(p, mlMappings, localDuplicates);
-            return (
-              <div className="flex items-center gap-1.5 cursor-help">
-                <span className="font-mono font-black text-slate-800 text-[11px]">{hStatus.qualityScore}%</span>
-                <div>
-                  {hStatus.status === 'completa' && <span className="bg-green-50 border border-green-200 text-green-700 text-[10px] font-black px-2 py-0.5 rounded">🟢 Completa</span>}
-                  {hStatus.status === 'parcial' && <span className="bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-black px-2 py-0.5 rounded">🟡 Parcial</span>}
-                  {hStatus.status === 'revision' && <span className="bg-orange-50 border border-orange-200 text-orange-700 text-[10px] font-black px-2 py-0.5 rounded">🟠 Revisar</span>}
-                  {hStatus.status === 'sin_homologar' && <span className="bg-red-50 border border-red-200 text-red-700 text-[10px] font-black px-2 py-0.5 rounded">🔴 Sin homologar</span>}
-                </div>
-                
-                {/* Custom Tooltip */}
-                <div className="absolute z-30 hidden group-hover:block bg-slate-900 border border-slate-800 text-white rounded-xl p-3.5 shadow-xl w-64 -top-2 right-full mr-2 space-y-2 text-[11px] pointer-events-none text-left">
-                  <span className="font-extrabold block border-b border-slate-800 pb-1 text-slate-450 tracking-wider uppercase text-[9px]">Validación Collectibles</span>
-                  
-                  <div className="flex justify-between items-center font-medium">
-                    <span className="text-slate-350">Categoría homologada</span>
-                    <span className={p.category_id ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
-                      {p.category_id ? '✔ Asignada' : '✗ Sin asignar'}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-center font-medium">
-                    <span className="text-slate-350">Marca homologada</span>
-                    <span className={(p.brand_id && !hStatus.brandInconsistency) ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
-                      {(p.brand_id && !hStatus.brandInconsistency) ? '✔ Asignada' : '✗ Sin asignar'}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-center font-medium">
-                    <span className="text-slate-350">Sin conflictos</span>
-                    <span className={(!p.is_exception && !p.has_conflict && !hStatus.brandInconsistency) ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
-                      {(!p.is_exception && !p.has_conflict && !hStatus.brandInconsistency) ? '✔ Coherente' : '✗ Con conflicto'}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-center font-medium">
-                    <span className="text-slate-350">Sin duplicados</span>
-                    <span className={hStatus.details[4].success ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
-                      {hStatus.details[4].success ? '✔ Único' : '✗ Duplicado'}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-center font-medium border-t border-slate-800/50 pt-1.5 pb-1">
-                    <span className="text-slate-300 font-bold">Publicable</span>
-                    <span className={hStatus.isPublicable ? 'text-green-400 font-black' : 'text-amber-400 font-black'}>
-                      {hStatus.isPublicable ? '✔ Sí' : '✗ No'}
-                    </span>
-                  </div>
-
-                  <span className="font-extrabold block border-b border-slate-800 pb-1 pt-1 text-slate-450 tracking-wider uppercase text-[9px]">Importación ML</span>
-
-                  <div className="flex justify-between items-center font-medium">
-                    <span className="text-slate-350">Categoría ML</span>
-                    <span className={p.ml_category ? 'text-green-400 font-bold' : 'text-amber-400 font-bold'}>
-                      {p.ml_category ? '✔ Detectada' : '⚠ No detectada'}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-center font-medium">
-                    <span className="text-slate-350">Marca ML</span>
-                    <span className={(p.ml_brand && p.ml_brand !== '—') ? 'text-green-400 font-bold' : 'text-amber-400 font-bold'}>
-                      {(p.ml_brand && p.ml_brand !== '—') ? '✔ Detectada' : '⚠ No detectada'}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-center font-medium border-b border-slate-800/50 pb-1.5">
-                    <span className="text-slate-350">Confidence</span>
-                    <span className={(p.confidence || 0) >= 70 ? 'text-green-400 font-bold' : 'text-amber-400 font-bold'}>
-                      {p.confidence ? `${p.confidence}%` : '0%'}
-                    </span>
-                  </div>
-                </div>
+          <div className="flex items-center gap-1.5 cursor-help">
+            <span className="font-mono font-black text-slate-800 text-[11px]">{p.catalogStatus.qualityScore}%</span>
+            <div>
+              {p.catalogStatus.homologationStatus === 'completa' && <span className="bg-green-50 border border-green-200 text-green-700 text-[10px] font-black px-2 py-0.5 rounded">🟢 Completa</span>}
+              {p.catalogStatus.homologationStatus === 'parcial' && <span className="bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-black px-2 py-0.5 rounded">🟡 Parcial</span>}
+              {p.catalogStatus.homologationStatus === 'revision' && <span className="bg-orange-50 border border-orange-200 text-orange-700 text-[10px] font-black px-2 py-0.5 rounded">🟠 Revisar</span>}
+              {p.catalogStatus.homologationStatus === 'sin_homologar' && <span className="bg-red-50 border border-red-200 text-red-700 text-[10px] font-black px-2 py-0.5 rounded">🔴 Sin homologar</span>}
+            </div>
+            
+            {/* Custom Tooltip */}
+            <div className="absolute z-30 hidden group-hover:block bg-slate-900 border border-slate-800 text-white rounded-xl p-3.5 shadow-xl w-64 -top-2 right-full mr-2 space-y-2 text-[11px] pointer-events-none text-left">
+              <span className="font-extrabold block border-b border-slate-800 pb-1 text-slate-450 tracking-wider uppercase text-[9px]">Validación Collectibles</span>
+              
+              <div className="flex justify-between items-center font-medium">
+                <span className="text-slate-350">Categoría homologada</span>
+                <span className={p.category_id ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
+                  {p.category_id ? '✔ Asignada' : '✗ Sin asignar'}
+                </span>
               </div>
-            );
-          })()}
+
+              <div className="flex justify-between items-center font-medium">
+                <span className="text-slate-350">Marca homologada</span>
+                <span className={(p.brand_id && p.catalogStatus.brandStatus === 'Consistente') ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
+                  {(p.brand_id && p.catalogStatus.brandStatus === 'Consistente') ? '✔ Asignada' : '✗ Sin asignar'}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center font-medium">
+                <span className="text-slate-350">Sin conflictos</span>
+                <span className={p.catalogStatus.validators.rules.result !== 'Conflicto' ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
+                  {p.catalogStatus.validators.rules.result !== 'Conflicto' ? '✔ Coherente' : '✗ Con conflicto'}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center font-medium">
+                <span className="text-slate-350">Sin duplicados</span>
+                <span className={p.catalogStatus.validators.duplicate.result !== 'Duplicado' ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
+                  {p.catalogStatus.validators.duplicate.result !== 'Duplicado' ? '✔ Único' : '✗ Duplicado'}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center font-medium border-t border-slate-800/50 pt-1.5 pb-1">
+                <span className="text-slate-300 font-bold">Publicable</span>
+                <span className={p.catalogStatus.isPublicable ? 'text-green-400 font-black' : 'text-amber-400 font-black'}>
+                  {p.catalogStatus.isPublicable ? '✔ Sí' : '✗ No'}
+                </span>
+              </div>
+
+              <span className="font-extrabold block border-b border-slate-800 pb-1 pt-1 text-slate-450 tracking-wider uppercase text-[9px]">Importación ML</span>
+
+              <div className="flex justify-between items-center font-medium">
+                <span className="text-slate-350">Categoría ML</span>
+                <span className={p.ml_category ? 'text-green-400 font-bold' : 'text-amber-400 font-bold'}>
+                  {p.ml_category ? '✔ Detectada' : '⚠ No detectada'}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center font-medium">
+                <span className="text-slate-350">Marca ML</span>
+                <span className={(p.ml_brand && p.ml_brand !== '—') ? 'text-green-400 font-bold' : 'text-amber-400 font-bold'}>
+                  {(p.ml_brand && p.ml_brand !== '—') ? '✔ Detectada' : '⚠ No detectada'}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center font-medium border-b border-slate-800/50 pb-1.5">
+                <span className="text-slate-350">Confidence</span>
+                <span className={(p.confidence || 0) >= 70 ? 'text-green-400 font-bold' : 'text-amber-400 font-bold'}>
+                  {p.confidence ? `${p.confidence}%` : '0%'}
+                </span>
+              </div>
+            </div>
+          </div>
         </td>
 
         {/* Estado publicación */}
         <td className="px-6 py-4">
           {(() => {
-            const hStatus = calculateHomologationStatus(p, mlMappings, localDuplicates);
-            const qualifies = hStatus.isPublicable;
+            const qualifies = p.catalogStatus.isPublicable;
             
             if (p.status === 'published') {
               if (qualifies) {
@@ -2391,33 +2487,20 @@ export default function AdminCatalogCenter() {
 
                  {/* Quality Engine & Datos Oficiales Collectibles (Fase 5 & 6) */}
                 {(() => {
-                  const currentMockProduct = {
-                    ...selectedProduct,
-                    title: sidePanelData.title,
-                    category_id: sidePanelData.categoryId || null,
-                    brand_id: sidePanelData.brandId || null,
-                    brand_name: brandsList.find(b => b.id === sidePanelData.brandId)?.name || null
-                  };
+                  const catalogStatus = activeProduct.catalogStatus;
+                  const qCheck = activeProduct.qCheck;
+                  const hStatus = activeProduct.hStatus;
                   
-                  const qCheck = runQualityEngineCheck(
-                    currentMockProduct,
-                    allProducts,
-                    mlMappings,
-                    localDuplicates,
-                    dictionaries,
-                    rules
-                  );
-                  
-                  const assignedBrand = currentMockProduct.brand_name || 'Sin marca';
+                  const assignedBrand = brandsList.find(b => b.id === sidePanelData.brandId)?.name || 'Sin marca';
                   const assignedCatName = categoriesList.find(c => c.id === sidePanelData.categoryId)?.name || 'Sin categoría';
 
                   return (
                     <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-3">
                       <div className="flex justify-between items-center border-b pb-2 border-slate-200">
                         <span className="text-[10px] text-slate-500 font-black uppercase tracking-wider">Datos Oficiales Collectibles</span>
-                        {qCheck.isBlocked ? (
+                        {catalogStatus.isBlocked ? (
                           <span className="px-2 py-0.5 rounded text-[8px] bg-red-50 text-red-700 font-extrabold uppercase border border-red-200">🔒 Bloqueado</span>
-                        ) : qCheck.isPublicable ? (
+                        ) : catalogStatus.isPublicable ? (
                           <span className="px-2 py-0.5 rounded text-[8px] bg-green-50 text-green-700 font-extrabold uppercase border border-green-200">✓ Publicable</span>
                         ) : (
                           <span className="px-2 py-0.5 rounded text-[8px] bg-amber-50 text-amber-700 font-extrabold uppercase border border-amber-200">⚠ No Publicable</span>
@@ -2430,46 +2513,47 @@ export default function AdminCatalogCenter() {
                           <span className="text-[8px] text-slate-400 font-bold uppercase block">Marca Asignada</span>
                           <span className="font-extrabold text-slate-900 block truncate">{assignedBrand}</span>
                           <span className={`text-[9px] font-black ${
-                            qCheck.validators.brand.result === 'Consistente' ? 'text-green-600' :
-                            qCheck.validators.brand.result === 'Incompleto' ? 'text-red-500' : 'text-red-500'
+                            catalogStatus.brandStatus === 'Consistente' ? 'text-green-600' :
+                            catalogStatus.brandStatus === 'Incompleto' ? 'text-red-500' : 'text-red-500'
                           }`}>
-                            {qCheck.validators.brand.result === 'Consistente' ? '✔ Correcto' :
-                             qCheck.validators.brand.result === 'Incompleto' ? '✗ Sin asignar' : '❌ Conflicto'}
+                            {catalogStatus.brandStatus === 'Consistente' ? '✔ Correcto' :
+                             catalogStatus.brandStatus === 'Incompleto' ? '✗ Sin asignar' : '❌ Conflicto'}
                           </span>
                         </div>
                         <div className="bg-white p-2 rounded-lg border border-slate-100">
                           <span className="text-[8px] text-slate-400 font-bold uppercase block">Categoría Asignada</span>
                           <span className="font-extrabold text-indigo-600 block truncate" title={assignedCatName}>{assignedCatName}</span>
                           <span className={`text-[9px] font-black ${
-                            qCheck.validators.category.result === 'Consistente' ? 'text-green-600' :
-                            qCheck.validators.category.result === 'Incompleto' ? 'text-red-500' : 'text-red-500'
+                            catalogStatus.categoryStatus === 'Consistente' ? 'text-green-600' :
+                            catalogStatus.categoryStatus === 'Incompleto' ? 'text-red-500' : 'text-red-500'
                           }`}>
-                            {qCheck.validators.category.result === 'Consistente' ? '✔ Correcto' :
-                             qCheck.validators.category.result === 'Incompleto' ? '✗ Sin asignar' : '❌ Conflicto'}
+                            {catalogStatus.categoryStatus === 'Consistente' ? '✔ Correcto' :
+                             catalogStatus.categoryStatus === 'Incompleto' ? '✗ Sin asignar' : '❌ Conflicto'}
                           </span>
                         </div>
                       </div>
+                      
                       <div className="bg-slate-900 text-white rounded-xl p-3.5 space-y-2.5 border border-slate-800 shadow-lg">
                         <div className="flex justify-between items-center">
                           <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-widest">Calidad del Catálogo</span>
                           <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
-                            qCheck.result === 'Excelente' ? 'bg-green-500/20 text-green-400' :
-                            qCheck.result === 'Alta' ? 'bg-emerald-500/20 text-emerald-400' :
-                            qCheck.result === 'Media' ? 'bg-amber-500/20 text-amber-400' :
-                            qCheck.result === 'Baja' ? 'bg-orange-500/20 text-orange-400' :
+                            catalogStatus.qualityLevel === 'Excelente' ? 'bg-green-500/20 text-green-400' :
+                            catalogStatus.qualityLevel === 'Alta' ? 'bg-emerald-500/20 text-emerald-400' :
+                            catalogStatus.qualityLevel === 'Media' ? 'bg-amber-500/20 text-amber-400' :
+                            catalogStatus.qualityLevel === 'Baja' ? 'bg-orange-500/20 text-orange-400' :
                             'bg-red-500/20 text-red-400'
-                          }`}>{qCheck.result.toUpperCase()}</span>
+                          }`}>{catalogStatus.qualityLevel.toUpperCase()}</span>
                         </div>
                         <div className="flex items-baseline gap-1.5 font-black text-white">
-                          <span className="text-3xl font-black tracking-tight">{qCheck.catalogQualityScore}%</span>
+                          <span className="text-3xl font-black tracking-tight">{catalogStatus.qualityCatalogScore}%</span>
                           <span className="text-[9px] text-slate-450 font-bold uppercase tracking-wider">Score Catálogo</span>
                         </div>
 
                         {/* Breakdown list for Catalog */}
                         <div className="grid grid-cols-2 gap-1.5 pt-2 border-t border-slate-800 text-[10px] font-bold text-slate-355">
-                          {Object.entries(qCheck.validators)
+                          {Object.entries(catalogStatus.validators)
                             .filter(([key]) => ['brand', 'category', 'rules', 'dictionary', 'consistency', 'similar', 'duplicate'].includes(key))
-                            .map(([key, validator]) => (
+                            .map(([key, validator]: [string, any]) => (
                               <div key={key} className="flex justify-between items-center bg-slate-950/40 p-1.5 rounded border border-slate-805/40">
                                 <span>{validator.name.replace('Validador de ', '')}</span>
                                 <span className={validator.score > 0 ? 'text-green-400' : 'text-red-450'}>
@@ -2485,22 +2569,22 @@ export default function AdminCatalogCenter() {
                         <div className="flex justify-between items-center">
                           <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-widest">Calidad de Importación</span>
                           <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
-                            qCheck.importQualityScore >= 90 ? 'bg-green-500/20 text-green-400' :
-                            qCheck.importQualityScore >= 70 ? 'bg-emerald-500/20 text-emerald-400' :
-                            qCheck.importQualityScore >= 50 ? 'bg-amber-500/20 text-amber-400' :
+                            catalogStatus.qualityImportScore >= 90 ? 'bg-green-500/20 text-green-400' :
+                            catalogStatus.qualityImportScore >= 70 ? 'bg-emerald-500/20 text-emerald-400' :
+                            catalogStatus.qualityImportScore >= 50 ? 'bg-amber-500/20 text-amber-400' :
                             'bg-red-500/20 text-red-400'
-                          }`}>{qCheck.importQualityScore >= 90 ? 'EXCELENTE' : qCheck.importQualityScore >= 70 ? 'ALTA' : qCheck.importQualityScore >= 50 ? 'MEDIA' : 'CRÍTICA'}</span>
+                          }`}>{catalogStatus.qualityImportScore >= 90 ? 'EXCELENTE' : catalogStatus.qualityImportScore >= 70 ? 'ALTA' : catalogStatus.qualityImportScore >= 50 ? 'MEDIA' : 'CRÍTICA'}</span>
                         </div>
                         <div className="flex items-baseline gap-1.5 font-black text-white">
-                          <span className="text-3xl font-black tracking-tight">{qCheck.importQualityScore}%</span>
+                          <span className="text-3xl font-black tracking-tight">{catalogStatus.qualityImportScore}%</span>
                           <span className="text-[9px] text-slate-450 font-bold uppercase tracking-wider">Score Importación</span>
                         </div>
 
                         {/* Breakdown list for Import */}
                         <div className="grid grid-cols-2 gap-1.5 pt-2 border-t border-slate-800 text-[10px] font-bold text-slate-355">
-                          {Object.entries(qCheck.validators)
+                          {Object.entries(catalogStatus.validators)
                             .filter(([key]) => ['mlCategory', 'mlBrand', 'iaConfidence', 'metadata', 'vendor'].includes(key))
-                            .map(([key, validator]) => (
+                            .map(([key, validator]: [string, any]) => (
                               <div key={key} className="flex justify-between items-center bg-slate-950/40 p-1.5 rounded border border-slate-805/40">
                                 <span>{validator.name}</span>
                                 <span className={validator.score > 0 ? 'text-green-400' : 'text-amber-450'}>
@@ -2510,6 +2594,42 @@ export default function AdminCatalogCenter() {
                             ))}
                         </div>
                       </div>
+
+                      {/* Debug Mode Panel (Fase 9) */}
+                      <details className="group border border-slate-700/30 rounded-xl bg-slate-900 overflow-hidden transition-all duration-300 shadow-md">
+                        <summary className="flex justify-between items-center p-2.5 text-xs font-bold text-slate-300 cursor-pointer hover:bg-slate-800 select-none outline-none">
+                          <span className="flex items-center gap-1.5">
+                            <Settings className="w-3.5 h-3.5 text-indigo-405" /> Modo Debug (CatalogStatus JSON)
+                          </span>
+                          <ChevronDown className="w-4 h-4 text-slate-400 group-open:rotate-180 transition-transform" />
+                        </summary>
+                        <div className="p-3 border-t border-slate-800 bg-slate-950 text-[10px] space-y-2 text-slate-300 font-mono overflow-x-auto max-h-60">
+                          <div className="flex justify-between items-center text-slate-400 border-b border-slate-800 pb-1.5 mb-1.5 font-sans">
+                            <span>Origen: <strong className="text-indigo-400">Quality Engine V2</strong></span>
+                            <span>Versión: <strong>{catalogStatus.engineVersion}</strong></span>
+                          </div>
+                          <div className="text-slate-400 mb-1.5 font-sans">
+                            Cálculo: <strong>{new Date(catalogStatus.lastCalculated).toLocaleString()}</strong>
+                          </div>
+                          <pre className="text-indigo-300 p-1.5 bg-slate-900/50 rounded border border-slate-800 leading-normal">
+                            {JSON.stringify({
+                              qualityScore: catalogStatus.qualityScore,
+                              qualityLevel: catalogStatus.qualityLevel,
+                              publicationStatus: catalogStatus.publicationStatus,
+                              publicationReason: catalogStatus.publicationReason,
+                              isPublicable: catalogStatus.isPublicable,
+                              isBlocked: catalogStatus.isBlocked,
+                              homologationStatus: catalogStatus.homologationStatus,
+                              duplicateStatus: catalogStatus.duplicateStatus,
+                              brandStatus: catalogStatus.brandStatus,
+                              categoryStatus: catalogStatus.categoryStatus,
+                              qualityCatalogScore: catalogStatus.qualityCatalogScore,
+                              qualityImportScore: catalogStatus.qualityImportScore,
+                              capApplied: catalogStatus.capApplied
+                            }, null, 2)}
+                          </pre>
+                        </div>
+                      </details>
 
                       {/* Score explanation accordion (Fase 6) */}
                       <details className="group border border-slate-205 rounded-xl bg-white overflow-hidden transition-all duration-300 shadow-sm">
@@ -2521,9 +2641,9 @@ export default function AdminCatalogCenter() {
                           {/* Catalog Validators Explanations */}
                           <div className="space-y-1.5">
                             <span className="text-[9px] text-slate-450 font-black uppercase tracking-wider block mb-1">Métricas de Catálogo</span>
-                            {Object.entries(qCheck.validators)
+                            {Object.entries(catalogStatus.validators)
                               .filter(([key]) => ['brand', 'category', 'rules', 'dictionary', 'consistency', 'similar', 'duplicate'].includes(key))
-                              .map(([key, val]) => (
+                              .map(([key, val]: [string, any]) => (
                                 <div key={key} className="flex justify-between items-start border-b border-slate-100/50 pb-1.5 last:border-0 last:pb-0">
                                   <div>
                                     <span className="text-slate-900 block font-bold">{val.name}</span>
@@ -2539,11 +2659,11 @@ export default function AdminCatalogCenter() {
                               ))}
                             <div className="pt-2 flex justify-between items-center text-xs font-black text-slate-900 border-t border-slate-200">
                               <span>Total Catálogo</span>
-                              <span className="text-indigo-650 font-black">{qCheck.catalogQualityScore} / 100</span>
+                              <span className="text-indigo-650 font-black">{catalogStatus.qualityCatalogScore} / 100</span>
                             </div>
-                            {qCheck.capApplied && (
+                            {catalogStatus.capApplied && (
                               <div className="mt-1 bg-red-50 border border-red-200 rounded px-2 py-1 text-[9.5px] font-bold text-red-700 leading-snug">
-                                ⚠️ Puntuación máxima limitada al {qCheck.capApplied} debido a conflictos o campos incompletos.
+                                ⚠️ Puntuación máxima limitada al {catalogStatus.capApplied} debido a conflictos o campos incompletos.
                               </div>
                             )}
                           </div>
@@ -2551,9 +2671,9 @@ export default function AdminCatalogCenter() {
                           {/* Import Validators Explanations */}
                           <div className="space-y-1.5 pt-2 border-t border-slate-200">
                             <span className="text-[9px] text-slate-450 font-black uppercase tracking-wider block mb-1">Métricas de Importación</span>
-                            {Object.entries(qCheck.validators)
+                            {Object.entries(catalogStatus.validators)
                               .filter(([key]) => ['mlCategory', 'mlBrand', 'iaConfidence', 'metadata', 'vendor'].includes(key))
-                              .map(([key, val]) => (
+                              .map(([key, val]: [string, any]) => (
                                 <div key={key} className="flex justify-between items-start border-b border-slate-100/50 pb-1.5 last:border-0 last:pb-0">
                                   <div>
                                     <span className="text-slate-900 block font-bold">{val.name}</span>
@@ -2569,7 +2689,7 @@ export default function AdminCatalogCenter() {
                               ))}
                             <div className="pt-2 flex justify-between items-center text-xs font-black text-slate-900 border-t border-slate-200">
                               <span>Total Importación</span>
-                              <span className="text-slate-600 font-black">{qCheck.importQualityScore} / 100</span>
+                              <span className="text-slate-600 font-black">{catalogStatus.qualityImportScore} / 100</span>
                             </div>
                           </div>
                         </div>
@@ -2578,6 +2698,7 @@ export default function AdminCatalogCenter() {
                       {/* Duplicate Engine Sidebar Card */}
                       {(() => {
                         const duplicateRelation = localDuplicates.find(d => 
+
                           d.product_id === selectedProduct.id || d.related_product_id === selectedProduct.id
                         );
                         if (!duplicateRelation) return null;
@@ -2840,10 +2961,28 @@ export default function AdminCatalogCenter() {
                   <button 
                     onClick={handleSaveSidePanelProduct}
                     disabled={actionLoading}
-                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-black transition-all flex items-center justify-center gap-1.5 shadow-md shadow-indigo-100 disabled:opacity-50"
+                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-black transition-all flex items-center justify-center gap-1.5 shadow-md shadow-indigo-100 disabled:opacity-50 text-xs"
                   >
                     <Save className="w-4 h-4" /> Guardar Catalogación
                   </button>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handlePublishSingle(selectedProduct)}
+                      disabled={actionLoading || !activeProduct?.catalogStatus.isPublicable || activeProduct?.catalogStatus.publicationStatus === 'published'}
+                      className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-100 disabled:text-slate-400 text-white rounded-lg font-black transition-all text-xs flex items-center justify-center gap-1 shadow-sm disabled:shadow-none"
+                    >
+                      <Check className="w-3.5 h-3.5" /> {activeProduct?.catalogStatus.publicationStatus === 'published' ? 'Publicado' : 'Publicar'}
+                    </button>
+                    
+                    <button
+                      onClick={() => handleBlockSingle(selectedProduct)}
+                      disabled={actionLoading || activeProduct?.catalogStatus.isPublicable}
+                      className="flex-1 py-2 bg-red-650 hover:bg-red-755 disabled:bg-slate-100 disabled:text-slate-400 text-white rounded-lg font-black transition-all text-xs flex items-center justify-center gap-1 shadow-sm disabled:shadow-none"
+                    >
+                      <X className="w-3.5 h-3.5" /> {(activeProduct?.catalogStatus.isBlocked || activeProduct?.catalogStatus.publicationStatus === 'draft' || activeProduct?.status === 'ignored') ? 'Bloqueado' : 'Bloquear'}
+                    </button>
+                  </div>
 
                   {showLearningPrompt && learningPromptData && (
                     <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3 mt-3 animate-fade-in text-center">

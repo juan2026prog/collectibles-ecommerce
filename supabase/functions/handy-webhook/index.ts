@@ -68,6 +68,46 @@ Deno.serve(async (req: Request) => {
         payment.order_id,
         webhookData.providerTransactionId || webhookData.transactionExternalId,
       );
+    } else if (webhookData.mappedStatus === "refunded") {
+      await supabaseAdmin
+        .from("orders")
+        .update({
+          status: "cancelada",
+          payment_status: "refunded",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", payment.order_id);
+
+      await supabaseAdmin
+        .from("order_suborders")
+        .update({
+          status: "refunded",
+          liquidation_status: "cancelled",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("parent_order_id", payment.order_id)
+        .neq("liquidation_status", "paid");
+
+      // Register refund in refunds if not exists
+      const { data: existingRefund } = await supabaseAdmin
+        .from("refunds")
+        .select("id")
+        .eq("order_id", payment.order_id)
+        .eq("status", "completed")
+        .maybeSingle();
+
+      if (!existingRefund) {
+        await supabaseAdmin.from("refunds").insert({
+          order_id: payment.order_id,
+          payment_id: payment.id,
+          provider: "handy",
+          amount: payment.amount || 0,
+          reason: "Reembolso notificado por webhook de Handy",
+          status: "completed",
+          processed_at: new Date().toISOString(),
+          api_response: payload
+        });
+      }
     } else {
       const orderPaymentStatus = webhookData.mappedStatus === "pending" ? "pending_payment" : webhookData.mappedStatus;
       const orderStatus = webhookData.mappedStatus === "cancelled" ? "cancelled" : "pending";

@@ -127,7 +127,10 @@ export default function VOrders() {
                               {sub.shipping_provider ? `${sub.shipping_provider.toUpperCase()}: ` : ''}{sub.tracking_number}
                             </div>
                           ) : (
-                            <span className="text-[10px] text-gray-400">Sin tracking</span>
+                            <span className="text-[10px] text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-100 flex items-center gap-1 w-fit">
+                              {['pickup', 'local'].includes((sub.shipping_method || '').toLowerCase()) ? 'Listo para retiro' : 
+                               (sub.shipping_method || '').toLowerCase().includes('manual') ? 'Envío manual' : 'Rastreo pendiente'}
+                            </span>
                           )}
                         </div>
                       </td>

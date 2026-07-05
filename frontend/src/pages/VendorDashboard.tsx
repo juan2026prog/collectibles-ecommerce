@@ -10,6 +10,7 @@ import VImports from '../components/vendor/VImports';
 import VMercadoLibre from '../components/vendor/VMercadoLibre';
 import VInventory from '../components/vendor/VInventory';
 import VOrders from '../components/vendor/VOrders';
+import VEnvios from '../components/vendor/VEnvios';
 import VShipping from '../components/vendor/VShipping';
 import VSLA from '../components/vendor/VSLA';
 import VFinances from '../components/vendor/VFinances';
@@ -198,6 +199,7 @@ export default function VendorDashboard() {
       {activeTab === 'mercadolibre' && <VMercadoLibre activeStoreId={activeStoreId} />}
       {activeTab === 'inventory' && <VInventory mode="inventory" activeStoreId={activeStoreId} />}
       {activeTab === 'orders' && <VOrders activeStoreId={activeStoreId} />}
+      {activeTab === 'shipments' && <VEnvios activeStoreId={activeStoreId} />}
       {activeTab === 'shipping' && <VShipping activeStoreId={activeStoreId} />}
       {activeTab === 'sla' && <VSLA activeStoreId={activeStoreId} />}
       {activeTab === 'finances' && <VFinances mode="finances" activeStoreId={activeStoreId} />}

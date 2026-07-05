@@ -226,7 +226,7 @@ export default function VendorPrueba() {
               const stock = p.variants?.[0]?.inventory_count || 0;
               const sku = p.variants?.[0]?.sku || '-';
               const img = getProductImage(p);
-              const price = p.base_price + (p.variants?.[0]?.price_adjustment || 0);
+              const price = Number(p.base_price || 0) + Number(p.variants?.[0]?.price_adjustment || 0);
 
               // Sync status check
               const syncFailed = p.ml_catalog_links?.[0]?.last_sync_status === 'failed';

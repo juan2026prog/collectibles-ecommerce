@@ -13,6 +13,7 @@ import { URUGUAY_LOCATIONS, DEPARTAMENTOS, calculateShipping, isLocationInSoyDel
 import { getProductImage, resolveImage } from '../lib/imageUtils';
 import { usePromotions, evaluateItemDiscount, evaluateItemDiscountDetailed } from '../hooks/usePromotions';
 import { trackGA4Event, trackClarityEvent, mapCartItemsToGA4 } from '../lib/analyticsTracker';
+import { resolveCartItemPrice } from '../lib/priceResolver';
 import { generateMetaEventId, trackInitiateCheckout, trackAddPaymentInfo } from '../lib/meta/metaPixel';
 import { calculateUruboxEstimate, getEstimatedWeightKg } from '../lib/urubox';
 
@@ -635,12 +636,16 @@ export default function Checkout() {
 
   // Debug log for department
   useEffect(() => {
-    console.log("[Checkout Debug] Department elegido:", form.department);
+    if (import.meta.env.DEV) {
+      console.log("[Checkout Debug] Department elegido:", form.department);
+    }
   }, [form.department]);
 
   // Debug log for shipping method
   useEffect(() => {
-    console.log("[Checkout Debug] Shipping method detectado (selectedShippingMethod):", selectedShippingMethod);
+    if (import.meta.env.DEV) {
+      console.log("[Checkout Debug] Shipping method detectado (selectedShippingMethod):", selectedShippingMethod);
+    }
   }, [selectedShippingMethod]);
 
   // Reset DAC cost/error when changing delivery mode or shipping method
@@ -768,7 +773,9 @@ export default function Checkout() {
                 bodyPayload.k_oficina_destino = selectedAgency.k_oficina;
               }
 
-              console.log(`[Checkout Debug] Fallback to DAC for ${storeKey} con payload:`, bodyPayload);
+              if (import.meta.env.DEV) {
+                console.log(`[Checkout Debug] Fallback to DAC for ${storeKey} con payload:`, bodyPayload);
+              }
 
               const { data, error } = await supabase.functions.invoke('dac-get-cost', {
                 body: bodyPayload,
@@ -778,7 +785,9 @@ export default function Checkout() {
               if (!active) return;
               if (error) throw error;
 
-              console.log(`[Checkout Debug] Respuesta dac-get-cost fallback para ${storeKey}:`, data);
+              if (import.meta.env.DEV) {
+                console.log(`[Checkout Debug] Respuesta dac-get-cost fallback para ${storeKey}:`, data);
+              }
 
               if (data && data.success) {
                 costsByVendor[storeKey] = data.cost;
@@ -820,7 +829,9 @@ export default function Checkout() {
         });
       } catch (err: any) {
         if (err.name === 'AbortError') {
-          console.log('[Checkout Debug] Aborted previous DAC cost fetch.');
+          if (import.meta.env.DEV) {
+            console.log('[Checkout Debug] Aborted previous DAC cost fetch.');
+          }
           return;
         }
         console.error("Error fetching shipping cost:", err);
@@ -887,7 +898,9 @@ export default function Checkout() {
 
   // Debug log for shipping cost final
   useEffect(() => {
-    console.log("[Checkout Debug] Shipping cost final:", shipping);
+    if (import.meta.env.DEV) {
+      console.log("[Checkout Debug] Shipping cost final:", shipping);
+    }
   }, [shipping]);
 
   const subtotalWithShipping = total - autoDiscountAmount + shipping;
@@ -1142,7 +1155,9 @@ export default function Checkout() {
   }, [grandTotal]);
 
   useEffect(() => {
-    console.log("[Checkout Debug] Total final enviado a pago (finalTotal):", finalTotal);
+    if (import.meta.env.DEV) {
+      console.log("[Checkout Debug] Total final enviado a pago (finalTotal):", finalTotal);
+    }
   }, [finalTotal]);
 
   useEffect(() => {
@@ -1346,13 +1361,13 @@ export default function Checkout() {
   const handleAddSuggestion = (p: any) => {
     const variant = p.variants?.[0];
     if (!variant) return;
-    
+    const resolvedPrice = resolveCartItemPrice(p, variant);
     addItem({
       product_id: p.id,
       variant_id: variant.id,
       quantity: 1,
       title: p.title,
-      price: p.base_price + (variant.price_adjustment || 0),
+      price: resolvedPrice,
       image: getProductImage(p),
       variant_name: variant.name || '',
       category_id: p.category_id,
@@ -1383,7 +1398,9 @@ export default function Checkout() {
     async function fetchPaymentProviders() {
       try {
         const providers = await getPublicPaymentProviders();
-        console.log("payment providers:", providers);
+        if (import.meta.env.DEV) {
+          console.log("payment providers:", providers);
+        }
         setPublicPaymentProviders(providers);
       } catch (error) {
         console.error('No se pudieron cargar los medios de pago publicos', error);
@@ -1570,6 +1587,24 @@ export default function Checkout() {
       return;
     }
 
+    // VALIDACIÓN DEFENSIVA: precio final mayor a cero
+    if (finalTotal <= 0) {
+      setCheckoutError("No se pudo iniciar el pago porque el total del carrito no es válido. Revisá tu carrito e intentá nuevamente.");
+      
+      const normalizedPaymentType = 
+        paymentMethod === 'mercadopago' ? 'mercado_pago' :
+        paymentMethod === 'dlocalgo' ? 'dlocal_go' :
+        paymentMethod;
+
+      trackGA4Event('checkout_order_creation_error', {
+        payment_method: normalizedPaymentType,
+        checkout_step: 3,
+        error_code: "INVALID_CHECKOUT_TOTAL",
+        error_stage: "pre_order_validation"
+      });
+      return;
+    }
+
     const normalizedPaymentType = 
       paymentMethod === 'mercadopago' ? 'mercado_pago' :
       paymentMethod === 'dlocalgo' ? 'dlocal_go' :
@@ -1578,7 +1613,7 @@ export default function Checkout() {
     // GA4 standard Add Payment Info event
     trackGA4Event('add_payment_info', {
       currency: 'UYU',
-      value: subtotalWithShipping,
+      value: finalTotal,
       payment_type: normalizedPaymentType,
       items: mapCartItemsToGA4(items)
     });
@@ -1670,6 +1705,11 @@ export default function Checkout() {
 
       if (!orderId) {
         throw new Error("La orden no devolvió ID");
+      }
+
+      const orderTotal = Number(order?.total_amount || 0);
+      if (isNaN(orderTotal) || orderTotal <= 0) {
+        throw new Error("INVALID_CHECKOUT_TOTAL: La orden creada tiene un total inválido");
       }
 
       if (!epm) {

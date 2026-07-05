@@ -90,22 +90,47 @@ export function trackGA4Event(eventName: string, params: Record<string, any> = {
   }
 }
 
-// Dispatch Clarity custom events
-export function trackClarityEvent(eventName: string) {
+// Safe wrappers for Microsoft Clarity to prevent runtime crashes
+export function safeClaritySet(key: string, value: string) {
   try {
-    const isInternal = checkIsInternalUser();
-    if ((window as any).clarity) {
-      // Set custom tag for traffic filtering
-      (window as any).clarity('set', 'traffic_type', isInternal ? 'internal' : 'commercial');
+    if (!key || typeof key !== 'string' || key.trim() === '') return;
+    if (!value || typeof value !== 'string' || value.trim() === '') return;
 
-      if (import.meta.env.DEV) {
-        console.log(`[Clarity Event] ${eventName}`);
-      }
-      (window as any).clarity('event', eventName);
+    const clarityFn = (window as any).clarity;
+    if (typeof clarityFn === 'function') {
+      clarityFn('set', key.trim(), value.trim());
     }
   } catch (error) {
-    console.warn('[Analytics Tracker] Clarity dispatch failed (silently caught):', error);
+    if (import.meta.env.DEV) {
+      console.warn('[safeClaritySet] Failed:', error);
+    }
   }
+}
+
+export function safeClarityEvent(name: string) {
+  try {
+    if (!name || typeof name !== 'string' || name.trim() === '') return;
+
+    const clarityFn = (window as any).clarity;
+    if (typeof clarityFn === 'function') {
+      clarityFn('event', name.trim());
+    }
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.warn('[safeClarityEvent] Failed:', error);
+    }
+  }
+}
+
+// Dispatch Clarity custom events
+export function trackClarityEvent(eventName: string) {
+  const isInternal = checkIsInternalUser();
+  safeClaritySet('traffic_type', isInternal ? 'internal' : 'commercial');
+
+  if (import.meta.env.DEV) {
+    console.log(`[Clarity Event] ${eventName}`);
+  }
+  safeClarityEvent(eventName);
 }
 
 // Check if a purchase has already been tracked (read-only)
