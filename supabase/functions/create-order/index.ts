@@ -1082,9 +1082,9 @@ Deno.serve(async (req) => {
         const itemDiscount = subtotal > 0 ? (totalDiscounts * (item.price * item.quantity) / subtotal) : 0;
         orderItems.push({
           product_id: item.product_id,
-          variant_id: item.variant_id || "",
-          vendor_id: item.vendor_id || "",
-          vendor_store_id: item.vendor_store_id || "",
+          variant_id: item.variant_id || null,
+          vendor_id: item.vendor_id || null,
+          vendor_store_id: item.vendor_store_id || null,
           quantity: item.quantity,
           unit_price: item.price,
           product_name: item.product_name,
