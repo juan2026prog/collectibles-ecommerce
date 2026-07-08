@@ -175,10 +175,48 @@ Deno.serve(async (req: Request) => {
     const finalTotalAmount = isTesting ? Math.max(amount, sumProductsAmount, 5.00) : amount;
     const currencyCode = order.currency?.toUpperCase() === "USD" ? 840 : 858;
 
-    const numPart = order.order_number ? order.order_number.replace(/\D/g, '') : '';
-    const invoiceNumber = Number(numPart);
+    // Helper function to extract numeric invoice number within 32-bit signed int limit
+    function extractNumericInvoiceNumber(orderNumber: string | null | undefined): number {
+      if (!orderNumber) return 0;
+      
+      // 1. If it matches COL-YYYYMMDD-XXXX format
+      const colMatch = orderNumber.match(/COL-(\d{4})(\d{2})(\d{2})-(\d{4})/i);
+      if (colMatch) {
+        const year = parseInt(colMatch[1], 10);
+        const month = colMatch[2];
+        const day = colMatch[3];
+        const seq = colMatch[4];
+        
+        // Using year offset from 2020 to ensure it fits in a 32-bit signed integer (max 2147483647)
+        // E.g., COL-20260707-0001 -> yearOffset 6 -> 607070001
+        const yearOffset = year - 2020;
+        const val = Number(`${yearOffset}${month}${day}${seq}`);
+        if (!isNaN(val) && val > 0 && val <= 2147483647) {
+          return val;
+        }
+      }
+      
+      // 2. Fallback: extract all digits
+      const digits = orderNumber.replace(/\D/g, '');
+      const val = Number(digits);
+      if (!isNaN(val) && val > 0 && val <= 2147483647) {
+        return val;
+      }
+      
+      return 0;
+    }
 
-    console.log("Handy InvoiceNumber:", invoiceNumber);
+    const invoiceNumber = extractNumericInvoiceNumber(order.order_number);
+
+    console.log('[HANDY_INVOICE_TRACE]', {
+      orderId,
+      rawOrderNumber: order?.order_number,
+      rawType: typeof order?.order_number,
+      extractedInvoiceNumber: invoiceNumber,
+      extractedType: typeof invoiceNumber,
+      length: String(invoiceNumber ?? '').length
+    });
+
     console.log("Handy TransactionExternalId:", order.id);
 
     // Defensive validation: Order Items
@@ -187,7 +225,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Defensive validation: InvoiceNumber
-    if (isNaN(invoiceNumber) || !Number.isInteger(invoiceNumber) || invoiceNumber <= 0 || invoiceNumber > 2147483647) {
+    if (!invoiceNumber || !/^\d+$/.test(String(invoiceNumber)) || invoiceNumber <= 0 || invoiceNumber > 2147483647) {
       throw new Error("HANDY_INVALID_INVOICE_NUMBER");
     }
 

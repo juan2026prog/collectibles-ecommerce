@@ -1172,6 +1172,7 @@ Deno.serve(async (req) => {
       success: true,
       order: {
         id: orderResult.order_id,
+        order_number: orderResult.order_number,
         total_amount: totalAmount,
         subtotal,
         discount: discountAmount,

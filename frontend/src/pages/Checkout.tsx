@@ -245,9 +245,21 @@ export default function Checkout() {
   }>>({});
   const [globalProviders, setGlobalProviders] = useState<Record<string, boolean>>({ dac: true, ues: false, soydelivery: false });
 
+  const getStoreKey = (item: any): string => {
+    const vId = item.vendor_id;
+    const sId = item.vendor_store_id;
+    if (!vId || vId === 'platform' || vId === 'null' || vId === 'undefined') {
+      return 'collectibles';
+    }
+    if (sId && sId !== 'null' && sId !== 'undefined') {
+      return sId;
+    }
+    return vId;
+  };
+
   const getVendorName = (storeKey: string) => {
     if (storeKey === 'collectibles' || storeKey === 'platform') return 'Collectibles.uy';
-    return items.find(item => (item.vendor_store_id || item.vendor_id || 'collectibles') === storeKey)?.vendor_name || 'Vendedor';
+    return items.find(item => getStoreKey(item) === storeKey)?.vendor_name || 'Vendedor';
   };
 
   const getVendorShippingOptions = (storeKey: string, groupTotal: number) => {
@@ -447,7 +459,7 @@ export default function Checkout() {
     return options;
   };
 
-  const uniqueStoreKeys = Array.from(new Set(items.map(item => item.vendor_store_id || item.vendor_id || 'collectibles')));
+  const uniqueStoreKeys = Array.from(new Set(items.map(item => getStoreKey(item))));
 
   const cannotPickupVendors = uniqueStoreKeys.filter(storeKey => {
     if (storeKey === 'collectibles' || storeKey === 'platform') return false;
@@ -490,7 +502,7 @@ export default function Checkout() {
       }
       
       for (const item of items) {
-        const storeKey = item.vendor_store_id || item.vendor_id || 'collectibles';
+        const storeKey = getStoreKey(item);
         if (loaded[storeKey]) continue;
 
         if (storeKey === 'collectibles' || storeKey === 'platform') {
@@ -589,6 +601,8 @@ export default function Checkout() {
   const [dacAgencies, setDacAgencies] = useState<any[]>([]);
   const [selectedAgency, setSelectedAgency] = useState<any | null>(null);
   const [agencySearchTerm, setAgencySearchTerm] = useState('');
+
+  const isDacAgencyMode = form.department !== 'Montevideo' && dacDeliveryMode === 'dac_agency';
 
   useEffect(() => {
     if (shippingMethod === 'pickup' && hasPickupError) {
@@ -720,7 +734,7 @@ export default function Checkout() {
         const costsByVendor: Record<string, number> = {};
 
         const groups = items.reduce((acc: Record<string, any[]>, item: any) => {
-          const storeKey = item.vendor_store_id || item.vendor_id || 'collectibles';
+          const storeKey = getStoreKey(item);
           if (!acc[storeKey]) acc[storeKey] = [];
           acc[storeKey].push(item);
           return acc;
@@ -950,7 +964,7 @@ export default function Checkout() {
     const { hour: curHour, minute: curMin, dayOfWeek } = getUruguayDateTime();
 
     const hasAnySD = items.some(item => {
-      const storeKey = item.vendor_store_id || item.vendor_id || 'collectibles';
+      const storeKey = getStoreKey(item);
       const v = vendorsData[storeKey];
       return isMontevideo && v && isSoyDeliveryAvailableForVendor(
         v.default_address, 
@@ -959,7 +973,7 @@ export default function Checkout() {
     });
 
     const allVendorsCoveredBySD = items.every(item => {
-      const storeKey = item.vendor_store_id || item.vendor_id || 'collectibles';
+      const storeKey = getStoreKey(item);
       const v = vendorsData[storeKey];
       return isMontevideo && v && isSoyDeliveryAvailableForVendor(
         v.default_address, 
@@ -1133,7 +1147,7 @@ export default function Checkout() {
     let baseForCoupon = 0;
     items.forEach(item => {
       const isCollectibles = !item.vendor_id || item.vendor_id === 'platform';
-      const storeKey = item.vendor_store_id || item.vendor_id || 'collectibles';
+      const storeKey = getStoreKey(item);
       const isOptedIn = vendorsData[storeKey]?.promotions_opt_in || false;
       
       if (isCollectibles || isOptedIn) {
@@ -1663,8 +1677,8 @@ export default function Checkout() {
           last_name: form.last_name,
           street: selectedShippingMethod === 'pickup' ? 'Retiro en local' : (selectedShippingMethod === 'dac_agency' ? (selectedAgency?.address || selectedAgency?.office_name || 'Retiro en agencia DAC') : form.street),
           apartment: form.apartment || undefined,
-          city: selectedShippingMethod === 'pickup' ? 'Montevideo' : form.city,
-          department: selectedShippingMethod === 'pickup' ? 'Montevideo' : form.department,
+          city: selectedShippingMethod === 'pickup' ? 'Montevideo' : (selectedShippingMethod === 'dac_agency' ? (selectedAgency?.city || selectedAgency?.locality || form.city || '') : form.city),
+          department: selectedShippingMethod === 'pickup' ? 'Montevideo' : (selectedShippingMethod === 'dac_agency' ? (selectedAgency?.department || form.department) : form.department),
           postal_code: form.postal_code || undefined,
           country: form.country,
           barrio: selectedShippingMethod === 'pickup' ? undefined : form.barrio,
@@ -1751,63 +1765,183 @@ export default function Checkout() {
     { id: 3, label: 'Pago' },
   ];
 
-  const validateStep2 = (): boolean => {
-    const errors: Record<string, string> = {};
+  const validateStep2 = (): {
+    valid: boolean;
+    errors: Array<{ field: string; code: string; message: string }>;
+  } => {
+    const errorsList: Array<{ field: string; code: string; message: string }> = [];
     const isMvd = form.department === 'Montevideo';
 
     // 1. Mandatory base fields
     if (!form.department) {
-      errors.department = 'El departamento es obligatorio.';
+      errorsList.push({
+        field: 'department',
+        code: 'REQUIRED',
+        message: 'El departamento es obligatorio.'
+      });
     }
+    
     if (shippingMethod === 'delivery') {
-      if (isMvd) {
-        if (!form.barrio) {
-          errors.barrio = 'El barrio es obligatorio para Montevideo.';
+      if (!isDacAgencyMode) {
+        if (isMvd) {
+          if (!form.barrio) {
+            errorsList.push({
+              field: 'barrio',
+              code: 'REQUIRED',
+              message: 'El barrio es obligatorio para Montevideo.'
+            });
+          }
+        } else {
+          if (!form.city) {
+            errorsList.push({
+              field: 'city',
+              code: 'REQUIRED',
+              message: 'La ciudad es obligatoria.'
+            });
+          }
         }
-      } else {
-        if (!form.city) {
-          errors.city = 'La ciudad es obligatoria.';
+        if (!form.street || !form.street.trim()) {
+          errorsList.push({
+            field: 'street',
+            code: 'REQUIRED',
+            message: 'La dirección (calle y número) es obligatoria.'
+          });
         }
       }
-      if (!form.street || !form.street.trim()) {
-        errors.street = 'La dirección (calle y número) es obligatoria.';
-      }
+      
       if (!form.phone || !form.phone.trim()) {
-        errors.phone = 'El teléfono es obligatorio para coordinar el envío.';
+        errorsList.push({
+          field: 'phone',
+          code: 'REQUIRED',
+          message: 'El teléfono es obligatorio para coordinar el envío.'
+        });
+      }
+
+      // CI checking
+      const isDac = selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency' || selectedShippingMethod === 'dac';
+      if (isDac && (!form.ci || !validateUruguayanCI(form.ci))) {
+        errorsList.push({
+          field: 'ci',
+          code: 'INVALID_CI',
+          message: 'La Cédula de Identidad es obligatoria e inválida (requerida por DAC).'
+        });
       }
 
       // 2. Agency checking
       if (selectedShippingMethod === 'dac_agency' && !selectedAgency) {
-        errors.agency = 'Debe seleccionar una agencia DAC de destino.';
+        errorsList.push({
+          field: 'agency',
+          code: 'REQUIRED',
+          message: 'Debe seleccionar una agencia DAC de destino.'
+        });
       }
 
       // 3. Calculation state checking
       if (dacCalculationStatus === 'loading') {
-        errors.calculation = 'Por favor, espere a que termine de calcularse el costo de envío.';
+        errorsList.push({
+          field: 'calculation',
+          code: 'LOADING',
+          message: 'Por favor, espere a que termine de calcularse el costo de envío.'
+        });
       } else if (dacCalculationStatus === 'missing_data') {
-        errors.calculation = 'Faltan ingresar datos para calcular el costo de envío.';
+        errorsList.push({
+          field: 'calculation',
+          code: 'MISSING_DATA',
+          message: 'Faltan ingresar datos para calcular el costo de envío.'
+        });
       } else if (dacCalculationStatus === 'error') {
-        errors.calculation = dacShippingError || 'Ocurrió un error al calcular el costo de envío. Por favor intente de nuevo.';
+        errorsList.push({
+          field: 'calculation',
+          code: 'CALCULATION_ERROR',
+          message: dacShippingError || 'Ocurrió un error al calcular el costo de envío. Por favor intente de nuevo.'
+        });
       } else if (dacCalculationStatus === 'idle') {
-        errors.calculation = 'Es necesario calcular el costo de envío.';
+        errorsList.push({
+          field: 'calculation',
+          code: 'IDLE',
+          message: 'Es necesario calcular el costo de envío.'
+        });
       } else if (dacShippingCost === null) {
-        errors.calculation = 'El costo de envío es desconocido. No es posible completar la compra.';
+        errorsList.push({
+          field: 'calculation',
+          code: 'NULL_COST',
+          message: 'El costo de envío es desconocido. No es posible completar la compra.'
+        });
       }
     }
 
-    setStep2Errors(errors);
+    // 4. Shipping Groups Mixed validation
+    const uniqueKeys = Array.from(new Set(items.map(item => getStoreKey(item))));
+    uniqueKeys.forEach(key => {
+      const groupItems = items.filter(item => getStoreKey(item) === key);
+      const isCollectiblesGroup = key === 'collectibles' || key === 'platform';
+      const v = vendorsData[key];
+      
+      const groupTotal = groupItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
+      const options = getVendorShippingOptions(key, groupTotal);
+      
+      const hasValidMethod = options.some(o => o.available && (
+        (shippingMethod === 'pickup' && o.id === 'pickup') ||
+        (shippingMethod === 'delivery' && (
+          (selectedShippingMethod === 'dac_agency' && o.id === 'dac') ||
+          (selectedShippingMethod === 'dac_home' && o.id === 'dac') ||
+          (selectedShippingMethod === 'delivery' && o.id === 'soydelivery') ||
+          (selectedShippingMethod === 'ues' && o.id === 'ues') ||
+          (selectedShippingMethod === 'correo_uruguayo' && o.id === 'correo_uruguayo') ||
+          (selectedShippingMethod === 'manual' && o.id === 'manual')
+        ))
+      ));
 
-    const keys = Object.keys(errors);
-    if (keys.length > 0) {
+      console.log('[CHECKOUT_SHIPPING_GROUP_VALIDATION]', {
+        sellerName: getVendorName(key),
+        sellerType: isCollectiblesGroup ? 'collectibles' : 'vendor',
+        itemCount: groupItems.length,
+        selectedMethod: selectedShippingMethod,
+        deliveryMode: dacDeliveryMode,
+        agencyId: selectedAgency?.id || null,
+        valid: hasValidMethod,
+        errors: !v ? ['Vendor data not loaded'] : (!hasValidMethod ? ['No available shipping method for current selection'] : [])
+      });
+
+      if (!hasValidMethod) {
+        errorsList.push({
+          field: 'calculation',
+          code: 'INVALID_GROUP_SHIPPING',
+          message: `El vendedor ${getVendorName(key)} no tiene métodos de envío disponibles para tu dirección.`
+        });
+      }
+    });
+
+    // 5. Agency visual vs internal state validation & debug
+    console.log('[CHECKOUT_AGENCY_STATE_DEBUG]', {
+      selectedDacAgencyVisual: selectedAgency?.office_name || null,
+      selectedAgency: selectedAgency
+    });
+
+    // Map list to Record
+    const errorsMap: Record<string, string> = {};
+    errorsList.forEach(err => {
+      errorsMap[err.field] = err.message;
+    });
+    setStep2Errors(errorsMap);
+
+    const result = {
+      valid: errorsList.length === 0,
+      errors: errorsList
+    };
+
+    console.log('[CHECKOUT_STEP2_VALIDATION_RESULT]', result);
+
+    if (!result.valid) {
       // Trigger checkout_validation_error technical event (Phase 5)
       trackGA4Event('checkout_validation_error', {
         step: 2,
-        error_fields: keys,
-        error_messages: Object.values(errors)
+        error_fields: errorsList.map(e => e.field),
+        error_messages: errorsList.map(e => e.message)
       });
 
       // Smooth scroll to the first element with an error
-      const firstErrorKey = keys[0];
+      const firstErrorKey = errorsList[0].field;
       let elementId = '';
       if (firstErrorKey === 'department') elementId = 'shipping-department';
       else if (firstErrorKey === 'city') elementId = 'shipping-city';
@@ -1816,6 +1950,7 @@ export default function Checkout() {
       else if (firstErrorKey === 'phone') elementId = 'shipping-phone';
       else if (firstErrorKey === 'agency') elementId = 'shipping-agency-selector';
       else if (firstErrorKey === 'calculation') elementId = 'shipping-calculation-block';
+      else if (firstErrorKey === 'ci') elementId = 'shipping-ci-block';
 
       if (elementId) {
         const el = document.getElementById(elementId);
@@ -1828,10 +1963,9 @@ export default function Checkout() {
           }
         }
       }
-      return false;
     }
 
-    return true;
+    return result;
   };
 
   const canAdvanceStep = (step: number): boolean => {
@@ -1842,9 +1976,13 @@ export default function Checkout() {
       if (shippingMethod === 'pickup') return true;
       if (shippingMethod === 'delivery') {
         const isMvd = form.department === 'Montevideo';
-        const baseFieldsValid = isMvd
-          ? !!(form.street && form.department && form.barrio)
-          : !!(form.street && form.department && form.city);
+
+        const baseFieldsValid = isDacAgencyMode
+          ? !!form.department
+          : (isMvd
+              ? !!(form.street && form.department && form.barrio)
+              : !!(form.street && form.department && form.city)
+            );
         
         if (!baseFieldsValid) return false;
         
@@ -1864,6 +2002,27 @@ export default function Checkout() {
           return false;
         }
 
+        // Mixed cart group checks
+        const uniqueKeys = Array.from(new Set(items.map(item => getStoreKey(item))));
+        const groupsValid = uniqueKeys.every(key => {
+          const groupItems = items.filter(item => getStoreKey(item) === key);
+          const groupTotal = groupItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
+          const options = getVendorShippingOptions(key, groupTotal);
+          return options.some(o => o.available && (
+            (shippingMethod === 'pickup' && o.id === 'pickup') ||
+            (shippingMethod === 'delivery' && (
+              (selectedShippingMethod === 'dac_agency' && o.id === 'dac') ||
+              (selectedShippingMethod === 'dac_home' && o.id === 'dac') ||
+              (selectedShippingMethod === 'delivery' && o.id === 'soydelivery') ||
+              (selectedShippingMethod === 'ues' && o.id === 'ues') ||
+              (selectedShippingMethod === 'correo_uruguayo' && o.id === 'correo_uruguayo') ||
+              (selectedShippingMethod === 'manual' && o.id === 'manual')
+            ))
+          ));
+        });
+
+        if (!groupsValid) return false;
+
         return true;
       }
     }
@@ -1871,27 +2030,113 @@ export default function Checkout() {
   };
 
   const goNext = () => {
+    console.log('[CHECKOUT_CONTINUE_CLICKED]', {
+      currentStep,
+      selectedShippingMethod,
+      dacDeliveryMode,
+      selectedAgency,
+      form,
+      loading: dacShippingLoading,
+      isSubmitting
+    });
+
     if (currentStep === 1) {
       if (canAdvanceStep(1)) {
         setCurrentStep(2);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     } else if (currentStep === 2) {
-      if (validateStep2() && canAdvanceStep(2)) {
-        // GA4 event: add_shipping_info (Phase 2)
-        trackGA4Event('add_shipping_info', {
-          currency: 'UYU',
-          value: subtotalWithShipping,
-          shipping_tier: selectedShippingMethod,
-          items: mapCartItemsToGA4(items)
+      const validation = validateStep2();
+      const canAdvance = canAdvanceStep(2);
+      
+      const blockingReason = !validation.valid ? 'validateStep2 failed' : (!canAdvance ? 'canAdvanceStep failed' : '');
+      
+      console.log('[CHECKOUT_CONTINUE_BUTTON_STATE]', {
+        disabled: !canAdvance,
+        reason: blockingReason,
+        canAdvance,
+        step2Valid: validation.valid
+      });
+
+      if (!validation.valid) {
+        console.warn('[CHECKOUT_STEP2_BLOCKED]', validation.errors);
+        return;
+      }
+
+      if (!canAdvance) {
+        // If validateStep2 passed but canAdvanceStep failed, highlight the specific fields
+        const errors: Record<string, string> = {};
+        const isDac = selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency' || selectedShippingMethod === 'dac';
+        
+        if (isDac && (!form.ci || !validateUruguayanCI(form.ci))) {
+          errors.ci = 'La Cédula de Identidad es obligatoria e inválida (requerida por DAC).';
+        }
+        if (selectedShippingMethod === 'dac_agency' && !selectedAgency) {
+          errors.agency = 'Debe seleccionar una agencia DAC de destino para retirar su pedido.';
+        }
+        if (dacCalculationStatus === 'loading') {
+          errors.calculation = 'Por favor, espere a que termine de calcularse el costo de envío.';
+        } else if (dacCalculationStatus === 'missing_data') {
+          errors.calculation = 'Faltan ingresar datos para calcular el costo de envío.';
+        } else if (dacCalculationStatus === 'error') {
+          errors.calculation = dacShippingError || 'Ocurrió un error al calcular el costo de envío. Por favor intente de nuevo.';
+        } else if (dacCalculationStatus === 'idle') {
+          errors.calculation = 'Es necesario calcular el costo de envío.';
+        } else if (dacShippingCost === null) {
+          errors.calculation = 'El costo de envío es desconocido. No es posible completar la compra.';
+        }
+
+        // Mixed cart group checks
+        const uniqueKeys = Array.from(new Set(items.map(item => getStoreKey(item))));
+        uniqueKeys.forEach(key => {
+          const groupItems = items.filter(item => getStoreKey(item) === key);
+          const groupTotal = groupItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
+          const options = getVendorShippingOptions(key, groupTotal);
+          const hasValidMethod = options.some(o => o.available && (
+            (shippingMethod === 'pickup' && o.id === 'pickup') ||
+            (shippingMethod === 'delivery' && (
+              (selectedShippingMethod === 'dac_agency' && o.id === 'dac') ||
+              (selectedShippingMethod === 'dac_home' && o.id === 'dac') ||
+              (shippingMethod === 'delivery' && o.id === 'soydelivery') ||
+              (shippingMethod === 'ues' && o.id === 'ues') ||
+              (shippingMethod === 'correo_uruguayo' && o.id === 'correo_uruguayo') ||
+              (shippingMethod === 'manual' && o.id === 'manual')
+            ))
+          ));
+          if (!hasValidMethod) {
+            errors.calculation = `El vendedor ${getVendorName(key)} no tiene métodos de envío disponibles para tu dirección.`;
+          }
         });
 
-        // Clarity event: shipping_selected (Phase 6)
-        trackClarityEvent('shipping_selected');
-
-        setCurrentStep(3);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        if (Object.keys(errors).length > 0) {
+          setStep2Errors(errors);
+          const firstKey = Object.keys(errors)[0];
+          let elementId = '';
+          if (firstKey === 'ci') elementId = 'shipping-ci-block';
+          else if (firstKey === 'agency') elementId = 'shipping-agency-selector';
+          else if (firstKey === 'calculation') elementId = 'shipping-calculation-block';
+          
+          if (elementId) {
+            const el = document.getElementById(elementId);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }
+        return;
       }
+
+      // GA4 event: add_shipping_info (Phase 2)
+      trackGA4Event('add_shipping_info', {
+        currency: 'UYU',
+        value: subtotalWithShipping,
+        shipping_tier: selectedShippingMethod,
+        items: mapCartItemsToGA4(items)
+      });
+
+      // Clarity event: shipping_selected (Phase 6)
+      trackClarityEvent('shipping_selected');
+
+      setCurrentStep(3);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -2440,6 +2685,36 @@ export default function Checkout() {
                             Te avisaremos cuando esté listo en la agencia <strong className="text-white">{selectedAgency.office_name}</strong>. Recordá llevar tu documento.
                           </div>
                         )}
+
+                        {/* CI Input for DAC (visible in Step 2 when using DAC) */}
+                        {(selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') && (
+                          <div id="shipping-ci-block" className="space-y-1.5 mt-3 pt-3 border-t border-white/5">
+                            <label className="form-label flex items-center justify-between text-xs">
+                              <span className="font-semibold text-slate-300">Cédula de Identidad (CI) *</span>
+                              {form.ci && !validateUruguayanCI(form.ci) && (
+                                <span className="text-[11px] text-red-400 font-semibold animate-pulse">CI Inválida</span>
+                              )}
+                              {form.ci && validateUruguayanCI(form.ci) && (
+                                <span className="text-[11px] text-green-400 font-semibold">✓ CI Válida</span>
+                              )}
+                            </label>
+                            <input
+                              required
+                              placeholder="Ej: 1.234.567-8"
+                              className={`form-input text-xs transition-all ${
+                                form.ci
+                                  ? validateUruguayanCI(form.ci)
+                                    ? 'border-green-500/50 focus:border-green-500 bg-green-500/5'
+                                    : 'border-red-500/50 focus:border-red-500 bg-red-500/5'
+                                  : 'border-white/10 focus:border-primary-500 bg-white/5'
+                              }`}
+                              value={form.ci}
+                              onChange={e => setForm({ ...form, ci: e.target.value })}
+                            />
+                            {step2Errors.ci && <p className="text-red-500 text-xs font-semibold">{step2Errors.ci}</p>}
+                            <p className="text-[10px] text-slate-500 leading-normal">Requerida para la facturación y despacho de la guía por DAC.</p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -2447,9 +2722,11 @@ export default function Checkout() {
                   {/* Address fields — only for delivery */}
                   {shippingMethod === 'delivery' && (
                     <div className="pt-4 mt-4 border-t border-white/10 space-y-4">
-                      <h3 className="font-semibold text-sm text-slate-400 mb-2">Dirección de entrega</h3>
+                      <h3 className="font-semibold text-sm text-slate-400 mb-2">
+                        {isDacAgencyMode ? 'Departamento para Retiro' : 'Dirección de entrega'}
+                      </h3>
 
-                      {savedAddresses.length > 0 && (
+                      {savedAddresses.length > 0 && !isDacAgencyMode && (
                         <div className="space-y-2 mb-4">
                           <label className="form-label text-xs">Elegir dirección guardada</label>
                           <div className="grid gap-2">
@@ -2505,19 +2782,21 @@ export default function Checkout() {
                         </div>
                       )}
 
-                      {(savedAddresses.length === 0 || selectedAddress === -2) && (
+                      {(savedAddresses.length === 0 || selectedAddress === -2 || isDacAgencyMode) && (
                         <>
-                          <div id="shipping-street">
-                            <label className="form-label">Dirección (calle y número) *</label>
-                            <AddressAutocomplete
-                              value={form.street}
-                              onChange={value => setForm({ ...form, street: value })}
-                              onSelect={handleAddressSelect}
-                            />
-                            {step2Errors.street && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.street}</p>}
-                          </div>
+                          {!isDacAgencyMode && (
+                            <div id="shipping-street">
+                              <label className="form-label">Dirección (calle y número) *</label>
+                              <AddressAutocomplete
+                                value={form.street}
+                                onChange={value => setForm({ ...form, street: value })}
+                                onSelect={handleAddressSelect}
+                              />
+                              {step2Errors.street && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.street}</p>}
+                            </div>
+                          )}
 
-                          <div className="grid grid-cols-2 gap-4">
+                          <div className={isDacAgencyMode ? "grid grid-cols-1 gap-4" : "grid grid-cols-2 gap-4"}>
                             <div id="shipping-department">
                               <label className="form-label">Departamento *</label>
                               <select
@@ -2534,103 +2813,109 @@ export default function Checkout() {
                               {step2Errors.department && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.department}</p>}
                             </div>
 
-                            <div id="shipping-city">
-                              <label className="form-label">Ciudad / Localidad *</label>
-                              {form.department === 'Montevideo' ? (
-                                <input
-                                  type="text"
-                                  className="form-input opacity-80 cursor-not-allowed"
-                                  value="Montevideo"
-                                  readOnly
-                                />
-                              ) : (
-                                <select
-                                  required={shippingMethod === 'delivery'}
-                                  className={`form-input ${step2Errors.city ? 'border-red-500' : ''}`}
-                                  value={form.city}
-                                  onChange={e => setForm({ ...form, city: e.target.value })}
-                                  disabled={!form.department}
-                                >
-                                  <option value="">Selecciona una localidad...</option>
-                                  {form.department && URUGUAY_LOCATIONS[form.department]?.map((location) => (
-                                    <option key={location} value={location}>{location}</option>
-                                  ))}
-                                </select>
-                              )}
-                              {step2Errors.city && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.city}</p>}
-                            </div>
+                            {!isDacAgencyMode && (
+                              <div id="shipping-city">
+                                <label className="form-label">Ciudad / Localidad *</label>
+                                {form.department === 'Montevideo' ? (
+                                  <input
+                                    type="text"
+                                    className="form-input opacity-80 cursor-not-allowed"
+                                    value="Montevideo"
+                                    readOnly
+                                  />
+                                ) : (
+                                  <select
+                                    required={shippingMethod === 'delivery'}
+                                    className={`form-input ${step2Errors.city ? 'border-red-500' : ''}`}
+                                    value={form.city}
+                                    onChange={e => setForm({ ...form, city: e.target.value })}
+                                    disabled={!form.department}
+                                  >
+                                    <option value="">Selecciona una localidad...</option>
+                                    {form.department && URUGUAY_LOCATIONS[form.department]?.map((location) => (
+                                      <option key={location} value={location}>{location}</option>
+                                    ))}
+                                  </select>
+                                )}
+                                {step2Errors.city && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.city}</p>}
+                              </div>
+                            )}
                           </div>
 
-                          <div className="grid grid-cols-1 gap-4">
-                            <div id="shipping-barrio">
-                              <label className="form-label">Barrio {form.department === 'Montevideo' ? '*' : '(Opcional)'}</label>
-                              {form.department === 'Montevideo' ? (
-                                <select
-                                  required={shippingMethod === 'delivery'}
-                                  className={`form-input ${step2Errors.barrio ? 'border-red-500' : ''}`}
-                                  value={form.barrio}
-                                  onChange={e => setForm({ ...form, barrio: e.target.value })}
-                                >
-                                  <option value="">Selecciona un barrio...</option>
-                                  {URUGUAY_LOCATIONS['Montevideo']?.map((barrioName) => (
-                                    <option key={barrioName} value={barrioName}>{barrioName}</option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <input
-                                  type="text"
-                                  className="form-input"
-                                  placeholder="Ej: Centro, La Floresta, etc."
-                                  value={form.barrio}
-                                  onChange={e => setForm({ ...form, barrio: e.target.value })}
-                                />
-                              )}
-                              {step2Errors.barrio && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.barrio}</p>}
-                            </div>
-                          </div>
+                          {!isDacAgencyMode && (
+                            <>
+                              <div className="grid grid-cols-1 gap-4">
+                                <div id="shipping-barrio">
+                                  <label className="form-label">Barrio {form.department === 'Montevideo' ? '*' : '(Opcional)'}</label>
+                                  {form.department === 'Montevideo' ? (
+                                    <select
+                                      required={shippingMethod === 'delivery'}
+                                      className={`form-input ${step2Errors.barrio ? 'border-red-500' : ''}`}
+                                      value={form.barrio}
+                                      onChange={e => setForm({ ...form, barrio: e.target.value })}
+                                    >
+                                      <option value="">Selecciona un barrio...</option>
+                                      {URUGUAY_LOCATIONS['Montevideo']?.map((barrioName) => (
+                                        <option key={barrioName} value={barrioName}>{barrioName}</option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <input
+                                      type="text"
+                                      className="form-input"
+                                      placeholder="Ej: Centro, La Floresta, etc."
+                                      value={form.barrio}
+                                      onChange={e => setForm({ ...form, barrio: e.target.value })}
+                                    />
+                                  )}
+                                  {step2Errors.barrio && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.barrio}</p>}
+                                </div>
+                              </div>
 
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <label className="form-label">Apartamento / Timbre</label>
-                              <input
-                                className="form-input"
-                                placeholder="Ej: Apto 302, Timbre 4"
-                                value={form.apartment}
-                                onChange={e => setForm({ ...form, apartment: e.target.value })}
-                              />
-                            </div>
-                            <div>
-                              <label className="form-label">Referencia / Indicaciones</label>
-                              <input
-                                className="form-input"
-                                placeholder="Ej: Portón de madera, reja negra"
-                                value={form.reference}
-                                onChange={e => setForm({ ...form, reference: e.target.value })}
-                              />
-                            </div>
-                          </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <label className="form-label">Apartamento / Timbre</label>
+                                  <input
+                                    className="form-input"
+                                    placeholder="Ej: Apto 302, Timbre 4"
+                                    value={form.apartment}
+                                    onChange={e => setForm({ ...form, apartment: e.target.value })}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="form-label">Referencia / Indicaciones</label>
+                                  <input
+                                    className="form-input"
+                                    placeholder="Ej: Portón de madera, reja negra"
+                                    value={form.reference}
+                                    onChange={e => setForm({ ...form, reference: e.target.value })}
+                                  />
+                                </div>
+                              </div>
 
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <label className="form-label">Código postal</label>
-                              <input
-                                className="form-input"
-                                placeholder="Ej: 11300"
-                                value={form.postal_code}
-                                onChange={e => setForm({ ...form, postal_code: e.target.value })}
-                              />
-                            </div>
-                            <div>
-                              <label className="form-label">País</label>
-                              <select
-                                className="form-input"
-                                value={form.country}
-                                onChange={e => setForm({ ...form, country: e.target.value })}
-                              >
-                                <option value="Uruguay">Uruguay</option>
-                              </select>
-                            </div>
-                          </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <label className="form-label">Código postal</label>
+                                  <input
+                                    className="form-input"
+                                    placeholder="Ej: 11300"
+                                    value={form.postal_code}
+                                    onChange={e => setForm({ ...form, postal_code: e.target.value })}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="form-label">País</label>
+                                  <select
+                                    className="form-input"
+                                    value={form.country}
+                                    onChange={e => setForm({ ...form, country: e.target.value })}
+                                  >
+                                    <option value="Uruguay">Uruguay</option>
+                                  </select>
+                                </div>
+                              </div>
+                            </>
+                          )}
                         </>
                       )}
 
@@ -2701,13 +2986,24 @@ export default function Checkout() {
                 </div>
 
                 {/* Step 2 Nav */}
-                <div className="checkout-nav">
-                  <button type="button" onClick={goBack} className="checkout-btn-back">
-                    <ChevronLeft className="w-4 h-4" /> Volver
-                  </button>
-                  <button type="button" onClick={goNext} className="checkout-btn-next">
-                    Continuar <ChevronRight className="w-4 h-4" />
-                  </button>
+                <div className="space-y-4">
+                  {Object.keys(step2Errors).length > 0 && (
+                    <div className="p-4 bg-red-950/20 border border-red-500/30 rounded-lg space-y-1.5 animate-pulse">
+                      <p className="text-red-400 text-xs font-bold uppercase tracking-wider">No se puede continuar:</p>
+                      {Object.entries(step2Errors).map(([field, msg]) => (
+                        <p key={field} className="text-red-300 text-xs">• {msg}</p>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="checkout-nav">
+                    <button type="button" onClick={goBack} className="checkout-btn-back">
+                      <ChevronLeft className="w-4 h-4" /> Volver
+                    </button>
+                    <button type="button" onClick={goNext} className="checkout-btn-next">
+                      Continuar <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -2902,7 +3198,7 @@ export default function Checkout() {
                 <div className="space-y-4 mb-6">
                   {Object.entries(
                     items.reduce((acc: Record<string, { name: string; items: any[] }>, item: any) => {
-                      const storeKey = item.vendor_store_id || item.vendor_id || 'collectibles';
+                      const storeKey = getStoreKey(item);
                       const storeName = item.vendor_name || (storeKey === 'collectibles' ? 'Collectibles.uy' : 'Vendedor');
                       if (!acc[storeKey]) {
                         acc[storeKey] = { name: storeName, items: [] };
