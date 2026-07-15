@@ -765,6 +765,11 @@ export default function Checkout() {
     return sel && (sel.method === 'dac_home' || sel.method === 'dac_agency');
   });
 
+  const hasAnyHomeDelivery = uniqueStoreKeys.some(key => {
+    const sel = subordersShipping[key];
+    return sel && !['pickup', 'dac_agency'].includes(sel.method);
+  });
+
   // Reset DAC cost/error when changing delivery mode or shipping method
   useEffect(() => {
     setDacShippingCost(null);
