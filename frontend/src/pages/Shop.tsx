@@ -683,9 +683,18 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
         <div className="absolute -right-40 top-0 w-[560px] h-[560px] bg-[#f00856]/20 blur-3xl rounded-full"></div>
         <div className="relative max-w-7xl mx-auto px-6 py-6 md:py-10">
           <div className="label-tag">{isInternational ? "Especial" : group ? "Colección" : isCategoryRoute ? "Categoría" : isBrandRoute ? "Marca" : "Catálogo"}</div>
-          <h1 className="text-5xl md:text-7xl font-black leading-[.9] mt-3 tracking-tighter">
-            {isInternational ? "Collectibles Internacional" : group ? group.name : isCategoryRoute && currentCategory ? currentCategory.name : isBrandRoute && currentBrand ? currentBrand.name : "Productos"}
-          </h1>
+          <div className="flex items-center gap-4 mt-3 flex-wrap">
+            <h1 className="text-5xl md:text-7xl font-black leading-[.9] tracking-tighter">
+              {isInternational ? "Collectibles Internacional" : group ? group.name : isCategoryRoute && currentCategory ? currentCategory.name : isBrandRoute && currentBrand ? currentBrand.name : "Productos"}
+            </h1>
+            {group?.badge_image_url && (
+              <img
+                src={group.badge_image_url}
+                alt={group.badge_alt_text || `Cocarda de ${group.name}`}
+                className="w-12 h-12 md:w-16 md:h-16 object-contain pointer-events-none drop-shadow-md select-none"
+              />
+            )}
+          </div>
           <p className="text-slate-300 text-lg mt-5 max-w-3xl leading-relaxed">
             {isInternational ? "Explora nuestro catálogo de productos internacionales importados a pedido." : group ? group.description || "Explora esta colección exclusiva de productos curados." : ""}
           </p>

@@ -14,7 +14,7 @@ interface CreateOrderParams {
   affiliate_code?: string;
   payment_method: 'dlocalgo' | 'paypal' | 'mercadopago' | 'handy';
   currency: string;
-  shipping_method: 'delivery' | 'pickup' | 'dac' | 'dac_home' | 'dac_agency';
+  shipping_method: 'delivery' | 'pickup' | 'dac' | 'dac_home' | 'dac_agency' | 'ues' | 'correo_uruguayo' | 'manual';
   shipping_address: {
     first_name: string;
     last_name: string;
@@ -38,6 +38,14 @@ interface CreateOrderParams {
   accepted_terms_version: string;
   email_opt_in?: boolean;
   whatsapp_opt_in?: boolean;
+  suborders_shipping?: Record<string, {
+    shipping_method: 'delivery' | 'pickup' | 'dac' | 'dac_home' | 'dac_agency' | 'ues' | 'correo_uruguayo' | 'manual';
+    dac_office_id?: string | null;
+    dac_k_oficina_destino?: number | null;
+    dac_office_name?: string;
+    dac_office_address?: string;
+    ci?: string;
+  }>;
 }
 
 interface StartPaymentParams {

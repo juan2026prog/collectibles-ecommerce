@@ -9,7 +9,7 @@ import { useWishlistContext } from '../contexts/WishlistContext';
 import { usePromotions, getApplicablePromotions, evaluateItemDiscountDetailed } from '../hooks/usePromotions';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { useLocale } from '../contexts/LocaleContext';
-import { ProductBadge } from '../components/ProductBadge';
+import { getProductGroupBadge } from '../hooks/useData';
 import { getProductImage, resolveImage, FALLBACK_IMAGE } from '../lib/imageUtils';
 import { analytics } from '../lib/analytics';
 import { trackViewContent, trackAddToCart, generateMetaEventId } from '../lib/meta/metaPixel';
@@ -27,6 +27,7 @@ export default function ProductDetail() {
   const { settings } = useSiteSettings();
   const { slug } = useParams();
   const { product, loading } = useProduct(slug);
+  const groupBadge = getProductGroupBadge(product);
   const { buyBox, loading: buyBoxLoading } = useProductBuyBox(product?.id);
   const cart = useCartContext();
   const internationalCart = useInternationalCartContext();
@@ -489,6 +490,15 @@ export default function ProductDetail() {
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
           >
+            {groupBadge && (
+              <div className="absolute top-4 left-4 z-20 w-14 h-14 md:w-16 md:h-16 pointer-events-none drop-shadow-md select-none">
+                <img
+                  src={groupBadge.url}
+                  alt={groupBadge.alt}
+                  className="w-full h-full object-contain"
+                />
+              </div>
+            )}
             <img
               src={displayImage}
               alt={product.title}

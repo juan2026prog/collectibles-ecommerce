@@ -7,6 +7,7 @@ import { useWishlistContext } from '../contexts/WishlistContext';
 import { useAdminMode } from '../contexts/AdminModeContext';
 import { useLocale } from '../contexts/LocaleContext';
 import { trackGA4Event } from '../lib/analyticsTracker';
+import { getProductGroupBadge } from '../hooks/useData';
 
 interface ProductGridCardProps {
   product: any;
@@ -100,6 +101,20 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
         >
           <Heart className={`w-4 h-4 transition-colors ${isInWishlist(product.id) ? 'fill-[#f00856] text-[#f00856]' : 'text-white/70 group-hover:text-white'}`} />
         </button>
+
+        {/* Cocarda del Grupo/Colección */}
+        {(() => {
+          const groupBadge = getProductGroupBadge(product);
+          return groupBadge && (
+            <div className="absolute top-12 left-2 z-20 w-10 h-10 md:w-12 md:h-12 pointer-events-none drop-shadow-md select-none">
+              <img
+                src={groupBadge.url}
+                alt={groupBadge.alt}
+                className="w-full h-full object-contain"
+              />
+            </div>
+          );
+        })()}
 
         {/* Badge superior opcional */}
         <div className="absolute top-2 right-2 z-20 scale-75 md:scale-90 origin-top-right pointer-events-none">

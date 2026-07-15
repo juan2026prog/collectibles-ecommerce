@@ -189,8 +189,9 @@ export function useProducts(filters: ProductFilters = {}) {
         variants:product_variants(id, sku, name, price_adjustment, inventory_count),
         product_tags:product_tags(tag_id),
         vendor:vendors(id, store_name, slug, logo_url, promotions_opt_in),
-        vendor_store:vendor_stores(id, store_name, slug, logo_url, status, is_official, approved_by, approved_at, vendor_store_badge_assignments(status, approved_by, approved_at, vendor_store_badges(*)))
-        ${categoryId ? ', product_categories!inner(category_id)' : ''}
+        vendor_store:vendor_stores(id, store_name, slug, logo_url, status, is_official, approved_by, approved_at, vendor_store_badge_assignments(status, approved_by, approved_at, vendor_store_badges(*))),
+        product_group_items(group_id, group:product_groups(id, name, slug, badge_image_url, badge_storage_path, badge_alt_text, badge_updated_at, is_active, sort_order))
+        \${categoryId ? ', product_categories!inner(category_id)' : ''}
     `;
 
     let query = supabase
@@ -261,7 +262,8 @@ export function useProduct(slug: string | undefined) {
           product_tags:product_tags(tag_id),
           vendor:vendors(id, store_name, slug, logo_url, promotions_opt_in, company_name),
           vendor_store:vendor_stores(id, store_name, slug, logo_url, status, is_official, approved_by, approved_at, vendor_store_badge_assignments(status, approved_by, approved_at, vendor_store_badges(*))),
-          reviews:reviews(id, rating, title, body, created_at, user:profiles(first_name, last_name))
+          reviews:reviews(id, rating, title, body, created_at, user:profiles(first_name, last_name)),
+          product_group_items(group_id, group:product_groups(id, name, slug, badge_image_url, badge_storage_path, badge_alt_text, badge_updated_at, is_active, sort_order))
         `)
         .eq('slug', slug)
         .single();
@@ -590,7 +592,7 @@ export function useProductGroups() {
       const { data } = await supabase
         .from('product_groups')
         .select(`
-          id, name, slug, description, type, rules_json, show_on_home,
+          id, name, slug, description, type, rules_json, show_on_home, badge_image_url, badge_storage_path, badge_alt_text, badge_updated_at,
           product_group_items (
             product:products (
               *,
@@ -629,7 +631,7 @@ export function useProductGroup(slug: string | undefined) {
       const { data, error } = await supabase
         .from('product_groups')
         .select(`
-          id, name, slug, description, type, rules_json, is_active, show_on_home,
+          id, name, slug, description, type, rules_json, is_active, show_on_home, badge_image_url, badge_storage_path, badge_alt_text, badge_updated_at,
           product_group_items (
             product:products (
               *,
@@ -679,7 +681,7 @@ export function useProductGroupMetadata(slug: string | undefined) {
       setLoading(true);
       const { data } = await supabase
         .from('product_groups')
-        .select('id, name, slug, description, is_active, show_on_home')
+        .select('id, name, slug, description, is_active, show_on_home, badge_image_url, badge_storage_path, badge_alt_text, badge_updated_at')
         .eq('slug', slug)
         .eq('is_active', true)
         .single();
@@ -866,4 +868,25 @@ export function useStoreBadges(storeId: string | undefined) {
   }, [storeId]);
 
   return { badges, loading };
+}
+
+// Helper to resolve product group badge based on priority rules
+export function getProductGroupBadge(product: any) {
+  if (!product || !product.product_group_items) return null;
+  const items = Array.isArray(product.product_group_items) ? product.product_group_items : [];
+
+  // Find active group badges, filter by active status & presence of badge image, and sort by group sort_order ascending
+  const activeGroupBadges = items
+    .map((item: any) => item.group)
+    .filter((g: any) => g && g.is_active && g.badge_image_url)
+    .sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
+
+  if (activeGroupBadges.length > 0) {
+    return {
+      url: activeGroupBadges[0].badge_image_url,
+      alt: activeGroupBadges[0].badge_alt_text || activeGroupBadges[0].name || 'Cocarda de colección',
+      groupName: activeGroupBadges[0].name
+    };
+  }
+  return null;
 }

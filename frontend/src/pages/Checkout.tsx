@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRight, ChevronLeft, ChevronDown, Truck, Store, Tag, Sparkles, X, Home, Ticket, Share2, Clock, AlertCircle, MapPin, Building2, Search, Check, Trash2, Plus, Minus, XCircle } from 'lucide-react';
+import { ChevronRight, ChevronLeft, ChevronDown, Truck, Store, Tag, Sparkles, X, Home, Ticket, Share2, Clock, AlertCircle, MapPin, Building2, Search, Check, Trash2, Plus, Minus, XCircle, RefreshCcw } from 'lucide-react';
 import { useCartContext } from '../contexts/CartContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -244,6 +244,10 @@ export default function Checkout() {
     default_address?: { department: string; city: string; address: string; phone?: string } | null;
   }>>({});
   const [globalProviders, setGlobalProviders] = useState<Record<string, boolean>>({ dac: true, ues: false, soydelivery: false });
+  const [subordersShipping, setSubordersShipping] = useState<Record<string, {
+    method: 'delivery' | 'pickup' | 'dac_home' | 'dac_agency' | 'ues' | 'correo_uruguayo' | 'manual';
+    selectedAgency?: any | null;
+  }>>({});
 
   const getStoreKey = (item: any): string => {
     const vId = item.vendor_id;
@@ -351,36 +355,76 @@ export default function Checkout() {
     const dacActive = isPlatform ? true : !!s.dac?.active;
     const dacGlobalActive = !!globalProviders['dac'];
     if (dacActive && dacGlobalActive) {
-      const isDacCalculable = form.department && (isMontevideo ? form.barrio !== '' : (dacDeliveryMode === 'dac_agency' ? !!selectedAgency : !!form.city));
+      const isDacCalculable = form.department && (isMontevideo ? form.barrio !== '' : !!form.city);
+      
+      // DAC Home option
       if (!isDacCalculable) {
         options.push({
-          id: 'dac',
-          name: 'DAC',
+          id: 'dac_home',
+          name: 'DAC a domicilio',
           available: false,
-          reason: 'Falta dirección o ciudad/agencia de destino.',
+          reason: 'Falta dirección o ciudad de destino.',
           show: true
         });
-      } else if (dacShippingError && !vendorShippingCosts[storeKey] && !options.some(o => o.id === 'soydelivery' && o.available)) {
+      } else if (dacShippingError && !vendorShippingCosts[storeKey] && subordersShipping[storeKey]?.method === 'dac_home') {
         options.push({
-          id: 'dac',
-          name: 'DAC',
+          id: 'dac_home',
+          name: 'DAC a domicilio',
           available: false,
           reason: dacShippingError || 'No pudimos calcular el costo de envío.',
           show: true
         });
       } else {
         options.push({
-          id: 'dac',
-          name: 'DAC',
+          id: 'dac_home',
+          name: 'DAC a domicilio',
           available: true,
           cost: vendorShippingCosts[storeKey] ?? 180,
           show: true
         });
       }
+
+      // DAC Agency option (only for Interior)
+      if (!isMontevideo) {
+        const suborderSel = subordersShipping[storeKey];
+        const suborderAgency = suborderSel?.selectedAgency || selectedAgency;
+        if (!suborderAgency) {
+          options.push({
+            id: 'dac_agency',
+            name: 'Retiro en agencia DAC',
+            available: false,
+            reason: 'Falta seleccionar agencia de destino.',
+            show: true
+          });
+        } else if (dacShippingError && !vendorShippingCosts[storeKey] && subordersShipping[storeKey]?.method === 'dac_agency') {
+          options.push({
+            id: 'dac_agency',
+            name: 'Retiro en agencia DAC',
+            available: false,
+            reason: dacShippingError || 'No pudimos calcular el costo de envío.',
+            show: true
+          });
+        } else {
+          options.push({
+            id: 'dac_agency',
+            name: 'Retiro en agencia DAC',
+            available: true,
+            cost: vendorShippingCosts[storeKey] ?? 180,
+            show: true
+          });
+        }
+      }
     } else {
       options.push({
-        id: 'dac',
-        name: 'DAC',
+        id: 'dac_home',
+        name: 'DAC a domicilio',
+        available: false,
+        reason: 'No habilitado por el vendedor.',
+        show: false
+      });
+      options.push({
+        id: 'dac_agency',
+        name: 'Retiro en agencia DAC',
         available: false,
         reason: 'No habilitado por el vendedor.',
         show: false
@@ -525,16 +569,20 @@ export default function Checkout() {
           const vendorId = item.vendor_id;
           const vendorStoreId = item.vendor_store_id;
 
-          // 1. Fetch vendor shipping settings
-          const { data: vendor } = await supabase
-            .from('vendors')
-            .select('id, shipping_settings, promotions_opt_in')
-            .eq('id', vendorId)
-            .maybeSingle();
+          // 1. Fetch vendor shipping settings safely (guard against null/undefined)
+          let vendor = null;
+          if (vendorId && vendorId !== 'null' && vendorId !== 'undefined' && vendorId !== 'platform') {
+            const { data } = await supabase
+              .from('vendors')
+              .select('id, shipping_settings, promotions_opt_in')
+              .eq('id', vendorId)
+              .maybeSingle();
+            vendor = data;
+          }
 
-          // 2. Fetch dispatch address (store-specific first, then vendor default)
+          // 2. Fetch dispatch address safely
           let dispatchAddress = null;
-          if (vendorStoreId) {
+          if (vendorStoreId && vendorStoreId !== 'null' && vendorStoreId !== 'undefined') {
             const { data: storeAddr } = await supabase
               .from('vendor_dispatch_addresses')
               .select('department, city, address, phone')
@@ -544,7 +592,7 @@ export default function Checkout() {
             dispatchAddress = storeAddr;
           }
 
-          if (!dispatchAddress) {
+          if (!dispatchAddress && vendorId && vendorId !== 'null' && vendorId !== 'undefined' && vendorId !== 'platform') {
             const { data: defaultAddr } = await supabase
               .from('vendor_dispatch_addresses')
               .select('department, city, address, phone')
@@ -572,6 +620,51 @@ export default function Checkout() {
     
     loadVendorsShippingInfo();
   }, [items]);
+
+  useEffect(() => {
+    if (Object.keys(vendorsData).length === 0) return;
+    
+    setSubordersShipping(prev => {
+      const updated = { ...prev };
+      let changed = false;
+
+      uniqueStoreKeys.forEach(storeKey => {
+        if (!updated[storeKey]) {
+          const v = vendorsData[storeKey];
+          const isCollectiblesGroup = storeKey === 'collectibles' || storeKey === 'platform';
+          
+          let defaultMethod: any = 'dac_home';
+          
+          if (isCollectiblesGroup) {
+            defaultMethod = form.department === 'Montevideo' ? 'pickup' : 'dac_home';
+          } else {
+            const settings = v?.shipping_settings || {};
+            if (settings.pickup?.active) {
+              defaultMethod = 'pickup';
+            } else if (settings.dac?.active) {
+              defaultMethod = 'dac_home';
+            } else if (settings.ues?.active) {
+              defaultMethod = 'ues';
+            } else if (settings.correo_uruguayo?.active) {
+              defaultMethod = 'correo_uruguayo';
+            } else if (settings.manual?.active) {
+              defaultMethod = 'manual';
+            } else if (settings.soydelivery?.active) {
+              defaultMethod = 'delivery';
+            }
+          }
+
+          updated[storeKey] = {
+            method: defaultMethod,
+            selectedAgency: null
+          };
+          changed = true;
+        }
+      });
+
+      return changed ? updated : prev;
+    });
+  }, [vendorsData, uniqueStoreKeys, form.department]);
 
   // Destination type based on shipping form in Uruguay
   let destinationType = 'no_local_delivery';
@@ -662,19 +755,29 @@ export default function Checkout() {
     }
   }, [selectedShippingMethod]);
 
+  const hasAnyDelivery = uniqueStoreKeys.some(key => {
+    const sel = subordersShipping[key];
+    return sel && sel.method !== 'pickup';
+  });
+
+  const hasAnyDac = uniqueStoreKeys.some(key => {
+    const sel = subordersShipping[key];
+    return sel && (sel.method === 'dac_home' || sel.method === 'dac_agency');
+  });
+
   // Reset DAC cost/error when changing delivery mode or shipping method
   useEffect(() => {
     setDacShippingCost(null);
     setDacShippingError(null);
     setDetectedKOficina(null);
     setVendorShippingCosts({});
-  }, [dacDeliveryMode, selectedShippingMethod]);
+  }, [subordersShipping]);
 
   const resolvedCityForShipping = form.department === 'Montevideo' ? form.barrio : form.city;
   const isMontevideo = form.department === 'Montevideo';
 
   useEffect(() => {
-    if (shippingMethod !== 'delivery' || !form.department) {
+    if (!hasAnyDelivery || !form.department) {
       setDacShippingCost(null);
       setDacShippingError(null);
       setDetectedKOficina(null);
@@ -683,16 +786,27 @@ export default function Checkout() {
       return;
     }
 
-    if (!isMontevideo) {
-      if (dacDeliveryMode === 'dac_agency' && !selectedAgency) {
-        setDacShippingCost(null);
-        setDacShippingError(null);
-        setDetectedKOficina(null);
-        setVendorShippingCosts({});
-        setDacCalculationStatus('missing_data');
-        return;
+    // Check if any suborder is loading / missing data
+    // If a suborder is 'dac_agency' but has no selected agency, we cannot calculate
+    let missingAgency = false;
+    uniqueStoreKeys.forEach(key => {
+      const sel = subordersShipping[key];
+      if (sel && sel.method === 'dac_agency' && !sel.selectedAgency) {
+        missingAgency = true;
       }
-      if (dacDeliveryMode === 'dac_home' && !form.city) {
+    });
+
+    if (missingAgency) {
+      setDacShippingCost(null);
+      setDacShippingError(null);
+      setDetectedKOficina(null);
+      setVendorShippingCosts({});
+      setDacCalculationStatus('missing_data');
+      return;
+    }
+
+    if (isMontevideo) {
+      if (form.barrio === '') {
         setDacShippingCost(null);
         setDacShippingError(null);
         setDetectedKOficina(null);
@@ -701,7 +815,7 @@ export default function Checkout() {
         return;
       }
     } else {
-      if (form.barrio === '') {
+      if (!form.city) {
         setDacShippingCost(null);
         setDacShippingError(null);
         setDetectedKOficina(null);
@@ -720,12 +834,10 @@ export default function Checkout() {
       setDacShippingError(null);
       setDacCalculationStatus('loading');
 
-      // Technical event: shipping_calculation_started (Phase 5)
       trackGA4Event('shipping_calculation_started', {
         department: form.department,
         city: resolvedCityForShipping,
-        shipping_method: selectedShippingMethod,
-        dac_mode: dacDeliveryMode
+        shipping_method: 'packages_multimodal'
       });
 
       try {
@@ -743,31 +855,48 @@ export default function Checkout() {
         for (const [storeKey, groupItems] of Object.entries(groups)) {
           const groupTotal = groupItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
 
+          const sel = subordersShipping[storeKey];
+          if (!sel) {
+            costsByVendor[storeKey] = 0;
+            continue;
+          }
+
+          const method = sel.method;
           const v = vendorsData[storeKey];
           const hasSD = isMontevideo && v && v.shipping_settings?.soydelivery?.active && globalProviders['soydelivery'] && isSoyDeliveryAvailableForVendor(
             v.default_address, 
             { department: form.department, city: resolvedCityForShipping }
           ).available;
 
-          const isDacActive = v?.shipping_settings?.dac?.active && globalProviders['dac'];
-          const isUesActive = v?.shipping_settings?.ues?.active && globalProviders['ues'];
-          const isCorreoActive = v?.shipping_settings?.correo_uruguayo?.active && globalProviders['correo_uruguayo'];
-          const isManualActive = v?.shipping_settings?.manual?.active;
-
-          if (isMontevideo && hasSD) {
+          if (method === 'pickup') {
+            costsByVendor[storeKey] = 0;
+          } else if (method === 'manual') {
+            const fixedCost = Number(v?.shipping_settings?.manual?.fixed_cost || v?.shipping_settings?.manual?.fixed_price || 0);
+            costsByVendor[storeKey] = isNaN(fixedCost) ? 0 : fixedCost;
+            totalCost += costsByVendor[storeKey];
+          } else if (method === 'ues') {
+            const cost = isFreeShipping ? 0 : 220;
+            costsByVendor[storeKey] = cost;
+            totalCost += cost;
+          } else if (method === 'correo_uruguayo') {
+            const cost = isFreeShipping ? 0 : 180;
+            costsByVendor[storeKey] = cost;
+            totalCost += cost;
+          } else if (method === 'delivery' && hasSD) {
             const cost = isFreeShipping ? 0 : calculateShipping(resolvedCityForShipping, form.department, groupTotal, freeShippingThreshold);
             costsByVendor[storeKey] = cost;
             totalCost += cost;
-          } else if (isDacActive) {
+          } else if (method === 'dac_home' || method === 'dac_agency') {
             if (isFreeShipping) {
               costsByVendor[storeKey] = 0;
             } else {
-              const mode = isMontevideo ? 'home' : (dacDeliveryMode === 'dac_agency' ? 'agency' : 'home');
+              const dacMode = method === 'dac_agency' ? 'agency' : 'home';
+              const suborderAgency = sel.selectedAgency || selectedAgency;
               const bodyPayload: any = {
-                mode,
+                mode: dacMode,
                 department: form.department,
-                city: isMontevideo ? 'Montevideo' : (mode === 'agency' ? (selectedAgency?.city || form.city || selectedAgency?.office_name) : form.city),
-                locality: isMontevideo ? form.barrio : (mode === 'agency' ? (selectedAgency?.locality || form.barrio || "") : (form.barrio || "")),
+                city: isMontevideo ? 'Montevideo' : (dacMode === 'agency' ? (suborderAgency?.city || form.city || suborderAgency?.office_name) : form.city),
+                locality: isMontevideo ? form.barrio : (dacMode === 'agency' ? (suborderAgency?.locality || form.barrio || "") : (form.barrio || "")),
                 phone: form.phone,
                 package_quantity: 1,
                 package_type: 1,
@@ -779,16 +908,12 @@ export default function Checkout() {
                   price: item.price,
                   title: item.title
                 })),
-                address: isMontevideo ? form.street : (mode === 'agency' && selectedAgency ? (selectedAgency.address || selectedAgency.office_name) : form.street)
+                address: isMontevideo ? form.street : (dacMode === 'agency' && suborderAgency ? (suborderAgency.address || suborderAgency.office_name) : form.street)
               };
 
-              if (mode === 'agency' && selectedAgency) {
-                bodyPayload.dac_office_id = selectedAgency.id;
-                bodyPayload.k_oficina_destino = selectedAgency.k_oficina;
-              }
-
-              if (import.meta.env.DEV) {
-                console.log(`[Checkout Debug] Fallback to DAC for ${storeKey} con payload:`, bodyPayload);
+              if (dacMode === 'agency' && suborderAgency) {
+                bodyPayload.dac_office_id = suborderAgency.id;
+                bodyPayload.k_oficina_destino = suborderAgency.k_oficina;
               }
 
               const { data, error } = await supabase.functions.invoke('dac-get-cost', {
@@ -799,10 +924,6 @@ export default function Checkout() {
               if (!active) return;
               if (error) throw error;
 
-              if (import.meta.env.DEV) {
-                console.log(`[Checkout Debug] Respuesta dac-get-cost fallback para ${storeKey}:`, data);
-              }
-
               if (data && data.success) {
                 costsByVendor[storeKey] = data.cost;
                 totalCost += data.cost;
@@ -811,20 +932,8 @@ export default function Checkout() {
                 throw new Error(data?.error || "Error al calcular costo DAC.");
               }
             }
-          } else if (isUesActive) {
-            const cost = isFreeShipping ? 0 : 220;
-            costsByVendor[storeKey] = cost;
-            totalCost += cost;
-          } else if (isCorreoActive) {
-            const cost = isFreeShipping ? 0 : 180;
-            costsByVendor[storeKey] = cost;
-            totalCost += cost;
-          } else if (isManualActive) {
-            const fixedCost = Number(v.shipping_settings?.manual?.fixed_cost || v.shipping_settings?.manual?.fixed_price || 0);
-            costsByVendor[storeKey] = fixedCost;
-            totalCost += fixedCost;
           } else {
-            throw new Error("Este vendedor no tiene métodos de envío disponibles para tu dirección.");
+            throw new Error(`El vendedor ${getVendorName(storeKey)} no tiene métodos de envío disponibles para tu selección.`);
           }
         }
 
@@ -834,38 +943,20 @@ export default function Checkout() {
         setDetectedKOficina(lastKOficina);
         setDacCalculationStatus('success');
 
-        // Technical event: shipping_calculation_success (Phase 5)
-        trackGA4Event('shipping_calculation_success', {
+      } catch (err: any) {
+        if (!active) return;
+        const errorMessage = err.message || "Error calculando el costo de envío.";
+        setDacShippingError(errorMessage);
+        setDacCalculationStatus('error');
+        setDacShippingCost(null);
+        setVendorShippingCosts({});
+
+        trackGA4Event('shipping_calculation_error', {
           department: form.department,
           city: resolvedCityForShipping,
-          shipping_cost: isFreeShipping ? 0 : totalCost,
-          is_free: isFreeShipping
+          error_message: errorMessage
         });
-      } catch (err: any) {
-        if (err.name === 'AbortError') {
-          if (import.meta.env.DEV) {
-            console.log('[Checkout Debug] Aborted previous DAC cost fetch.');
-          }
-          return;
-        }
-        console.error("Error fetching shipping cost:", err);
-        if (active) {
-          const errorMessage = err.message || "No pudimos calcular el costo de envío para esta localidad.";
-          setDacShippingError(errorMessage);
-          setDacShippingCost(null);
-          setDetectedKOficina(null);
-          setDacCalculationStatus('error');
-
-          // Technical event: shipping_calculation_error (Phase 5)
-          trackGA4Event('shipping_calculation_error', {
-            department: form.department,
-            city: resolvedCityForShipping,
-            error_message: errorMessage
-          });
-
-          // Clarity Custom Event: shipping_calculation_error (Phase 6)
-          trackClarityEvent('shipping_calculation_error');
-        }
+        trackClarityEvent('shipping_calculation_error');
       } finally {
         if (active) {
           setDacShippingLoading(false);
@@ -895,20 +986,29 @@ export default function Checkout() {
     items.length,
     total,
     vendorsData,
-    recalculateTrigger
+    recalculateTrigger,
+    subordersShipping,
+    hasAnyDelivery,
+    hasAnyDac
   ]);
 
+
+
   const isLocationSelected = 
-    shippingMethod === 'pickup' || 
-    (shippingMethod === 'delivery' && (
-      (isMontevideo && form.barrio !== '' && Object.keys(vendorShippingCosts).length === uniqueStoreKeys.length) || 
-      (!isMontevideo && dacShippingCost !== null)
+    !hasAnyDelivery || 
+    (hasAnyDelivery && (
+      (!hasAnyDac && form.phone && (!isMontevideo || form.barrio !== '')) ||
+      (hasAnyDac && form.phone && form.ci && validateUruguayanCI(form.ci) && 
+        uniqueStoreKeys.every(key => {
+          const sel = subordersShipping[key];
+          if (!sel) return true;
+          if (sel.method === 'dac_agency' && !sel.selectedAgency) return false;
+          return true;
+        })
+      )
     ));
   
-  let shipping = 0;
-  if (shippingMethod === 'delivery') {
-    shipping = Object.values(vendorShippingCosts).reduce((sum, cost) => sum + cost, 0);
-  }
+  let shipping = Object.values(vendorShippingCosts).reduce((sum, cost) => sum + cost, 0);
 
   // Debug log for shipping cost final
   useEffect(() => {
@@ -951,7 +1051,7 @@ export default function Checkout() {
     return { hour: h || 0, minute: m || 0 };
   };
 
-  const getLogisticsDetails = () => {
+  const getLogisticsDetails = (city: string, department: string) => {
     if (shippingMethod === 'pickup') {
       return {
         providerName: null,
@@ -960,7 +1060,7 @@ export default function Checkout() {
       };
     }
 
-    const isMontevideo = form.department === 'Montevideo';
+    const isMontevideo = department === 'Montevideo';
     const { hour: curHour, minute: curMin, dayOfWeek } = getUruguayDateTime();
 
     const hasAnySD = items.some(item => {
@@ -968,7 +1068,7 @@ export default function Checkout() {
       const v = vendorsData[storeKey];
       return isMontevideo && v && isSoyDeliveryAvailableForVendor(
         v.default_address, 
-        { department: form.department, city: resolvedCityForShipping }
+        { department, city }
       ).available;
     });
 
@@ -977,7 +1077,7 @@ export default function Checkout() {
       const v = vendorsData[storeKey];
       return isMontevideo && v && isSoyDeliveryAvailableForVendor(
         v.default_address, 
-        { department: form.department, city: resolvedCityForShipping }
+        { department, city }
       ).available;
     });
 
@@ -1040,7 +1140,7 @@ export default function Checkout() {
     }
   };
 
-  const logistics = getLogisticsDetails();
+  const logistics = getLogisticsDetails(resolvedCityForShipping, form.department);
 
   const handleDepartmentChange = (val: string) => {
     setForm(current => ({
@@ -1545,40 +1645,54 @@ export default function Checkout() {
   }
 
   const isPaymentBlocked = () => {
-    if (selectedShippingMethod === 'pickup') {
-      if (hasPickupError) return true;
+    // Check if any package has pickup error
+    const hasAnyPickupError = uniqueStoreKeys.some(key => {
+      const sel = subordersShipping[key];
+      if (sel && sel.method === 'pickup') {
+        const groupItems = items.filter(item => getStoreKey(item) === key);
+        const groupTotal = groupItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
+        const options = getVendorShippingOptions(key, groupTotal);
+        return !options.some(o => o.id === 'pickup' && o.available);
+      }
       return false;
-    }
+    });
+    if (hasAnyPickupError) return true;
 
-    // Delivery check: block if calculations are not ready or errored
-    if (dacCalculationStatus === 'loading' || dacCalculationStatus === 'error' || dacCalculationStatus === 'missing_data') {
-      return true;
-    }
-    if (dacShippingCost === null) {
-      return true;
-    }
+    if (hasAnyDelivery) {
+      if (dacCalculationStatus === 'loading' || dacCalculationStatus === 'error' || dacCalculationStatus === 'missing_data') {
+        return true;
+      }
+      if (dacShippingCost === null) {
+        return true;
+      }
 
-    const isMvd = form.department === 'Montevideo';
-
-    if (selectedShippingMethod === 'delivery') {
-      if (dacShippingError !== null) return true;
-      if (!form.department || !form.street || !form.phone) return true;
-      if (isMvd && !form.barrio) return true;
-      if (!isMvd && !form.city) return true;
-    }
-    if (selectedShippingMethod === 'dac' || selectedShippingMethod === 'dac_home') {
-      if (dacShippingError !== null) return true;
-      if (!form.department || !form.street || !form.phone) return true;
-      if (isMvd && !form.barrio) return true;
-      if (!isMvd && !form.city) return true;
-      if (!form.ci || !validateUruguayanCI(form.ci)) return true;
-    }
-    if (selectedShippingMethod === 'dac_agency') {
       if (dacShippingError !== null) return true;
       if (!form.department || !form.phone) return true;
-      if (!selectedAgency) return true;
-      if (!form.ci || !validateUruguayanCI(form.ci)) return true;
+
+      const hasAnyHomeDelivery = uniqueStoreKeys.some(key => {
+        const sel = subordersShipping[key];
+        return sel && !['pickup', 'dac_agency'].includes(sel.method);
+      });
+
+      if (hasAnyHomeDelivery) {
+        const isMvd = form.department === 'Montevideo';
+        if (isMvd && !form.barrio) return true;
+        if (!isMvd && !form.city) return true;
+        if (!form.street) return true;
+      }
+
+      if (hasAnyDac) {
+        if (!form.ci || !validateUruguayanCI(form.ci)) return true;
+      }
+
+      // Check if all agency selections are resolved
+      const missingAgency = uniqueStoreKeys.some(key => {
+        const sel = subordersShipping[key];
+        return sel && sel.method === 'dac_agency' && !sel.selectedAgency;
+      });
+      if (missingAgency) return true;
     }
+
     return false;
   };
 
@@ -1657,6 +1771,27 @@ export default function Checkout() {
          }
       }
 
+      const subordersShippingPayload: Record<string, any> = {};
+      uniqueStoreKeys.forEach(key => {
+        const sel = subordersShipping[key];
+        if (sel) {
+          subordersShippingPayload[key] = {
+            shipping_method: sel.method,
+            dac_office_id: sel.selectedAgency?.id || null,
+            dac_k_oficina_destino: sel.selectedAgency?.k_oficina || null,
+            dac_office_name: sel.selectedAgency?.office_name || null,
+            dac_office_address: sel.selectedAgency?.address || sel.selectedAgency?.office_name || null,
+            ci: form.ci || null
+          };
+        }
+      });
+
+      const firstKey = uniqueStoreKeys[0] || 'collectibles';
+      const firstSelection = subordersShipping[firstKey];
+      const primaryMethod = firstSelection?.method || 'pickup';
+      const primaryAgency = firstSelection?.selectedAgency || null;
+      const primaryDacMode = primaryMethod === 'dac_agency' ? 'agency' : 'home';
+
       const order = await createCheckoutOrder({
         items: items.map((item) => ({
           product_id: item.product_id,
@@ -1671,32 +1806,32 @@ export default function Checkout() {
         affiliate_code: affiliateCode.trim() || undefined,
         payment_method: paymentMethod,
         currency: 'UYU',
-        shipping_method: selectedShippingMethod,
+        shipping_method: primaryMethod,
         shipping_address: {
           first_name: form.first_name,
           last_name: form.last_name,
-          street: selectedShippingMethod === 'pickup' ? 'Retiro en local' : (selectedShippingMethod === 'dac_agency' ? (selectedAgency?.address || selectedAgency?.office_name || 'Retiro en agencia DAC') : form.street),
+          street: primaryMethod === 'pickup' ? 'Retiro en local' : (primaryMethod === 'dac_agency' ? (primaryAgency?.address || primaryAgency?.office_name || 'Retiro en agencia DAC') : form.street),
           apartment: form.apartment || undefined,
-          city: selectedShippingMethod === 'pickup' ? 'Montevideo' : (selectedShippingMethod === 'dac_agency' ? (selectedAgency?.city || selectedAgency?.locality || form.city || '') : form.city),
-          department: selectedShippingMethod === 'pickup' ? 'Montevideo' : (selectedShippingMethod === 'dac_agency' ? (selectedAgency?.department || form.department) : form.department),
+          city: primaryMethod === 'pickup' ? 'Montevideo' : (primaryMethod === 'dac_agency' ? (primaryAgency?.city || primaryAgency?.locality || form.city || '') : form.city),
+          department: primaryMethod === 'pickup' ? 'Montevideo' : (primaryMethod === 'dac_agency' ? (primaryAgency?.department || form.department) : form.department),
           postal_code: form.postal_code || undefined,
           country: form.country,
-          barrio: selectedShippingMethod === 'pickup' ? undefined : form.barrio,
-          reference: selectedShippingMethod === 'pickup' ? undefined : form.reference,
+          barrio: primaryMethod === 'pickup' ? undefined : form.barrio,
+          reference: primaryMethod === 'pickup' ? undefined : form.reference,
           international_courier: items.some(i => i.is_international) ? internationalCourier : undefined,
           international_suite: items.some(i => i.is_international) && internationalCourier === 'urubox' ? courierSuite : undefined,
           international_miami_address: items.some(i => i.is_international) && internationalCourier === 'other' ? courierAddress : undefined,
-          ci: (selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') ? form.ci : undefined,
-          ...(selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency' ? {
-            dac_delivery_mode: dacDeliveryMode,
+          ci: (primaryMethod === 'dac_home' || primaryMethod === 'dac_agency') ? form.ci : undefined,
+          ...((primaryMethod === 'dac_home' || primaryMethod === 'dac_agency') ? {
+            dac_delivery_mode: primaryDacMode,
             shipping_provider: 'DAC',
-            shipping_method: selectedShippingMethod,
+            shipping_method: primaryMethod,
           } : {}),
-          ...(selectedShippingMethod === 'dac_agency' && selectedAgency ? {
-            dac_office_id: selectedAgency.id,
-            dac_k_oficina_destino: selectedAgency.k_oficina,
-            dac_office_name: selectedAgency.office_name,
-            dac_office_address: selectedAgency.address || selectedAgency.office_name,
+          ...(primaryMethod === 'dac_agency' && primaryAgency ? {
+            dac_office_id: primaryAgency.id,
+            dac_k_oficina_destino: primaryAgency.k_oficina,
+            dac_office_name: primaryAgency.office_name,
+            dac_office_address: primaryAgency.address || primaryAgency.office_name,
           } : {}),
         },
         customer_email: form.email,
@@ -1707,6 +1842,7 @@ export default function Checkout() {
         accepted_terms_version: "2026-05-27",
         email_opt_in: emailOptIn,
         whatsapp_opt_in: whatsappOptIn,
+        suborders_shipping: subordersShippingPayload,
       });
 
       console.log("create-order success:", order);
@@ -1781,8 +1917,22 @@ export default function Checkout() {
       });
     }
     
-    if (shippingMethod === 'delivery') {
-      if (!isDacAgencyMode) {
+    if (hasAnyDelivery) {
+      if (!form.phone || !form.phone.trim()) {
+        errorsList.push({
+          field: 'phone',
+          code: 'REQUIRED',
+          message: 'El teléfono es obligatorio para coordinar el envío.'
+        });
+      }
+
+      // Check if any package is using home delivery (requires address)
+      const hasAnyHomeDelivery = uniqueStoreKeys.some(key => {
+        const sel = subordersShipping[key];
+        return sel && !['pickup', 'dac_agency'].includes(sel.method);
+      });
+
+      if (hasAnyHomeDelivery) {
         if (isMvd) {
           if (!form.barrio) {
             errorsList.push({
@@ -1808,18 +1958,9 @@ export default function Checkout() {
           });
         }
       }
-      
-      if (!form.phone || !form.phone.trim()) {
-        errorsList.push({
-          field: 'phone',
-          code: 'REQUIRED',
-          message: 'El teléfono es obligatorio para coordinar el envío.'
-        });
-      }
 
       // CI checking
-      const isDac = selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency' || selectedShippingMethod === 'dac';
-      if (isDac && (!form.ci || !validateUruguayanCI(form.ci))) {
+      if (hasAnyDac && (!form.ci || !validateUruguayanCI(form.ci))) {
         errorsList.push({
           field: 'ci',
           code: 'INVALID_CI',
@@ -1827,14 +1968,17 @@ export default function Checkout() {
         });
       }
 
-      // 2. Agency checking
-      if (selectedShippingMethod === 'dac_agency' && !selectedAgency) {
-        errorsList.push({
-          field: 'agency',
-          code: 'REQUIRED',
-          message: 'Debe seleccionar una agencia DAC de destino.'
-        });
-      }
+      // 2. Agency checking per suborder
+      uniqueStoreKeys.forEach(key => {
+        const sel = subordersShipping[key];
+        if (sel && sel.method === 'dac_agency' && !sel.selectedAgency) {
+          errorsList.push({
+            field: `agency_${key}`,
+            code: 'REQUIRED_AGENCY',
+            message: `Debe seleccionar una agencia DAC para el paquete de ${getVendorName(key)}.`
+          });
+        }
+      });
 
       // 3. Calculation state checking
       if (dacCalculationStatus === 'loading') {
@@ -1871,8 +2015,7 @@ export default function Checkout() {
     }
 
     // 4. Shipping Groups Mixed validation
-    const uniqueKeys = Array.from(new Set(items.map(item => getStoreKey(item))));
-    uniqueKeys.forEach(key => {
+    uniqueStoreKeys.forEach(key => {
       const groupItems = items.filter(item => getStoreKey(item) === key);
       const isCollectiblesGroup = key === 'collectibles' || key === 'platform';
       const v = vendorsData[key];
@@ -1880,25 +2023,15 @@ export default function Checkout() {
       const groupTotal = groupItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
       const options = getVendorShippingOptions(key, groupTotal);
       
-      const hasValidMethod = options.some(o => o.available && (
-        (shippingMethod === 'pickup' && o.id === 'pickup') ||
-        (shippingMethod === 'delivery' && (
-          (selectedShippingMethod === 'dac_agency' && o.id === 'dac') ||
-          (selectedShippingMethod === 'dac_home' && o.id === 'dac') ||
-          (selectedShippingMethod === 'delivery' && o.id === 'soydelivery') ||
-          (selectedShippingMethod === 'ues' && o.id === 'ues') ||
-          (selectedShippingMethod === 'correo_uruguayo' && o.id === 'correo_uruguayo') ||
-          (selectedShippingMethod === 'manual' && o.id === 'manual')
-        ))
-      ));
+      const sel = subordersShipping[key];
+      const hasValidMethod = sel && options.some(o => o.available && o.id === sel.method);
 
       console.log('[CHECKOUT_SHIPPING_GROUP_VALIDATION]', {
         sellerName: getVendorName(key),
         sellerType: isCollectiblesGroup ? 'collectibles' : 'vendor',
         itemCount: groupItems.length,
-        selectedMethod: selectedShippingMethod,
-        deliveryMode: dacDeliveryMode,
-        agencyId: selectedAgency?.id || null,
+        selectedMethod: sel?.method || null,
+        agencyId: sel?.selectedAgency?.id || null,
         valid: hasValidMethod,
         errors: !v ? ['Vendor data not loaded'] : (!hasValidMethod ? ['No available shipping method for current selection'] : [])
       });
@@ -1907,15 +2040,14 @@ export default function Checkout() {
         errorsList.push({
           field: 'calculation',
           code: 'INVALID_GROUP_SHIPPING',
-          message: `El vendedor ${getVendorName(key)} no tiene métodos de envío disponibles para tu dirección.`
+          message: `El vendedor ${getVendorName(key)} no tiene métodos de envío disponibles para tu selección.`
         });
       }
     });
 
     // 5. Agency visual vs internal state validation & debug
     console.log('[CHECKOUT_AGENCY_STATE_DEBUG]', {
-      selectedDacAgencyVisual: selectedAgency?.office_name || null,
-      selectedAgency: selectedAgency
+      subordersShipping: subordersShipping
     });
 
     // Map list to Record
@@ -1948,8 +2080,8 @@ export default function Checkout() {
       else if (firstErrorKey === 'barrio') elementId = 'shipping-barrio';
       else if (firstErrorKey === 'street') elementId = 'shipping-street';
       else if (firstErrorKey === 'phone') elementId = 'shipping-phone';
-      else if (firstErrorKey === 'agency') elementId = 'shipping-agency-selector';
-      else if (firstErrorKey === 'calculation') elementId = 'shipping-calculation-block';
+      else if (firstErrorKey.startsWith('agency')) elementId = 'shipping-packages-block';
+      else if (firstErrorKey === 'calculation') elementId = 'shipping-packages-block';
       else if (firstErrorKey === 'ci') elementId = 'shipping-ci-block';
 
       if (elementId) {
@@ -1973,58 +2105,52 @@ export default function Checkout() {
       return !!(form.email && form.first_name && form.last_name && form.phone);
     }
     if (step === 2) {
-      if (shippingMethod === 'pickup') return true;
-      if (shippingMethod === 'delivery') {
-        const isMvd = form.department === 'Montevideo';
-
-        const baseFieldsValid = isDacAgencyMode
-          ? !!form.department
-          : (isMvd
-              ? !!(form.street && form.department && form.barrio)
-              : !!(form.street && form.department && form.city)
-            );
+      if (!form.department) return false;
+      if (hasAnyDelivery) {
+        if (!form.phone || !form.phone.trim()) return false;
         
-        if (!baseFieldsValid) return false;
-        
-        // CI check (required for DAC methods)
-        const isDac = selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency' || selectedShippingMethod === 'dac';
-        if (isDac && (!form.ci || !validateUruguayanCI(form.ci))) {
-          return false;
-        }
-
-        // Agency check
-        if (selectedShippingMethod === 'dac_agency' && !selectedAgency) {
-          return false;
-        }
-
-        // DAC Shipping calculation state checks (for delivery mode)
-        if (dacCalculationStatus !== 'success' || dacShippingCost === null) {
-          return false;
-        }
-
-        // Mixed cart group checks
-        const uniqueKeys = Array.from(new Set(items.map(item => getStoreKey(item))));
-        const groupsValid = uniqueKeys.every(key => {
-          const groupItems = items.filter(item => getStoreKey(item) === key);
-          const groupTotal = groupItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
-          const options = getVendorShippingOptions(key, groupTotal);
-          return options.some(o => o.available && (
-            (shippingMethod === 'pickup' && o.id === 'pickup') ||
-            (shippingMethod === 'delivery' && (
-              (selectedShippingMethod === 'dac_agency' && o.id === 'dac') ||
-              (selectedShippingMethod === 'dac_home' && o.id === 'dac') ||
-              (selectedShippingMethod === 'delivery' && o.id === 'soydelivery') ||
-              (selectedShippingMethod === 'ues' && o.id === 'ues') ||
-              (selectedShippingMethod === 'correo_uruguayo' && o.id === 'correo_uruguayo') ||
-              (selectedShippingMethod === 'manual' && o.id === 'manual')
-            ))
-          ));
+        const hasAnyHomeDelivery = uniqueStoreKeys.some(key => {
+          const sel = subordersShipping[key];
+          return sel && !['pickup', 'dac_agency'].includes(sel.method);
         });
 
-        if (!groupsValid) return false;
+        if (hasAnyHomeDelivery) {
+          const isMvd = form.department === 'Montevideo';
+          if (isMvd) {
+            if (!form.barrio) return false;
+          } else {
+            if (!form.city) return false;
+          }
+          if (!form.street || !form.street.trim()) return false;
+        }
 
-        return true;
+        if (hasAnyDac && (!form.ci || !validateUruguayanCI(form.ci))) {
+          return false;
+        }
+
+        // Agency check per suborder
+        const agenciesValid = uniqueStoreKeys.every(key => {
+          const sel = subordersShipping[key];
+          if (sel && sel.method === 'dac_agency' && !sel.selectedAgency) return false;
+          return true;
+        });
+        if (!agenciesValid) return false;
+
+        // Shipping calculation state check
+        if (dacCalculationStatus !== 'success' || dacShippingCost === null) return false;
       }
+
+      // Group shipping validation
+      const groupsValid = uniqueStoreKeys.every(key => {
+        const groupItems = items.filter(item => getStoreKey(item) === key);
+        const groupTotal = groupItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
+        const options = getVendorShippingOptions(key, groupTotal);
+        const sel = subordersShipping[key];
+        return sel && options.some(o => o.available && o.id === sel.method);
+      });
+      if (!groupsValid) return false;
+
+      return true;
     }
     return true;
   };
@@ -2032,9 +2158,7 @@ export default function Checkout() {
   const goNext = () => {
     console.log('[CHECKOUT_CONTINUE_CLICKED]', {
       currentStep,
-      selectedShippingMethod,
-      dacDeliveryMode,
-      selectedAgency,
+      subordersShipping,
       form,
       loading: dacShippingLoading,
       isSubmitting
@@ -2064,63 +2188,6 @@ export default function Checkout() {
       }
 
       if (!canAdvance) {
-        // If validateStep2 passed but canAdvanceStep failed, highlight the specific fields
-        const errors: Record<string, string> = {};
-        const isDac = selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency' || selectedShippingMethod === 'dac';
-        
-        if (isDac && (!form.ci || !validateUruguayanCI(form.ci))) {
-          errors.ci = 'La Cédula de Identidad es obligatoria e inválida (requerida por DAC).';
-        }
-        if (selectedShippingMethod === 'dac_agency' && !selectedAgency) {
-          errors.agency = 'Debe seleccionar una agencia DAC de destino para retirar su pedido.';
-        }
-        if (dacCalculationStatus === 'loading') {
-          errors.calculation = 'Por favor, espere a que termine de calcularse el costo de envío.';
-        } else if (dacCalculationStatus === 'missing_data') {
-          errors.calculation = 'Faltan ingresar datos para calcular el costo de envío.';
-        } else if (dacCalculationStatus === 'error') {
-          errors.calculation = dacShippingError || 'Ocurrió un error al calcular el costo de envío. Por favor intente de nuevo.';
-        } else if (dacCalculationStatus === 'idle') {
-          errors.calculation = 'Es necesario calcular el costo de envío.';
-        } else if (dacShippingCost === null) {
-          errors.calculation = 'El costo de envío es desconocido. No es posible completar la compra.';
-        }
-
-        // Mixed cart group checks
-        const uniqueKeys = Array.from(new Set(items.map(item => getStoreKey(item))));
-        uniqueKeys.forEach(key => {
-          const groupItems = items.filter(item => getStoreKey(item) === key);
-          const groupTotal = groupItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
-          const options = getVendorShippingOptions(key, groupTotal);
-          const hasValidMethod = options.some(o => o.available && (
-            (shippingMethod === 'pickup' && o.id === 'pickup') ||
-            (shippingMethod === 'delivery' && (
-              (selectedShippingMethod === 'dac_agency' && o.id === 'dac') ||
-              (selectedShippingMethod === 'dac_home' && o.id === 'dac') ||
-              (shippingMethod === 'delivery' && o.id === 'soydelivery') ||
-              (shippingMethod === 'ues' && o.id === 'ues') ||
-              (shippingMethod === 'correo_uruguayo' && o.id === 'correo_uruguayo') ||
-              (shippingMethod === 'manual' && o.id === 'manual')
-            ))
-          ));
-          if (!hasValidMethod) {
-            errors.calculation = `El vendedor ${getVendorName(key)} no tiene métodos de envío disponibles para tu dirección.`;
-          }
-        });
-
-        if (Object.keys(errors).length > 0) {
-          setStep2Errors(errors);
-          const firstKey = Object.keys(errors)[0];
-          let elementId = '';
-          if (firstKey === 'ci') elementId = 'shipping-ci-block';
-          else if (firstKey === 'agency') elementId = 'shipping-agency-selector';
-          else if (firstKey === 'calculation') elementId = 'shipping-calculation-block';
-          
-          if (elementId) {
-            const el = document.getElementById(elementId);
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }
-        }
         return;
       }
 
@@ -2128,7 +2195,7 @@ export default function Checkout() {
       trackGA4Event('add_shipping_info', {
         currency: 'UYU',
         value: subtotalWithShipping,
-        shipping_tier: selectedShippingMethod,
+        shipping_tier: 'packages_multimodal',
         items: mapCartItemsToGA4(items)
       });
 
@@ -2447,286 +2514,238 @@ export default function Checkout() {
                     </div>
                   )}
 
-                  <h3 className="font-bold text-white mb-4">Envío dentro de Uruguay</h3>
-                  {/* Shipping method selection */}
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    {form.department === 'Montevideo' ? (
-                      <label className={`flex items-start gap-4 p-4 border-2 cursor-pointer transition-all ${shippingMethod === 'delivery' ? 'border-primary-500 bg-primary-500/10' : 'border-white/10 hover:border-white/10 bg-white/5'}`}>
-                        <input type="radio" checked={shippingMethod === 'delivery'} onChange={() => setShippingMethod('delivery')} className="sr-only" />
-                        <div className={`p-2 ${shippingMethod === 'delivery' ? 'bg-primary-500/100 text-white' : 'glass text-slate-400 shadow-sm'}`}>
-                          <Truck className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <div className="font-bold text-white">Envío a domicilio</div>
-                          <div className="text-sm text-slate-400 mt-1">Recibilo en tu puerta</div>
-                        </div>
-                      </label>
-                    ) : (
-                      <label className={`flex items-start gap-4 p-4 border-2 cursor-pointer transition-all ${shippingMethod === 'delivery' ? 'border-primary-500 bg-primary-500/10' : 'border-white/10 hover:border-white/10 bg-white/5'}`}>
-                        <input type="radio" checked={shippingMethod === 'delivery'} onChange={() => setShippingMethod('delivery')} className="sr-only" />
-                        <div className={`p-2 ${shippingMethod === 'delivery' ? 'bg-primary-500/100 text-white' : 'glass text-slate-400 shadow-sm'}`}>
-                          <Truck className="w-5 h-5" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="font-bold text-white">Envío por DAC al interior</div>
-                          <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                            Elegí cómo querés recibir tu pedido por DAC.
-                          </p>
-                        </div>
-                      </label>
-                    )}
-                    <label className={`flex items-start gap-4 p-4 border-2 transition-all ${
-                      hasPickupError 
-                        ? 'border-red-500/20 bg-red-500/5 opacity-60 cursor-not-allowed' 
-                        : (shippingMethod === 'pickup' ? 'border-primary-500 bg-primary-500/10 cursor-pointer' : 'border-white/10 hover:border-white/10 bg-white/5 cursor-pointer')
-                    }`}>
-                      <input 
-                        type="radio" 
-                        checked={shippingMethod === 'pickup'} 
-                        disabled={hasPickupError} 
-                        onChange={() => {
-                          if (!hasPickupError) setShippingMethod('pickup');
-                        }} 
-                        className="sr-only" 
-                      />
-                      <div className={`p-2 ${shippingMethod === 'pickup' && !hasPickupError ? 'bg-primary-500/100 text-white' : 'glass text-slate-400 shadow-sm'}`}>
-                        <Store className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <div className="font-bold text-white">Retiro en local</div>
-                        {hasPickupError ? (
-                          <div className="text-xs text-red-400 font-medium mt-1 leading-normal">
-                            {cannotPickupVendors.length > 0 ? (
-                              `No disponible: ${cannotPickupVendors.map(k => getVendorName(k)).join(', ')} no admite retiro en local.`
-                            ) : (
-                              'Retiro no disponible: el vendedor no configuró dirección.'
+                  <h3 className="font-bold text-white mb-4">Opciones de Envío por Paquete</h3>
+                  <p className="text-xs text-slate-400 mb-6 leading-relaxed">
+                    Tu pedido incluye productos de distintos vendedores. Seleccioná el método de entrega preferido para cada paquete.
+                  </p>
+
+                  <div id="shipping-packages-block" className="space-y-6">
+                    {uniqueStoreKeys.map(storeKey => {
+                      const groupItems = items.filter(item => getStoreKey(item) === storeKey);
+                      const groupTotal = groupItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
+                      const options = getVendorShippingOptions(storeKey, groupTotal);
+                      const selection = subordersShipping[storeKey] || { method: 'pickup', selectedAgency: null };
+                      const vendorName = getVendorName(storeKey);
+                      
+                      const selectedOption = options.find(o => o.id === selection.method);
+                      const isCostLoading = dacShippingLoading && (selection.method === 'dac_home' || selection.method === 'dac_agency');
+                      const packageCost = vendorShippingCosts[storeKey];
+                      const hasCostError = dacShippingError && !packageCost && (selection.method === 'dac_home' || selection.method === 'dac_agency');
+
+                      return (
+                        <div key={storeKey} className="p-5 rounded-2xl border border-white/10 bg-white/5 space-y-4">
+                          <div className="flex items-center justify-between border-b border-white/15 pb-3">
+                            <div>
+                              <h4 className="font-bold text-white text-base">Paquete de {vendorName}</h4>
+                              <p className="text-xs text-slate-400 mt-0.5">
+                                {groupItems.length} {groupItems.length === 1 ? 'producto' : 'productos'} · Subtotal: ${groupTotal} UYU
+                              </p>
+                            </div>
+                            {selection.method !== 'pickup' && packageCost !== undefined && !isCostLoading && (
+                              <span className="text-xs font-black px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400">
+                                {packageCost === 0 ? 'Envío Gratis' : `Envío: $${packageCost} UYU`}
+                              </span>
                             )}
                           </div>
-                        ) : (
-                          <div className="text-sm text-green-600 font-medium mt-1">GRATIS</div>
-                        )}
-                      </div>
-                    </label>
-                  </div>
 
-                  {/* DAC Multimodal Selection — only when delivery is selected and NOT Montevideo */}
-                  {form.department !== 'Montevideo' && shippingMethod === 'delivery' && (
-                    <div className="mt-6 pt-6 border-t border-white/10 space-y-4">
-                      <div className="px-1">
-                        <p className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">Elegí cómo querés recibir por DAC</p>
-                        <div className="grid grid-cols-2 gap-3">
-                          {/* Card A: Home Delivery */}
-                          <button
-                            type="button"
-                            onClick={() => { setDacDeliveryMode('dac_home'); setSelectedAgency(null); }}
-                            className={`text-left p-4 rounded-xl border-2 transition-all duration-200 ${
-                              dacDeliveryMode === 'dac_home'
-                                ? 'border-primary-500 bg-primary-500/10 shadow-lg shadow-primary-500/10'
-                                : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/[0.07]'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5 mb-2">
-                              <div className={`p-1.5 rounded-lg ${dacDeliveryMode === 'dac_home' ? 'bg-primary-500 text-white' : 'bg-white/10 text-slate-400'}`}>
-                                <Truck className="w-4 h-4" />
-                              </div>
-                              <span className="font-bold text-sm text-white">Entrega en domicilio</span>
-                            </div>
-                            <p className="text-[11px] text-slate-400 leading-relaxed">
-                              DAC entrega el pedido en la dirección que ingresaste.
-                            </p>
-                          </button>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {options.filter(o => o.show !== false).map(opt => {
+                              const isSelected = selection.method === opt.id;
+                              
+                              let icon = <Truck className="w-4 h-4" />;
+                              if (opt.id === 'pickup') icon = <Store className="w-4 h-4" />;
+                              if (opt.id === 'dac_agency') icon = <Building2 className="w-4 h-4" />;
 
-                          {/* Card B: Agency Pickup */}
-                          <button
-                            type="button"
-                            onClick={() => setDacDeliveryMode('dac_agency')}
-                            className={`text-left p-4 rounded-xl border-2 transition-all duration-200 ${
-                              dacDeliveryMode === 'dac_agency'
-                                ? 'border-amber-500 bg-amber-500/10 shadow-lg shadow-amber-500/10'
-                                : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/[0.07]'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5 mb-2">
-                              <div className={`p-1.5 rounded-lg ${dacDeliveryMode === 'dac_agency' ? 'bg-amber-500 text-white' : 'bg-white/10 text-slate-400'}`}>
-                                <Building2 className="w-4 h-4" />
-                              </div>
-                              <span className="font-bold text-sm text-white">Retiro en agencia DAC</span>
-                            </div>
-                            <p className="text-[11px] text-slate-400 leading-relaxed">
-                              Enviamos tu pedido a una agencia DAC y lo retirás allí con tu documento.
-                            </p>
-                          </button>
-                        </div>
-                      </div>
+                              return (
+                                <button
+                                  key={opt.id}
+                                  type="button"
+                                  disabled={!opt.available && !isSelected}
+                                  onClick={() => {
+                                    setSubordersShipping(prev => ({
+                                      ...prev,
+                                      [storeKey]: {
+                                        method: opt.id as any,
+                                        selectedAgency: opt.id === 'dac_agency' ? prev[storeKey]?.selectedAgency : null
+                                      }
+                                    }));
+                                  }}
+                                  className={`text-left p-4 rounded-xl border-2 transition-all flex items-start gap-3 ${
+                                    isSelected
+                                      ? 'border-primary-500 bg-primary-500/10 shadow-lg shadow-primary-500/5'
+                                      : (!opt.available ? 'border-white/5 opacity-50 cursor-not-allowed bg-black/10' : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/[0.07]')
+                                  }`}
+                                >
+                                  <div className={`p-2 rounded-lg ${isSelected ? 'bg-primary-500 text-white' : 'bg-white/10 text-slate-400'}`}>
+                                    {icon}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="font-bold text-sm text-white">{opt.name}</div>
+                                    {opt.cost !== undefined && (
+                                      <div className="text-xs font-bold text-emerald-400 mt-0.5">
+                                        {opt.cost === 0 ? 'Gratis' : `$${opt.cost} UYU`}
+                                      </div>
+                                    )}
+                                    {opt.reason && !isSelected && (
+                                      <div className="text-[10px] text-slate-400 mt-1 leading-normal">
+                                        {opt.reason}
+                                      </div>
+                                    )}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
 
-                      {/* Agency Selector (visible only in agency mode) */}
-                      {dacDeliveryMode === 'dac_agency' && (
-                        <div className="px-1 space-y-3" id="shipping-agency-selector">
-                          <label className="form-label text-xs flex items-center gap-1.5">
-                            <MapPin className="w-3.5 h-3.5 text-amber-500" />
-                            Seleccioná una agencia DAC en {form.department || 'tu departamento'}
-                          </label>
-                          {dacAgencies.length > 0 ? (
-                            <>
-                              {dacAgencies.length > 4 && (
-                                <div className="relative">
-                                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
-                                  <input
-                                    type="text"
-                                    placeholder="Buscar agencia..."
-                                    className="form-input pl-9 text-xs"
-                                    value={agencySearchTerm}
-                                    onChange={e => setAgencySearchTerm(e.target.value)}
-                                  />
+                          {/* Specific agency selector for this package if Retiro en agencia DAC is chosen */}
+                          {selection.method === 'dac_agency' && (
+                            <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
+                              <label className="form-label text-xs flex items-center gap-1.5 text-slate-300">
+                                <MapPin className="w-3.5 h-3.5 text-amber-500" />
+                                Seleccioná una agencia DAC para {vendorName} en {form.department || 'tu departamento'}
+                              </label>
+
+                              {dacAgencies.length > 0 ? (
+                                <>
+                                  {dacAgencies.length > 4 && (
+                                    <div className="relative">
+                                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                                      <input
+                                        type="text"
+                                        placeholder="Buscar agencia..."
+                                        className="form-input pl-9 text-xs"
+                                        value={agencySearchTerm}
+                                        onChange={e => setAgencySearchTerm(e.target.value)}
+                                      />
+                                    </div>
+                                  )}
+                                  <div className="max-h-48 overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+                                    {dacAgencies
+                                      .filter(a => {
+                                        if (!agencySearchTerm.trim()) return true;
+                                        const term = agencySearchTerm.toLowerCase();
+                                        return (
+                                          a.office_name?.toLowerCase().includes(term) ||
+                                          a.city?.toLowerCase().includes(term) ||
+                                          a.locality?.toLowerCase().includes(term) ||
+                                          a.address?.toLowerCase().includes(term)
+                                        );
+                                      })
+                                      .map((agency) => {
+                                        const isAgencySelected = selection.selectedAgency?.id === agency.id;
+                                        return (
+                                          <button
+                                            key={agency.id}
+                                            type="button"
+                                            onClick={() => {
+                                              setSubordersShipping(prev => ({
+                                                ...prev,
+                                                [storeKey]: {
+                                                  ...prev[storeKey],
+                                                  selectedAgency: agency
+                                                }
+                                              }));
+                                            }}
+                                            className={`w-full text-left p-3 rounded-lg border-2 transition-all ${
+                                              isAgencySelected
+                                                ? 'border-amber-500 bg-amber-500/10'
+                                                : 'border-white/10 bg-white/5 hover:border-amber-500/30 hover:bg-white/[0.07]'
+                                            }`}
+                                          >
+                                            <div className="flex items-center justify-between">
+                                              <div>
+                                                <div className="font-bold text-sm text-white">{agency.office_name}</div>
+                                                {agency.address && (
+                                                  <div className="text-[11px] text-slate-400 mt-0.5">{agency.address}</div>
+                                                )}
+                                                {agency.city && (
+                                                  <div className="text-[11px] text-slate-500 mt-0.5">
+                                                    {agency.city}{agency.locality ? `, ${agency.locality}` : ''}
+                                                  </div>
+                                                )}
+                                              </div>
+                                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                                isAgencySelected
+                                                  ? 'bg-amber-500 text-white'
+                                                  : 'bg-white/10 text-slate-500'
+                                              }`}>
+                                                K_{agency.k_oficina}
+                                              </span>
+                                            </div>
+                                          </button>
+                                        );
+                                      })}
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="text-xs text-slate-500 p-3 bg-white/5 rounded-lg border border-white/10 text-center">
+                                  {form.department ? `No hay agencias DAC activas para retiro en ${form.department}.` : 'Seleccioná un departamento arriba para ver agencias disponibles.'}
                                 </div>
                               )}
-                              <div className="max-h-48 overflow-y-auto space-y-2 pr-1 scrollbar-thin">
-                                {dacAgencies
-                                  .filter(a => {
-                                    if (!agencySearchTerm.trim()) return true;
-                                    const term = agencySearchTerm.toLowerCase();
-                                    return (
-                                      a.office_name?.toLowerCase().includes(term) ||
-                                      a.city?.toLowerCase().includes(term) ||
-                                      a.locality?.toLowerCase().includes(term) ||
-                                      a.address?.toLowerCase().includes(term)
-                                    );
-                                  })
-                                  .map((agency) => (
-                                  <button
-                                    key={agency.id}
-                                    type="button"
-                                    onClick={() => setSelectedAgency(agency)}
-                                    className={`w-full text-left p-3 rounded-lg border-2 transition-all ${
-                                      selectedAgency?.id === agency.id
-                                        ? 'border-amber-500 bg-amber-500/10'
-                                        : 'border-white/10 bg-white/5 hover:border-amber-500/30 hover:bg-white/[0.07]'
-                                    }`}
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <div>
-                                        <div className="font-bold text-sm text-white">{agency.office_name}</div>
-                                        {agency.address && (
-                                          <div className="text-[11px] text-slate-400 mt-0.5">{agency.address}</div>
-                                        )}
-                                        {agency.city && (
-                                          <div className="text-[11px] text-slate-500 mt-0.5">
-                                            {agency.city}{agency.locality ? `, ${agency.locality}` : ''}
-                                          </div>
-                                        )}
-                                        {agency.phone && (
-                                          <div className="text-[10px] text-slate-500 mt-0.5">Tel: {agency.phone}</div>
-                                        )}
-                                      </div>
-                                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                                        selectedAgency?.id === agency.id
-                                          ? 'bg-amber-500 text-white'
-                                          : 'bg-white/10 text-slate-500'
-                                      }`}>
-                                        K_{agency.k_oficina}
-                                      </span>
-                                    </div>
-                                  </button>
-                                ))}
-                              </div>
-                            </>
-                          ) : (
-                            <div className="text-xs text-slate-500 p-3 bg-white/5 rounded-lg border border-white/10 text-center">
-                              {form.department ? `No hay agencias DAC activas para retiro en ${form.department}.` : 'Seleccioná un departamento para ver agencias disponibles.'}
+                              
+                              {step2Errors[`agency_${storeKey}`] && (
+                                <p className="text-red-500 text-xs font-semibold">{step2Errors[`agency_${storeKey}`]}</p>
+                              )}
                             </div>
                           )}
-                          {step2Errors.agency && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.agency}</p>}
+
+                          {/* Specific cost / loading status for this package */}
+                          <div className="px-1 text-xs">
+                            {isCostLoading && (
+                              <div className="text-amber-400 font-semibold flex items-center gap-1.5">
+                                <span className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin inline-block" />
+                                <span>Calculando costo de envío...</span>
+                              </div>
+                            )}
+                            {hasCostError && (
+                              <div className="text-red-400 font-semibold leading-relaxed">
+                                {dacShippingError || "No pudimos calcular el costo de envío para este paquete."}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      )}
+                      );
+                    })}
+                  </div>
 
-                      {/* DAC Cost/Status Display */}
-                      <div className="px-1 space-y-2">
-                        {dacDeliveryMode === 'dac_agency' && !selectedAgency && (
-                          <div className="text-amber-400 text-xs font-semibold">
-                            Seleccioná una agencia DAC para calcular el costo.
-                          </div>
+                  {/* CI Input for DAC (visible when using DAC on any package) */}
+                  {hasAnyDac && (
+                    <div id="shipping-ci-block" className="space-y-1.5 mt-5 pt-5 border-t border-white/10">
+                      <label className="form-label flex items-center justify-between text-xs">
+                        <span className="font-semibold text-slate-300">Cédula de Identidad (CI) *</span>
+                        {form.ci && !validateUruguayanCI(form.ci) && (
+                          <span className="text-[11px] text-red-400 font-semibold animate-pulse">CI Inválida</span>
                         )}
-                        {dacShippingLoading && (
-                          <div className="text-amber-400 text-xs font-semibold flex items-center gap-1.5">
-                            <span className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin inline-block" />
-                            <span>Calculando costo DAC...</span>
-                          </div>
+                        {form.ci && validateUruguayanCI(form.ci) && (
+                          <span className="text-[11px] text-green-400 font-semibold">✓ CI Válida</span>
                         )}
-                        {!dacShippingLoading && dacShippingCost !== null && (
-                          <div className="text-emerald-400 text-sm font-black">
-                            {dacDeliveryMode === 'dac_agency'
-                              ? `Retiro en agencia DAC: $${dacShippingCost} UYU`
-                              : `Costo envío DAC: $${dacShippingCost} UYU`}
-                          </div>
-                        )}
-                        {!dacShippingLoading && dacShippingError && (
-                          <div className="text-red-400 text-xs font-semibold leading-relaxed">
-                            {dacDeliveryMode === 'dac_agency'
-                              ? "No pudimos calcular el costo para esta agencia. Elegí otra o consultanos por WhatsApp."
-                              : "No pudimos calcular DAC para esta localidad. Consultanos por WhatsApp."}
-                          </div>
-                        )}
-                        {isAdmin && detectedKOficina !== null && (
-                          <div className="text-amber-500 text-[11px] font-mono mt-1">
-                            Oficina DAC destino detectada: {detectedKOficina}
-                          </div>
-                        )}
-
-                        {/* Context notice */}
-                        {dacDeliveryMode === 'dac_home' && dacShippingCost !== null && !dacShippingLoading && (
-                          <div className="p-3 rounded-lg bg-primary-500/5 border border-primary-500/20 text-xs text-slate-300">
-                            <strong className="text-primary-400">📦 </strong>
-                            DAC entregará en la dirección que ingresaste. Tiempo estimado: 24-48 hs hábiles.
-                          </div>
-                        )}
-                        {dacDeliveryMode === 'dac_agency' && selectedAgency && dacShippingCost !== null && !dacShippingLoading && (
-                          <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 text-xs text-slate-300">
-                            <strong className="text-amber-400">🏢 </strong>
-                            Te avisaremos cuando esté listo en la agencia <strong className="text-white">{selectedAgency.office_name}</strong>. Recordá llevar tu documento.
-                          </div>
-                        )}
-
-                        {/* CI Input for DAC (visible in Step 2 when using DAC) */}
-                        {(selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') && (
-                          <div id="shipping-ci-block" className="space-y-1.5 mt-3 pt-3 border-t border-white/5">
-                            <label className="form-label flex items-center justify-between text-xs">
-                              <span className="font-semibold text-slate-300">Cédula de Identidad (CI) *</span>
-                              {form.ci && !validateUruguayanCI(form.ci) && (
-                                <span className="text-[11px] text-red-400 font-semibold animate-pulse">CI Inválida</span>
-                              )}
-                              {form.ci && validateUruguayanCI(form.ci) && (
-                                <span className="text-[11px] text-green-400 font-semibold">✓ CI Válida</span>
-                              )}
-                            </label>
-                            <input
-                              required
-                              placeholder="Ej: 1.234.567-8"
-                              className={`form-input text-xs transition-all ${
-                                form.ci
-                                  ? validateUruguayanCI(form.ci)
-                                    ? 'border-green-500/50 focus:border-green-500 bg-green-500/5'
-                                    : 'border-red-500/50 focus:border-red-500 bg-red-500/5'
-                                  : 'border-white/10 focus:border-primary-500 bg-white/5'
-                              }`}
-                              value={form.ci}
-                              onChange={e => setForm({ ...form, ci: e.target.value })}
-                            />
-                            {step2Errors.ci && <p className="text-red-500 text-xs font-semibold">{step2Errors.ci}</p>}
-                            <p className="text-[10px] text-slate-500 leading-normal">Requerida para la facturación y despacho de la guía por DAC.</p>
-                          </div>
-                        )}
-                      </div>
+                      </label>
+                      <input
+                        required
+                        placeholder="Ej: 1.234.567-8"
+                        className={`form-input text-xs transition-all ${
+                          form.ci
+                            ? validateUruguayanCI(form.ci)
+                              ? 'border-green-500/50 focus:border-green-500 bg-green-500/5'
+                              : 'border-red-500/50 focus:border-red-500 bg-red-500/5'
+                            : 'border-white/10 focus:border-primary-500 bg-white/5'
+                        }`}
+                        value={form.ci}
+                        onChange={e => setForm({ ...form, ci: e.target.value })}
+                      />
+                      {step2Errors.ci && <p className="text-red-500 text-xs font-semibold">{step2Errors.ci}</p>}
+                      <p className="text-[10px] text-slate-500 leading-normal">Requerida para la facturación y despacho de la guía por DAC.</p>
                     </div>
                   )}
 
                   {/* Address fields — only for delivery */}
-                  {shippingMethod === 'delivery' && (
+                  {hasAnyDelivery && (
                     <div className="pt-4 mt-4 border-t border-white/10 space-y-4">
                       <h3 className="font-semibold text-sm text-slate-400 mb-2">
-                        {isDacAgencyMode ? 'Departamento para Retiro' : 'Dirección de entrega'}
+                        {!hasAnyHomeDelivery ? 'Departamento para Retiro' : 'Dirección de entrega'}
                       </h3>
 
-                      {savedAddresses.length > 0 && !isDacAgencyMode && (
+                      {savedAddresses.length > 0 && hasAnyHomeDelivery && (
                         <div className="space-y-2 mb-4">
                           <label className="form-label text-xs">Elegir dirección guardada</label>
                           <div className="grid gap-2">
@@ -2782,9 +2801,9 @@ export default function Checkout() {
                         </div>
                       )}
 
-                      {(savedAddresses.length === 0 || selectedAddress === -2 || isDacAgencyMode) && (
+                      {(savedAddresses.length === 0 || selectedAddress === -2 || !hasAnyHomeDelivery) && (
                         <>
-                          {!isDacAgencyMode && (
+                          {hasAnyHomeDelivery && (
                             <div id="shipping-street">
                               <label className="form-label">Dirección (calle y número) *</label>
                               <AddressAutocomplete
@@ -2796,11 +2815,11 @@ export default function Checkout() {
                             </div>
                           )}
 
-                          <div className={isDacAgencyMode ? "grid grid-cols-1 gap-4" : "grid grid-cols-2 gap-4"}>
+                          <div className={!hasAnyHomeDelivery ? "grid grid-cols-1 gap-4" : "grid grid-cols-2 gap-4"}>
                             <div id="shipping-department">
                               <label className="form-label">Departamento *</label>
                               <select
-                                required={shippingMethod === 'delivery'}
+                                required={hasAnyDelivery}
                                 className={`form-input ${step2Errors.department ? 'border-red-500' : ''}`}
                                 value={form.department}
                                 onChange={e => handleDepartmentChange(e.target.value)}
@@ -2813,7 +2832,7 @@ export default function Checkout() {
                               {step2Errors.department && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.department}</p>}
                             </div>
 
-                            {!isDacAgencyMode && (
+                            {hasAnyHomeDelivery && (
                               <div id="shipping-city">
                                 <label className="form-label">Ciudad / Localidad *</label>
                                 {form.department === 'Montevideo' ? (
@@ -2825,7 +2844,7 @@ export default function Checkout() {
                                   />
                                 ) : (
                                   <select
-                                    required={shippingMethod === 'delivery'}
+                                    required={hasAnyDelivery}
                                     className={`form-input ${step2Errors.city ? 'border-red-500' : ''}`}
                                     value={form.city}
                                     onChange={e => setForm({ ...form, city: e.target.value })}
@@ -2842,14 +2861,14 @@ export default function Checkout() {
                             )}
                           </div>
 
-                          {!isDacAgencyMode && (
+                          {hasAnyHomeDelivery && (
                             <>
                               <div className="grid grid-cols-1 gap-4">
                                 <div id="shipping-barrio">
                                   <label className="form-label">Barrio {form.department === 'Montevideo' ? '*' : '(Opcional)'}</label>
                                   {form.department === 'Montevideo' ? (
                                     <select
-                                      required={shippingMethod === 'delivery'}
+                                      required={hasAnyDelivery}
                                       className={`form-input ${step2Errors.barrio ? 'border-red-500' : ''}`}
                                       value={form.barrio}
                                       onChange={e => setForm({ ...form, barrio: e.target.value })}
@@ -3244,16 +3263,8 @@ export default function Checkout() {
                     const availableOptions = options.filter(o => o.available);
                     const unavailableOptions = options.filter(o => !o.available && o.show);
 
-                    const assignedMethod = options.find(o => o.available && (
-                      (shippingMethod === 'pickup' && o.id === 'pickup') ||
-                      (shippingMethod === 'delivery' && (
-                        (providerLabel === 'Soy Delivery' && o.id === 'soydelivery') ||
-                        (providerLabel === 'DAC' && o.id === 'dac') ||
-                        (providerLabel === 'UES' && o.id === 'ues') ||
-                        (providerLabel === 'Correo Uruguayo' && o.id === 'correo_uruguayo') ||
-                        (providerLabel === 'Envío manual' && o.id === 'manual')
-                      ))
-                    ));
+                    const sel = subordersShipping[storeKey] || { method: 'pickup', selectedAgency: null };
+                    const assignedMethod = options.find(o => o.id === sel.method);
 
                     return (
                       <div key={storeKey} className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-3">
@@ -3272,7 +3283,7 @@ export default function Checkout() {
                           </div>
                           {isLocationSelected && form.department && (
                             <span className="text-[10px] font-bold text-slate-400">
-                              {shippingMethod === 'pickup' 
+                              {sel.method === 'pickup' 
                                 ? 'Retiro en local: GRATIS'
                                 : `Envío (${providerLabel}): ${groupShippingCost === 0 ? 'GRATIS' : formatCurrencyPrice(groupShippingCost)}`
                               }
@@ -3421,7 +3432,7 @@ export default function Checkout() {
                 )}
                  <div className="flex justify-between text-sm">
                   <span className="text-slate-400">
-                    {selectedShippingMethod === 'dac_home' ? 'Envío DAC a domicilio' : selectedShippingMethod === 'dac_agency' ? (selectedAgency ? `Retiro en agencia - ${selectedAgency.office_name}` : 'Retiro en agencia DAC') : selectedShippingMethod === 'dac' ? 'Envío DAC al interior' : 'Envío'}
+                    Costo total de envío
                   </span>
                   <span className="font-bold flex items-center gap-1.5">
                     {dacCalculationStatus === 'loading' ? (

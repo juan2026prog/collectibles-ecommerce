@@ -25,7 +25,7 @@ const checkoutSchema = z.object({
   affiliate_code: z.string().trim().min(1).optional(),
   payment_method: z.enum(["dlocalgo", "mercadopago", "paypal", "handy"]),
   currency: z.string().default("UYU"),
-  shipping_method: z.enum(["delivery", "pickup", "dac", "dac_home", "dac_agency"]).default("delivery"),
+  shipping_method: z.enum(["delivery", "pickup", "dac", "dac_home", "dac_agency", "ues", "correo_uruguayo", "manual"]).default("delivery"),
   shipping_address: z.object({
     first_name: z.string().trim().min(1),
     last_name: z.string().trim().min(1),
@@ -56,6 +56,19 @@ const checkoutSchema = z.object({
   accepted_terms_version: z.string(),
   email_opt_in: z.boolean().optional().default(false),
   whatsapp_opt_in: z.boolean().optional().default(false),
+  suborders_shipping: z.record(z.object({
+    shipping_method: z.enum(["delivery", "pickup", "dac", "dac_home", "dac_agency", "ues", "correo_uruguayo", "manual"]),
+    dac_office_id: z.string().uuid().nullable().optional(),
+    dac_k_oficina_destino: z.number().int().nullable().optional(),
+    dac_office_name: z.string().optional(),
+    dac_office_address: z.string().optional(),
+    ci: z.string().optional(),
+    dispatch_address_id: z.string().uuid().nullable().optional(),
+    seller_type: z.enum(["platform", "vendor"]).optional(),
+    shipping_mode: z.enum(["home", "agency", "pickup"]).optional(),
+    pickup_type: z.string().nullable().optional(),
+    internal_reference: z.string().optional(),
+  })).optional(),
 });
 
 const FLEX_NEAR = new Set([
@@ -884,7 +897,7 @@ Deno.serve(async (req) => {
         if (vendorStoreId) {
           const { data: defaultStoreAddr } = await supabase
             .from('vendor_dispatch_addresses')
-            .select('department, city, address, phone')
+            .select('id, department, city, address, phone')
             .eq('vendor_id', vendorId)
             .eq('vendor_store_id', vendorStoreId)
             .order('is_default', { ascending: false })
@@ -898,7 +911,7 @@ Deno.serve(async (req) => {
         } else {
           const { data: defaultAddr } = await supabase
             .from('vendor_dispatch_addresses')
-            .select('department, city, address, phone')
+            .select('id, department, city, address, phone')
             .eq('vendor_id', vendorId)
             .is('vendor_store_id', null)
             .order('is_default', { ascending: false })
@@ -910,7 +923,7 @@ Deno.serve(async (req) => {
           } else {
             const { data: anyAddr } = await supabase
               .from('vendor_dispatch_addresses')
-              .select('department, city, address, phone')
+              .select('id, department, city, address, phone')
               .eq('vendor_id', vendorId)
               .limit(1)
               .maybeSingle();
@@ -943,29 +956,52 @@ Deno.serve(async (req) => {
         isVendorCovered && 
         (vendorId === null || shippingSettings.soydelivery?.active === true);
 
+      // Resolve shipping selection for this suborder
+      const suborderKey = groupKey || 'collectibles';
+      const selection = payload.suborders_shipping?.[suborderKey];
+      const selectedMethod = selection?.shipping_method || payload.shipping_method;
+
+      // Extract specific DAC parameters for this suborder if available
+      const suborderDacOfficeId = selection?.dac_office_id || payload.shipping_address.dac_office_id || null;
+      const suborderDacKOficinaDestino = selection?.dac_k_oficina_destino || payload.shipping_address.dac_k_oficina_destino || null;
+      const suborderDacOfficeName = selection?.dac_office_name || payload.shipping_address.dac_office_name || null;
+      const suborderDacOfficeAddress = selection?.dac_office_address || payload.shipping_address.dac_office_address || null;
+
       // Strict backend validation of explicit selection
-      if (payload.shipping_method === "pickup") {
+      if (selectedMethod === "pickup") {
         if (vendorId !== null) {
           const isPickupActive = shippingSettings.pickup?.active === true;
           const pickupAddress = shippingSettings.pickup?.address?.trim() || vendorAddress;
           if (!isPickupActive || !pickupAddress) {
-            throw new Error("El método de envío seleccionado no está disponible para este vendedor.");
+            throw new Error(`El método de envío 'pickup' no está disponible para el vendedor ${vendorName}.`);
           }
         }
-      } else if (payload.shipping_method === "dac" || payload.shipping_method === "dac_home" || payload.shipping_method === "dac_agency") {
+      } else if (selectedMethod === "dac" || selectedMethod === "dac_home" || selectedMethod === "dac_agency") {
         if (vendorId !== null && shippingSettings.dac?.active !== true) {
-          throw new Error("El método de envío seleccionado no está disponible para este vendedor.");
+          throw new Error(`El método de envío 'dac' no está disponible para el vendedor ${vendorName}.`);
+        }
+      } else if (selectedMethod === "ues") {
+        if (vendorId !== null && shippingSettings.ues?.active !== true) {
+          throw new Error(`El método de envío 'ues' no está disponible para el vendedor ${vendorName}.`);
+        }
+      } else if (selectedMethod === "correo_uruguayo") {
+        if (vendorId !== null && shippingSettings.correo_uruguayo?.active !== true) {
+          throw new Error(`El método de envío 'correo_uruguayo' no está disponible para el vendedor ${vendorName}.`);
+        }
+      } else if (selectedMethod === "manual") {
+        if (vendorId !== null && shippingSettings.manual?.active !== true) {
+          throw new Error(`El método de envío 'manual' no está disponible para el vendedor ${vendorName}.`);
         }
       }
 
       let shippingProvider = "DAC";
       let groupShippingCost = 0;
 
-      if (payload.shipping_method === "pickup") {
-        shippingProvider = "Retiro en local";
+      if (selectedMethod === "pickup") {
+        shippingProvider = "pickup";
         groupShippingCost = 0;
-      } else if ((payload.shipping_method === "delivery" || payload.shipping_method === "dac" || payload.shipping_method === "dac_home" || payload.shipping_method === "dac_agency") && isSoyDeliveryAvailable && payload.shipping_method === "delivery") {
-        shippingProvider = "SoyDelivery";
+      } else if ((selectedMethod === "delivery" || selectedMethod === "dac" || selectedMethod === "dac_home" || selectedMethod === "dac_agency") && isSoyDeliveryAvailable && selectedMethod === "delivery") {
+        shippingProvider = "soydelivery";
         groupShippingCost = calculateShipping(shippingCity, "Montevideo", groupSubtotal, freeShippingThreshold);
       } else {
         const isDacActive = shippingSettings.dac?.active && globalProvidersMap['dac'] === true;
@@ -973,12 +1009,15 @@ Deno.serve(async (req) => {
         const isCorreoActive = shippingSettings.correo_uruguayo?.active === true;
         const isManualActive = shippingSettings.manual?.active === true;
 
-        if (isDacActive) {
-          shippingProvider = "DAC";
+        if (selectedMethod === "dac_home" || selectedMethod === "dac_agency" || selectedMethod === "dac") {
+          if (vendorId !== null && !isDacActive) {
+            throw new Error(`DAC no está disponible para el vendedor ${vendorName}.`);
+          }
+          shippingProvider = "dac";
           if (groupSubtotal >= freeShippingThreshold) {
             groupShippingCost = 0;
           } else {
-            const dacMode = (payload.shipping_method === "dac_agency") ? "agency" : "home";
+            const dacMode = (selectedMethod === "dac_agency") ? "agency" : "home";
             const dacCostResponse = await fetch(`${supabaseUrl}/functions/v1/dac-get-cost`, {
               method: 'POST',
               headers: {
@@ -990,8 +1029,8 @@ Deno.serve(async (req) => {
                 department: payload.shipping_address.department,
                 city: payload.shipping_address.department === "Montevideo" ? "Montevideo" : payload.shipping_address.city,
                 address: payload.shipping_address.street || '',
-                dac_office_id: payload.shipping_address.dac_office_id,
-                k_oficina_destino: payload.shipping_address.dac_k_oficina_destino,
+                dac_office_id: suborderDacOfficeId,
+                k_oficina_destino: suborderDacKOficinaDestino,
                 package_quantity: 1,
                 package_type: 1,
                 cart_total: groupSubtotal,
@@ -1008,21 +1047,29 @@ Deno.serve(async (req) => {
             
             groupShippingCost = dacCostResult.cost;
           }
-        } else if (isUesActive) {
-          shippingProvider = "UES";
+        } else if (selectedMethod === "ues") {
+          if (vendorId !== null && !isUesActive) {
+            throw new Error(`UES no está disponible para el vendedor ${vendorName}.`);
+          }
+          shippingProvider = "ues";
           groupShippingCost = (groupSubtotal >= freeShippingThreshold) ? 0 : 220;
-        } else if (isCorreoActive) {
-          shippingProvider = "Correo Uruguayo";
+        } else if (selectedMethod === "correo_uruguayo") {
+          if (vendorId !== null && !isCorreoActive) {
+            throw new Error(`Correo Uruguayo no está disponible para el vendedor ${vendorName}.`);
+          }
+          shippingProvider = "correo_uruguayo";
           groupShippingCost = (groupSubtotal >= freeShippingThreshold) ? 0 : 180;
-        } else if (isManualActive) {
-          shippingProvider = "Envío manual";
-          // Support both fixed_cost and fixed_price to be safe
+        } else if (selectedMethod === "manual") {
+          if (vendorId !== null && !isManualActive) {
+            throw new Error(`Envío manual no está disponible para el vendedor ${vendorName}.`);
+          }
+          shippingProvider = "manual";
           const manualFixedCost = shippingSettings.manual?.fixed_cost !== undefined && shippingSettings.manual?.fixed_cost !== null && shippingSettings.manual?.fixed_cost !== ''
             ? Number(shippingSettings.manual.fixed_cost)
             : (shippingSettings.manual?.fixed_price !== undefined && shippingSettings.manual?.fixed_price !== null && shippingSettings.manual?.fixed_price !== '' ? Number(shippingSettings.manual.fixed_price) : 0);
           groupShippingCost = manualFixedCost;
         } else {
-          throw new Error("El método de envío seleccionado no está disponible para este vendedor.");
+          throw new Error(`El método de envío seleccionado '${selectedMethod}' no está disponible para el vendedor ${vendorName}.`);
         }
       }
 
@@ -1049,6 +1096,10 @@ Deno.serve(async (req) => {
       const suborderGross = isCollectiblesEnvios ? groupSubtotal : (groupSubtotal + groupShippingCost);
       const suborderNet = isCollectiblesEnvios ? (groupSubtotal - marketplaceFee) : (groupSubtotal + groupShippingCost - marketplaceFee);
 
+      const sellerType = vendorId === null ? 'platform' : 'vendor';
+      const shippingMode = selectedMethod === 'pickup' ? 'pickup' : (selectedMethod === 'dac_agency' ? 'agency' : 'home');
+      const pickupType = selectedMethod === 'pickup' ? 'local' : (selectedMethod === 'dac_agency' ? 'agency' : null);
+
       subordersList.push({
         vendor_id: vendorId,
         vendor_name: vendorName,
@@ -1056,7 +1107,7 @@ Deno.serve(async (req) => {
         vendor_store_name: vendorStoreId ? vendorName : null,
         is_collectibles_order: vendorId === null,
         product_subtotal: groupSubtotal,
-        shipping_method: payload.shipping_method,
+        shipping_method: selectedMethod,
         shipping_provider: shippingProvider,
         shipping_cost: groupShippingCost,
         marketplace_commission_rate: commissionRate,
@@ -1070,7 +1121,14 @@ Deno.serve(async (req) => {
         shipping_paid_by: paidBy,
         shipping_billing_mode: billingMode,
         shipping_margin: 0.00,
-        shipping_provider_invoice_status: 'pending'
+        shipping_provider_invoice_status: 'pending',
+        // Logistical package-level fields
+        seller_type: sellerType,
+        shipping_mode: shippingMode,
+        pickup_type: pickupType,
+        agency_id: suborderDacOfficeId,
+        agency_name: suborderDacOfficeName,
+        dispatch_address_id: vendorAddress?.id || null
       });
     }
 

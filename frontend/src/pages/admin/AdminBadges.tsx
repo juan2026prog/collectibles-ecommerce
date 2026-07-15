@@ -207,10 +207,47 @@ export default function AdminBadges() {
   }
 
   async function handleDeleteBadge(badgeId: string) {
-    if (!(await confirm('¿Eliminar esta cocarda de la base de datos?', { danger: true }))) return;
-    await supabase.from('badges').delete().eq('id', badgeId).or(`slug.eq.${badgeId}`);
+    if (!(await confirm('¿Eliminar esta cocarda de la base de datos y desasignarla de todos los productos?', { danger: true }))) return;
+
+    // 1. Find the badge in our local state to resolve its key (slug or id)
+    const badgeToDelete = badges.find(b => b.id === badgeId);
+    const key = badgeToDelete?.slug || badgeToDelete?.id || badgeId;
+
+    // 2. Fetch all products that have badges assigned to remove the deleted badge
+    const { data: productsWithBadges } = await supabase
+      .from('products')
+      .select('id, badge')
+      .not('badge', 'is', null);
+
+    if (productsWithBadges && productsWithBadges.length > 0) {
+      for (const p of productsWithBadges) {
+        let list = getProductBadges(p.badge);
+        if (list.includes(key) || list.includes(badgeId)) {
+          list = list.filter(b => b !== key && b !== badgeId);
+          await supabase
+            .from('products')
+            .update({ badge: list.join(',') || null })
+            .eq('id', p.id);
+        }
+      }
+    }
+
+    // 3. Delete from badges table
+    const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(badgeId);
+    if (isUUID) {
+      await supabase.from('badges').delete().eq('id', badgeId);
+    } else {
+      await supabase.from('badges').delete().or(`id.eq.${badgeId},slug.eq.${badgeId}`);
+    }
+
+    // 4. Reset selected badge if it was the one deleted
+    if (selectedBadge === badgeId) {
+      setSelectedBadge(null);
+    }
+
     loadCustomBadges();
-    toast.success('Cocarda eliminada');
+    fetchData(); // Refresh the product grid/list
+    toast.success('Cocarda eliminada correctamente');
   }
 
   return (
