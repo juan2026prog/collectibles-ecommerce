@@ -181,6 +181,7 @@ Deno.serve(async (req: Request) => {
 
     const orderItemIds = orderItems?.map((i: any) => i.id) || [];
     let hasPurchasedIntlItem = false;
+    const ZINC_API_KEY = Deno.env.get("ZINC_API_KEY");
 
     if (orderItemIds.length > 0) {
       const { data: intlItems } = await supabaseAdmin
@@ -195,9 +196,75 @@ Deno.serve(async (req: Request) => {
             continue;
           }
           const purchaseStatus = intlItem.purchase_status;
+          
           if (['purchased', 'warehouse_received', 'shipped', 'delivered', 'shipped_to_courier', 'delivered_to_courier'].includes(purchaseStatus)) {
             hasPurchasedIntlItem = true;
             break;
+          }
+
+          if (['zinc_order_created', 'zinc_processing'].includes(purchaseStatus) && intlItem.zinc_order_id) {
+            if (!ZINC_API_KEY) {
+              throw new Error("ZINC_API_KEY no configurada para procesar la cancelación internacional.");
+            }
+            
+            console.log(`[Refund] Attempting to cancel Zinc order ${intlItem.zinc_order_id} for item ${intlItem.id}...`);
+            try {
+              const cancelRes = await fetch(`https://api.zinc.com/orders/${intlItem.zinc_order_id}/cancel`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${ZINC_API_KEY}` }
+              });
+              
+              if (!cancelRes.ok) {
+                console.error(`[Refund] Zinc cancellation API error: ${cancelRes.status}`);
+                
+                await supabaseAdmin.from("international_order_items").update({
+                  purchase_status: 'cancellation_requires_review'
+                }).eq("id", intlItem.id);
+                
+                if (itemSuborderId) {
+                  await supabaseAdmin.from("order_suborders").update({
+                    status: 'cancellation_requires_review',
+                    updated_at: new Date().toISOString()
+                  }).eq("id", itemSuborderId);
+                }
+                
+                await supabaseAdmin.from("orders").update({
+                  status: 'cancellation_requires_review',
+                  updated_at: new Date().toISOString()
+                }).eq("id", orderId);
+                
+                throw new Error("Zinc no pudo cancelar la compra en Amazon. Cancelación automática bloqueada. Se requiere revisión manual.");
+              }
+              
+              const cancelData = await cancelRes.json();
+              console.log(`[Refund] Zinc cancellation response:`, cancelData);
+              
+              await supabaseAdmin.from("international_order_items").update({
+                purchase_status: 'cancelled',
+                updated_at: new Date().toISOString()
+              }).eq("id", intlItem.id);
+              
+            } catch (err: any) {
+              console.error(`[Refund] Error calling Zinc cancellation API:`, err.message);
+              
+              await supabaseAdmin.from("international_order_items").update({
+                purchase_status: 'cancellation_requires_review'
+              }).eq("id", intlItem.id);
+              
+              if (itemSuborderId) {
+                await supabaseAdmin.from("order_suborders").update({
+                  status: 'cancellation_requires_review',
+                  updated_at: new Date().toISOString()
+                }).eq("id", itemSuborderId);
+              }
+              
+              await supabaseAdmin.from("orders").update({
+                status: 'cancellation_requires_review',
+                updated_at: new Date().toISOString()
+              }).eq("id", orderId);
+              
+              throw new Error(`Error llamando a la API de cancelación de Zinc: ${err.message}`);
+            }
           }
         }
       }
@@ -705,6 +772,52 @@ Deno.serve(async (req: Request) => {
           })
           .eq("id", paymentIdUuid);
       }
+
+      // Create manual refund task in manual_refund_tasks table
+      const { error: taskErr } = await supabaseAdmin
+        .from("manual_refund_tasks")
+        .insert({
+          order_id: orderId,
+          payment_provider: order.payment_method,
+          payment_id: order.payment_id || 'UNKNOWN',
+          amount: refundAmount,
+          currency: order.currency || 'UYU',
+          reason: reason || 'Reembolso manual requerido',
+          status: 'pending',
+          assigned_to: null,
+          note: reason || 'Reembolso manual requerido'
+        });
+
+      if (taskErr) {
+        console.error("Error creating manual_refund_task:", taskErr);
+      }
+
+      // Update orders and order_suborders to refund_pending_manual
+      if (suborderId) {
+        await supabaseAdmin
+          .from("order_suborders")
+          .update({
+            status: "refund_pending_manual",
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", suborderId);
+      } else {
+        await supabaseAdmin
+          .from("order_suborders")
+          .update({
+            status: "refund_pending_manual",
+            updated_at: new Date().toISOString()
+          })
+          .eq("parent_order_id", orderId);
+      }
+
+      await supabaseAdmin
+        .from("orders")
+        .update({
+          status: "refund_pending_manual",
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", orderId);
 
       // Send Admin Notification (manual required)
       await fetch(supabaseUrl + "/functions/v1/transactional-emails", {

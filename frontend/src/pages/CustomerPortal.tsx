@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useCartContext } from '../contexts/CartContext';
-import { Package, User, Settings, Save, Check, ShoppingCart, RotateCcw, MapPin, Phone, Plus, Trash2, Lock, Eye, EyeOff, Edit3, Store, Truck } from 'lucide-react';
+import { Package, User, Settings, Save, Check, ShoppingCart, RotateCcw, MapPin, Phone, Plus, Trash2, Lock, Eye, EyeOff, Edit3, Store, Truck, AlertCircle, FileText, Globe, CreditCard, Clock } from 'lucide-react';
 import { useLocale } from '../contexts/LocaleContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { URUGUAY_LOCATIONS, DEPARTAMENTOS } from '../utils/uruguayLocations';
@@ -37,10 +37,29 @@ export default function CustomerPortal() {
   const cart = useCartContext();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'orders' | 'profile' | 'security'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'profile' | 'security' | 'couriers'>('orders');
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
   const [isVendor, setIsVendor] = useState(false);
+
+  // International addresses
+  const [intlAddresses, setIntlAddresses] = useState<any[]>([]);
+  const [loadingIntl, setLoadingIntl] = useState(false);
+  const [editingIntlId, setEditingIntlId] = useState<string | 'new' | null>(null);
+  const [intlForm, setIntlForm] = useState({
+    label: '',
+    courier_name: '',
+    recipient_name: '',
+    customer_code: '',
+    address_line_1: '',
+    address_line_2: '',
+    city: '',
+    state: '',
+    postal_code: '',
+    country: 'United States',
+    phone: '',
+    instructions: ''
+  });
 
   // Profile fields
   const [firstName, setFirstName] = useState('');
@@ -59,13 +78,176 @@ export default function CustomerPortal() {
   const [pwLoading, setPwLoading] = useState(false);
   const [pwMessage, setPwMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
 
+  const getTrackingMilestoneStep = (status: string) => {
+    switch (status) {
+      case 'pending_purchase':
+        return 1;
+      case 'zinc_order_created':
+      case 'zinc_processing':
+        return 2;
+      case 'purchased':
+        return 3;
+      case 'warehouse_received':
+        return 4;
+      case 'shipped':
+      case 'shipped_to_courier':
+        return 5;
+      case 'delivered':
+      case 'delivered_to_courier':
+        return 6;
+      default:
+        return 1;
+    }
+  };
+
+  const downloadCleanInvoice = (order: any) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const orderDate = new Date(order.created_at).toLocaleDateString('es-UY', { year: 'numeric', month: 'long', day: 'numeric' });
+    const orderNumber = order.id.slice(0, 8).toUpperCase();
+    const hasIntl = order.order_items.some((item: any) => item.international_order_items && item.international_order_items.length > 0);
+    const courier = order.shipping_address?.international_courier_name || order.shipping_address?.international_courier || 'N/A';
+    const suite = order.shipping_address?.international_customer_code || order.shipping_address?.international_suite || '';
+
+    let itemsHtml = '';
+    order.order_items.forEach((item: any) => {
+      const isItemIntl = item.international_order_items && item.international_order_items.length > 0;
+      itemsHtml += `
+        <tr>
+          <td style="padding: 12px; border-bottom: 1px solid #eee;">
+            <div style="font-weight: bold; color: #1e293b;">${item.products?.title || 'Producto'}</div>
+            ${isItemIntl ? `<div style="font-size: 10px; color: #f00856; font-weight: bold; margin-top: 2px;">IMPORTADO (Amazon USA)</div>` : ''}
+          </td>
+          <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: center;">${item.quantity}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: right;">${formatCurrencyPrice(item.unit_price)}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: right; font-weight: bold;">${formatCurrencyPrice(item.total_price || (item.unit_price * item.quantity))}</td>
+        </tr>
+      `;
+    });
+
+    const htmlContent = `
+      <html>
+        <head>
+          <title>Factura - ${orderNumber}</title>
+          <style>
+            body { font-family: 'Inter', system-ui, sans-serif; color: #334155; margin: 0; padding: 40px; }
+            .header { display: flex; justify-content: space-between; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 30px; }
+            .logo { font-size: 24px; font-weight: 900; color: #f00856; text-transform: uppercase; }
+            .invoice-title { font-size: 20px; font-weight: 800; text-align: right; }
+            .details { display: flex; justify-content: space-between; margin-bottom: 30px; font-size: 13px; }
+            .details-col { width: 48%; }
+            .details-title { font-weight: bold; text-transform: uppercase; color: #64748b; font-size: 10px; letter-spacing: 1px; margin-bottom: 8px; }
+            .table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+            .table th { background: #f8fafc; padding: 12px; text-align: left; font-size: 11px; font-weight: bold; text-transform: uppercase; color: #64748b; border-bottom: 2px solid #e2e8f0; }
+            .totals { display: flex; flex-direction: column; align-items: flex-end; font-size: 14px; margin-top: 20px; }
+            .total-row { display: flex; justify-content: space-between; width: 300px; padding: 6px 0; }
+            .total-row.grand { font-size: 18px; font-weight: bold; color: #f00856; border-top: 2px solid #f1f5f9; padding-top: 12px; margin-top: 6px; }
+            .footer { text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 20px; margin-top: 50px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <div class="logo">Collectibles.uy</div>
+              <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Collectibles Uruguay S.R.L.</div>
+            </div>
+            <div class="invoice-title">
+              <div>COMPROBANTE DE COMPRA</div>
+              <div style="font-size: 14px; font-weight: normal; color: #64748b; margin-top: 4px;">Orden #${orderNumber}</div>
+            </div>
+          </div>
+          
+          <div class="details">
+            <div class="details-col">
+              <div class="details-title">DATOS DE COMPRA</div>
+              <div><b>Fecha:</b> ${orderDate}</div>
+              <div><b>Método de Pago:</b> ${order.payment_method?.toUpperCase()}</div>
+              <div><b>Email:</b> ${order.customer_email}</div>
+            </div>
+            <div class="details-col" style="text-align: right;">
+              <div class="details-title">INFORMACIÓN DE ENTREGA</div>
+              <div><b>Cliente:</b> ${order.shipping_address?.first_name || ''} ${order.shipping_address?.last_name || ''}</div>
+              ${hasIntl ? `
+                <div><b>Modalidad:</b> Entrega en courier de Miami</div>
+                <div><b>Courier:</b> ${courier.toUpperCase()}</div>
+                <div><b>Casilla / Suite:</b> ${suite || 'N/A'}</div>
+              ` : `
+                <div><b>Dirección:</b> ${order.shipping_address?.street || ''} ${order.shipping_address?.apartment || ''}</div>
+                <div><b>Localidad:</b> ${order.shipping_address?.city || ''}, ${order.shipping_address?.department || ''}</div>
+              `}
+            </div>
+          </div>
+
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Descripción</th>
+                <th style="text-align: center; width: 80px;">Cant</th>
+                <th style="text-align: right; width: 120px;">Precio Unit.</th>
+                <th style="text-align: right; width: 120px;">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+
+          <div class="totals">
+            <div class="total-row">
+              <span style="color: #64748b;">Subtotal Productos:</span>
+              <span>${formatCurrencyPrice(order.total_amount - (order.total_shipping || 0))}</span>
+            </div>
+            <div class="total-row">
+              <span style="color: #64748b;">Envío Local (Uruguay):</span>
+              <span>${formatCurrencyPrice(order.total_shipping || 0)}</span>
+            </div>
+            <div class="total-row grand">
+              <span>Total Abonado:</span>
+              <span>${formatCurrencyPrice(order.total_amount)}</span>
+            </div>
+          </div>
+
+          <div class="footer">
+            <p>Este documento es un comprobante oficial de compra emitido por Collectibles.uy.</p>
+            <p>Vázquez 1418, Montevideo, Uruguay · R.U.T. 219988220011</p>
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
   useEffect(() => {
     if (!user) return;
     async function loadData() {
       const orderSelect = `
-        id, total_amount, currency, status, created_at, payment_method, customer_email,
-        order_items (quantity, unit_price, total_price, product_id, variant_id, vendor_id, vendor_store_id, sku, vendor:vendors(store_name, slug, logo_url, promotions_opt_in, company_name), vendor_store:vendor_stores(store_name, slug, logo_url), products (title, slug, images:product_images(url))),
-        order_suborders (id, suborder_number, status, shipping_method, shipping_provider, shipping_cost, tracking_number, tracking_url, shipments(id, tracking_code, external_guide, shipping_status, package_number, total_packages), vendor:vendors(store_name, slug, logo_url), vendor_store:vendor_stores(store_name, slug, logo_url))
+        id, total_amount, currency, status, created_at, payment_method, customer_email, shipping_address, total_shipping,
+        payments(id, status, payment_url),
+        order_items (
+          quantity, unit_price, total_price, product_id, variant_id, vendor_id, vendor_store_id, sku,
+          vendor:vendors(store_name, slug, logo_url, promotions_opt_in, company_name),
+          vendor_store:vendor_stores(store_name, slug, logo_url),
+          products (title, slug, images:product_images(url)),
+          international_order_items (id, purchase_status, zinc_order_id, tracking_number, carrier, tracking_url, final_price_usd, expected_delivery_date)
+        ),
+        order_suborders (
+          id, suborder_number, status, shipping_method, shipping_provider, shipping_cost, tracking_number, tracking_url, exchange_rate_value,
+          shipments(id, tracking_code, external_guide, shipping_status, package_number, total_packages),
+          vendor:vendors(store_name, slug, logo_url),
+          vendor_store:vendor_stores(store_name, slug, logo_url)
+        ),
+        international_shipment_tracking (
+          tracking_number, tracking_url, courier_company, picked_up_at, estimated_delivery, contact_phone, contact_email, observations
+        )
       `;
 
       const { data: ordersData } = await supabase
@@ -88,6 +270,20 @@ export default function CustomerPortal() {
         setAddresses(Array.isArray(profileData.saved_addresses) ? profileData.saved_addresses : []);
         setIsVendor(!!profileData.is_vendor);
       }
+
+      // Load international addresses
+      try {
+        const { data: intlData } = await supabase
+          .from('customer_international_addresses')
+          .select('*')
+          .order('is_default', { ascending: false });
+        if (intlData) {
+          setIntlAddresses(intlData);
+        }
+      } catch (err) {
+        console.error("Error loading international addresses in loadData:", err);
+      }
+
       setLoading(false);
     }
     loadData();
@@ -130,6 +326,114 @@ export default function CustomerPortal() {
 
   function updateAddress(idx: number, field: keyof SavedAddress, value: string) {
     setAddresses(addresses.map((a, i) => i === idx ? { ...a, [field]: value } : a));
+  }
+
+  async function loadIntlAddresses() {
+    if (!user) return;
+    setLoadingIntl(true);
+    try {
+      const { data, error } = await supabase
+        .from('customer_international_addresses')
+        .select('*')
+        .order('is_default', { ascending: false });
+      if (error) throw error;
+      setIntlAddresses(data || []);
+    } catch (err) {
+      console.error("Error loading international addresses:", err);
+    } finally {
+      setLoadingIntl(false);
+    }
+  }
+
+  async function saveIntlAddress() {
+    if (!user) return;
+    try {
+      if (!intlForm.label.trim()) throw new Error("Ingresá la etiqueta (ej: Urubox Miami).");
+      if (!intlForm.courier_name.trim()) throw new Error("Ingresá el nombre del courier.");
+      if (!intlForm.recipient_name.trim()) throw new Error("Ingresá el nombre del destinatario.");
+      if (!intlForm.address_line_1.trim()) throw new Error("Ingresá la dirección.");
+      if (!intlForm.city.trim()) throw new Error("Ingresá la ciudad.");
+      if (!intlForm.state.trim()) throw new Error("Ingresá el estado.");
+      if (!intlForm.postal_code.trim()) throw new Error("Ingresá el ZIP Code.");
+      if (!intlForm.phone.trim()) throw new Error("Ingresá el teléfono.");
+
+      if (editingIntlId === 'new') {
+        const { error } = await supabase
+          .from('customer_international_addresses')
+          .insert({
+            user_id: user.id,
+            label: intlForm.label.trim(),
+            courier_name: intlForm.courier_name.trim(),
+            recipient_name: intlForm.recipient_name.trim(),
+            customer_code: intlForm.customer_code.trim() || null,
+            address_line_1: intlForm.address_line_1.trim(),
+            address_line_2: intlForm.address_line_2.trim() || null,
+            city: intlForm.city.trim(),
+            state: intlForm.state.trim(),
+            postal_code: intlForm.postal_code.trim(),
+            country: 'United States',
+            phone: intlForm.phone.trim(),
+            instructions: intlForm.instructions.trim() || null,
+            is_default: intlAddresses.length === 0
+          });
+        if (error) throw error;
+      } else if (editingIntlId) {
+        const { error } = await supabase
+          .from('customer_international_addresses')
+          .update({
+            label: intlForm.label.trim(),
+            courier_name: intlForm.courier_name.trim(),
+            recipient_name: intlForm.recipient_name.trim(),
+            customer_code: intlForm.customer_code.trim() || null,
+            address_line_1: intlForm.address_line_1.trim(),
+            address_line_2: intlForm.address_line_2.trim() || null,
+            city: intlForm.city.trim(),
+            state: intlForm.state.trim(),
+            postal_code: intlForm.postal_code.trim(),
+            phone: intlForm.phone.trim(),
+            instructions: intlForm.instructions.trim() || null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editingIntlId);
+        if (error) throw error;
+      }
+      setEditingIntlId(null);
+      await loadIntlAddresses();
+    } catch (err: any) {
+      alert(err.message || "Error al guardar dirección.");
+    }
+  }
+
+  async function deleteIntlAddress(id: string) {
+    if (!confirm("¿Seguro que querés eliminar esta dirección?")) return;
+    try {
+      const { error } = await supabase
+        .from('customer_international_addresses')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+      await loadIntlAddresses();
+    } catch (err: any) {
+      alert(err.message || "Error al eliminar dirección.");
+    }
+  }
+
+  async function setAsDefaultIntlAddress(id: string) {
+    try {
+      await supabase
+        .from('customer_international_addresses')
+        .update({ is_default: false })
+        .eq('user_id', user!.id);
+      
+      await supabase
+        .from('customer_international_addresses')
+        .update({ is_default: true })
+        .eq('id', id);
+      
+      await loadIntlAddresses();
+    } catch (err: any) {
+      alert(err.message || "Error al establecer como predeterminada.");
+    }
   }
 
   async function handleChangePassword() {
@@ -232,6 +536,7 @@ export default function CustomerPortal() {
         {([
           { key: 'orders', icon: Package, label: 'Mis Pedidos', count: orders.length },
           { key: 'profile', icon: User, label: 'Mis Datos' },
+          { key: 'couriers', icon: Globe, label: 'Direcciones Courier USA' },
           { key: 'security', icon: Lock, label: 'Seguridad' },
         ] as const).map(tab => (
           <button
@@ -276,18 +581,19 @@ export default function CustomerPortal() {
                       <p className="font-bold text-lg text-primary-600">{formatCurrencyPrice(order.total_amount)}</p>
                       <div className="flex flex-col items-end gap-2">
                         <span className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase ${
-                          ['paid', 'delivered'].includes(order.status) ? 'bg-green-100 text-green-700' :
+                          ['paid', 'delivered', 'confirmed'].includes(order.status) ? 'bg-green-100 text-green-700' :
                           order.status === 'shipped' ? 'bg-blue-100 text-blue-700' :
-                          order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                          order.status === 'cancelada' || order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                          ['pending', 'awaiting_payment'].includes(order.status) ? 'bg-yellow-100 text-yellow-800' :
+                          ['cancelled', 'cancelada', 'expired'].includes(order.status) ? 'bg-red-100 text-red-700' :
                           'bg-white/10 text-slate-300'
                         }`}>
-                          {order.status === 'pending' && 'Pendiente'}
-                          {order.status === 'paid' && 'Pagado'}
+                          {(order.status === 'pending' || order.status === 'awaiting_payment') && 'Esperando Pago'}
+                          {(order.status === 'paid' || order.status === 'confirmed') && 'Confirmado'}
                           {order.status === 'processing' && 'En Preparación'}
                           {order.status === 'shipped' && 'En Tránsito'}
                           {order.status === 'delivered' && 'Entregado'}
                           {(order.status === 'cancelled' || order.status === 'cancelada') && 'Cancelado'}
+                          {order.status === 'expired' && 'Expirado'}
                         </span>
                         
                         {order.order_suborders && order.order_suborders.length > 0 ? (
@@ -385,6 +691,209 @@ export default function CustomerPortal() {
                     </div>
                   </div>
                   <div className="p-6">
+                    {/* ARGENTINA SHIPPING TRACKING MODULE */}
+                    {(() => {
+                      const isArgentina = ['argentina', 'ar'].includes((order.shipping_address?.country || '').toLowerCase().trim());
+                      if (!isArgentina) return null;
+
+                      const tracking = order.international_shipment_tracking;
+                      return (
+                        <div className="mb-6 bg-white/5 border border-white/10 p-5 rounded-xl space-y-4 text-xs font-medium">
+                          <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                            <Truck className="w-4 h-4 text-primary-500" /> Envío Internacional (Argentina)
+                          </h3>
+
+                          {tracking ? (
+                            <div className="space-y-4">
+                              <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-start gap-3">
+                                <div className="p-1 bg-emerald-500 text-white rounded shrink-0">
+                                  <Truck className="w-4 h-4" />
+                                </div>
+                                <div className="flex-1">
+                                  <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider">¡Paquete en Camino!</h4>
+                                  <p className="text-xs text-slate-300 mt-1 leading-normal">
+                                    Tu envío internacional ha sido despachado a través de <b>{tracking.courier_company}</b>. Puedes realizar el seguimiento del envío utilizando el número de tracking provisto.
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs bg-white/5 p-4 rounded-xl border border-white/5 font-medium">
+                                <div>
+                                  <span className="text-slate-400 block mb-0.5">Número de Seguimiento (Tracking)</span>
+                                  <span className="font-mono text-sm font-bold text-white select-all">{tracking.tracking_number}</span>
+                                  {tracking.tracking_url && (
+                                    <a
+                                      href={tracking.tracking_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-primary-400 hover:underline block mt-1 font-bold"
+                                    >
+                                      Rastrear Envío →
+                                    </a>
+                                  )}
+                                </div>
+
+                                <div>
+                                  <span className="text-slate-400 block mb-0.5">Empresa Courier</span>
+                                  <span className="text-sm font-bold text-white uppercase">{tracking.courier_company}</span>
+                                </div>
+
+                                {tracking.picked_up_at && (
+                                  <div>
+                                    <span className="text-slate-400 block mb-0.5">Fecha de Retiro</span>
+                                    <span className="font-bold text-white">{new Date(tracking.picked_up_at).toLocaleDateString()}</span>
+                                  </div>
+                                )}
+
+                                {tracking.estimated_delivery && (
+                                  <div>
+                                    <span className="text-slate-400 block mb-0.5">Entrega Estimada</span>
+                                    <span className="font-bold text-white">{tracking.estimated_delivery}</span>
+                                  </div>
+                                )}
+
+                                {(tracking.contact_phone || tracking.contact_email) && (
+                                  <div className="col-span-1 sm:col-span-2 border-t border-white/5 pt-3 mt-1 space-y-1">
+                                    <span className="text-slate-400 block">Información de Contacto del Courier</span>
+                                    <div className="flex flex-wrap gap-x-4 text-slate-300">
+                                      {tracking.contact_phone && <span className="mr-3">📞 {tracking.contact_phone}</span>}
+                                      {tracking.contact_email && <span>✉️ {tracking.contact_email}</span>}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {tracking.observations && (
+                                  <div className="col-span-1 sm:col-span-2 border-t border-white/5 pt-3 mt-1 text-slate-300">
+                                    <span className="text-slate-400 block mb-0.5 font-bold">Detalles / Estado</span>
+                                    <span className="italic">{tracking.observations}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="p-4 bg-primary-500/10 border border-primary-500/20 rounded-xl flex items-start gap-3">
+                              <div className="p-1 bg-primary-500 text-white rounded shrink-0">
+                                <Clock className="w-4 h-4 animate-pulse" />
+                              </div>
+                              <div>
+                                <h4 className="text-xs font-bold text-primary-400 uppercase tracking-wider">Preparando Envío</h4>
+                                <p className="text-xs text-slate-300 mt-1 leading-normal font-medium">
+                                  Pago confirmado. Estamos preparando tu envío internacional. El seguimiento estará disponible una vez que el courier retire el paquete.
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    {/* MÓDULO INTERNACIONAL: SEGUIMIENTO "MIS IMPORTACIONES" */}
+                    {(() => {
+                      const isArgentina = ['argentina', 'ar'].includes((order.shipping_address?.country || '').toLowerCase().trim());
+                      if (isArgentina) return null;
+
+                      const intlItems = order.order_items.filter((item: any) => item.international_order_items && item.international_order_items.length > 0);
+                      if (intlItems.length === 0) return null;
+
+                      // Use the status of the first international item as representative
+                      const representativeTracker = intlItems[0].international_order_items[0];
+                      const purchaseStatus = representativeTracker?.purchase_status || 'pending_purchase';
+                      const zincOrderId = representativeTracker?.zinc_order_id;
+                      const trackingNumber = representativeTracker?.tracking_number;
+                      const trackingUrl = representativeTracker?.tracking_url;
+                      const carrier = representativeTracker?.carrier;
+
+                      const currentStep = getTrackingMilestoneStep(purchaseStatus);
+
+                      const steps = [
+                        { label: 'Recibido', desc: 'Pago confirmado en Collectibles' },
+                        { label: 'Procesando', desc: 'Amazon está preparando la orden' },
+                        { label: 'Comprado', desc: 'Zinc procesó la compra en USA' },
+                        { label: 'En Depósito', desc: 'Recibido en Miami' },
+                        { label: 'En Tránsito', desc: 'Viajando hacia Uruguay' },
+                        { label: 'Entregado', desc: 'Recibido en destino' },
+                      ];
+
+                      return (
+                        <div className="mb-6 bg-white/5 border border-white/10 p-5 rounded-xl">
+                          <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+                            <Truck className="w-4 h-4 text-[#f00856]" /> Seguimiento de Importación (Amazon USA)
+                          </h3>
+
+                          {/* Timeline visualization */}
+                          <div className="relative flex flex-col md:flex-row justify-between items-start md:items-center gap-4 md:gap-2 mb-6">
+                            {/* Connecting Line (for MD screens and above) */}
+                            <div className="absolute top-3.5 left-3.5 right-3.5 h-[2px] bg-white/10 -z-10 hidden md:block" />
+                            
+                            {steps.map((st, index) => {
+                              const stepNum = index + 1;
+                              const isCompleted = stepNum < currentStep;
+                              const isActive = stepNum === currentStep;
+
+                              return (
+                                <div key={index} className="flex md:flex-col items-center gap-3 md:gap-1.5 flex-1 w-full md:text-center z-10">
+                                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black transition-all ${
+                                    isCompleted ? 'bg-green-500 text-white shadow-lg shadow-green-500/20' :
+                                    isActive ? 'bg-[#f00856] text-white animate-pulse shadow-lg shadow-[#f00856]/20' :
+                                    'bg-slate-700 text-slate-400'
+                                  }`}>
+                                    {isCompleted ? '✓' : stepNum}
+                                  </div>
+                                  <div className="text-left md:text-center">
+                                    <div className={`text-xs font-bold ${isActive ? 'text-[#f00856]' : isCompleted ? 'text-green-400' : 'text-slate-400'}`}>{st.label}</div>
+                                    <div className="text-[10px] text-slate-500 leading-tight mt-0.5 md:max-w-[90px] mx-auto">{st.desc}</div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Tracking metadata */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-white/5 pt-4 text-xs">
+                            <div>
+                              <span className="text-slate-400 font-medium">Estado actual:</span>
+                              <span className="font-bold text-white ml-1.5 uppercase">
+                                {purchaseStatus === 'pending_purchase' && 'Esperando compra en Amazon'}
+                                {(purchaseStatus === 'zinc_order_created' || purchaseStatus === 'zinc_processing') && 'Comprando en Amazon USA'}
+                                {purchaseStatus === 'purchased' && 'Despachado por Amazon'}
+                                {purchaseStatus === 'warehouse_received' && 'Recibido en depósito Miami'}
+                                {(purchaseStatus === 'shipped' || purchaseStatus === 'shipped_to_courier') && 'Viajando a Uruguay'}
+                                {(purchaseStatus === 'delivered' || purchaseStatus === 'delivered_to_courier') && 'Listo para retirar / Entregado'}
+                                {purchaseStatus === 'cancelled' && 'Orden Cancelada'}
+                                {purchaseStatus === 'cancellation_requires_review' && 'Cancelación Pendiente de Revisión'}
+                                {purchaseStatus === 'manual_review' && 'Requiere Revisión Administrativa'}
+                              </span>
+                            </div>
+
+                            {trackingNumber && (
+                              <div className="sm:text-right">
+                                <span className="text-slate-400 font-medium">Código de rastreo:</span>
+                                <span className="font-mono font-bold text-blue-400 ml-1.5">{trackingNumber} ({carrier || 'Amazon'})</span>
+                                {trackingUrl && (
+                                  <a href={trackingUrl} target="_blank" rel="noreferrer" className="text-primary-500 hover:underline block mt-1 font-bold">Rastrear paquete original</a>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Franchise Warning */}
+                          <div className="mt-4 bg-[#f00856]/5 border border-[#f00856]/20 p-4 rounded-xl flex items-start gap-3">
+                            <AlertCircle className="w-5 h-5 text-[#f00856] shrink-0 mt-0.5" />
+                            <div>
+                              <h4 className="text-xs font-bold text-white uppercase tracking-wider">Control de Franquicia Aduanera (Uruguay)</h4>
+                              <p className="text-xs text-slate-300 mt-1 leading-normal">
+                                Esta compra consume 1 de tus 3 franquicias anuales. El valor aduanero CIF es de 
+                                <span className="font-bold text-white mx-1">
+                                  USD {intlItems.reduce((sum: number, it: any) => sum + (it.international_order_items?.[0]?.final_price_usd || (it.unit_price / (order.exchange_rate_value || 40)) * it.quantity), 0).toFixed(2)}
+                                </span>.
+                                Recuerda que para no pagar impuestos aduaneros, el valor de la importación no debe superar los <b>USD 200.00</b>.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     {order.order_items.map((item: any, i: number) => (
                       <div key={i} className="flex gap-4 py-3 border-b last:border-0 last:pb-0 items-center">
                         <Link to={item.products?.slug ? `/p/${item.products.slug}` : '#'}>
@@ -400,9 +909,22 @@ export default function CustomerPortal() {
                       </div>
                     ))}
                   </div>
-                  <div className="px-6 pb-5 flex gap-3">
+                  <div className="px-6 pb-5 flex flex-wrap gap-3">
+                    {['awaiting_payment', 'pending'].includes(order.status) && order.payments && order.payments.length > 0 && order.payments[0].payment_url && (
+                      <a 
+                        href={order.payments[0].payment_url} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="flex items-center gap-2 px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm transition-colors border border-amber-500"
+                      >
+                        <CreditCard className="w-4 h-4" /> Retomar Pago
+                      </a>
+                    )}
                     <button onClick={() => handleBuyAgain(order)} className="flex items-center gap-2 px-5 py-2 bg-primary-500/10 text-primary-700 hover:bg-primary-500/15  font-bold text-sm transition-colors border border-primary-200">
                       <RotateCcw className="w-4 h-4" /> Volver a Comprar
+                    </button>
+                    <button onClick={() => downloadCleanInvoice(order)} className="flex items-center gap-2 px-5 py-2 bg-white/5 text-white hover:bg-white/10 font-bold text-sm transition-colors border border-white/10">
+                      <FileText className="w-4 h-4 text-slate-400" /> Descargar Factura
                     </button>
                   </div>
                 </div>
@@ -555,6 +1077,316 @@ export default function CustomerPortal() {
               {savingProfile ? <>Guardando...</> : profileSaved ? <><Check className="w-4 h-4" /> Guardado</> : <><Save className="w-4 h-4" /> Guardar Todo</>}
             </button>
             {profileSaved && <span className="text-sm text-green-600 font-medium">✓ Datos y direcciones guardados correctamente.</span>}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ TAB: Direcciones Courier USA ═══ */}
+      {activeTab === 'couriers' && (
+        <div className="space-y-6">
+          <div className="glass border shadow-sm overflow-hidden">
+            <div className="px-8 py-5 border-b bg-white/5 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold flex items-center gap-2">
+                  <Globe className="w-5 h-5 text-primary-500" /> Direcciones de Courier (USA)
+                </h2>
+                <p className="text-xs text-slate-400 mt-1">
+                  Administrá las casillas y direcciones en Estados Unidos provistas por tu courier para recibir compras de importación.
+                </p>
+              </div>
+              {editingIntlId === null && (
+                <button 
+                  onClick={() => {
+                    setEditingIntlId('new');
+                    setIntlForm({
+                      label: '',
+                      courier_name: '',
+                      recipient_name: `${firstName} ${lastName}`.trim(),
+                      customer_code: '',
+                      address_line_1: '',
+                      address_line_2: '',
+                      city: '',
+                      state: '',
+                      postal_code: '',
+                      country: 'United States',
+                      phone: '',
+                      instructions: ''
+                    });
+                  }} 
+                  className="flex items-center gap-1.5 px-4 py-2 bg-primary-500/10 text-primary-700 hover:bg-primary-500/15 font-bold text-sm border border-primary-200 transition-colors"
+                >
+                  <Plus className="w-4 h-4" /> Agregar
+                </button>
+              )}
+            </div>
+
+            <div className="p-8">
+              {editingIntlId !== null ? (
+                /* Add / Edit Form */
+                <div className="space-y-4 max-w-2xl bg-black/10 p-6 rounded-xl border border-white/5">
+                  <h3 className="font-bold text-sm text-white mb-2">
+                    {editingIntlId === 'new' ? 'Nueva Dirección Internacional' : 'Editar Dirección Internacional'}
+                  </h3>
+
+                  {/* Suggestions template helper */}
+                  <div className="mb-4">
+                    <span className="text-xs text-slate-400 block mb-2 font-medium">Usar plantilla de autocompletado:</span>
+                    <div className="flex flex-wrap gap-2">
+                      <button 
+                        type="button" 
+                        className="bg-white/5 hover:bg-white/10 text-white text-[11px] px-2.5 py-1.5 rounded-lg border border-white/10 transition"
+                        onClick={() => {
+                          setIntlForm(prev => ({
+                            ...prev,
+                            label: 'Mi casilla Urubox',
+                            courier_name: 'Urubox',
+                            address_line_1: '2030 NW 95th Ave',
+                            address_line_2: 'Suite UY',
+                            city: 'Doral',
+                            state: 'FL',
+                            postal_code: '33172',
+                            phone: '7863140977'
+                          }));
+                        }}
+                      >
+                        Urubox Miami
+                      </button>
+                      <button 
+                        type="button" 
+                        className="bg-white/5 hover:bg-white/10 text-white text-[11px] px-2.5 py-1.5 rounded-lg border border-white/10 transition"
+                        onClick={() => {
+                          setIntlForm(prev => ({
+                            ...prev,
+                            label: 'Mi casilla USX Cargo',
+                            courier_name: 'USX Cargo',
+                            address_line_1: '8400 NW 25th St',
+                            address_line_2: 'Suite UY',
+                            city: 'Doral',
+                            state: 'FL',
+                            postal_code: '33122',
+                            phone: '3055928880'
+                          }));
+                        }}
+                      >
+                        USX Cargo Miami
+                      </button>
+                      <button 
+                        type="button" 
+                        className="bg-white/5 hover:bg-white/10 text-white text-[11px] px-2.5 py-1.5 rounded-lg border border-white/10 transition"
+                        onClick={() => {
+                          setIntlForm(prev => ({
+                            ...prev,
+                            label: 'Mi casilla PuntoMio',
+                            courier_name: 'PuntoMio',
+                            address_line_1: '2200 NW 129th Ave',
+                            address_line_2: 'Suite UY',
+                            city: 'Miami',
+                            state: 'FL',
+                            postal_code: '33182',
+                            phone: '3054772020'
+                          }));
+                        }}
+                      >
+                        PuntoMio Miami
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="form-label">Etiqueta Identificadora *</label>
+                      <input 
+                        className="form-input" 
+                        placeholder="Ej: Urubox Miami" 
+                        value={intlForm.label}
+                        onChange={e => setIntlForm({...intlForm, label: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Nombre del Courier *</label>
+                      <input 
+                        className="form-input" 
+                        placeholder="Ej: Urubox" 
+                        value={intlForm.courier_name}
+                        onChange={e => setIntlForm({...intlForm, courier_name: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Destinatario completo *</label>
+                      <input 
+                        className="form-input" 
+                        placeholder="Ej: Juan Pérez / UY12345" 
+                        value={intlForm.recipient_name}
+                        onChange={e => setIntlForm({...intlForm, recipient_name: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Número de Casilla / Suite *</label>
+                      <input 
+                        className="form-input" 
+                        placeholder="Ej: UY12345" 
+                        value={intlForm.customer_code}
+                        onChange={e => setIntlForm({...intlForm, customer_code: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Address Line 1 *</label>
+                      <input 
+                        className="form-input" 
+                        placeholder="Ej: 2030 NW 95th Ave" 
+                        value={intlForm.address_line_1}
+                        onChange={e => setIntlForm({...intlForm, address_line_1: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Address Line 2 (Opcional)</label>
+                      <input 
+                        className="form-input" 
+                        placeholder="Ej: Suite UY" 
+                        value={intlForm.address_line_2}
+                        onChange={e => setIntlForm({...intlForm, address_line_2: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Ciudad *</label>
+                      <input 
+                        className="form-input" 
+                        placeholder="Ej: Doral" 
+                        value={intlForm.city}
+                        onChange={e => setIntlForm({...intlForm, city: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Estado / Región *</label>
+                      <input 
+                        className="form-input" 
+                        placeholder="Ej: FL o Florida" 
+                        value={intlForm.state}
+                        onChange={e => setIntlForm({...intlForm, state: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">ZIP Code / Código Postal *</label>
+                      <input 
+                        className="form-input" 
+                        placeholder="Ej: 33172" 
+                        value={intlForm.postal_code}
+                        onChange={e => setIntlForm({...intlForm, postal_code: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Teléfono de Recepción *</label>
+                      <input 
+                        className="form-input" 
+                        placeholder="Ej: 7863140977" 
+                        value={intlForm.phone}
+                        onChange={e => setIntlForm({...intlForm, phone: e.target.value})}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="form-label">Instrucciones Adicionales (Opcional)</label>
+                    <textarea 
+                      className="form-input" 
+                      rows={2}
+                      placeholder="Ej: Entregar solo de lunes a viernes de 9 a 17 hs." 
+                      value={intlForm.instructions}
+                      onChange={e => setIntlForm({...intlForm, instructions: e.target.value})}
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-3 mt-4">
+                    <button onClick={saveIntlAddress} className="btn-primary px-6 py-2 flex items-center gap-1.5">
+                      <Save className="w-4 h-4" /> Guardar Dirección
+                    </button>
+                    <button onClick={() => setEditingIntlId(null)} className="px-6 py-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white font-bold text-sm transition">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* Listing saved addresses */
+                <>
+                  {loadingIntl ? (
+                    <div className="text-center py-6 text-slate-400">Cargando direcciones...</div>
+                  ) : intlAddresses.length === 0 ? (
+                    <div className="text-center py-10 text-slate-500">
+                      <Globe className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                      <p>No tenés direcciones de courier guardadas.</p>
+                      <p className="text-xs text-slate-600 mt-1">Agregá una casilla para que esté disponible en tu checkout.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {intlAddresses.map((addr) => (
+                        <div key={addr.id} className="border border-white/10 rounded-xl bg-white/5 p-5 flex flex-col justify-between hover:border-white/20 transition-all">
+                          <div>
+                            <div className="flex items-center justify-between mb-3">
+                              <h4 className="font-bold text-white text-sm flex items-center gap-2">
+                                {addr.label}
+                                {addr.is_default && (
+                                  <span className="bg-primary-500/10 text-primary-600 text-[9px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Principal</span>
+                                )}
+                              </h4>
+                              <div className="flex items-center gap-1">
+                                <button 
+                                  onClick={() => {
+                                    setEditingIntlId(addr.id);
+                                    setIntlForm({
+                                      label: addr.label || '',
+                                      courier_name: addr.courier_name || '',
+                                      recipient_name: addr.recipient_name || '',
+                                      customer_code: addr.customer_code || '',
+                                      address_line_1: addr.address_line_1 || '',
+                                      address_line_2: addr.address_line_2 || '',
+                                      city: addr.city || '',
+                                      state: addr.state || '',
+                                      postal_code: addr.postal_code || '',
+                                      country: addr.country || 'United States',
+                                      phone: addr.phone || '',
+                                      instructions: addr.instructions || ''
+                                    });
+                                  }} 
+                                  className="p-1 text-slate-400 hover:text-primary-500 hover:bg-white/5 rounded transition"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                                <button 
+                                  onClick={() => deleteIntlAddress(addr.id)} 
+                                  className="p-1 text-slate-400 hover:text-red-500 hover:bg-white/5 rounded transition"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="space-y-1.5 text-xs text-slate-400 leading-relaxed">
+                              <p><span className="text-slate-500">Courier:</span> <strong className="text-slate-300">{addr.courier_name}</strong></p>
+                              <p><span className="text-slate-500">Destinatario:</span> <strong className="text-slate-300">{addr.recipient_name}</strong></p>
+                              {addr.customer_code && <p><span className="text-slate-500">Casilla/Suite:</span> <strong className="text-slate-300">{addr.customer_code}</strong></p>}
+                              <p><span className="text-slate-500">Address Line 1:</span> <span className="text-slate-300">{addr.address_line_1}</span></p>
+                              {addr.address_line_2 && <p><span className="text-slate-500">Address Line 2:</span> <span className="text-slate-300">{addr.address_line_2}</span></p>}
+                              <p><span className="text-slate-500">Ubicación:</span> <span className="text-slate-300">{addr.city}, {addr.state} {addr.postal_code}</span></p>
+                              <p><span className="text-slate-500">Teléfono:</span> <span className="text-slate-300">{addr.phone}</span></p>
+                              {addr.instructions && <p className="mt-2 text-[11px] italic text-slate-500">Instrucciones: {addr.instructions}</p>}
+                            </div>
+                          </div>
+
+                          {!addr.is_default && (
+                            <button 
+                              onClick={() => setAsDefaultIntlAddress(addr.id)} 
+                              className="w-full mt-4 py-1.5 border border-white/5 hover:border-white/10 bg-white/5 hover:bg-white/10 text-xs text-slate-300 font-bold transition rounded-lg"
+                            >
+                              Establecer como predeterminada
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

@@ -12,7 +12,9 @@ export default function AdminLogisticsConnections() {
   const fetchConnections = async () => {
     setLoading(true);
     try {
-      const { data: connData, error: connErr } = await supabase
+      let connData: any[] | null = null;
+      
+      const { data: primaryData, error: primaryErr } = await supabase
         .from('vendor_shipping_connections')
         .select(`
           id, provider, account_name, connection_status, last_tested_at, last_error, updated_at, vendor_id,
@@ -20,7 +22,30 @@ export default function AdminLogisticsConnections() {
         `)
         .order('updated_at', { ascending: false });
 
-      if (connErr) throw connErr;
+      if (primaryErr) {
+        // Fallback: Query vendor_shipping_connections without nested join
+        const { data: fallbackData, error: fallbackErr } = await supabase
+          .from('vendor_shipping_connections')
+          .select('id, provider, account_name, connection_status, last_tested_at, last_error, updated_at, vendor_id')
+          .order('updated_at', { ascending: false });
+        if (fallbackErr) throw fallbackErr;
+
+        // Populate vendor info separately if needed
+        const vendorIds = Array.from(new Set((fallbackData || []).map(c => c.vendor_id).filter(Boolean)));
+        let vendorsMap: Record<string, any> = {};
+        if (vendorIds.length > 0) {
+          const { data: vList } = await supabase.from('vendors').select('id, company_name, store_name, email').in('id', vendorIds);
+          if (vList) {
+            vList.forEach(v => { vendorsMap[v.id] = v; });
+          }
+        }
+        connData = (fallbackData || []).map(c => ({
+          ...c,
+          vendors: vendorsMap[c.vendor_id] || null
+        }));
+      } else {
+        connData = primaryData;
+      }
 
       // Fetch all shipments for stats
       const { data: shipData, error: shipErr } = await supabase

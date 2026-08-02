@@ -39,11 +39,16 @@ Deno.serve(async (req: Request) => {
       throw new Error("La orden no existe.");
     }
 
+    const reqEmail = (customer_email || "").trim().toLowerCase();
+    const orderEmail = String(currentOrder.customer_email || "").trim().toLowerCase();
+    const isEmailMatched = reqEmail.length > 0 && reqEmail === orderEmail;
+    const isUserMatched = Boolean(user && currentOrder.customer_id && user.id === currentOrder.customer_id);
+
     if (currentOrder.customer_id) {
-      if (!user || user.id !== currentOrder.customer_id) {
+      if (!isUserMatched && !isEmailMatched) {
         throw new Error("No tienes permisos para consultar esta orden.");
       }
-    } else if (customer_email && customer_email.toLowerCase() !== String(currentOrder.customer_email || "").toLowerCase()) {
+    } else if (customer_email && !isEmailMatched) {
       throw new Error("No se pudo validar el email de la orden.");
     }
 
@@ -55,7 +60,7 @@ Deno.serve(async (req: Request) => {
         throw new Error("No se pudo validar la orden de PayPal retornada por el proveedor.");
       }
 
-      if (currentOrder.payment_processed_at) {
+      if (currentOrder.payment_processed_at || ['paid', 'confirmed'].includes(currentOrder.status)) {
         return new Response(JSON.stringify({ success: true, status: "paid", order: orderSummary(currentOrder) }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -109,7 +114,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (provider === "mercadopago") {
-      if (currentOrder.payment_processed_at) {
+      if (currentOrder.payment_processed_at || ['paid', 'confirmed'].includes(currentOrder.status)) {
         return new Response(JSON.stringify({ success: true, status: "paid", order: orderSummary(currentOrder) }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -153,6 +158,35 @@ Deno.serve(async (req: Request) => {
     }
 
     if (provider === "handy") {
+      if (currentOrder.payment_processed_at || ['paid', 'confirmed'].includes(currentOrder.status)) {
+        return new Response(JSON.stringify({ success: true, status: "paid", order: orderSummary(currentOrder) }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: handyPayment } = await supabaseClient
+        .from("payments")
+        .select("id, status, transaction_external_id, provider_transaction_id")
+        .eq("order_id", order_id)
+        .eq("provider", "handy")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (handyPayment && (handyPayment.status === "approved" || handyPayment.status === "completed")) {
+        const paidOrder = await finalizeOrderIfNeeded(
+          supabaseClient,
+          supabaseUrl,
+          supabaseServiceRoleKey,
+          order_id,
+          handyPayment.provider_transaction_id || handyPayment.transaction_external_id || handyPayment.id,
+        );
+
+        return new Response(JSON.stringify({ success: true, status: "paid", order: orderSummary(paidOrder) }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       return new Response(JSON.stringify({
         success: true,
         status: currentOrder.payment_status || currentOrder.status || "pending_payment",

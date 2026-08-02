@@ -155,31 +155,43 @@ Deno.serve(async (req: Request) => {
           ? paymentData.fee_details.reduce((sum: number, fee: any) => sum + fee.amount, 0) 
           : (paymentData.transaction_amount - paymentData.transaction_details?.net_received_amount) || 0;
 
-        if (order?.status !== 'paid') {
-          console.log(`[MP Webhook] Marking Order ${orderId} as PAID`);
+        if (order?.status === 'awaiting_payment' || order?.status === 'pending') {
+          console.log(`[MP Webhook] Confirming payment for Order ${orderId}`);
           
-          // Update Order
+          // Update Order and Reservation atomically
+          const { error: confirmError } = await supabaseAdmin.rpc("confirm_payment_atomic", {
+            p_order_id: orderId,
+            p_payment_provider: "mercadopago",
+            p_payment_ref: paymentId.toString(),
+          });
+
+          if (confirmError) {
+            console.error("[MP Webhook] confirm_payment_atomic failed:", confirmError);
+            throw new Error(confirmError.message || "No se pudo confirmar la orden.");
+          }
+
+          // Fetch updated order to get total amount
+          const { data: updatedOrder, error: fetchErr } = await supabaseAdmin
+            .from('orders')
+            .select('*')
+            .eq('id', orderId)
+            .single();
+
+          if (fetchErr || !updatedOrder) {
+            console.error("[MP Webhook] Failed to fetch updated order:", fetchErr);
+            throw new Error("No se pudo recuperar la orden actualizada.");
+          }
+
+          // Update total_payment_fee
           await supabaseAdmin
             .from("orders")
             .update({ 
-              status: "paid", 
-              payment_status: "approved",
-              payment_provider: "mercadopago",
-              payment_provider_reference: paymentId.toString(),
               total_payment_fee: totalPaymentFee,
-              payment_id: paymentId.toString(),
-              payment_processed_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             })
             .eq("id", orderId);
 
-          // Get the actual order total amount
-          const { data: refreshedOrder } = await supabaseAdmin
-            .from('orders')
-            .select('total_amount')
-            .eq('id', orderId)
-            .single();
-          const orderTotal = refreshedOrder ? Number(refreshedOrder.total_amount) : 0;
+          const orderTotal = Number(updatedOrder.total_amount);
 
           // Fetch suborders and update them
           const { data: suborders } = await supabaseAdmin
@@ -205,21 +217,13 @@ Deno.serve(async (req: Request) => {
             }
           }
 
-          // Inventory Management
+          // Inventory Management (Physical stock decremented in confirm_payment_atomic RPC, we only sync to ML here)
           const { data: orderItems } = await supabaseAdmin.from("order_items").select("*").eq("order_id", orderId);
           if (orderItems) {
             for (const item of orderItems) {
               if (item.variant_id) {
-                const { error: invErr } = await supabaseAdmin.rpc("decrement_inventory", { 
-                  p_variant_id: item.variant_id, 
-                  p_quantity: item.quantity 
-                });
-                if (invErr) {
-                  console.error("Inventory error:", invErr);
-                } else {
-                  // Enqueue ML stock sync event
-                  await enqueueMlSyncEvent(supabaseAdmin, item.variant_id);
-                }
+                // Enqueue ML stock sync event without blocking
+                await enqueueMlSyncEvent(supabaseAdmin, item.variant_id).catch((e: any) => console.error("ML Sync error:", e));
               }
             }
           }
@@ -295,11 +299,14 @@ Deno.serve(async (req: Request) => {
       } 
       // CANCELLED or REJECTED STATUS
       else if (paymentData.status === "cancelled" || paymentData.status === "rejected") {
+        const orderStatus = paymentData.status === "cancelled" ? "cancelled" : "awaiting_payment";
+        const orderPaymentStatus = paymentData.status === "cancelled" ? "cancelled" : "rejected";
+        
         await supabaseAdmin
           .from("orders")
           .update({
-            status: "cancelled",
-            payment_status: paymentData.status === "rejected" ? "rejected" : "cancelled",
+            status: orderStatus,
+            payment_status: orderPaymentStatus,
             updated_at: new Date().toISOString(),
           })
           .eq("id", orderId);

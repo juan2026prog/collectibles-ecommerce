@@ -243,14 +243,18 @@ export default function AdminProducts() {
         }
       }
 
-      let titleSlug = form.slug || form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'); if (!editing && !form.slug) { titleSlug = `${titleSlug.replace(/-+$/, '')}-`; }
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUserId = session?.user?.id;
 
-      const payload = {
+      const payload: any = {
         title: form.title, slug: titleSlug, description: form.description, short_description: form.short_description,
         base_price: parseFloat(form.base_price) || 0, compare_at_price: form.compare_at_price ? parseFloat(form.compare_at_price) : null,
         status: form.status, badge: form.badge || null, is_featured: form.is_featured, is_active: form.is_active,
         brand_id: form.brands[0] || null, category_id: form.categories[0] || null
       };
+      if (!editing && currentUserId) {
+        payload.vendor_id = currentUserId;
+      }
 
       let productId = editing?.id;
       if (editing) {
@@ -275,7 +279,7 @@ export default function AdminProducts() {
       }
 
       // 📦 Variants 📦
-      const skuVal = form.sku || `${Date.now()}`;
+      const skuVal = form.sku?.trim() || `SKU-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
       if (editing && editing.variants?.[0]?.id) {
         const { error: varErr } = await supabase.from('product_variants').update({ sku: skuVal, inventory_count: parseInt(form.stock) || 0 }).eq('id', editing.variants[0].id);
         if (varErr) throw varErr;
@@ -518,7 +522,10 @@ export default function AdminProducts() {
       // Ensure slug is unique by appending a random suffix
       const newSlug = `${baseSlug.replace(/-+$/, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-      const payload = {
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUserId = session?.user?.id;
+
+      const payload: any = {
         title: newTitle,
         slug: newSlug,
         description: product.description,
@@ -532,6 +539,9 @@ export default function AdminProducts() {
         brand_id: product.brand?.id || product.brand_id || null,
         category_id: product.category?.id || product.category_id || null
       };
+      if (currentUserId) {
+        payload.vendor_id = currentUserId;
+      }
 
       const { data: newProd, error: insertError } = await supabase.from('products').insert(payload).select().single();
       if (insertError) throw insertError;
@@ -550,9 +560,11 @@ export default function AdminProducts() {
         if (insImgErr) throw insImgErr;
       }
 
-      // 4. Duplicate Variants (generate new SKU to avoid unique constraint conflict)
+      // 4. Duplicate Variants (generate unique SKU with random suffix to prevent unique constraint conflicts)
       const originalSku = product.variants?.[0]?.sku || '';
-      const newSku = originalSku ? `${originalSku}-COPY` : `${Date.now()}`;
+      const randSuffix = Math.floor(1000 + Math.random() * 9000);
+      const cleanOriginalSku = originalSku ? originalSku.replace(/-COPY(-\d+)?$/gi, '') : `SKU-${Date.now()}`;
+      const newSku = `${cleanOriginalSku}-COPY-${randSuffix}`;
       const originalStock = product.variants?.[0]?.inventory_count || 0;
       
       const { error: varErr } = await supabase.from('product_variants').insert({

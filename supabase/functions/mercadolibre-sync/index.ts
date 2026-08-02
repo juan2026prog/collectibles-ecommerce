@@ -130,22 +130,54 @@ async function resolveCollectiblesCategoryFromML(supabase: any, title: string, b
     return d4?.id || null;
 }
 
+function isValidGtinChecksum(code: string | null | undefined): boolean {
+  if (!code) return false;
+  const clean = code.replace(/[^0-9]/g, '');
+  const len = clean.length;
+  if (![8, 12, 13, 14].includes(len)) return false;
+
+  let sum = 0;
+  for (let i = 1; i < len; i++) {
+    const digit = parseInt(clean.charAt(len - 1 - i), 10);
+    const weight = (i % 2 === 1) ? 3 : 1;
+    sum += digit * weight;
+  }
+  const check = (10 - (sum % 10)) % 10;
+  return check === parseInt(clean.charAt(len - 1), 10);
+}
+
 function extractRealSkuFromML(item: any, variation: any = null) {
-   let sku = null;
+   let sku: string | null = null;
    let source = 'missing';
 
    const getFromAttr = (attrs: any[], code: string) => attrs?.find((a: any) => a.id === code)?.value_name;
 
-   if (item.seller_custom_field) { sku = item.seller_custom_field; source = 'seller_custom_field'; }
-   else if (variation?.seller_custom_field) { sku = variation.seller_custom_field; source = 'seller_custom_field_var'; }
-   else if (getFromAttr(item.attributes, 'SELLER_SKU')) { sku = getFromAttr(item.attributes, 'SELLER_SKU'); source = 'seller_sku'; }
-   else if (getFromAttr(item.attributes, 'SKU')) { sku = getFromAttr(item.attributes, 'SKU'); source = 'sku'; }
-   else if (item.inventory_id) { sku = item.inventory_id; source = 'inventory_id'; }
-   else if (variation?.inventory_id) { sku = variation.inventory_id; source = 'inventory_id_var'; }
+   const gtin = getFromAttr(item.attributes, 'GTIN') || 
+                getFromAttr(item.attributes, 'EAN') || 
+                getFromAttr(item.attributes, 'UPC') || 
+                getFromAttr(item.attributes, 'JAN') ||
+                getFromAttr(variation?.attributes, 'GTIN') || 
+                getFromAttr(variation?.attributes, 'EAN') || 
+                getFromAttr(variation?.attributes, 'UPC');
 
-   if (!sku) {
-       sku = item.id; 
-       source = 'ml_item_id_fallback';
+   if (gtin && isValidGtinChecksum(gtin.trim())) {
+      sku = gtin.trim();
+      source = 'universal_gtin';
+   } else {
+      const candidate = item.seller_custom_field || 
+                        variation?.seller_custom_field || 
+                        getFromAttr(item.attributes, 'SELLER_SKU') || 
+                        getFromAttr(item.attributes, 'SKU');
+      if (candidate && isValidGtinChecksum(candidate.trim())) {
+         sku = candidate.trim();
+         source = 'seller_gtin';
+      }
+   }
+
+   // Regla de Negocio: Si no posee un código universal con checksum válido, sku es null y se generará COL-XXXXXX
+   if (!sku || !isValidGtinChecksum(sku)) {
+       sku = null; 
+       source = 'missing_universal_code';
    }
    return { sku, source, generated_sku: sku };
 }

@@ -30,16 +30,8 @@ export async function triggerPostPaymentActions(
   if (orderItems) {
     for (const item of orderItems) {
       if (item.variant_id) {
-        const { error: invError } = await supabaseClient.rpc("decrement_inventory", {
-          p_variant_id: item.variant_id,
-          p_quantity: item.quantity,
-        });
-        if (invError) {
-          console.error("Inventory error:", invError);
-        } else {
-          // Enqueue ML stock sync event without blocking
-          await enqueueMlSyncEvent(supabaseClient, item.variant_id);
-        }
+        // Enqueue ML stock sync event without blocking (physical stock decremented in confirm_payment_atomic RPC)
+        await enqueueMlSyncEvent(supabaseClient, item.variant_id).catch((e: any) => console.error("ML Sync error:", e));
       }
     }
   }
@@ -188,6 +180,8 @@ export async function triggerPostPaymentActions(
     }).catch((err: any) => console.error("Email error:", err));
   }
 
+  // MBE logistics flow is now decoupled and handled asynchronously via database triggers on public.orders update
+
   // Trigger Zinc verification and automatic purchase for international items
   await triggerZincVerificationIfNeeded(supabaseClient, supabaseUrl, supabaseServiceRoleKey, orderId);
 }
@@ -239,23 +233,29 @@ export async function finalizeOrderIfNeeded(
     console.warn("Could not retrieve payment record for fee share calculation:", e);
   }
 
+  const { error: confirmError } = await supabaseClient.rpc("confirm_payment_atomic", {
+    p_order_id: orderId,
+    p_payment_provider: currentOrder.payment_method,
+    p_payment_ref: paymentId || currentOrder.payment_id || "UNKNOWN",
+  });
+
+  if (confirmError) {
+    console.error("confirm_payment_atomic failed:", confirmError);
+    throw new Error(confirmError.message || "No se pudo confirmar el pago de la orden.");
+  }
+
+  // Update total_payment_fee on orders
   const { data: updatedOrder, error: updateError } = await supabaseClient
     .from("orders")
     .update({
-      status: "paid",
-      payment_status: "approved",
-      payment_id: paymentId || currentOrder.payment_id,
-      payment_provider: currentOrder.payment_method,
-      payment_provider_reference: paymentId || currentOrder.payment_id,
       total_payment_fee: totalPaymentFee,
-      payment_processed_at: new Date().toISOString(),
     })
     .eq("id", orderId)
     .select("*")
     .single();
 
   if (updateError || !updatedOrder) {
-    throw new Error(updateError?.message || "No se pudo marcar la orden como pagada.");
+    throw new Error(updateError?.message || "No se pudo recuperar la orden actualizada.");
   }
 
   // Update order suborders

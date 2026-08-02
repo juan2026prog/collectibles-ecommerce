@@ -194,9 +194,11 @@ export default function ProductDetail() {
   const hasDiscount = promoResult.discount > 0;
   const discountPercent = hasDiscount ? Math.round((promoResult.discount / basePriceWithVariant) * 100) : 0;
 
-  const images = product.product_images && product.product_images.length > 0
-    ? product.product_images.sort((a: any, b: any) => (a.position || 0) - (b.position || 0))
-    : [{ url: product.image_url || FALLBACK_IMAGE }];
+  const images = Array.isArray(product.images) && product.images.length > 0
+    ? [...product.images].sort((a: any, b: any) => (a.sort_order || a.position || 0) - (b.sort_order || b.position || 0))
+    : Array.isArray(product.product_images) && product.product_images.length > 0
+      ? [...product.product_images].sort((a: any, b: any) => (a.position || a.sort_order || 0) - (b.position || b.sort_order || 0))
+      : [{ url: product.image_url || FALLBACK_IMAGE }];
 
   const currentImgObj = images[selectedImage] || images[0];
   const displayImage = resolveImage(currentImgObj?.url || product.image_url);

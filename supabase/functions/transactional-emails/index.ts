@@ -120,7 +120,8 @@ serve(async (req: Request) => {
       const { type, record, old_record } = payload;
 
       // ORDER PAID CONFIRMATION
-      if (record.status === 'paid' && (type === 'INSERT' || old_record?.status !== 'paid')) {
+      if ((record.status === 'paid' || record.status === 'confirmed') && 
+          (type === 'INSERT' || (old_record?.status !== 'paid' && old_record?.status !== 'confirmed'))) {
          const customerEmail = record.customer_email || 'noreply@collectibles.com';
          const subject = `¡Confirmación de tu Orden #${record.id.slice(0, 8).toUpperCase()}!`;
          const html = `

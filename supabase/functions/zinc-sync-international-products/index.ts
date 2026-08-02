@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { verifyAdmin } from "../_shared/auth.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
+import { calculateFee, calculateRealCost, calculateProfitEngine, applyProfitProtection, calculateUruboxEstimate } from "../_shared/pricing.ts";
+import { getEffectiveExchangeRate } from "../_shared/internationalPricing.ts";
 
 serve(async (req) => {
   const optionsResponse = handleOptions(req);
@@ -25,6 +27,10 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
+
+    const { data: settings } = await supabase.from('international_sync_settings').select('*').eq('id', 1).single();
+    if (!settings) throw new Error("Configuración internacional no encontrada");
+    const { effective_rate } = await getEffectiveExchangeRate(supabase);
 
     const { data: products, error: productsError } = await supabase
       .from('international_products')
@@ -108,24 +114,28 @@ serve(async (req) => {
 
         const base_price_usd = price !== null ? price : p.base_price_usd;
         
-        // Recalculate final_price_usd
-        // The exchange rate isn't natively stored in the DB, only final_price_uyu. 
-        // We can infer the previous exchange rate if we want, or rely on base_price_usd.
-        // Prompt: "final_price_uyu usando el tipo de cambio guardado o el valor indicado por admin si existe."
-        // We will infer exchange rate: final_price_uyu / final_price_usd
+        const pricing_mode = p.pricing_mode || settings.pricing_mode || 'amazon_price_plus_fee';
+        const fee = calculateFee(base_price_usd, pricing_mode, settings.fixed_markup_usd, settings.percentage_markup, settings.tiered_markup_rules);
         
-        let exchange_rate = 40; // fallback
-        if (p.final_price_usd > 0 && p.final_price_uyu > 0) {
-            exchange_rate = Number(p.final_price_uyu) / Number(p.final_price_usd);
-        }
+        const usaShipping = Number(p.usa_domestic_shipping_usd || 0);
+        const realCost = calculateRealCost(base_price_usd, usaShipping, settings as any);
+        const expectedProfit = calculateProfitEngine(realCost, settings as any);
+        const protection = applyProfitProtection(base_price_usd, fee, realCost, expectedProfit, settings as any);
 
-        const final_price_usd = Number(base_price_usd) + Number(p.usa_domestic_shipping_usd || 0) + Number(p.collectibles_fee_usd || 0);
-        const final_price_uyu = final_price_usd * exchange_rate;
+        const final_price_usd = protection.finalPrice + usaShipping;
+        const final_price_uyu = Number((final_price_usd * effective_rate).toFixed(2));
+        
+        const urubox_estimated_cost_usd = calculateUruboxEstimate(p.weight_grams, p.category, settings as any);
 
         await supabase.from('international_products').update({
             base_price_usd,
             final_price_usd,
             final_price_uyu,
+            collectibles_fee_usd: protection.finalFee,
+            expected_profit_usd: expectedProfit,
+            real_cost_usd: realCost,
+            urubox_estimated_cost_usd,
+            total_estimated_cost_usd: final_price_usd + urubox_estimated_cost_usd,
             availability,
             rating,
             review_count,

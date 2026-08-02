@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { calculateFee, calculateRealCost, calculateProfitEngine, applyProfitProtection } from "../_shared/pricing.ts";
+import { getEffectiveExchangeRate } from "../_shared/internationalPricing.ts";
 
 serve(async (req) => {
   const optionsResponse = handleOptions(req);
@@ -30,6 +31,8 @@ serve(async (req) => {
     const serviceClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "");
     const { data: settings } = await serviceClient.from('international_sync_settings').select('*').eq('id', 1).single();
     if (!settings) throw new Error("Sync settings not found");
+    
+    const { effective_rate } = await getEffectiveExchangeRate(serviceClient);
     const results = [];
     let all_ok = true;
 
@@ -101,10 +104,12 @@ serve(async (req) => {
 
            // Update DB with valid_until 10 mins
            const validUntil = new Date(Date.now() + 10 * 60000).toISOString();
+           const finalPriceUyu = Number((finalPriceWithShipping * effective_rate).toFixed(2));
            await serviceClient.from('international_products').update({
                last_price_usd: price,
                amazon_current_price_usd: price,
                final_price_usd: finalPriceWithShipping,
+               final_price_uyu: finalPriceUyu,
                collectibles_fee_usd: protection.finalFee,
                expected_profit_usd: expectedProfit,
                real_cost_usd: realCost,

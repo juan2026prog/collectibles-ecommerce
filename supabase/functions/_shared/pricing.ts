@@ -54,7 +54,8 @@ export function calculateFinancialCostPrex(amazonPrice: number): number {
 
 export function calculateRealCost(amazonPrice: number, usaShipping: number, settings: ProfitSettings): number {
   const costPrex = calculateFinancialCostPrex(amazonPrice);
-  return amazonPrice + usaShipping + settings.zinc_fee_usd + costPrex;
+  const floridaSalesTax = (amazonPrice + usaShipping) * 0.07;
+  return amazonPrice + usaShipping + floridaSalesTax + settings.zinc_fee_usd + costPrex;
 }
 
 export function calculateProfitEngine(realCost: number, settings: ProfitSettings): number {

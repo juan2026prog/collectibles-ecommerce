@@ -296,7 +296,8 @@ export default function VProducts() {
       }
 
       // 📦 Variants 📦
-      const skuVal = form.sku || `${Date.now()}`;
+      const cleanInputSku = form.sku?.trim();
+      const skuVal = (cleanInputSku && /^[0-9]{8,14}$/.test(cleanInputSku)) ? cleanInputSku : null;
       if (editing && editing.variants?.[0]?.id) {
         const { error: varErr } = await supabase.from('product_variants').update({ sku: skuVal, inventory_count: parseInt(form.stock) || 0 }).eq('id', editing.variants[0].id);
         if (varErr) throw varErr;
@@ -550,9 +551,11 @@ export default function VProducts() {
         if (insImgErr) throw insImgErr;
       }
 
-      // 4. Duplicate Variants (generate new SKU to avoid unique constraint conflict)
+      // 4. Duplicate Variants (generate unique SKU with random suffix to prevent unique constraint conflicts)
       const originalSku = product.variants?.[0]?.sku || '';
-      const newSku = originalSku ? `${originalSku}-COPY` : `${Date.now()}`;
+      const randSuffix = Math.floor(1000 + Math.random() * 9000);
+      const cleanOriginalSku = originalSku ? originalSku.replace(/-COPY(-\d+)?$/gi, '') : `SKU-${Date.now()}`;
+      const newSku = `${cleanOriginalSku}-COPY-${randSuffix}`;
       const originalStock = product.variants?.[0]?.inventory_count || 0;
       
       const { error: varErr } = await supabase.from('product_variants').insert({
@@ -786,8 +789,19 @@ export default function VProducts() {
   const removeFromGallery = (idx: number) => setForm({ ...form, gallery: form.gallery.filter((_, i) => i !== idx) });
 
   const filteredProducts = useMemo(() => {
+    const sLower = search.toLowerCase().trim();
     return products.filter(p => {
-      const matchesSearch = p.title.toLowerCase().includes(search.toLowerCase());
+      const matchesSearch = !sLower || 
+        p.title.toLowerCase().includes(sLower) ||
+        p.ml_item_id?.toLowerCase().includes(sLower) ||
+        (p.metadata?.gtin && String(p.metadata.gtin).toLowerCase().includes(sLower)) ||
+        (p.metadata?.amazon_asin && String(p.metadata.amazon_asin).toLowerCase().includes(sLower)) ||
+        (p.metadata?.external_product_id && String(p.metadata.external_product_id).toLowerCase().includes(sLower)) ||
+        p.variants?.some((v: any) => 
+          (v.sku && String(v.sku).toLowerCase().includes(sLower)) || 
+          (v.legacy_sku && String(v.legacy_sku).toLowerCase().includes(sLower)) ||
+          (v.sku_vendedor && String(v.sku_vendedor).toLowerCase().includes(sLower))
+        );
       const matchesCategory = filterCategory === '' || p.category_id === filterCategory || p.product_categories?.[0]?.categories?.id === filterCategory || p.category?.id === filterCategory;
       const matchesBrand = filterBrand === '' || p.brand?.id === filterBrand || p.brand_id === filterBrand;
       return matchesSearch && matchesCategory && matchesBrand;
@@ -1190,8 +1204,9 @@ export default function VProducts() {
                                 <input type="number" className="w-full p-2.5 border rounded-lg text-sm bg-gray-50 focus:bg-white outline-none" value={form.compare_at_price} onChange={e => setForm({...form, compare_at_price: e.target.value})} />
                              </div>
                              <div>
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">SKU</label>
-                                <input className="w-full p-2.5 border rounded-lg text-sm bg-gray-50 focus:bg-white outline-none" value={form.sku} onChange={e => setForm({...form, sku: e.target.value})} />
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">SKU (UPC / EAN / GTIN)</label>
+                                <input className="w-full p-2.5 border rounded-lg text-sm bg-gray-50 focus:bg-white outline-none font-mono" placeholder="Ej: 887961308259" value={form.sku} onChange={e => setForm({...form, sku: e.target.value})} />
+                                <span className="text-[9px] text-gray-400 block mt-1">Exclusivamente UPC / EAN / GTIN numérico.</span>
                              </div>
                              <div>
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Stock</label>
@@ -1199,6 +1214,22 @@ export default function VProducts() {
                              </div>
                           </div>
                        </div>
+
+                       {/* 🔒 Identificadores de Integración (Técnico / Solo Lectura) */}
+                       {editing && (
+                          <div className="bg-slate-900 rounded-xl p-5 text-white shadow-lg border border-slate-800">
+                             <h4 className="font-bold flex items-center gap-2 mb-1 text-sm text-slate-200">
+                                Identificadores de Integración
+                             </h4>
+                             <p className="text-[11px] text-slate-400 mb-3">Identificadores técnicos relacionales del sistema y marketplaces externos (No mostrados como SKU).</p>
+                             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs font-mono bg-slate-800/80 p-3 rounded-lg border border-slate-700">
+                                <div><span className="text-slate-400 block text-[10px]">ML Item ID:</span> {editing.ml_item_id || '—'}</div>
+                                <div><span className="text-slate-400 block text-[10px]">Amazon ASIN:</span> {editing.metadata?.amazon_asin || editing.metadata?.external_product_id || '—'}</div>
+                                <div><span className="text-slate-400 block text-[10px]">Vendor SKU:</span> {editing.variants?.[0]?.sku_vendedor || '—'}</div>
+                                <div><span className="text-slate-400 block text-[10px]">UUID Interno:</span> {editing.id ? `${editing.id.substring(0, 8)}...` : '—'}</div>
+                             </div>
+                          </div>
+                       )}
 
                        {/* ML Special Data */}
                        {editing?.ml_item_id && (

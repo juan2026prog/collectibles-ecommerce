@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { Eye, ChevronDown, Package, Truck, PhoneCall, X, Save, Ban, AlertTriangle, UserX, Gift, RefreshCw, FileText, Clock, Settings } from 'lucide-react';
+import { Eye, ChevronDown, Package, Truck, PhoneCall, X, Save, Ban, AlertTriangle, UserX, Gift, RefreshCw, FileText, Clock, Settings, Mail, MapPin } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
 import { createDacShipment, getDacLabel, trackDacShipment } from '../../lib/dac';
@@ -30,6 +30,7 @@ export default function AdminOrders() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [isBlocking, setIsBlocking] = useState(false);
   const [isSendingDiscount, setIsSendingDiscount] = useState(false);
+  const isArgentina = selectedOrder ? ['argentina', 'ar'].includes((selectedOrder?.shipping_address?.country || '').toLowerCase().trim()) : false;
 
   // International Zinc tracking state
   const [intlOrderItems, setIntlOrderItems] = useState<any[]>([]);
@@ -43,6 +44,22 @@ export default function AdminOrders() {
   const [uesShipment, setUesShipment] = useState<any | null>(null);
   const [loadingUes, setLoadingUes] = useState(false);
   const [isUesActive, setIsUesActive] = useState(false);
+
+  // MBE Shipping Logs & International Tracking States
+  const [mbeLogs, setMbeLogs] = useState<any[]>([]);
+  const [mbeLogsLoading, setMbeLogsLoading] = useState(false);
+  const [trackingInfo, setTrackingInfo] = useState<any | null>(null);
+  const [trackingInfoLoading, setTrackingInfoLoading] = useState(false);
+
+  // Tracking Form Inputs
+  const [formTrackingNumber, setFormTrackingNumber] = useState('');
+  const [formTrackingUrl, setFormTrackingUrl] = useState('');
+  const [formCourierCompany, setFormCourierCompany] = useState('');
+  const [formPickedUpAt, setFormPickedUpAt] = useState('');
+  const [formEstimatedDelivery, setFormEstimatedDelivery] = useState('');
+  const [formContactPhone, setFormContactPhone] = useState('');
+  const [formContactEmail, setFormContactEmail] = useState('');
+  const [formObservations, setFormObservations] = useState('');
   
   // DAC Form inputs
   const [dacCustomerName, setDacCustomerName] = useState('');
@@ -121,6 +138,8 @@ export default function AdminOrders() {
       setDacObs('');
       
       loadOrderItemsAndSuborders(selectedOrder.id);
+      loadMbeLogs(selectedOrder.id);
+      loadInternationalTracking(selectedOrder.id);
     } else {
       setDacShipment(null);
       setUesShipment(null);
@@ -207,6 +226,151 @@ export default function AdminOrders() {
   async function loadDacShipmentForOrder(orderId: string) {
     await loadShipmentsForOrder(orderId);
   }
+
+  // Load MBE logs
+  const loadMbeLogs = async (orderId: string) => {
+    setMbeLogsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('mbe_shipping_logs')
+        .select('*')
+        .eq('order_id', orderId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setMbeLogs(data || []);
+    } catch (err) {
+      console.error("Error loading MBE logs:", err);
+    } finally {
+      setMbeLogsLoading(false);
+    }
+  };
+
+  // Load International Tracking
+  const loadInternationalTracking = async (orderId: string) => {
+    setTrackingInfoLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('international_shipment_tracking')
+        .select('*')
+        .eq('order_id', orderId)
+        .maybeSingle();
+      if (error) throw error;
+      setTrackingInfo(data);
+      if (data) {
+        setFormTrackingNumber(data.tracking_number || '');
+        setFormTrackingUrl(data.tracking_url || '');
+        setFormCourierCompany(data.courier_company || '');
+        setFormPickedUpAt(data.picked_up_at ? data.picked_up_at.split('T')[0] : '');
+        setFormEstimatedDelivery(data.estimated_delivery || '');
+        setFormContactPhone(data.contact_phone || '');
+        setFormContactEmail(data.contact_email || '');
+        setFormObservations(data.observations || '');
+      } else {
+        setFormTrackingNumber('');
+        setFormTrackingUrl('');
+        setFormCourierCompany('');
+        setFormPickedUpAt('');
+        setFormEstimatedDelivery('');
+        setFormContactPhone('');
+        setFormContactEmail('');
+        setFormObservations('');
+      }
+    } catch (err) {
+      console.error("Error loading international tracking:", err);
+    } finally {
+      setTrackingInfoLoading(false);
+    }
+  };
+
+  // Resend MBE Email Action
+  const handleResendMbeEmail = async () => {
+    if (!selectedOrder) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/mbe-logistics`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ action: 'resend_email', order_id: selectedOrder.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error re-sending email');
+      alert("Correo reenviado exitosamente a MBE.");
+      loadMbeLogs(selectedOrder.id);
+    } catch (err: any) {
+      alert("Error reenviando correo: " + err.message);
+    }
+  };
+
+  // Save International Tracking Form Action
+  const [savingTracking, setSavingTracking] = useState(false);
+  const handleSaveTracking = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedOrder) return;
+    if (!formTrackingNumber.trim() || !formCourierCompany.trim()) {
+      alert("Número de tracking y Courier son obligatorios.");
+      return;
+    }
+    setSavingTracking(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const payload = {
+        order_id: selectedOrder.id,
+        tracking_number: formTrackingNumber,
+        tracking_url: formTrackingUrl || null,
+        courier_company: formCourierCompany,
+        picked_up_at: formPickedUpAt ? new Date(formPickedUpAt).toISOString() : null,
+        estimated_delivery: formEstimatedDelivery || null,
+        contact_phone: formContactPhone || null,
+        contact_email: formContactEmail || null,
+        observations: formObservations || null,
+        updated_by: user?.id || null,
+        updated_at: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('international_shipment_tracking')
+        .upsert(payload, { onConflict: 'order_id' });
+
+      if (error) throw error;
+
+      // Update order status to 'shipped' (En tránsito)
+      const { error: orderErr } = await supabase
+        .from('orders')
+        .update({ status: 'shipped' })
+        .eq('id', selectedOrder.id);
+
+      if (orderErr) throw orderErr;
+
+      // Update order state locally
+      setSelectedOrder({ ...selectedOrder, status: 'shipped' });
+
+      // Trigger tracking email to customer
+      const { data: { session } } = await supabase.auth.getSession();
+      await fetch(`${SUPABASE_URL}/functions/v1/transactional-emails`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          type: "UPDATE",
+          table: "orders",
+          record: { ...selectedOrder, status: 'shipped' },
+          old_record: selectedOrder
+        })
+      }).catch(err => console.error("Error triggering customer tracking email:", err));
+
+      alert("Seguimiento guardado exitosamente. Estado de la orden cambiado a 'En tránsito'.");
+      loadInternationalTracking(selectedOrder.id);
+    } catch (err: any) {
+      alert("Error guardando seguimiento: " + err.message);
+    } finally {
+      setSavingTracking(false);
+    }
+  };
 
   // Zinc Order Actions
   async function handleRetryZincPurchase() {
@@ -1102,7 +1266,7 @@ export default function AdminOrders() {
               </div>
 
               {/* DAC / GRUPO AGENCIA SHIPPING MODULE */}
-              {(isDacActive || selectedOrder.shipping_method === 'dac_home' || selectedOrder.shipping_method === 'dac_agency') && (() => {
+              {!isArgentina && (isDacActive || selectedOrder.shipping_method === 'dac_home' || selectedOrder.shipping_method === 'dac_agency') && (() => {
                 const isDacOrder = selectedOrder.shipping_method === 'dac_home' || selectedOrder.shipping_method === 'dac_agency';
                 const isOrderPaid = selectedOrder.status === 'paid' || selectedOrder.payment_status === 'approved';
                 const hasNoTracking = !selectedOrder.tracking_number;
@@ -1409,7 +1573,7 @@ export default function AdminOrders() {
               })()}
 
               {/* UES SHIPPING MODULE */}
-              {(() => {
+              {!isArgentina && (() => {
                 const isUesOrder = selectedOrder.shipping_method?.toLowerCase().includes('ues') || 
                                    orderSuborders.some((s: any) => s.shipping_method?.toLowerCase().includes('ues') || s.shipping_provider?.toLowerCase() === 'ues') ||
                                    uesShipment !== null;
@@ -1509,6 +1673,252 @@ export default function AdminOrders() {
                         )}
                       </>
                     )}
+                  </div>
+                );
+              })()}
+
+              {/* ARGENTINA / MBE LOGISTICS MODULE */}
+              {isArgentina && (() => {
+                const recipientName = `${selectedOrder.shipping_address?.first_name || ""} ${selectedOrder.shipping_address?.last_name || ""}`.trim();
+                const isCompany = selectedOrder.shipping_address?.recipient_type === 'company';
+
+                return (
+                  <div className="space-y-4 bg-white p-4 rounded-xl border border-indigo-200 shadow-sm bg-indigo-50/10 mt-4">
+                    <div className="flex items-center justify-between border-b border-indigo-100 pb-2 mb-2">
+                      <h4 className="text-xs font-black text-indigo-950 uppercase tracking-wider flex items-center gap-2">
+                        <Truck className="w-4 h-4 text-indigo-600" /> Logística Internacional MBE
+                      </h4>
+                      <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-150 px-2 py-0.5 rounded-full">
+                        Argentina Activo
+                      </span>
+                    </div>
+
+                    {/* Datos del Cliente y Privacidad */}
+                    <div className="bg-gray-50 p-3 rounded-lg border border-gray-150 text-xs space-y-2">
+                      <h5 className="font-bold text-gray-800 text-[11px] uppercase tracking-wider">Datos de Entrega</h5>
+                      <div className="grid grid-cols-2 gap-2 text-gray-600">
+                        <div>
+                          <span className="text-[9px] font-bold text-gray-400 block">Destinatario</span>
+                          <span className="font-medium text-gray-900">{recipientName}</span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-bold text-gray-400 block">Tipo Destinatario</span>
+                          <span className="font-medium text-gray-900">{isCompany ? 'Empresa' : 'Persona Física'}</span>
+                        </div>
+                        {selectedOrder.shipping_address?.dni && (
+                          <div>
+                            <span className="text-[9px] font-bold text-gray-400 block">DNI</span>
+                            <span className="font-medium text-gray-900">{selectedOrder.shipping_address.dni}</span>
+                          </div>
+                        )}
+                        {selectedOrder.shipping_address?.cuit && (
+                          <div>
+                            <span className="text-[9px] font-bold text-gray-400 block">CUIT</span>
+                            <span className="font-medium text-gray-900">{selectedOrder.shipping_address.cuit}</span>
+                          </div>
+                        )}
+                        {selectedOrder.shipping_address?.razon_social && (
+                          <div>
+                            <span className="text-[9px] font-bold text-gray-400 block">Razón Social</span>
+                            <span className="font-medium text-gray-900">{selectedOrder.shipping_address.razon_social}</span>
+                          </div>
+                        )}
+                        <div>
+                          <span className="text-[9px] font-bold text-gray-400 block">Dirección</span>
+                          <span className="font-medium text-gray-900">
+                            {selectedOrder.shipping_address?.street} {selectedOrder.shipping_address?.street_number || ''}
+                            {selectedOrder.shipping_address?.apartment ? `, Apto ${selectedOrder.shipping_address.apartment}` : ''}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-bold text-gray-400 block">Localidad y CPA</span>
+                          <span className="font-medium text-gray-900">
+                            {selectedOrder.shipping_address?.city}, {selectedOrder.shipping_address?.department} ({selectedOrder.shipping_address?.postal_code || 'S/C'})
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-bold text-gray-400 block">Consentimiento de Privacidad</span>
+                          <span className="font-bold text-emerald-600">Aceptado</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Acciones de MBE */}
+                    <div className="flex flex-col gap-2">
+                      <h5 className="font-bold text-gray-800 text-[11px] uppercase tracking-wider">Acciones Comerciales</h5>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => window.open(`${SUPABASE_URL}/functions/v1/mbe-logistics?action=download_excel&order_id=${selectedOrder.id}`, '_blank')}
+                          className="py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-center flex items-center justify-center gap-1.5 shadow-sm transition-colors text-xs"
+                        >
+                          <FileText className="w-3.5 h-3.5" /> Descargar Excel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleResendMbeEmail}
+                          className="py-2 px-3 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg text-center flex items-center justify-center gap-1.5 shadow-sm transition-colors text-xs"
+                        >
+                          <Mail className="w-3.5 h-3.5" /> Reenviar Correo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => window.open(`${SUPABASE_URL}/functions/v1/mbe-logistics?action=regenerar_excel&order_id=${selectedOrder.id}`, '_blank')}
+                          className="col-span-2 py-2 px-3 bg-gray-100 hover:bg-gray-200 border border-gray-300 text-gray-700 font-bold rounded-lg text-center flex items-center justify-center gap-1.5 transition-colors text-xs"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" /> Regenerar Excel
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Historial de envíos a MBE */}
+                    <div className="space-y-2">
+                      <h5 className="font-bold text-gray-800 text-[11px] uppercase tracking-wider">Historial de Envíos</h5>
+                      {mbeLogsLoading ? (
+                        <p className="text-[11px] text-gray-400 italic">Cargando historial...</p>
+                      ) : mbeLogs.length === 0 ? (
+                        <p className="text-[11px] text-gray-500 italic">No hay registros de envío para esta orden.</p>
+                      ) : (
+                        <div className="max-h-36 overflow-y-auto border border-gray-200 rounded-lg p-2 space-y-1.5 bg-white scrollbar-thin">
+                          {mbeLogs.map((log) => (
+                            <div key={log.id} className="border-b border-gray-100 last:border-0 pb-1.5 last:pb-0 text-[10px] space-y-0.5">
+                              <div className="flex justify-between font-semibold">
+                                <span className="text-gray-500">{new Date(log.sent_at).toLocaleString()}</span>
+                                <span className={`px-1.5 rounded-full text-[9px] font-bold ${
+                                  log.status === 'Enviado a MBE' || log.status === 'Reenviado a MBE' ? 'bg-emerald-50 text-emerald-700' :
+                                  log.status === 'Pendiente de enviar a logística' ? 'bg-amber-50 text-amber-700 font-pulse' :
+                                  'bg-red-50 text-red-700'
+                                }`}>
+                                  {log.status}
+                                </span>
+                              </div>
+                              <div className="text-gray-600">
+                                <b>Para:</b> {log.recipient} | <b>Asunto:</b> {log.subject}
+                              </div>
+                              {log.error_message && (
+                                <div className="text-red-600 font-mono text-[9px] mt-0.5 max-h-12 overflow-y-auto leading-tight">
+                                  <b>Error:</b> {log.error_message}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Formulario/Visualización de Tracking Internacional */}
+                    <div className="border-t border-gray-100 pt-3 space-y-3">
+                      <h5 className="font-bold text-gray-800 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-indigo-500" /> Seguimiento del Courier
+                      </h5>
+
+                      {trackingInfoLoading ? (
+                        <p className="text-[11px] text-gray-400 italic">Cargando seguimiento...</p>
+                      ) : (
+                        <form onSubmit={handleSaveTracking} className="space-y-2 text-xs">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Nro de Tracking *</label>
+                              <input
+                                type="text"
+                                required
+                                className="w-full form-input py-1.5 px-2 text-xs"
+                                placeholder="Ej: DHL123456"
+                                value={formTrackingNumber}
+                                onChange={e => setFormTrackingNumber(e.target.value)}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Empresa Logística *</label>
+                              <input
+                                type="text"
+                                required
+                                className="w-full form-input py-1.5 px-2 text-xs"
+                                placeholder="Ej: DHL, FedEx, UPS"
+                                value={formCourierCompany}
+                                onChange={e => setFormCourierCompany(e.target.value)}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Link de Seguimiento</label>
+                              <input
+                                type="url"
+                                className="w-full form-input py-1.5 px-2 text-xs"
+                                placeholder="Ej: https://..."
+                                value={formTrackingUrl}
+                                onChange={e => setFormTrackingUrl(e.target.value)}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Fecha de Entrega Estimada</label>
+                              <input
+                                type="date"
+                                className="w-full form-input py-1.5 px-2 text-xs"
+                                value={formEstimatedDelivery}
+                                onChange={e => setFormEstimatedDelivery(e.target.value)}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Contacto Courier (Teléfono)</label>
+                              <input
+                                type="text"
+                                className="w-full form-input py-1.5 px-2 text-xs"
+                                placeholder="Ej: +5411..."
+                                value={formContactPhone}
+                                onChange={e => setFormContactPhone(e.target.value)}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Contacto Courier (Email)</label>
+                              <input
+                                type="email"
+                                className="w-full form-input py-1.5 px-2 text-xs"
+                                placeholder="Ej: ayuda@dhl.com"
+                                value={formContactEmail}
+                                onChange={e => setFormContactEmail(e.target.value)}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Fecha de Retiro</label>
+                              <input
+                                type="date"
+                                className="w-full form-input py-1.5 px-2 text-xs"
+                                value={formPickedUpAt}
+                                onChange={e => setFormPickedUpAt(e.target.value)}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] font-bold text-gray-500 mb-0.5">Observaciones</label>
+                              <input
+                                type="text"
+                                className="w-full form-input py-1.5 px-2 text-xs"
+                                placeholder="Ej: En depósito, Despachado..."
+                                value={formObservations}
+                                onChange={e => setFormObservations(e.target.value)}
+                              />
+                            </div>
+                          </div>
+
+                          <button
+                            type="submit"
+                            disabled={savingTracking}
+                            className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-center flex items-center justify-center gap-1.5 shadow-sm transition-colors text-xs disabled:opacity-50 mt-1"
+                          >
+                            <Save className="w-4 h-4" />
+                            {savingTracking ? 'Guardando seguimiento...' : 'Guardar Información de Seguimiento'}
+                          </button>
+                        </form>
+                      )}
+                    </div>
                   </div>
                 );
               })()}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { CheckCircle, Clock, Package, ArrowRight, Copy, Check, RefreshCcw } from 'lucide-react';
+import { CheckCircle, Clock, Package, ArrowRight, Copy, Check, RefreshCcw, CreditCard } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useCartContext } from '../contexts/CartContext';
 import { analytics } from '../lib/analytics';
@@ -24,22 +24,42 @@ export default function CheckoutSuccess() {
   const [copied, setCopied] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState('');
+  const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
 
   const orderNumber = orderId ? orderId.slice(0, 8).toUpperCase() : '---';
-  const isPending = statusParam === 'pending' || order?.status === 'pending' || order?.payment_status === 'pending_payment' || order?.payment_status === 'redirected';
+  const isPending = statusParam === 'pending' || 
+                    ['pending', 'awaiting_payment'].includes(order?.status || '') || 
+                    ['pending_payment', 'redirected', 'initiated'].includes(order?.payment_status || '');
 
   const shouldTrackPurchase = useMemo(() => {
-    if (!orderId || order?.status !== 'paid') return false;
+    if (!orderId || (order?.status !== 'paid' && order?.status !== 'confirmed')) return false;
     return !sessionStorage.getItem(`purchase_tracked_${orderId}`);
   }, [order?.status, orderId]);
 
   useEffect(() => {
     async function verifyPayment() {
-      if (!orderId || !provider) return;
+      if (!orderId) return;
 
       setVerifying(true);
       setError('');
       try {
+        // Fetch latest payment URL from Supabase payments table
+        const { data: payData } = await supabase
+          .from('payments')
+          .select('payment_url')
+          .eq('order_id', orderId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (payData?.payment_url) {
+          setPaymentUrl(payData.payment_url);
+        }
+
+        if (!provider) {
+          setVerifying(false);
+          return;
+        }
+
         const externalId = searchParams.get('token') || searchParams.get('payment_id') || undefined;
         const fallbackEmail = order?.customer_email || '';
         const { data, error } = await supabase.functions.invoke('confirm-payment', {
@@ -65,8 +85,8 @@ export default function CheckoutSuccess() {
   useEffect(() => {
     if (!shouldTrackPurchase || !orderId) return;
 
-    // Check if order status is confirmed (paid, entregado, or en_preparacion)
-    const allowedStatuses = ['paid', 'entregado', 'en_preparacion'];
+    // Check if order status is confirmed (paid, confirmed, entregado, or en_preparacion)
+    const allowedStatuses = ['paid', 'confirmed', 'entregado', 'en_preparacion'];
     const currentStatus = order?.status || '';
     if (!allowedStatuses.includes(currentStatus)) {
       console.log(`[CheckoutSuccess] Skipping purchase tracking: status is "${currentStatus}" (needs to be one of ${allowedStatuses.join(', ')})`);
@@ -176,6 +196,16 @@ export default function CheckoutSuccess() {
               : 'Recibimos tu pago y tu pedido ya esta confirmado.'}
         </p>
 
+        {isPending && (
+          <div className="mb-6 p-4 border border-amber-500/30 bg-amber-500/10 text-amber-200 text-sm text-left flex items-start gap-3">
+            <Clock className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-bold mb-1 text-amber-300">¡Reserva Temporal de Stock Activa!</div>
+              <p className="text-amber-200/90 leading-relaxed">Tu stock está reservado de forma segura. Por favor completa tu pago antes de que expire la reserva (generalmente 30 minutos) para evitar la liberación de stock y la cancelación automática de tu orden.</p>
+            </div>
+          </div>
+        )}
+
         {error && (
           <div className="mb-6 p-4  border border-amber-200 bg-amber-50 text-amber-700 text-sm text-left">
             <div className="font-bold mb-1">No pudimos validar el proveedor en este momento</div>
@@ -212,8 +242,8 @@ export default function CheckoutSuccess() {
               </div>
               <div className="flex items-center justify-between py-2 border-t border-white/10">
                 <span className="text-sm text-slate-400">Estado</span>
-                <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest  ${order.status === 'paid' ? 'bg-green-100 text-green-700 border border-green-200' : isPending ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-white/10 text-slate-400 border border-white/10'}`}>
-                  {order.status === 'paid' ? 'Confirmada' : isPending ? 'Pendiente' : order.payment_status || order.status}
+                <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest  ${['paid', 'confirmed'].includes(order.status) ? 'bg-green-100 text-green-700 border border-green-200' : isPending ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-white/10 text-slate-400 border border-white/10'}`}>
+                  {['paid', 'confirmed'].includes(order.status) ? 'Confirmada' : isPending ? 'Pendiente' : order.payment_status || order.status}
                 </span>
               </div>
             </>
@@ -223,7 +253,7 @@ export default function CheckoutSuccess() {
         <div className="flex items-center justify-center gap-3 mb-10">
           {[
             { icon: CheckCircle, label: 'Orden creada', active: true },
-            { icon: Package, label: 'Preparando', active: order?.status === 'paid' },
+            { icon: Package, label: 'Preparando', active: ['paid', 'confirmed'].includes(order?.status || '') },
             { icon: ArrowRight, label: 'En camino', active: order?.status === 'shipped' },
           ].map((step, index) => (
             <div key={index} className="flex items-center gap-2">
@@ -237,9 +267,20 @@ export default function CheckoutSuccess() {
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link to="/shop" className="btn-primary px-8 py-3">Seguir comprando</Link>
           {isPending ? (
-            <Link to="/checkout" className="px-8 py-3 border-2 border-white/10  font-bold text-gray-700 hover:border-white/30 transition-colors inline-flex items-center justify-center gap-2">
-              <RefreshCcw className="w-4 h-4" /> Reintentar pago
-            </Link>
+            paymentUrl ? (
+              <a 
+                href={paymentUrl} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="px-8 py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold transition-colors inline-flex items-center justify-center gap-2"
+              >
+                <CreditCard className="w-4 h-4" /> Completar pago
+              </a>
+            ) : (
+              <Link to="/checkout" className="px-8 py-3 border-2 border-white/10  font-bold text-gray-700 hover:border-white/30 transition-colors inline-flex items-center justify-center gap-2">
+                <RefreshCcw className="w-4 h-4" /> Reintentar pago
+              </Link>
+            )
           ) : (
             <Link to="/account" className="px-8 py-3 border-2 border-white/10  font-bold text-gray-700 hover:border-white/30 transition-colors">Ver mis ordenes</Link>
           )}

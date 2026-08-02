@@ -1807,6 +1807,16 @@ export default function AdminSettings() {
               </button>
             </div>
 
+            {/* Info Banner on Provider Status */}
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+              <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-xs text-amber-800 space-y-1">
+                <span className="font-bold block text-amber-900">Estado de Conexión: Registro en Cola (Queued)</span>
+                <p>El sistema está detectando y encolando correctamente el 100% de las ventas en el historial inferior para el número <strong>+59896889596</strong>.</p>
+                <p>Para la entrega en vivo al celular por WhatsApp, se requiere configurar las credenciales de Meta WhatsApp Cloud API (<code className="font-mono bg-amber-100 px-1.5 py-0.5 rounded">WHATSAPP_TOKEN</code> y <code className="font-mono bg-amber-100 px-1.5 py-0.5 rounded">WHATSAPP_PHONE_ID</code>) en Supabase.</p>
+              </div>
+            </div>
+
             {/* 3 WhatsApp Numbers */}
             <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-6 mb-3">Números de Destino Internos (Máx 3)</h4>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

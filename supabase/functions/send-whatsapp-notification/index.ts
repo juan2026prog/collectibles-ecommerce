@@ -62,10 +62,15 @@ serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
     }
 
-    console.log(`[WhatsApp Function] Processing event: ${event_type}`, body);
+    const { data: waSettings } = await supabaseAdmin
+      .from('site_settings')
+      .select('key, value')
+      .in('key', ['whatsapp_token', 'whatsapp_phone_id']);
 
-    const WHATSAPP_TOKEN = Deno.env.get('WHATSAPP_TOKEN') || 'mock-whatsapp-key';
-    const WHATSAPP_PHONE_ID = Deno.env.get('WHATSAPP_PHONE_ID') || '1234567890';
+    const waConfig = Object.fromEntries((waSettings || []).map((s: any) => [s.key, s.value]));
+
+    const WHATSAPP_TOKEN = Deno.env.get('WHATSAPP_TOKEN') || waConfig.whatsapp_token || 'mock-whatsapp-key';
+    const WHATSAPP_PHONE_ID = Deno.env.get('WHATSAPP_PHONE_ID') || waConfig.whatsapp_phone_id || '1234567890';
 
     // Helper to log notifications
     const logNotification = async (scope: 'vendor' | 'admin', targetVendorId: string | null, recipientPhone: string, status: string, errorMsg: string | null = null) => {
@@ -129,7 +134,7 @@ serve(async (req: Request) => {
       // Load order items with products and vendors
       const { data: items } = await supabaseAdmin
         .from('order_items')
-        .select('id, quantity, unit_price, product_id, products(title, vendor_id, vendors(store_name))')
+        .select('id, quantity, unit_price, product_id, vendor_id, products(title, vendor_id, vendors(store_name))')
         .eq('order_id', order_id);
 
       const itemsList = items || [];
@@ -148,23 +153,30 @@ serve(async (req: Request) => {
       let collectiblesTotal = 0;
       let hasVendorItems = false;
 
-      itemsList.forEach((item: any) => {
+      for (const item of itemsList) {
         const product = item.products;
-        if (product && product.vendor_id) {
+        const vendorId = item.vendor_id || product?.vendor_id;
+        
+        if (vendorId) {
           hasVendorItems = true;
-          if (!vendorItems[product.vendor_id]) {
-            vendorItems[product.vendor_id] = {
-              store_name: product.vendors?.store_name || 'Tienda',
+          if (!vendorItems[vendorId]) {
+            let storeName = product?.vendors?.store_name;
+            if (!storeName) {
+              const { data: vData } = await supabaseAdmin.from('vendors').select('store_name').eq('id', vendorId).maybeSingle();
+              storeName = vData?.store_name || 'Tienda';
+            }
+            vendorItems[vendorId] = {
+              store_name: storeName,
               items: [],
               total: 0
             };
           }
-          vendorItems[product.vendor_id].items.push(item);
-          vendorItems[product.vendor_id].total += Number(item.unit_price || 0) * item.quantity;
+          vendorItems[vendorId].items.push(item);
+          vendorItems[vendorId].total += Number(item.unit_price || 0) * item.quantity;
         } else {
           collectiblesTotal += Number(item.unit_price || 0) * item.quantity;
         }
-      });
+      }
 
       // A. Notify Vendors involved
       for (const [vendorId, group] of Object.entries(vendorItems)) {

@@ -21,11 +21,11 @@ export function getFirstValue(payload: Record<string, any>, paths: string[]) {
 
 export function mapHandyPaymentStatus(status: string | undefined) {
   const normalized = (status || "").trim().toUpperCase();
-  if (["APPROVED", "AUTHORIZED", "PAID", "SUCCESS", "COMPLETED"].includes(normalized)) return "approved";
-  if (["REJECTED", "DECLINED", "DENIED"].includes(normalized)) return "rejected";
-  if (["CANCELLED", "CANCELED", "VOIDED", "ABANDONED"].includes(normalized)) return "cancelled";
-  if (["REFUNDED", "REVERSED"].includes(normalized)) return "refunded";
-  if (["PENDING", "CREATED", "IN_PROCESS", "PROCESSING"].includes(normalized)) return "pending";
+  if (["APPROVED", "AUTHORIZED", "PAID", "SUCCESS", "COMPLETED", "FINALIZADO", "FINALIZED", "COMPLETADO", "2"].includes(normalized)) return "approved";
+  if (["REJECTED", "DECLINED", "DENIED", "3"].includes(normalized)) return "rejected";
+  if (["CANCELLED", "CANCELED", "VOIDED", "ABANDONED", "4"].includes(normalized)) return "cancelled";
+  if (["REFUNDED", "REVERSED", "5"].includes(normalized)) return "refunded";
+  if (["PENDING", "CREATED", "IN_PROCESS", "PROCESSING", "1"].includes(normalized)) return "pending";
   return "failed";
 }
 
@@ -57,6 +57,8 @@ export function extractHandyWebhookData(payload: Record<string, any>) {
     "paymentStatus",
     "Data.Status",
     "data.status",
+    "PurchaseData.Status",
+    "purchaseData.status",
   ]) || "");
 
   return {

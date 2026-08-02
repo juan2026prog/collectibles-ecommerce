@@ -109,8 +109,19 @@ Deno.serve(async (req: Request) => {
         });
       }
     } else {
-      const orderPaymentStatus = webhookData.mappedStatus === "pending" ? "pending_payment" : webhookData.mappedStatus;
-      const orderStatus = webhookData.mappedStatus === "cancelled" ? "cancelled" : "pending";
+      let orderPaymentStatus = "initiated";
+      let orderStatus = "awaiting_payment";
+
+      if (webhookData.mappedStatus === "pending") {
+        orderPaymentStatus = "pending";
+        orderStatus = "awaiting_payment";
+      } else if (webhookData.mappedStatus === "cancelled") {
+        orderPaymentStatus = "cancelled";
+        orderStatus = "cancelled";
+      } else if (webhookData.mappedStatus === "rejected" || webhookData.mappedStatus === "failed") {
+        orderPaymentStatus = "rejected";
+        orderStatus = "awaiting_payment"; // allow retry
+      }
 
       await supabaseAdmin
         .from("orders")

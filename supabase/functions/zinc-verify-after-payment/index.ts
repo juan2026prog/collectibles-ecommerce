@@ -53,9 +53,12 @@ serve(async (req) => {
     let finalOrderStatus = order.status;
     let allOk = true;
 
+    const shipping = order.shipping_address || {};
+    const isIntlResolved = shipping.is_international_address_resolved === true;
+
     // Parse Courier Address for Zinc
-    let first_name = order.shipping_address.first_name || '';
-    let last_name = order.shipping_address.last_name || '';
+    let first_name = shipping.first_name || '';
+    let last_name = shipping.last_name || '';
     let address_line1 = '2030 NW 95th AVE';
     let address_line2 = '';
     let city = 'Doral';
@@ -63,52 +66,33 @@ serve(async (req) => {
     let zip_code = '33172';
     let phone_number = '7863140977';
 
-    const courierType = order.shipping_address.international_courier;
+    if (isIntlResolved) {
+      first_name = shipping.international_recipient_name?.split(' ')[0] || '';
+      last_name = shipping.international_recipient_name?.split(' ').slice(1).join(' ') || '';
+      address_line1 = shipping.international_address_line_1;
+      
+      const line2Parts = [shipping.international_address_line_2, shipping.international_customer_code].filter(Boolean);
+      address_line2 = line2Parts.join(' ') || '';
+      
+      city = shipping.international_city;
+      state = shipping.international_state;
+      zip_code = shipping.international_postal_code;
+      phone_number = shipping.international_phone;
+    }
 
     // Address verification helper
     const isAddressValid = () => {
-      if (!courierType) return false;
-      if (courierType === 'other') {
-        const rawAddr = order.shipping_address.international_miami_address;
-        return !!rawAddr;
-      } else {
-        const suite = order.shipping_address.international_suite;
-        return !!suite;
+      if (isIntlResolved) {
+        return !!shipping.international_courier_name && 
+               !!shipping.international_recipient_name && 
+               !!shipping.international_address_line_1 && 
+               !!shipping.international_city && 
+               !!shipping.international_state && 
+               !!shipping.international_postal_code && 
+               !!shipping.international_phone;
       }
+      return false;
     };
-
-    if (isAddressValid()) {
-      if (courierType === 'other') {
-        const rawAddr = order.shipping_address.international_miami_address;
-        if (typeof rawAddr === 'object' && rawAddr !== null) {
-          first_name = rawAddr.fullName?.split(' ')[0] || first_name;
-          last_name = rawAddr.fullName?.split(' ').slice(1).join(' ') || last_name;
-          address_line1 = rawAddr.address1 || address_line1;
-          address_line2 = rawAddr.address2 || '';
-          city = rawAddr.city || city;
-          state = rawAddr.state || state;
-          zip_code = rawAddr.zip || zip_code;
-          phone_number = rawAddr.phone || phone_number;
-        } else if (typeof rawAddr === 'string') {
-          const lines = rawAddr.split(/\r?\n|\,/g).map(l => l.trim()).filter(Boolean);
-          if (lines.length > 0) address_line1 = lines[0];
-          if (lines.length > 1) address_line2 = lines[1];
-          if (lines.length > 2) {
-            const lastLines = lines.slice(2).join(' ');
-            const zipMatch = lastLines.match(/\b\d{5}\b/);
-            if (zipMatch) zip_code = zipMatch[0];
-            const stateMatch = lastLines.match(/\b[A-Z]{2}\b/);
-            if (stateMatch) state = stateMatch[0];
-            if (lastLines.toLowerCase().includes('miami')) city = 'Miami';
-            else if (lastLines.toLowerCase().includes('doral')) city = 'Doral';
-            else if (lastLines.toLowerCase().includes('medley')) city = 'Medley';
-          }
-        }
-      } else {
-        const suite = order.shipping_address.international_suite || '';
-        address_line2 = `Suite ${suite}`;
-      }
-    }
 
     const zincShippingAddress = {
       first_name,
@@ -185,6 +169,11 @@ serve(async (req) => {
       // 5. Check if shipping address is valid
       if (!failureMessage && !isAddressValid()) {
         failureMessage = "La dirección del courier en USA está incompleta.";
+      }
+
+      // 5b. If courier is not pre-approved, force manual review
+      if (!failureMessage && isIntlResolved && shipping.international_is_pre_approved === false) {
+        failureMessage = "Dirección de courier no pre-aprobada por defecto. Requiere validación y aprobación manual de la dirección.";
       }
 
       // 6. Live Check & Profit Protection Engine Check

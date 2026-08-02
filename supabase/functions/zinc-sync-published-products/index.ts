@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { calculateFee, calculateDiscount, calculateRealCost, calculateProfitEngine, applyProfitProtection, calculateUruboxEstimate } from "../_shared/pricing.ts";
+import { getEffectiveExchangeRate } from "../_shared/internationalPricing.ts";
 
 serve(async (req) => {
   const optionsResponse = handleOptions(req);
@@ -40,6 +41,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ message: "No products to sync" }), { headers: getCorsHeaders(), status: 200 });
     }
 
+    const { effective_rate } = await getEffectiveExchangeRate(supabase);
     const logs = [];
 
     for (const prod of products) {
@@ -144,12 +146,7 @@ serve(async (req) => {
             updates.urubox_estimated_cost_usd = urubox_estimated_cost_usd;
             updates.total_estimated_cost_usd = finalPriceWithShipping + urubox_estimated_cost_usd;
 
-            updates.final_price_uyu = updates.final_price_usd * 40;
-            
-            if (prod.final_price_usd && prod.final_price_uyu) {
-              const implicit_exchange_rate = prod.final_price_uyu / prod.final_price_usd;
-              updates.final_price_uyu = updates.final_price_usd * implicit_exchange_rate;
-            }
+            updates.final_price_uyu = Number((updates.final_price_usd * effective_rate).toFixed(2));
 
             updates.price_change_percent = change_percent;
             updates.max_allowed_price_usd = max_price;

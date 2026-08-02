@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { calculateFee, calculateRealCost, calculateProfitEngine, applyProfitProtection } from "../_shared/pricing.ts";
+import { getEffectiveExchangeRate } from "../_shared/internationalPricing.ts";
 
 serve(async (req) => {
   const optionsResponse = handleOptions(req);
@@ -23,6 +24,7 @@ serve(async (req) => {
     if (!prod) throw new Error("Producto no encontrado");
 
     const { data: settings } = await supabase.from('international_sync_settings').select('*').eq('id', 1).single();
+    const { effective_rate } = await getEffectiveExchangeRate(supabase);
 
     const url = `https://api.zinc.com/products/${prod.external_product_id}?retailer=amazon`;
     const res = await fetch(url, { headers: { 'Authorization': `Bearer ${ZINC_API_KEY}` } });
@@ -82,6 +84,7 @@ serve(async (req) => {
       message,
       new_amazon_price: newPrice,
       new_final_price_usd: finalPriceWithShipping,
+      new_final_price_uyu: Number((finalPriceWithShipping * effective_rate).toFixed(2)),
       real_cost: realCost,
       expected_profit: expectedProfit,
       protection_applied: protection.isLoss

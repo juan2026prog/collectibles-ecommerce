@@ -27,7 +27,14 @@ interface CreateOrderParams {
     barrio?: string;
     reference?: string;
     ci?: string;
+    recipient_type?: 'person' | 'company';
+    dni?: string;
+    cuit?: string;
+    razon_social?: string;
+    street_number?: string;
+    logistics_consent?: boolean;
   };
+  logistics_consent?: boolean;
   customer_email: string;
   customer_phone?: string;
   bank_promo?: {

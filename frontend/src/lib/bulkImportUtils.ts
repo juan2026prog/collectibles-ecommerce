@@ -101,8 +101,9 @@ export async function parseProductsFile(file: File): Promise<ParsedProduct[]> {
           const comparePriceVal = findValue(processedRow, ['compare_at_price', 'precio_comparacion', 'precio anterior', 'precio original', 'compare price', 'regular_price', 'precio lista', 'precio_lista']);
           const compare_at_price = comparePriceVal ? parseFloat(comparePriceVal.toString().replace(/[^0-9.]/g, '')) || undefined : undefined;
 
-          // Resolve SKU
-          const sku = (findValue(processedRow, ['sku', 'referencia', 'código', 'codigo', 'cod', 'ref', 'código de barras', 'barcode']) || '').toString().trim();
+          // Resolve SKU: Only keep if it is a valid numeric UPC/EAN/GTIN (8-14 digits). If not GTIN, leave empty.
+          const rawSkuCandidate = (findValue(processedRow, ['upc', 'ean', 'gtin', 'código de barras', 'barcode', 'codigo de barras', 'sku']) || '').toString().trim();
+          const sku = /^[0-9]{8,14}$/.test(rawSkuCandidate) ? rawSkuCandidate : '';
 
           // Resolve Stock
           const stockVal = findValue(processedRow, ['stock', 'cantidad', 'inventario', 'inventory', 'qty', 'quantity', 'unidades']);

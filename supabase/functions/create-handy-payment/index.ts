@@ -239,10 +239,11 @@ Deno.serve(async (req: Request) => {
       throw new Error("HANDY_INVALID_CURRENCY");
     }
 
-    // Ensure we do not use localhost for SiteUrl
-    const siteUrl = handy.siteUrl && !handy.siteUrl.includes("localhost")
+    const baseSiteUrl = handy.siteUrl && !handy.siteUrl.includes("localhost")
       ? handy.siteUrl.trim()
-      : "https://collectibles-ecommerce.vercel.app";
+      : "https://collectibles.uy";
+
+    const returnSuccessUrl = `${baseSiteUrl.replace(/\/$/, '')}/checkout/success?order_id=${orderId}&provider=handy`;
 
     // Ensure we omit LinkImageUrl if empty or invalid
     const linkImageUrl = handy.defaultImageUrl && handy.defaultImageUrl.trim().startsWith("http")
@@ -264,10 +265,16 @@ Deno.serve(async (req: Request) => {
       },
       Client: {
         CommerceName: String(handy.commerceName || "Collectibles").trim() || "Collectibles",
-        SiteUrl: siteUrl,
+        SiteUrl: returnSuccessUrl,
       },
       CallbackURL: callbackUrl,
       CallbackUrl: callbackUrl, // Send both casings to be absolutely foolproof
+      RedirectUrl: returnSuccessUrl,
+      RedirectURL: returnSuccessUrl,
+      ReturnUrl: returnSuccessUrl,
+      ReturnURL: returnSuccessUrl,
+      SuccessUrl: returnSuccessUrl,
+      SuccessURL: returnSuccessUrl,
       ResponseType: "Json",
       Customer: {
         Name: getCustomerName(order),
