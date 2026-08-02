@@ -171,7 +171,13 @@ export default function ProductDetail() {
   const variantAdjustment = Number(selectedVariant?.price_adjustment || 0);
   const basePriceWithVariant = rawBasePrice + variantAdjustment;
 
-  const applicablePromos = getApplicablePromotions(promotions || []);
+  const applicablePromos = product ? getApplicablePromotions({
+    product_id: product.id,
+    category_id: product.category_id,
+    brand_id: product.brand_id,
+    vendor_id: winnerVendorId,
+    tag_ids: Array.isArray(product.product_tags) ? product.product_tags.map((pt: any) => pt.tag_id) : []
+  }, promotions || []) : [];
   const promoResult = evaluateItemDiscountDetailed({
     product_id: product.id,
     category_id: product.category_id,
