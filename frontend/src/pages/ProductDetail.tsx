@@ -473,10 +473,6 @@ export default function ProductDetail() {
       />
       <AdminTechnicalPanel product={product} />
 
-      <div data-pdp-version="NEW-PDP-PRODUCTION" className="text-[10px] font-mono text-slate-500 mb-2">
-        PDP PROD VERSION: f9be60b
-      </div>
-
       <nav className="flex items-center text-[11px] font-black uppercase tracking-[0.2em] text-slate-500 mb-6 flex-wrap gap-2">
         <Link to="/" className="hover:text-primary-500 transition-colors">Inicio</Link>
         <span className="opacity-30">/</span>
