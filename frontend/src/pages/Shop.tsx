@@ -708,13 +708,13 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
           <select
             value={sortBy}
             onChange={e => { setSortBy(e.target.value); setPage(0); }}
-            className="bg-white/5 border border-white/10 rounded-full px-4 py-2 text-xs font-bold text-white focus:outline-none"
+            className="bg-[#0e1525] border border-white/10 rounded-full px-4 py-2 text-xs font-bold text-white focus:outline-none cursor-pointer"
           >
-            <option value="default">Recomendados</option>
-            <option value="newest">Más nuevos</option>
-            <option value="price-low">Menor precio</option>
-            <option value="price-high">Mayor precio</option>
-            <option value="name">A-Z</option>
+            <option value="default" className="bg-[#0e1525] text-white">Recomendados</option>
+            <option value="newest" className="bg-[#0e1525] text-white">Más nuevos</option>
+            <option value="price-low" className="bg-[#0e1525] text-white">Menor precio</option>
+            <option value="price-high" className="bg-[#0e1525] text-white">Mayor precio</option>
+            <option value="name" className="bg-[#0e1525] text-white">A-Z</option>
           </select>
           <button
             onClick={() => setMobileFilters(true)}
@@ -840,13 +840,13 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
               <select
                 value={sortBy}
                 onChange={e => { setSortBy(e.target.value); setPage(0); }}
-                className="glass rounded-full px-5 py-2 text-xs font-black uppercase tracking-widest text-white border border-white/10 hover:border-white/20 bg-transparent focus:outline-none"
+                className="bg-[#0e1525] rounded-full px-5 py-2 text-xs font-black uppercase tracking-widest text-white border border-white/10 hover:border-white/20 focus:outline-none cursor-pointer"
               >
-                <option value="default">Recomendados</option>
-                <option value="newest">Más nuevos</option>
-                <option value="price-low">Menor precio</option>
-                <option value="price-high">Mayor precio</option>
-                <option value="name">A-Z</option>
+                <option value="default" className="bg-[#0e1525] text-white">Recomendados</option>
+                <option value="newest" className="bg-[#0e1525] text-white">Más nuevos</option>
+                <option value="price-low" className="bg-[#0e1525] text-white">Menor precio</option>
+                <option value="price-high" className="bg-[#0e1525] text-white">Mayor precio</option>
+                <option value="name" className="bg-[#0e1525] text-white">A-Z</option>
               </select>
             </div>
           </div>

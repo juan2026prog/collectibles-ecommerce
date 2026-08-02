@@ -164,13 +164,25 @@ export default function ProductDetail() {
   const stock = bbWinner ? Number(bbWinner.stock) : (selectedVariant?.inventory_count || 0);
   const finalPrice = bbWinner && !bbWinner.is_collectibles && bbWinner.price !== undefined ? Number(bbWinner.price) : (product ? (Number(product.base_price || 0) + Number((bbWinner ? bbWinner.price_adjustment : selectedVariant?.price_adjustment) || 0)) : 0);
     
-  const winnerIsCollectibles = bbWinner ? bbWinner.is_collectibles : !product?.vendor_id;
-  const winnerVendorId = bbWinner ? bbWinner.vendor_id : (product?.vendor_id || null);
-  const storeName = bbWinner 
-    ? bbWinner.vendor_name 
-    : (product?.vendor_id 
-        ? (product.vendor_store?.display_name || product.vendor_store?.store_name || product.vendor_store?.name || product.vendor?.company_name || product.vendor?.store_name || 'Vendedor')
-        : 'Collectibles.uy');
+  const baseProductStoreName = product?.vendor_store?.display_name 
+    || product?.vendor_store?.store_name 
+    || product?.vendor_store?.name 
+    || product?.vendor?.company_name 
+    || product?.vendor?.store_name 
+    || 'Vendedor';
+
+  const winnerIsCollectibles = product?.vendor_id 
+    ? false 
+    : (bbWinner ? bbWinner.is_collectibles : true);
+
+  const winnerVendorId = winnerIsCollectibles 
+    ? null 
+    : (bbWinner && !bbWinner.is_collectibles && bbWinner.vendor_id ? bbWinner.vendor_id : (product?.vendor_id || null));
+
+  const storeName = winnerIsCollectibles 
+    ? 'Collectibles.uy' 
+    : (bbWinner && !bbWinner.is_collectibles && bbWinner.vendor_id && bbWinner.vendor_name ? bbWinner.vendor_name : baseProductStoreName);
+
   const winnerVendorName = winnerIsCollectibles ? 'Collectibles.uy' : storeName;
   const winnerHasLogistics = bbWinner ? bbWinner.has_logistics : false;
 
@@ -262,7 +274,7 @@ export default function ProductDetail() {
       
     const targetStoreName = option 
       ? option.vendor_name 
-      : (bbWinner ? bbWinner.vendor_name : (product.vendor_store?.store_name || product.vendor?.store_name || 'Collectibles'));
+      : winnerVendorName;
 
     const targetStoreSlug = option 
       ? option.vendor_store_slug 
@@ -783,11 +795,11 @@ export default function ProductDetail() {
 
           {/* VENDIDO Y DESPACHADO POR */}
           <SoldByCard 
-            vendorId={product.vendor_id || undefined} 
-            vendorName={product.vendor_id ? storeName : 'Collectibles.uy'} 
-            vendorLogo={product.vendor_id ? (product.vendor_store?.logo_url || product.vendor?.logo_url) : undefined}
-            vendorSlug={product.vendor_id ? (product.vendor_store?.slug || product.vendor?.slug) : undefined}
-            badges={[]}
+            vendorId={winnerIsCollectibles ? undefined : (winnerVendorId || product.vendor_id || undefined)} 
+            vendorName={winnerVendorName} 
+            vendorLogo={winnerIsCollectibles ? undefined : (bbWinner?.vendor_store_logo || product.vendor_store?.logo_url || product.vendor?.logo_url)}
+            vendorSlug={winnerIsCollectibles ? undefined : (bbWinner?.vendor_store_slug || product.vendor_store?.slug || product.vendor?.slug)}
+            badges={winnerIsCollectibles ? [] : (bbWinner?.vendor_store_badges || (product.vendor_store?.vendor_store_badge_assignments?.filter((x: any) => x.status === 'active' && x.approved_by && x.approved_at).map((x: any) => x.vendor_store_badges).filter(Boolean) || []))}
           />
 
           <div className="grid grid-cols-3 gap-3 mt-4">

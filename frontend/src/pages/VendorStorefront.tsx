@@ -1003,12 +1003,12 @@ export default function VendorStorefront() {
                   <select
                     value={sortBy}
                     onChange={e => handleSortChange(e.target.value)}
-                    className="bg-[#05070f] border border-white/10 text-white text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#f00856] cursor-pointer"
+                    className="bg-[#0e1525] border border-white/10 text-white text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#f00856] cursor-pointer"
                   >
-                    <option value="default">Recomendados</option>
-                    <option value="newest">Más recientes</option>
-                    <option value="price-low">Precio: menor a mayor</option>
-                    <option value="price-high">Precio: mayor a menor</option>
+                    <option value="default" className="bg-[#0e1525] text-white">Recomendados</option>
+                    <option value="newest" className="bg-[#0e1525] text-white">Más recientes</option>
+                    <option value="price-low" className="bg-[#0e1525] text-white">Precio: menor a mayor</option>
+                    <option value="price-high" className="bg-[#0e1525] text-white">Precio: mayor a menor</option>
                   </select>
                 </div>
               </div>

@@ -13,7 +13,7 @@ interface SoldByCardProps {
 export default function SoldByCard({ vendorId, vendorName, vendorLogo, vendorSlug, badges }: SoldByCardProps) {
   if (!vendorId && !vendorName) return null;
 
-  const isPlatform = !vendorId || vendorId === 'platform' || vendorName === 'Collectibles';
+  const isPlatform = !vendorId || vendorId === 'platform';
 
   return (
     <div className="flex items-center gap-4 p-4 mt-4 bg-white/5 border border-white/10 rounded-2xl">
@@ -35,7 +35,7 @@ export default function SoldByCard({ vendorId, vendorName, vendorLogo, vendorSlu
                 {vendorName}
               </Link>
             ) : (
-               <p className="text-sm font-black text-white uppercase tracking-wider">{vendorName}</p>
+               <p className="text-sm font-black text-[#f00856] uppercase tracking-wider">{vendorName}</p>
             )
           )}
           {badges && badges.length > 0 && (
