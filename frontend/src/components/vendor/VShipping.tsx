@@ -46,7 +46,8 @@ export default function VShipping() {
     manual: { active: false, method_name: '', fixed_cost: '', instructions: '', estimated_time: '' },
     free_shipping: { active: false, min_amount: '' },
     cutoff_time: '14:00',
-    dispatch_days: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']
+    dispatch_days: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'],
+    preparation_days: 0
   });
   const [globalProviders, setGlobalProviders] = useState<any[]>([]);
   const [dacOffices, setDacOffices] = useState<any[]>([]);
@@ -986,7 +987,7 @@ export default function VShipping() {
           <p className="text-xs text-gray-500 mt-1">Configurá tus horarios de procesamiento y los días que despachás mercadería.</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs">
           <div>
             <label className="block font-bold text-gray-700 mb-1.5">Horario de Corte de Pedidos</label>
             <input 
@@ -1009,6 +1010,20 @@ export default function VShipping() {
               placeholder="Ej: Lunes, Martes, Miércoles, Jueves, Viernes" 
             />
             <p className="text-[10px] text-gray-400 mt-1">Separados por coma. Ejemplo: Lunes, Miércoles, Viernes</p>
+          </div>
+
+          <div>
+            <label className="block font-bold text-gray-700 mb-1.5">Tiempo de Preparación (Días)</label>
+            <input 
+              type="number"
+              min="0"
+              max="30"
+              value={shippingData.preparation_days ?? 0} 
+              onChange={(e) => setShippingData(prev => ({ ...prev, preparation_days: parseInt(e.target.value, 10) || 0 }))} 
+              className="w-full px-3 py-2 border rounded-lg text-sm font-medium" 
+              placeholder="0" 
+            />
+            <p className="text-[10px] text-gray-400 mt-1">Días hábiles requeridos de preparación antes de enviar.</p>
           </div>
         </div>
       </div>

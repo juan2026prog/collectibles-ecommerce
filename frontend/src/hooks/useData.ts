@@ -260,7 +260,7 @@ export function useProduct(slug: string | undefined) {
           images:product_images(id, url, alt_text, sort_order, is_primary),
           variants:product_variants(id, sku, name, price_adjustment, inventory_count),
           product_tags:product_tags(tag_id),
-          vendor:vendors(id, store_name, slug, logo_url, promotions_opt_in, company_name),
+          vendor:vendors(id, store_name, slug, logo_url, promotions_opt_in, company_name, shipping_settings),
           vendor_store:vendor_stores(id, store_name, slug, logo_url, status, is_official, approved_by, approved_at, vendor_store_badge_assignments(status, approved_by, approved_at, vendor_store_badges(*))),
           reviews:reviews(id, rating, title, body, created_at, user:profiles(first_name, last_name)),
           product_group_items(group_id, group:product_groups(id, name, slug, badge_image_url, badge_storage_path, badge_alt_text, badge_updated_at, is_active, sort_order))

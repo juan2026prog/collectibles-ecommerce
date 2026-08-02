@@ -19,6 +19,8 @@ import { resolveCartItemPrice } from '../lib/priceResolver';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { formatUSD } from '../lib/formatters';
 import SoldByCard from '../components/SoldByCard';
+import ProductShippingBlock from '../components/ProductShippingBlock';
+import { sanitizeProductDescription } from '../lib/descriptionSanitizer';
 import AdminTechnicalPanel from '../components/AdminTechnicalPanel';
 import { calculateUruboxEstimate, getEstimatedWeightKg } from '../lib/urubox';
 
@@ -802,6 +804,15 @@ export default function ProductDetail() {
             badges={winnerIsCollectibles ? [] : (bbWinner?.vendor_store_badges || (product.vendor_store?.vendor_store_badge_assignments?.filter((x: any) => x.status === 'active' && x.approved_by && x.approved_at).map((x: any) => x.vendor_store_badges).filter(Boolean) || []))}
           />
 
+          {/* BLOQUE DINÁMICO DE ENVÍOS Y RETIRO POR PRODUCTO Y VENDEDOR */}
+          <ProductShippingBlock
+            product={product}
+            vendorId={winnerIsCollectibles ? null : (winnerVendorId || product.vendor_id || null)}
+            vendorName={winnerVendorName}
+            vendorShippingSettings={winnerIsCollectibles ? null : (product?.vendor?.shipping_settings || null)}
+            isCollectibles={winnerIsCollectibles}
+          />
+
           <div className="grid grid-cols-3 gap-3 mt-4">
             <div className="soft rounded-2xl p-4 transition-colors hover:bg-white/5">
               <b className="text-white block text-sm">{settings['product_trust_title_1'] || '⚡ Entrega'}</b>
@@ -824,9 +835,9 @@ export default function ProductDetail() {
         <div className="glass rounded-[2.5rem] p-8 md:p-12">
           <div className="label-tag">Historia del producto</div>
           <h2 className="text-3xl md:text-4xl font-black mt-3 text-white tracking-tight">{settings['product_history_title'] || '¿Por qué importa?'}</h2>
-          <div className="prose prose-invert mt-6 max-w-none text-slate-300 leading-relaxed text-lg">
+          <div className="prose prose-invert mt-6 max-w-none text-slate-300 leading-relaxed text-lg whitespace-pre-line">
              {product.description ? (
-               <p>{product.description}</p>
+               <p>{sanitizeProductDescription(product.description)}</p>
              ) : (
                <p>{settings['product_history_default_text'] || 'Cada detalle ha sido verificado para garantizar su autenticidad y estado. Contexto del personaje, rareza, franquicia y valor para coleccionistas.'}</p>
              )}
@@ -877,9 +888,9 @@ export default function ProductDetail() {
             <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${openMobileTab === 'description' ? 'rotate-180 text-[#f00856]' : ''}`} />
           </button>
           {openMobileTab === 'description' && (
-            <div className="px-6 pb-6 pt-2 prose prose-invert text-slate-300 text-sm leading-relaxed border-t border-white/5 animate-fade-in">
+            <div className="px-6 pb-6 pt-2 prose prose-invert text-slate-300 text-sm leading-relaxed border-t border-white/5 animate-fade-in whitespace-pre-line">
               {product.description ? (
-                <p>{product.description}</p>
+                <p>{sanitizeProductDescription(product.description)}</p>
               ) : (
                 <p>{settings['product_history_default_text'] || 'Cada detalle ha sido verificado para garantizar su autenticidad y estado. Contexto del personaje, rareza, franquicia y valor para coleccionistas.'}</p>
               )}
