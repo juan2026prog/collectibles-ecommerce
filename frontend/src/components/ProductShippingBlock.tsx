@@ -160,36 +160,36 @@ export default function ProductShippingBlock({
   // --------------------------------------------------------------------------
   if (isInternational) {
     return (
-      <div className="glass rounded-[2rem] p-6 mt-6 border border-indigo-500/30 bg-indigo-950/20 shadow-lg relative overflow-hidden">
-        <div className="flex items-center justify-between border-b border-indigo-500/20 pb-3 mb-4">
+      <div className="rounded-2xl p-4 mt-4 border border-indigo-500/20 bg-indigo-950/20 relative overflow-hidden">
+        <div className="flex items-center justify-between border-b border-indigo-500/20 pb-2.5 mb-3">
           <div className="flex items-center gap-2">
-            <PackageCheck className="w-5 h-5 text-indigo-400" />
-            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-white">Importación Amazon USA</h3>
+            <PackageCheck className="w-4 h-4 text-indigo-400" />
+            <h3 className="text-[11px] font-black uppercase tracking-[0.15em] text-white">Importación Amazon USA</h3>
           </div>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
             USA ✈ Uruguay
           </span>
         </div>
 
-        <div className="space-y-3 text-xs text-slate-300">
-          <div className="flex items-start gap-2.5 bg-white/5 rounded-xl p-3 border border-white/5">
-            <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+        <div className="space-y-2 text-xs text-slate-300">
+          <div className="flex items-start gap-2 text-[11px]">
+            <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
             <span>Compra inmediata protegida por Collectibles.uy.</span>
           </div>
 
-          <div className="flex items-start gap-2.5 bg-white/5 rounded-xl p-3 border border-white/5">
-            <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+          <div className="flex items-start gap-2 text-[11px]">
+            <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
             <span>Se envía a tu casilla courier en Estados Unidos.</span>
           </div>
 
-          <div className="flex items-start gap-2.5 bg-white/5 rounded-xl p-3 border border-white/5">
-            <Info className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
-            <span>El envío desde Estados Unidos hasta Uruguay será gestionado por el courier elegido por el cliente.</span>
+          <div className="flex items-start gap-2 text-[11px]">
+            <Info className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
+            <span>Envío USA ➔ Uruguay gestionado por el courier elegido por el cliente.</span>
           </div>
         </div>
 
-        <div className="text-[11px] text-slate-400 mt-4 pt-3 border-t border-indigo-500/20 leading-relaxed bg-indigo-500/10 p-3 rounded-xl">
-          ⚠️ El costo del courier internacional no está incluido en el precio del producto y se calcula según el peso final al ingresar a tu casilla.
+        <div className="text-[10px] text-slate-400 mt-3 pt-2.5 border-t border-indigo-500/20 leading-relaxed">
+          ⚠️ Costo de courier internacional no incluido en el precio. Se calcula según el peso final al ingresar a tu casilla.
         </div>
       </div>
     );
@@ -199,30 +199,30 @@ export default function ProductShippingBlock({
   // RENDER: BLOQUE NACIONAL MARKETPLACE / COLLECTIBLES
   // --------------------------------------------------------------------------
   return (
-    <div className="glass rounded-[2rem] p-6 mt-6 border border-white/10 shadow-lg relative overflow-hidden">
+    <div className="rounded-2xl p-4 sm:p-5 mt-4 border border-white/10 bg-white/[0.03] relative overflow-hidden">
       
       {/* HEADER: TITULO + VENDEDOR + BADGE OFICIAL */}
-      <div className="flex items-center justify-between border-b border-white/10 pb-3.5 mb-4">
+      <div className="flex items-center justify-between border-b border-white/10 pb-2.5 mb-3">
         <div className="flex items-center gap-2">
-          <Truck className="w-5 h-5 text-[#f00856]" />
-          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-white">ENVÍOS Y RETIRO</h3>
+          <Truck className="w-4 h-4 text-[#f00856]" />
+          <h3 className="text-[11px] font-black uppercase tracking-[0.15em] text-white">ENVÍOS Y RETIRO</h3>
         </div>
 
         <div className="flex items-center gap-2">
           {isOfficialStore && (
-            <span className="text-[9px] px-2 py-0.5 font-black uppercase rounded bg-red-500 text-white border border-red-400 tracking-wider shadow-sm">
+            <span className="text-[8px] px-1.5 py-0.5 font-black uppercase rounded bg-red-500 text-white border border-red-400 tracking-wider">
               TIENDA OFICIAL
             </span>
           )}
-          <span className="text-xs font-bold text-slate-400">
-            Despachado por <strong className="text-white">{vendorName}</strong>
+          <span className="text-[11px] font-medium text-slate-400">
+            Despachado por <strong className="text-white font-bold">{vendorName}</strong>
           </span>
         </div>
       </div>
 
-      {/* SEMÁFORO VISUAL + SUMMARY ROW (Scan in 5 seconds) */}
-      <div className="flex flex-wrap items-center gap-2 mb-4 bg-white/5 p-2.5 rounded-xl border border-white/5 text-xs">
-        <div className="flex items-center gap-1.5 font-bold text-white pr-2 border-r border-white/10">
+      {/* SEMÁFORO VISUAL + SUMMARY ROW */}
+      <div className="flex flex-wrap items-center gap-2 mb-3 text-xs">
+        <div className="flex items-center gap-1.5 font-bold text-white pr-2 border-r border-white/10 text-[11px]">
           <span className={`w-2 h-2 rounded-full ${statusLight.color}`} />
           <span>{statusLight.label}</span>
         </div>
@@ -242,89 +242,81 @@ export default function ProductShippingBlock({
 
       {/* SPECIAL PRODUCT WARNINGS */}
       {isPreorder ? (
-        <div className="soft rounded-xl p-4 bg-amber-500/10 border border-amber-500/20 text-amber-200 text-xs mb-4">
-          <div className="flex items-center gap-2 font-black uppercase tracking-wider text-amber-400 mb-1">
-            <Clock className="w-4 h-4" /> Producto en Preventa
+        <div className="rounded-xl p-3 bg-amber-500/10 border border-amber-500/20 text-amber-200 text-xs mb-3">
+          <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-amber-400 text-[11px] mb-0.5">
+            <Clock className="w-3.5 h-3.5" /> Producto en Preventa
           </div>
-          <p className="leading-relaxed text-slate-300">
-            El despacho o retiro de este producto se realizará una vez recibido en stock en el depósito del vendedor.
+          <p className="leading-relaxed text-slate-300 text-[11px]">
+            El despacho o retiro se realizará una vez recibido en stock en el depósito del vendedor.
           </p>
         </div>
       ) : settings.preparation_days && settings.preparation_days > 0 ? (
-        <div className="soft rounded-xl p-4 bg-slate-500/10 border border-slate-500/20 text-slate-200 text-xs mb-4">
-          <div className="flex items-center gap-2 font-black uppercase tracking-wider text-slate-300 mb-1">
-            <Clock className="w-4 h-4 text-amber-400" /> Preparación Especial
+        <div className="rounded-xl p-3 bg-slate-500/10 border border-slate-500/20 text-slate-200 text-xs mb-3">
+          <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-slate-300 text-[11px] mb-0.5">
+            <Clock className="w-3.5 h-3.5 text-amber-400" /> Preparación Especial
           </div>
-          <p className="leading-relaxed">
+          <p className="leading-relaxed text-[11px]">
             Este producto requiere <strong className="text-white">{settings.preparation_days} día{settings.preparation_days > 1 ? 's' : ''} hábil{settings.preparation_days > 1 ? 'es' : ''}</strong> de preparación antes del despacho.
           </p>
         </div>
       ) : dispatchInfo ? (
-        /* BANNER DE DESPACHO DINÁMICO CON CONTADOR DE CORTE */
-        <div className={`soft rounded-xl p-4 text-xs mb-4 border transition-colors ${
+        /* BANNER DE DESPACHO DINÁMICO */
+        <div className={`rounded-xl p-3 text-[11px] mb-3 border transition-colors ${
           dispatchInfo.can_dispatch_today
             ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-200'
-            : 'bg-white/5 border-white/10 text-slate-300'
+            : 'bg-white/[0.02] border-white/10 text-slate-300'
         }`}>
-          <div className="flex items-center gap-2 font-black mb-1 text-white">
-            <Clock className={`w-4 h-4 ${dispatchInfo.can_dispatch_today ? 'text-emerald-400' : 'text-[#f00856]'}`} />
+          <div className="flex items-center gap-1.5 font-bold mb-0.5 text-white">
+            <Clock className={`w-3.5 h-3.5 ${dispatchInfo.can_dispatch_today ? 'text-emerald-400' : 'text-[#f00856]'}`} />
             <span>Próximo Despacho: <strong className="capitalize text-white">{dispatchInfo.next_dispatch_label}</strong></span>
           </div>
-          <p className="leading-relaxed text-slate-300 font-medium">
+          <p className="leading-relaxed text-slate-300">
             {dispatchInfo.formatted_message}
           </p>
         </div>
       ) : null}
 
-      {/* CLARIFICACIÓN PERMANENTE DESPACHO VS ENTREGA */}
-      <div className="soft rounded-xl p-3 bg-white/5 border border-white/5 text-[11px] text-slate-400 mb-4 flex items-start gap-2 leading-relaxed">
-        <Info className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-        <span>
-          El despacho corresponde al momento en que el vendedor entrega el paquete al transportista. El tiempo de entrega dependerá del courier seleccionado.
-        </span>
-      </div>
-
       {/* ADVERTENCIA PRODUCTOS VOLUMINOSOS */}
       {isVoluminous && (
-        <div className="soft rounded-xl p-3 bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs mb-4 flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+        <div className="rounded-xl p-2.5 bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] mb-3 flex items-center gap-2">
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
           <span>Este producto puede requerir una cotización especial de envío.</span>
         </div>
       )}
 
       {/* ENVÍO GRATIS BANNER */}
       {freeShippingThreshold && (
-        <div className="soft rounded-xl p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs mb-4 font-bold flex items-center justify-between">
-          <span className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" /> Envío gratis disponible
+        <div className="rounded-xl p-2.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[11px] mb-3 font-bold flex items-center justify-between">
+          <span className="flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Envío gratis disponible
           </span>
           <span className="text-white">Desde ${freeShippingThreshold}</span>
         </div>
       )}
 
       {/* MÉTODOS DISPONIBLES (LISTA LIMPIA CON CHECKMARKS) */}
-      <div className="mt-4">
-        <div className="text-[10px] uppercase text-slate-400 font-black tracking-widest mb-2.5">
+      <div className="mt-3">
+        <div className="text-[10px] uppercase text-slate-400 font-bold tracking-wider mb-2">
           Métodos disponibles
         </div>
 
-        <div className="space-y-2.5">
+        <div className="space-y-2">
           {/* RETIRO EN TIENDA */}
           {pickupEnabled && (
-            <div className="soft rounded-xl p-3 flex items-start justify-between text-xs bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
-              <div className="flex items-start gap-2.5">
-                <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <div className="p-2.5 rounded-xl flex items-start justify-between text-xs bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] transition-colors">
+              <div className="flex items-start gap-2">
+                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
                 <div>
-                  <div className="font-bold text-white">Retiro en tienda</div>
+                  <div className="font-bold text-white text-[12px]">Retiro en tienda</div>
                   {!settings.pickup?.hide_address && settings.pickup?.address && (
                     <div className="text-slate-400 text-[11px] mt-0.5">
                       {settings.pickup.address}
-                      {settings.pickup?.hours && <span className="block text-slate-500">{settings.pickup.hours}</span>}
+                      {settings.pickup?.hours && <span className="block text-slate-400">{settings.pickup.hours}</span>}
                     </div>
                   )}
                 </div>
               </div>
-              <span className="text-[11px] font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded shrink-0">
+              <span className="text-[10px] font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded shrink-0">
                 Sin costo
               </span>
             </div>
@@ -333,11 +325,11 @@ export default function ProductShippingBlock({
           {/* COURIERS ACTIVOS */}
           {activeCarriers.length > 0 ? (
             activeCarriers.map(carrier => (
-              <div key={carrier.code} className="soft rounded-xl p-3 flex items-start justify-between text-xs bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
-                <div className="flex items-start gap-2.5">
-                  <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              <div key={carrier.code} className="p-2.5 rounded-xl flex items-start justify-between text-xs bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] transition-colors">
+                <div className="flex items-start gap-2">
+                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
                   <div>
-                    <div className="font-bold text-white">{carrier.label}</div>
+                    <div className="font-bold text-white text-[12px]">{carrier.label}</div>
                     <div className="text-slate-400 text-[11px] mt-0.5">{carrier.desc}</div>
                   </div>
                 </div>
@@ -347,17 +339,12 @@ export default function ProductShippingBlock({
               </div>
             ))
           ) : !pickupEnabled ? (
-            <div className="soft rounded-xl p-4 bg-red-500/10 border border-red-500/20 text-red-300 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+            <div className="rounded-xl p-3 bg-red-500/10 border border-red-500/20 text-red-300 text-xs flex items-center gap-2">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-400" />
               <span>Este vendedor no tiene métodos de envío activos para tu ubicación.</span>
             </div>
           ) : null}
         </div>
-      </div>
-
-      {/* TEXTO FINAL DE CONFIANZA */}
-      <div className="text-[10px] text-slate-500 mt-5 pt-3 border-t border-white/5 text-center leading-relaxed font-medium">
-        Todos los pedidos se despachan utilizando el método logístico seleccionado durante la compra. El costo se calcula durante el checkout.
       </div>
     </div>
   );
