@@ -463,7 +463,7 @@ export default function ProductDetail() {
   };
 
   return (
-    <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-6 md:py-10">
+    <div className="max-w-[1500px] mx-auto px-4 sm:px-6 py-6 md:py-10">
       <SEO
         title={seoTitle}
         description={seoDescription}
@@ -485,11 +485,11 @@ export default function ProductDetail() {
         <span className="text-white line-clamp-1">{product.title}</span>
       </nav>
 
-      <div className="grid lg:grid-cols-[1.2fr_1fr] gap-8 lg:gap-14 items-start">
+      <div className="grid lg:grid-cols-[1.25fr_1fr] gap-8 lg:gap-14 items-start">
         {/* GALLERY SECTION */}
         <section className="flex flex-col gap-4 lg:sticky lg:top-28">
           <div
-            className="w-full aspect-square max-h-[620px] rounded-3xl bg-white flex items-center justify-center relative overflow-hidden group cursor-crosshair border border-white/10 shadow-2xl p-6 sm:p-10 transition-all duration-300"
+            className="w-full aspect-square max-h-[660px] rounded-3xl bg-white flex items-center justify-center relative overflow-hidden group cursor-crosshair border border-white/10 shadow-2xl p-4 sm:p-8 transition-all duration-300"
             onMouseMove={handleMouseMove}
             onMouseEnter={() => setIsHovering(true)}
             onMouseLeave={() => setIsHovering(false)}
@@ -510,7 +510,7 @@ export default function ProductDetail() {
               src={displayImage}
               alt={product.title}
               referrerPolicy="no-referrer"
-              className={`w-full h-full max-h-[540px] object-contain mix-blend-multiply transition-all duration-500 ease-out ${isHovering ? 'scale-105' : 'scale-100'}`}
+              className={`w-full h-full max-h-[580px] object-contain mix-blend-multiply transition-all duration-500 ease-out ${isHovering ? 'scale-105' : 'scale-100'}`}
             />
             
             {/* Magnifier Lens */}
