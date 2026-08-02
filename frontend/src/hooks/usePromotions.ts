@@ -18,71 +18,87 @@ export interface AutoPromo {
   tiers: any[];
 }
 
+let _promotionsCache: AutoPromo[] | null = null;
+let _promotionsPromise: Promise<AutoPromo[]> | null = null;
+
 export function usePromotions() {
-  const [promotions, setPromotions] = useState<AutoPromo[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [promotions, setPromotions] = useState<AutoPromo[]>(_promotionsCache || []);
+  const [loading, setLoading] = useState(!_promotionsCache);
 
   useEffect(() => {
-    async function fetchPromos() {
-      try {
-        const now = new Date().toISOString();
-        const { data: promos, error } = await supabase
-          .from('promotions')
-          .select('id, name, discount_type, discount_value, min_quantity, is_stackable, priority, badge_text, badge_color, badge_bg, owner_vendor_id')
-          .neq('discount_type', 'bank_discount')
-          .eq('is_active', true)
-          .or(`starts_at.is.null,starts_at.lte.${now}`)
-          .or(`ends_at.is.null,ends_at.gte.${now}`)
-          .order('priority', { ascending: false });
-
-        if (error || !promos || promos.length === 0) {
-          setPromotions([]);
-          setLoading(false);
-          return;
-        }
-
-        const promoIds = promos.map(p => p.id);
-        const [{ data: targets }, { data: exclusions }, { data: tiers }] = await Promise.all([
-          supabase.from('promotion_targets').select('*').in('promotion_id', promoIds),
-          supabase.from('promotion_exclusions').select('*').in('promotion_id', promoIds),
-          supabase.from('promotion_tiers').select('*').in('promotion_id', promoIds)
-        ]);
-
-        const groupIds = new Set<string>();
-        (targets || []).filter(t => t.target_type === 'group').forEach(t => groupIds.add(t.target_id));
-        (exclusions || []).filter(e => e.target_type === 'group').forEach(e => groupIds.add(e.target_id));
-
-        let groupItems: any[] = [];
-        if (groupIds.size > 0) {
-          const { data } = await supabase.from('product_group_items').select('group_id, product_id').in('group_id', Array.from(groupIds));
-          groupItems = data || [];
-        }
-
-        const fullPromos = promos.map(p => {
-          const pTargets = (targets || []).filter(t => t.promotion_id === p.id).map(t => ({
-            ...t,
-            group_product_ids: t.target_type === 'group' ? groupItems.filter(gi => gi.group_id === t.target_id).map(gi => gi.product_id) : []
-          }));
-          const pExclusions = (exclusions || []).filter(e => e.promotion_id === p.id).map(e => ({
-            ...e,
-            group_product_ids: e.target_type === 'group' ? groupItems.filter(gi => gi.group_id === e.target_id).map(gi => gi.product_id) : []
-          }));
-          return {
-            ...p,
-            targets: pTargets,
-            exclusions: pExclusions,
-            tiers: (tiers || []).filter(t => t.promotion_id === p.id).sort((a,b) => b.min_quantity - a.min_quantity),
-          };
-        });
-
-        setPromotions(fullPromos);
-      } catch (e) {
-        console.warn('Could not fetch promotions (tables may not exist):', e);
-        setPromotions([]);
-      }
+    if (_promotionsCache) {
+      setPromotions(_promotionsCache);
       setLoading(false);
     }
-    fetchPromos();
+
+    if (!_promotionsPromise) {
+      _promotionsPromise = (async () => {
+        try {
+          const now = new Date().toISOString();
+          const { data: promos, error } = await supabase
+            .from('promotions')
+            .select('id, name, discount_type, discount_value, min_quantity, is_stackable, priority, badge_text, badge_color, badge_bg, owner_vendor_id')
+            .neq('discount_type', 'bank_discount')
+            .eq('is_active', true)
+            .or(`starts_at.is.null,starts_at.lte.${now}`)
+            .or(`ends_at.is.null,ends_at.gte.${now}`)
+            .order('priority', { ascending: false });
+
+          if (error || !promos || promos.length === 0) {
+            _promotionsCache = [];
+            _promotionsPromise = null;
+            return [];
+          }
+
+          const promoIds = promos.map(p => p.id);
+          const [{ data: targets }, { data: exclusions }, { data: tiers }] = await Promise.all([
+            supabase.from('promotion_targets').select('*').in('promotion_id', promoIds),
+            supabase.from('promotion_exclusions').select('*').in('promotion_id', promoIds),
+            supabase.from('promotion_tiers').select('*').in('promotion_id', promoIds)
+          ]);
+
+          const groupIds = new Set<string>();
+          (targets || []).filter(t => t.target_type === 'group').forEach(t => groupIds.add(t.target_id));
+          (exclusions || []).filter(e => e.target_type === 'group').forEach(e => groupIds.add(e.target_id));
+
+          let groupItems: any[] = [];
+          if (groupIds.size > 0) {
+            const { data } = await supabase.from('product_group_items').select('group_id, product_id').in('group_id', Array.from(groupIds));
+            groupItems = data || [];
+          }
+
+          const fullPromos = promos.map(p => {
+            const pTargets = (targets || []).filter(t => t.promotion_id === p.id).map(t => ({
+              ...t,
+              group_product_ids: t.target_type === 'group' ? groupItems.filter(gi => gi.group_id === t.target_id).map(gi => gi.product_id) : []
+            }));
+            const pExclusions = (exclusions || []).filter(e => e.promotion_id === p.id).map(e => ({
+              ...e,
+              group_product_ids: e.target_type === 'group' ? groupItems.filter(gi => gi.group_id === e.target_id).map(gi => gi.product_id) : []
+            }));
+            return {
+              ...p,
+              targets: pTargets,
+              exclusions: pExclusions,
+              tiers: (tiers || []).filter(t => t.promotion_id === p.id).sort((a,b) => b.min_quantity - a.min_quantity),
+            };
+          });
+
+          _promotionsCache = fullPromos;
+          _promotionsPromise = null;
+          return fullPromos;
+        } catch (e) {
+          console.warn('Could not fetch promotions (tables may not exist):', e);
+          _promotionsPromise = null;
+          return _promotionsCache || [];
+        }
+      })();
+    }
+
+    _promotionsPromise.then(res => {
+      setPromotions(res);
+      setLoading(false);
+    });
   }, []);
 
   return { promotions, loading };

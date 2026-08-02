@@ -14,6 +14,7 @@ let _promise: Promise<Record<string, string>> | null = null;
 const _listeners = new Set<(s: Record<string, string>) => void>();
 
 function fetchSettings(): Promise<Record<string, string>> {
+  if (_cache && Object.keys(_cache).length > 0) return Promise.resolve(_cache);
   if (_promise) return _promise;
   _promise = supabase
     .from('public_site_config')
@@ -24,12 +25,12 @@ function fetchSettings(): Promise<Record<string, string>> {
       _cache = s;
       try { localStorage.setItem('site_settings_cache', JSON.stringify(s)); } catch (e) {}
       _listeners.forEach(fn => fn(s));
-      _promise = null; // Clear promise so the next call/mount fetches again
+      _promise = null;
       return s;
     })
     .catch((err) => {
-      _promise = null; // Clear promise on error too
-      throw err;
+      _promise = null;
+      return _cache || {};
     });
   return _promise;
 }

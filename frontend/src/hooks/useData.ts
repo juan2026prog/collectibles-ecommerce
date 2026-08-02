@@ -358,25 +358,52 @@ export function useProductBuyBox(productId: string | undefined) {
   return { buyBox, loading };
 }
 
+// ═══ Global Caches for Site-wide Hooks ═══
+let _categoriesCache: any[] | null = null;
+let _categoriesPromise: Promise<any[]> | null = null;
+
+let _brandsCache: any[] | null = null;
+let _brandsPromise: Promise<any[]> | null = null;
+
 // ═══ useCategories ═══
 export function useCategories() {
-  const [categories, setCategories] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState<any[]>(_categoriesCache || []);
+  const [loading, setLoading] = useState(!_categoriesCache);
 
   useEffect(() => {
-    async function fetch() {
-      const { data } = await supabase
+    if (_categoriesCache) {
+      setCategories(_categoriesCache);
+      setLoading(false);
+    }
+
+    if (!_categoriesPromise) {
+      _categoriesPromise = supabase
         .from('categories_with_published_counts')
         .select('*')
         .eq('is_active', true)
         .eq('status', 'approved')
         .gt('published_products_count', 0)
         .order('sort_order')
-        .order('name');
-      setCategories(data || []);
-      setLoading(false);
+        .order('name')
+        .then(({ data, error }) => {
+          if (!error && data) {
+            _categoriesCache = data;
+          } else {
+            console.error('[useCategories] fetch error:', error);
+          }
+          _categoriesPromise = null;
+          return _categoriesCache || [];
+        })
+        .catch(() => {
+          _categoriesPromise = null;
+          return _categoriesCache || [];
+        });
     }
-    fetch();
+
+    _categoriesPromise.then(cats => {
+      setCategories(cats);
+      setLoading(false);
+    });
   }, []);
 
   return { categories, loading };
@@ -384,22 +411,42 @@ export function useCategories() {
 
 // ═══ useBrands ═══
 export function useBrands() {
-  const [brands, setBrands] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [brands, setBrands] = useState<any[]>(_brandsCache || []);
+  const [loading, setLoading] = useState(!_brandsCache);
 
   useEffect(() => {
-    async function fetch() {
-      const { data } = await supabase
+    if (_brandsCache) {
+      setBrands(_brandsCache);
+      setLoading(false);
+    }
+
+    if (!_brandsPromise) {
+      _brandsPromise = supabase
         .from('brands')
         .select('*')
         .eq('status', 'approved')
         .eq('is_active', true)
         .eq('is_public', true)
-        .order('sort_order');
-      setBrands(data || []);
-      setLoading(false);
+        .order('sort_order')
+        .then(({ data, error }) => {
+          if (!error && data) {
+            _brandsCache = data;
+          } else {
+            console.error('[useBrands] fetch error:', error);
+          }
+          _brandsPromise = null;
+          return _brandsCache || [];
+        })
+        .catch(() => {
+          _brandsPromise = null;
+          return _brandsCache || [];
+        });
     }
-    fetch();
+
+    _brandsPromise.then(b => {
+      setBrands(b);
+      setLoading(false);
+    });
   }, []);
 
   return { brands, loading };
