@@ -22,6 +22,9 @@ export interface DispatchCalculatorResult {
   formatted_message: string; // Commercial text matching user specification
   cutoff_passed: boolean;
   cutoff_time_formatted: string;
+  hours_remaining_to_cutoff?: number;
+  minutes_remaining_to_cutoff?: number;
+  time_remaining_str?: string; // e.g. "2 h 15 min"
   reason: 'within_cutoff' | 'cutoff_passed' | 'weekend_or_non_dispatch_day' | 'holiday' | 'preparation_days';
 }
 
@@ -185,16 +188,31 @@ export function getNextDispatchDate(input: DispatchCalculatorInput = {}): Dispat
   // Determine commercial reason & message
   let reason: DispatchCalculatorResult['reason'] = 'within_cutoff';
   let formattedMessage = '';
+  let hoursRemainingToCutoff: number | undefined;
+  let minutesRemainingToCutoff: number | undefined;
+  let timeRemainingStr: string | undefined;
 
   if (canDispatchToday) {
     reason = 'within_cutoff';
-    formattedMessage = `Comprando antes de las ${cutoffFormatted}, ${vendorName} despacha hoy por ${courierName}.`;
+    const totalNowMinutes = nowParts.hour * 60 + nowParts.minute;
+    const totalCutoffMinutes = cutoffHour * 60 + cutoffMinute;
+    const diffMinutes = Math.max(0, totalCutoffMinutes - totalNowMinutes);
+    hoursRemainingToCutoff = Math.floor(diffMinutes / 60);
+    minutesRemainingToCutoff = diffMinutes % 60;
+
+    if (hoursRemainingToCutoff > 0) {
+      timeRemainingStr = `${hoursRemainingToCutoff} h ${minutesRemainingToCutoff} min`;
+      formattedMessage = `Comprando en las próximas ${timeRemainingStr}, ${vendorName} despacha hoy por ${courierName}.`;
+    } else {
+      timeRemainingStr = `${minutesRemainingToCutoff} min`;
+      formattedMessage = `Comprando en los próximos ${timeRemainingStr}, ${vendorName} despacha hoy por ${courierName}.`;
+    }
   } else if (preparationDays > 0) {
     reason = 'preparation_days';
     formattedMessage = `Este producto requiere ${preparationDays} día${preparationDays > 1 ? 's' : ''} hábil${preparationDays > 1 ? 'es' : ''} de preparación antes del despacho.`;
   } else if (isTodayHoliday) {
     reason = 'holiday';
-    formattedMessage = `Por feriado/excepción, este pedido se despacha el ${finalDayName} por ${courierName}.`;
+    formattedMessage = `Por feriado/excepción, el próximo despacho será el ${finalDayName} por ${courierName}.`;
   } else if (nowParts.weekdayIdx === 5 && passedCutoffToday) {
     // Friday after cutoff
     reason = 'cutoff_passed';
@@ -206,10 +224,10 @@ export function getNextDispatchDate(input: DispatchCalculatorInput = {}): Dispat
   } else if (passedCutoffToday) {
     // Mon-Thu after cutoff
     reason = 'cutoff_passed';
-    formattedMessage = `Este pedido se despacha el próximo día hábil por ${courierName}.`;
+    formattedMessage = `El próximo despacho será el próximo día hábil por ${courierName}.`;
   } else {
     reason = 'weekend_or_non_dispatch_day';
-    formattedMessage = `Este pedido se despacha el ${finalDayName} por ${courierName}.`;
+    formattedMessage = `El próximo despacho será el ${finalDayName} por ${courierName}.`;
   }
 
   return {
@@ -220,6 +238,9 @@ export function getNextDispatchDate(input: DispatchCalculatorInput = {}): Dispat
     formatted_message: formattedMessage,
     cutoff_passed: passedCutoffToday,
     cutoff_time_formatted: cutoffFormatted,
+    hours_remaining_to_cutoff: hoursRemainingToCutoff,
+    minutes_remaining_to_cutoff: minutesRemainingToCutoff,
+    time_remaining_str: timeRemainingStr,
     reason
   };
 }

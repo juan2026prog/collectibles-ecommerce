@@ -1,14 +1,16 @@
 import React, { useMemo } from 'react';
-import { Truck, Store, Clock, PackageCheck, AlertCircle, ShieldCheck } from 'lucide-react';
+import { Truck, Store, Clock, PackageCheck, AlertCircle, ShieldCheck, Check, Info, AlertTriangle } from 'lucide-react';
 import { getNextDispatchDate } from '../lib/dispatchCalculator';
 
 interface ShippingSettings {
-  dac?: { active?: boolean };
-  ues?: { active?: boolean };
-  soydelivery?: { active?: boolean };
-  correo_uruguayo?: { active?: boolean };
-  manual?: { active?: boolean; method_name?: string };
-  pickup?: { active?: boolean; address?: string; city?: string; hours?: string };
+  dac?: { active?: boolean; fixed_cost?: string | number };
+  ues?: { active?: boolean; fixed_cost?: string | number };
+  soydelivery?: { active?: boolean; fixed_cost?: string | number };
+  correo_uruguayo?: { active?: boolean; fixed_cost?: string | number };
+  manual?: { active?: boolean; method_name?: string; fixed_cost?: string | number };
+  pickup?: { active?: boolean; address?: string; city?: string; hours?: string; hide_address?: boolean };
+  free_shipping?: { active?: boolean; min_amount?: string | number };
+  free_shipping_from?: string | number;
   cutoff_time?: string;
   dispatch_days?: (string | number)[];
   preparation_days?: number;
@@ -36,6 +38,7 @@ export default function ProductShippingBlock({
   const isPreorder = Boolean(product?.badge?.toLowerCase().includes('preventa') || product?.metadata?.is_preorder || product?.title?.toLowerCase().includes('preventa'));
   const isInternational = product?.source_provider === 'zinc' || product?.source_provider === 'amazon';
   const isPickupOnly = Boolean(product?.metadata?.pickup_only || product?.dimensions?.pickup_only);
+  const isVoluminous = Boolean(product?.metadata?.is_voluminous || product?.dimensions?.is_voluminous);
 
   // 2. Parse Shipping Settings for Platform vs Vendor
   const defaultCollectiblesSettings: ShippingSettings = {
@@ -51,61 +54,72 @@ export default function ProductShippingBlock({
   const settings: ShippingSettings = (isCollectibles || !vendorId)
     ? { ...defaultCollectiblesSettings, ...vendorShippingSettings }
     : (vendorShippingSettings || {
-        dac: { active: true }, // default fallback if vendor hasn't configured
+        dac: { active: true },
         pickup: { active: false },
         cutoff_time: '15:00',
         dispatch_days: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']
       });
 
-  // Extract enabled carriers
-  const activeCarriers: { code: string; label: string; desc: string }[] = [];
+  // Extract active carriers
+  const activeCarriers: { code: string; label: string; desc: string; costLabel?: string }[] = [];
 
   if (settings.dac?.active && !isPickupOnly) {
+    const cost = settings.dac.fixed_cost;
     activeCarriers.push({
       code: 'dac',
       label: 'DAC',
-      desc: 'Envíos por DAC a todo Uruguay (agencia o domicilio).'
+      desc: 'Entrega a domicilio o retiro en agencia',
+      costLabel: cost ? `$${cost}` : undefined
     });
   }
 
   if (settings.ues?.active && !isPickupOnly) {
+    const cost = settings.ues.fixed_cost;
     activeCarriers.push({
       code: 'ues',
       label: 'UES',
-      desc: 'Entrega rápida a domicilio en Montevideo e interior.'
+      desc: 'Entrega rápida a domicilio',
+      costLabel: cost ? `$${cost}` : undefined
     });
   }
 
   if (settings.soydelivery?.active && !isPickupOnly) {
+    const cost = settings.soydelivery.fixed_cost;
     activeCarriers.push({
       code: 'soydelivery',
       label: 'SoyDelivery',
-      desc: 'Envíos Flex / Express en zonas habilitadas.'
+      desc: 'Envíos Flex / Express en zonas habilitadas',
+      costLabel: cost ? `$${cost}` : undefined
     });
   }
 
   if (settings.correo_uruguayo?.active && !isPickupOnly) {
+    const cost = settings.correo_uruguayo.fixed_cost;
     activeCarriers.push({
       code: 'correo_uruguayo',
       label: 'Correo Uruguayo',
-      desc: 'Cobertura nacional a través de Correo Uruguayo.'
+      desc: 'Cobertura nacional a todo el país',
+      costLabel: cost ? `$${cost}` : undefined
     });
   }
 
   if (settings.manual?.active && !isPickupOnly) {
+    const cost = settings.manual.fixed_cost;
     activeCarriers.push({
       code: 'manual',
       label: settings.manual.method_name || 'Cadetería propia',
-      desc: 'Envío directo gestionado por el vendedor.'
+      desc: 'Envío gestionado por el vendedor',
+      costLabel: cost ? `$${cost}` : undefined
     });
   }
 
   const pickupEnabled = Boolean(settings.pickup?.active);
-
-  // Determine main courier for schedule calculation
   const primaryCourierName = activeCarriers.length > 0
     ? activeCarriers.map(c => c.label).join(' / ')
     : 'DAC';
+
+  // Free shipping threshold check
+  const freeShippingThreshold = settings.free_shipping_from || settings.free_shipping?.min_amount;
 
   // 3. Compute Dispatch Schedule using Helper
   const dispatchInfo = useMemo(() => {
@@ -123,91 +137,227 @@ export default function ProductShippingBlock({
     });
   }, [settings, isPreorder, isInternational, primaryCourierName, vendorName]);
 
+  // Check Official Store status
+  const isOfficialStore = Boolean(
+    product?.vendor_store?.is_official &&
+    product?.vendor_store?.status === 'active' &&
+    product?.vendor_store?.approved_by
+  );
+
+  // Semáforo visual state
+  const statusLight = isPreorder
+    ? { color: 'bg-amber-400', label: 'En preventa' }
+    : isInternational
+    ? { color: 'bg-indigo-400', label: 'Importación USA' }
+    : settings.preparation_days && settings.preparation_days > 0
+    ? { color: 'bg-slate-400', label: `Preparación ${settings.preparation_days}d` }
+    : dispatchInfo?.can_dispatch_today
+    ? { color: 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]', label: 'Despacha hoy' }
+    : { color: 'bg-amber-400', label: `Despacho el ${dispatchInfo?.next_dispatch_day_name || 'próximo día hábil'}` };
+
+  // --------------------------------------------------------------------------
+  // RENDER: BLOQUE INTERNACIONAL (AMAZON USA)
+  // --------------------------------------------------------------------------
+  if (isInternational) {
+    return (
+      <div className="glass rounded-[2rem] p-6 mt-6 border border-indigo-500/30 bg-indigo-950/20 shadow-lg relative overflow-hidden">
+        <div className="flex items-center justify-between border-b border-indigo-500/20 pb-3 mb-4">
+          <div className="flex items-center gap-2">
+            <PackageCheck className="w-5 h-5 text-indigo-400" />
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-white">Importación Amazon USA</h3>
+          </div>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+            USA ✈ Uruguay
+          </span>
+        </div>
+
+        <div className="space-y-3 text-xs text-slate-300">
+          <div className="flex items-start gap-2.5 bg-white/5 rounded-xl p-3 border border-white/5">
+            <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <span>Compra inmediata protegida por Collectibles.uy.</span>
+          </div>
+
+          <div className="flex items-start gap-2.5 bg-white/5 rounded-xl p-3 border border-white/5">
+            <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <span>Se envía a tu casilla courier en Estados Unidos.</span>
+          </div>
+
+          <div className="flex items-start gap-2.5 bg-white/5 rounded-xl p-3 border border-white/5">
+            <Info className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+            <span>El envío desde Estados Unidos hasta Uruguay será gestionado por el courier elegido por el cliente.</span>
+          </div>
+        </div>
+
+        <div className="text-[11px] text-slate-400 mt-4 pt-3 border-t border-indigo-500/20 leading-relaxed bg-indigo-500/10 p-3 rounded-xl">
+          ⚠️ El costo del courier internacional no está incluido en el precio del producto y se calcula según el peso final al ingresar a tu casilla.
+        </div>
+      </div>
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // RENDER: BLOQUE NACIONAL MARKETPLACE / COLLECTIBLES
+  // --------------------------------------------------------------------------
   return (
     <div className="glass rounded-[2rem] p-6 mt-6 border border-white/10 shadow-lg relative overflow-hidden">
-      <div className="flex items-center gap-2 mb-4">
-        <Truck className="w-5 h-5 text-[#f00856]" />
-        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-white">ENVÍOS Y RETIRO</h3>
+      
+      {/* HEADER: TITULO + VENDEDOR + BADGE OFICIAL */}
+      <div className="flex items-center justify-between border-b border-white/10 pb-3.5 mb-4">
+        <div className="flex items-center gap-2">
+          <Truck className="w-5 h-5 text-[#f00856]" />
+          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-white">ENVÍOS Y RETIRO</h3>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {isOfficialStore && (
+            <span className="text-[9px] px-2 py-0.5 font-black uppercase rounded bg-red-500 text-white border border-red-400 tracking-wider shadow-sm">
+              TIENDA OFICIAL
+            </span>
+          )}
+          <span className="text-xs font-bold text-slate-400">
+            Despachado por <strong className="text-white">{vendorName}</strong>
+          </span>
+        </div>
       </div>
 
-      <div className="text-xs font-bold text-slate-300 mb-4 pb-3 border-b border-white/10 flex items-center gap-2">
-        <ShieldCheck className="w-4 h-4 text-green-400 shrink-0" />
-        <span>Vendido y enviado por <strong className="text-white">{vendorName}</strong></span>
+      {/* SEMÁFORO VISUAL + SUMMARY ROW (Scan in 5 seconds) */}
+      <div className="flex flex-wrap items-center gap-2 mb-4 bg-white/5 p-2.5 rounded-xl border border-white/5 text-xs">
+        <div className="flex items-center gap-1.5 font-bold text-white pr-2 border-r border-white/10">
+          <span className={`w-2 h-2 rounded-full ${statusLight.color}`} />
+          <span>{statusLight.label}</span>
+        </div>
+
+        {activeCarriers.length > 0 && (
+          <span className="text-slate-300 font-medium text-[11px] flex items-center gap-1">
+            <Check className="w-3.5 h-3.5 text-emerald-400" /> {activeCarriers[0].label} disponible
+          </span>
+        )}
+
+        {pickupEnabled && (
+          <span className="text-slate-300 font-medium text-[11px] flex items-center gap-1">
+            <Check className="w-3.5 h-3.5 text-emerald-400" /> Retiro en tienda
+          </span>
+        )}
       </div>
 
-      {/* SPECIAL PRODUCT EXCEPTIONS */}
+      {/* SPECIAL PRODUCT WARNINGS */}
       {isPreorder ? (
         <div className="soft rounded-xl p-4 bg-amber-500/10 border border-amber-500/20 text-amber-200 text-xs mb-4">
           <div className="flex items-center gap-2 font-black uppercase tracking-wider text-amber-400 mb-1">
             <Clock className="w-4 h-4" /> Producto en Preventa
           </div>
-          <p className="leading-relaxed">
-            El despacho o retiro de este producto se realizará una vez que sea recibido en stock en nuestro depósito.
+          <p className="leading-relaxed text-slate-300">
+            El despacho o retiro de este producto se realizará una vez recibido en stock en el depósito del vendedor.
           </p>
         </div>
-      ) : isInternational ? (
-        <div className="soft rounded-xl p-4 bg-indigo-500/10 border border-indigo-500/20 text-indigo-200 text-xs mb-4">
-          <div className="flex items-center gap-2 font-black uppercase tracking-wider text-indigo-400 mb-1">
-            <PackageCheck className="w-4 h-4" /> Importación Internacional
+      ) : settings.preparation_days && settings.preparation_days > 0 ? (
+        <div className="soft rounded-xl p-4 bg-slate-500/10 border border-slate-500/20 text-slate-200 text-xs mb-4">
+          <div className="flex items-center gap-2 font-black uppercase tracking-wider text-slate-300 mb-1">
+            <Clock className="w-4 h-4 text-amber-400" /> Preparación Especial
           </div>
           <p className="leading-relaxed">
-            Compra protegida por Collectibles.uy. Envío a tu casilla courier en USA y posterior despacho local.
+            Este producto requiere <strong className="text-white">{settings.preparation_days} día{settings.preparation_days > 1 ? 's' : ''} hábil{settings.preparation_days > 1 ? 'es' : ''}</strong> de preparación antes del despacho.
           </p>
         </div>
       ) : dispatchInfo ? (
-        /* DYNAMIC DISPATCH BANNER */
+        /* BANNER DE DESPACHO DINÁMICO CON CONTADOR DE CORTE */
         <div className={`soft rounded-xl p-4 text-xs mb-4 border transition-colors ${
           dispatchInfo.can_dispatch_today
-            ? 'bg-green-500/10 border-green-500/20 text-green-300'
+            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-200'
             : 'bg-white/5 border-white/10 text-slate-300'
         }`}>
           <div className="flex items-center gap-2 font-black mb-1 text-white">
-            <Clock className="w-4 h-4 text-[#f00856]" />
-            <span>Próximo Despacho: <strong className="capitalize">{dispatchInfo.next_dispatch_label}</strong></span>
+            <Clock className={`w-4 h-4 ${dispatchInfo.can_dispatch_today ? 'text-emerald-400' : 'text-[#f00856]'}`} />
+            <span>Próximo Despacho: <strong className="capitalize text-white">{dispatchInfo.next_dispatch_label}</strong></span>
           </div>
-          <p className="leading-relaxed text-slate-300">
+          <p className="leading-relaxed text-slate-300 font-medium">
             {dispatchInfo.formatted_message}
           </p>
         </div>
       ) : null}
 
-      {/* ENABLED SHIPPING METHODS & PICKUP LIST */}
-      <div className="space-y-3">
-        {/* PICKUP METHOD */}
-        {pickupEnabled && (
-          <div className="soft rounded-xl p-3 flex items-start gap-3 text-xs bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
-            <Store className="w-4 h-4 text-green-400 shrink-0 mt-0.5" />
-            <div>
-              <div className="font-bold text-white">Retiro disponible</div>
-              <div className="text-slate-400 text-[11px] mt-0.5">
-                {settings.pickup?.address ? `${settings.pickup.address}` : 'Retiro en sucursal del vendedor.'}
-                {settings.pickup?.hours && <span className="block text-slate-500">{settings.pickup.hours}</span>}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* COURIER METHODS */}
-        {activeCarriers.length > 0 ? (
-          activeCarriers.map(carrier => (
-            <div key={carrier.code} className="soft rounded-xl p-3 flex items-start gap-3 text-xs bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
-              <Truck className="w-4 h-4 text-[#f00856] shrink-0 mt-0.5" />
-              <div>
-                <div className="font-bold text-white">{carrier.label}</div>
-                <div className="text-slate-400 text-[11px] mt-0.5">{carrier.desc}</div>
-              </div>
-            </div>
-          ))
-        ) : !pickupEnabled ? (
-          <div className="soft rounded-xl p-4 bg-red-500/10 border border-red-500/20 text-red-300 text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
-            <span>Este vendedor no tiene métodos de envío activos configurados actualmente.</span>
-          </div>
-        ) : null}
+      {/* CLARIFICACIÓN PERMANENTE DESPACHO VS ENTREGA */}
+      <div className="soft rounded-xl p-3 bg-white/5 border border-white/5 text-[11px] text-slate-400 mb-4 flex items-start gap-2 leading-relaxed">
+        <Info className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+        <span>
+          El despacho corresponde al momento en que el vendedor entrega el paquete al transportista. El tiempo de entrega dependerá del courier seleccionado.
+        </span>
       </div>
 
-      <div className="text-[11px] text-slate-500 mt-4 pt-3 border-t border-white/5 text-center">
-        El costo y el plazo definitivo se calculan al ingresar tu dirección en el checkout.
+      {/* ADVERTENCIA PRODUCTOS VOLUMINOSOS */}
+      {isVoluminous && (
+        <div className="soft rounded-xl p-3 bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs mb-4 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+          <span>Este producto puede requerir una cotización especial de envío.</span>
+        </div>
+      )}
+
+      {/* ENVÍO GRATIS BANNER */}
+      {freeShippingThreshold && (
+        <div className="soft rounded-xl p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs mb-4 font-bold flex items-center justify-between">
+          <span className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" /> Envío gratis disponible
+          </span>
+          <span className="text-white">Desde ${freeShippingThreshold}</span>
+        </div>
+      )}
+
+      {/* MÉTODOS DISPONIBLES (LISTA LIMPIA CON CHECKMARKS) */}
+      <div className="mt-4">
+        <div className="text-[10px] uppercase text-slate-400 font-black tracking-widest mb-2.5">
+          Métodos disponibles
+        </div>
+
+        <div className="space-y-2.5">
+          {/* RETIRO EN TIENDA */}
+          {pickupEnabled && (
+            <div className="soft rounded-xl p-3 flex items-start justify-between text-xs bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
+              <div className="flex items-start gap-2.5">
+                <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-bold text-white">Retiro en tienda</div>
+                  {!settings.pickup?.hide_address && settings.pickup?.address && (
+                    <div className="text-slate-400 text-[11px] mt-0.5">
+                      {settings.pickup.address}
+                      {settings.pickup?.hours && <span className="block text-slate-500">{settings.pickup.hours}</span>}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <span className="text-[11px] font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded shrink-0">
+                Sin costo
+              </span>
+            </div>
+          )}
+
+          {/* COURIERS ACTIVOS */}
+          {activeCarriers.length > 0 ? (
+            activeCarriers.map(carrier => (
+              <div key={carrier.code} className="soft rounded-xl p-3 flex items-start justify-between text-xs bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
+                <div className="flex items-start gap-2.5">
+                  <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-bold text-white">{carrier.label}</div>
+                    <div className="text-slate-400 text-[11px] mt-0.5">{carrier.desc}</div>
+                  </div>
+                </div>
+                <span className="text-[11px] font-medium text-slate-400 shrink-0">
+                  {carrier.costLabel || 'En checkout'}
+                </span>
+              </div>
+            ))
+          ) : !pickupEnabled ? (
+            <div className="soft rounded-xl p-4 bg-red-500/10 border border-red-500/20 text-red-300 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+              <span>Este vendedor no tiene métodos de envío activos para tu ubicación.</span>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {/* TEXTO FINAL DE CONFIANZA */}
+      <div className="text-[10px] text-slate-500 mt-5 pt-3 border-t border-white/5 text-center leading-relaxed font-medium">
+        Todos los pedidos se despachan utilizando el método logístico seleccionado durante la compra. El costo se calcula durante el checkout.
       </div>
     </div>
   );
