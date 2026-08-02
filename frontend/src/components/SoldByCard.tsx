@@ -1,5 +1,5 @@
 import React from 'react';
-import { Store } from 'lucide-react';
+import { Store, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface SoldByCardProps {
@@ -14,43 +14,55 @@ export default function SoldByCard({ vendorId, vendorName, vendorLogo, vendorSlu
   if (!vendorId && !vendorName) return null;
 
   const isPlatform = !vendorId || vendorId === 'platform';
+  const name = isPlatform ? 'Collectibles.uy' : (vendorName || 'Vendedor Oficial');
+  const isOfficial = badges?.some((b: any) => b.badge_key === 'official_store' || b.label?.toLowerCase().includes('oficial'));
 
   return (
-    <div className="flex items-center justify-between gap-3 p-3 mt-4 bg-white/[0.03] border border-white/10 rounded-xl hover:bg-white/[0.05] transition-colors">
-      <div className="flex items-center gap-3">
+    <div className="flex items-center justify-between gap-4 py-3.5 border-t border-white/10">
+      <div className="flex items-center gap-3.5 min-w-0">
         {vendorLogo ? (
-          <img src={vendorLogo} alt={vendorName} className="w-8 h-8 rounded-lg object-cover border border-white/10" />
+          <img src={vendorLogo} alt={name} className="w-9 h-9 rounded-xl object-contain bg-white p-1 border border-white/10 shrink-0 shadow-sm" />
         ) : (
-          <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
-            <Store className="w-4 h-4 text-slate-400" />
+          <div className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+            <Store className="w-4 h-4 text-[#f00856]" />
           </div>
         )}
-        <div>
-          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block leading-none">Vendido y despachado por</span>
-          <div className="flex items-center gap-2 mt-1 flex-wrap">
+        <div className="min-w-0 flex-1">
+          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block leading-none mb-1">
+            Vendido y despachado por
+          </span>
+          <div className="flex items-center gap-2 flex-wrap">
             {isPlatform ? (
-              <span className="text-xs font-black text-white uppercase tracking-wider">Collectibles.uy</span>
+              <span className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                Collectibles.uy
+                <CheckCircle2 className="w-3.5 h-3.5 text-[#f00856] inline" />
+              </span>
+            ) : vendorSlug ? (
+              <Link to={`/store/${vendorSlug}`} className="text-xs font-black text-white uppercase tracking-wider hover:text-[#f00856] transition-colors truncate">
+                {name}
+              </Link>
             ) : (
-              vendorSlug ? (
-                <Link to={`/store/${vendorSlug}`} className="text-xs font-black text-[#f00856] uppercase tracking-wider hover:underline">
-                  {vendorName}
-                </Link>
-              ) : (
-                <span className="text-xs font-black text-[#f00856] uppercase tracking-wider">{vendorName}</span>
-              )
+              <span className="text-xs font-black text-white uppercase tracking-wider truncate">{name}</span>
             )}
-            {badges && badges.length > 0 && (
-              <div className="flex items-center gap-1">
-                {badges.map((b: any) => (
-                  <span key={b.id || b.badge_key} className={`text-[8px] px-1.5 py-0.5 font-semibold leading-none uppercase rounded ${b.color_class || 'bg-blue-600 text-white'}`} title={b.description}>
-                    {b.label}
-                  </span>
-                ))}
-              </div>
+
+            {isOfficial && (
+              <span className="text-[9px] px-2 py-0.5 font-black uppercase rounded bg-[#f00856] text-white tracking-wider">
+                Tienda Oficial
+              </span>
             )}
           </div>
         </div>
       </div>
+
+      {!isPlatform && vendorSlug && (
+        <Link 
+          to={`/store/${vendorSlug}`} 
+          className="text-xs font-bold text-slate-400 hover:text-[#f00856] transition-colors flex items-center gap-1 shrink-0 py-1"
+        >
+          <span>Ver tienda</span>
+          <ChevronRight className="w-3.5 h-3.5" />
+        </Link>
+      )}
     </div>
   );
 }

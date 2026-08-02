@@ -1,7 +1,7 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
-import { ShoppingCart, Minus, Plus, Truck, ShieldCheck, Star, ChevronDown, Heart, Trophy, Zap } from 'lucide-react';
-import { useProduct, useProductBuyBox } from '../hooks/useData';
+import { ShoppingCart, Minus, Plus, Star, ChevronDown, Heart, Zap } from 'lucide-react';
+import { useProduct, useProductBuyBox, useProducts, getProductGroupBadge } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
 import { useInternationalCartContext } from '../contexts/InternationalCartContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -9,13 +9,10 @@ import { useWishlistContext } from '../contexts/WishlistContext';
 import { usePromotions, getApplicablePromotions, evaluateItemDiscountDetailed } from '../hooks/usePromotions';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { useLocale } from '../contexts/LocaleContext';
-import { getProductGroupBadge } from '../hooks/useData';
-import { getProductImage, resolveImage, FALLBACK_IMAGE } from '../lib/imageUtils';
+import { resolveImage, FALLBACK_IMAGE } from '../lib/imageUtils';
 import { analytics } from '../lib/analytics';
-import { trackViewContent, trackAddToCart, generateMetaEventId } from '../lib/meta/metaPixel';
-import { trackGA4Event, trackClarityEvent } from '../lib/analyticsTracker';
+import { trackGA4Event } from '../lib/analyticsTracker';
 import SEO from '../components/SEO';
-import { resolveCartItemPrice } from '../lib/priceResolver';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { formatUSD } from '../lib/formatters';
 import SoldByCard from '../components/SoldByCard';
@@ -24,6 +21,37 @@ import { sanitizeProductDescription } from '../lib/descriptionSanitizer';
 import AdminTechnicalPanel from '../components/AdminTechnicalPanel';
 import { calculateUruboxEstimate, getEstimatedWeightKg } from '../lib/urubox';
 import { isValidInternalSku } from '../lib/skuUtils';
+import { ProductGridCard } from '../components/ProductGridCard';
+
+// ── COMPONENTE SECCIÓN PRODUCTOS RELACIONADOS ──
+function RelatedProductsSection({ currentProductId, categorySlug }: { currentProductId: string; categorySlug?: string }) {
+  const { products } = useProducts({ category: categorySlug, limit: 6 });
+  const { formatCurrencyPrice } = useCurrency();
+  const { addToCart } = useCartContext();
+
+  const filtered = (products || []).filter(p => p.id !== currentProductId).slice(0, 4);
+
+  if (filtered.length === 0) return null;
+
+  return (
+    <section className="mt-14 pt-10 border-t border-white/10">
+      <div className="mb-6">
+        <span className="text-[10px] uppercase font-black tracking-[0.2em] text-[#f00856]">Recomendados</span>
+        <h2 className="text-2xl md:text-3xl font-black mt-1 text-white tracking-tight">También puede interesarte</h2>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {filtered.map(p => (
+          <ProductGridCard
+            key={p.id}
+            product={p}
+            onAddToCart={() => addToCart(p)}
+            formatPrice={(price) => formatCurrencyPrice(price)}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
 
 export default function ProductDetail() {
   const navigate = useNavigate();
@@ -32,19 +60,17 @@ export default function ProductDetail() {
   const { slug } = useParams();
   const { product, loading } = useProduct(slug);
   const groupBadge = getProductGroupBadge(product);
-  const { buyBox, loading: buyBoxLoading } = useProductBuyBox(product?.id);
+  const { buyBox } = useProductBuyBox(product?.id);
   const cart = useCartContext();
   const internationalCart = useInternationalCartContext();
   const { user } = useAuth();
   const { formatCurrencyPrice } = useCurrency();
-  const { language } = useLocale();
   const { promotions } = usePromotions();
   const { toggleWishlist, isInWishlist } = useWishlistContext();
   
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [selectedVariantIdx, setSelectedVariantIdx] = useState(0);
-  const [activeTab, setActiveTab] = useState<'description' | 'specs' | 'reviews'>('description');
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [isHovering, setIsHovering] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
@@ -98,23 +124,8 @@ export default function ProductDetail() {
         user: { email: user?.email || undefined }
       });
       
-      try {
-        const eventId = generateMetaEventId('ViewContent', product.id);
-        trackViewContent(eventId, {
-          content_ids: [product.id],
-          content_name: product.title,
-          category: product.category?.name,
-          brand: product.brand?.name,
-          value: product.base_price,
-          currency: 'UYU'
-        });
-      } catch (e) {
-        console.warn("Meta tracking error", e);
-      }
-
       if (viewTrackedRef.current !== product.id) {
         viewTrackedRef.current = product.id;
-
         trackGA4Event('view_item', {
           currency: 'UYU',
           value: product.base_price,
@@ -123,344 +134,136 @@ export default function ProductDetail() {
             item_name: String(product.title),
             item_brand: product.brand?.name || undefined,
             item_category: product.category?.name || undefined,
-            price: Number(product.base_price),
-            quantity: 1
+            price: Number(product.base_price)
           }]
         });
-
-        trackClarityEvent('product_viewed');
       }
     }
   }, [product, user]);
 
-  if (loading) return (
-    <div className="max-w-7xl mx-auto px-6 py-12">
-      <div className="grid md:grid-cols-2 gap-10">
-        <div className="animate-pulse bg-white/10 aspect-square" />
-        <div className="space-y-4">
-          <div className="animate-pulse bg-white/10 h-8 w-3/4 rounded" />
-          <div className="animate-pulse bg-white/10 h-6 w-1/4 rounded" />
-          <div className="animate-pulse bg-white/10 h-20 rounded" />
-        </div>
+  if (loading) {
+    return (
+      <div className="max-w-[1500px] mx-auto px-6 py-20 flex justify-center items-center min-h-[50vh]">
+        <div className="w-10 h-10 border-4 border-[#f00856] border-t-transparent rounded-full animate-spin" />
       </div>
-    </div>
-  );
+    );
+  }
 
-  if (!product || product.is_active === false) return (
-    <div className="max-w-7xl mx-auto px-6 py-20 text-center">
-      <h1 className="text-2xl font-bold text-slate-500">Este producto no está disponible actualmente</h1>
-      <Link to="/shop" className="btn-primary mt-4">Volver a la tienda</Link>
-    </div>
-  );
+  if (!product) {
+    return (
+      <div className="max-w-[1500px] mx-auto px-6 py-20 text-center min-h-[50vh] flex flex-col justify-center items-center">
+        <h2 className="text-3xl font-black text-white">Producto no encontrado</h2>
+        <p className="text-slate-400 mt-2">El producto que buscas no existe o ha sido despublicado.</p>
+        <Link to="/shop" className="btn-primary mt-6">Volver al catálogo</Link>
+      </div>
+    );
+  }
 
-  const productImage = getProductImage(product);
-  const { images = [], variants = [], reviews = [] } = product || {};
-  const selectedVariant = variants[selectedVariantIdx] || variants[0];
-  
-  const activeBuyBox = buyBox?.[selectedVariant?.id] || null;
-  const bbWinner = activeBuyBox?.winner || null;
-  const hideVendors = false;
+  const bbWinner = buyBox?.winner;
+  const winnerIsCollectibles = !bbWinner || bbWinner.vendor_id === 'platform' || !bbWinner.vendor_id;
+  const winnerVendorName = winnerIsCollectibles ? 'Collectibles.uy' : (bbWinner?.vendor_store_name || product.vendor_store?.name || product.vendor?.name || 'Vendedor Oficial');
+  const winnerVendorId = bbWinner?.vendor_id || product.vendor_id;
 
-  const stock = bbWinner ? Number(bbWinner.stock) : (selectedVariant?.inventory_count || 0);
-  const finalPrice = bbWinner && !bbWinner.is_collectibles && bbWinner.price !== undefined ? Number(bbWinner.price) : (product ? (Number(product.base_price || 0) + Number((bbWinner ? bbWinner.price_adjustment : selectedVariant?.price_adjustment) || 0)) : 0);
-    
-  const baseProductStoreName = product?.vendor_store?.display_name 
-    || product?.vendor_store?.store_name 
-    || product?.vendor_store?.name 
-    || product?.vendor?.company_name 
-    || product?.vendor?.store_name 
-    || 'Vendedor';
+  const variants = product.variants && product.variants.length > 0 ? product.variants : [];
+  const selectedVariant = variants[selectedVariantIdx] || null;
 
-  const winnerIsCollectibles = product?.vendor_id 
-    ? false 
-    : (bbWinner ? bbWinner.is_collectibles : true);
+  const rawBasePrice = Number(product.base_price || 0);
+  const variantAdjustment = Number(selectedVariant?.price_adjustment || 0);
+  const basePriceWithVariant = rawBasePrice + variantAdjustment;
 
-  const winnerVendorId = winnerIsCollectibles 
-    ? null 
-    : (bbWinner && !bbWinner.is_collectibles && bbWinner.vendor_id ? bbWinner.vendor_id : (product?.vendor_id || null));
-
-  const storeName = winnerIsCollectibles 
-    ? 'Collectibles.uy' 
-    : (bbWinner && !bbWinner.is_collectibles && bbWinner.vendor_id && bbWinner.vendor_name ? bbWinner.vendor_name : baseProductStoreName);
-
-  const winnerVendorName = winnerIsCollectibles ? 'Collectibles.uy' : storeName;
-
-  const avgRating = reviews.length > 0 ? reviews.reduce((s: number, r: any) => s + r.rating, 0) / reviews.length : 0;
-  const currentImage = images[selectedImage]?.url;
-  const displayImage = currentImage ? resolveImage(currentImage) : productImage;
-
-  const applicablePromos = product ? getApplicablePromotions({
+  const applicablePromos = getApplicablePromotions(promotions || []);
+  const promoResult = evaluateItemDiscountDetailed({
     product_id: product.id,
-    category_id: product.category?.id,
-    brand_id: product.brand?.id,
-    vendor_id: product.vendor_id,
-    promotions_opt_in: product.vendor?.promotions_opt_in || false,
-    tag_ids: product.product_tags?.map((pt: any) => pt.tag_id) || []
-  }, promotions) : [];
+    category_id: product.category_id,
+    brand_id: product.brand_id,
+    vendor_id: winnerVendorId,
+    tag_ids: product.product_tags?.map((pt: any) => pt.tag_id) || [],
+    price: basePriceWithVariant,
+    quantity: 1
+  }, applicablePromos);
 
-  let promoDiscount = 0;
-  if (applicablePromos.length > 0 && product) {
-    const item = {
-      product_id: product.id,
-      category_id: product.category?.id,
-      brand_id: product.brand?.id,
-      vendor_id: product.vendor_id,
-      promotions_opt_in: product.vendor?.promotions_opt_in || false,
-      tag_ids: product.product_tags?.map((pt: any) => pt.tag_id) || [],
-      price: finalPrice,
-      quantity: 1
-    };
-    const result = evaluateItemDiscountDetailed(item, applicablePromos);
-    promoDiscount = result.discount;
-  }
+  const finalPrice = basePriceWithVariant - promoResult.discount;
+  const displayPrice = finalPrice;
+  const displayOldPrice = basePriceWithVariant;
+  const hasDiscount = promoResult.discount > 0;
+  const discountPercent = hasDiscount ? Math.round((promoResult.discount / basePriceWithVariant) * 100) : 0;
 
-  const displayPrice = finalPrice - promoDiscount;
-  const hasDiscount = (product?.compare_at_price || 0) > product?.base_price || promoDiscount > 0;
-  const displayOldPrice = promoDiscount > 0 ? finalPrice : product?.compare_at_price;
+  const images = product.product_images && product.product_images.length > 0
+    ? product.product_images.sort((a: any, b: any) => (a.position || 0) - (b.position || 0))
+    : [{ url: product.image_url || FALLBACK_IMAGE }];
 
-  function getStockLabel(count: number): { text: string; className: string } {
-    if (count <= 0) return { text: 'Agotado', className: 'text-red-400 border-red-500/20' };
-    if (count <= 3) return { text: 'Últimas unidades', className: 'text-amber-400 border-amber-500/20' };
-    return { text: 'Disponible', className: 'text-emerald-400 border-emerald-500/20' };
-  }
+  const currentImgObj = images[selectedImage] || images[0];
+  const displayImage = resolveImage(currentImgObj?.url || product.image_url);
 
-  const stockInfo = getStockLabel(stock);
+  const stock = selectedVariant ? (selectedVariant.stock ?? product.stock) : product.stock;
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
-    const x = ((e.pageX - left - window.scrollX) / width) * 100;
-    const y = ((e.pageY - top - window.scrollY) / height) * 100;
-    setMousePos({ x, y });
+  const getStockInfo = () => {
+    if (stock <= 0) return { text: 'Agotado', className: 'text-red-400 border-red-500/20 bg-red-500/10' };
+    if (product.badge?.toLowerCase().includes('preventa') || product.title?.toLowerCase().includes('preventa')) {
+      return { text: 'Preventa', className: 'text-amber-400 border-amber-500/20 bg-amber-500/10' };
+    }
+    if (stock <= 3) return { text: `¡Últimas ${stock} unidades!`, className: 'text-amber-400 border-amber-500/20 bg-amber-500/10' };
+    return { text: 'Disponible en stock', className: 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' };
   };
 
-  const intlProduct = product?.international_products?.[0] || product?.international_products;
-  const rawWeightGrams = intlProduct?.weight_grams;
-  const weightKg = rawWeightGrams ? rawWeightGrams / 1000 : getEstimatedWeightKg(product?.category?.name);
-  
-  const uruboxEstimate = calculateUruboxEstimate({
-    weight_kg: weightKg,
-    category: product?.category?.name,
-    destination_type: 'no_local_delivery'
-  });
-  const uruboxEstimatedCost = uruboxEstimate.total_urubox_usd;
+  const stockInfo = getStockInfo();
 
-  function addToCart(selectedOption?: any, directCheckout: boolean = false) {
-    const isEvent = selectedOption && (
-      selectedOption instanceof Event ||
-      (typeof Event !== 'undefined' && selectedOption instanceof Event) ||
-      selectedOption.nativeEvent ||
-      selectedOption.target ||
-      typeof selectedOption.preventDefault === 'function'
-    );
-    const option = isEvent ? undefined : selectedOption;
+  const addToCart = (customVariant?: any, directCheckout = false) => {
+    if (stock <= 0) return;
+    const targetVariant = customVariant || selectedVariant;
 
-    if (!selectedVariant) return;
-    
-    const targetPrice = resolveCartItemPrice(product, option || selectedVariant);
-    const targetStock = option ? option.stock : stock;
-    const targetVendorId = option ? option.vendor_id : winnerVendorId;
-    const targetVendorName = option ? option.vendor_name : winnerVendorName;
-    const targetVpvId = option ? option.vpv_id : (bbWinner && !bbWinner.is_collectibles ? bbWinner.vpv_id : null);
-
-    const targetStoreId = option 
-      ? option.vendor_store_id 
-      : (bbWinner && !bbWinner.is_collectibles ? bbWinner.vendor_store_id : (product.vendor_store_id || null));
-      
-    const targetStoreName = option 
-      ? option.vendor_name 
-      : winnerVendorName;
-
-    const targetStoreSlug = option 
-      ? option.vendor_store_slug 
-      : (bbWinner && !bbWinner.is_collectibles ? bbWinner.vendor_store_slug : (product.vendor_store?.slug || product.vendor?.slug));
-
-    const targetStoreLogo = option 
-      ? option.vendor_store_logo 
-      : (bbWinner && !bbWinner.is_collectibles ? bbWinner.vendor_store_logo : (product.vendor_store?.logo_url || product.vendor?.logo_url));
-
-    const targetStoreBadges = option 
-      ? (option.vendor_store_badges || []) 
-      : (bbWinner && !bbWinner.is_collectibles 
-          ? (bbWinner.vendor_store_badges || []) 
-          : (product.vendor_store?.vendor_store_badge_assignments?.filter((x: any) => x.status === 'active' && x.approved_by && x.approved_at).map((x: any) => x.vendor_store_badges).filter(Boolean) || []));
-
-    if (targetStock <= 0) return;
-    if (quantity > targetStock) return;
-
-    if (product.source_provider === 'zinc' || product.source_provider === 'amazon') {
-      const intlProduct = product.international_products?.[0] || product.international_products;
-      const weightKg = intlProduct?.weight_grams ? intlProduct.weight_grams / 1000 : undefined;
-      
+    if (product.source_provider === 'zinc') {
       internationalCart.addItem({
-        product_id: product.id,
-        variant_id: selectedVariant.id,
-        title: product.title,
-        price_usd: Number(intlProduct?.final_price_usd) || product.base_price,
-        image_url: resolveImage(images[0]?.url) || product.image_url,
-        quantity: quantity,
-        weight_kg,
-        raw_data: intlProduct?.raw_data,
-        international_data: intlProduct
+        product,
+        quantity,
+        variant_id: targetVariant?.id,
+        variant_name: targetVariant?.name
       });
-
       if (directCheckout) {
         navigate('/cart');
       } else {
         setAddedToCart(true);
-        setTimeout(() => setAddedToCart(false), 2000);
+        setTimeout(() => setAddedToCart(false), 2500);
       }
       return;
     }
 
     cart.addItem({
+      id: product.id,
       product_id: product.id,
-      variant_id: selectedVariant.id,
-      vendor_product_variant_id: targetVpvId,
-      quantity: option ? 1 : quantity,
       title: product.title,
-      price: targetPrice,
-      image: productImage,
-      variant_name: selectedVariant.name,
-      category_id: product.category?.id,
-      brand_id: product.brand?.id,
-      vendor_id: targetVendorId,
-      vendor_store_id: targetStoreId,
-      vendor_name: targetStoreName,
-      vendor_store_name: targetStoreName,
-      vendor_slug: targetStoreSlug,
-      vendor_store_slug: targetStoreSlug,
-      vendor_logo: targetStoreLogo,
-      vendor_store_badges: targetStoreBadges,
-      sku: selectedVariant.sku || null,
-      unit_price: targetPrice,
-      image_url: productImage,
-      promotions_opt_in: option
-        ? (option.promotions_opt_in || false)
-        : (product.vendor?.promotions_opt_in || false),
-      tag_ids: product.product_tags?.map((pt: any) => pt.tag_id) || [],
-      is_international: product.source_provider === 'zinc',
-      urubox_estimate: product.international_products?.urubox_estimated_cost_usd || 0,
-      weight_kg: weightKg,
-      category_name: product.category?.name
+      price: finalPrice,
+      base_price: product.base_price,
+      image_url: displayImage,
+      quantity,
+      variant_id: targetVariant?.id,
+      variant_name: targetVariant?.name,
+      vendor_id: winnerVendorId,
+      vendor_name: winnerVendorName,
+      sku: targetVariant?.sku || product.sku
     });
+
+    setAddedToCart(true);
+    setTimeout(() => setAddedToCart(false), 2500);
 
     if (directCheckout) {
       navigate('/checkout');
-    } else if (!option) {
-      setAddedToCart(true);
-      setTimeout(() => setAddedToCart(false), 2000);
-    }
-
-    analytics.track({
-      eventName: 'AddToCart',
-      eventData: {
-        content_name: product.title,
-        content_ids: [product.id],
-        content_type: 'product',
-        value: targetPrice * (option ? 1 : quantity),
-        currency: 'UYU'
-      }
-    });
-
-    const metaEventId = generateMetaEventId('AddToCart', product.id);
-    trackAddToCart(metaEventId, {
-      content_ids: [product.id],
-      contents: [{ id: product.id, quantity: option ? 1 : quantity, item_price: targetPrice }],
-      value: targetPrice * (option ? 1 : quantity),
-      currency: 'UYU'
-    });
-
-    trackGA4Event('add_to_cart', {
-      currency: 'UYU',
-      value: targetPrice * (option ? 1 : quantity),
-      items: [{
-        item_id: String(product.id),
-        item_name: String(product.title),
-        item_brand: product.brand?.name || undefined,
-        item_category: product.category?.name || undefined,
-        item_variant: option ? option.name : undefined,
-        price: Number(targetPrice),
-        quantity: option ? 1 : quantity
-      }]
-    });
-
-    trackClarityEvent('product_added_to_cart');
-  }
-
-  const vendorNameSuffix = hideVendors ? '' : (!winnerIsCollectibles ? ` (Vendido por ${winnerVendorName})` : '');
-  const seoTitle = (product.seo_title || `${product.title} - Comprar Online`) + vendorNameSuffix;
-  const seoDescription = (product.seo_description || product.short_description || product.title) + (hideVendors ? '' : (!winnerIsCollectibles ? ` - Vendido por ${winnerVendorName} en Collectibles.` : ''));
-  const productUrl = typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '';
-  const productSchema: any = {
-    "@context": "https://schema.org/",
-    "@type": "Product",
-    "name": seoTitle,
-    "image": [displayImage],
-    "description": seoDescription,
-    "sku": selectedVariant?.sku || product.id,
-    "brand": {
-      "@type": "Brand",
-      "name": product.brand?.name || "Generic"
-    },
-    "url": productUrl,
-    "offers": {
-      "@type": "Offer",
-      "url": productUrl,
-      "priceCurrency": "UYU",
-      "price": finalPrice,
-      "availability": stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
-      "itemCondition": "https://schema.org/NewCondition",
-      "seller": {
-        "@type": "Organization",
-        "name": winnerVendorName
-      }
     }
   };
 
-  if (reviews && reviews.length > 0) {
-    productSchema.aggregateRating = {
-      "@type": "AggregateRating",
-      "ratingValue": avgRating.toFixed(1),
-      "reviewCount": reviews.length
-    };
-    productSchema.review = reviews.slice(0, 5).map((r: any) => ({
-      "@type": "Review",
-      "author": { "@type": "Person", "name": r.user_name || "Anónimo" },
-      "datePublished": new Date(r.created_at).toISOString().split('T')[0],
-      "reviewBody": r.body,
-      "reviewRating": { "@type": "Rating", "bestRating": "5", "ratingValue": r.rating, "worstRating": "1" }
-    }));
-  }
-
-  const breadcrumbElements = [
-    { "@type": "ListItem", "position": 1, "name": "Inicio", "item": "https://collectibles.uy/" }
-  ];
-  if (product.category) {
-    breadcrumbElements.push({
-      "@type": "ListItem",
-      "position": 2,
-      "name": product.category.name,
-      "item": `https://collectibles.uy/categoria/${product.category.slug}`
-    });
-    breadcrumbElements.push({
-      "@type": "ListItem",
-      "position": 3,
-      "name": product.title,
-      "item": productUrl
-    });
-  } else {
-    breadcrumbElements.push({
-      "@type": "ListItem",
-      "position": 2,
-      "name": product.title,
-      "item": productUrl
-    });
-  }
-  const breadcrumbSchema = {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    "itemListElement": breadcrumbElements
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    setMousePos({ x, y });
   };
+
+  const reviews = product.reviews || [];
+
+  const seoTitle = `${product.title} | Collectibles.uy`;
+  const seoDescription = product.description
+    ? sanitizeProductDescription(product.description).slice(0, 155)
+    : `Comprar ${product.title} en Collectibles.uy. Envío a todo Uruguay.`;
 
   return (
     <div className="max-w-[1500px] mx-auto px-4 sm:px-6 py-6 md:py-10">
@@ -469,27 +272,27 @@ export default function ProductDetail() {
         description={seoDescription}
         image={displayImage}
         type="product"
-        schema={[productSchema, breadcrumbSchema]}
       />
       <AdminTechnicalPanel product={product} />
 
-      <nav className="flex items-center text-[11px] font-black uppercase tracking-[0.2em] text-slate-500 mb-6 flex-wrap gap-2">
-        <Link to="/" className="hover:text-primary-500 transition-colors">Inicio</Link>
-        <span className="opacity-30">/</span>
+      {/* BREADCRUMB (Requirement 12) */}
+      <nav className="flex items-center text-xs font-bold uppercase tracking-wider text-slate-400 mb-8 flex-wrap gap-2.5">
+        <Link to="/" className="hover:text-white transition-colors">Inicio</Link>
+        <span className="text-slate-600">/</span>
         {product.category && (
           <>
-            <Link to={`/categoria/${product.category.slug}`} className="hover:text-primary-500 transition-colors">{product.category.name}</Link>
-            <span className="opacity-30">/</span>
+            <Link to={`/categoria/${product.category.slug}`} className="hover:text-white transition-colors">{product.category.name}</Link>
+            <span className="text-slate-600">/</span>
           </>
         )}
         <span className="text-white line-clamp-1">{product.title}</span>
       </nav>
 
       <div className="grid lg:grid-cols-[1.25fr_1fr] gap-8 lg:gap-14 items-start">
-        {/* GALLERY SECTION */}
+        {/* GALLERY SECTION (Requirement 10 & 11) */}
         <section className="flex flex-col gap-4 lg:sticky lg:top-28">
           <div
-            className="w-full aspect-square max-h-[660px] rounded-3xl bg-white flex items-center justify-center relative overflow-hidden group cursor-crosshair border border-white/10 shadow-2xl p-4 sm:p-8 transition-all duration-300"
+            className="w-full aspect-square max-h-[660px] rounded-3xl bg-white flex items-center justify-center relative overflow-hidden group cursor-crosshair border border-white/10 shadow-2xl p-3 sm:p-6 transition-all duration-300"
             onMouseMove={handleMouseMove}
             onMouseEnter={() => setIsHovering(true)}
             onMouseLeave={() => setIsHovering(false)}
@@ -531,7 +334,7 @@ export default function ProductDetail() {
             )}
           </div>
 
-          {/* GALLERY THUMBNAILS */}
+          {/* GALLERY THUMBNAILS (Requirement 11) */}
           {images.length > 1 && (
             <div className="grid grid-cols-5 gap-3 mt-1">
               {images.map((img: any, i: number) => {
@@ -541,7 +344,7 @@ export default function ProductDetail() {
                     key={img.id || i}
                     onClick={() => setSelectedImage(i)}
                     onMouseEnter={() => setSelectedImage(i)}
-                    className={`relative rounded-2xl aspect-square overflow-hidden transition-all duration-200 bg-white ${
+                    className={`relative rounded-2xl aspect-square overflow-hidden transition-all duration-200 bg-white cursor-pointer hover:scale-105 ${
                       i === selectedImage
                         ? 'ring-2 ring-[#f00856] ring-offset-2 ring-offset-[#05070f] scale-[0.98] opacity-100 shadow-md'
                         : 'border border-white/10 opacity-60 hover:opacity-100 hover:border-white/30'
@@ -555,19 +358,19 @@ export default function ProductDetail() {
           )}
         </section>
 
-        {/* INFO SECTION - REORGANIZED EXACTLY AS REQUESTED */}
+        {/* INFO SECTION */}
         <section className="space-y-6">
-          {/* 1. CABECERA / TÍTULO */}
+          {/* TÍTULO */}
           <div>
-            <div className="flex items-center gap-2 flex-wrap mb-3">
-              <span className="text-[10px] uppercase font-black tracking-[0.2em] text-[#f00856] bg-[#f00856]/10 px-3.5 py-1.5 rounded-full border border-[#f00856]/20">
+            <div className="flex items-center gap-2 flex-wrap mb-2">
+              <span className="text-[10px] uppercase font-black tracking-[0.2em] text-[#f00856] bg-[#f00856]/10 px-3 py-1 rounded-full border border-[#f00856]/20">
                 {settings['product_tag_label'] || 'Ficha de producto'}
               </span>
 
               {applicablePromos.map(promo => promo.badge_text && (
                 <span 
                   key={promo.id}
-                  className="px-3.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full text-white shadow-sm"
+                  className="px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-full text-white shadow-sm"
                   style={{ 
                     backgroundColor: promo.badge_bg || '#f00856', 
                     color: promo.badge_color || '#ffffff' 
@@ -576,218 +379,172 @@ export default function ProductDetail() {
                   {promo.badge_text}
                 </span>
               ))}
+            </div>
 
-              {product.source_provider === 'zinc' && product.international_products?.amazon_discount_percent > 0 && (
-                <span className="px-3.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full text-white bg-[#f00856]">
-                  {product.international_products?.amazon_discount_percent > 40 ? '🔥 Liquidación' : '🔥 Oferta Amazon'}
-                </span>
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black leading-[1.15] tracking-tight text-white mt-2">
+              {product.title}
+            </h1>
+          </div>
+
+          {/* 1. BLOQUE DE PRECIO (PRIORIDAD MÁXIMA - Requirement 1 & 13) */}
+          <div className="pt-4 border-t border-white/10 space-y-3">
+            <div className="text-[10px] uppercase text-slate-400 font-black tracking-widest">Precio actual</div>
+            <div className="flex items-baseline gap-4 flex-wrap">
+              <span className="text-4xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight">
+                {formatCurrencyPrice(displayPrice)}
+              </span>
+              {hasDiscount && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xl sm:text-2xl text-slate-500 line-through font-bold">
+                    {formatCurrencyPrice(displayOldPrice)}
+                  </span>
+                  <span className="bg-[#f00856]/15 text-[#f00856] text-xs font-black px-2.5 py-1 rounded-md uppercase border border-[#f00856]/30">
+                    {discountPercent}% OFF
+                  </span>
+                </div>
               )}
             </div>
 
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black leading-[1.15] tracking-tight text-white">
-              {product.title}
-            </h1>
-            
-            {/* Reviews — only show if there are real reviews */}
-            {reviews.length > 0 && (
-              <div className="flex items-center gap-3 mt-3">
-                <div className="flex gap-1">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className={`w-4 h-4 ${i < Math.round(avgRating) ? 'fill-yellow-400 text-yellow-400' : 'text-slate-700'}`} />
-                  ))}
-                </div>
-                <span className="text-xs font-bold text-slate-400">{reviews.length} valoraciones de compradores</span>
-              </div>
-            )}
-          </div>
-
-          {/* 2. PRECIO & ESTADO DEL PRODUCTO */}
-          <div className="pt-4 border-t border-white/10 space-y-4">
-            <div className="flex items-baseline justify-between flex-wrap gap-4">
-              <div>
-                {product.source_provider === 'zinc' ? (
-                  <div>
-                    {product.international_products?.amazon_list_price_usd && (
-                      <div className="text-sm text-slate-400 font-bold flex items-center gap-2 mb-1">
-                        <span className="line-through">{formatUSD(product.international_products?.amazon_list_price_usd)}</span>
-                        <span className="text-red-400 bg-red-500/10 px-2 py-0.5 rounded text-[10px] uppercase font-black">{product.international_products?.amazon_discount_percent}% OFF</span>
-                      </div>
-                    )}
-                    <div className="text-4xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight">
-                      {formatCurrencyPrice(displayPrice)}
-                    </div>
-                    <div className="text-xs text-slate-400 mt-1 flex items-center gap-2">
-                      <span>Precio producto: {formatUSD(intlProduct?.final_price_usd || product.base_price)}</span>
-                      <span>+ Est. Urubox: {formatUSD(uruboxEstimatedCost)}</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <div className="text-[10px] uppercase text-slate-400 font-bold tracking-widest mb-1">Precio actual</div>
-                    <div className="text-4xl sm:text-5xl lg:text-6xl font-black text-white flex items-baseline gap-3 flex-wrap tracking-tight">
-                      <span>{formatCurrencyPrice(displayPrice)}</span>
-                      {hasDiscount && (
-                        <span className="text-xl sm:text-2xl text-slate-400 line-through font-semibold">
-                          {formatCurrencyPrice(displayOldPrice)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* ESTADO DEL PRODUCTO (STOCK BADGE) */}
-              <div className={`text-xs font-bold px-3.5 py-1.5 rounded-full border bg-white/[0.03] flex items-center gap-2 ${stockInfo.className}`}>
+            {/* BADGES DE CONFIANZA Y ATRIBUTOS REALES (Requirement 13) */}
+            <div className="flex items-center gap-2 flex-wrap pt-1">
+              <div className={`text-xs font-bold px-3 py-1 rounded-full border bg-white/[0.03] flex items-center gap-2 ${stockInfo.className}`}>
                 <span className="w-2 h-2 rounded-full bg-current shadow-[0_0_8px_currentColor]" />
                 {stockInfo.text}
               </div>
+
+              {product.source_provider === 'zinc' && (
+                <span className="text-xs font-bold px-3 py-1 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-300">
+                  ✈ Importado USA
+                </span>
+              )}
+              {product.brand?.name && (
+                <span className="text-xs font-bold px-3 py-1 rounded-full border border-white/10 bg-white/[0.03] text-slate-300">
+                  Original · {product.brand.name}
+                </span>
+              )}
             </div>
+          </div>
 
-            {/* VARIANT SELECTOR (SI EXISTE) */}
-            {variants.length > 1 && (
-              <div>
-                <div className="text-[10px] uppercase text-slate-400 font-bold tracking-wider mb-2">Variante</div>
-                <div className="flex flex-wrap gap-2">
-                  {variants.map((v: any, idx: number) => (
-                    <button
-                      key={v.id}
-                      onClick={() => { setSelectedVariantIdx(idx); setQuantity(1); }}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
-                        selectedVariantIdx === idx
-                          ? 'border-[#f00856] bg-[#f00856]/10 text-white'
-                          : 'border-white/10 text-slate-400 hover:border-white/20 hover:text-white bg-white/[0.02]'
-                      }`}
-                    >
-                      {v.name}
-                      {v.price_adjustment > 0 && <span className="ml-1 text-[10px] opacity-70">(+${v.price_adjustment})</span>}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* 3. CANTIDAD & BOTONES COMPRAR / AGREGAR AL CARRITO */}
-            <div className="space-y-3 pt-2">
-              {/* SELECTOR DE CANTIDAD */}
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Cantidad</span>
-                <div className="flex items-center justify-between border border-white/10 bg-white/[0.03] rounded-xl h-11 w-36">
+          {/* VARIANT SELECTOR */}
+          {variants.length > 1 && (
+            <div className="pt-2 border-t border-white/10">
+              <div className="text-[10px] uppercase text-slate-400 font-bold tracking-wider mb-2">Variante</div>
+              <div className="flex flex-wrap gap-2">
+                {variants.map((v: any, idx: number) => (
                   <button
-                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="w-11 h-full flex items-center justify-center hover:bg-white/10 transition-colors text-slate-300 hover:text-white"
-                    disabled={quantity <= 1}
+                    key={v.id}
+                    onClick={() => { setSelectedVariantIdx(idx); setQuantity(1); }}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+                      selectedVariantIdx === idx
+                        ? 'border-[#f00856] bg-[#f00856]/10 text-white'
+                        : 'border-white/10 text-slate-400 hover:border-white/20 hover:text-white bg-white/[0.02]'
+                    }`}
                   >
-                    <Minus className="w-4 h-4" />
+                    {v.name}
+                    {v.price_adjustment > 0 && <span className="ml-1 text-[10px] opacity-70">(+${v.price_adjustment})</span>}
                   </button>
-                  <span className="font-black text-base text-white">{quantity}</span>
-                  <button
-                    onClick={() => setQuantity(Math.min(stock, quantity + 1))}
-                    className="w-11 h-full flex items-center justify-center hover:bg-white/10 transition-colors text-slate-300 hover:text-white"
-                    disabled={quantity >= stock}
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </div>
+                ))}
               </div>
+            </div>
+          )}
 
-              {/* BOTÓN COMPRAR (CTA PRINCIPAL) */}
-              <button
-                id="main-buy-now"
-                onClick={() => addToCart(undefined, true)}
-                disabled={stock <= 0}
-                className={`w-full py-4.5 rounded-2xl flex items-center justify-center gap-2.5 text-base uppercase tracking-widest font-black transition-all bg-[#f00856] text-white shadow-xl shadow-[#f00856]/30 hover:bg-[#d00749] hover:shadow-[#f00856]/50 hover:-translate-y-0.5 cursor-pointer ${
-                  stock <= 0 ? 'opacity-50 cursor-not-allowed bg-slate-800 shadow-none' : ''
-                }`}
-              >
-                <Zap className="w-5 h-5" />
-                {stock <= 0 ? 'Sin Stock' : 'Comprar ahora'}
-              </button>
-
-              {/* BOTÓN AGREGAR AL CARRITO (CTA SECUNDARIO) */}
-              <button
-                id="main-add-to-cart"
-                onClick={() => addToCart()}
-                disabled={stock <= 0}
-                className={`w-full py-3.5 rounded-2xl flex items-center justify-center gap-2 text-xs uppercase tracking-widest font-bold transition-all border border-white/20 text-white bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/40 cursor-pointer ${
-                  stock <= 0 ? 'opacity-50 cursor-not-allowed border-white/5' : ''
-                } ${addedToCart ? 'bg-green-500/20 border-green-500 text-green-400' : ''}`}
-              >
-                <ShoppingCart className="w-4 h-4" />
-                {addedToCart ? '✓ Agregado al carrito' : 'Agregar al carrito'}
-              </button>
-
-              {/* FAVORITOS */}
-              <div className="flex justify-center pt-1">
+          {/* 2. BOTONES DE COMPRA (Requirement 2) */}
+          <div className="space-y-3 pt-3 border-t border-white/10">
+            {/* QUANTITY SELECTOR */}
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Cantidad</span>
+              <div className="flex items-center justify-between border border-white/10 bg-white/[0.03] rounded-xl h-11 w-36">
                 <button
-                  onClick={() => {
-                    const isAdding = !isInWishlist(product.id);
-                    toggleWishlist(product);
-                    if (isAdding) {
-                      trackGA4Event('add_to_wishlist', {
-                        currency: 'UYU',
-                        value: product.base_price,
-                        items: [{
-                          item_id: String(product.id),
-                          item_name: String(product.title),
-                          item_brand: product.brand?.name || undefined,
-                          item_category: product.category?.name || undefined,
-                          price: Number(product.base_price),
-                          quantity: 1
-                        }]
-                      });
-                    }
-                  }}
-                  className="inline-flex items-center gap-2 text-xs font-medium text-slate-400 hover:text-white transition-colors py-1 cursor-pointer"
+                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                  className="w-11 h-full flex items-center justify-center hover:bg-white/10 transition-colors text-slate-300 hover:text-white"
+                  disabled={quantity <= 1}
                 >
-                  <Heart className={`w-4 h-4 transition-colors ${isInWishlist(product.id) ? 'fill-[#f00856] text-[#f00856]' : 'text-slate-400'}`} />
-                  <span>{isInWishlist(product.id) ? 'Quitar de favoritos' : 'Agregar a favoritos'}</span>
+                  <Minus className="w-4 h-4" />
+                </button>
+                <span className="font-black text-base text-white">{quantity}</span>
+                <button
+                  onClick={() => setQuantity(Math.min(stock, quantity + 1))}
+                  className="w-11 h-full flex items-center justify-center hover:bg-white/10 transition-colors text-slate-300 hover:text-white"
+                  disabled={quantity >= stock}
+                >
+                  <Plus className="w-4 h-4" />
                 </button>
               </div>
             </div>
-          </div>
 
-          {/* 4. BLOQUE VENDEDOR */}
-          <div className="pt-2 border-t border-white/10">
-            <SoldByCard 
-              vendorId={winnerIsCollectibles ? undefined : (winnerVendorId || product.vendor_id || undefined)} 
-              vendorName={winnerVendorName} 
-              vendorLogo={winnerIsCollectibles ? undefined : (bbWinner?.vendor_store_logo || product.vendor_store?.logo_url || product.vendor?.logo_url)}
-              vendorSlug={winnerIsCollectibles ? undefined : (bbWinner?.vendor_store_slug || product.vendor_store?.slug || product.vendor?.slug)}
-              badges={winnerIsCollectibles ? [] : (bbWinner?.vendor_store_badges || (product.vendor_store?.vendor_store_badge_assignments?.filter((x: any) => x.status === 'active' && x.approved_by && x.approved_at).map((x: any) => x.vendor_store_badges).filter(Boolean) || []))}
-            />
-          </div>
+            {/* BOTÓN COMPRAR AHORA (CTA PRINCIPAL) */}
+            <button
+              id="main-buy-now"
+              onClick={() => addToCart(undefined, true)}
+              disabled={stock <= 0}
+              className={`w-full py-4 sm:py-4.5 rounded-2xl flex items-center justify-center gap-2.5 text-base uppercase tracking-widest font-black transition-all bg-[#f00856] text-white shadow-xl shadow-[#f00856]/30 hover:bg-[#d00749] hover:shadow-[#f00856]/50 hover:-translate-y-0.5 cursor-pointer ${
+                stock <= 0 ? 'opacity-50 cursor-not-allowed bg-slate-800 shadow-none' : ''
+              }`}
+            >
+              <Zap className="w-5 h-5" />
+              {stock <= 0 ? 'Sin Stock' : 'Comprar ahora'}
+            </button>
 
-          {/* 5. BLOQUE ENVÍOS */}
-          <div className="pt-2 border-t border-white/10">
-            <ProductShippingBlock
-              product={product}
-              vendorId={winnerIsCollectibles ? null : (winnerVendorId || product.vendor_id || null)}
-              vendorName={winnerVendorName}
-              vendorShippingSettings={winnerIsCollectibles ? null : (product?.vendor?.shipping_settings || null)}
-              isCollectibles={winnerIsCollectibles}
-            />
-          </div>
+            {/* BOTÓN AGREGAR AL CARRITO (CTA SECUNDARIO) */}
+            <button
+              id="main-add-to-cart"
+              onClick={() => addToCart()}
+              disabled={stock <= 0}
+              className={`w-full py-3.5 rounded-2xl flex items-center justify-center gap-2 text-xs uppercase tracking-widest font-bold transition-all border border-white/20 text-white bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/40 cursor-pointer ${
+                stock <= 0 ? 'opacity-50 cursor-not-allowed border-white/5' : ''
+              } ${addedToCart ? 'bg-green-500/20 border-green-500 text-green-400' : ''}`}
+            >
+              <ShoppingCart className="w-4 h-4" />
+              {addedToCart ? '✓ Agregado al carrito' : 'Agregar al carrito'}
+            </button>
 
-          {/* 6. BLOQUE GARANTÍA / CONFIANZA */}
-          <div className="grid grid-cols-3 gap-2.5 pt-2 border-t border-white/10">
-            <div className="rounded-xl p-3 bg-white/[0.02] border border-white/5 text-center">
-              <b className="text-white block text-xs font-bold">{settings['product_trust_title_1'] || '⚡ Entrega'}</b>
-              <p className="text-[10px] text-slate-400 mt-0.5 font-medium">{settings['product_trust_desc_1'] || '24-48 horas'}</p>
+            {/* FAVORITOS */}
+            <div className="flex justify-center pt-1">
+              <button
+                onClick={() => toggleWishlist(product)}
+                className="inline-flex items-center gap-2 text-xs font-medium text-slate-400 hover:text-white transition-colors py-1 cursor-pointer"
+              >
+                <Heart className={`w-4 h-4 transition-colors ${isInWishlist(product.id) ? 'fill-[#f00856] text-[#f00856]' : 'text-slate-400'}`} />
+                <span>{isInWishlist(product.id) ? 'Quitar de favoritos' : 'Agregar a favoritos'}</span>
+              </button>
             </div>
-            <div className="rounded-xl p-3 bg-white/[0.02] border border-white/5 text-center">
-              <b className="text-white block text-xs font-bold">{settings['product_trust_title_2'] || '✅ Estado'}</b>
-              <p className="text-[10px] text-slate-400 mt-0.5 font-medium">{settings['product_trust_desc_2'] || 'Nuevo / Sellado'}</p>
+          </div>
+
+          {/* 3. BLOQUE DEL VENDEDOR (Requirement 3) */}
+          <SoldByCard 
+            vendorId={winnerIsCollectibles ? undefined : (winnerVendorId || product.vendor_id || undefined)} 
+            vendorName={winnerVendorName} 
+            vendorLogo={winnerIsCollectibles ? undefined : (bbWinner?.vendor_store_logo || product.vendor_store?.logo_url || product.vendor?.logo_url)}
+            vendorSlug={winnerIsCollectibles ? undefined : (bbWinner?.vendor_store_slug || product.vendor_store?.slug || product.vendor?.slug)}
+            badges={winnerIsCollectibles ? [] : (bbWinner?.vendor_store_badges || (product.vendor_store?.vendor_store_badge_assignments?.filter((x: any) => x.status === 'active' && x.approved_by && x.approved_at).map((x: any) => x.vendor_store_badges).filter(Boolean) || []))}
+          />
+
+          {/* 4. REDISEÑO BLOQUE ENVÍOS (Requirement 4) */}
+          <ProductShippingBlock
+            product={product}
+            vendorId={winnerIsCollectibles ? null : (winnerVendorId || product.vendor_id || null)}
+            vendorName={winnerVendorName}
+            vendorShippingSettings={winnerIsCollectibles ? null : (product?.vendor?.shipping_settings || null)}
+            isCollectibles={winnerIsCollectibles}
+          />
+
+          {/* 5. BLOQUE "¿POR QUÉ COMPRAR EN COLLECTIBLES?" (Requirement 5) */}
+          <div className="grid grid-cols-3 gap-2 py-3.5 border-t border-white/10 text-center">
+            <div className="text-xs font-bold text-slate-300">
+              <span className="text-emerald-400 font-black mr-1">✓</span> Productos originales
             </div>
-            <div className="rounded-xl p-3 bg-white/[0.02] border border-white/5 text-center">
-              <b className="text-white block text-xs font-bold">{settings['product_trust_title_3'] || '🔄 Devolución'}</b>
-              <p className="text-[10px] text-slate-400 mt-0.5 font-medium">{settings['product_trust_desc_3'] || '14 días gratis'}</p>
+            <div className="text-xs font-bold text-slate-300">
+              <span className="text-emerald-400 font-black mr-1">✓</span> Compra segura
+            </div>
+            <div className="text-xs font-bold text-slate-300">
+              <span className="text-emerald-400 font-black mr-1">✓</span> Atención especializada
             </div>
           </div>
         </section>
       </div>
 
-      {/* DESKTOP DESCRIPTION & TECHNICAL SPECS SECTION */}
-      <section className="hidden lg:grid grid-cols-[1.2fr_0.8fr] gap-12 mt-16 pt-12 border-t border-white/10">
+      {/* 6 & 7. DESCRIPCIÓN Y ESPECIFICACIONES (Requirement 6 & 7) */}
+      <section className="hidden lg:grid grid-cols-[1.25fr_1fr] gap-14 mt-14 pt-10 border-t border-white/10">
         <div>
           <span className="text-[10px] uppercase font-black tracking-[0.2em] text-[#f00856]">Detalles</span>
           <h2 className="text-2xl md:text-3xl font-black mt-1 text-white tracking-tight">{settings['product_history_title'] || 'Descripción del producto'}</h2>
@@ -826,9 +583,8 @@ export default function ProductDetail() {
         </div>
       </section>
 
-      {/* MOBILE ACCORDIONS (lg:hidden) */}
+      {/* MOBILE ACCORDIONS */}
       <section className="lg:hidden mt-10 space-y-3">
-        {/* Accordion 1: Description */}
         <div className="rounded-2xl overflow-hidden border border-white/10 bg-white/[0.02]">
           <button
             type="button"
@@ -837,7 +593,7 @@ export default function ProductDetail() {
           >
             <div>
               <span className="text-[10px] uppercase font-bold text-[#f00856]">Detalles</span>
-              <h3 className="text-base font-black text-white uppercase tracking-tight">{settings['product_history_title'] || 'Descripción del producto'}</h3>
+              <h3 className="text-base font-black text-white uppercase tracking-tight">Descripción del producto</h3>
             </div>
             <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${openMobileTab === 'description' ? 'rotate-180 text-[#f00856]' : ''}`} />
           </button>
@@ -846,13 +602,12 @@ export default function ProductDetail() {
               {product.description ? (
                 <p>{sanitizeProductDescription(product.description)}</p>
               ) : (
-                <p>{settings['product_history_default_text'] || 'Cada detalle ha sido verificado para garantizar su autenticidad y estado. Contexto del personaje, rareza, franquicia y valor para coleccionistas.'}</p>
+                <p>Cada detalle ha sido verificado para garantizar su autenticidad y estado.</p>
               )}
             </div>
           )}
         </div>
 
-        {/* Accordion 2: Specs */}
         <div className="rounded-2xl overflow-hidden border border-white/10 bg-white/[0.02]">
           <button
             type="button"
@@ -861,7 +616,7 @@ export default function ProductDetail() {
           >
             <div>
               <span className="text-[10px] uppercase font-bold text-[#f00856]">Ficha Técnica</span>
-              <h3 className="text-base font-black text-white uppercase tracking-tight">{settings['product_specs_title'] || 'Especificaciones'}</h3>
+              <h3 className="text-base font-black text-white uppercase tracking-tight">Especificaciones</h3>
             </div>
             <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${openMobileTab === 'specs' ? 'rotate-180 text-[#f00856]' : ''}`} />
           </button>
@@ -890,42 +645,59 @@ export default function ProductDetail() {
         </div>
       </section>
 
-      {/* REVIEWS SECTION */}
-      <section className="mt-16 border-t border-white/10 pt-16">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
+      {/* 8. PRODUCTOS RELACIONADOS (Requirement 8) */}
+      <RelatedProductsSection
+        currentProductId={product.id}
+        categorySlug={product.category?.slug}
+      />
+
+      {/* 9. RESEÑAS / REVIEWS (Requirement 9) */}
+      <section className="mt-14 border-t border-white/10 pt-10">
+        <div className="flex justify-between items-center mb-6">
           <div>
-            <div className="label-tag">{settings['product_reviews_label'] || 'Opiniones de compradores'}</div>
-            <h2 className="text-4xl font-black mt-2 text-white">{settings['product_reviews_title'] || 'Lo que dicen los coleccionistas'}</h2>
+            <span className="text-[10px] uppercase font-black tracking-[0.2em] text-[#f00856]">Opiniones</span>
+            <h2 className="text-2xl md:text-3xl font-black mt-1 text-white tracking-tight">Lo que dicen los compradores</h2>
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {reviews.length === 0 ? (
-            <div className="md:col-span-2 lg:col-span-3 rounded-3xl p-10 text-center bg-white/[0.02] border border-white/5">
-               <Star className="w-10 h-10 text-slate-700 mx-auto mb-3" />
-               <p className="text-slate-400 font-bold">Aún no hay reseñas para este producto.</p>
-               <p className="text-xs text-slate-500 mt-1">Sé el primero en compartir tu experiencia.</p>
+        {reviews.length === 0 ? (
+          <div className="py-5 px-6 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex gap-1 text-yellow-400">
+                <Star className="w-4 h-4 fill-yellow-400" />
+                <Star className="w-4 h-4 fill-yellow-400" />
+                <Star className="w-4 h-4 fill-yellow-400" />
+                <Star className="w-4 h-4 fill-yellow-400" />
+                <Star className="w-4 h-4 fill-yellow-400" />
+              </div>
+              <span className="text-xs sm:text-sm font-bold text-slate-300">
+                Todavía no hay opiniones para este producto.
+              </span>
             </div>
-          ) : (
-            reviews.map((r: any) => (
-              <div key={r.id} className="rounded-3xl p-6 bg-white/[0.02] border border-white/5 hover:border-[#f00856]/30 transition-all group">
-                <div className="flex items-center gap-1 mb-3">
+            <span className="text-xs font-bold text-[#f00856]">
+              Sé el primero en escribir una
+            </span>
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {reviews.map((r: any) => (
+              <div key={r.id} className="rounded-2xl p-5 bg-white/[0.02] border border-white/5 hover:border-[#f00856]/30 transition-all group">
+                <div className="flex items-center gap-1 mb-2">
                   {[...Array(5)].map((_, i) => (
                     <Star key={i} className={`w-3.5 h-3.5 ${i < r.rating ? 'fill-yellow-400 text-yellow-400' : 'text-slate-700'}`} />
                   ))}
                 </div>
-                <p className="text-white font-black mb-2 group-hover:text-[#f00856] transition-colors">{r.title || 'Reseña de coleccionista'}</p>
-                <p className="text-sm text-slate-400 leading-relaxed mb-4 line-clamp-3">{r.body}</p>
-                <div className="flex items-center gap-3 mt-auto pt-4 border-t border-white/5">
-                  <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-[10px] font-black text-slate-400">
-                    {r.user_name?.[0] || 'U'}
-                  </div>
-                  <span className="text-xs font-bold text-slate-500">{r.user_name || 'Anónimo'} · {new Date(r.created_at).toLocaleDateString()}</span>
+                <p className="text-white font-black text-sm mb-1 group-hover:text-[#f00856] transition-colors">{r.title || 'Reseña de coleccionista'}</p>
+                <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">{r.body}</p>
+                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-white/5 text-[11px] text-slate-500 font-bold">
+                  <span>{r.user_name || 'Anónimo'}</span>
+                  <span>·</span>
+                  <span>{new Date(r.created_at).toLocaleDateString()}</span>
                 </div>
               </div>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* MOBILE STICKY BUY BAR */}
