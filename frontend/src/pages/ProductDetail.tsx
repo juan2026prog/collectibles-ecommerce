@@ -456,7 +456,6 @@ export default function ProductDetail() {
       "item": productUrl
     });
   }
-
   const breadcrumbSchema = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
@@ -464,7 +463,7 @@ export default function ProductDetail() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-10">
+    <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-6 md:py-10">
       <SEO
         title={seoTitle}
         description={seoDescription}
@@ -474,7 +473,7 @@ export default function ProductDetail() {
       />
       <AdminTechnicalPanel product={product} />
 
-      <nav className="flex items-center text-[11px] font-black uppercase tracking-[0.2em] text-slate-500 mb-8 flex-wrap gap-2">
+      <nav className="flex items-center text-[11px] font-black uppercase tracking-[0.2em] text-slate-500 mb-6 flex-wrap gap-2">
         <Link to="/" className="hover:text-primary-500 transition-colors">Inicio</Link>
         <span className="opacity-30">/</span>
         {product.category && (
@@ -486,11 +485,11 @@ export default function ProductDetail() {
         <span className="text-white line-clamp-1">{product.title}</span>
       </nav>
 
-      <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-8 lg:gap-12 items-start">
+      <div className="grid lg:grid-cols-[1.2fr_1fr] gap-8 lg:gap-14 items-start">
         {/* GALLERY SECTION */}
-        <section className="flex flex-col gap-4 lg:sticky lg:top-8">
+        <section className="flex flex-col gap-4 lg:sticky lg:top-28">
           <div
-            className="w-full aspect-square md:h-[500px] lg:h-[540px] rounded-3xl bg-white flex items-center justify-center relative overflow-hidden group cursor-crosshair border border-white/10 shadow-2xl transition-all duration-300"
+            className="w-full aspect-square max-h-[620px] rounded-3xl bg-white flex items-center justify-center relative overflow-hidden group cursor-crosshair border border-white/10 shadow-2xl p-6 sm:p-10 transition-all duration-300"
             onMouseMove={handleMouseMove}
             onMouseEnter={() => setIsHovering(true)}
             onMouseLeave={() => setIsHovering(false)}
@@ -499,7 +498,7 @@ export default function ProductDetail() {
             onTouchEnd={handleTouchEnd}
           >
             {groupBadge && (
-              <div className="absolute top-5 left-5 z-20 w-14 h-14 md:w-16 md:h-16 pointer-events-none drop-shadow-md select-none">
+              <div className="absolute top-5 left-5 z-20 w-16 h-16 pointer-events-none drop-shadow-md select-none">
                 <img
                   src={groupBadge.url}
                   alt={groupBadge.alt}
@@ -511,7 +510,7 @@ export default function ProductDetail() {
               src={displayImage}
               alt={product.title}
               referrerPolicy="no-referrer"
-              className={`max-w-[82%] max-h-[82%] object-contain mix-blend-multiply transition-all duration-500 ease-out ${isHovering ? 'scale-105' : 'scale-100'}`}
+              className={`w-full h-full max-h-[540px] object-contain mix-blend-multiply transition-all duration-500 ease-out ${isHovering ? 'scale-105' : 'scale-100'}`}
             />
             
             {/* Magnifier Lens */}
@@ -521,11 +520,11 @@ export default function ProductDetail() {
                 style={{
                   left: `${mousePos.x}%`,
                   top: `${mousePos.y}%`,
-                  width: '280px',
-                  height: '280px',
+                  width: '300px',
+                  height: '300px',
                   transform: 'translate(-50%, -50%)',
                   backgroundImage: `url(${displayImage})`,
-                  backgroundSize: '240%',
+                  backgroundSize: '250%',
                   backgroundPosition: `${mousePos.x}% ${mousePos.y}%`,
                 }}
               />
@@ -534,7 +533,7 @@ export default function ProductDetail() {
 
           {/* GALLERY THUMBNAILS */}
           {images.length > 1 && (
-            <div className="grid grid-cols-4 sm:grid-cols-5 gap-3 mt-1">
+            <div className="grid grid-cols-5 gap-3 mt-1">
               {images.map((img: any, i: number) => {
                 const src = resolveImage(img.url);
                 return (
@@ -557,18 +556,18 @@ export default function ProductDetail() {
         </section>
 
         {/* INFO SECTION - REORGANIZED EXACTLY AS REQUESTED */}
-        <section className="space-y-5">
-          {/* 1. TÍTULO */}
+        <section className="space-y-6">
+          {/* 1. CABECERA / TÍTULO */}
           <div>
-            <div className="flex items-center gap-2 flex-wrap mb-2">
-              <span className="text-[10px] uppercase font-black tracking-[0.2em] text-[#f00856] bg-[#f00856]/10 px-3 py-1 rounded-full border border-[#f00856]/20">
+            <div className="flex items-center gap-2 flex-wrap mb-3">
+              <span className="text-[10px] uppercase font-black tracking-[0.2em] text-[#f00856] bg-[#f00856]/10 px-3.5 py-1.5 rounded-full border border-[#f00856]/20">
                 {settings['product_tag_label'] || 'Ficha de producto'}
               </span>
 
               {applicablePromos.map(promo => promo.badge_text && (
                 <span 
                   key={promo.id}
-                  className="px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-full text-white shadow-sm"
+                  className="px-3.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full text-white shadow-sm"
                   style={{ 
                     backgroundColor: promo.badge_bg || '#f00856', 
                     color: promo.badge_color || '#ffffff' 
@@ -579,13 +578,13 @@ export default function ProductDetail() {
               ))}
 
               {product.source_provider === 'zinc' && product.international_products?.amazon_discount_percent > 0 && (
-                <span className="px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-full text-white bg-[#f00856]">
+                <span className="px-3.5 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-full text-white bg-[#f00856]">
                   {product.international_products?.amazon_discount_percent > 40 ? '🔥 Liquidación' : '🔥 Oferta Amazon'}
                 </span>
               )}
             </div>
 
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-black leading-[1.15] tracking-tight text-white">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black leading-[1.15] tracking-tight text-white">
               {product.title}
             </h1>
             
@@ -603,7 +602,7 @@ export default function ProductDetail() {
           </div>
 
           {/* 2. PRECIO & ESTADO DEL PRODUCTO */}
-          <div className="pt-3 border-t border-white/10 space-y-4">
+          <div className="pt-4 border-t border-white/10 space-y-4">
             <div className="flex items-baseline justify-between flex-wrap gap-4">
               <div>
                 {product.source_provider === 'zinc' ? (
@@ -614,7 +613,7 @@ export default function ProductDetail() {
                         <span className="text-red-400 bg-red-500/10 px-2 py-0.5 rounded text-[10px] uppercase font-black">{product.international_products?.amazon_discount_percent}% OFF</span>
                       </div>
                     )}
-                    <div className="text-3xl sm:text-4xl lg:text-5xl font-black text-white">
+                    <div className="text-4xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight">
                       {formatCurrencyPrice(displayPrice)}
                     </div>
                     <div className="text-xs text-slate-400 mt-1 flex items-center gap-2">
@@ -625,7 +624,7 @@ export default function ProductDetail() {
                 ) : (
                   <div>
                     <div className="text-[10px] uppercase text-slate-400 font-bold tracking-widest mb-1">Precio actual</div>
-                    <div className="text-4xl sm:text-5xl font-black text-white flex items-baseline gap-3 flex-wrap">
+                    <div className="text-4xl sm:text-5xl lg:text-6xl font-black text-white flex items-baseline gap-3 flex-wrap tracking-tight">
                       <span>{formatCurrencyPrice(displayPrice)}</span>
                       {hasDiscount && (
                         <span className="text-xl sm:text-2xl text-slate-400 line-through font-semibold">
@@ -672,21 +671,21 @@ export default function ProductDetail() {
               {/* SELECTOR DE CANTIDAD */}
               <div className="flex items-center justify-between">
                 <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Cantidad</span>
-                <div className="flex items-center justify-between border border-white/10 bg-white/[0.03] rounded-xl h-10 w-32">
+                <div className="flex items-center justify-between border border-white/10 bg-white/[0.03] rounded-xl h-11 w-36">
                   <button
                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="w-10 h-full flex items-center justify-center hover:bg-white/10 transition-colors text-slate-300 hover:text-white"
+                    className="w-11 h-full flex items-center justify-center hover:bg-white/10 transition-colors text-slate-300 hover:text-white"
                     disabled={quantity <= 1}
                   >
-                    <Minus className="w-3.5 h-3.5" />
+                    <Minus className="w-4 h-4" />
                   </button>
-                  <span className="font-black text-sm text-white">{quantity}</span>
+                  <span className="font-black text-base text-white">{quantity}</span>
                   <button
                     onClick={() => setQuantity(Math.min(stock, quantity + 1))}
-                    className="w-10 h-full flex items-center justify-center hover:bg-white/10 transition-colors text-slate-300 hover:text-white"
+                    className="w-11 h-full flex items-center justify-center hover:bg-white/10 transition-colors text-slate-300 hover:text-white"
                     disabled={quantity >= stock}
                   >
-                    <Plus className="w-3.5 h-3.5" />
+                    <Plus className="w-4 h-4" />
                   </button>
                 </div>
               </div>
@@ -696,11 +695,11 @@ export default function ProductDetail() {
                 id="main-buy-now"
                 onClick={() => addToCart(undefined, true)}
                 disabled={stock <= 0}
-                className={`w-full py-4 rounded-2xl flex items-center justify-center gap-2 text-sm uppercase tracking-widest font-black transition-all bg-[#f00856] text-white shadow-lg shadow-[#f00856]/25 hover:bg-[#d00749] hover:shadow-[#f00856]/40 hover:-translate-y-0.5 ${
+                className={`w-full py-4.5 rounded-2xl flex items-center justify-center gap-2.5 text-base uppercase tracking-widest font-black transition-all bg-[#f00856] text-white shadow-xl shadow-[#f00856]/30 hover:bg-[#d00749] hover:shadow-[#f00856]/50 hover:-translate-y-0.5 cursor-pointer ${
                   stock <= 0 ? 'opacity-50 cursor-not-allowed bg-slate-800 shadow-none' : ''
                 }`}
               >
-                <Zap className="w-4 h-4" />
+                <Zap className="w-5 h-5" />
                 {stock <= 0 ? 'Sin Stock' : 'Comprar ahora'}
               </button>
 
@@ -709,7 +708,7 @@ export default function ProductDetail() {
                 id="main-add-to-cart"
                 onClick={() => addToCart()}
                 disabled={stock <= 0}
-                className={`w-full py-3.5 rounded-2xl flex items-center justify-center gap-2 text-xs uppercase tracking-widest font-bold transition-all border border-white/20 text-white bg-white/5 hover:bg-white/10 hover:border-white/40 ${
+                className={`w-full py-3.5 rounded-2xl flex items-center justify-center gap-2 text-xs uppercase tracking-widest font-bold transition-all border border-white/20 text-white bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/40 cursor-pointer ${
                   stock <= 0 ? 'opacity-50 cursor-not-allowed border-white/5' : ''
                 } ${addedToCart ? 'bg-green-500/20 border-green-500 text-green-400' : ''}`}
               >
@@ -738,7 +737,7 @@ export default function ProductDetail() {
                       });
                     }
                   }}
-                  className="inline-flex items-center gap-2 text-xs font-medium text-slate-400 hover:text-white transition-colors py-1"
+                  className="inline-flex items-center gap-2 text-xs font-medium text-slate-400 hover:text-white transition-colors py-1 cursor-pointer"
                 >
                   <Heart className={`w-4 h-4 transition-colors ${isInWishlist(product.id) ? 'fill-[#f00856] text-[#f00856]' : 'text-slate-400'}`} />
                   <span>{isInWishlist(product.id) ? 'Quitar de favoritos' : 'Agregar a favoritos'}</span>
@@ -748,34 +747,38 @@ export default function ProductDetail() {
           </div>
 
           {/* 4. BLOQUE VENDEDOR */}
-          <SoldByCard 
-            vendorId={winnerIsCollectibles ? undefined : (winnerVendorId || product.vendor_id || undefined)} 
-            vendorName={winnerVendorName} 
-            vendorLogo={winnerIsCollectibles ? undefined : (bbWinner?.vendor_store_logo || product.vendor_store?.logo_url || product.vendor?.logo_url)}
-            vendorSlug={winnerIsCollectibles ? undefined : (bbWinner?.vendor_store_slug || product.vendor_store?.slug || product.vendor?.slug)}
-            badges={winnerIsCollectibles ? [] : (bbWinner?.vendor_store_badges || (product.vendor_store?.vendor_store_badge_assignments?.filter((x: any) => x.status === 'active' && x.approved_by && x.approved_at).map((x: any) => x.vendor_store_badges).filter(Boolean) || []))}
-          />
+          <div className="pt-2 border-t border-white/10">
+            <SoldByCard 
+              vendorId={winnerIsCollectibles ? undefined : (winnerVendorId || product.vendor_id || undefined)} 
+              vendorName={winnerVendorName} 
+              vendorLogo={winnerIsCollectibles ? undefined : (bbWinner?.vendor_store_logo || product.vendor_store?.logo_url || product.vendor?.logo_url)}
+              vendorSlug={winnerIsCollectibles ? undefined : (bbWinner?.vendor_store_slug || product.vendor_store?.slug || product.vendor?.slug)}
+              badges={winnerIsCollectibles ? [] : (bbWinner?.vendor_store_badges || (product.vendor_store?.vendor_store_badge_assignments?.filter((x: any) => x.status === 'active' && x.approved_by && x.approved_at).map((x: any) => x.vendor_store_badges).filter(Boolean) || []))}
+            />
+          </div>
 
           {/* 5. BLOQUE ENVÍOS */}
-          <ProductShippingBlock
-            product={product}
-            vendorId={winnerIsCollectibles ? null : (winnerVendorId || product.vendor_id || null)}
-            vendorName={winnerVendorName}
-            vendorShippingSettings={winnerIsCollectibles ? null : (product?.vendor?.shipping_settings || null)}
-            isCollectibles={winnerIsCollectibles}
-          />
+          <div className="pt-2 border-t border-white/10">
+            <ProductShippingBlock
+              product={product}
+              vendorId={winnerIsCollectibles ? null : (winnerVendorId || product.vendor_id || null)}
+              vendorName={winnerVendorName}
+              vendorShippingSettings={winnerIsCollectibles ? null : (product?.vendor?.shipping_settings || null)}
+              isCollectibles={winnerIsCollectibles}
+            />
+          </div>
 
           {/* 6. BLOQUE GARANTÍA / CONFIANZA */}
-          <div className="grid grid-cols-3 gap-2 pt-1">
-            <div className="rounded-xl p-2.5 bg-white/[0.02] border border-white/5 text-center">
+          <div className="grid grid-cols-3 gap-2.5 pt-2 border-t border-white/10">
+            <div className="rounded-xl p-3 bg-white/[0.02] border border-white/5 text-center">
               <b className="text-white block text-xs font-bold">{settings['product_trust_title_1'] || '⚡ Entrega'}</b>
               <p className="text-[10px] text-slate-400 mt-0.5 font-medium">{settings['product_trust_desc_1'] || '24-48 horas'}</p>
             </div>
-            <div className="rounded-xl p-2.5 bg-white/[0.02] border border-white/5 text-center">
+            <div className="rounded-xl p-3 bg-white/[0.02] border border-white/5 text-center">
               <b className="text-white block text-xs font-bold">{settings['product_trust_title_2'] || '✅ Estado'}</b>
               <p className="text-[10px] text-slate-400 mt-0.5 font-medium">{settings['product_trust_desc_2'] || 'Nuevo / Sellado'}</p>
             </div>
-            <div className="rounded-xl p-2.5 bg-white/[0.02] border border-white/5 text-center">
+            <div className="rounded-xl p-3 bg-white/[0.02] border border-white/5 text-center">
               <b className="text-white block text-xs font-bold">{settings['product_trust_title_3'] || '🔄 Devolución'}</b>
               <p className="text-[10px] text-slate-400 mt-0.5 font-medium">{settings['product_trust_desc_3'] || '14 días gratis'}</p>
             </div>
@@ -784,11 +787,11 @@ export default function ProductDetail() {
       </div>
 
       {/* DESKTOP DESCRIPTION & TECHNICAL SPECS SECTION */}
-      <section className="hidden lg:grid grid-cols-[1.1fr_0.9fr] gap-10 mt-16 pt-12 border-t border-white/10">
+      <section className="hidden lg:grid grid-cols-[1.2fr_0.8fr] gap-12 mt-16 pt-12 border-t border-white/10">
         <div>
           <span className="text-[10px] uppercase font-black tracking-[0.2em] text-[#f00856]">Detalles</span>
           <h2 className="text-2xl md:text-3xl font-black mt-1 text-white tracking-tight">{settings['product_history_title'] || 'Descripción del producto'}</h2>
-          <div className="mt-4 text-slate-300 leading-relaxed text-base whitespace-pre-line space-y-4">
+          <div className="mt-4 text-slate-300 leading-relaxed text-base md:text-lg whitespace-pre-line space-y-4">
              {product.description ? (
                <p>{sanitizeProductDescription(product.description)}</p>
              ) : (
@@ -894,19 +897,18 @@ export default function ProductDetail() {
             <div className="label-tag">{settings['product_reviews_label'] || 'Opiniones de compradores'}</div>
             <h2 className="text-4xl font-black mt-2 text-white">{settings['product_reviews_title'] || 'Lo que dicen los coleccionistas'}</h2>
           </div>
-          {/* "Escribir reseña" disabled — no backend handler */}
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {reviews.length === 0 ? (
-            <div className="md:col-span-2 lg:col-span-3 glass rounded-[2rem] p-12 text-center">
-               <Star className="w-12 h-12 text-slate-700 mx-auto mb-4" />
+            <div className="md:col-span-2 lg:col-span-3 rounded-3xl p-10 text-center bg-white/[0.02] border border-white/5">
+               <Star className="w-10 h-10 text-slate-700 mx-auto mb-3" />
                <p className="text-slate-400 font-bold">Aún no hay reseñas para este producto.</p>
-               <p className="text-sm text-slate-500 mt-1">Sé el primero en compartir tu experiencia.</p>
+               <p className="text-xs text-slate-500 mt-1">Sé el primero en compartir tu experiencia.</p>
             </div>
           ) : (
             reviews.map((r: any) => (
-              <div key={r.id} className="glass rounded-[2rem] p-6 hover:border-[#f00856]/30 transition-all group">
+              <div key={r.id} className="rounded-3xl p-6 bg-white/[0.02] border border-white/5 hover:border-[#f00856]/30 transition-all group">
                 <div className="flex items-center gap-1 mb-3">
                   {[...Array(5)].map((_, i) => (
                     <Star key={i} className={`w-3.5 h-3.5 ${i < r.rating ? 'fill-yellow-400 text-yellow-400' : 'text-slate-700'}`} />
@@ -943,13 +945,11 @@ export default function ProductDetail() {
               </div>
             </div>
             <button
-              onClick={addToCart}
-              className={`btn-primary rounded-full px-6 py-3 flex items-center justify-center gap-2 text-xs uppercase tracking-widest font-black transition-all shadow-lg shadow-[#f00856]/20 hover:shadow-[#f00856]/40 ${
-                addedToCart ? 'bg-green-500 border-green-500 hover:bg-green-600 shadow-green-500/20' : ''
-              }`}
+              onClick={() => addToCart(undefined, true)}
+              className="btn-primary rounded-full px-6 py-3 flex items-center justify-center gap-2 text-xs uppercase tracking-widest font-black transition-all shadow-lg shadow-[#f00856]/20 hover:shadow-[#f00856]/40 cursor-pointer"
             >
-              <ShoppingCart className="w-4 h-4" />
-              {addedToCart ? 'Agregado' : 'Comprar'}
+              <Zap className="w-4 h-4" />
+              Comprar
             </button>
           </div>
         </div>
