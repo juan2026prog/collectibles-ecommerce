@@ -25,27 +25,27 @@ const checkoutSchema = z.object({
   affiliate_code: z.string().trim().min(1).optional(),
   payment_method: z.enum(["dlocalgo", "mercadopago", "paypal", "handy"]),
   currency: z.string().default("UYU"),
-  shipping_method: z.enum(["delivery", "pickup", "dac", "dac_home", "dac_agency", "ues", "correo_uruguayo", "manual"]).default("delivery"),
+  shipping_method: z.enum(["delivery", "pickup", "dac", "dac_home", "dac_agency", "ues", "correo_uruguayo", "manual", "international_courier_direct"]).default("delivery"),
   shipping_address: z.object({
     first_name: z.string().trim().min(1),
     last_name: z.string().trim().min(1),
-    street: z.string().trim().optional(),
-    apartment: z.string().trim().optional(),
-    city: z.string().trim().optional(),
-    department: z.string().trim().optional(),
-    barrio: z.string().trim().optional(),
-    reference: z.string().trim().optional(),
-    postal_code: z.string().trim().optional(),
+    street: z.string().trim().nullable().optional(),
+    apartment: z.string().trim().nullable().optional(),
+    city: z.string().trim().nullable().optional(),
+    department: z.string().trim().nullable().optional(),
+    barrio: z.string().trim().nullable().optional(),
+    reference: z.string().trim().nullable().optional(),
+    postal_code: z.string().trim().nullable().optional(),
     country: z.string().trim().default("Uruguay"),
-    dac_delivery_mode: z.string().optional(),
+    dac_delivery_mode: z.string().nullable().optional(),
     dac_office_id: z.string().uuid().nullable().optional(),
     dac_k_oficina_destino: z.number().int().nullable().optional(),
-    dac_office_name: z.string().optional(),
-    dac_office_address: z.string().optional(),
-    ci: z.string().optional(),
+    dac_office_name: z.string().nullable().optional(),
+    dac_office_address: z.string().nullable().optional(),
+    ci: z.string().nullable().optional(),
   }).passthrough(),
   customer_email: z.string().email(),
-  customer_phone: z.string().trim().optional(),
+  customer_phone: z.string().trim().nullable().optional(),
   bank_promo: z.object({
     promo_id: z.string().uuid(),
   }).optional(),
@@ -56,13 +56,14 @@ const checkoutSchema = z.object({
   accepted_terms_version: z.string(),
   email_opt_in: z.boolean().optional().default(false),
   whatsapp_opt_in: z.boolean().optional().default(false),
+  logistics_consent: z.boolean().optional().default(false),
   suborders_shipping: z.record(z.object({
-    shipping_method: z.enum(["delivery", "pickup", "dac", "dac_home", "dac_agency", "ues", "correo_uruguayo", "manual"]),
+    shipping_method: z.enum(["delivery", "pickup", "dac", "dac_home", "dac_agency", "ues", "correo_uruguayo", "manual", "international_courier_direct"]),
     dac_office_id: z.string().uuid().nullable().optional(),
     dac_k_oficina_destino: z.number().int().nullable().optional(),
-    dac_office_name: z.string().optional(),
-    dac_office_address: z.string().optional(),
-    ci: z.string().optional(),
+    dac_office_name: z.string().nullable().optional(),
+    dac_office_address: z.string().nullable().optional(),
+    ci: z.string().nullable().optional(),
     dispatch_address_id: z.string().uuid().nullable().optional(),
     seller_type: z.enum(["platform", "vendor"]).optional(),
     shipping_mode: z.enum(["home", "agency", "pickup"]).optional(),
@@ -255,8 +256,40 @@ Deno.serve(async (req) => {
       });
     }
 
+    let productsList = products ? [...products] : [];
+
+    // Check if any product IDs are missing from products, and query international_products
+    const fetchedProductIds = new Set(productsList.map(p => p.id));
+    const missingProductIds = productIds.filter(id => !fetchedProductIds.has(id));
+
+    if (missingProductIds.length > 0) {
+      const { data: intlProds, error: intlError } = await supabase
+        .from("international_products")
+        .select("id, title, final_price_uyu")
+        .in("id", missingProductIds);
+
+      if (intlError) {
+        console.error("Error fetching international products:", intlError);
+      } else if (intlProds) {
+        for (const ip of intlProds) {
+          productsList.push({
+            id: ip.id,
+            title: ip.title,
+            base_price: ip.final_price_uyu, // Use UYU price
+            category_id: null,
+            brand_id: null,
+            vendor_id: null,
+            vendor_store_id: null,
+            vendors: null,
+            product_tags: [],
+            is_international: true
+          });
+        }
+      }
+    }
+
     const productPriceMap = new Map<string, number>();
-    for (const product of products || []) {
+    for (const product of productsList) {
       productPriceMap.set(product.id, Number(product.base_price));
     }
 
@@ -305,7 +338,7 @@ Deno.serve(async (req) => {
         });
       }
 
-      const dbProduct = products?.find(p => p.id === productId);
+      const dbProduct = productsList.find(p => p.id === productId);
       if (!dbProduct) {
         return new Response(JSON.stringify({
           success: false,
@@ -596,7 +629,7 @@ Deno.serve(async (req) => {
         }
 
         for (const item of verifiedItems) {
-          const product = products?.find(p => p.id === item.product_id);
+          const product = productsList.find(p => p.id === item.product_id);
           if (!product) continue;
 
           let itemDiscount = 0;
@@ -738,7 +771,7 @@ Deno.serve(async (req) => {
       let eligibleSubtotal = 0;
       
       for (const item of verifiedItems) {
-        const product = products?.find(p => p.id === item.product_id);
+        const product = productsList.find(p => p.id === item.product_id);
         let isExcluded = false;
 
         const itemVendorId = item.vendor_id || product?.vendor_id || null;
@@ -827,9 +860,9 @@ Deno.serve(async (req) => {
     // Group items by vendor store
     const groups = new Map<string | null, any[]>();
     for (const item of verifiedItems) {
-      const dbProduct = products?.find(p => p.id === item.product_id);
-      const storeId = item.vendor_store_id || dbProduct?.vendor_store_id || null;
-      const groupKey = storeId || item.vendor_id || dbProduct?.vendor_id || null;
+      const dbProduct = productsList.find(p => p.id === item.product_id);
+      const isIntl = dbProduct?.is_international === true;
+      const groupKey = isIntl ? 'international' : (item.vendor_store_id || dbProduct?.vendor_store_id || item.vendor_id || dbProduct?.vendor_id || null);
       if (!groups.has(groupKey)) {
         groups.set(groupKey, []);
       }
@@ -837,13 +870,14 @@ Deno.serve(async (req) => {
       const variantObj = item.variant_id ? variantMap.get(item.variant_id) : null;
       const productName = variantObj ? `${dbProduct?.title} (${variantObj.name})` : (dbProduct?.title || item.title || "Producto");
       const itemSku = variantObj?.sku || null;
+      const vendorStoreId = item.vendor_store_id || dbProduct?.vendor_store_id || null;
 
       groups.get(groupKey)!.push({
         ...item,
         product_name: productName,
         sku: itemSku,
         vendor_id: item.vendor_id || dbProduct?.vendor_id || null,
-        vendor_store_id: storeId,
+        vendor_store_id: vendorStoreId,
       });
     }
 
@@ -859,6 +893,8 @@ Deno.serve(async (req) => {
 
       if (groupKey === null) {
         vendorName = "Collectibles";
+      } else if (groupKey === "international") {
+        vendorName = "Importación Amazon USA";
       } else {
         const { data: storeData } = await supabase
           .from('vendor_stores')
@@ -886,7 +922,13 @@ Deno.serve(async (req) => {
       
       // 1. Get vendor dispatch address
       let vendorAddress = null;
-      if (vendorId === null) {
+      if (groupKey === "international") {
+        vendorAddress = {
+          department: "Florida",
+          city: "Miami",
+          address: "Miami Courier Suite"
+        };
+      } else if (vendorId === null) {
         vendorAddress = {
           department: "Montevideo",
           city: "Montevideo",
@@ -997,12 +1039,17 @@ Deno.serve(async (req) => {
       let shippingProvider = "DAC";
       let groupShippingCost = 0;
 
+      const vendorFreeShippingActive = shippingSettings?.free_shipping?.active === true;
+      const vendorMinAmount = Number(shippingSettings?.free_shipping?.min_amount || 0);
+      const isVendorFreeShipping = vendorFreeShippingActive && vendorMinAmount > 0 && groupSubtotal >= vendorMinAmount;
+      const isGroupFreeShipping = (groupSubtotal >= freeShippingThreshold) || isVendorFreeShipping;
+
       if (selectedMethod === "pickup") {
         shippingProvider = "pickup";
         groupShippingCost = 0;
       } else if ((selectedMethod === "delivery" || selectedMethod === "dac" || selectedMethod === "dac_home" || selectedMethod === "dac_agency") && isSoyDeliveryAvailable && selectedMethod === "delivery") {
         shippingProvider = "soydelivery";
-        groupShippingCost = calculateShipping(shippingCity, "Montevideo", groupSubtotal, freeShippingThreshold);
+        groupShippingCost = isGroupFreeShipping ? 0 : calculateShipping(shippingCity, "Montevideo", groupSubtotal, freeShippingThreshold);
       } else {
         const isDacActive = shippingSettings.dac?.active && globalProvidersMap['dac'] === true;
         const isUesActive = shippingSettings.ues?.active && globalProvidersMap['ues'] === true;
@@ -1014,7 +1061,7 @@ Deno.serve(async (req) => {
             throw new Error(`DAC no está disponible para el vendedor ${vendorName}.`);
           }
           shippingProvider = "dac";
-          if (groupSubtotal >= freeShippingThreshold) {
+          if (isGroupFreeShipping) {
             groupShippingCost = 0;
           } else {
             const dacMode = (selectedMethod === "dac_agency") ? "agency" : "home";
@@ -1052,13 +1099,13 @@ Deno.serve(async (req) => {
             throw new Error(`UES no está disponible para el vendedor ${vendorName}.`);
           }
           shippingProvider = "ues";
-          groupShippingCost = (groupSubtotal >= freeShippingThreshold) ? 0 : 220;
+          groupShippingCost = isGroupFreeShipping ? 0 : 220;
         } else if (selectedMethod === "correo_uruguayo") {
           if (vendorId !== null && !isCorreoActive) {
             throw new Error(`Correo Uruguayo no está disponible para el vendedor ${vendorName}.`);
           }
           shippingProvider = "correo_uruguayo";
-          groupShippingCost = (groupSubtotal >= freeShippingThreshold) ? 0 : 180;
+          groupShippingCost = isGroupFreeShipping ? 0 : 180;
         } else if (selectedMethod === "manual") {
           if (vendorId !== null && !isManualActive) {
             throw new Error(`Envío manual no está disponible para el vendedor ${vendorName}.`);
@@ -1067,7 +1114,10 @@ Deno.serve(async (req) => {
           const manualFixedCost = shippingSettings.manual?.fixed_cost !== undefined && shippingSettings.manual?.fixed_cost !== null && shippingSettings.manual?.fixed_cost !== ''
             ? Number(shippingSettings.manual.fixed_cost)
             : (shippingSettings.manual?.fixed_price !== undefined && shippingSettings.manual?.fixed_price !== null && shippingSettings.manual?.fixed_price !== '' ? Number(shippingSettings.manual.fixed_price) : 0);
-          groupShippingCost = manualFixedCost;
+          groupShippingCost = isGroupFreeShipping ? 0 : manualFixedCost;
+        } else if (selectedMethod === "international_courier_direct") {
+          shippingProvider = "international_courier_direct";
+          groupShippingCost = 0;
         } else {
           throw new Error(`El método de envío seleccionado '${selectedMethod}' no está disponible para el vendedor ${vendorName}.`);
         }
@@ -1153,6 +1203,71 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Resolve Miami Courier Address for International orders
+    let resolvedMiamiAddress = null;
+    const hasInternationalItems = productsList.some(p => p.is_international);
+    if (hasInternationalItems) {
+      const sa = payload.shipping_address || {};
+      
+      const courier_name = (sa.international_courier_name || '').trim();
+      const recipient_name = (sa.international_recipient_name || '').trim();
+      const address_line_1 = (sa.international_address_line_1 || '').trim();
+      const city = (sa.international_city || '').trim();
+      const state = (sa.international_state || '').trim();
+      const postal_code = (sa.international_postal_code || '').trim();
+      const country = (sa.international_country || '').trim();
+      const phone = (sa.international_phone || '').trim();
+      const customer_code = (sa.international_customer_code || '').trim();
+      const address_line_2 = (sa.international_address_line_2 || '').trim();
+      const instructions = (sa.international_instructions || '').trim();
+
+      // Validations
+      if (!courier_name) throw new Error("Ingresá el nombre del courier.");
+      if (!recipient_name) throw new Error("Ingresá el nombre del destinatario.");
+      if (!address_line_1) throw new Error("Ingresá la dirección de Estados Unidos (Address Line 1).");
+      if (!city) throw new Error("Ingresá la ciudad.");
+      if (!state) throw new Error("Ingresá el estado.");
+      if (!postal_code) throw new Error("Ingresá el ZIP Code.");
+      if (!phone) throw new Error("Ingresá el teléfono de recepción.");
+
+      const isUS = ['us', 'usa', 'united states', 'estados unidos'].includes(country.toLowerCase());
+      if (!isUS) {
+        throw new Error("El país de destino internacional debe ser Estados Unidos (US).");
+      }
+
+      // Check if courier name matches any active courier in the DB for automatic pre-approval
+      let isPreApproved = false;
+      try {
+        const { data: matchedCourier } = await supabase
+          .from("international_couriers")
+          .select("id")
+          .eq("name", courier_name)
+          .eq("is_active", true)
+          .maybeSingle();
+        if (matchedCourier) {
+          isPreApproved = true;
+        }
+      } catch (err) {
+        console.warn("Error checking courier pre-approval:", err);
+      }
+
+      resolvedMiamiAddress = {
+        is_international_address_resolved: true,
+        international_courier_name: courier_name,
+        international_recipient_name: recipient_name,
+        international_customer_code: customer_code,
+        international_address_line_1: address_line_1,
+        international_address_line_2: address_line_2,
+        international_city: city,
+        international_state: state,
+        international_postal_code: postal_code,
+        international_country: 'United States',
+        international_phone: phone,
+        international_instructions: instructions,
+        international_is_pre_approved: isPreApproved
+      };
+    }
+
     const orderShippingAddress = {
       ...payload.shipping_address,
       shipping_method: payload.shipping_method,
@@ -1165,7 +1280,8 @@ Deno.serve(async (req) => {
       dac_k_oficina_destino: payload.shipping_address.dac_k_oficina_destino || null,
       dac_office_name: payload.shipping_address.dac_office_name || null,
       dac_office_address: payload.shipping_address.dac_office_address || null,
-      shipping_provider: "dac"
+      shipping_provider: hasInternationalItems ? "international_courier_direct" : "dac",
+      ...(resolvedMiamiAddress || {})
     };
 
     const { data: orderResult, error: rpcError } = await supabase.rpc("create_order_atomic", {
@@ -1185,6 +1301,7 @@ Deno.serve(async (req) => {
       p_accepted_terms_version: payload.accepted_terms_version,
       p_email_opt_in: payload.email_opt_in,
       p_whatsapp_opt_in: payload.whatsapp_opt_in,
+      p_logistics_consent: payload.logistics_consent || false,
     });
 
     if (rpcError) {

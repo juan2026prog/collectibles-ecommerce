@@ -17,6 +17,33 @@ import { resolveCartItemPrice } from '../lib/priceResolver';
 import { generateMetaEventId, trackInitiateCheckout, trackAddPaymentInfo } from '../lib/meta/metaPixel';
 import { calculateUruboxEstimate, getEstimatedWeightKg } from '../lib/urubox';
 
+const PROVINCIAS_ARGENTINA = [
+  "Buenos Aires",
+  "Ciudad Autónoma de Buenos Aires",
+  "Catamarca",
+  "Chaco",
+  "Chubut",
+  "Córdoba",
+  "Corrientes",
+  "Entre Ríos",
+  "Formosa",
+  "Jujuy",
+  "La Pampa",
+  "La Rioja",
+  "Mendoza",
+  "Misiones",
+  "Neuquén",
+  "Río Negro",
+  "Salta",
+  "San Juan",
+  "San Luis",
+  "Santa Cruz",
+  "Santa Fe",
+  "Santiago del Estero",
+  "Tierra del Fuego",
+  "Tucumán"
+].sort();
+
 function normalizeLocation(value?: string | null) {
   return (value || "")
     .normalize("NFD")
@@ -98,7 +125,16 @@ export default function Checkout() {
   const { items, total, addItem, updateQuantity, removeItem } = useCartContext();
   const { settings, loaded: settingsLoaded } = useSiteSettings();
   const freeShippingThreshold = Number(settings['free_shipping_threshold'] || 4000);
-  const { formatCurrencyPrice, selectedCurrency } = useCurrency();
+  const { formatCurrencyPrice, selectedCurrency, setSelectedCurrency } = useCurrency();
+
+  // Switch to USD for Argentina if setting is active
+  useEffect(() => {
+    if (form.country === 'Argentina' && settings['international_usd_mode'] === 'true') {
+      if (selectedCurrency !== 'USD') {
+        setSelectedCurrency('USD');
+      }
+    }
+  }, [form.country, settings, selectedCurrency]);
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [checkoutError, setCheckoutError] = useState('');
@@ -112,6 +148,50 @@ export default function Checkout() {
       prevPaymentMethodRef.current = paymentMethod;
     }
   }, [paymentMethod]);
+
+  // IP Geolocation Check on Mount (Run once per session, with 2.5s network timeout protection)
+  useEffect(() => {
+    const sessionGeoIP = sessionStorage.getItem("geoip_detected");
+    if (sessionGeoIP) return;
+
+    async function detectCountry() {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
+
+      try {
+        const res = await fetch("https://ipapi.co/json/", { signal: controller.signal });
+        clearTimeout(timeoutId);
+        const data = await res.json();
+        
+        sessionStorage.setItem("geoip_detected", "true");
+
+        if (data && (data.country_code === "AR" || data.country === "Argentina")) {
+          console.log("[GeoIP] Argentina detected via IP.");
+          const hasSetManual = localStorage.getItem("user_selected_country");
+          if (!hasSetManual) {
+            setForm(prev => ({
+              ...prev,
+              country: "Argentina",
+              department: "Buenos Aires",
+              city: "",
+              barrio: "",
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn("[GeoIP] Detection error or timeout:", err);
+        sessionStorage.setItem("geoip_detected", "true"); // Prevent infinite retry loops on failure
+      }
+    }
+    detectCountry();
+  }, []);
+
+  // Save manual country choices
+  useEffect(() => {
+    if (form.country) {
+      localStorage.setItem("user_selected_country", form.country);
+    }
+  }, [form.country]);
   const [shippingMethod, setShippingMethod] = useState<'delivery' | 'pickup'>('delivery');
   const [publicPaymentProviders, setPublicPaymentProviders] = useState<PublicPaymentProvider[]>([]);
   const [bankPromos, setBankPromos] = useState<BankPromo[]>([]);
@@ -123,9 +203,28 @@ export default function Checkout() {
   const [couponSuccess, setCouponSuccess] = useState<string | null>(null);
   const [couponLoading, setCouponLoading] = useState(false);
 
-  const [internationalCourier, setInternationalCourier] = useState<'urubox' | 'other'>('urubox');
+  const [internationalCourier, setInternationalCourier] = useState<string>('urubox');
+  const [couriersList, setCouriersList] = useState<any[]>([]);
   const [courierSuite, setCourierSuite] = useState('');
   const [courierAddress, setCourierAddress] = useState('');
+  
+  const [savedIntlAddresses, setSavedIntlAddresses] = useState<any[]>([]);
+  const [selectedIntlAddressId, setSelectedIntlAddressId] = useState<string | 'new'>('new');
+  const [intlForm, setIntlForm] = useState({
+    courier_name: '',
+    recipient_name: '',
+    customer_code: '',
+    address_line_1: '',
+    address_line_2: '',
+    city: '',
+    state: '',
+    postal_code: '',
+    country: 'United States',
+    phone: '',
+    instructions: ''
+  });
+  const [saveIntlAddress, setSaveIntlAddress] = useState(false);
+  const [confirmCopyAddress, setConfirmCopyAddress] = useState(false);
 
   // Calculated dynamically after form and shippingMethod states are declared
 
@@ -220,6 +319,12 @@ export default function Checkout() {
     postal_code: '',
     country: 'Uruguay',
     ci: '',
+    recipient_type: 'person',
+    dni: '',
+    cuit: '',
+    razon_social: '',
+    street_number: '',
+    consent: false,
   });
 
   const [dacShippingCost, setDacShippingCost] = useState<number | null>(null);
@@ -245,11 +350,14 @@ export default function Checkout() {
   }>>({});
   const [globalProviders, setGlobalProviders] = useState<Record<string, boolean>>({ dac: true, ues: false, soydelivery: false });
   const [subordersShipping, setSubordersShipping] = useState<Record<string, {
-    method: 'delivery' | 'pickup' | 'dac_home' | 'dac_agency' | 'ues' | 'correo_uruguayo' | 'manual';
+    method: 'delivery' | 'pickup' | 'dac_home' | 'dac_agency' | 'ues' | 'correo_uruguayo' | 'manual' | 'international_courier_direct';
     selectedAgency?: any | null;
   }>>({});
 
   const getStoreKey = (item: any): string => {
+    if (item.is_international === true) {
+      return 'international';
+    }
     const vId = item.vendor_id;
     const sId = item.vendor_store_id;
     if (!vId || vId === 'platform' || vId === 'null' || vId === 'undefined') {
@@ -263,10 +371,20 @@ export default function Checkout() {
 
   const getVendorName = (storeKey: string) => {
     if (storeKey === 'collectibles' || storeKey === 'platform') return 'Collectibles.uy';
+    if (storeKey === 'international') return 'Importación Amazon USA';
     return items.find(item => getStoreKey(item) === storeKey)?.vendor_name || 'Vendedor';
   };
 
   const getVendorShippingOptions = (storeKey: string, groupTotal: number) => {
+    if (storeKey === 'international') {
+      return [{
+        id: 'international_courier_direct',
+        name: 'Entrega en tu courier de Miami',
+        available: true,
+        cost: 0,
+        show: true
+      }];
+    }
     const v = vendorsData[storeKey];
     const options: Array<{
       id: string;
@@ -277,6 +395,16 @@ export default function Checkout() {
       show: boolean;
     }> = [];
 
+    if (form.country === 'Argentina') {
+      return [{
+        id: 'manual',
+        name: 'Envío Internacional (MBE)',
+        available: true,
+        cost: internationalShippingRate,
+        show: true
+      }];
+    }
+
     if (!v) return options;
 
     const isPlatform = storeKey === 'collectibles' || storeKey === 'platform';
@@ -284,6 +412,11 @@ export default function Checkout() {
     const defaultAddr = v.default_address;
     const isMontevideo = form.department === 'Montevideo';
     const resolvedCityForShipping = form.department === 'Montevideo' ? form.barrio : form.city;
+
+    const vendorFreeShippingActive = !!s.free_shipping?.active;
+    const vendorMinAmount = Number(s.free_shipping?.min_amount || 0);
+    const isVendorFreeShipping = vendorFreeShippingActive && vendorMinAmount > 0 && groupTotal >= vendorMinAmount;
+    const isFreeForThisGroup = (total >= freeShippingThreshold) || isVendorFreeShipping;
 
     // 1. Pickup
     const pickupActive = isPlatform ? true : !!s.pickup?.active;
@@ -337,7 +470,7 @@ export default function Checkout() {
           id: 'soydelivery',
           name: 'Soy Delivery',
           available: true,
-          cost: calculateShipping(resolvedCityForShipping, form.department, groupTotal, freeShippingThreshold),
+          cost: isFreeForThisGroup ? 0 : calculateShipping(resolvedCityForShipping, form.department, groupTotal, freeShippingThreshold),
           show: true
         });
       }
@@ -439,7 +572,7 @@ export default function Checkout() {
         id: 'ues',
         name: 'UES',
         available: true,
-        cost: (groupTotal >= freeShippingThreshold ? 0 : 220),
+        cost: (isFreeForThisGroup ? 0 : 220),
         show: true
       });
     } else {
@@ -460,7 +593,7 @@ export default function Checkout() {
         id: 'correo_uruguayo',
         name: 'Correo Uruguayo',
         available: true,
-        cost: (groupTotal >= freeShippingThreshold ? 0 : 180),
+        cost: (isFreeForThisGroup ? 0 : 180),
         show: true
       });
     } else {
@@ -486,7 +619,7 @@ export default function Checkout() {
         id: 'manual',
         name: s.manual?.method_name || 'Envío manual / propio',
         available: true,
-        cost: hasFixed ? fixedCost : 0,
+        cost: isFreeForThisGroup ? 0 : (hasFixed ? fixedCost : 0),
         reason: hasCoordinar && !hasFixed ? 'A coordinar con el vendedor' : undefined,
         show: true
       });
@@ -622,6 +755,24 @@ export default function Checkout() {
   }, [items]);
 
   useEffect(() => {
+    const fetchCouriers = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('international_couriers')
+          .select('*')
+          .eq('is_active', true)
+          .order('name', { ascending: true });
+        if (data) {
+          setCouriersList(data);
+        }
+      } catch (err) {
+        console.error("Error loading international couriers:", err);
+      }
+    };
+    fetchCouriers();
+  }, []);
+
+  useEffect(() => {
     if (Object.keys(vendorsData).length === 0) return;
     
     setSubordersShipping(prev => {
@@ -635,7 +786,9 @@ export default function Checkout() {
           
           let defaultMethod: any = 'dac_home';
           
-          if (isCollectiblesGroup) {
+          if (storeKey === 'international') {
+            defaultMethod = 'international_courier_direct';
+          } else if (isCollectiblesGroup) {
             defaultMethod = form.department === 'Montevideo' ? 'pickup' : 'dac_home';
           } else {
             const settings = v?.shipping_settings || {};
@@ -757,7 +910,7 @@ export default function Checkout() {
 
   const hasAnyDelivery = uniqueStoreKeys.some(key => {
     const sel = subordersShipping[key];
-    return sel && sel.method !== 'pickup';
+    return sel && !['pickup', 'international_courier_direct'].includes(sel.method);
   });
 
   const hasAnyDac = uniqueStoreKeys.some(key => {
@@ -767,7 +920,7 @@ export default function Checkout() {
 
   const hasAnyHomeDelivery = uniqueStoreKeys.some(key => {
     const sel = subordersShipping[key];
-    return sel && !['pickup', 'dac_agency'].includes(sel.method);
+    return sel && !['pickup', 'dac_agency', 'international_courier_direct'].includes(sel.method);
   });
 
   // Reset DAC cost/error when changing delivery mode or shipping method
@@ -778,10 +931,47 @@ export default function Checkout() {
     setVendorShippingCosts({});
   }, [subordersShipping]);
 
+  const [internationalShippingRate, setInternationalShippingRate] = useState<number>(1500);
+
+  useEffect(() => {
+    async function loadIntlRate() {
+      try {
+        const { data } = await supabase
+          .from('shipping_rules')
+          .select('rate')
+          .eq('zone', 'international')
+          .eq('is_active', true)
+          .maybeSingle();
+        if (data && data.rate) {
+          setInternationalShippingRate(Number(data.rate));
+        }
+      } catch (err) {
+        console.error("Error loading international shipping rate:", err);
+      }
+    }
+    loadIntlRate();
+  }, []);
+
   const resolvedCityForShipping = form.department === 'Montevideo' ? form.barrio : form.city;
   const isMontevideo = form.department === 'Montevideo';
 
   useEffect(() => {
+    if (form.country === 'Argentina') {
+      const isFreeShipping = total >= freeShippingThreshold;
+      const rate = isFreeShipping ? 0 : internationalShippingRate;
+      let totalCost = 0;
+      const costsByVendor: Record<string, number> = {};
+      uniqueStoreKeys.forEach(key => {
+        costsByVendor[key] = rate;
+        totalCost += rate;
+      });
+      setVendorShippingCosts(costsByVendor);
+      setDacShippingCost(totalCost);
+      setDacCalculationStatus('success');
+      setDacShippingError(null);
+      return;
+    }
+
     if (!hasAnyDelivery || !form.department) {
       setDacShippingCost(null);
       setDacShippingError(null);
@@ -868,6 +1058,11 @@ export default function Checkout() {
 
           const method = sel.method;
           const v = vendorsData[storeKey];
+          const vendorFreeShippingActive = !!v?.shipping_settings?.free_shipping?.active;
+          const vendorMinAmount = Number(v?.shipping_settings?.free_shipping?.min_amount || 0);
+          const isVendorFreeShipping = vendorFreeShippingActive && vendorMinAmount > 0 && groupTotal >= vendorMinAmount;
+          const isGroupFreeShipping = isFreeShipping || isVendorFreeShipping;
+
           const hasSD = isMontevideo && v && v.shipping_settings?.soydelivery?.active && globalProviders['soydelivery'] && isSoyDeliveryAvailableForVendor(
             v.default_address, 
             { department: form.department, city: resolvedCityForShipping }
@@ -877,22 +1072,22 @@ export default function Checkout() {
             costsByVendor[storeKey] = 0;
           } else if (method === 'manual') {
             const fixedCost = Number(v?.shipping_settings?.manual?.fixed_cost || v?.shipping_settings?.manual?.fixed_price || 0);
-            costsByVendor[storeKey] = isNaN(fixedCost) ? 0 : fixedCost;
+            costsByVendor[storeKey] = isGroupFreeShipping ? 0 : (isNaN(fixedCost) ? 0 : fixedCost);
             totalCost += costsByVendor[storeKey];
           } else if (method === 'ues') {
-            const cost = isFreeShipping ? 0 : 220;
+            const cost = isGroupFreeShipping ? 0 : 220;
             costsByVendor[storeKey] = cost;
             totalCost += cost;
           } else if (method === 'correo_uruguayo') {
-            const cost = isFreeShipping ? 0 : 180;
+            const cost = isGroupFreeShipping ? 0 : 180;
             costsByVendor[storeKey] = cost;
             totalCost += cost;
           } else if (method === 'delivery' && hasSD) {
-            const cost = isFreeShipping ? 0 : calculateShipping(resolvedCityForShipping, form.department, groupTotal, freeShippingThreshold);
+            const cost = isGroupFreeShipping ? 0 : calculateShipping(resolvedCityForShipping, form.department, groupTotal, freeShippingThreshold);
             costsByVendor[storeKey] = cost;
             totalCost += cost;
           } else if (method === 'dac_home' || method === 'dac_agency') {
-            if (isFreeShipping) {
+            if (isGroupFreeShipping) {
               costsByVendor[storeKey] = 0;
             } else {
               const dacMode = method === 'dac_agency' ? 'agency' : 'home';
@@ -1316,10 +1511,56 @@ export default function Checkout() {
         country: address.country || current.country,
         ci: address.ci || '',
       }));
+
+      // Load international addresses
+      try {
+        const { data: intlData } = await supabase
+          .from('customer_international_addresses')
+          .select('*')
+          .order('is_default', { ascending: false });
+        
+        if (intlData) {
+          setSavedIntlAddresses(intlData);
+          const defaultAddr = intlData.find(a => a.is_default);
+          if (defaultAddr) {
+            setSelectedIntlAddressId(defaultAddr.id);
+          } else if (intlData.length > 0) {
+            setSelectedIntlAddressId(intlData[0].id);
+          }
+        }
+      } catch (err) {
+        console.error("Error loading international addresses:", err);
+      }
     }
 
     loadProfile();
   }, [user]);
+
+  useEffect(() => {
+    if (selectedIntlAddressId === 'new') {
+      setIntlForm((current) => ({
+        ...current,
+        recipient_name: `${form.first_name} ${form.last_name}`.trim(),
+      }));
+    } else {
+      const addr = savedIntlAddresses.find(a => a.id === selectedIntlAddressId);
+      if (addr) {
+        setIntlForm({
+          courier_name: addr.courier_name || '',
+          recipient_name: addr.recipient_name || '',
+          customer_code: addr.customer_code || '',
+          address_line_1: addr.address_line_1 || '',
+          address_line_2: addr.address_line_2 || '',
+          city: addr.city || '',
+          state: addr.state || '',
+          postal_code: addr.postal_code || '',
+          country: addr.country || 'United States',
+          phone: addr.phone || '',
+          instructions: addr.instructions || ''
+        });
+      }
+    }
+  }, [selectedIntlAddressId, savedIntlAddresses, form.first_name, form.last_name]);
 
   useEffect(() => {
     if (items.length === 0) {
@@ -1676,7 +1917,7 @@ export default function Checkout() {
 
       const hasAnyHomeDelivery = uniqueStoreKeys.some(key => {
         const sel = subordersShipping[key];
-        return sel && !['pickup', 'dac_agency'].includes(sel.method);
+        return sel && !['pickup', 'dac_agency', 'international_courier_direct'].includes(sel.method);
       });
 
       if (hasAnyHomeDelivery) {
@@ -1696,6 +1937,13 @@ export default function Checkout() {
         return sel && sel.method === 'dac_agency' && !sel.selectedAgency;
       });
       if (missingAgency) return true;
+    }
+
+    if (items.some(i => i.is_international)) {
+      if (!confirmCopyAddress) return true;
+      if (!intlForm.courier_name || !intlForm.recipient_name || !intlForm.address_line_1 || !intlForm.city || !intlForm.state || !intlForm.postal_code || !intlForm.phone) return true;
+      const isUS = ['us', 'usa', 'united states', 'estados unidos'].includes((intlForm.country || '').toLowerCase());
+      if (!isUS) return true;
     }
 
     return false;
@@ -1797,6 +2045,29 @@ export default function Checkout() {
       const primaryAgency = firstSelection?.selectedAgency || null;
       const primaryDacMode = primaryMethod === 'dac_agency' ? 'agency' : 'home';
 
+      // Save international address if checked
+      if (items.some(i => i.is_international) && saveIntlAddress && user) {
+        try {
+          await supabase.from('customer_international_addresses').insert({
+            user_id: user.id,
+            label: `${intlForm.courier_name} (${intlForm.customer_code || 'Casilla'})`,
+            courier_name: intlForm.courier_name,
+            recipient_name: intlForm.recipient_name,
+            customer_code: intlForm.customer_code,
+            address_line_1: intlForm.address_line_1,
+            address_line_2: intlForm.address_line_2 || null,
+            city: intlForm.city,
+            state: intlForm.state,
+            postal_code: intlForm.postal_code,
+            country: intlForm.country,
+            phone: intlForm.phone,
+            instructions: intlForm.instructions || null
+          });
+        } catch (err) {
+          console.error("Error saving international address in checkout:", err);
+        }
+      }
+
       const order = await createCheckoutOrder({
         items: items.map((item) => ({
           product_id: item.product_id,
@@ -1810,7 +2081,7 @@ export default function Checkout() {
         coupon_code: couponCode.trim() || undefined,
         affiliate_code: affiliateCode.trim() || undefined,
         payment_method: paymentMethod,
-        currency: 'UYU',
+        currency: selectedCurrency,
         shipping_method: primaryMethod,
         shipping_address: {
           first_name: form.first_name,
@@ -1823,10 +2094,27 @@ export default function Checkout() {
           country: form.country,
           barrio: primaryMethod === 'pickup' ? undefined : form.barrio,
           reference: primaryMethod === 'pickup' ? undefined : form.reference,
-          international_courier: items.some(i => i.is_international) ? internationalCourier : undefined,
-          international_suite: items.some(i => i.is_international) && internationalCourier === 'urubox' ? courierSuite : undefined,
-          international_miami_address: items.some(i => i.is_international) && internationalCourier === 'other' ? courierAddress : undefined,
           ci: (primaryMethod === 'dac_home' || primaryMethod === 'dac_agency') ? form.ci : undefined,
+          recipient_type: form.country === 'Argentina' ? (form.recipient_type as any) : undefined,
+          dni: form.country === 'Argentina' && form.recipient_type === 'person' ? form.dni : undefined,
+          cuit: form.country === 'Argentina' && form.recipient_type === 'company' ? form.cuit : undefined,
+          razon_social: form.country === 'Argentina' && form.recipient_type === 'company' ? form.razon_social : undefined,
+          street_number: form.country === 'Argentina' ? form.street_number : undefined,
+          logistics_consent: form.country === 'Argentina' ? form.consent : undefined,
+          // Dynamic international courier fields snapshot
+          ...(items.some(i => i.is_international) ? {
+            international_courier_name: intlForm.courier_name,
+            international_recipient_name: intlForm.recipient_name,
+            international_customer_code: intlForm.customer_code,
+            international_address_line_1: intlForm.address_line_1,
+            international_address_line_2: intlForm.address_line_2 || undefined,
+            international_city: intlForm.city,
+            international_state: intlForm.state,
+            international_postal_code: intlForm.postal_code,
+            international_country: intlForm.country,
+            international_phone: intlForm.phone,
+            international_instructions: intlForm.instructions || undefined,
+          } : {}),
           ...((primaryMethod === 'dac_home' || primaryMethod === 'dac_agency') ? {
             dac_delivery_mode: primaryDacMode,
             shipping_provider: 'DAC',
@@ -1848,6 +2136,7 @@ export default function Checkout() {
         email_opt_in: emailOptIn,
         whatsapp_opt_in: whatsappOptIn,
         suborders_shipping: subordersShippingPayload,
+        logistics_consent: form.country === 'Argentina' ? form.consent : undefined,
       });
 
       console.log("create-order success:", order);
@@ -1906,12 +2195,94 @@ export default function Checkout() {
     { id: 3, label: 'Pago' },
   ];
 
+  const isValidCUIT = (cuit: string): boolean => {
+    const clean = cuit.replace(/\D/g, "");
+    if (clean.length !== 11) return false;
+
+    const multipliers = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+    let sum = 0;
+    for (let i = 0; i < 10; i++) {
+      sum += Number(clean[i]) * multipliers[i];
+    }
+
+    const remainder = sum % 11;
+    const result = 11 - remainder;
+    const checkDigit = Number(clean[10]);
+
+    if (result === 11) {
+      return checkDigit === 0;
+    }
+    if (result === 10) {
+      return checkDigit === 9 || checkDigit === 4;
+    }
+    return checkDigit === result;
+  };
+
   const validateStep2 = (): {
     valid: boolean;
     errors: Array<{ field: string; code: string; message: string }>;
   } => {
     const errorsList: Array<{ field: string; code: string; message: string }> = [];
     const isMvd = form.department === 'Montevideo';
+
+    if (form.country === 'Argentina') {
+      if (!form.first_name || !form.first_name.trim()) {
+        errorsList.push({ field: 'first_name', code: 'REQUIRED', message: 'El nombre es obligatorio.' });
+      }
+      if (!form.last_name || !form.last_name.trim()) {
+        errorsList.push({ field: 'last_name', code: 'REQUIRED', message: 'El apellido es obligatorio.' });
+      }
+      if (!form.email || !form.email.trim()) {
+        errorsList.push({ field: 'email', code: 'REQUIRED', message: 'El correo electrónico es obligatorio.' });
+      }
+      if (!form.phone || !form.phone.trim()) {
+        errorsList.push({ field: 'phone', code: 'REQUIRED', message: 'El teléfono es obligatorio.' });
+      } else if (!form.phone.startsWith('+')) {
+        errorsList.push({ field: 'phone', code: 'INVALID_FORMAT', message: 'El teléfono debe incluir el prefijo internacional (ej: +54911...).' });
+      }
+      if (!form.department) {
+        errorsList.push({ field: 'department', code: 'REQUIRED', message: 'La provincia es obligatoria.' });
+      }
+      if (!form.city || !form.city.trim()) {
+        errorsList.push({ field: 'city', code: 'REQUIRED', message: 'La localidad es obligatoria.' });
+      }
+      if (!form.street || !form.street.trim()) {
+        errorsList.push({ field: 'street', code: 'REQUIRED', message: 'La calle es obligatoria.' });
+      }
+      if (!form.street_number || !form.street_number.trim()) {
+        errorsList.push({ field: 'street_number', code: 'REQUIRED', message: 'El número de puerta es obligatorio.' });
+      }
+      if (!form.postal_code || !form.postal_code.trim()) {
+        errorsList.push({ field: 'postal_code', code: 'REQUIRED', message: 'El código postal o CPA es obligatorio.' });
+      }
+      if (form.recipient_type === 'person') {
+        if (!form.dni || !form.dni.trim()) {
+          errorsList.push({ field: 'dni', code: 'REQUIRED', message: 'El DNI es obligatorio para personas.' });
+        }
+      } else if (form.recipient_type === 'company') {
+        if (!form.cuit || !form.cuit.trim()) {
+          errorsList.push({ field: 'cuit', code: 'REQUIRED', message: 'El CUIT es obligatorio para empresas.' });
+        } else if (!isValidCUIT(form.cuit)) {
+          errorsList.push({ field: 'cuit', code: 'INVALID_FORMAT', message: 'El CUIT no es válido. Verifica el número e intenta nuevamente.' });
+        }
+        if (!form.razon_social || !form.razon_social.trim()) {
+          errorsList.push({ field: 'razon_social', code: 'REQUIRED', message: 'La razón social es obligatoria para empresas.' });
+        }
+      }
+      if (!form.consent) {
+        errorsList.push({ field: 'consent', code: 'REQUIRED', message: 'Debes aceptar compartir los datos de envío con el operador logístico.' });
+      }
+
+      const uniqueErrors = Array.from(new Map(errorsList.map(e => [e.field, e])).values());
+      const mappedErrors: Record<string, string> = {};
+      uniqueErrors.forEach(e => { mappedErrors[e.field] = e.message; });
+      setStep2Errors(mappedErrors);
+
+      return {
+        valid: errorsList.length === 0,
+        errors: errorsList
+      };
+    }
 
     // 1. Mandatory base fields
     if (!form.department) {
@@ -2462,58 +2833,276 @@ export default function Checkout() {
                         Tus productos se enviarán a un courier en Miami, USA.
                       </p>
                       
-                      <div className="space-y-4">
-                        <label className={`flex items-start gap-4 p-4 border-2 cursor-pointer transition-all rounded-lg ${internationalCourier === 'urubox' ? 'border-[#f00856] bg-[#f00856]/10' : 'border-white/10 hover:border-white/20 bg-white/5'}`}>
-                          <input type="radio" checked={internationalCourier === 'urubox'} onChange={() => setInternationalCourier('urubox')} className="sr-only" />
-                          <div className={`w-4 h-4 rounded-full mt-1 border-2 flex items-center justify-center ${internationalCourier === 'urubox' ? 'border-[#f00856]' : 'border-slate-500'}`}>
-                            {internationalCourier === 'urubox' && <div className="w-2 h-2 bg-[#f00856] rounded-full" />}
+                      <h3 className="font-bold text-white mb-3">
+                        ¿A qué dirección de Estados Unidos enviamos tu compra?
+                      </h3>
+                      <p className="text-xs text-slate-400 mb-4">
+                        Esta es la dirección que te proporcionó tu courier o casilla en Estados Unidos.
+                      </p>
+
+                      <div className="space-y-4 mb-6">
+                        {savedIntlAddresses.map((addr) => (
+                          <label key={addr.id} className={`flex items-start gap-4 p-4 border-2 cursor-pointer transition-all rounded-lg ${selectedIntlAddressId === addr.id ? 'border-[#f00856] bg-[#f00856]/10' : 'border-white/10 hover:border-white/20 bg-white/5'}`}>
+                            <input 
+                              type="radio" 
+                              name="selected_intl_address"
+                              checked={selectedIntlAddressId === addr.id} 
+                              onChange={() => setSelectedIntlAddressId(addr.id)} 
+                              className="sr-only" 
+                            />
+                            <div className={`w-4 h-4 rounded-full mt-1 border-2 flex items-center justify-center ${selectedIntlAddressId === addr.id ? 'border-[#f00856]' : 'border-slate-500'}`}>
+                              {selectedIntlAddressId === addr.id && <div className="w-2 h-2 bg-[#f00856] rounded-full" />}
+                            </div>
+                            <div className="flex-1 text-xs text-slate-300">
+                              <div className="font-bold text-white mb-1 flex items-center gap-2">
+                                {addr.label}
+                                {addr.is_default && <span className="bg-white/10 text-white text-[9px] px-1.5 py-0.5 rounded">Predeterminada</span>}
+                              </div>
+                              <p><span className="text-slate-400">Courier:</span> {addr.courier_name}</p>
+                              <p><span className="text-slate-400">Destinatario:</span> {addr.recipient_name} {addr.customer_code ? `(${addr.customer_code})` : ''}</p>
+                              <p><span className="text-slate-400">Dirección:</span> {addr.address_line_1} {addr.address_line_2 ? `, ${addr.address_line_2}` : ''}</p>
+                              <p><span className="text-slate-400">Ubicación:</span> {addr.city}, {addr.state} {addr.postal_code}, {addr.country}</p>
+                              <p><span className="text-slate-400">Teléfono:</span> {addr.phone}</p>
+                            </div>
+                          </label>
+                        ))}
+
+                        <label className={`flex items-start gap-4 p-4 border-2 cursor-pointer transition-all rounded-lg ${selectedIntlAddressId === 'new' ? 'border-[#f00856] bg-[#f00856]/10' : 'border-white/10 hover:border-white/20 bg-white/5'}`}>
+                          <input 
+                            type="radio" 
+                            name="selected_intl_address"
+                            checked={selectedIntlAddressId === 'new'} 
+                            onChange={() => setSelectedIntlAddressId('new')} 
+                            className="sr-only" 
+                          />
+                          <div className={`w-4 h-4 rounded-full mt-1 border-2 flex items-center justify-center ${selectedIntlAddressId === 'new' ? 'border-[#f00856]' : 'border-slate-500'}`}>
+                            {selectedIntlAddressId === 'new' && <div className="w-2 h-2 bg-[#f00856] rounded-full" />}
                           </div>
                           <div className="flex-1">
-                            <div className="font-bold text-white flex items-center gap-2">
-                              Usar Urubox <span className="bg-green-500/20 text-green-400 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-black">Recomendado</span>
-                            </div>
-                            <p className="text-xs text-slate-400 mt-1">Conectamos automáticamente con Urubox para facilitar tu importación.</p>
-                            
-                            {internationalCourier === 'urubox' && (
-                              <div className="mt-4">
-                                <label className="form-label text-white">Tu Número de Casilla / Suite Urubox</label>
-                                <input 
-                                  type="text" 
-                                  required
-                                  placeholder="Ej: UY12345"
-                                  className="form-input bg-black/20"
-                                  value={courierSuite}
-                                  onChange={e => setCourierSuite(e.target.value)}
-                                />
-                                <p className="text-[10px] text-slate-500 mt-1">Si no tenés, creá una cuenta gratis en Urubox.com</p>
-                              </div>
-                            )}
+                            <div className="font-bold text-white">Agregar nueva dirección de courier</div>
+                            <p className="text-xs text-slate-400 mt-0.5">Ingresar manualmente todos los campos asignados por tu courier.</p>
                           </div>
                         </label>
+                      </div>
 
-                        <label className={`flex items-start gap-4 p-4 border-2 cursor-pointer transition-all rounded-lg ${internationalCourier === 'other' ? 'border-[#f00856] bg-[#f00856]/10' : 'border-white/10 hover:border-white/20 bg-white/5'}`}>
-                          <input type="radio" checked={internationalCourier === 'other'} onChange={() => setInternationalCourier('other')} className="sr-only" />
-                          <div className={`w-4 h-4 rounded-full mt-1 border-2 flex items-center justify-center ${internationalCourier === 'other' ? 'border-[#f00856]' : 'border-slate-500'}`}>
-                            {internationalCourier === 'other' && <div className="w-2 h-2 bg-[#f00856] rounded-full" />}
+                      {selectedIntlAddressId === 'new' && (
+                        <div className="space-y-4 p-4 border border-white/5 rounded-xl bg-black/10 mb-6">
+                          <h4 className="font-bold text-sm text-white mb-2">Formulario de Dirección Internacional</h4>
+                          
+                          {/* Courier autocomplete helper */}
+                          <div className="mb-2">
+                            <span className="text-xs text-slate-400 block mb-2 font-medium">Completar con plantilla sugerida:</span>
+                            <div className="flex flex-wrap gap-2">
+                              <button 
+                                type="button" 
+                                className="bg-white/5 hover:bg-white/10 text-white text-[11px] px-2.5 py-1.5 rounded-lg border border-white/10 transition"
+                                onClick={() => {
+                                  setIntlForm(prev => ({
+                                    ...prev,
+                                    courier_name: 'Urubox',
+                                    address_line_1: '2030 NW 95th Ave',
+                                    address_line_2: 'Suite UY',
+                                    city: 'Doral',
+                                    state: 'FL',
+                                    postal_code: '33172',
+                                    phone: '7863140977'
+                                  }));
+                                }}
+                              >
+                                Urubox Miami
+                              </button>
+                              <button 
+                                type="button" 
+                                className="bg-white/5 hover:bg-white/10 text-white text-[11px] px-2.5 py-1.5 rounded-lg border border-white/10 transition"
+                                onClick={() => {
+                                  setIntlForm(prev => ({
+                                    ...prev,
+                                    courier_name: 'USX Cargo',
+                                    address_line_1: '8400 NW 25th St',
+                                    address_line_2: 'Suite UY',
+                                    city: 'Doral',
+                                    state: 'FL',
+                                    postal_code: '33122',
+                                    phone: '3055928880'
+                                  }));
+                                }}
+                              >
+                                USX Cargo Miami
+                              </button>
+                              <button 
+                                type="button" 
+                                className="bg-white/5 hover:bg-white/10 text-white text-[11px] px-2.5 py-1.5 rounded-lg border border-white/10 transition"
+                                onClick={() => {
+                                  setIntlForm(prev => ({
+                                    ...prev,
+                                    courier_name: 'PuntoMio',
+                                    address_line_1: '2200 NW 129th Ave',
+                                    address_line_2: 'Suite UY',
+                                    city: 'Miami',
+                                    state: 'FL',
+                                    postal_code: '33182',
+                                    phone: '3054772020'
+                                  }));
+                                }}
+                              >
+                                PuntoMio Miami
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex-1">
-                            <div className="font-bold text-white">Otro Courier</div>
-                            <p className="text-xs text-slate-400 mt-1">Si usás otro courier, ingresá la dirección en Miami.</p>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-medium text-slate-400 mb-1">Nombre del courier *</label>
+                              <input 
+                                type="text"
+                                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#f00856] text-xs"
+                                placeholder="Ej: Urubox"
+                                value={intlForm.courier_name}
+                                onChange={e => setIntlForm({...intlForm, courier_name: e.target.value})}
+                              />
+                            </div>
                             
-                            {internationalCourier === 'other' && (
-                              <div className="mt-4">
-                                <label className="form-label text-white">Dirección de tu Courier en Miami</label>
-                                <textarea 
-                                  required
-                                  rows={3}
-                                  placeholder="Ingresá la dirección completa, incluyendo tu número de suite o ID de cliente..."
-                                  className="form-input bg-black/20"
-                                  value={courierAddress}
-                                  onChange={e => setCourierAddress(e.target.value)}
-                                />
-                              </div>
-                            )}
+                            <div>
+                              <label className="block text-xs font-medium text-slate-400 mb-1">Destinatario completo (según courier) *</label>
+                              <input 
+                                type="text"
+                                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#f00856] text-xs"
+                                placeholder="Ej: Juan Pérez / UY12345"
+                                value={intlForm.recipient_name}
+                                onChange={e => setIntlForm({...intlForm, recipient_name: e.target.value})}
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-medium text-slate-400 mb-1">Número de Casilla / Suite *</label>
+                              <input 
+                                type="text"
+                                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#f00856] text-xs"
+                                placeholder="Ej: UY12345"
+                                value={intlForm.customer_code}
+                                onChange={e => setIntlForm({...intlForm, customer_code: e.target.value})}
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-medium text-slate-400 mb-1">Address Line 1 *</label>
+                              <input 
+                                type="text"
+                                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#f00856] text-xs"
+                                placeholder="Ej: 2030 NW 95th Ave"
+                                value={intlForm.address_line_1}
+                                onChange={e => setIntlForm({...intlForm, address_line_1: e.target.value})}
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-medium text-slate-400 mb-1">Address Line 2 (Opcional)</label>
+                              <input 
+                                type="text"
+                                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#f00856] text-xs"
+                                placeholder="Ej: Suite UY"
+                                value={intlForm.address_line_2}
+                                onChange={e => setIntlForm({...intlForm, address_line_2: e.target.value})}
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-medium text-slate-400 mb-1">Ciudad *</label>
+                              <input 
+                                type="text"
+                                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#f00856] text-xs"
+                                placeholder="Ej: Doral o Miami"
+                                value={intlForm.city}
+                                onChange={e => setIntlForm({...intlForm, city: e.target.value})}
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-medium text-slate-400 mb-1">Estado / Región *</label>
+                              <input 
+                                type="text"
+                                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#f00856] text-xs"
+                                placeholder="Ej: FL o Florida"
+                                value={intlForm.state}
+                                onChange={e => setIntlForm({...intlForm, state: e.target.value})}
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-medium text-slate-400 mb-1">ZIP Code / Código Postal *</label>
+                              <input 
+                                type="text"
+                                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#f00856] text-xs"
+                                placeholder="Ej: 33172"
+                                value={intlForm.postal_code}
+                                onChange={e => setIntlForm({...intlForm, postal_code: e.target.value})}
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-medium text-slate-400 mb-1">País *</label>
+                              <input 
+                                type="text"
+                                disabled
+                                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-slate-400 focus:outline-none focus:border-[#f00856] text-xs"
+                                value={intlForm.country}
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-medium text-slate-400 mb-1">Teléfono de Recepción *</label>
+                              <input 
+                                type="text"
+                                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#f00856] text-xs"
+                                placeholder="Ej: 7863140977"
+                                value={intlForm.phone}
+                                onChange={e => setIntlForm({...intlForm, phone: e.target.value})}
+                              />
+                            </div>
                           </div>
+
+                          <div className="mt-2">
+                            <label className="block text-xs font-medium text-slate-400 mb-1">Instrucciones Adicionales (Opcional)</label>
+                            <textarea 
+                              rows={2}
+                              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#f00856] text-xs"
+                              placeholder="Ej: Entregar solo en horario comercial..."
+                              value={intlForm.instructions}
+                              onChange={e => setIntlForm({...intlForm, instructions: e.target.value})}
+                            />
+                          </div>
+
+                          {user && (
+                            <label className="flex items-center gap-2 mt-4 cursor-pointer">
+                              <input 
+                                type="checkbox"
+                                checked={saveIntlAddress}
+                                onChange={e => setSaveIntlAddress(e.target.checked)}
+                                className="rounded border-white/10 text-[#f00856] focus:ring-[#f00856] bg-black/20"
+                              />
+                              <span className="text-xs text-slate-300">Guardar esta dirección en mi cuenta para futuras compras</span>
+                            </label>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Warning & Copy Confirmation Checkbox */}
+                      <div className="bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-lg mb-4 text-xs text-yellow-300">
+                        <p className="font-bold flex items-center gap-1.5 mb-1.5">
+                          <AlertTriangle className="w-4 h-4 text-yellow-500" /> ¡Advertencia Importante!
+                        </p>
+                        <p className="leading-relaxed">
+                          Ingresá la dirección exactamente como te la asignó tu courier. Un dato incorrecto puede provocar demoras, devolución o pérdida del paquete.
+                        </p>
+                        
+                        <label className="flex items-start gap-2.5 mt-3.5 cursor-pointer text-white font-medium select-none">
+                          <input 
+                            type="checkbox"
+                            checked={confirmCopyAddress}
+                            onChange={e => setConfirmCopyAddress(e.target.checked)}
+                            className="rounded border-white/10 text-[#f00856] focus:ring-[#f00856] bg-black/20 mt-0.5"
+                          />
+                          <span>Confirmo que copié exactamente la dirección asignada por mi courier.</span>
                         </label>
                       </div>
                     </div>
@@ -2808,136 +3397,368 @@ export default function Checkout() {
 
                       {(savedAddresses.length === 0 || selectedAddress === -2 || !hasAnyHomeDelivery) && (
                         <>
-                          {hasAnyHomeDelivery && (
-                            <div id="shipping-street">
-                              <label className="form-label">Dirección (calle y número) *</label>
-                              <AddressAutocomplete
-                                value={form.street}
-                                onChange={value => setForm({ ...form, street: value })}
-                                onSelect={handleAddressSelect}
-                              />
-                              {step2Errors.street && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.street}</p>}
-                            </div>
-                          )}
-
-                          <div className={!hasAnyHomeDelivery ? "grid grid-cols-1 gap-4" : "grid grid-cols-2 gap-4"}>
-                            <div id="shipping-department">
-                              <label className="form-label">Departamento *</label>
-                              <select
-                                required={hasAnyDelivery}
-                                className={`form-input ${step2Errors.department ? 'border-red-500' : ''}`}
-                                value={form.department}
-                                onChange={e => handleDepartmentChange(e.target.value)}
-                              >
-                                <option value="">Selecciona un departamento...</option>
-                                {DEPARTAMENTOS.map((department) => (
-                                  <option key={department} value={department}>{department}</option>
-                                ))}
-                              </select>
-                              {step2Errors.department && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.department}</p>}
-                            </div>
-
-                            {hasAnyHomeDelivery && (
-                              <div id="shipping-city">
-                                <label className="form-label">Ciudad / Localidad *</label>
-                                {form.department === 'Montevideo' ? (
-                                  <input
-                                    type="text"
-                                    className="form-input opacity-80 cursor-not-allowed"
-                                    value="Montevideo"
-                                    readOnly
-                                  />
-                                ) : (
-                                  <select
-                                    required={hasAnyDelivery}
-                                    className={`form-input ${step2Errors.city ? 'border-red-500' : ''}`}
-                                    value={form.city}
-                                    onChange={e => setForm({ ...form, city: e.target.value })}
-                                    disabled={!form.department}
+                          {form.country === 'Argentina' ? (
+                            <div className="space-y-4">
+                              {/* Tipo de Destinatario */}
+                              <div>
+                                <label className="form-label text-slate-300 font-bold">Tipo de Destinatario *</label>
+                                <div className="grid grid-cols-2 gap-3 mt-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setForm({ ...form, recipient_type: 'person', dni: '', cuit: '', razon_social: '' })}
+                                    className={`py-2.5 px-4 rounded-xl border-2 font-bold text-sm text-center transition-all ${
+                                      form.recipient_type === 'person'
+                                        ? 'border-primary-500 bg-primary-500/10 text-white'
+                                        : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
+                                    }`}
                                   >
-                                    <option value="">Selecciona una localidad...</option>
-                                    {form.department && URUGUAY_LOCATIONS[form.department]?.map((location) => (
-                                      <option key={location} value={location}>{location}</option>
-                                    ))}
-                                  </select>
-                                )}
-                                {step2Errors.city && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.city}</p>}
-                              </div>
-                            )}
-                          </div>
-
-                          {hasAnyHomeDelivery && (
-                            <>
-                              <div className="grid grid-cols-1 gap-4">
-                                <div id="shipping-barrio">
-                                  <label className="form-label">Barrio {form.department === 'Montevideo' ? '*' : '(Opcional)'}</label>
-                                  {form.department === 'Montevideo' ? (
-                                    <select
-                                      required={hasAnyDelivery}
-                                      className={`form-input ${step2Errors.barrio ? 'border-red-500' : ''}`}
-                                      value={form.barrio}
-                                      onChange={e => setForm({ ...form, barrio: e.target.value })}
-                                    >
-                                      <option value="">Selecciona un barrio...</option>
-                                      {URUGUAY_LOCATIONS['Montevideo']?.map((barrioName) => (
-                                        <option key={barrioName} value={barrioName}>{barrioName}</option>
-                                      ))}
-                                    </select>
-                                  ) : (
-                                    <input
-                                      type="text"
-                                      className="form-input"
-                                      placeholder="Ej: Centro, La Floresta, etc."
-                                      value={form.barrio}
-                                      onChange={e => setForm({ ...form, barrio: e.target.value })}
-                                    />
-                                  )}
-                                  {step2Errors.barrio && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.barrio}</p>}
+                                    Persona Física
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setForm({ ...form, recipient_type: 'company', dni: '', cuit: '', razon_social: '' })}
+                                    className={`py-2.5 px-4 rounded-xl border-2 font-bold text-sm text-center transition-all ${
+                                      form.recipient_type === 'company'
+                                        ? 'border-primary-500 bg-primary-500/10 text-white'
+                                        : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
+                                    }`}
+                                  >
+                                    Empresa
+                                  </button>
                                 </div>
                               </div>
 
-                              <div className="grid grid-cols-2 gap-4">
+                              {form.recipient_type === 'person' && (
                                 <div>
-                                  <label className="form-label">Apartamento / Timbre</label>
+                                  <label className="form-label text-slate-300">DNI (Documento Nacional de Identidad) *</label>
                                   <input
+                                    type="text"
+                                    required
+                                    placeholder="Ej: 12345678"
+                                    className={`form-input ${step2Errors.dni ? 'border-red-500' : ''}`}
+                                    value={form.dni}
+                                    onChange={e => setForm({ ...form, dni: e.target.value.replace(/[^0-9]/g, '') })}
+                                  />
+                                  {step2Errors.dni && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.dni}</p>}
+                                </div>
+                              )}
+
+                              {form.recipient_type === 'company' && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="form-label text-slate-300">CUIT *</label>
+                                    <input
+                                      type="text"
+                                      required
+                                      placeholder="11 dígitos (solo números)"
+                                      className={`form-input ${step2Errors.cuit ? 'border-red-500' : ''}`}
+                                      value={form.cuit}
+                                      onChange={e => setForm({ ...form, cuit: e.target.value.replace(/[^0-9]/g, '') })}
+                                    />
+                                    {step2Errors.cuit && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.cuit}</p>}
+                                  </div>
+                                  <div>
+                                    <label className="form-label text-slate-300">Razón Social *</label>
+                                    <input
+                                      type="text"
+                                      required
+                                      placeholder="Nombre de la empresa"
+                                      className={`form-input ${step2Errors.razon_social ? 'border-red-500' : ''}`}
+                                      value={form.razon_social}
+                                      onChange={e => setForm({ ...form, razon_social: e.target.value })}
+                                    />
+                                    {step2Errors.razon_social && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.razon_social}</p>}
+                                  </div>
+                                </div>
+                              )}
+
+                              <div>
+                                <label className="form-label text-slate-300">Teléfono con prefijo internacional *</label>
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder="Ej: +5491112345678"
+                                  className={`form-input ${step2Errors.phone ? 'border-red-500' : ''}`}
+                                  value={form.phone}
+                                  onChange={e => setForm({ ...form, phone: e.target.value })}
+                                />
+                                <p className="text-[10px] text-slate-400 mt-1">Debe comenzar con '+' y el código de país (ej: +54 para Argentina).</p>
+                                {step2Errors.phone && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.phone}</p>}
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                  <label className="form-label text-slate-300">Provincia *</label>
+                                  <select
+                                    required
+                                    className={`form-input ${step2Errors.department ? 'border-red-500' : ''}`}
+                                    value={form.department}
+                                    onChange={e => setForm({ ...form, department: e.target.value })}
+                                  >
+                                    <option value="">Selecciona una provincia...</option>
+                                    {PROVINCIAS_ARGENTINA.map(p => (
+                                      <option key={p} value={p}>{p}</option>
+                                    ))}
+                                  </select>
+                                  {step2Errors.department && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.department}</p>}
+                                </div>
+                                <div>
+                                  <label className="form-label text-slate-300">Localidad / Ciudad *</label>
+                                  <input
+                                    type="text"
+                                    required
+                                    placeholder="Ej: Rosario"
+                                    className={`form-input ${step2Errors.city ? 'border-red-500' : ''}`}
+                                    value={form.city}
+                                    onChange={e => setForm({ ...form, city: e.target.value })}
+                                  />
+                                  {step2Errors.city && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.city}</p>}
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-3 gap-4">
+                                <div className="col-span-2">
+                                  <label className="form-label text-slate-300">Calle *</label>
+                                  <input
+                                    type="text"
+                                    required
+                                    placeholder="Nombre de la calle"
+                                    className={`form-input ${step2Errors.street ? 'border-red-500' : ''}`}
+                                    value={form.street}
+                                    onChange={e => setForm({ ...form, street: e.target.value })}
+                                  />
+                                  {step2Errors.street && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.street}</p>}
+                                </div>
+                                <div>
+                                  <label className="form-label text-slate-300">Nro de puerta *</label>
+                                  <input
+                                    type="text"
+                                    required
+                                    placeholder="Nro"
+                                    className={`form-input ${step2Errors.street_number ? 'border-red-500' : ''}`}
+                                    value={form.street_number}
+                                    onChange={e => setForm({ ...form, street_number: e.target.value })}
+                                  />
+                                  {step2Errors.street_number && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.street_number}</p>}
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                  <label className="form-label text-slate-300">Piso / Departamento (Opcional)</label>
+                                  <input
+                                    type="text"
+                                    placeholder="Ej: Piso 4 Depto B"
                                     className="form-input"
-                                    placeholder="Ej: Apto 302, Timbre 4"
                                     value={form.apartment}
                                     onChange={e => setForm({ ...form, apartment: e.target.value })}
                                   />
                                 </div>
                                 <div>
-                                  <label className="form-label">Referencia / Indicaciones</label>
+                                  <label className="form-label text-slate-300">Código Postal (CPA) *</label>
                                   <input
-                                    className="form-input"
-                                    placeholder="Ej: Portón de madera, reja negra"
-                                    value={form.reference}
-                                    onChange={e => setForm({ ...form, reference: e.target.value })}
-                                  />
-                                </div>
-                              </div>
-
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <label className="form-label">Código postal</label>
-                                  <input
-                                    className="form-input"
-                                    placeholder="Ej: 11300"
+                                    type="text"
+                                    required
+                                    placeholder="Ej: C1024CWN o 2000"
+                                    className={`form-input ${step2Errors.postal_code ? 'border-red-500' : ''}`}
                                     value={form.postal_code}
                                     onChange={e => setForm({ ...form, postal_code: e.target.value })}
                                   />
-                                </div>
-                                <div>
-                                  <label className="form-label">País</label>
-                                  <select
-                                    className="form-input"
-                                    value={form.country}
-                                    onChange={e => setForm({ ...form, country: e.target.value })}
-                                  >
-                                    <option value="Uruguay">Uruguay</option>
-                                  </select>
+                                  {step2Errors.postal_code && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.postal_code}</p>}
                                 </div>
                               </div>
+
+                              <div>
+                                <label className="form-label text-slate-300">Indicaciones para la entrega (Opcional)</label>
+                                <textarea
+                                  placeholder="Ej: Tocar timbre negro, casa de rejas verdes..."
+                                  className="form-input min-h-[80px]"
+                                  value={form.reference}
+                                  onChange={e => setForm({ ...form, reference: e.target.value })}
+                                />
+                              </div>
+
+                              <div className="bg-white/5 border border-white/10 p-4 rounded-xl flex items-start gap-3 mt-3">
+                                <input
+                                  type="checkbox"
+                                  id="privacy-logistics-consent"
+                                  className={`rounded border-white/10 text-primary-500 focus:ring-primary-500 bg-black/20 mt-1 cursor-pointer ${
+                                    step2Errors.consent ? 'border-red-500 ring-2 ring-red-500' : ''
+                                  }`}
+                                  checked={form.consent}
+                                  onChange={e => setForm({ ...form, consent: e.target.checked })}
+                                />
+                                <label htmlFor="privacy-logistics-consent" className="text-xs text-slate-300 leading-relaxed cursor-pointer select-none">
+                                  Acepto compartir los datos personales y de contacto proporcionados en este formulario con el operador logístico (MBE y courier internacional) con el único fin de procesar el transporte y la liberación aduanera del paquete.
+                                </label>
+                              </div>
+                              {step2Errors.consent && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.consent}</p>}
+
+                              <div>
+                                <label className="form-label text-slate-300">País</label>
+                                <select
+                                  className="form-input"
+                                  value={form.country}
+                                  onChange={e => {
+                                    const newCountry = e.target.value;
+                                    setForm(prev => ({
+                                      ...prev,
+                                      country: newCountry,
+                                      department: newCountry === 'Argentina' ? 'Buenos Aires' : 'Montevideo',
+                                      city: newCountry === 'Argentina' ? '' : 'Montevideo',
+                                      barrio: '',
+                                    }));
+                                  }}
+                                >
+                                  <option value="Uruguay">Uruguay</option>
+                                  <option value="Argentina">Argentina</option>
+                                </select>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              {hasAnyHomeDelivery && (
+                                <div id="shipping-street">
+                                  <label className="form-label">Dirección (calle y número) *</label>
+                                  <AddressAutocomplete
+                                    value={form.street}
+                                    onChange={value => setForm({ ...form, street: value })}
+                                    onSelect={handleAddressSelect}
+                                  />
+                                  {step2Errors.street && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.street}</p>}
+                                </div>
+                              )}
+
+                              <div className={!hasAnyHomeDelivery ? "grid grid-cols-1 gap-4" : "grid grid-cols-2 gap-4"}>
+                                <div id="shipping-department">
+                                  <label className="form-label">Departamento *</label>
+                                  <select
+                                    required={hasAnyDelivery}
+                                    className={`form-input ${step2Errors.department ? 'border-red-500' : ''}`}
+                                    value={form.department}
+                                    onChange={e => handleDepartmentChange(e.target.value)}
+                                  >
+                                    <option value="">Selecciona un departamento...</option>
+                                    {DEPARTAMENTOS.map((department) => (
+                                      <option key={department} value={department}>{department}</option>
+                                    ))}
+                                  </select>
+                                  {step2Errors.department && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.department}</p>}
+                                </div>
+
+                                {hasAnyHomeDelivery && (
+                                  <div id="shipping-city">
+                                    <label className="form-label">Ciudad / Localidad *</label>
+                                    {form.department === 'Montevideo' ? (
+                                      <input
+                                        type="text"
+                                        className="form-input opacity-80 cursor-not-allowed"
+                                        value="Montevideo"
+                                        readOnly
+                                      />
+                                    ) : (
+                                      <select
+                                        required={hasAnyDelivery}
+                                        className={`form-input ${step2Errors.city ? 'border-red-500' : ''}`}
+                                        value={form.city}
+                                        onChange={e => setForm({ ...form, city: e.target.value })}
+                                        disabled={!form.department}
+                                      >
+                                        <option value="">Selecciona una localidad...</option>
+                                        {form.department && URUGUAY_LOCATIONS[form.department]?.map((location) => (
+                                          <option key={location} value={location}>{location}</option>
+                                        ))}
+                                      </select>
+                                    )}
+                                    {step2Errors.city && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.city}</p>}
+                                  </div>
+                                )}
+                              </div>
+
+                              {hasAnyHomeDelivery && (
+                                <>
+                                  <div className="grid grid-cols-1 gap-4">
+                                    <div id="shipping-barrio">
+                                      <label className="form-label">Barrio {form.department === 'Montevideo' ? '*' : '(Opcional)'}</label>
+                                      {form.department === 'Montevideo' ? (
+                                        <select
+                                          required={hasAnyDelivery}
+                                          className={`form-input ${step2Errors.barrio ? 'border-red-500' : ''}`}
+                                          value={form.barrio}
+                                          onChange={e => setForm({ ...form, barrio: e.target.value })}
+                                        >
+                                          <option value="">Selecciona un barrio...</option>
+                                          {URUGUAY_LOCATIONS['Montevideo']?.map((barrioName) => (
+                                            <option key={barrioName} value={barrioName}>{barrioName}</option>
+                                          ))}
+                                        </select>
+                                      ) : (
+                                        <input
+                                          type="text"
+                                          className="form-input"
+                                          placeholder="Ej: Centro, La Floresta, etc."
+                                          value={form.barrio}
+                                          onChange={e => setForm({ ...form, barrio: e.target.value })}
+                                        />
+                                      )}
+                                      {step2Errors.barrio && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.barrio}</p>}
+                                    </div>
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <label className="form-label">Apartamento / Timbre</label>
+                                      <input
+                                        className="form-input"
+                                        placeholder="Ej: Apto 302, Timbre 4"
+                                        value={form.apartment}
+                                        onChange={e => setForm({ ...form, apartment: e.target.value })}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="form-label">Referencia / Indicaciones</label>
+                                      <input
+                                        className="form-input"
+                                        placeholder="Ej: Portón de madera, reja negra"
+                                        value={form.reference}
+                                        onChange={e => setForm({ ...form, reference: e.target.value })}
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <label className="form-label">Código postal</label>
+                                      <input
+                                        className="form-input"
+                                        placeholder="Ej: 11300"
+                                        value={form.postal_code}
+                                        onChange={e => setForm({ ...form, postal_code: e.target.value })}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="form-label">País</label>
+                                      <select
+                                        className="form-input"
+                                        value={form.country}
+                                        onChange={e => {
+                                          const newCountry = e.target.value;
+                                          setForm(prev => ({
+                                            ...prev,
+                                            country: newCountry,
+                                            department: newCountry === 'Argentina' ? 'Buenos Aires' : 'Montevideo',
+                                            city: newCountry === 'Argentina' ? '' : 'Montevideo',
+                                            barrio: '',
+                                          }));
+                                        }}
+                                      >
+                                        <option value="Uruguay">Uruguay</option>
+                                        <option value="Argentina">Argentina</option>
+                                      </select>
+                                    </div>
+                                  </div>
+                                </>
+                              )}
                             </>
                           )}
                         </>

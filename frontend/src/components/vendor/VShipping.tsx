@@ -44,6 +44,7 @@ export default function VShipping() {
     correo_uruguayo: { active: false },
     pickup: { active: false, address: '', department: 'Montevideo', city: '', phone: '', hours: '', instructions: '' },
     manual: { active: false, method_name: '', fixed_cost: '', instructions: '', estimated_time: '' },
+    free_shipping: { active: false, min_amount: '' },
     cutoff_time: '14:00',
     dispatch_days: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']
   });
@@ -177,6 +178,10 @@ export default function VShipping() {
               instructions: s.manual?.instructions || '',
               estimated_time: s.manual?.estimated_time || ''
             },
+            free_shipping: {
+              active: s.free_shipping?.active || false,
+              min_amount: s.free_shipping?.min_amount !== undefined && s.free_shipping?.min_amount !== null ? String(s.free_shipping.min_amount) : ''
+            },
             cutoff_time: s.cutoff_time || '14:00',
             dispatch_days: Array.isArray(s.dispatch_days) ? s.dispatch_days : ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']
           });
@@ -223,7 +228,11 @@ export default function VShipping() {
     try {
       const finalShippingData = {
         ...shippingData,
-        soydelivery: { active: isSoyDeliveryAvailable ? shippingData.soydelivery.active : false }
+        soydelivery: { active: isSoyDeliveryAvailable ? shippingData.soydelivery.active : false },
+        free_shipping: {
+          active: shippingData.free_shipping.active,
+          min_amount: shippingData.free_shipping.min_amount !== '' ? Number(shippingData.free_shipping.min_amount) : 0
+        }
       };
 
       const { error } = await supabase
@@ -258,7 +267,7 @@ export default function VShipping() {
     }));
   };
 
-  const updateSection = (section: 'dac' | 'pickup' | 'manual', field: string, value: any) => {
+  const updateSection = (section: 'dac' | 'pickup' | 'manual' | 'free_shipping', field: string, value: any) => {
     setShippingData(prev => ({ 
       ...prev, 
       [section]: { ...prev[section], [field]: value } 
@@ -628,6 +637,58 @@ export default function VShipping() {
           )}
 
         </div>
+      </div>
+
+      {/* SECCIÓN ENVÍO GRATIS POR MONTO MÍNIMO */}
+      <div className="border border-emerald-200 rounded-xl p-6 bg-emerald-50/20 shadow-sm space-y-4">
+        <div className="flex justify-between items-center pb-3 border-b border-emerald-100">
+          <div className="flex items-center gap-2.5">
+            <Sparkles className="w-5 h-5 text-emerald-600 shrink-0" />
+            <div>
+              <h3 className="text-base font-bold text-gray-900">Envío Gratis por Monto Mínimo</h3>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Ofrecé envío gratis a los compradores que alcancen un monto mínimo en compras de tus productos.
+              </p>
+            </div>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer shrink-0">
+            <input
+              type="checkbox"
+              checked={shippingData.free_shipping.active}
+              onChange={(e) => updateSection('free_shipping', 'active', e.target.checked)}
+              className="sr-only peer"
+            />
+            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+            <span className="ml-3 text-xs font-bold text-gray-700">
+              {shippingData.free_shipping.active ? 'Activado' : 'Desactivado'}
+            </span>
+          </label>
+        </div>
+
+        {shippingData.free_shipping.active && (
+          <div className="pt-2 grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">
+                Monto mínimo de compra para Envío Gratis ($ UYU)
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-2 text-xs text-gray-400 font-semibold">$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="100"
+                  value={shippingData.free_shipping.min_amount}
+                  onChange={(e) => updateSection('free_shipping', 'min_amount', e.target.value)}
+                  className="w-full pl-7 pr-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 bg-white"
+                  placeholder="Ej: 2500"
+                />
+              </div>
+              <p className="text-[11px] text-gray-500 mt-1.5 leading-normal">
+                Si la suma de tus productos en el carrito del cliente es igual o superior a este monto, el costo de envío de tus artículos será $0.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* CONFIGURACIÓN ADICIONAL DE RETIRO / ENVÍO PROPIO */}
