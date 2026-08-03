@@ -55,6 +55,23 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   const [priceMin, setPriceMin] = useState('');
   const [priceMax, setPriceMax] = useState('');
   const [searchInput, setSearchInput] = useState(searchQ);
+
+  // Debounce search input changes to prevent query thrashing on typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchInput !== searchQ) {
+        const params = new URLSearchParams(searchParams);
+        if (searchInput.trim()) {
+          params.set('q', searchInput.trim());
+        } else {
+          params.delete('q');
+        }
+        setSearchParams(params);
+        setPage(0);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
   const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null);
   const [brandsExpanded, setBrandsExpanded] = useState(false);
   const [searchBrandQuery, setSearchBrandQuery] = useState('');

@@ -28,17 +28,19 @@ serve(async (req) => {
       return new Response(JSON.stringify({ message: "Sync is disabled" }), { headers: getCorsHeaders(), status: 200 });
     }
 
-    // Fetch 20 products
+    // Fetch up to 10 stale products (older than 30 minutes or null)
+    const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
     const { data: products } = await supabase
       .from('international_products')
       .select('*')
       .eq('status', 'published')
       .eq('sync_enabled', true)
+      .or(`last_synced_at.is.null,last_synced_at.lte.${thirtyMinAgo}`)
       .order('last_synced_at', { ascending: true, nullsFirst: true })
-      .limit(20);
+      .limit(10);
 
     if (!products || products.length === 0) {
-      return new Response(JSON.stringify({ message: "No products to sync" }), { headers: getCorsHeaders(), status: 200 });
+      return new Response(JSON.stringify({ message: "No stale products needing sync" }), { headers: getCorsHeaders(), status: 200 });
     }
 
     const { effective_rate } = await getEffectiveExchangeRate(supabase);
@@ -47,7 +49,13 @@ serve(async (req) => {
     for (const prod of products) {
       try {
         const url = `https://api.zinc.com/products/${prod.external_product_id}?retailer=amazon`;
-        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${ZINC_API_KEY}` } });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+
+        const res = await fetch(url, {
+          headers: { 'Authorization': `Bearer ${ZINC_API_KEY}` },
+          signal: controller.signal
+        }).finally(() => clearTimeout(timeoutId));
 
         if (!res.ok) {
            throw new Error(`Zinc API error: ${res.status}`);
@@ -155,17 +163,24 @@ serve(async (req) => {
 
         await supabase.from('international_products').update(updates).eq('id', prod.id);
 
-        logs.push({
-            product_id: prod.id,
-            old_price_usd: prod.last_price_usd,
-            new_price_usd: price || prod.last_price_usd,
-            old_availability: prod.availability,
-            new_availability: newAvail,
-            old_prime: prod.amazon_prime,
-            new_prime: newPrime,
-            sync_status: syncStatus,
-            raw_response: data
-        });
+        // Only push log if there was a meaningful change or error to prevent database bloat
+        const hasPriceChanged = price && prod.last_price_usd !== price;
+        const hasAvailChanged = prod.availability !== newAvail;
+        const hasPrimeChanged = prod.amazon_prime !== newPrime;
+
+        if (hasPriceChanged || hasAvailChanged || hasPrimeChanged || syncStatus === 'failed') {
+          logs.push({
+              product_id: prod.id,
+              old_price_usd: prod.last_price_usd,
+              new_price_usd: price || prod.last_price_usd,
+              old_availability: prod.availability,
+              new_availability: newAvail,
+              old_prime: prod.amazon_prime,
+              new_prime: newPrime,
+              sync_status: syncStatus,
+              raw_response: data
+          });
+        }
 
       } catch (err: any) {
         logs.push({
@@ -177,7 +192,9 @@ serve(async (req) => {
       }
     }
 
-    await supabase.from('international_product_sync_logs').insert(logs);
+    if (logs.length > 0) {
+      await supabase.from('international_product_sync_logs').insert(logs);
+    }
 
     return new Response(JSON.stringify({ success: true, processed: products.length }), { headers: getCorsHeaders(), status: 200 });
   } catch (error: any) {

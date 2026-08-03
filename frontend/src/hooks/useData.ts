@@ -19,6 +19,7 @@ interface ProductFilters {
   includeDrafts?: boolean;
   vendor_store_id?: string;
   collection_id?: string;
+  skipCount?: boolean;
 }
 
 export function useProducts(filters: ProductFilters = {}) {
@@ -182,21 +183,20 @@ export function useProducts(filters: ProductFilters = {}) {
     }
 
     const selectStr = `
-        *,
+        id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, is_international, created_at,
         category:categories(id, name, slug),
         brand:brands(id, name, slug, logo_url),
-        images:product_images(id, url, alt_text, sort_order, is_primary),
-        variants:product_variants(id, sku, legacy_sku, name, price_adjustment, inventory_count),
-        product_tags:product_tags(tag_id),
-        vendor:vendors(id, store_name, slug, logo_url, promotions_opt_in),
-        vendor_store:vendor_stores(id, store_name, slug, logo_url, status, is_official, approved_by, approved_at, vendor_store_badge_assignments(status, approved_by, approved_at, vendor_store_badges(*))),
-        product_group_items(group_id, group:product_groups(id, name, slug, badge_image_url, badge_storage_path, badge_alt_text, badge_updated_at, is_active, sort_order))
+        images:product_images(id, url, alt_text, is_primary),
+        variants:product_variants(id, sku, price_adjustment, inventory_count),
+        vendor:vendors(id, store_name, slug, logo_url),
+        vendor_store:vendor_stores(id, store_name, slug, logo_url, is_official)
         ${categoryId ? ', product_categories!inner(category_id)' : ''}
     `;
 
+    const shouldCount = !filters.skipCount && !filters.featured;
     let query = supabase
       .from('products')
-      .select(selectStr, { count: 'exact' })
+      .select(selectStr, shouldCount ? { count: 'exact' } : undefined)
       .eq('status', 'published')
       .eq('is_active', true);
 
@@ -652,7 +652,7 @@ export function useProductGroups() {
           id, name, slug, description, type, rules_json, show_on_home, badge_image_url, badge_storage_path, badge_alt_text, badge_updated_at,
           product_group_items (
             product:products (
-              *,
+              id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id,
               category:categories(id, name, slug),
               brand:brands(id, name, slug),
               images:product_images(id, url, alt_text, sort_order, is_primary),

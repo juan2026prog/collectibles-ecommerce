@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useMemo, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useMemo, useCallback, useRef, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
@@ -34,21 +34,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const fetchedUserIdRef = useRef<string | null>(null);
+
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Listen for auth changes (handles initial session & updates)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) fetchProfile(session.user.id);
-      else setLoading(false);
+      if (session?.user) {
+        // Only fetch profile if user changed or profile was not fetched yet
+        if (fetchedUserIdRef.current !== session.user.id || event === 'USER_UPDATED') {
+          fetchedUserIdRef.current = session.user.id;
+          fetchProfile(session.user.id);
+        }
+      } else {
+        fetchedUserIdRef.current = null;
+        setProfile(null);
+        setLoading(false);
+      }
     });
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) fetchProfile(session.user.id);
-      else { setProfile(null); setLoading(false); }
+    // Fallback getSession check (only fetch if onAuthStateChange hasn't already initialized it)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user && fetchedUserIdRef.current !== session.user.id) {
+        setSession(session);
+        setUser(session.user);
+        fetchedUserIdRef.current = session.user.id;
+        fetchProfile(session.user.id);
+      } else if (!session?.user && !fetchedUserIdRef.current) {
+        setLoading(false);
+      }
     });
 
     return () => subscription.unsubscribe();

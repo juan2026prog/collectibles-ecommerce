@@ -239,8 +239,8 @@ export default function Home() {
   const { country } = useLocale();
 
 
-  const { products: featured, loading: featuredLoading } = useProducts({ featured: true, limit: 10 });
-  const { products: newArrivals, loading: newArrivalsLoading } = useProducts({ badge: 'new', limit: 8 });
+  const { products: featured, loading: featuredLoading } = useProducts({ featured: true, limit: 10, skipCount: true });
+  const { products: newArrivals, loading: newArrivalsLoading } = useProducts({ badge: 'new', limit: 8, skipCount: true });
   const { brands, loading: brandsLoading } = useBrands();
   const { groups, loading: groupsLoading } = useProductGroups();
   const cart = useCartContext();
