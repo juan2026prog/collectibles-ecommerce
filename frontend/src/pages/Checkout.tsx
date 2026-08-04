@@ -126,6 +126,30 @@ export default function Checkout() {
   const { settings, loaded: settingsLoaded } = useSiteSettings();
   const freeShippingThreshold = Number(settings['free_shipping_threshold'] || 4000);
   const { formatCurrencyPrice, selectedCurrency, setSelectedCurrency } = useCurrency();
+  const { user } = useAuth();
+
+  const [form, setForm] = useState({
+    email: user?.email || '',
+    first_name: '',
+    last_name: '',
+    phone: '',
+    street: '',
+    apartment: '',
+    city: 'Montevideo',
+    department: 'Montevideo',
+    barrio: '',
+    reference: '',
+    postal_code: '',
+    country: 'Uruguay',
+    ci: '',
+    recipient_type: 'person',
+    dni: '',
+    cuit: '',
+    razon_social: '',
+    street_number: '',
+    consent: false,
+  });
+  const [internationalShippingRate, setInternationalShippingRate] = useState<number>(1500);
 
   // Switch to USD for Argentina if setting is active
   useEffect(() => {
@@ -135,7 +159,6 @@ export default function Checkout() {
       }
     }
   }, [form.country, settings, selectedCurrency]);
-  const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [checkoutError, setCheckoutError] = useState('');
   const initiateCheckoutTrackedRef = useRef(false);
@@ -305,27 +328,6 @@ export default function Checkout() {
   const [suggestionsLoading, setSuggestionsLoading] = useState(true);
   const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
   const carouselRef = useRef<HTMLDivElement>(null);
-  const [form, setForm] = useState({
-    email: user?.email || '',
-    first_name: '',
-    last_name: '',
-    phone: '',
-    street: '',
-    apartment: '',
-    city: 'Montevideo',
-    department: 'Montevideo',
-    barrio: '',
-    reference: '',
-    postal_code: '',
-    country: 'Uruguay',
-    ci: '',
-    recipient_type: 'person',
-    dni: '',
-    cuit: '',
-    razon_social: '',
-    street_number: '',
-    consent: false,
-  });
 
   const [dacShippingCost, setDacShippingCost] = useState<number | null>(null);
   const [vendorShippingCosts, setVendorShippingCosts] = useState<Record<string, number>>({});
@@ -930,8 +932,6 @@ export default function Checkout() {
     setDetectedKOficina(null);
     setVendorShippingCosts({});
   }, [subordersShipping]);
-
-  const [internationalShippingRate, setInternationalShippingRate] = useState<number>(1500);
 
   useEffect(() => {
     async function loadIntlRate() {
