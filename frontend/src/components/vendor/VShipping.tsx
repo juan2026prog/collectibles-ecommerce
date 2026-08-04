@@ -4,9 +4,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/admin/Toast';
 import { 
   Truck, Store, Package, AlertTriangle, CheckCircle, XCircle, 
-  MapPin, Plus, Trash2, Shield, Settings, Info, Check, RefreshCw, Sparkles, Eye 
+  MapPin, Plus, Trash2, Shield, Settings, Info, Check, RefreshCw, Sparkles, Eye, Sliders 
 } from 'lucide-react';
 import VendorLabelPreviewModal from './VendorLabelPreviewModal';
+import VDistrilogicIntegration from './VDistrilogicIntegration';
 import { isLocationInSoyDeliveryZone, isSoyDeliveryAvailableForVendor } from '../../utils/uruguayLocations';
 
 interface DispatchAddress {
@@ -82,6 +83,11 @@ export default function VShipping() {
   const [vendorObj, setVendorObj] = useState<any>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
 
+  // 5. Distrilogic BYOC connection state
+  const [distrilogicConn, setDistrilogicConn] = useState<any>(null);
+  const [showDistrilogicModal, setShowDistrilogicModal] = useState(false);
+  const [distrilogicModalTab, setDistrilogicModalTab] = useState<'credentials' | 'services'>('credentials');
+
   const departments = [
     'Artigas', 'Canelones', 'Cerro Largo', 'Colonia', 'Durazno', 
     'Flores', 'Florida', 'Lavalleja', 'Maldonado', 'Montevideo', 
@@ -93,7 +99,7 @@ export default function VShipping() {
     if (!user) return;
     try {
       // Run queries in parallel
-      const [vendorRes, addrRes, mlRes, provRes] = await Promise.all([
+      const [vendorRes, addrRes, mlRes, provRes, distrilogicRes] = await Promise.all([
         supabase
           .from('vendors')
           .select('store_name, logo_url, slug, contact_phone, pickup_address, shipping_settings')
@@ -123,8 +129,23 @@ export default function VShipping() {
           .from('shipping_providers')
           .select('code, name, is_active, status')
           .then(res => ({ success: true, data: res.data, error: res.error }))
+          .catch(err => ({ success: false, data: null, error: err })),
+
+        supabase
+          .from('vendor_shipping_connections')
+          .select('*')
+          .eq('vendor_id', user.id)
+          .eq('provider', 'distrilogic')
+          .maybeSingle()
+          .then(res => ({ success: true, data: res.data, error: res.error }))
           .catch(err => ({ success: false, data: null, error: err }))
       ]);
+
+      if (distrilogicRes?.success) {
+        setDistrilogicConn(distrilogicRes.data);
+      } else {
+        setDistrilogicConn(null);
+      }
 
       // Process providers result
       if (provRes.success && provRes.data) {
@@ -251,6 +272,16 @@ export default function VShipping() {
 
   const isProviderActive = (code: string) => {
     return globalProviders.some(p => p.code === code && p.is_active && p.status === 'active');
+  };
+
+  const getDistrilogicBadge = () => {
+    if (!distrilogicConn) return { text: 'No configurado', class: 'bg-gray-100 text-gray-700 border border-gray-200' };
+    const status = distrilogicConn.connection_status;
+    if (status === 'disabled') return { text: 'Desactivado', class: 'bg-slate-100 text-slate-700 border border-slate-200' };
+    if (status === 'error') return { text: 'Error de conexión', class: 'bg-red-100 text-red-800 border border-red-200' };
+    if (status === 'connected' && distrilogicConn.last_tested_at) return { text: 'Conectado', class: 'bg-emerald-100 text-emerald-800 border border-emerald-200' };
+    if (status === 'connected') return { text: 'Configurado', class: 'bg-blue-100 text-blue-800 border border-blue-200' };
+    return { text: 'No configurado', class: 'bg-gray-100 text-gray-700 border border-gray-200' };
   };
 
   const toggleMethod = (method: 'dac' | 'ues' | 'soydelivery' | 'correo_uruguayo' | 'pickup' | 'manual') => {
@@ -447,13 +478,13 @@ export default function VShipping() {
         </div>
       </div>
 
-      {/* CENTRALIZED SHIPMENTS EXPLANATION CARD */}
+      {/* EXPLICACIÓN DE INTEGRACIONES Y LOGÍSTICA */}
       <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 flex gap-4 text-sm text-slate-700">
         <Shield className="w-6 h-6 text-slate-700 shrink-0 mt-0.5" />
         <div>
-          <span className="font-bold text-base text-slate-900 block">Modelo Centralizado Sin Credenciales</span>
+          <span className="font-bold text-base text-slate-900 block">Integraciones logísticas por tienda</span>
           <p className="mt-1.5 text-slate-600 leading-relaxed">
-            Ya no necesitás ingresar claves API, usuarios ni contraseñas. Collectibles centraliza las integraciones logísticas, tarifas y generación de etiquetas. El cliente abona el envío durante el checkout según las tarifas globales de la plataforma y este importe se sumará de forma íntegra a tu liquidación.
+            Podés utilizar los métodos centralizados de Collectibles o conectar tu propia cuenta de un proveedor logístico compatible. Cada integración configurada se aplica únicamente a los pedidos de tu tienda.
           </p>
         </div>
       </div>
@@ -475,168 +506,252 @@ export default function VShipping() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          
-          {/* DAC */}
-          {isProviderActive('dac') && (
-            <div 
-              onClick={() => toggleMethod('dac')}
-              className={`p-4 border rounded-xl cursor-pointer transition-all flex items-start gap-3 hover:bg-slate-50 ${shippingData.dac.active ? 'border-blue-500 bg-blue-50/20' : 'border-gray-200 bg-white'}`}
-            >
-              <input 
-                type="checkbox" 
-                checked={shippingData.dac.active} 
-                onChange={() => {}} 
-                className="mt-1 rounded text-blue-600 focus:ring-blue-500 pointer-events-none" 
-              />
-              <div>
-                <div className="font-bold text-sm text-gray-900 flex items-center gap-2">
-                  DAC
-                  <span className="bg-blue-100 text-blue-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
-                    Collectibles Envíos
-                  </span>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">Despacho nacional interdepartamental. Las tarifas se cotizan de forma automática.</p>
-              </div>
-            </div>
-          )}
+        {/* CATEGORÍA A: MÉTODOS ADMINISTRADOS POR COLLECTIBLES */}
+        <div className="space-y-3">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 pb-2 border-b border-slate-100 flex items-center gap-1.5">
+            <Truck className="w-4 h-4 text-slate-600" />
+            A. Métodos administrados por Collectibles
+          </h4>
 
-          {/* UES */}
-          {isProviderActive('ues') && (
-            <div 
-              onClick={() => toggleMethod('ues')}
-              className={`p-4 border rounded-xl cursor-pointer transition-all flex items-start gap-3 hover:bg-slate-50 ${shippingData.ues.active ? 'border-teal-500 bg-teal-50/20' : 'border-gray-200 bg-white'}`}
-            >
-              <input 
-                type="checkbox" 
-                checked={shippingData.ues.active} 
-                onChange={() => {}} 
-                className="mt-1 rounded text-teal-600 focus:ring-teal-500 pointer-events-none" 
-              />
-              <div>
-                <div className="font-bold text-sm text-gray-900 flex items-center gap-2">
-                  UES
-                  <span className="bg-teal-100 text-teal-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
-                    Collectibles Envíos
-                  </span>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">Entregas a domicilio y red de pick centers nacionales.</p>
-              </div>
-            </div>
-          )}
-
-          {/* SOYDELIVERY */}
-          {isProviderActive('soydelivery') && (
-            <div 
-              onClick={() => {
-                if (!isSoyDeliveryAvailable) {
-                  toast.error("SoyDelivery/Flex solo está disponible para vendedores dentro de la zona de cobertura.");
-                  return;
-                }
-                toggleMethod('soydelivery');
-              }}
-              className={`p-4 border rounded-xl transition-all flex items-start gap-3 ${
-                !isSoyDeliveryAvailable 
-                  ? 'opacity-65 cursor-not-allowed border-gray-200 bg-gray-50' 
-                  : shippingData.soydelivery.active 
-                    ? 'border-orange-500 bg-orange-50/20 cursor-pointer hover:bg-slate-50' 
-                    : 'border-gray-200 bg-white cursor-pointer hover:bg-slate-50'
-              }`}
-            >
-              <input 
-                type="checkbox" 
-                checked={shippingData.soydelivery.active} 
-                disabled={!isSoyDeliveryAvailable}
-                onChange={() => {}} 
-                className="mt-1 rounded text-orange-600 focus:ring-orange-500 pointer-events-none" 
-              />
-              <div>
-                <div className="font-bold text-sm text-gray-900 flex items-center gap-2">
-                  SoyDelivery
-                  <span className="bg-orange-100 text-orange-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
-                    Collectibles Envíos
-                  </span>
-                  {!isSoyDeliveryAvailable && (
-                    <span className="bg-red-100 text-red-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
-                      {dispatchAddresses.length === 0 ? "Sin dirección" : "Fuera de zona"}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            {/* DAC */}
+            {isProviderActive('dac') && (
+              <div 
+                onClick={() => toggleMethod('dac')}
+                className={`p-4 border rounded-xl cursor-pointer transition-all flex items-start gap-3 hover:bg-slate-50 ${shippingData.dac.active ? 'border-blue-500 bg-blue-50/20' : 'border-gray-200 bg-white'}`}
+              >
+                <input 
+                  type="checkbox" 
+                  checked={shippingData.dac.active} 
+                  onChange={() => {}} 
+                  className="mt-1 rounded text-blue-600 focus:ring-blue-500 pointer-events-none" 
+                />
+                <div>
+                  <div className="font-bold text-sm text-gray-900 flex items-center gap-2">
+                    DAC
+                    <span className="bg-blue-100 text-blue-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
+                      Collectibles Envíos
                     </span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Despacho nacional interdepartamental. Las tarifas se cotizan de forma automática.</p>
+                </div>
+              </div>
+            )}
+
+            {/* UES */}
+            {isProviderActive('ues') && (
+              <div 
+                onClick={() => toggleMethod('ues')}
+                className={`p-4 border rounded-xl cursor-pointer transition-all flex items-start gap-3 hover:bg-slate-50 ${shippingData.ues.active ? 'border-teal-500 bg-teal-50/20' : 'border-gray-200 bg-white'}`}
+              >
+                <input 
+                  type="checkbox" 
+                  checked={shippingData.ues.active} 
+                  onChange={() => {}} 
+                  className="mt-1 rounded text-teal-600 focus:ring-teal-500 pointer-events-none" 
+                />
+                <div>
+                  <div className="font-bold text-sm text-gray-900 flex items-center gap-2">
+                    UES
+                    <span className="bg-teal-100 text-teal-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
+                      Collectibles Envíos
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Entregas a domicilio y red de pick centers nacionales.</p>
+                </div>
+              </div>
+            )}
+
+            {/* SOYDELIVERY */}
+            {isProviderActive('soydelivery') && (
+              <div 
+                onClick={() => {
+                  if (!isSoyDeliveryAvailable) {
+                    toast.error("SoyDelivery/Flex solo está disponible para vendedores dentro de la zona de cobertura.");
+                    return;
+                  }
+                  toggleMethod('soydelivery');
+                }}
+                className={`p-4 border rounded-xl transition-all flex items-start gap-3 ${
+                  !isSoyDeliveryAvailable 
+                    ? 'opacity-65 cursor-not-allowed border-gray-200 bg-gray-50' 
+                    : shippingData.soydelivery.active 
+                      ? 'border-orange-500 bg-orange-50/20 cursor-pointer hover:bg-slate-50' 
+                      : 'border-gray-200 bg-white cursor-pointer hover:bg-slate-50'
+                }`}
+              >
+                <input 
+                  type="checkbox" 
+                  checked={shippingData.soydelivery.active} 
+                  disabled={!isSoyDeliveryAvailable}
+                  onChange={() => {}} 
+                  className="mt-1 rounded text-orange-600 focus:ring-orange-500 pointer-events-none" 
+                />
+                <div>
+                  <div className="font-bold text-sm text-gray-900 flex items-center gap-2">
+                    SoyDelivery
+                    <span className="bg-orange-100 text-orange-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
+                      Collectibles Envíos
+                    </span>
+                    {!isSoyDeliveryAvailable && (
+                      <span className="bg-red-100 text-red-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
+                        {dispatchAddresses.length === 0 ? "Sin dirección" : "Fuera de zona"}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Envíos express en el día (Flex) para Montevideo y zonas metropolitanas.</p>
+                  {!isSoyDeliveryAvailable && (
+                    <p className="text-[10px] text-red-600 mt-1 font-medium flex items-center gap-1">
+                      <Info className="w-3.5 h-3.5 shrink-0" />
+                      {dispatchAddresses.length === 0 
+                        ? "Configurá tu dirección de despacho para calcular envíos."
+                        : "SoyDelivery/Flex solo está disponible para vendedores dentro de la zona cubierta."}
+                    </p>
                   )}
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Envíos express en el día (Flex) para Montevideo y zonas metropolitanas.</p>
-                {!isSoyDeliveryAvailable && (
-                  <p className="text-[10px] text-red-600 mt-1 font-medium flex items-center gap-1">
-                    <Info className="w-3.5 h-3.5 shrink-0" />
-                    {dispatchAddresses.length === 0 
-                      ? "Configurá tu dirección de despacho para calcular envíos."
-                      : "SoyDelivery/Flex solo está disponible para vendedores dentro de la zona cubierta."}
-                  </p>
+              </div>
+            )}
+
+            {/* CORREO URUGUAYO */}
+            {isProviderActive('correo_uruguayo') && (
+              <div 
+                onClick={() => toggleMethod('correo_uruguayo')}
+                className={`p-4 border rounded-xl cursor-pointer transition-all flex items-start gap-3 hover:bg-slate-50 ${shippingData.correo_uruguayo.active ? 'border-yellow-600 bg-yellow-50/20' : 'border-gray-200 bg-white'}`}
+              >
+                <input 
+                  type="checkbox" 
+                  checked={shippingData.correo_uruguayo.active} 
+                  onChange={() => {}} 
+                  className="mt-1 rounded text-yellow-600 focus:ring-yellow-500 pointer-events-none" 
+                />
+                <div>
+                  <div className="font-bold text-sm text-gray-900 flex items-center gap-2">
+                    Correo Uruguayo
+                    <span className="bg-yellow-100 text-yellow-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
+                      Collectibles Envíos
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Envíos nacionales con cobertura de oficinas postales públicas.</p>
+                </div>
+              </div>
+            )}
+
+            {/* RETIRO EN LOCAL */}
+            {isProviderActive('pickup') && (
+              <div 
+                onClick={() => toggleMethod('pickup')}
+                className={`p-4 border rounded-xl cursor-pointer transition-all flex items-start gap-3 hover:bg-slate-50 ${shippingData.pickup.active ? 'border-black bg-gray-50/20' : 'border-gray-200 bg-white'}`}
+              >
+                <input 
+                  type="checkbox" 
+                  checked={shippingData.pickup.active} 
+                  onChange={() => {}} 
+                  className="mt-1 rounded text-black focus:ring-black pointer-events-none" 
+                />
+                <div>
+                  <div className="font-bold text-sm text-gray-900">Retiro en Local</div>
+                  <p className="text-xs text-gray-500 mt-1">Habilitá a tus compradores a retirar el artículo directamente en tu tienda física.</p>
+                </div>
+              </div>
+            )}
+
+            {/* ENVIO PROPIO */}
+            {isProviderActive('manual') && (
+              <div 
+                onClick={() => toggleMethod('manual')}
+                className={`p-4 border rounded-xl cursor-pointer transition-all flex items-start gap-3 hover:bg-slate-50 ${shippingData.manual.active ? 'border-black bg-gray-50/20' : 'border-gray-200 bg-white'}`}
+              >
+                <input 
+                  type="checkbox" 
+                  checked={shippingData.manual.active} 
+                  onChange={() => {}} 
+                  className="mt-1 rounded text-black focus:ring-black pointer-events-none" 
+                />
+                <div>
+                  <div className="font-bold text-sm text-gray-900">Envío Propio</div>
+                  <p className="text-xs text-gray-500 mt-1">Configurá tarifas personalizadas, cadetería directa o métodos manuales a coordinar.</p>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+
+        {/* CATEGORÍA B: INTEGRACIONES CON CUENTA DEL VENDOR */}
+        <div className="space-y-3 pt-5 border-t border-gray-100">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-purple-800 pb-2 border-b border-purple-100 flex items-center gap-1.5">
+            <Shield className="w-4 h-4 text-purple-700" />
+            B. Integraciones con cuenta del vendor
+          </h4>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            {/* DISTRILOGIC CARD */}
+            <div className="p-4 border border-purple-200 bg-purple-50/30 rounded-xl space-y-3 transition-all hover:bg-purple-50/50">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="font-bold text-sm text-gray-900 flex items-center gap-2">
+                    <Truck className="w-4 h-4 text-purple-700" />
+                    Distrilogic
+                  </div>
+                  <span className="bg-purple-100 text-purple-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
+                    Cuenta propia
+                  </span>
+                </div>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${getDistrilogicBadge().class}`}>
+                  {getDistrilogicBadge().text}
+                </span>
+              </div>
+
+              <p className="text-xs text-gray-600 leading-relaxed">
+                Conectá tu cuenta de Distrilogic para cotizar, generar etiquetas y realizar seguimiento de tus envíos.
+              </p>
+
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDistrilogicModalTab('credentials');
+                    setShowDistrilogicModal(true);
+                  }}
+                  className="px-3 py-1.5 text-xs font-bold rounded-lg bg-purple-700 text-white hover:bg-purple-800 transition shadow-sm flex items-center gap-1"
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                  {distrilogicConn ? 'Editar credenciales' : 'Configurar cuenta'}
+                </button>
+
+                {distrilogicConn && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDistrilogicModalTab('credentials');
+                        setShowDistrilogicModal(true);
+                      }}
+                      className="px-3 py-1.5 text-xs font-bold rounded-lg bg-white border border-gray-300 text-gray-700 hover:bg-slate-50 transition flex items-center gap-1"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      Probar conexión
+                    </button>
+                    
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDistrilogicModalTab('services');
+                        setShowDistrilogicModal(true);
+                      }}
+                      className="px-3 py-1.5 text-xs font-bold rounded-lg bg-white border border-gray-300 text-gray-700 hover:bg-slate-50 transition flex items-center gap-1"
+                    >
+                      <Sliders className="w-3.5 h-3.5" />
+                      Administrar servicios
+                    </button>
+                  </>
                 )}
               </div>
             </div>
-          )}
 
-          {/* CORREO URUGUAYO */}
-          {isProviderActive('correo_uruguayo') && (
-            <div 
-              onClick={() => toggleMethod('correo_uruguayo')}
-              className={`p-4 border rounded-xl cursor-pointer transition-all flex items-start gap-3 hover:bg-slate-50 ${shippingData.correo_uruguayo.active ? 'border-yellow-600 bg-yellow-50/20' : 'border-gray-200 bg-white'}`}
-            >
-              <input 
-                type="checkbox" 
-                checked={shippingData.correo_uruguayo.active} 
-                onChange={() => {}} 
-                className="mt-1 rounded text-yellow-600 focus:ring-yellow-500 pointer-events-none" 
-              />
-              <div>
-                <div className="font-bold text-sm text-gray-900 flex items-center gap-2">
-                  Correo Uruguayo
-                  <span className="bg-yellow-100 text-yellow-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
-                    Collectibles Envíos
-                  </span>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">Envíos nacionales con cobertura de oficinas postales públicas.</p>
-              </div>
-            </div>
-          )}
-
-          {/* RETIRO EN LOCAL */}
-          {isProviderActive('pickup') && (
-            <div 
-              onClick={() => toggleMethod('pickup')}
-              className={`p-4 border rounded-xl cursor-pointer transition-all flex items-start gap-3 hover:bg-slate-50 ${shippingData.pickup.active ? 'border-black bg-gray-50/20' : 'border-gray-200 bg-white'}`}
-            >
-              <input 
-                type="checkbox" 
-                checked={shippingData.pickup.active} 
-                onChange={() => {}} 
-                className="mt-1 rounded text-black focus:ring-black pointer-events-none" 
-              />
-              <div>
-                <div className="font-bold text-sm text-gray-900">Retiro en Local</div>
-                <p className="text-xs text-gray-500 mt-1">Habilitá a tus compradores a retirar el artículo directamente en tu tienda física.</p>
-              </div>
-            </div>
-          )}
-
-          {/* ENVIO PROPIO */}
-          {isProviderActive('manual') && (
-            <div 
-              onClick={() => toggleMethod('manual')}
-              className={`p-4 border rounded-xl cursor-pointer transition-all flex items-start gap-3 hover:bg-slate-50 ${shippingData.manual.active ? 'border-black bg-gray-50/20' : 'border-gray-200 bg-white'}`}
-            >
-              <input 
-                type="checkbox" 
-                checked={shippingData.manual.active} 
-                onChange={() => {}} 
-                className="mt-1 rounded text-black focus:ring-black pointer-events-none" 
-              />
-              <div>
-                <div className="font-bold text-sm text-gray-900">Envío Propio</div>
-                <p className="text-xs text-gray-500 mt-1">Configurá tarifas personalizadas, cadetería directa o métodos manuales a coordinar.</p>
-              </div>
-            </div>
-          )}
-
+          </div>
         </div>
       </div>
 
@@ -1122,6 +1237,14 @@ export default function VShipping() {
           onClose={() => setShowPreviewModal(false)}
         />
       )}
+
+      {/* MODAL DISTRILOGIC CONFIGURATION & SERVICES */}
+      <VDistrilogicIntegration
+        isOpen={showDistrilogicModal}
+        onClose={() => setShowDistrilogicModal(false)}
+        initialTab={distrilogicModalTab}
+        onConnectionChange={loadData}
+      />
     </div>
   );
 }
