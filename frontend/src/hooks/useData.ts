@@ -183,7 +183,7 @@ export function useProducts(filters: ProductFilters = {}) {
     }
 
     const selectStr = `
-        id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, is_international, created_at,
+        id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, created_at,
         category:categories(id, name, slug),
         brand:brands(id, name, slug, logo_url),
         images:product_images(id, url, alt_text, is_primary),
