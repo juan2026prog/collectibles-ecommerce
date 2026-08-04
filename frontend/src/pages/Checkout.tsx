@@ -3136,6 +3136,10 @@ export default function Checkout() {
                       const vData = vendorsData[storeKey];
                       const sSettings = vData?.shipping_settings || {};
                       
+                      const isCostLoading = dacShippingLoading && (selection.method === 'dac_home' || selection.method === 'dac_agency');
+                      const packageCost = vendorShippingCosts[storeKey];
+                      const hasCostError = !!dacShippingError && packageCost === undefined && (selection.method === 'dac_home' || selection.method === 'dac_agency');
+                      
                       return (
                         <div key={storeKey} className="space-y-4">
                           <PackageCard
