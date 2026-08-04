@@ -1222,7 +1222,8 @@ export default function Checkout() {
     }
   }, [shipping]);
 
-  const subtotalWithShipping = total - autoDiscountAmount + shipping;
+  const subtotal = total;
+  const subtotalWithShipping = subtotal - autoDiscountAmount + shipping;
 
   const getUruguayDateTime = () => {
     const now = new Date();
