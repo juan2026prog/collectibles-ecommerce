@@ -3121,7 +3121,7 @@ export default function Checkout() {
                       </span>
                       <span className="text-neutral-500">·</span>
                       <span className="text-white font-bold">
-                        Total de envío: ${shippingTotal.toLocaleString('es-UY')}
+                        Total de envío: ${shipping.toLocaleString('es-UY')}
                       </span>
                     </div>
                   </div>
