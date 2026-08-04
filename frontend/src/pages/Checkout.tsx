@@ -16,6 +16,11 @@ import { trackGA4Event, trackClarityEvent, mapCartItemsToGA4 } from '../lib/anal
 import { resolveCartItemPrice } from '../lib/priceResolver';
 import { generateMetaEventId, trackInitiateCheckout, trackAddPaymentInfo } from '../lib/meta/metaPixel';
 import { calculateUruboxEstimate, getEstimatedWeightKg } from '../lib/urubox';
+import CheckoutStepper from '../components/checkout/CheckoutStepper';
+import CheckoutSectionHeader from '../components/checkout/CheckoutSectionHeader';
+import PackageCard from '../components/checkout/PackageCard';
+import PaymentMethodCard from '../components/checkout/PaymentMethodCard';
+import ShipmentSummary from '../components/checkout/ShipmentSummary';
 
 const PROVINCIAS_ARGENTINA = [
   "Buenos Aires",
@@ -2601,28 +2606,12 @@ export default function Checkout() {
       </nav>
 
       {/* ═══ STEPPER ═══ */}
-      <div className="checkout-stepper">
-        {CHECKOUT_STEPS.map((step, idx) => (
-          <div key={step.id} className="checkout-step">
-            <div
-              className={`checkout-step ${
-                currentStep === step.id ? 'checkout-step--active' :
-                currentStep > step.id ? 'checkout-step--completed' : ''
-              }`}
-              style={{ cursor: currentStep > step.id ? 'pointer' : 'default' }}
-              onClick={() => { if (currentStep > step.id) setCurrentStep(step.id); }}
-            >
-              <div className="checkout-step-circle">
-                {currentStep > step.id ? <Check className="w-4 h-4" /> : step.id}
-              </div>
-              <span className="checkout-step-label">{step.label}</span>
-            </div>
-            {idx < CHECKOUT_STEPS.length - 1 && (
-              <div className={`checkout-step-line ${currentStep > step.id ? 'checkout-step-line--completed' : ''}`} />
-            )}
-          </div>
-        ))}
-      </div>
+      <CheckoutStepper
+        currentStep={currentStep}
+        onStepClick={(step) => {
+          if (currentStep > step) setCurrentStep(step);
+        }}
+      />
 
       {checkoutError && (
         <div className="mb-6 p-4 bg-red-900/30 border border-red-500/30 text-sm text-red-400 rounded-xl flex items-center justify-between">
@@ -2730,9 +2719,11 @@ export default function Checkout() {
             {/* ═══════════════════════════════════════════════════════════ */}
             {currentStep === 1 && (
               <div className="checkout-step-content" key="step-1">
-                <div className="glass p-6">
-                  <h2 className="font-bold text-lg mb-1">Datos de facturación</h2>
-                  <p className="text-xs text-slate-400 mb-6">Completá tus datos personales para continuar.</p>
+                <div className="bg-neutral-900/90 border border-neutral-800 rounded-2xl p-6 shadow-xl">
+                  <CheckoutSectionHeader
+                    title="Datos de facturación"
+                    subtitle="Completá tus datos personales para continuar."
+                  />
                   <div className="space-y-4">
                     <div>
                       <label className="form-label">Correo electrónico *</label>
@@ -2820,9 +2811,13 @@ export default function Checkout() {
             {/* ═══════════════════════════════════════════════════════════ */}
             {currentStep === 2 && (
               <div className="checkout-step-content" key="step-2">
-                <div className="glass p-6">
-                  <h2 className="font-bold text-lg mb-1">Datos de envío</h2>
-                  <p className="text-xs text-slate-400 mb-6">Elegí cómo querés recibir tu pedido.</p>
+                <div className="bg-neutral-900/90 border border-neutral-800 rounded-2xl p-6 shadow-xl">
+                  <CheckoutSectionHeader
+                    title="Elegí cómo querés recibir cada paquete"
+                    subtitle="Tus productos se enviarán en paquetes separados según la tienda. Cada tienda puede tener opciones, costos y promociones de envío diferentes."
+                    icon={Truck}
+                    badgeText={`${uniqueStoreKeys.length} ${uniqueStoreKeys.length === 1 ? 'Paquete' : 'Paquetes'}`}
+                  />
 
                   {items.some(i => i.is_international) && (
                     <div className="mb-8 bg-[#f00856]/5 border border-[#f00856]/20 p-4 rounded-xl">
@@ -3113,83 +3108,64 @@ export default function Checkout() {
                     Tu pedido incluye productos de distintos vendedores. Seleccioná el método de entrega preferido para cada paquete.
                   </p>
 
+                  {/* Quick Multi-Vendor Shipping Summary Banner */}
+                  <div className="mb-6 p-4 rounded-xl bg-neutral-950 border border-neutral-800 flex flex-wrap items-center justify-between gap-3 text-xs md:text-sm font-semibold text-neutral-200">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#f00856] animate-pulse" />
+                      <span>{uniqueStoreKeys.length} {uniqueStoreKeys.length === 1 ? 'paquete' : 'paquetes en total'}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className="text-emerald-400 font-bold">
+                        {Object.values(subordersShipping).filter(s => (vendorShippingCosts[s.method] ?? 0) === 0 || s.method === 'pickup').length} envíos gratis
+                      </span>
+                      <span className="text-neutral-500">·</span>
+                      <span className="text-white font-bold">
+                        Total de envío: ${shippingTotal.toLocaleString('es-UY')}
+                      </span>
+                    </div>
+                  </div>
+
                   <div id="shipping-packages-block" className="space-y-6">
-                    {uniqueStoreKeys.map(storeKey => {
+                    {uniqueStoreKeys.map((storeKey, idx) => {
                       const groupItems = items.filter(item => getStoreKey(item) === storeKey);
                       const groupTotal = groupItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
                       const options = getVendorShippingOptions(storeKey, groupTotal);
                       const selection = subordersShipping[storeKey] || { method: 'pickup', selectedAgency: null };
                       const vendorName = getVendorName(storeKey);
+                      const vData = vendorsData[storeKey];
+                      const sSettings = vData?.shipping_settings || {};
                       
-                      const selectedOption = options.find(o => o.id === selection.method);
-                      const isCostLoading = dacShippingLoading && (selection.method === 'dac_home' || selection.method === 'dac_agency');
-                      const packageCost = vendorShippingCosts[storeKey];
-                      const hasCostError = dacShippingError && !packageCost && (selection.method === 'dac_home' || selection.method === 'dac_agency');
-
                       return (
-                        <div key={storeKey} className="p-5 rounded-2xl border border-white/10 bg-white/5 space-y-4">
-                          <div className="flex items-center justify-between border-b border-white/15 pb-3">
-                            <div>
-                              <h4 className="font-bold text-white text-base">Paquete de {vendorName}</h4>
-                              <p className="text-xs text-slate-400 mt-0.5">
-                                {groupItems.length} {groupItems.length === 1 ? 'producto' : 'productos'} · Subtotal: ${groupTotal} UYU
-                              </p>
-                            </div>
-                            {selection.method !== 'pickup' && packageCost !== undefined && !isCostLoading && (
-                              <span className="text-xs font-black px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400">
-                                {packageCost === 0 ? 'Envío Gratis' : `Envío: $${packageCost} UYU`}
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {options.filter(o => o.show !== false).map(opt => {
-                              const isSelected = selection.method === opt.id;
-                              
-                              let icon = <Truck className="w-4 h-4" />;
-                              if (opt.id === 'pickup') icon = <Store className="w-4 h-4" />;
-                              if (opt.id === 'dac_agency') icon = <Building2 className="w-4 h-4" />;
-
-                              return (
-                                <button
-                                  key={opt.id}
-                                  type="button"
-                                  disabled={!opt.available && !isSelected}
-                                  onClick={() => {
-                                    setSubordersShipping(prev => ({
-                                      ...prev,
-                                      [storeKey]: {
-                                        method: opt.id as any,
-                                        selectedAgency: opt.id === 'dac_agency' ? prev[storeKey]?.selectedAgency : null
-                                      }
-                                    }));
-                                  }}
-                                  className={`text-left p-4 rounded-xl border-2 transition-all flex items-start gap-3 ${
-                                    isSelected
-                                      ? 'border-primary-500 bg-primary-500/10 shadow-lg shadow-primary-500/5'
-                                      : (!opt.available ? 'border-white/5 opacity-50 cursor-not-allowed bg-black/10' : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/[0.07]')
-                                  }`}
-                                >
-                                  <div className={`p-2 rounded-lg ${isSelected ? 'bg-primary-500 text-white' : 'bg-white/10 text-slate-400'}`}>
-                                    {icon}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="font-bold text-sm text-white">{opt.name}</div>
-                                    {opt.cost !== undefined && (
-                                      <div className="text-xs font-bold text-emerald-400 mt-0.5">
-                                        {opt.cost === 0 ? 'Gratis' : `$${opt.cost} UYU`}
-                                      </div>
-                                    )}
-                                    {opt.reason && !isSelected && (
-                                      <div className="text-[10px] text-slate-400 mt-1 leading-normal">
-                                        {opt.reason}
-                                      </div>
-                                    )}
-                                  </div>
-                                </button>
-                              );
-                            })}
-                          </div>
+                        <div key={storeKey} className="space-y-4">
+                          <PackageCard
+                            packageIndex={idx + 1}
+                            totalPackages={uniqueStoreKeys.length}
+                            storeKey={storeKey}
+                            vendorName={vendorName}
+                            vendorLogo={vData?.default_address?.address ? null : null}
+                            items={groupItems.map(gi => ({
+                              id: gi.id,
+                              title: gi.title,
+                              image_url: getProductImage(gi),
+                              price: gi.price,
+                              quantity: gi.quantity
+                            }))}
+                            groupTotal={groupTotal}
+                            freeShippingThreshold={freeShippingThreshold}
+                            vendorFreeShippingMin={Number(sSettings.free_shipping?.min_amount || 0)}
+                            vendorFreeShippingActive={!!sSettings.free_shipping?.active}
+                            shippingOptions={options}
+                            selectedMethodId={selection.method}
+                            onSelectMethod={(methodId) => {
+                              setSubordersShipping(prev => ({
+                                ...prev,
+                                [storeKey]: {
+                                  method: methodId as any,
+                                  selectedAgency: methodId === 'dac_agency' ? prev[storeKey]?.selectedAgency : null
+                                }
+                              }));
+                            }}
+                          />
 
                           {/* Specific agency selector for this package if Retiro en agencia DAC is chosen */}
                           {selection.method === 'dac_agency' && (
@@ -3858,69 +3834,48 @@ export default function Checkout() {
             {/* ═══════════════════════════════════════════════════════════ */}
             {currentStep === 3 && (
               <div className="checkout-step-content" key="step-3">
-                <div className="glass p-6">
-                  <h2 className="font-bold text-lg mb-1">Forma de pago</h2>
-                  <p className="text-xs text-slate-400 mb-6">Elegí cómo querés pagar tu pedido.</p>
+                <div className="bg-neutral-900/90 border border-neutral-800 rounded-2xl p-6 shadow-xl">
+                  <CheckoutSectionHeader
+                    title="Elegí cómo querés pagar"
+                    subtitle="Seleccioná tu pasarela o método de pago preferido para confirmar la compra."
+                  />
                   <div className="space-y-3">
                     {mercadopagoEnabled && (
-                      <label className={`flex items-center gap-4 p-4  border-2 cursor-pointer transition-all ${paymentMethod === 'mercadopago' ? 'border-blue-500 bg-blue-50/50 shadow-sm' : 'border-white/10 hover:border-white/10'}`}>
-                        <input type="radio" name="payment" value="mercadopago" checked={paymentMethod === 'mercadopago'} onChange={() => setPaymentMethod('mercadopago')} className="text-primary-600 shrink-0" />
-                        <img src="/logos/Mercado_Pago.png" alt="Mercado Pago" className="h-6 object-contain" />
-                      </label>
+                      <PaymentMethodCard
+                        id="mercadopago"
+                        title="Mercado Pago"
+                        description="Pagá de forma segura con tarjetas de crédito, débito o dinero en cuenta."
+                        badge="RECOMENDADO"
+                        isSelected={paymentMethod === 'mercadopago'}
+                        onSelect={() => setPaymentMethod('mercadopago')}
+                      />
                     )}
                     {dlocalgoEnabled && (
-                      <label className={`flex items-center gap-4 p-4  border-2 cursor-pointer transition-all ${paymentMethod === 'dlocalgo' ? 'border-blue-500 bg-blue-50/50 shadow-sm' : 'border-white/10 hover:border-white/10'}`}>
-                        <input type="radio" name="payment" value="dlocalgo" checked={paymentMethod === 'dlocalgo'} onChange={() => setPaymentMethod('dlocalgo')} className="text-primary-600 shrink-0" />
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <img src="/logos/visa-mastercard.png" alt="Visa / Mastercard" className="h-6 object-contain rounded" />
-                          <img src="/logos/OCA_LOGO.png" alt="OCA" className="h-6 object-contain" />
-                          <img src="/logos/DINERS.png" alt="Diners Club" className="h-6 object-contain" />
-                          <img src="/logos/lider.png" alt="Lider" className="h-6 object-contain" />
-                          <div className="w-px h-6 bg-gray-200 mx-1" />
-                          <img src="/logos/Red_Pagos_Logos.png" alt="RedPagos" className="h-6 object-contain" />
-                        </div>
-                      </label>
+                      <PaymentMethodCard
+                        id="dlocalgo"
+                        title="Tarjetas y Redes de Cobranza (dLocal)"
+                        description="OCA, Visa, Mastercard, Diners, Lider, Abitab y Redpagos."
+                        isSelected={paymentMethod === 'dlocalgo'}
+                        onSelect={() => setPaymentMethod('dlocalgo')}
+                      />
                     )}
                     {paypalEnabled && (
-                      <label className={`flex items-center gap-4 p-4  border-2 cursor-pointer transition-all ${paymentMethod === 'paypal' ? 'border-blue-500 bg-blue-50/50 shadow-sm' : 'border-white/10 hover:border-white/10'}`}>
-                        <input type="radio" name="payment" value="paypal" checked={paymentMethod === 'paypal'} onChange={() => setPaymentMethod('paypal')} className="text-primary-600 shrink-0" />
-                        <img src="/logos/paypal.png" alt="PayPal" className="h-6 object-contain" />
-                      </label>
+                      <PaymentMethodCard
+                        id="paypal"
+                        title="PayPal"
+                        description="Pago internacional rápido y seguro en USD."
+                        isSelected={paymentMethod === 'paypal'}
+                        onSelect={() => setPaymentMethod('paypal')}
+                      />
                     )}
                     {handyEnabled && (
-                      <label className={`flex items-center gap-4 p-4 border-2 cursor-pointer transition-all ${paymentMethod === 'handy' ? 'border-emerald-500 bg-emerald-50/50 shadow-sm' : 'border-white/10 hover:border-white/10'}`}>
-                        <input type="radio" name="payment" value="handy" checked={paymentMethod === 'handy'} onChange={() => setPaymentMethod('handy')} className="text-primary-600 shrink-0" />
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between flex-wrap gap-4">
-                            <div>
-                              <div className="font-bold text-white">Tarjetas y redes de cobranza</div>
-                              <div className="text-xs text-slate-400 mt-0.5">
-                                Botón de pago externo ({handyProvider?.environment === 'production' ? 'Producción' : 'Pruebas'})
-                              </div>
-                            </div>
-                            <div className="flex flex-col items-end gap-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <img src="/logos/visa-mastercard.png" alt="Visa / Mastercard" className="h-6 object-contain rounded" />
-                                <img src="/logos/OCA_LOGO.png" alt="OCA" className="h-6 object-contain" />
-                                <img src="/logos/lider.png" alt="Lider" className="h-6 object-contain" />
-                                <div className="w-px h-6 bg-white/20 mx-1" />
-                                <img src="/logos/Red_Pagos_Logos.png" alt="RedPagos" className="h-6 object-contain" />
-                              </div>
-                              <button
-                                type="button"
-                                className="text-[11px] text-primary-400 hover:text-primary-300 hover:underline font-medium mt-1 bg-transparent border-none p-0 cursor-pointer outline-none"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setShowPaymentMethodsModal(true);
-                                }}
-                              >
-                                Ver más medios de pago
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </label>
+                      <PaymentMethodCard
+                        id="handy"
+                        title="Handy Pago Directo"
+                        description="Pago con tarjetas locales y redes de cobranza."
+                        isSelected={paymentMethod === 'handy'}
+                        onSelect={() => setPaymentMethod('handy')}
+                      />
                     )}
                   </div>
                 </div>
@@ -4248,114 +4203,23 @@ export default function Checkout() {
                   })}
                 </div>
               </div>
-              <div className="border-t pt-4 space-y-2">
-                <div className="flex justify-between text-sm"><span className="text-slate-400">Subtotal ({items.reduce((s, i) => s + i.quantity, 0)} {items.reduce((s, i) => s + i.quantity, 0) === 1 ? 'item' : 'items'})</span><span className="font-bold">{formatCurrencyPrice(total - autoDiscountAmount)}</span></div>
-                {autoDiscountAmount > 0 && (
-                  <div className="flex justify-between items-center text-emerald-400 text-xs mt-1">
-                    <span className="flex items-center gap-1"><Tag className="w-3.5 h-3.5" /> Ahorro en promociones</span>
-                    <span className="font-bold">{formatCurrencyPrice(autoDiscountAmount)}</span>
-                  </div>
-                )}
-                 <div className="flex justify-between text-sm">
-                  <span className="text-slate-400">
-                    Costo total de envío
-                  </span>
-                  <span className="font-bold flex items-center gap-1.5">
-                    {dacCalculationStatus === 'loading' ? (
-                      <>
-                        <span className="w-3.5 h-3.5 border-2 border-primary-500 border-t-transparent rounded-full animate-spin inline-block" />
-                        <span className="text-xs text-slate-400 font-normal">Calculando...</span>
-                      </>
-                    ) : dacCalculationStatus === 'error' ? (
-                      <span className="text-xs text-red-400 font-bold">Error al calcular</span>
-                    ) : !isLocationSelected && total < freeShippingThreshold ? (
-                      <span className="text-xs text-slate-400 font-normal">-</span>
-                    ) : (
-                      shipping === 0 ? 'GRATIS' : formatCurrencyPrice(shipping)
-                    )}
-                  </span>
-                </div>
-                {bankDiscount > 0 && selectedPromo && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-green-600 flex items-center gap-1"><Tag className="w-3 h-3" />Promo {selectedPromo.bank_name}</span>
-                    <span className="font-bold text-green-600">-{formatCurrencyPrice(bankDiscount)}</span>
-                  </div>
-                )}
-                {activeCoupon && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-green-600 flex items-center gap-1">
-                      <Ticket className="w-3.5 h-3.5" />
-                      Cupón {couponCode}
-                      <span className="text-[10px] font-bold bg-green-500/10 text-green-500 px-1.5 py-0.5 rounded ml-1">
-                        {activeCoupon.discount_type === 'percentage' ? `-${activeCoupon.discount_value}%` : `-$${activeCoupon.discount_value}`}
-                      </span>
-                    </span>
-                    <span className="font-bold text-green-600">-{formatCurrencyPrice(couponDiscount)}</span>
-                  </div>
-                )}
-                {shippingMethod === 'delivery' && isLocationSelected && form.department && logistics.providerName && (
-                  <div className="border-t border-white/5 pt-3 mt-3 space-y-1">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-slate-400">Logística por</span>
-                      <span className="font-semibold text-slate-200">{logistics.providerName}</span>
-                    </div>
-                    <div className="flex items-start gap-1.5 text-xs mt-1">
-                      <Clock className="w-3.5 h-3.5 mt-0.5 shrink-0 text-green-500" />
-                      <span className="font-bold text-green-500">{logistics.message}</span>
-                    </div>
-                  </div>
-                )}
-                <div className="border-t pt-2 mt-2 flex justify-between">
-                  <span className="font-bold text-lg">Total</span>
-                  <div className="text-right">
-                    {(bankDiscount > 0 || couponDiscount > 0) && (
-                      <span className="text-sm text-slate-500 line-through mr-2">
-                        {formatCurrencyPrice(subtotalWithShipping)}
-                      </span>
-                    )}
-                    <span className="text-2xl font-black text-[#f00856]">{formatCurrencyPrice(grandTotal)}</span>
-                    {selectedCurrency !== 'UYU' && (
-                      <p className="text-[10px] text-slate-500 mt-1">
-                        Conversión estimada. El cobro final se realiza en pesos uruguayos.
-                      </p>
-                    )}
-                  </div>
-                </div>
-                {items.some(i => i.is_international) && (
-                  <div className="mt-4 bg-[#f00856]/10 border border-[#f00856]/20 p-3 rounded-lg flex flex-col gap-2">
-                    <div className="flex items-start gap-3">
-                      <AlertCircle className="w-5 h-5 text-[#f00856] shrink-0" />
-                      <p className="text-xs text-slate-300">
-                        <b className="text-[#f00856]">Importación Internacional:</b> El costo de traslado desde tu courier en USA hasta Uruguay no está incluido en el total a pagar hoy.
-                      </p>
-                    </div>
-                    {internationalCourier === 'urubox' ? (
-                      <div className="mt-2 pt-2 border-t border-[#f00856]/20 space-y-1.5">
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-slate-300 font-medium">Producto:</span>
-                          <span className="font-bold text-white">USD {items.reduce((sum, item) => sum + (item.is_international ? (item.price * item.quantity) : 0), 0).toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-slate-300 font-medium">Urubox estimado:</span>
-                          <span className="font-bold text-white">USD {uruboxTotalEstimate.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-sm font-bold border-t border-[#f00856]/20 pt-1.5 text-white">
-                          <span>Total estimado:</span>
-                          <span className="text-[#f00856]">USD {(items.reduce((sum, item) => sum + (item.is_international ? (item.price * item.quantity) : 0), 0) + uruboxTotalEstimate).toFixed(2)}</span>
-                        </div>
-                        <p className="text-[10px] text-slate-500 mt-2 text-center">
-                          Estimación basada en peso informado o estimado. El costo final puede variar según el peso real del courier.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="mt-2 pt-2 border-t border-[#f00856]/20 text-center text-xs text-amber-400 font-medium">
-                        El costo final dependerá del courier seleccionado.
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
+              <ShipmentSummary
+                items={items}
+                uniqueStoreKeys={uniqueStoreKeys}
+                getVendorName={getVendorName}
+                subordersShipping={subordersShipping}
+                vendorShippingCosts={vendorShippingCosts}
+                subtotal={subtotal}
+                shippingTotal={shipping}
+                shippingSavings={Object.values(subordersShipping).some(s => s.method === 'pickup') ? 220 : 0}
+                couponDiscount={couponDiscount}
+                autoDiscount={autoDiscountAmount}
+                finalTotal={grandTotal}
+                formatCurrencyPrice={formatCurrencyPrice}
+                activeCoupon={activeCoupon}
+                onRemoveCoupon={handleRemoveCoupon}
+              />
+              
               {/* Sección de Cupón de Descuento */}
               <div className="border-t border-white/10 pt-4 mt-4">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-2">
