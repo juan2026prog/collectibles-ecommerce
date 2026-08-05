@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRight, ChevronLeft, ChevronDown, Truck, Store, Tag, Sparkles, X, Home, Ticket, Share2, Clock, AlertCircle, MapPin, Building2, Search, Check, Trash2, Plus, Minus, XCircle, RefreshCcw } from 'lucide-react';
+import { ChevronRight, ChevronLeft, ChevronDown, Truck, Store, Tag, Sparkles, X, Home, Ticket, Share2, Clock, AlertCircle, MapPin, Building2, Search, Check, Trash2, Plus, Minus, XCircle, RefreshCcw, Info, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useCartContext } from '../contexts/CartContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { useAuth } from '../contexts/AuthContext';
