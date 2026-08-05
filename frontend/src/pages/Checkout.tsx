@@ -2809,20 +2809,21 @@ export default function Checkout() {
             )}
 
             {/* ═══════════════════════════════════════════════════════════ */}
-            {/* STEP 2: DATOS DE ENVÍO                                    */}
+            {/* STEP 2: DIRECCIÓN Y ENVÍO                                  */}
             {/* ═══════════════════════════════════════════════════════════ */}
             {currentStep === 2 && (
-              <div className="checkout-step-content" key="step-2">
-                <div className="bg-neutral-900/90 border border-neutral-800 rounded-2xl p-6 shadow-xl">
+              <div className="checkout-step-content space-y-6" key="step-2">
+                <div className="bg-neutral-900/90 border border-neutral-800 rounded-2xl p-6 shadow-xl space-y-6">
+                  {/* Step 2 Header */}
                   <CheckoutSectionHeader
-                    title="Elegí cómo querés recibir cada paquete"
-                    subtitle="Tus productos se enviarán en paquetes separados según la tienda. Cada tienda puede tener opciones, costos y promociones de envío diferentes."
+                    title="Dirección y envío"
+                    subtitle="Ingresá tu dirección para ver los métodos y costos disponibles para cada paquete."
                     icon={Truck}
                     badgeText={`${uniqueStoreKeys.length} ${uniqueStoreKeys.length === 1 ? 'Paquete' : 'Paquetes'}`}
                   />
 
                   {items.some(i => i.is_international) && (
-                    <div className="mb-8 bg-[#f00856]/5 border border-[#f00856]/20 p-4 rounded-xl">
+                    <div className="mb-6 bg-[#f00856]/5 border border-[#f00856]/20 p-4 rounded-xl">
                       <h3 className="font-bold text-white mb-2 flex items-center gap-2">
                         <AlertCircle className="w-4 h-4 text-[#f00856]" /> Importación Internacional
                       </h3>
@@ -2886,7 +2887,6 @@ export default function Checkout() {
                         <div className="space-y-4 p-4 border border-white/5 rounded-xl bg-black/10 mb-6">
                           <h4 className="font-bold text-sm text-white mb-2">Formulario de Dirección Internacional</h4>
                           
-                          {/* Courier autocomplete helper */}
                           <div className="mb-2">
                             <span className="text-xs text-slate-400 block mb-2 font-medium">Completar con plantilla sugerida:</span>
                             <div className="flex flex-wrap gap-2">
@@ -3083,7 +3083,6 @@ export default function Checkout() {
                         </div>
                       )}
 
-                      {/* Warning & Copy Confirmation Checkbox */}
                       <div className="bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-lg mb-4 text-xs text-yellow-300">
                         <p className="font-bold flex items-center gap-1.5 mb-1.5">
                           <AlertTriangle className="w-4 h-4 text-yellow-500" /> ¡Advertencia Importante!
@@ -3105,711 +3104,745 @@ export default function Checkout() {
                     </div>
                   )}
 
-                  <h3 className="font-bold text-white mb-4">Opciones de Envío por Paquete</h3>
-                  <p className="text-xs text-slate-400 mb-6 leading-relaxed">
-                    Tu pedido incluye productos de distintos vendedores. Seleccioná el método de entrega preferido para cada paquete.
-                  </p>
-
-                  {/* Quick Multi-Vendor Shipping Summary Banner */}
-                  <div className="mb-6 p-4 rounded-xl bg-neutral-950 border border-neutral-800 flex flex-wrap items-center justify-between gap-3 text-xs md:text-sm font-semibold text-neutral-200">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#f00856] animate-pulse" />
-                      <span>{uniqueStoreKeys.length} {uniqueStoreKeys.length === 1 ? 'paquete' : 'paquetes en total'}</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs">
-                      <span className="text-emerald-400 font-bold">
-                        {Object.values(subordersShipping).filter(s => (vendorShippingCosts[s.method] ?? 0) === 0 || s.method === 'pickup').length} envíos gratis
-                      </span>
-                      <span className="text-neutral-500">·</span>
-                      <span className="text-white font-bold">
-                        Total de envío: ${shipping.toLocaleString('es-UY')}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div id="shipping-packages-block" className="space-y-6">
-                    {uniqueStoreKeys.map((storeKey, idx) => {
-                      const groupItems = items.filter(item => getStoreKey(item) === storeKey);
-                      const groupTotal = groupItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
-                      const options = getVendorShippingOptions(storeKey, groupTotal);
-                      const selection = subordersShipping[storeKey] || { method: 'pickup', selectedAgency: null };
-                      const vendorName = getVendorName(storeKey);
-                      const vData = vendorsData[storeKey];
-                      const sSettings = vData?.shipping_settings || {};
-                      
-                      const isCostLoading = dacShippingLoading && (selection.method === 'dac_home' || selection.method === 'dac_agency');
-                      const packageCost = vendorShippingCosts[storeKey];
-                      const hasCostError = !!dacShippingError && packageCost === undefined && (selection.method === 'dac_home' || selection.method === 'dac_agency');
-                      
-                      return (
-                        <div key={storeKey} className="space-y-4">
-                          <PackageCard
-                            packageIndex={idx + 1}
-                            totalPackages={uniqueStoreKeys.length}
-                            storeKey={storeKey}
-                            vendorName={vendorName}
-                            vendorLogo={vData?.default_address?.address ? null : null}
-                            items={groupItems.map(gi => ({
-                              id: gi.id,
-                              title: gi.title,
-                              image_url: getProductImage(gi),
-                              price: gi.price,
-                              quantity: gi.quantity
-                            }))}
-                            groupTotal={groupTotal}
-                            freeShippingThreshold={freeShippingThreshold}
-                            vendorFreeShippingMin={Number(sSettings.free_shipping?.min_amount || 0)}
-                            vendorFreeShippingActive={!!sSettings.free_shipping?.active}
-                            shippingOptions={options}
-                            selectedMethodId={selection.method}
-                            onSelectMethod={(methodId) => {
-                              setSubordersShipping(prev => ({
-                                ...prev,
-                                [storeKey]: {
-                                  method: methodId as any,
-                                  selectedAgency: methodId === 'dac_agency' ? prev[storeKey]?.selectedAgency : null
-                                }
-                              }));
-                            }}
-                          />
-
-                          {/* Specific agency selector for this package if Retiro en agencia DAC is chosen */}
-                          {selection.method === 'dac_agency' && (
-                            <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
-                              <label className="form-label text-xs flex items-center gap-1.5 text-slate-300">
-                                <MapPin className="w-3.5 h-3.5 text-amber-500" />
-                                Seleccioná una agencia DAC para {vendorName} en {form.department || 'tu departamento'}
-                              </label>
-
-                              {dacAgencies.length > 0 ? (
-                                <>
-                                  {dacAgencies.length > 4 && (
-                                    <div className="relative">
-                                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
-                                      <input
-                                        type="text"
-                                        placeholder="Buscar agencia..."
-                                        className="form-input pl-9 text-xs"
-                                        value={agencySearchTerm}
-                                        onChange={e => setAgencySearchTerm(e.target.value)}
-                                      />
-                                    </div>
-                                  )}
-                                  <div className="max-h-48 overflow-y-auto space-y-2 pr-1 scrollbar-thin">
-                                    {dacAgencies
-                                      .filter(a => {
-                                        if (!agencySearchTerm.trim()) return true;
-                                        const term = agencySearchTerm.toLowerCase();
-                                        return (
-                                          a.office_name?.toLowerCase().includes(term) ||
-                                          a.city?.toLowerCase().includes(term) ||
-                                          a.locality?.toLowerCase().includes(term) ||
-                                          a.address?.toLowerCase().includes(term)
-                                        );
-                                      })
-                                      .map((agency) => {
-                                        const isAgencySelected = selection.selectedAgency?.id === agency.id;
-                                        return (
-                                          <button
-                                            key={agency.id}
-                                            type="button"
-                                            onClick={() => {
-                                              setSubordersShipping(prev => ({
-                                                ...prev,
-                                                [storeKey]: {
-                                                  ...prev[storeKey],
-                                                  selectedAgency: agency
-                                                }
-                                              }));
-                                            }}
-                                            className={`w-full text-left p-3 rounded-lg border-2 transition-all ${
-                                              isAgencySelected
-                                                ? 'border-amber-500 bg-amber-500/10'
-                                                : 'border-white/10 bg-white/5 hover:border-amber-500/30 hover:bg-white/[0.07]'
-                                            }`}
-                                          >
-                                            <div className="flex items-center justify-between">
-                                              <div>
-                                                <div className="font-bold text-sm text-white">{agency.office_name}</div>
-                                                {agency.address && (
-                                                  <div className="text-[11px] text-slate-400 mt-0.5">{agency.address}</div>
-                                                )}
-                                                {agency.city && (
-                                                  <div className="text-[11px] text-slate-500 mt-0.5">
-                                                    {agency.city}{agency.locality ? `, ${agency.locality}` : ''}
-                                                  </div>
-                                                )}
-                                              </div>
-                                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                                                isAgencySelected
-                                                  ? 'bg-amber-500 text-white'
-                                                  : 'bg-white/10 text-slate-500'
-                                              }`}>
-                                                K_{agency.k_oficina}
-                                              </span>
-                                            </div>
-                                          </button>
-                                        );
-                                      })}
-                                  </div>
-                                </>
-                              ) : (
-                                <div className="text-xs text-slate-500 p-3 bg-white/5 rounded-lg border border-white/10 text-center">
-                                  {form.department ? `No hay agencias DAC activas para retiro en ${form.department}.` : 'Seleccioná un departamento arriba para ver agencias disponibles.'}
-                                </div>
-                              )}
-                              
-                              {step2Errors[`agency_${storeKey}`] && (
-                                <p className="text-red-500 text-xs font-semibold">{step2Errors[`agency_${storeKey}`]}</p>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Specific cost / loading status for this package */}
-                          <div className="px-1 text-xs">
-                            {isCostLoading && (
-                              <div className="text-amber-400 font-semibold flex items-center gap-1.5">
-                                <span className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin inline-block" />
-                                <span>Calculando costo de envío...</span>
-                              </div>
-                            )}
-                            {hasCostError && (
-                              <div className="text-red-400 font-semibold leading-relaxed">
-                                {dacShippingError || "No pudimos calcular el costo de envío para este paquete."}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* CI Input for DAC (visible when using DAC on any package) */}
-                  {hasAnyDac && (
-                    <div id="shipping-ci-block" className="space-y-1.5 mt-5 pt-5 border-t border-white/10">
-                      <label className="form-label flex items-center justify-between text-xs">
-                        <span className="font-semibold text-slate-300">Cédula de Identidad (CI) *</span>
-                        {form.ci && !validateUruguayanCI(form.ci) && (
-                          <span className="text-[11px] text-red-400 font-semibold animate-pulse">CI Inválida</span>
-                        )}
-                        {form.ci && validateUruguayanCI(form.ci) && (
-                          <span className="text-[11px] text-green-400 font-semibold">✓ CI Válida</span>
-                        )}
-                      </label>
-                      <input
-                        required
-                        placeholder="Ej: 1.234.567-8"
-                        className={`form-input text-xs transition-all ${
-                          form.ci
-                            ? validateUruguayanCI(form.ci)
-                              ? 'border-green-500/50 focus:border-green-500 bg-green-500/5'
-                              : 'border-red-500/50 focus:border-red-500 bg-red-500/5'
-                            : 'border-white/10 focus:border-primary-500 bg-white/5'
-                        }`}
-                        value={form.ci}
-                        onChange={e => setForm({ ...form, ci: e.target.value })}
-                      />
-                      {step2Errors.ci && <p className="text-red-500 text-xs font-semibold">{step2Errors.ci}</p>}
-                      <p className="text-[10px] text-slate-500 leading-normal">Requerida para la facturación y despacho de la guía por DAC.</p>
-                    </div>
-                  )}
-
-                  {/* Address fields — only for delivery */}
-                  {hasAnyDelivery && (
-                    <div className="pt-4 mt-4 border-t border-white/10 space-y-4">
-                      <h3 className="font-semibold text-sm text-slate-400 mb-2">
-                        {!hasAnyHomeDelivery ? 'Departamento para Retiro' : 'Dirección de entrega'}
+                  {/* ═══════════════════════════════════════════════════════════ */}
+                  {/* SECCIÓN 1: DIRECCIÓN DE ENTREGA                            */}
+                  {/* ═══════════════════════════════════════════════════════════ */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between border-b border-neutral-800/80 pb-3">
+                      <h3 className="font-bold text-base text-white flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-primary-500" />
+                        1. Dirección de entrega
                       </h3>
+                      <span className="text-xs text-slate-400 font-medium">
+                        {form.country === 'Argentina' ? 'Envío internacional (MBE)' : 'Uruguay'}
+                      </span>
+                    </div>
 
-                      {savedAddresses.length > 0 && hasAnyHomeDelivery && (
-                        <div className="space-y-2 mb-4">
-                          <label className="form-label text-xs">Elegir dirección guardada</label>
-                          <div className="grid gap-2">
-                            {savedAddresses.map((address: any, index: number) => (
-                              <label key={index} className={`flex items-center gap-3 p-3  border-2 cursor-pointer transition-all ${selectedAddress === index ? 'border-primary-500 bg-primary-500/10' : 'border-white/10 hover:border-white/10'}`}>
-                                <input
-                                  type="radio"
-                                  name="savedAddr"
-                                  className="sr-only"
-                                  checked={selectedAddress === index}
-                                  onChange={() => {
-                                    setSelectedAddress(index);
-                                    setForm((current) => ({
-                                      ...current,
-                                      street: address.street || '',
-                                      apartment: address.apartment || '',
-                                      city: address.city || '',
-                                      department: address.department || '',
-                                      barrio: address.barrio || '',
-                                      reference: address.reference || '',
-                                      postal_code: address.postal_code || '',
-                                      country: address.country || 'Uruguay',
-                                      ci: address.ci || '',
-                                    }));
-                                  }}
-                                />
-                                <div className={`p-1.5  ${selectedAddress === index ? 'bg-primary-500/100 text-white' : 'bg-white/10 text-slate-500'}`}>
-                                  <Home className="w-4 h-4" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <span className="font-bold text-sm block">{address.label || `Dirección ${index + 1}`}</span>
-                                  <span className="text-xs text-slate-400 block truncate">{address.street}{address.apartment ? `, ${address.apartment}` : ''} - {address.city}, {address.department}</span>
-                                </div>
-                              </label>
-                            ))}
-                            <label className={`flex items-center gap-3 p-3  border-2 cursor-pointer transition-all ${selectedAddress === -2 ? 'border-primary-500 bg-primary-500/100/10' : 'border-white/10 border-dashed hover:border-white/10'}`}>
+                    <div className="bg-blue-500/5 border border-blue-500/20 p-3.5 rounded-xl flex items-start gap-2.5 text-xs text-blue-300">
+                      <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                      <span>Usaremos esta dirección para calcular cobertura, costos y métodos disponibles para cada tienda.</span>
+                    </div>
+
+                    {/* Excepción Retiro en Local para todos los paquetes */}
+                    {uniqueStoreKeys.length > 0 && uniqueStoreKeys.every(key => subordersShipping[key]?.method === 'pickup') && (
+                      <div className="bg-emerald-500/10 border border-emerald-500/30 p-3.5 rounded-xl text-xs text-emerald-300 flex items-start gap-2">
+                        <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                        <span>No necesitás ingresar dirección de calle porque seleccionaste retiro en local para todos los paquetes.</span>
+                      </div>
+                    )}
+
+                    {savedAddresses.length > 0 && hasAnyHomeDelivery && (
+                      <div className="space-y-2 mb-4">
+                        <label className="form-label text-xs">Elegir dirección guardada</label>
+                        <div className="grid gap-2">
+                          {savedAddresses.map((address: any, index: number) => (
+                            <label key={index} className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${selectedAddress === index ? 'border-primary-500 bg-primary-500/10' : 'border-white/10 hover:border-white/20 bg-white/5'}`}>
                               <input
                                 type="radio"
                                 name="savedAddr"
                                 className="sr-only"
-                                checked={selectedAddress === -2}
+                                checked={selectedAddress === index}
                                 onChange={() => {
-                                  setSelectedAddress(-2);
-                                  setForm((current) => ({ ...current, street: '', apartment: '', city: '', department: '', barrio: '', reference: '', postal_code: '' }));
+                                  setSelectedAddress(index);
+                                  setForm((current) => ({
+                                    ...current,
+                                    street: address.street || '',
+                                    apartment: address.apartment || '',
+                                    city: address.city || '',
+                                    department: address.department || '',
+                                    barrio: address.barrio || '',
+                                    reference: address.reference || '',
+                                    postal_code: address.postal_code || '',
+                                    country: address.country || 'Uruguay',
+                                    ci: address.ci || '',
+                                  }));
                                 }}
                               />
-                              <div className={`p-1.5  ${selectedAddress === -2 ? 'bg-primary-500/100 text-white' : 'bg-white/10 text-slate-500'}`}>
+                              <div className={`p-1.5 rounded-lg ${selectedAddress === index ? 'bg-primary-500 text-white' : 'bg-white/10 text-slate-500'}`}>
                                 <Home className="w-4 h-4" />
                               </div>
-                              <span className="font-bold text-sm text-slate-400">Usar otra dirección</span>
+                              <div className="flex-1 min-w-0">
+                                <span className="font-bold text-sm block text-white">{address.label || `Dirección ${index + 1}`}</span>
+                                <span className="text-xs text-slate-400 block truncate">{address.street}{address.apartment ? `, ${address.apartment}` : ''} - {address.city}, {address.department}</span>
+                              </div>
                             </label>
+                          ))}
+                          <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${selectedAddress === -2 ? 'border-primary-500 bg-primary-500/10' : 'border-white/10 border-dashed hover:border-white/20 bg-white/5'}`}>
+                            <input
+                              type="radio"
+                              name="savedAddr"
+                              className="sr-only"
+                              checked={selectedAddress === -2}
+                              onChange={() => {
+                                setSelectedAddress(-2);
+                                setForm((current) => ({ ...current, street: '', apartment: '', city: '', department: '', barrio: '', reference: '', postal_code: '' }));
+                              }}
+                            />
+                            <div className={`p-1.5 rounded-lg ${selectedAddress === -2 ? 'bg-primary-500 text-white' : 'bg-white/10 text-slate-500'}`}>
+                              <Home className="w-4 h-4" />
+                            </div>
+                            <span className="font-bold text-sm text-slate-300">Usar otra dirección</span>
+                          </label>
+                        </div>
+                      </div>
+                    )}
+
+                    {(savedAddresses.length === 0 || selectedAddress === -2 || !hasAnyHomeDelivery) && (
+                      <>
+                        {form.country === 'Argentina' ? (
+                          <div className="space-y-4">
+                            <div>
+                              <label className="form-label text-slate-300 font-bold">Tipo de Destinatario *</label>
+                              <div className="grid grid-cols-2 gap-3 mt-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setForm({ ...form, recipient_type: 'person', dni: '', cuit: '', razon_social: '' })}
+                                  className={`py-2.5 px-4 rounded-xl border-2 font-bold text-sm text-center transition-all ${
+                                    form.recipient_type === 'person'
+                                      ? 'border-primary-500 bg-primary-500/10 text-white'
+                                      : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
+                                  }`}
+                                >
+                                  Persona Física
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setForm({ ...form, recipient_type: 'company', dni: '', cuit: '', razon_social: '' })}
+                                  className={`py-2.5 px-4 rounded-xl border-2 font-bold text-sm text-center transition-all ${
+                                    form.recipient_type === 'company'
+                                      ? 'border-primary-500 bg-primary-500/10 text-white'
+                                      : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
+                                  }`}
+                                >
+                                  Empresa
+                                </button>
+                              </div>
+                            </div>
+
+                            {form.recipient_type === 'person' && (
+                              <div>
+                                <label className="form-label text-slate-300">DNI (Documento Nacional de Identidad) *</label>
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder="Ej: 12345678"
+                                  className={`form-input ${step2Errors.dni ? 'border-red-500' : ''}`}
+                                  value={form.dni}
+                                  onChange={e => setForm({ ...form, dni: e.target.value.replace(/[^0-9]/g, '') })}
+                                />
+                                {step2Errors.dni && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.dni}</p>}
+                              </div>
+                            )}
+
+                            {form.recipient_type === 'company' && (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                  <label className="form-label text-slate-300">CUIT *</label>
+                                  <input
+                                    type="text"
+                                    required
+                                    placeholder="11 dígitos (solo números)"
+                                    className={`form-input ${step2Errors.cuit ? 'border-red-500' : ''}`}
+                                    value={form.cuit}
+                                    onChange={e => setForm({ ...form, cuit: e.target.value.replace(/[^0-9]/g, '') })}
+                                  />
+                                  {step2Errors.cuit && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.cuit}</p>}
+                                </div>
+                                <div>
+                                  <label className="form-label text-slate-300">Razón Social *</label>
+                                  <input
+                                    type="text"
+                                    required
+                                    placeholder="Nombre de la empresa"
+                                    className={`form-input ${step2Errors.razon_social ? 'border-red-500' : ''}`}
+                                    value={form.razon_social}
+                                    onChange={e => setForm({ ...form, razon_social: e.target.value })}
+                                  />
+                                  {step2Errors.razon_social && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.razon_social}</p>}
+                                </div>
+                              </div>
+                            )}
+
+                            <div>
+                              <label className="form-label text-slate-300">Teléfono con prefijo internacional *</label>
+                              <input
+                                type="text"
+                                required
+                                placeholder="Ej: +5491112345678"
+                                className={`form-input ${step2Errors.phone ? 'border-red-500' : ''}`}
+                                value={form.phone}
+                                onChange={e => setForm({ ...form, phone: e.target.value })}
+                              />
+                              <p className="text-[10px] text-slate-400 mt-1">Debe comenzar con '+' y el código de país (ej: +54 para Argentina).</p>
+                              {step2Errors.phone && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.phone}</p>}
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <div>
+                                <label className="form-label text-slate-300">Provincia *</label>
+                                <select
+                                  required
+                                  className={`form-input ${step2Errors.department ? 'border-red-500' : ''}`}
+                                  value={form.department}
+                                  onChange={e => setForm({ ...form, department: e.target.value })}
+                                >
+                                  <option value="">Selecciona una provincia...</option>
+                                  {PROVINCIAS_ARGENTINA.map(p => (
+                                    <option key={p} value={p}>{p}</option>
+                                  ))}
+                                </select>
+                                {step2Errors.department && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.department}</p>}
+                              </div>
+                              <div>
+                                <label className="form-label text-slate-300">Localidad / Ciudad *</label>
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder="Ej: Rosario"
+                                  className={`form-input ${step2Errors.city ? 'border-red-500' : ''}`}
+                                  value={form.city}
+                                  onChange={e => setForm({ ...form, city: e.target.value })}
+                                />
+                                {step2Errors.city && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.city}</p>}
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-4">
+                              <div className="col-span-2">
+                                <label className="form-label text-slate-300">Calle *</label>
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder="Nombre de la calle"
+                                  className={`form-input ${step2Errors.street ? 'border-red-500' : ''}`}
+                                  value={form.street}
+                                  onChange={e => setForm({ ...form, street: e.target.value })}
+                                />
+                                {step2Errors.street && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.street}</p>}
+                              </div>
+                              <div>
+                                <label className="form-label text-slate-300">Nro de puerta *</label>
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder="Nro"
+                                  className={`form-input ${step2Errors.street_number ? 'border-red-500' : ''}`}
+                                  value={form.street_number}
+                                  onChange={e => setForm({ ...form, street_number: e.target.value })}
+                                />
+                                {step2Errors.street_number && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.street_number}</p>}
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <div>
+                                <label className="form-label text-slate-300">Piso / Departamento (Opcional)</label>
+                                <input
+                                  type="text"
+                                  placeholder="Ej: Piso 4 Depto B"
+                                  className="form-input"
+                                  value={form.apartment}
+                                  onChange={e => setForm({ ...form, apartment: e.target.value })}
+                                />
+                              </div>
+                              <div>
+                                <label className="form-label text-slate-300">Código Postal (CPA) *</label>
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder="Ej: C1024CWN o 2000"
+                                  className={`form-input ${step2Errors.postal_code ? 'border-red-500' : ''}`}
+                                  value={form.postal_code}
+                                  onChange={e => setForm({ ...form, postal_code: e.target.value })}
+                                />
+                                {step2Errors.postal_code && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.postal_code}</p>}
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="form-label text-slate-300">Indicaciones para la entrega (Opcional)</label>
+                              <textarea
+                                placeholder="Ej: Tocar timbre negro, casa de rejas verdes..."
+                                className="form-input min-h-[80px]"
+                                value={form.reference}
+                                onChange={e => setForm({ ...form, reference: e.target.value })}
+                              />
+                            </div>
+
+                            <div className="bg-white/5 border border-white/10 p-4 rounded-xl flex items-start gap-3 mt-3">
+                              <input
+                                type="checkbox"
+                                id="privacy-logistics-consent"
+                                className={`rounded border-white/10 text-primary-500 focus:ring-primary-500 bg-black/20 mt-1 cursor-pointer ${
+                                  step2Errors.consent ? 'border-red-500 ring-2 ring-red-500' : ''
+                                }`}
+                                checked={form.consent}
+                                onChange={e => setForm({ ...form, consent: e.target.checked })}
+                              />
+                              <label htmlFor="privacy-logistics-consent" className="text-xs text-slate-300 leading-relaxed cursor-pointer select-none">
+                                Acepto compartir los datos personales y de contacto proporcionados en este formulario con el operador logístico (MBE y courier internacional) con el único fin de procesar el transporte y la liberación aduanera del paquete.
+                              </label>
+                            </div>
+                            {step2Errors.consent && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.consent}</p>}
+
+                            <div>
+                              <label className="form-label text-slate-300">País</label>
+                              <select
+                                className="form-input"
+                                value={form.country}
+                                onChange={e => {
+                                  const newCountry = e.target.value;
+                                  setForm(prev => ({
+                                    ...prev,
+                                    country: newCountry,
+                                    department: newCountry === 'Argentina' ? 'Buenos Aires' : 'Montevideo',
+                                    city: newCountry === 'Argentina' ? '' : 'Montevideo',
+                                    barrio: '',
+                                  }));
+                                }}
+                              >
+                                <option value="Uruguay">Uruguay</option>
+                                <option value="Argentina">Argentina</option>
+                              </select>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {hasAnyHomeDelivery && (
+                              <div id="shipping-street">
+                                <label className="form-label">Dirección (calle y número) *</label>
+                                <AddressAutocomplete
+                                  value={form.street}
+                                  onChange={value => setForm({ ...form, street: value })}
+                                  onSelect={handleAddressSelect}
+                                />
+                                {step2Errors.street && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.street}</p>}
+                              </div>
+                            )}
+
+                            <div className={!hasAnyHomeDelivery ? "grid grid-cols-1 gap-4" : "grid grid-cols-2 gap-4"}>
+                              <div id="shipping-department">
+                                <label className="form-label">Departamento *</label>
+                                <select
+                                  required={hasAnyDelivery}
+                                  className={`form-input ${step2Errors.department ? 'border-red-500' : ''}`}
+                                  value={form.department}
+                                  onChange={e => handleDepartmentChange(e.target.value)}
+                                >
+                                  <option value="">Selecciona un departamento...</option>
+                                  {DEPARTAMENTOS.map((department) => (
+                                    <option key={department} value={department}>{department}</option>
+                                  ))}
+                                </select>
+                                {step2Errors.department && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.department}</p>}
+                              </div>
+
+                              {hasAnyHomeDelivery && (
+                                <div id="shipping-city">
+                                  <label className="form-label">Ciudad / Localidad *</label>
+                                  {form.department === 'Montevideo' ? (
+                                    <input
+                                      type="text"
+                                      className="form-input opacity-80 cursor-not-allowed"
+                                      value="Montevideo"
+                                      readOnly
+                                    />
+                                  ) : (
+                                    <select
+                                      required={hasAnyDelivery}
+                                      className={`form-input ${step2Errors.city ? 'border-red-500' : ''}`}
+                                      value={form.city}
+                                      onChange={e => setForm({ ...form, city: e.target.value })}
+                                      disabled={!form.department}
+                                    >
+                                      <option value="">Selecciona una localidad...</option>
+                                      {form.department && URUGUAY_LOCATIONS[form.department]?.map((location) => (
+                                        <option key={location} value={location}>{location}</option>
+                                      ))}
+                                    </select>
+                                  )}
+                                  {step2Errors.city && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.city}</p>}
+                                </div>
+                              )}
+                            </div>
+
+                            {hasAnyHomeDelivery && (
+                              <>
+                                <div className="grid grid-cols-1 gap-4">
+                                  <div id="shipping-barrio">
+                                    <label className="form-label">Barrio {form.department === 'Montevideo' ? '*' : '(Opcional)'}</label>
+                                    {form.department === 'Montevideo' ? (
+                                      <select
+                                        required={hasAnyDelivery}
+                                        className={`form-input ${step2Errors.barrio ? 'border-red-500' : ''}`}
+                                        value={form.barrio}
+                                        onChange={e => setForm({ ...form, barrio: e.target.value })}
+                                      >
+                                        <option value="">Selecciona un barrio...</option>
+                                        {URUGUAY_LOCATIONS['Montevideo']?.map((barrioName) => (
+                                          <option key={barrioName} value={barrioName}>{barrioName}</option>
+                                        ))}
+                                      </select>
+                                    ) : (
+                                      <input
+                                        type="text"
+                                        className="form-input"
+                                        placeholder="Ej: Centro, La Floresta, etc."
+                                        value={form.barrio}
+                                        onChange={e => setForm({ ...form, barrio: e.target.value })}
+                                      />
+                                    )}
+                                    {step2Errors.barrio && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.barrio}</p>}
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="form-label">Apartamento / Timbre</label>
+                                    <input
+                                      className="form-input"
+                                      placeholder="Ej: Apto 302, Timbre 4"
+                                      value={form.apartment}
+                                      onChange={e => setForm({ ...form, apartment: e.target.value })}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="form-label">Referencia / Indicaciones</label>
+                                    <input
+                                      className="form-input"
+                                      placeholder="Ej: Portón de madera, reja negra"
+                                      value={form.reference}
+                                      onChange={e => setForm({ ...form, reference: e.target.value })}
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="form-label">Código postal</label>
+                                    <input
+                                      className="form-input"
+                                      placeholder="Ej: 11300"
+                                      value={form.postal_code}
+                                      onChange={e => setForm({ ...form, postal_code: e.target.value })}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="form-label">País</label>
+                                    <select
+                                      className="form-input"
+                                      value={form.country}
+                                      onChange={e => {
+                                        const newCountry = e.target.value;
+                                        setForm(prev => ({
+                                          ...prev,
+                                          country: newCountry,
+                                          department: newCountry === 'Argentina' ? 'Buenos Aires' : 'Montevideo',
+                                          city: newCountry === 'Argentina' ? '' : 'Montevideo',
+                                          barrio: '',
+                                        }));
+                                      }}
+                                    >
+                                      <option value="Uruguay">Uruguay</option>
+                                      <option value="Argentina">Argentina</option>
+                                    </select>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </>
+                    )}
+
+                    {/* CI Input for DAC (visible when using DAC on any package) */}
+                    {hasAnyDac && (
+                      <div id="shipping-ci-block" className="space-y-1.5 pt-3 border-t border-white/10">
+                        <label className="form-label flex items-center justify-between text-xs">
+                          <span className="font-semibold text-slate-300">Cédula de Identidad (CI) *</span>
+                          {form.ci && !validateUruguayanCI(form.ci) && (
+                            <span className="text-[11px] text-red-400 font-semibold animate-pulse">CI Inválida</span>
+                          )}
+                          {form.ci && validateUruguayanCI(form.ci) && (
+                            <span className="text-[11px] text-green-400 font-semibold">✓ CI Válida</span>
+                          )}
+                        </label>
+                        <input
+                          required
+                          placeholder="Ej: 1.234.567-8"
+                          className={`form-input text-xs transition-all ${
+                            form.ci
+                              ? validateUruguayanCI(form.ci)
+                                ? 'border-green-500/50 focus:border-green-500 bg-green-500/5'
+                                : 'border-red-500/50 focus:border-red-500 bg-red-500/5'
+                              : 'border-white/10 focus:border-primary-500 bg-white/5'
+                          }`}
+                          value={form.ci}
+                          onChange={e => setForm({ ...form, ci: e.target.value })}
+                        />
+                        {step2Errors.ci && <p className="text-red-500 text-xs font-semibold">{step2Errors.ci}</p>}
+                        <p className="text-[10px] text-slate-500 leading-normal">Requerida para la facturación y despacho de la guía por DAC.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ═══════════════════════════════════════════════════════════ */}
+                  {/* ESTADO DE COTIZACIÓN Y MENSAJES DE COBERTURA               */}
+                  {/* ═══════════════════════════════════════════════════════════ */}
+                  {form.department && (
+                    <div className="space-y-3 pt-2" id="shipping-calculation-block">
+                      {isLocationSelected && logistics.providerName && (
+                        <div className="p-4 rounded-xl border border-primary-500/30 bg-primary-500/5 flex items-start gap-3 shadow-lg">
+                          <Clock className="w-5 h-5 text-primary-500 shrink-0 mt-0.5 animate-pulse" />
+                          <div>
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-primary-400">
+                              Información de entrega ({logistics.providerName})
+                            </h4>
+                            <p className="text-sm font-semibold text-white mt-1">
+                              {logistics.message}
+                            </p>
                           </div>
                         </div>
                       )}
 
-                      {(savedAddresses.length === 0 || selectedAddress === -2 || !hasAnyHomeDelivery) && (
-                        <>
-                          {form.country === 'Argentina' ? (
-                            <div className="space-y-4">
-                              {/* Tipo de Destinatario */}
-                              <div>
-                                <label className="form-label text-slate-300 font-bold">Tipo de Destinatario *</label>
-                                <div className="grid grid-cols-2 gap-3 mt-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => setForm({ ...form, recipient_type: 'person', dni: '', cuit: '', razon_social: '' })}
-                                    className={`py-2.5 px-4 rounded-xl border-2 font-bold text-sm text-center transition-all ${
-                                      form.recipient_type === 'person'
-                                        ? 'border-primary-500 bg-primary-500/10 text-white'
-                                        : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
-                                    }`}
-                                  >
-                                    Persona Física
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setForm({ ...form, recipient_type: 'company', dni: '', cuit: '', razon_social: '' })}
-                                    className={`py-2.5 px-4 rounded-xl border-2 font-bold text-sm text-center transition-all ${
-                                      form.recipient_type === 'company'
-                                        ? 'border-primary-500 bg-primary-500/10 text-white'
-                                        : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'
-                                    }`}
-                                  >
-                                    Empresa
-                                  </button>
-                                </div>
-                              </div>
-
-                              {form.recipient_type === 'person' && (
-                                <div>
-                                  <label className="form-label text-slate-300">DNI (Documento Nacional de Identidad) *</label>
-                                  <input
-                                    type="text"
-                                    required
-                                    placeholder="Ej: 12345678"
-                                    className={`form-input ${step2Errors.dni ? 'border-red-500' : ''}`}
-                                    value={form.dni}
-                                    onChange={e => setForm({ ...form, dni: e.target.value.replace(/[^0-9]/g, '') })}
-                                  />
-                                  {step2Errors.dni && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.dni}</p>}
-                                </div>
-                              )}
-
-                              {form.recipient_type === 'company' && (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                  <div>
-                                    <label className="form-label text-slate-300">CUIT *</label>
-                                    <input
-                                      type="text"
-                                      required
-                                      placeholder="11 dígitos (solo números)"
-                                      className={`form-input ${step2Errors.cuit ? 'border-red-500' : ''}`}
-                                      value={form.cuit}
-                                      onChange={e => setForm({ ...form, cuit: e.target.value.replace(/[^0-9]/g, '') })}
-                                    />
-                                    {step2Errors.cuit && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.cuit}</p>}
-                                  </div>
-                                  <div>
-                                    <label className="form-label text-slate-300">Razón Social *</label>
-                                    <input
-                                      type="text"
-                                      required
-                                      placeholder="Nombre de la empresa"
-                                      className={`form-input ${step2Errors.razon_social ? 'border-red-500' : ''}`}
-                                      value={form.razon_social}
-                                      onChange={e => setForm({ ...form, razon_social: e.target.value })}
-                                    />
-                                    {step2Errors.razon_social && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.razon_social}</p>}
-                                  </div>
-                                </div>
-                              )}
-
-                              <div>
-                                <label className="form-label text-slate-300">Teléfono con prefijo internacional *</label>
-                                <input
-                                  type="text"
-                                  required
-                                  placeholder="Ej: +5491112345678"
-                                  className={`form-input ${step2Errors.phone ? 'border-red-500' : ''}`}
-                                  value={form.phone}
-                                  onChange={e => setForm({ ...form, phone: e.target.value })}
-                                />
-                                <p className="text-[10px] text-slate-400 mt-1">Debe comenzar con '+' y el código de país (ej: +54 para Argentina).</p>
-                                {step2Errors.phone && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.phone}</p>}
-                              </div>
-
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                  <label className="form-label text-slate-300">Provincia *</label>
-                                  <select
-                                    required
-                                    className={`form-input ${step2Errors.department ? 'border-red-500' : ''}`}
-                                    value={form.department}
-                                    onChange={e => setForm({ ...form, department: e.target.value })}
-                                  >
-                                    <option value="">Selecciona una provincia...</option>
-                                    {PROVINCIAS_ARGENTINA.map(p => (
-                                      <option key={p} value={p}>{p}</option>
-                                    ))}
-                                  </select>
-                                  {step2Errors.department && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.department}</p>}
-                                </div>
-                                <div>
-                                  <label className="form-label text-slate-300">Localidad / Ciudad *</label>
-                                  <input
-                                    type="text"
-                                    required
-                                    placeholder="Ej: Rosario"
-                                    className={`form-input ${step2Errors.city ? 'border-red-500' : ''}`}
-                                    value={form.city}
-                                    onChange={e => setForm({ ...form, city: e.target.value })}
-                                  />
-                                  {step2Errors.city && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.city}</p>}
-                                </div>
-                              </div>
-
-                              <div className="grid grid-cols-3 gap-4">
-                                <div className="col-span-2">
-                                  <label className="form-label text-slate-300">Calle *</label>
-                                  <input
-                                    type="text"
-                                    required
-                                    placeholder="Nombre de la calle"
-                                    className={`form-input ${step2Errors.street ? 'border-red-500' : ''}`}
-                                    value={form.street}
-                                    onChange={e => setForm({ ...form, street: e.target.value })}
-                                  />
-                                  {step2Errors.street && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.street}</p>}
-                                </div>
-                                <div>
-                                  <label className="form-label text-slate-300">Nro de puerta *</label>
-                                  <input
-                                    type="text"
-                                    required
-                                    placeholder="Nro"
-                                    className={`form-input ${step2Errors.street_number ? 'border-red-500' : ''}`}
-                                    value={form.street_number}
-                                    onChange={e => setForm({ ...form, street_number: e.target.value })}
-                                  />
-                                  {step2Errors.street_number && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.street_number}</p>}
-                                </div>
-                              </div>
-
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                  <label className="form-label text-slate-300">Piso / Departamento (Opcional)</label>
-                                  <input
-                                    type="text"
-                                    placeholder="Ej: Piso 4 Depto B"
-                                    className="form-input"
-                                    value={form.apartment}
-                                    onChange={e => setForm({ ...form, apartment: e.target.value })}
-                                  />
-                                </div>
-                                <div>
-                                  <label className="form-label text-slate-300">Código Postal (CPA) *</label>
-                                  <input
-                                    type="text"
-                                    required
-                                    placeholder="Ej: C1024CWN o 2000"
-                                    className={`form-input ${step2Errors.postal_code ? 'border-red-500' : ''}`}
-                                    value={form.postal_code}
-                                    onChange={e => setForm({ ...form, postal_code: e.target.value })}
-                                  />
-                                  {step2Errors.postal_code && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.postal_code}</p>}
-                                </div>
-                              </div>
-
-                              <div>
-                                <label className="form-label text-slate-300">Indicaciones para la entrega (Opcional)</label>
-                                <textarea
-                                  placeholder="Ej: Tocar timbre negro, casa de rejas verdes..."
-                                  className="form-input min-h-[80px]"
-                                  value={form.reference}
-                                  onChange={e => setForm({ ...form, reference: e.target.value })}
-                                />
-                              </div>
-
-                              <div className="bg-white/5 border border-white/10 p-4 rounded-xl flex items-start gap-3 mt-3">
-                                <input
-                                  type="checkbox"
-                                  id="privacy-logistics-consent"
-                                  className={`rounded border-white/10 text-primary-500 focus:ring-primary-500 bg-black/20 mt-1 cursor-pointer ${
-                                    step2Errors.consent ? 'border-red-500 ring-2 ring-red-500' : ''
-                                  }`}
-                                  checked={form.consent}
-                                  onChange={e => setForm({ ...form, consent: e.target.checked })}
-                                />
-                                <label htmlFor="privacy-logistics-consent" className="text-xs text-slate-300 leading-relaxed cursor-pointer select-none">
-                                  Acepto compartir los datos personales y de contacto proporcionados en este formulario con el operador logístico (MBE y courier internacional) con el único fin de procesar el transporte y la liberación aduanera del paquete.
-                                </label>
-                              </div>
-                              {step2Errors.consent && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.consent}</p>}
-
-                              <div>
-                                <label className="form-label text-slate-300">País</label>
-                                <select
-                                  className="form-input"
-                                  value={form.country}
-                                  onChange={e => {
-                                    const newCountry = e.target.value;
-                                    setForm(prev => ({
-                                      ...prev,
-                                      country: newCountry,
-                                      department: newCountry === 'Argentina' ? 'Buenos Aires' : 'Montevideo',
-                                      city: newCountry === 'Argentina' ? '' : 'Montevideo',
-                                      barrio: '',
-                                    }));
-                                  }}
-                                >
-                                  <option value="Uruguay">Uruguay</option>
-                                  <option value="Argentina">Argentina</option>
-                                </select>
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              {hasAnyHomeDelivery && (
-                                <div id="shipping-street">
-                                  <label className="form-label">Dirección (calle y número) *</label>
-                                  <AddressAutocomplete
-                                    value={form.street}
-                                    onChange={value => setForm({ ...form, street: value })}
-                                    onSelect={handleAddressSelect}
-                                  />
-                                  {step2Errors.street && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.street}</p>}
-                                </div>
-                              )}
-
-                              <div className={!hasAnyHomeDelivery ? "grid grid-cols-1 gap-4" : "grid grid-cols-2 gap-4"}>
-                                <div id="shipping-department">
-                                  <label className="form-label">Departamento *</label>
-                                  <select
-                                    required={hasAnyDelivery}
-                                    className={`form-input ${step2Errors.department ? 'border-red-500' : ''}`}
-                                    value={form.department}
-                                    onChange={e => handleDepartmentChange(e.target.value)}
-                                  >
-                                    <option value="">Selecciona un departamento...</option>
-                                    {DEPARTAMENTOS.map((department) => (
-                                      <option key={department} value={department}>{department}</option>
-                                    ))}
-                                  </select>
-                                  {step2Errors.department && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.department}</p>}
-                                </div>
-
-                                {hasAnyHomeDelivery && (
-                                  <div id="shipping-city">
-                                    <label className="form-label">Ciudad / Localidad *</label>
-                                    {form.department === 'Montevideo' ? (
-                                      <input
-                                        type="text"
-                                        className="form-input opacity-80 cursor-not-allowed"
-                                        value="Montevideo"
-                                        readOnly
-                                      />
-                                    ) : (
-                                      <select
-                                        required={hasAnyDelivery}
-                                        className={`form-input ${step2Errors.city ? 'border-red-500' : ''}`}
-                                        value={form.city}
-                                        onChange={e => setForm({ ...form, city: e.target.value })}
-                                        disabled={!form.department}
-                                      >
-                                        <option value="">Selecciona una localidad...</option>
-                                        {form.department && URUGUAY_LOCATIONS[form.department]?.map((location) => (
-                                          <option key={location} value={location}>{location}</option>
-                                        ))}
-                                      </select>
-                                    )}
-                                    {step2Errors.city && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.city}</p>}
-                                  </div>
-                                )}
-                              </div>
-
-                              {hasAnyHomeDelivery && (
-                                <>
-                                  <div className="grid grid-cols-1 gap-4">
-                                    <div id="shipping-barrio">
-                                      <label className="form-label">Barrio {form.department === 'Montevideo' ? '*' : '(Opcional)'}</label>
-                                      {form.department === 'Montevideo' ? (
-                                        <select
-                                          required={hasAnyDelivery}
-                                          className={`form-input ${step2Errors.barrio ? 'border-red-500' : ''}`}
-                                          value={form.barrio}
-                                          onChange={e => setForm({ ...form, barrio: e.target.value })}
-                                        >
-                                          <option value="">Selecciona un barrio...</option>
-                                          {URUGUAY_LOCATIONS['Montevideo']?.map((barrioName) => (
-                                            <option key={barrioName} value={barrioName}>{barrioName}</option>
-                                          ))}
-                                        </select>
-                                      ) : (
-                                        <input
-                                          type="text"
-                                          className="form-input"
-                                          placeholder="Ej: Centro, La Floresta, etc."
-                                          value={form.barrio}
-                                          onChange={e => setForm({ ...form, barrio: e.target.value })}
-                                        />
-                                      )}
-                                      {step2Errors.barrio && <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.barrio}</p>}
-                                    </div>
-                                  </div>
-
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                      <label className="form-label">Apartamento / Timbre</label>
-                                      <input
-                                        className="form-input"
-                                        placeholder="Ej: Apto 302, Timbre 4"
-                                        value={form.apartment}
-                                        onChange={e => setForm({ ...form, apartment: e.target.value })}
-                                      />
-                                    </div>
-                                    <div>
-                                      <label className="form-label">Referencia / Indicaciones</label>
-                                      <input
-                                        className="form-input"
-                                        placeholder="Ej: Portón de madera, reja negra"
-                                        value={form.reference}
-                                        onChange={e => setForm({ ...form, reference: e.target.value })}
-                                      />
-                                    </div>
-                                  </div>
-
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                      <label className="form-label">Código postal</label>
-                                      <input
-                                        className="form-input"
-                                        placeholder="Ej: 11300"
-                                        value={form.postal_code}
-                                        onChange={e => setForm({ ...form, postal_code: e.target.value })}
-                                      />
-                                    </div>
-                                    <div>
-                                      <label className="form-label">País</label>
-                                      <select
-                                        className="form-input"
-                                        value={form.country}
-                                        onChange={e => {
-                                          const newCountry = e.target.value;
-                                          setForm(prev => ({
-                                            ...prev,
-                                            country: newCountry,
-                                            department: newCountry === 'Argentina' ? 'Buenos Aires' : 'Montevideo',
-                                            city: newCountry === 'Argentina' ? '' : 'Montevideo',
-                                            barrio: '',
-                                          }));
-                                        }}
-                                      >
-                                        <option value="Uruguay">Uruguay</option>
-                                        <option value="Argentina">Argentina</option>
-                                      </select>
-                                    </div>
-                                  </div>
-                                </>
-                              )}
-                            </>
-                          )}
-                        </>
+                      {dacCalculationStatus === 'loading' && (
+                        <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center gap-3">
+                          <div className="w-4 h-4 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+                          <span className="text-xs font-semibold text-blue-300">Calculando métodos y costos de envío en tiempo real...</span>
+                        </div>
                       )}
 
-                      {form.department && (
-                        <div className="space-y-3 mt-4" id="shipping-calculation-block">
-                          {isLocationSelected && logistics.providerName && (
-                            <div className="p-4 rounded-xl border border-primary-500/30 bg-primary-500/5 flex items-start gap-3 shadow-lg">
-                              <Clock className="w-5 h-5 text-primary-500 shrink-0 mt-0.5 animate-pulse" />
-                              <div>
-                                <h4 className="text-xs font-bold uppercase tracking-wider text-primary-400">
-                                  Información de entrega ({logistics.providerName})
-                                </h4>
-                                <p className="text-sm font-semibold text-white mt-1">
-                                  {logistics.message}
-                                </p>
-                              </div>
+                      {dacCalculationStatus === 'error' && dacShippingError && (
+                        <div className="p-4 rounded-xl bg-orange-950/20 border border-orange-500/30 space-y-3">
+                          <div className="flex items-start gap-2.5">
+                            <AlertCircle className="w-4 h-4 text-orange-400 shrink-0 mt-0.5 animate-bounce" />
+                            <div className="text-xs text-orange-200 leading-relaxed">
+                              <strong className="block font-bold text-orange-300 mb-0.5">No fue posible calcular el costo automáticamente</strong>
+                              {dacShippingError}
                             </div>
-                          )}
-
-                          {dacCalculationStatus === 'loading' && (
-                            <div className="p-3 rounded-lg bg-white/5 border border-white/10 flex items-center gap-3">
-                              <div className="w-4 h-4 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
-                              <span className="text-xs text-slate-300">Calculando costo de envío en tiempo real con DAC...</span>
-                            </div>
-                          )}
-
-                          {dacCalculationStatus === 'error' && dacShippingError && (
-                            <div className="p-4 rounded-lg bg-orange-950/20 border border-orange-500/30 space-y-3">
-                              <div className="flex items-start gap-2.5">
-                                <AlertCircle className="w-4 h-4 text-orange-400 shrink-0 mt-0.5 animate-bounce" />
-                                <div className="text-xs text-orange-200 leading-relaxed">
-                                  <strong className="block font-bold text-orange-300 mb-0.5">No fue posible calcular el costo automáticamente</strong>
-                                  {dacShippingError}
-                                </div>
-                              </div>
-                              <div className="flex gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => setRecalculateTrigger(prev => prev + 1)}
-                                  className="flex-1 py-2 px-3 rounded bg-primary-600 hover:bg-primary-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md"
-                                >
-                                  <RefreshCcw className="w-3.5 h-3.5" /> Reintentar cálculo
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const productsList = items.map(item => `- ${item.title} x${item.quantity}`).join('%0A');
-                                    const waNum = settings['whatsapp'] || '59899000000';
-                                    const formattedNum = waNum.replace(/[^0-9]/g, '');
-                                    const msg = `¡Hola! Quería realizar una compra desde la web pero no pudimos calcular el costo de envío automáticamente para ${form.city}, ${form.department}.%0A%0A*Productos:*%0A${productsList}%0A%0A*Dirección de envío:*%0A${form.street}%0A%0A¿Me podrían ayudar a coordinarlo?`;
-                                    window.open(`https://wa.me/${formattedNum}?text=${msg}`, '_blank');
-                                  }}
-                                  className="flex-1 py-2 px-3 rounded bg-green-600 hover:bg-green-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md"
-                                >
-                                  Coordinar por WhatsApp
-                                </button>
-                              </div>
-                            </div>
-                          )}
-
-                          {step2Errors.calculation && (
-                            <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.calculation}</p>
-                          )}
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setRecalculateTrigger(prev => prev + 1)}
+                              className="flex-1 py-2 px-3 rounded bg-primary-600 hover:bg-primary-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md"
+                            >
+                              <RefreshCcw className="w-3.5 h-3.5" /> Reintentar cálculo
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const productsList = items.map(item => `- ${item.title} x${item.quantity}`).join('%0A');
+                                const waNum = settings['whatsapp'] || '59899000000';
+                                const formattedNum = waNum.replace(/[^0-9]/g, '');
+                                const msg = `¡Hola! Quería realizar una compra desde la web pero no pudimos calcular el costo de envío automáticamente para ${form.city}, ${form.department}.%0A%0A*Productos:*%0A${productsList}%0A%0A*Dirección de envío:*%0A${form.street}%0A%0A¿Me podrían ayudar a coordinarlo?`;
+                                window.open(`https://wa.me/${formattedNum}?text=${msg}`, '_blank');
+                              }}
+                              className="flex-1 py-2 px-3 rounded bg-green-600 hover:bg-green-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md"
+                            >
+                              Coordinar por WhatsApp
+                            </button>
+                          </div>
                         </div>
+                      )}
+
+                      {step2Errors.calculation && (
+                        <p className="text-red-500 text-xs mt-1 font-semibold">{step2Errors.calculation}</p>
                       )}
                     </div>
                   )}
+
+                  {/* ═══════════════════════════════════════════════════════════ */}
+                  {/* SECCIÓN 2: OPCIONES DE ENVÍO POR PAQUETE                   */}
+                  {/* ═══════════════════════════════════════════════════════════ */}
+                  <div className="space-y-4 pt-4 border-t border-neutral-800/80">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-bold text-base text-white flex items-center gap-2">
+                          <Package className="w-4 h-4 text-primary-500" />
+                          2. Elegí cómo recibir cada paquete
+                        </h3>
+                        <p className="text-xs text-slate-400 mt-1">
+                          Cada tienda puede ofrecer métodos y costos diferentes según tu dirección.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Quick Multi-Vendor Shipping Summary Banner */}
+                    <div className="p-4 rounded-xl bg-neutral-950 border border-neutral-800 flex flex-wrap items-center justify-between gap-3 text-xs md:text-sm font-semibold text-neutral-200">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#f00856] animate-pulse" />
+                        <span>{uniqueStoreKeys.length} {uniqueStoreKeys.length === 1 ? 'paquete' : 'paquetes en total'}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs">
+                        <span className="text-emerald-400 font-bold">
+                          {Object.values(subordersShipping).filter(s => (vendorShippingCosts[s.method] ?? 0) === 0 || s.method === 'pickup').length} envíos gratis
+                        </span>
+                        <span className="text-neutral-500">·</span>
+                        <span className="text-white font-bold">
+                          Total de envío: ${shipping.toLocaleString('es-UY')}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Package Cards list per vendor */}
+                    <div id="shipping-packages-block" className="space-y-6">
+                      {uniqueStoreKeys.map((storeKey, idx) => {
+                        const groupItems = items.filter(item => getStoreKey(item) === storeKey);
+                        const groupTotal = groupItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
+                        const options = getVendorShippingOptions(storeKey, groupTotal);
+                        const selection = subordersShipping[storeKey] || { method: 'pickup', selectedAgency: null };
+                        const vendorName = getVendorName(storeKey);
+                        const vData = vendorsData[storeKey];
+                        const sSettings = vData?.shipping_settings || {};
+                        
+                        const isCostLoading = dacShippingLoading && (selection.method === 'dac_home' || selection.method === 'dac_agency');
+                        const packageCost = vendorShippingCosts[storeKey];
+                        const hasCostError = !!dacShippingError && packageCost === undefined && (selection.method === 'dac_home' || selection.method === 'dac_agency');
+                        
+                        return (
+                          <div key={storeKey} className="space-y-4">
+                            <PackageCard
+                              packageIndex={idx + 1}
+                              totalPackages={uniqueStoreKeys.length}
+                              storeKey={storeKey}
+                              vendorName={vendorName}
+                              vendorLogo={vData?.default_address?.address ? null : null}
+                              items={groupItems.map(gi => ({
+                                id: gi.id,
+                                title: gi.title,
+                                image_url: getProductImage(gi),
+                                price: gi.price,
+                                quantity: gi.quantity
+                              }))}
+                              groupTotal={groupTotal}
+                              freeShippingThreshold={freeShippingThreshold}
+                              vendorFreeShippingMin={Number(sSettings.free_shipping?.min_amount || 0)}
+                              vendorFreeShippingActive={!!sSettings.free_shipping?.active}
+                              shippingOptions={options}
+                              selectedMethodId={selection.method}
+                              onSelectMethod={(methodId) => {
+                                setSubordersShipping(prev => ({
+                                  ...prev,
+                                  [storeKey]: {
+                                    method: methodId as any,
+                                    selectedAgency: methodId === 'dac_agency' ? prev[storeKey]?.selectedAgency : null
+                                  }
+                                }));
+                              }}
+                            />
+
+                            {/* Specific agency selector for this package if Retiro en agencia DAC is chosen */}
+                            {selection.method === 'dac_agency' && (
+                              <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
+                                <label className="form-label text-xs flex items-center gap-1.5 text-slate-300">
+                                  <MapPin className="w-3.5 h-3.5 text-amber-500" />
+                                  Seleccioná una agencia DAC para {vendorName} en {form.department || 'tu departamento'}
+                                </label>
+
+                                {dacAgencies.length > 0 ? (
+                                  <>
+                                    {dacAgencies.length > 4 && (
+                                      <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                                        <input
+                                          type="text"
+                                          placeholder="Buscar agencia..."
+                                          className="form-input pl-9 text-xs"
+                                          value={agencySearchTerm}
+                                          onChange={e => setAgencySearchTerm(e.target.value)}
+                                        />
+                                      </div>
+                                    )}
+                                    <div className="max-h-48 overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+                                      {dacAgencies
+                                        .filter(a => {
+                                          if (!agencySearchTerm.trim()) return true;
+                                          const term = agencySearchTerm.toLowerCase();
+                                          return (
+                                            a.office_name?.toLowerCase().includes(term) ||
+                                            a.city?.toLowerCase().includes(term) ||
+                                            a.locality?.toLowerCase().includes(term) ||
+                                            a.address?.toLowerCase().includes(term)
+                                          );
+                                        })
+                                        .map((agency) => {
+                                          const isAgencySelected = selection.selectedAgency?.id === agency.id;
+                                          return (
+                                            <button
+                                              key={agency.id}
+                                              type="button"
+                                              onClick={() => {
+                                                setSubordersShipping(prev => ({
+                                                  ...prev,
+                                                  [storeKey]: {
+                                                    ...prev[storeKey],
+                                                    selectedAgency: agency
+                                                  }
+                                                }));
+                                              }}
+                                              className={`w-full text-left p-3 rounded-lg border-2 transition-all ${
+                                                isAgencySelected
+                                                  ? 'border-amber-500 bg-amber-500/10'
+                                                  : 'border-white/10 bg-white/5 hover:border-amber-500/30 hover:bg-white/[0.07]'
+                                              }`}
+                                            >
+                                              <div className="flex items-center justify-between">
+                                                <div>
+                                                  <div className="font-bold text-sm text-white">{agency.office_name}</div>
+                                                  {agency.address && (
+                                                    <div className="text-[11px] text-slate-400 mt-0.5">{agency.address}</div>
+                                                  )}
+                                                  {agency.city && (
+                                                    <div className="text-[11px] text-slate-500 mt-0.5">
+                                                      {agency.city}{agency.locality ? `, ${agency.locality}` : ''}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                                  isAgencySelected
+                                                    ? 'bg-amber-500 text-white'
+                                                    : 'bg-white/10 text-slate-500'
+                                                }`}>
+                                                  K_{agency.k_oficina}
+                                                </span>
+                                              </div>
+                                            </button>
+                                          );
+                                        })}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <div className="text-xs text-slate-500 p-3 bg-white/5 rounded-lg border border-white/10 text-center">
+                                    {form.department ? `No hay agencias DAC activas para retiro en ${form.department}.` : 'Seleccioná un departamento arriba para ver agencias disponibles.'}
+                                  </div>
+                                )}
+                                
+                                {step2Errors[`agency_${storeKey}`] && (
+                                  <p className="text-red-500 text-xs font-semibold">{step2Errors[`agency_${storeKey}`]}</p>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Specific cost / loading status for this package */}
+                            <div className="px-1 text-xs">
+                              {isCostLoading && (
+                                <div className="text-amber-400 font-semibold flex items-center gap-1.5">
+                                  <span className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin inline-block" />
+                                  <span>Calculando costo de envío...</span>
+                                </div>
+                              )}
+                              {hasCostError && (
+                                <div className="text-red-400 font-semibold leading-relaxed">
+                                  {dacShippingError || "No pudimos calcular el costo de envío para este paquete."}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Step 2 Nav */}
