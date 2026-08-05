@@ -346,6 +346,10 @@ export default function DynamicPage({ forcedSlug }: { forcedSlug?: string }) {
         <span class="text-[#f00856] font-bold text-base mt-0.5">•</span>
         <span class="text-slate-300">Todo producto es transportado y despachado con la protección adecuada para conservar su estado de colección.</span>
       </li>
+      <li class="flex items-start gap-3">
+        <span class="text-[#f00856] font-bold text-base mt-0.5">•</span>
+        <span class="text-slate-300"><strong>SoyDelivery / Flex (Entregas Express):</strong> Operado bajo el modelo BYOC (Cuenta Propia del Vendedor). Cada vendedor que ofrece Flex conecta sus propias credenciales comerciales de SoyDelivery, prepara y despacha de forma independiente desde su tienda física y abona el servicio directamente al operador postal.</span>
+      </li>
     </ul>
   </div>
 

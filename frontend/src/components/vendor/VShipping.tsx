@@ -9,6 +9,7 @@ import {
 import VendorLabelPreviewModal from './VendorLabelPreviewModal';
 import VDistrilogicIntegration from './VDistrilogicIntegration';
 import VDacIntegrationModal from './VDacIntegrationModal';
+import VSoyDeliveryIntegrationModal from './VSoyDeliveryIntegrationModal';
 import { isLocationInSoyDeliveryZone, isSoyDeliveryAvailableForVendor } from '../../utils/uruguayLocations';
 
 interface DispatchAddress {
@@ -93,6 +94,10 @@ export default function VShipping() {
   const [dacConn, setDacConn] = useState<any>(null);
   const [showDacModal, setShowDacModal] = useState(false);
 
+  // 7. SoyDelivery BYOC connection state
+  const [soyDeliveryConn, setSoyDeliveryConn] = useState<any>(null);
+  const [showSoyDeliveryModal, setShowSoyDeliveryModal] = useState(false);
+
   const departments = [
     'Artigas', 'Canelones', 'Cerro Largo', 'Colonia', 'Durazno', 
     'Flores', 'Florida', 'Lavalleja', 'Maldonado', 'Montevideo', 
@@ -100,11 +105,27 @@ export default function VShipping() {
     'San José', 'Soriano', 'Tacuarembó', 'Treinta y Tres'
   ];
 
+  const getSoyDeliveryBadge = () => {
+    if (!soyDeliveryConn) {
+      return { text: 'No configurado', class: 'bg-gray-100 text-gray-700 border border-gray-200' };
+    }
+    if (soyDeliveryConn.connection_status === 'connected' && soyDeliveryConn.enabled) {
+      return { text: 'Conectado', class: 'bg-emerald-100 text-emerald-800 border border-emerald-200' };
+    }
+    if (soyDeliveryConn.connection_status === 'error') {
+      return { text: 'Error de conexión', class: 'bg-red-100 text-red-800 border border-red-200' };
+    }
+    if (!soyDeliveryConn.enabled) {
+      return { text: 'Desactivado', class: 'bg-amber-100 text-amber-800 border border-amber-200' };
+    }
+    return { text: 'Configurado', class: 'bg-blue-100 text-blue-800 border border-blue-200' };
+  };
+
   const loadData = async () => {
     if (!user) return;
     try {
       // Run queries in parallel
-      const [vendorRes, addrRes, mlRes, provRes, distrilogicRes, dacRes] = await Promise.all([
+      const [vendorRes, addrRes, mlRes, provRes, distrilogicRes, dacRes, soyDeliveryRes] = await Promise.all([
         supabase
           .from('vendors')
           .select('store_name, logo_url, slug, contact_phone, pickup_address, shipping_settings')
@@ -152,6 +173,15 @@ export default function VShipping() {
           .eq('provider', 'dac')
           .maybeSingle()
           .then(res => ({ success: true, data: res.data, error: res.error }))
+          .catch(err => ({ success: false, data: null, error: err })),
+
+        supabase
+          .from('vendor_shipping_connections')
+          .select('*')
+          .eq('vendor_id', user.id)
+          .eq('provider', 'soydelivery')
+          .maybeSingle()
+          .then(res => ({ success: true, data: res.data, error: res.error }))
           .catch(err => ({ success: false, data: null, error: err }))
       ]);
 
@@ -165,6 +195,12 @@ export default function VShipping() {
         setDacConn(dacRes.data);
       } else {
         setDacConn(null);
+      }
+
+      if (soyDeliveryRes?.success) {
+        setSoyDeliveryConn(soyDeliveryRes.data);
+      } else {
+        setSoyDeliveryConn(null);
       }
 
       // Process providers result
@@ -611,56 +647,6 @@ export default function VShipping() {
               </div>
             )}
 
-            {/* SOYDELIVERY */}
-            {isProviderActive('soydelivery') && (
-              <div 
-                onClick={() => {
-                  if (!isSoyDeliveryAvailable) {
-                    toast.error("SoyDelivery/Flex solo está disponible para vendedores dentro de la zona de cobertura.");
-                    return;
-                  }
-                  toggleMethod('soydelivery');
-                }}
-                className={`p-4 border rounded-xl transition-all flex items-start gap-3 ${
-                  !isSoyDeliveryAvailable 
-                    ? 'opacity-65 cursor-not-allowed border-gray-200 bg-gray-50' 
-                    : shippingData.soydelivery.active 
-                      ? 'border-orange-500 bg-orange-50/20 cursor-pointer hover:bg-slate-50' 
-                      : 'border-gray-200 bg-white cursor-pointer hover:bg-slate-50'
-                }`}
-              >
-                <input 
-                  type="checkbox" 
-                  checked={shippingData.soydelivery.active} 
-                  disabled={!isSoyDeliveryAvailable}
-                  onChange={() => {}} 
-                  className="mt-1 rounded text-orange-600 focus:ring-orange-500 pointer-events-none" 
-                />
-                <div>
-                  <div className="font-bold text-sm text-gray-900 flex items-center gap-2">
-                    SoyDelivery
-                    <span className="bg-orange-100 text-orange-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
-                      Collectibles Envíos
-                    </span>
-                    {!isSoyDeliveryAvailable && (
-                      <span className="bg-red-100 text-red-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
-                        {dispatchAddresses.length === 0 ? "Sin dirección" : "Fuera de zona"}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">Envíos express en el día (Flex) para Montevideo y zonas metropolitanas.</p>
-                  {!isSoyDeliveryAvailable && (
-                    <p className="text-[10px] text-red-600 mt-1 font-medium flex items-center gap-1">
-                      <Info className="w-3.5 h-3.5 shrink-0" />
-                      {dispatchAddresses.length === 0 
-                        ? "Configurá tu dirección de despacho para calcular envíos."
-                        : "SoyDelivery/Flex solo está disponible para vendedores dentro de la zona cubierta."}
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-
             {/* CORREO URUGUAYO */}
             {isProviderActive('correo_uruguayo') && (
               <div 
@@ -735,6 +721,59 @@ export default function VShipping() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             
+            {/* SOYDELIVERY FLEX BYOC CARD */}
+            <div className="p-4 border border-orange-200 bg-orange-50/30 rounded-xl space-y-3 transition-all hover:bg-orange-50/50">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="font-bold text-sm text-gray-900 flex items-center gap-2">
+                    <Truck className="w-4 h-4 text-orange-600" />
+                    SoyDelivery / Flex
+                  </div>
+                  <span className="bg-orange-100 text-orange-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
+                    Cuenta propia
+                  </span>
+                </div>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${getSoyDeliveryBadge().class}`}>
+                  {getSoyDeliveryBadge().text}
+                </span>
+              </div>
+
+              <p className="text-xs text-gray-600 leading-relaxed">
+                Conectá tu cuenta de SoyDelivery para ofrecer entregas Flex desde tu tienda. Necesitás credenciales proporcionadas directamente por SoyDelivery. Vos preparás, despachás y abonás el servicio.
+              </p>
+
+              {!isSoyDeliveryAvailable && (
+                <p className="text-[11px] text-amber-700 font-medium flex items-center gap-1">
+                  <Info className="w-3.5 h-3.5 shrink-0" />
+                  {dispatchAddresses.length === 0 
+                    ? "Configurá una dirección de despacho para usar SoyDelivery."
+                    : "Tu dirección de despacho está fuera de la zona cubierta de SoyDelivery."}
+                </p>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowSoyDeliveryModal(true)}
+                  className="px-3 py-1.5 text-xs font-bold rounded-lg bg-orange-600 text-white hover:bg-orange-700 transition shadow-sm flex items-center gap-1"
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                  {soyDeliveryConn ? 'Editar credenciales' : 'Configurar cuenta'}
+                </button>
+
+                {soyDeliveryConn && (
+                  <button
+                    type="button"
+                    onClick={() => setShowSoyDeliveryModal(true)}
+                    className="px-3 py-1.5 text-xs font-bold rounded-lg bg-white border border-gray-300 text-gray-700 hover:bg-slate-50 transition flex items-center gap-1"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Probar conexión
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* DISTRILOGIC CARD */}
             <div className="p-4 border border-purple-200 bg-purple-50/30 rounded-xl space-y-3 transition-all hover:bg-purple-50/50">
               <div className="flex items-start justify-between gap-2">
@@ -1298,6 +1337,13 @@ export default function VShipping() {
       <VDacIntegrationModal
         isOpen={showDacModal}
         onClose={() => setShowDacModal(false)}
+        onSaved={loadData}
+      />
+
+      {/* MODAL SOYDELIVERY BYOC CONFIGURATION */}
+      <VSoyDeliveryIntegrationModal
+        isOpen={showSoyDeliveryModal}
+        onClose={() => setShowSoyDeliveryModal(false)}
         onSaved={loadData}
       />
     </div>

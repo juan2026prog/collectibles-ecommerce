@@ -74,63 +74,50 @@ serve(async (req) => {
 
     const addr = resolvedShippingAddress || {};
 
-    // 2. Fetch SoyDelivery credentials (Vendor or Global Fallback)
+    // 2. Fetch SoyDelivery credentials (Strict Vendor BYOC Only)
     let sdCreds: any = null;
-    let usedVendor = false;
 
-    if (resolvedVendorId) {
-      const { data: vConn } = await supabase
-        .from('vendor_shipping_connections')
-        .select('*')
-        .eq('vendor_id', resolvedVendorId)
-        .eq('provider', 'soydelivery')
-        .single();
-      
-      if (vConn && vConn.connection_status === 'connected' && vConn.credentials_encrypted) {
-        try {
-          const { decryptData } = await import("../_shared/crypto.ts");
-          const secret = Deno.env.get("SHIPPING_ENCRYPTION_KEY") || supabaseKey.substring(0, 32);
-          const decryptedJson = await decryptData(vConn.credentials_encrypted, secret);
-          const creds = JSON.parse(decryptedJson);
-          
-          sdCreds = {
-            apiKey: creds.apiKey,
-            clientId: creds.clientId,
-            negocioId: creds.clientId,
-            secret: creds.secret,
-            negocioClave: creds.secret,
-            isSandbox: vConn.environment === 'uat'
-          };
-          usedVendor = true;
-        } catch (e) {
-          console.log("[SoyDelivery] Failed to decrypt vendor credentials, falling back to global.");
-        }
-      }
+    if (!resolvedVendorId) {
+      throw new Error("No se pudo asociar la orden a ningún vendedor para despachar por SoyDelivery.");
     }
 
-    if (!usedVendor) {
-      const { data: provider, error: providerErr } = await supabase
-        .from('shipping_providers')
-        .select('*')
-        .eq('code', 'soydelivery')
-        .single();
+    const { data: vConn, error: vConnErr } = await supabase
+      .from('vendor_shipping_connections')
+      .select('*')
+      .eq('vendor_id', resolvedVendorId)
+      .eq('provider', 'soydelivery')
+      .maybeSingle();
 
-      if (providerErr || !provider) {
-        throw new Error("No hay credenciales SoyDelivery globales configuradas en la plataforma.");
-      }
+    if (vConnErr || !vConn) {
+      return new Response(JSON.stringify({ 
+        skipped: true, 
+        reason: "El vendedor no tiene configurada una cuenta propia (BYOC) de SoyDelivery." 
+      }), { headers: corsHeaders });
+    }
 
-      if (provider.status !== 'active' || !provider.is_active) {
-        return new Response(JSON.stringify({ skipped: true, reason: "SoyDelivery is not active globally" }), { headers: corsHeaders });
-      }
+    if (vConn.connection_status !== 'connected' || !vConn.enabled || !vConn.credentials_encrypted) {
+      return new Response(JSON.stringify({ 
+        skipped: true, 
+        reason: `La conexión SoyDelivery del vendedor no está activa (estado: ${vConn.connection_status}).` 
+      }), { headers: corsHeaders });
+    }
+
+    try {
+      const { decryptData } = await import("../_shared/crypto.ts");
+      const secret = Deno.env.get("SHIPPING_ENCRYPTION_KEY") || supabaseKey.substring(0, 32);
+      const decryptedJson = await decryptData(vConn.credentials_encrypted, secret);
+      const creds = JSON.parse(decryptedJson);
 
       sdCreds = {
-        apiKey: provider.settings?.apiKey || provider.settings?.shipping_soydelivery_api_key || "",
-        clientId: provider.settings?.clientId || provider.settings?.shipping_soydelivery_api_id || "",
-        negocioId: provider.settings?.negocioId || provider.settings?.shipping_soydelivery_negocio_id || "",
-        secret: provider.settings?.secret || provider.settings?.shipping_soydelivery_negocio_clave || "",
-        negocioClave: provider.settings?.negocioClave || provider.settings?.shipping_soydelivery_negocio_clave || "",
-        isSandbox: provider.environment === 'uat' || provider.settings?.sandbox === 'true'
+        apiKey: creds.apiKey,
+        clientId: creds.clientId || creds.negocioId,
+        negocioId: creds.negocioId || creds.clientId,
+        secret: creds.secret || creds.negocioClave,
+        negocioClave: creds.negocioClave || creds.secret,
+        isSandbox: vConn.environment === 'uat' || vConn.environment === 'testing'
       };
+    } catch (e: any) {
+      throw new Error(`Error al descifrar las credenciales de SoyDelivery del vendedor: ${e.message}`);
     }
 
     const adapter = new SoyDeliveryAdapter();

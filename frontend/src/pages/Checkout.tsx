@@ -456,8 +456,8 @@ export default function Checkout() {
       });
     }
 
-    // 2. SoyDelivery
-    const sdActive = isPlatform ? true : !!s.soydelivery?.active;
+    // 2. SoyDelivery (Strict BYOC per vendor)
+    const sdActive = isPlatform ? false : !!v?.has_soydelivery_byoc;
     const sdGlobalActive = !!globalProviders['soydelivery'];
     if (sdActive && sdGlobalActive) {
       const cov = isSoyDeliveryAvailableForVendor(
@@ -486,7 +486,7 @@ export default function Checkout() {
         id: 'soydelivery',
         name: 'Soy Delivery',
         available: false,
-        reason: 'No habilitado por el vendedor.',
+        reason: 'El vendedor no tiene configurada una cuenta activa de SoyDelivery / Flex.',
         show: false
       });
     }
@@ -742,13 +742,29 @@ export default function Checkout() {
             dispatchAddress = defaultAddr;
           }
 
+          // 3. Fetch SoyDelivery BYOC connection safely
+          let hasSoyDeliveryConnection = false;
+          if (vendorId && vendorId !== 'null' && vendorId !== 'undefined' && vendorId !== 'platform') {
+            const { data: sdConn } = await supabase
+              .from('vendor_shipping_connections')
+              .select('connection_status, enabled, credentials_encrypted')
+              .eq('vendor_id', vendorId)
+              .eq('provider', 'soydelivery')
+              .maybeSingle();
+            
+            if (sdConn && sdConn.connection_status === 'connected' && sdConn.enabled && sdConn.credentials_encrypted) {
+              hasSoyDeliveryConnection = true;
+            }
+          }
+
           loaded[storeKey] = {
             id: storeKey,
             vendor_id: vendorId,
             vendor_store_id: vendorStoreId,
             shipping_settings: vendor?.shipping_settings || {},
             promotions_opt_in: vendor?.promotions_opt_in || false,
-            default_address: dispatchAddress || null
+            default_address: dispatchAddress || null,
+            has_soydelivery_byoc: hasSoyDeliveryConnection
           };
         } catch (e) {
           console.error(`Error loading shipping info for storeKey ${storeKey}:`, e);
@@ -809,7 +825,7 @@ export default function Checkout() {
               defaultMethod = 'correo_uruguayo';
             } else if (settings.manual?.active) {
               defaultMethod = 'manual';
-            } else if (settings.soydelivery?.active) {
+            } else if (v?.has_soydelivery_byoc) {
               defaultMethod = 'delivery';
             }
           }
@@ -1068,7 +1084,7 @@ export default function Checkout() {
           const isVendorFreeShipping = vendorFreeShippingActive && vendorMinAmount > 0 && groupTotal >= vendorMinAmount;
           const isGroupFreeShipping = isFreeShipping || isVendorFreeShipping;
 
-          const hasSD = isMontevideo && v && v.shipping_settings?.soydelivery?.active && globalProviders['soydelivery'] && isSoyDeliveryAvailableForVendor(
+          const hasSD = isMontevideo && v && v.has_soydelivery_byoc && globalProviders['soydelivery'] && isSoyDeliveryAvailableForVendor(
             v.default_address, 
             { department: form.department, city: resolvedCityForShipping }
           ).available;
@@ -4050,7 +4066,7 @@ export default function Checkout() {
                     const groupShippingCost = vendorShippingCosts[storeKey] ?? 0;
 
                     const v = vendorsData[storeKey];
-                    const hasSD = isMontevideo && v && v.shipping_settings?.soydelivery?.active && globalProviders['soydelivery'] && isSoyDeliveryAvailableForVendor(
+                    const hasSD = isMontevideo && v && v.has_soydelivery_byoc && globalProviders['soydelivery'] && isSoyDeliveryAvailableForVendor(
                       v.default_address, 
                       { department: form.department, city: resolvedCityForShipping }
                     ).available;

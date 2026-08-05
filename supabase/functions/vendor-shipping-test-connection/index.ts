@@ -134,13 +134,41 @@ serve(async (req) => {
       message = "Conexión con DAC exitosa";
 
     } else if (provider === 'soydelivery') {
-      const { apiKey } = credentials;
-      if (!apiKey) {
-        throw new Error("SoyDelivery requiere API Key");
+      const { apiKey, clientId, negocioId } = credentials;
+      const apiId = clientId || negocioId;
+      if (!apiKey || !apiId) {
+        throw new Error("SoyDelivery requiere ID de Cliente / Negocio (ApiId) y API Key");
       }
-      
+
+      const isSandbox = environment === 'uat' || environment === 'testing';
+      const baseUrl = isSandbox
+        ? "http://testing.soydelivery.com.uy/rest"
+        : "https://soydelivery.com.uy/rest";
+
+      const authRes = await fetch(`${baseUrl}/sdws_autenticar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ApiId: Number(apiId),
+          ApiKey: String(apiKey).trim()
+        })
+      });
+
+      if (!authRes.ok) {
+        throw new Error(`Error HTTP ${authRes.status} al conectar con SoyDelivery (${environment})`);
+      }
+
+      const authData = await authRes.json();
+      if (authData.ErrId && authData.ErrId !== "0") {
+        throw new Error(`SoyDelivery respondió error: ${authData.ErrDescription || 'Credenciales inválidas'}`);
+      }
+
+      if (!authData.AccessToken) {
+        throw new Error("SoyDelivery no devolvió token de autenticación. Verifica las credenciales.");
+      }
+
       success = true;
-      message = "Conexión con SoyDelivery exitosa";
+      message = `Conexión con SoyDelivery exitosa (${isSandbox ? 'Testing' : 'Producción'}). Credenciales autenticadas correctamente.`;
 
     } else if (provider === 'ues') {
       const { username, password, apiKey, token } = credentials;
