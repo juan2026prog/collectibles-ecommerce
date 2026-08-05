@@ -19,6 +19,7 @@ serve(async (req) => {
     console.log("[DAC Get Cost] Raw payload received:", JSON.stringify(body));
 
     // Support unified mapping for both Checkout payload and Admin Logistics payload
+    const vendor_id = body.vendor_id || null;
     const mode = body.mode || "home"; // 'home' or 'agency'
     const department = body.department || "";
     const city = body.city || body.locality || "";
@@ -27,34 +28,76 @@ serve(async (req) => {
     const dac_office_id = body.dac_office_id || null;
     const k_oficina_destino = body.k_oficina_destino !== undefined ? body.k_oficina_destino : body.K_Oficina_Destino;
 
-    console.log("[DAC Get Cost] Resolved inputs:", { mode, department, city, address, packages, dac_office_id, k_oficina_destino });
+    console.log("[DAC Get Cost] Resolved inputs:", { vendor_id, mode, department, city, address, packages, dac_office_id, k_oficina_destino });
 
-    // 1. Fetch DAC provider details
-    const { data: provider, error: providerErr } = await supabase
-      .from('shipping_providers')
-      .select('*')
-      .eq('code', 'dac')
-      .single();
+    // 1. Resolve credentials (BYOC vs Standard)
+    let dacCreds: { username: string; password_encrypted: string; api_url: string; settings: any } | null = null;
+    let account_mode: 'standard' | 'byoc' = 'standard';
+    let pricing_source: 'platform_standard' | 'vendor_account' = 'platform_standard';
 
-    if (providerErr || !provider) {
-      throw new Error("No se encontró la configuración del proveedor DAC en la base de datos.");
+    if (vendor_id) {
+      const { data: vConn } = await supabase
+        .from('vendor_shipping_connections')
+        .select('*')
+        .eq('vendor_id', vendor_id)
+        .eq('provider', 'dac')
+        .maybeSingle();
+
+      if (vConn && vConn.account_mode === 'byoc' && vConn.connection_status === 'connected' && vConn.credentials_encrypted) {
+        try {
+          const { decryptData } = await import("../_shared/crypto.ts");
+          const secret = Deno.env.get("SHIPPING_ENCRYPTION_KEY") || supabaseKey.substring(0, 32);
+          const decryptedJson = await decryptData(vConn.credentials_encrypted, secret);
+          const creds = JSON.parse(decryptedJson);
+          if (creds.username && creds.password) {
+            dacCreds = {
+              username: creds.username,
+              password_encrypted: creds.password,
+              api_url: creds.apiUrl || creds.api_url || "https://www.gacela.com.uy/wsGacelaTest/wsGacela.asmx",
+              settings: vConn.settings || {}
+            };
+            account_mode = 'byoc';
+            pricing_source = 'vendor_account';
+          }
+        } catch (e) {
+          console.warn("[DAC Get Cost] Error decrypting vendor BYOC credentials, falling back to platform standard:", e);
+        }
+      }
     }
 
-    if (!provider.is_active || provider.status !== 'active') {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: "El servicio DAC no está activo.",
-        technical_error: "Provider inactive in database" 
-      }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
+    if (!dacCreds) {
+      const { data: provider, error: providerErr } = await supabase
+        .from('shipping_providers')
+        .select('*')
+        .eq('code', 'dac')
+        .single();
+
+      if (providerErr || !provider) {
+        throw new Error("No se encontró la configuración del proveedor DAC en la base de datos.");
+      }
+
+      if (!provider.is_active || provider.status !== 'active') {
+        return new Response(JSON.stringify({ 
+          success: false, 
+          error: "El servicio DAC no está activo.",
+          technical_error: "Provider inactive in database" 
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      const { username, password_encrypted, api_url, settings = {} } = provider;
+      if (!username || !password_encrypted || !api_url) {
+        throw new Error("Credenciales de DAC incompletas en shipping_providers.");
+      }
+
+      dacCreds = { username, password_encrypted, api_url, settings };
+      account_mode = 'standard';
+      pricing_source = 'platform_standard';
     }
 
-    const { username, password_encrypted, api_url, settings = {} } = provider;
-    if (!username || !password_encrypted || !api_url) {
-      throw new Error("Credenciales de DAC incompletas en shipping_providers.");
-    }
+    const { username, password_encrypted, api_url, settings = {} } = dacCreds;
 
     // 2. Resolve destination office (K_Oficina_Destino) — NO FALLBACKS
     let selectedOffice = null;
@@ -282,6 +325,8 @@ serve(async (req) => {
       provider: "dac",
       cost: cost,
       currency: "UYU",
+      account_mode,
+      pricing_source,
       finalKOficina: selectedOffice.k_oficina,
       officeName: selectedOffice.office_name,
       raw_response: {
@@ -290,6 +335,8 @@ serve(async (req) => {
         k_oficina: selectedOffice.k_oficina,
         entrega: entrega,
         modo: mode,
+        account_mode,
+        pricing_source,
         tiempo_estimado: "24-48 hs hábiles"
       }
     }), {

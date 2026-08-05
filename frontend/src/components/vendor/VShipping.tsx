@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import VendorLabelPreviewModal from './VendorLabelPreviewModal';
 import VDistrilogicIntegration from './VDistrilogicIntegration';
+import VDacIntegrationModal from './VDacIntegrationModal';
 import { isLocationInSoyDeliveryZone, isSoyDeliveryAvailableForVendor } from '../../utils/uruguayLocations';
 
 interface DispatchAddress {
@@ -88,6 +89,10 @@ export default function VShipping() {
   const [showDistrilogicModal, setShowDistrilogicModal] = useState(false);
   const [distrilogicModalTab, setDistrilogicModalTab] = useState<'credentials' | 'services'>('credentials');
 
+  // 6. DAC Hybrid connection state
+  const [dacConn, setDacConn] = useState<any>(null);
+  const [showDacModal, setShowDacModal] = useState(false);
+
   const departments = [
     'Artigas', 'Canelones', 'Cerro Largo', 'Colonia', 'Durazno', 
     'Flores', 'Florida', 'Lavalleja', 'Maldonado', 'Montevideo', 
@@ -99,7 +104,7 @@ export default function VShipping() {
     if (!user) return;
     try {
       // Run queries in parallel
-      const [vendorRes, addrRes, mlRes, provRes, distrilogicRes] = await Promise.all([
+      const [vendorRes, addrRes, mlRes, provRes, distrilogicRes, dacRes] = await Promise.all([
         supabase
           .from('vendors')
           .select('store_name, logo_url, slug, contact_phone, pickup_address, shipping_settings')
@@ -138,6 +143,15 @@ export default function VShipping() {
           .eq('provider', 'distrilogic')
           .maybeSingle()
           .then(res => ({ success: true, data: res.data, error: res.error }))
+          .catch(err => ({ success: false, data: null, error: err })),
+
+        supabase
+          .from('vendor_shipping_connections')
+          .select('*')
+          .eq('vendor_id', user.id)
+          .eq('provider', 'dac')
+          .maybeSingle()
+          .then(res => ({ success: true, data: res.data, error: res.error }))
           .catch(err => ({ success: false, data: null, error: err }))
       ]);
 
@@ -145,6 +159,12 @@ export default function VShipping() {
         setDistrilogicConn(distrilogicRes.data);
       } else {
         setDistrilogicConn(null);
+      }
+
+      if (dacRes?.success) {
+        setDacConn(dacRes.data);
+      } else {
+        setDacConn(null);
       }
 
       // Process providers result
@@ -518,23 +538,51 @@ export default function VShipping() {
             {/* DAC */}
             {isProviderActive('dac') && (
               <div 
-                onClick={() => toggleMethod('dac')}
-                className={`p-4 border rounded-xl cursor-pointer transition-all flex items-start gap-3 hover:bg-slate-50 ${shippingData.dac.active ? 'border-blue-500 bg-blue-50/20' : 'border-gray-200 bg-white'}`}
+                className={`p-4 border rounded-xl transition-all flex flex-col justify-between ${shippingData.dac.active ? 'border-blue-500 bg-blue-50/20' : 'border-gray-200 bg-white'}`}
               >
-                <input 
-                  type="checkbox" 
-                  checked={shippingData.dac.active} 
-                  onChange={() => {}} 
-                  className="mt-1 rounded text-blue-600 focus:ring-blue-500 pointer-events-none" 
-                />
-                <div>
-                  <div className="font-bold text-sm text-gray-900 flex items-center gap-2">
-                    DAC
-                    <span className="bg-blue-100 text-blue-800 text-[9px] font-bold px-1.5 py-0.5 rounded">
-                      Collectibles Envíos
-                    </span>
+                <div className="flex items-start gap-3">
+                  <input 
+                    type="checkbox" 
+                    checked={shippingData.dac.active} 
+                    onChange={() => toggleMethod('dac')} 
+                    className="mt-1 rounded text-blue-600 focus:ring-blue-500 cursor-pointer" 
+                  />
+                  <div className="flex-1">
+                    <div className="font-bold text-sm text-gray-900 flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-2">
+                        DAC
+                        {dacConn?.account_mode === 'byoc' ? (
+                          <span className="bg-purple-100 text-purple-800 text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded">
+                            Cuenta propia
+                          </span>
+                        ) : (
+                          <span className="bg-blue-100 text-blue-800 text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded">
+                            Tarifa integrada
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                      Despachá directamente desde tu tienda. Podés usar las tarifas estándar disponibles en Collectibles o conectar tu propia cuenta de DAC.
+                    </p>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">Despacho nacional interdepartamental. Las tarifas se cotizan de forma automática.</p>
+                </div>
+
+                <div className="mt-3 pt-3 border-t border-gray-200/60 flex items-center justify-between">
+                  <span className="text-[11px] font-medium text-gray-500">
+                    Modalidad: <strong className="text-gray-800">{dacConn?.account_mode === 'byoc' ? 'Cuenta Propia' : 'Tarifas Estándar'}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowDacModal(true);
+                    }}
+                    className="px-3 py-1 bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1"
+                  >
+                    <Settings className="w-3.5 h-3.5 text-blue-600" />
+                    Configurar DAC
+                  </button>
                 </div>
               </div>
             )}
@@ -1244,6 +1292,13 @@ export default function VShipping() {
         onClose={() => setShowDistrilogicModal(false)}
         initialTab={distrilogicModalTab}
         onConnectionChange={loadData}
+      />
+
+      {/* MODAL DAC HYBRID CONFIGURATION */}
+      <VDacIntegrationModal
+        isOpen={showDacModal}
+        onClose={() => setShowDacModal(false)}
+        onSaved={loadData}
       />
     </div>
   );
