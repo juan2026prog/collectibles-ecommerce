@@ -1098,6 +1098,7 @@ export default function Checkout() {
               const dacMode = method === 'dac_agency' ? 'agency' : 'home';
               const suborderAgency = sel.selectedAgency || selectedAgency;
               const bodyPayload: any = {
+                vendor_id: v?.vendor_id || v?.id || (storeKey !== 'collectibles' && storeKey !== 'platform' ? storeKey : null),
                 mode: dacMode,
                 department: form.department,
                 city: isMontevideo ? 'Montevideo' : (dacMode === 'agency' ? (suborderAgency?.city || form.city || suborderAgency?.office_name) : form.city),
