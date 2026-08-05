@@ -6,18 +6,27 @@ import { useToast } from '../../components/admin/Toast';
 import VMercadoLibre from './VMercadoLibre';
 import VShipping from './VShipping';
 import VKyc from './VKyc';
-import { User, CreditCard, Truck, Link2, FileText, Save, UploadCloud, Bell, AlertCircle, CheckCircle2, RefreshCw, ToggleLeft, ToggleRight } from 'lucide-react';
+import VTermsSettings from './VTermsSettings';
+import { User, CreditCard, Truck, Link2, FileText, Save, UploadCloud, Bell, AlertCircle, CheckCircle2, RefreshCw, ToggleLeft, ToggleRight, ShieldCheck } from 'lucide-react';
+
+import { normalizeSettingsTab } from '../../config/vendorNavigation';
 
 export default function VSettings() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get('sub') || 'profile';
+  
+  const rawSub = searchParams.get('sub') || searchParams.get('section') || searchParams.get('settingsTab');
+  const activeTab = normalizeSettingsTab(rawSub);
+
   const setActiveTab = (tab: string) => {
+    const canonical = normalizeSettingsTab(tab);
     setSearchParams(prev => {
-      prev.set('sub', tab);
-      return prev;
-    });
+      const next = new URLSearchParams(prev);
+      next.set('tab', 'settings');
+      next.set('sub', canonical);
+      return next;
+    }, { replace: false });
   };
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -340,6 +349,7 @@ export default function VSettings() {
     { id: 'notifications', label: 'Notificaciones', icon: Bell },
     { id: 'mercadolibre', label: 'Mercado Libre', icon: Link2 },
     { id: 'documents', label: 'Documentación', icon: FileText },
+    { id: 'terms', label: 'Términos y Condiciones', icon: ShieldCheck },
   ];
 
   if (loading) {
@@ -781,6 +791,13 @@ export default function VSettings() {
         {activeTab === 'documents' && (
           <div className="bg-white rounded-xl">
              <VKyc />
+          </div>
+        )}
+
+        {/* TAB TÉRMINOS Y CONDICIONES */}
+        {activeTab === 'terms' && (
+          <div className="bg-white rounded-xl">
+             <VTermsSettings />
           </div>
         )}
 

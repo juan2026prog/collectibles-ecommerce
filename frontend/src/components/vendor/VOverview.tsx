@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { resolveImage } from '../../lib/imageUtils';
 import { isRealPaidOrder } from '../../lib/payments';
+import VendorOnboardingWidget from './VendorOnboardingWidget';
 
 interface VOverviewProps {
   onChangeTab?: (tab: string) => void;
@@ -269,6 +270,8 @@ export default function VOverview({ onChangeTab, activeStoreId }: VOverviewProps
   return (
     <div className="space-y-6 animate-fade-in">
       
+      {/* Onboarding Guide Widget */}
+      <VendorOnboardingWidget />
       {activeStoreId && storeStats && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-205 p-6 flex flex-wrap gap-6 items-center justify-between">
           <div className="flex items-center gap-4">
@@ -310,54 +313,7 @@ export default function VOverview({ onChangeTab, activeStoreId }: VOverviewProps
         </div>
       )}
 
-      {!onboarding.isComplete && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Comienza a vender en Collectibles</h2>
-          <p className="text-sm text-gray-500 mb-6">Completa estos pasos para activar tu tienda y empezar a recibir pedidos.</p>
-          
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <Link to="/vendor?tab=settings" className={`p-4 rounded-xl border ${onboarding.profile ? 'border-green-200 bg-green-50' : 'border-gray-200 hover:border-black'} flex flex-col items-center text-center transition-colors`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-3 ${onboarding.profile ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
-                1
-              </div>
-              <span className="text-sm font-bold text-gray-900">Perfil</span>
-              <span className="text-xs text-gray-500 mt-1">Logo y datos</span>
-            </Link>
 
-            <Link to="/vendor?tab=settings" className={`p-4 rounded-xl border ${onboarding.kyc ? 'border-green-200 bg-green-50' : 'border-gray-200 hover:border-black'} flex flex-col items-center text-center transition-colors`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-3 ${onboarding.kyc ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
-                2
-              </div>
-              <span className="text-sm font-bold text-gray-900">Documentación</span>
-              <span className="text-xs text-gray-500 mt-1">RUT y Fiscal</span>
-            </Link>
-
-            <Link to="/vendor?tab=settings" className={`p-4 rounded-xl border ${onboarding.billing ? 'border-green-200 bg-green-50' : 'border-gray-200 hover:border-black'} flex flex-col items-center text-center transition-colors`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-3 ${onboarding.billing ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
-                3
-              </div>
-              <span className="text-sm font-bold text-gray-900">Cobros</span>
-              <span className="text-xs text-gray-500 mt-1">Cuenta bancaria</span>
-            </Link>
-
-            <Link to="/vendor?tab=settings" className={`p-4 rounded-xl border ${onboarding.shipping ? 'border-green-200 bg-green-50' : 'border-gray-200 hover:border-black'} flex flex-col items-center text-center transition-colors`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-3 ${onboarding.shipping ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
-                4
-              </div>
-              <span className="text-sm font-bold text-gray-900">Logística</span>
-              <span className="text-xs text-gray-500 mt-1">DAC / SoyDelivery</span>
-            </Link>
-
-            <Link to="/vendor?tab=settings" className={`p-4 rounded-xl border ${onboarding.mercadolibre ? 'border-green-200 bg-green-50' : 'border-gray-200 hover:border-black'} flex flex-col items-center text-center transition-colors`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-3 ${onboarding.mercadolibre ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
-                5
-              </div>
-              <span className="text-sm font-bold text-gray-900">Sincronización</span>
-              <span className="text-xs text-gray-500 mt-1">Mercado Libre</span>
-            </Link>
-          </div>
-        </div>
-      )}
 
       {alerts.length > 0 && (
         <div className="space-y-3">

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/admin/Toast';
@@ -26,8 +27,26 @@ interface DispatchAddress {
 export default function VShipping() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!loading) {
+      const focus = searchParams.get('focus');
+      if (focus === 'dispatch-address') {
+        setTimeout(() => {
+          const el = document.getElementById('dispatch-address-section');
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }, 150);
+      } else if (focus === 'shipping-methods') {
+        setTimeout(() => {
+          const el = document.getElementById('shipping-methods-section');
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }, 150);
+      }
+    }
+  }, [loading, searchParams]);
 
   // 1. Settings en vendors.shipping_settings (Centralized Collectibles Envíos + Pickup/Manual)
   const [shippingData, setShippingData] = useState({
@@ -546,7 +565,7 @@ export default function VShipping() {
       </div>
 
       {/* METODOS DISPONIBLES CHECKLIST */}
-      <div className="border border-gray-200 rounded-xl p-6 bg-white shadow-sm space-y-6">
+      <div id="shipping-methods-section" className="border border-gray-200 rounded-xl p-6 bg-white shadow-sm space-y-6">
         <div>
           <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
             <Settings className="w-5 h-5 text-gray-600" />
@@ -1077,7 +1096,7 @@ export default function VShipping() {
       )}
 
       {/* SECCIÓN DIRECCIONES DE DESPACHO (REMITENTE) */}
-      <div className="border border-gray-200 rounded-xl p-6 bg-white shadow-sm">
+      <div id="dispatch-address-section" className="border border-gray-200 rounded-xl p-6 bg-white shadow-sm">
         <div className="flex justify-between items-center mb-6">
           <div>
             <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
