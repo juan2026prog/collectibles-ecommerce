@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { Eye, ChevronDown, Package, Truck, PhoneCall, X, Save, Ban, AlertTriangle, UserX, Gift, RefreshCw, FileText, Clock, Settings, Mail, MapPin } from 'lucide-react';
+import { Eye, ChevronDown, Package, Truck, PhoneCall, X, Save, Ban, AlertTriangle, UserX, Gift, RefreshCw, FileText, Clock, Settings, Mail, MapPin, CreditCard, CheckCircle, XCircle, ShieldAlert } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
 import { createDacShipment, getDacLabel, trackDacShipment } from '../../lib/dac';
@@ -80,12 +80,115 @@ export default function AdminOrders() {
   // Added for products and suborders
   const [orderItems, setOrderItems] = useState<any[]>([]);
   const [orderSuborders, setOrderSuborders] = useState<any[]>([]);
-  const [loadingItems, setLoadingItems] = useState(false);
+  // Payment Traceability States
+  const [paymentAttempts, setPaymentAttempts] = useState<any[]>([]);
+  const [paymentEvents, setPaymentEvents] = useState<any[]>([]);
+  const [loadingPaymentData, setLoadingPaymentData] = useState(false);
+  const [isReconciling, setIsReconciling] = useState(false);
+  const [manualPaymentModalOpen, setManualPaymentModalOpen] = useState(false);
+  const [manualPaymentMethod, setManualPaymentMethod] = useState('transfer');
+  const [manualPaymentRef, setManualPaymentRef] = useState('');
+  const [manualPaymentNotes, setManualPaymentNotes] = useState('');
+  const [isRegisteringManual, setIsRegisteringManual] = useState(false);
+  const [showTimelineModal, setShowTimelineModal] = useState(false);
+  const [paymentFilter, setPaymentFilter] = useState('all');
 
   const { toast } = useToast();
   const { confirm, prompt } = useConfirmModal();
 
-  useEffect(() => { fetchOrders(); }, [statusFilter, channelFilter]);
+  useEffect(() => { fetchOrders(); }, [statusFilter, channelFilter, paymentFilter]);
+
+  async function loadPaymentTraceability(orderId: string) {
+    setLoadingPaymentData(true);
+    try {
+      const { data: attempts } = await supabase
+        .from('payment_attempts')
+        .select('*')
+        .eq('order_id', orderId)
+        .order('attempt_number', { ascending: false });
+
+      const { data: events } = await supabase
+        .from('payment_events')
+        .select('*')
+        .eq('order_id', orderId)
+        .order('created_at', { ascending: false });
+
+      setPaymentAttempts(attempts || []);
+      setPaymentEvents(events || []);
+    } catch (err: any) {
+      console.error("Error loading payment traceability:", err);
+    } finally {
+      setLoadingPaymentData(false);
+    }
+  }
+
+  async function handleReconcilePayment(orderId: string) {
+    setIsReconciling(true);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const token = session.session?.access_token;
+      
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/reconcile-payment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ order_id: orderId })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Fallo en la conciliación');
+      }
+
+      toast.success(`Conciliación completada: Estado [${data.normalized_status}]`);
+      const { data: updatedOrder } = await supabase.from('orders').select('*').eq('id', orderId).single();
+      if (updatedOrder) setSelectedOrder(updatedOrder);
+      loadPaymentTraceability(orderId);
+      fetchOrders();
+    } catch (err: any) {
+      console.error("Error conciliando pago:", err);
+      toast.error(`Error al conciliar: ${err.message}`);
+    } finally {
+      setIsReconciling(false);
+    }
+  }
+
+  async function handleRegisterManualPayment() {
+    if (!selectedOrder) return;
+    if (!manualPaymentRef.trim()) {
+      toast.error("Debe ingresar un número de referencia o comprobante.");
+      return;
+    }
+    setIsRegisteringManual(true);
+    try {
+      const { data, error } = await supabase.rpc('register_manual_payment', {
+        p_order_id: selectedOrder.id,
+        p_method: manualPaymentMethod,
+        p_amount: Number(selectedOrder.total_amount),
+        p_currency: selectedOrder.currency || 'UYU',
+        p_reference: manualPaymentRef.trim(),
+        p_notes: manualPaymentNotes.trim()
+      });
+
+      if (error) throw error;
+      toast.success("Pago manual registrado y aprobado exitosamente.");
+      setManualPaymentModalOpen(false);
+      setManualPaymentRef('');
+      setManualPaymentNotes('');
+      
+      const { data: updatedOrder } = await supabase.from('orders').select('*').eq('id', selectedOrder.id).single();
+      if (updatedOrder) setSelectedOrder(updatedOrder);
+      loadPaymentTraceability(selectedOrder.id);
+      fetchOrders();
+    } catch (err: any) {
+      console.error("Error registrando pago manual:", err);
+      toast.error(`Error: ${err.message}`);
+    } finally {
+      setIsRegisteringManual(false);
+    }
+  }
 
   useEffect(() => {
     async function checkProvidersActive() {
@@ -117,6 +220,7 @@ export default function AdminOrders() {
   useEffect(() => {
     if (selectedOrder) {
       loadShipmentsForOrder(selectedOrder.id);
+      loadPaymentTraceability(selectedOrder.id);
       
       // Prefill values from order address
       const addr = selectedOrder.shipping_address || {};
@@ -594,6 +698,7 @@ export default function AdminOrders() {
     setLoading(true);
     let query = supabase.from('orders').select('*, customer:profiles(email, first_name, last_name)').order('created_at', { ascending: false });
     if (statusFilter !== 'all') query = query.eq('status', statusFilter);
+    if (paymentFilter !== 'all') query = query.eq('payment_status', paymentFilter);
     if (channelFilter === 'web') {
       query = query.is('ml_order_id', null);
     } else if (channelFilter === 'mercadolibre') {
@@ -790,9 +895,19 @@ export default function AdminOrders() {
               Mercado Libre
             </button>
           </div>
-          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="form-input w-48 text-sm font-medium">
-            <option value="all">Ver Todos los Estados</option>
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="form-input w-44 text-xs font-medium">
+            <option value="all">Estado Orden: Todos</option>
             {ORDER_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
+          <select value={paymentFilter} onChange={e => setPaymentFilter(e.target.value)} className="form-input w-48 text-xs font-medium border-emerald-300 bg-emerald-50/50">
+            <option value="all">Estado Pago: Todos</option>
+            <option value="approved">Aprobado</option>
+            <option value="initiated">Iniciado / Pendiente</option>
+            <option value="rejected">Rechazado</option>
+            <option value="expired">Expirado</option>
+            <option value="no_payment_attempt">Sin intento de pago</option>
+            <option value="unknown_legacy">Histórico incompleto</option>
+            <option value="refunded">Reembolsado</option>
           </select>
         </div>
       </div>
@@ -804,6 +919,7 @@ export default function AdminOrders() {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Orden ID / Cliente</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Total</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Estado de Pago</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Estado y Logística</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Fecha</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Tags</th>
@@ -812,11 +928,13 @@ export default function AdminOrders() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-400">Cargando órdenes...</td></tr>
+                <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400">Cargando órdenes...</td></tr>
               ) : orders.length === 0 ? (
-                <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-400">No hay órdenes para mostrar</td></tr>
+                <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400">No hay órdenes para mostrar</td></tr>
               ) : orders.map(o => {
                 const statusObj = ORDER_STATUSES.find(s => s.value === o.status) || ORDER_STATUSES[0];
+                const pStat = o.payment_status || 'no_payment_attempt';
+
                 return (
                   <tr key={o.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4">
@@ -840,6 +958,23 @@ export default function AdminOrders() {
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-sm font-bold text-gray-900">${o.total_amount}</span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex flex-col gap-1">
+                        <span className={`inline-flex items-center gap-1 w-fit px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md ${
+                          pStat === 'approved' ? 'bg-emerald-100 text-emerald-800 border border-emerald-250' :
+                          ['initiated', 'pending', 'processing'].includes(pStat) ? 'bg-amber-100 text-amber-800 border border-amber-250' :
+                          pStat === 'no_payment_attempt' ? 'bg-gray-100 text-gray-700 border border-gray-250' :
+                          ['rejected', 'failed'].includes(pStat) ? 'bg-rose-100 text-rose-800 border border-rose-250' :
+                          pStat === 'expired' ? 'bg-slate-200 text-slate-800 border border-slate-300' :
+                          'bg-purple-100 text-purple-800 border border-purple-250'
+                        }`}>
+                          {pStat}
+                        </span>
+                        <span className="text-[10px] text-gray-400 capitalize">
+                          {o.payment_provider || o.payment_method || 'Sin pasarela'}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="relative inline-block">
@@ -915,6 +1050,98 @@ export default function AdminOrders() {
                   <p className="mt-1 font-mono text-[10px] text-yellow-600">ID de Mercado Libre: {selectedOrder.ml_order_id}</p>
                 </div>
               )}
+
+              {/* PAGO Y TRANSACCIONES PANEL */}
+              <div className="space-y-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                    <CreditCard className="w-4 h-4 text-emerald-600" /> Pago y Transacciones
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleReconcilePayment(selectedOrder.id)}
+                      disabled={isReconciling}
+                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1"
+                      title="Consultar estado en la pasarela server-side"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isReconciling ? 'animate-spin' : ''}`} /> Conciliar
+                    </button>
+                  </div>
+                </div>
+
+                {/* Status Header Badge */}
+                <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-100">
+                  <div>
+                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Estado Normalizado</span>
+                    <span className={`inline-flex items-center gap-1 mt-0.5 px-2.5 py-1 rounded-md text-xs font-black uppercase tracking-wider ${
+                      selectedOrder.payment_status === 'approved' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
+                      ['initiated', 'pending', 'processing'].includes(selectedOrder.payment_status) ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                      selectedOrder.payment_status === 'no_payment_attempt' ? 'bg-gray-100 text-gray-700 border border-gray-300' :
+                      ['rejected', 'failed'].includes(selectedOrder.payment_status) ? 'bg-rose-100 text-rose-800 border border-rose-300' :
+                      selectedOrder.payment_status === 'expired' ? 'bg-slate-200 text-slate-800 border border-slate-300' :
+                      ['cancelled', 'refunded'].includes(selectedOrder.payment_status) ? 'bg-purple-100 text-purple-800 border border-purple-300' :
+                      'bg-orange-100 text-orange-800 border border-orange-300'
+                    }`}>
+                      {selectedOrder.payment_status || 'no_payment_attempt'}
+                    </span>
+                  </div>
+
+                  <div className="text-right">
+                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Monto Total</span>
+                    <span className="text-sm font-black text-gray-900">${selectedOrder.total_amount} {selectedOrder.currency || 'UYU'}</span>
+                  </div>
+                </div>
+
+                {/* Technical Details Grid */}
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Proveedor / Método</span>
+                    <span className="font-semibold text-gray-800 capitalize">{selectedOrder.payment_provider || selectedOrder.payment_method || 'Sin selección'}</span>
+                  </div>
+                  <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Intentos Registrados</span>
+                    <span className="font-semibold text-gray-800">{paymentAttempts.length} intento(s)</span>
+                  </div>
+                  <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100 col-span-2">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">ID Externo / Referencia</span>
+                    <span className="font-mono text-[11px] text-slate-700 break-all">{selectedOrder.payment_id || selectedOrder.payment_provider_reference || 'Sin ID registrado'}</span>
+                  </div>
+                  <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Conciliación</span>
+                    <span className="font-medium text-gray-700 capitalize">{selectedOrder.reconciliation_status || 'Pendiente'}</span>
+                  </div>
+                  <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Última Verificación</span>
+                    <span className="font-medium text-gray-700">{selectedOrder.last_reconciled_at ? new Date(selectedOrder.last_reconciled_at).toLocaleString() : 'No verificado'}</span>
+                  </div>
+                </div>
+
+                {/* Last Attempt Error / Detail */}
+                {paymentAttempts[0]?.error_message_sanitized && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-800">
+                    <p className="font-bold flex items-center gap-1">
+                      <AlertTriangle className="w-3.5 h-3.5 text-rose-600" /> Motivo de Rechazo / Error:
+                    </p>
+                    <p className="mt-1 font-mono text-[11px] text-rose-700">{paymentAttempts[0].error_message_sanitized}</p>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
+                  <button
+                    onClick={() => setShowTimelineModal(true)}
+                    className="flex-1 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <Clock className="w-3.5 h-3.5" /> Timeline de Eventos ({paymentEvents.length})
+                  </button>
+                  <button
+                    onClick={() => setManualPaymentModalOpen(true)}
+                    className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5"
+                  >
+                    💵 Pago Manual
+                  </button>
+                </div>
+              </div>
               
               {/* PRODUCTOS DE LA ORDEN */}
               <div className="space-y-4 bg-white p-4 rounded-xl border border-gray-100">
@@ -1932,6 +2159,136 @@ export default function AdminOrders() {
                 className="w-full btn-primary py-3 flex justify-center items-center gap-2"
               >
                 <Save className="w-5 h-5" /> Guardar Cambios
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* TIMELINE MODAL */}
+      {showTimelineModal && (
+        <>
+          <div className="fixed inset-0 bg-black/60 z-50 backdrop-blur-sm" onClick={() => setShowTimelineModal(false)} />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white rounded-2xl z-50 shadow-2xl p-6 space-y-4 max-h-[85vh] flex flex-col animate-fade-in">
+            <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+              <h3 className="font-black text-base flex items-center gap-2 text-gray-900">
+                <Clock className="w-5 h-5 text-indigo-600" /> Timeline de Pago (Historial Inmutable)
+              </h3>
+              <button onClick={() => setShowTimelineModal(false)} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+              {paymentEvents.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-8">No hay eventos de pago registrados aún.</p>
+              ) : (
+                <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-gray-200">
+                  {paymentEvents.map((ev: any) => (
+                    <div key={ev.id} className="relative">
+                      <div className="absolute -left-6 top-1 w-3.5 h-3.5 rounded-full bg-indigo-600 ring-4 ring-white" />
+                      <div className="bg-gray-50 border border-gray-200 rounded-xl p-3.5 text-xs space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-gray-900 uppercase tracking-wider text-[11px]">{ev.event_type}</span>
+                          <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-800">
+                            {ev.source}
+                          </span>
+                        </div>
+
+                        <p className="text-gray-700 font-medium">{ev.processing_result || 'Evento procesado'}</p>
+
+                        <div className="flex items-center justify-between text-[10px] text-gray-400 font-mono pt-1 border-t border-gray-100">
+                          <span>Proveedor: {ev.provider}</span>
+                          <span>{new Date(ev.occurred_at || ev.created_at).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* MANUAL PAYMENT REGISTRATION MODAL */}
+      {manualPaymentModalOpen && selectedOrder && (
+        <>
+          <div className="fixed inset-0 bg-black/60 z-50 backdrop-blur-sm" onClick={() => setManualPaymentModalOpen(false)} />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded-2xl z-50 shadow-2xl p-6 space-y-4 animate-fade-in">
+            <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+              <h3 className="font-black text-base flex items-center gap-2 text-gray-900">
+                💵 Registrar Pago Manual
+              </h3>
+              <button onClick={() => setManualPaymentModalOpen(false)} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-600 leading-relaxed">
+              Registra la recepción del pago por transferencia bancaria o compra asistida para habilitar la preparación de la orden.
+            </p>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-gray-700 block mb-1">Método de Pago</label>
+                <select 
+                  value={manualPaymentMethod} 
+                  onChange={(e) => setManualPaymentMethod(e.target.value)}
+                  className="form-input w-full"
+                >
+                  <option value="transfer">Transferencia Bancaria Itaú/Santander</option>
+                  <option value="manual_cash">Efectivo en Abitab / Redpagos</option>
+                  <option value="assisted_card">Tarjeta asistida POS</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-gray-700 block mb-1">Monto a Confirmar</label>
+                <input 
+                  type="text" 
+                  disabled 
+                  value={`$${selectedOrder.total_amount} ${selectedOrder.currency || 'UYU'}`} 
+                  className="form-input w-full bg-gray-100 text-gray-500 font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-gray-700 block mb-1">Número de Transacción / Comprobante (*)</label>
+                <input 
+                  type="text" 
+                  placeholder="Ej: TRX-99887766 o Nº de transferencia" 
+                  value={manualPaymentRef} 
+                  onChange={(e) => setManualPaymentRef(e.target.value)} 
+                  className="form-input w-full font-mono text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-gray-700 block mb-1">Observaciones / Notas</label>
+                <textarea 
+                  rows={2} 
+                  placeholder="Detalles adicionales o ejecutivo asistido..." 
+                  value={manualPaymentNotes} 
+                  onChange={(e) => setManualPaymentNotes(e.target.value)} 
+                  className="form-input w-full text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
+              <button 
+                onClick={() => setManualPaymentModalOpen(false)} 
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={handleRegisterManualPayment} 
+                disabled={isRegisteringManual} 
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5"
+              >
+                {isRegisteringManual ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : 'Confirmar Pago Manual'}
               </button>
             </div>
           </div>
