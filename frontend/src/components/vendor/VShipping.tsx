@@ -525,7 +525,7 @@ export default function VShipping() {
   if (loading) return <div className="p-8 text-center text-gray-500">Cargando configuración de envíos...</div>;
 
   return (
-    <div className="max-w-5xl space-y-8 pb-20 animate-fade-in">
+    <div className="max-w-full w-full space-y-8 pb-20 animate-fade-in">
       <div className="flex justify-between items-end border-b border-gray-200 pb-6">
         <div>
           <h2 className="text-3xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
