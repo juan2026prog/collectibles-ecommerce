@@ -311,10 +311,79 @@ export default function VOverview({ onChangeTab, activeStoreId }: VOverviewProps
             </div>
           </div>
         </div>
-      )}
+      )}      {/* Block 6 Pasos Configuración Rápida */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        <h2 className="text-xl font-bold text-gray-900 mb-1">Comienza a vender en Collectibles</h2>
+        <p className="text-sm text-gray-500 mb-6">Completa estos pasos para activar tu tienda y empezar a recibir pedidos.</p>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <Link 
+            to="/vendor?tab=settings&sub=profile" 
+            className="p-4 rounded-xl border border-gray-200 hover:border-black flex flex-col items-center text-center transition-colors hover:shadow-sm bg-white"
+          >
+            <div className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center mb-3 font-bold text-sm">
+              1
+            </div>
+            <span className="text-sm font-bold text-gray-900">Perfil</span>
+            <span className="text-xs text-gray-500 mt-1">Logo y datos</span>
+          </Link>
 
+          <Link 
+            to="/vendor?tab=settings&sub=documents" 
+            className="p-4 rounded-xl border border-gray-200 hover:border-black flex flex-col items-center text-center transition-colors hover:shadow-sm bg-white"
+          >
+            <div className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center mb-3 font-bold text-sm">
+              2
+            </div>
+            <span className="text-sm font-bold text-gray-900">Documentación</span>
+            <span className="text-xs text-gray-500 mt-1">RUT y Fiscal</span>
+          </Link>
 
+          <Link 
+            to="/vendor?tab=settings&sub=billing" 
+            className="p-4 rounded-xl border border-gray-200 hover:border-black flex flex-col items-center text-center transition-colors hover:shadow-sm bg-white"
+          >
+            <div className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center mb-3 font-bold text-sm">
+              3
+            </div>
+            <span className="text-sm font-bold text-gray-900">Cobros</span>
+            <span className="text-xs text-gray-500 mt-1">Cuenta bancaria</span>
+          </Link>
 
+          <Link 
+            to="/vendor?tab=settings&sub=shipping" 
+            className="p-4 rounded-xl border border-gray-200 hover:border-black flex flex-col items-center text-center transition-colors hover:shadow-sm bg-white"
+          >
+            <div className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center mb-3 font-bold text-sm">
+              4
+            </div>
+            <span className="text-sm font-bold text-gray-900">Logística</span>
+            <span className="text-xs text-gray-500 mt-1">DAC / SoyDelivery</span>
+          </Link>
+
+          <Link 
+            to="/vendor?tab=settings&sub=mercadolibre" 
+            className="p-4 rounded-xl border border-gray-200 hover:border-black flex flex-col items-center text-center transition-colors hover:shadow-sm bg-white"
+          >
+            <div className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center mb-3 font-bold text-sm">
+              5
+            </div>
+            <span className="text-sm font-bold text-gray-900">Sincronización</span>
+            <span className="text-xs text-gray-500 mt-1">Mercado Libre</span>
+          </Link>
+
+          <Link 
+            to="/vendor?tab=settings&sub=notifications" 
+            className="p-4 rounded-xl border border-gray-200 hover:border-black flex flex-col items-center text-center transition-colors hover:shadow-sm bg-white"
+          >
+            <div className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center mb-3 font-bold text-sm">
+              6
+            </div>
+            <span className="text-sm font-bold text-gray-900">Notificaciones</span>
+            <span className="text-xs text-gray-500 mt-1">WhatsApp y Alertas</span>
+          </Link>
+        </div>
+      </div>
       {alerts.length > 0 && (
         <div className="space-y-3">
           {alerts.map((alert, i) => (
