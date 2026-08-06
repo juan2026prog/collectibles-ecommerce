@@ -113,7 +113,7 @@ export default function VOverview({ onChangeTab, activeStoreId }: VOverviewProps
           price,
           quantity,
           vendor_store_id,
-          order:orders(id, created_at, status, customer:profiles(first_name, last_name, email))
+          order:orders(id, created_at, status)
         `)
         .eq('vendor_id', vendorId);
 
@@ -141,34 +141,27 @@ export default function VOverview({ onChangeTab, activeStoreId }: VOverviewProps
       });
       const uniqueOrders = Array.from(uniqueOrdersMap.values()).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-      // 4. Fetch Low Stock
+      // 4. Fetch Low Stock (Directly from products)
       let lowStockQuery = supabase
-        .from('vendor_product_variants')
-        .select(`
-          id, sku, inventory_count, 
-          product:vendor_products!inner(id, title, vendor_id, product_id)
-        `)
-        .eq('product.vendor_id', vendorId)
-        .lt('inventory_count', 5);
+        .from('products')
+        .select('id, title, stock, vendor_id, vendor_store_id')
+        .eq('vendor_id', vendorId)
+        .lt('stock', 5);
+
+      if (activeStoreId) {
+        lowStockQuery = lowStockQuery.eq('vendor_store_id', activeStoreId);
+      }
 
       const { data: rawLowStock } = await lowStockQuery
-        .order('inventory_count', { ascending: true })
-        .limit(50);
+        .order('stock', { ascending: true })
+        .limit(5);
         
-      let filteredLowStock = rawLowStock || [];
-      if (activeStoreId && filteredLowStock.length > 0) {
-        const prodIds = filteredLowStock.map(x => x.product.product_id).filter(Boolean);
-        const { data: storeProds } = await supabase
-          .from('products')
-          .select('id, vendor_store_id')
-          .in('id', prodIds);
-          
-        const validProdIds = new Set(
-          storeProds?.filter(p => p.vendor_store_id === activeStoreId).map(p => p.id) || []
-        );
-        filteredLowStock = filteredLowStock.filter(x => validProdIds.has(x.product.product_id));
-      }
-      const lowStockData = filteredLowStock.slice(0, 5);
+      const lowStockData = (rawLowStock || []).map(p => ({
+        id: p.id,
+        sku: p.id.substring(0, 8),
+        inventory_count: p.stock || 0,
+        product: { id: p.id, title: p.title }
+      }));
 
       // 5. Build Alerts (KYC, ML, Logistics) & Onboarding
       const { data: vendorData } = await supabase
