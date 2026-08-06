@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -21,6 +21,11 @@ export default function VendorRouteGuard({ children }: VendorRouteGuardProps) {
   const [activeDoc, setActiveDoc] = useState<any>(null);
   const [showReminder, setShowReminder] = useState(false);
   const [isSuspended, setIsSuspended] = useState(false);
+  const [isRevalidating, setIsRevalidating] = useState(false);
+
+  // Cached state and initialization flags
+  const initialCheckCompletedRef = useRef(false);
+  const lastCheckTimeRef = useRef<number>(0);
 
   useEffect(() => {
     if (!user || !profile?.is_vendor) {
@@ -28,11 +33,40 @@ export default function VendorRouteGuard({ children }: VendorRouteGuardProps) {
       return;
     }
 
-    checkVendorTermsAndStatus();
-  }, [user, profile]);
+    const isInitial = !initialCheckCompletedRef.current;
+    checkVendorTermsAndStatus({ isInitial });
+  }, [user?.id, profile?.is_vendor]);
 
-  async function checkVendorTermsAndStatus() {
-    setCheckingTerms(true);
+  // Window Focus / Visibility Change Listener for Silent Background Revalidation
+  useEffect(() => {
+    function handleFocus() {
+      if (!user || !profile?.is_vendor || !initialCheckCompletedRef.current) return;
+      
+      const now = Date.now();
+      // Cooldown of 30 seconds to prevent spamming on tab toggling
+      if (now - lastCheckTimeRef.current < 30000) return;
+
+      checkVendorTermsAndStatus({ isInitial: false });
+    }
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
+  }, [user?.id, profile?.is_vendor]);
+
+  async function checkVendorTermsAndStatus({ isInitial = false }: { isInitial?: boolean } = {}) {
+    lastCheckTimeRef.current = Date.now();
+
+    if (isInitial) {
+      setCheckingTerms(true);
+    } else {
+      setIsRevalidating(true);
+    }
+
     try {
       // 1. Fetch vendor record
       const { data: vendorData, error: vendorErr } = await supabase
@@ -41,19 +75,23 @@ export default function VendorRouteGuard({ children }: VendorRouteGuardProps) {
         .eq('id', user!.id)
         .maybeSingle();
 
-      if (vendorErr) console.error('Error loading vendor profile:', vendorErr);
+      if (vendorErr) console.error('[VendorRouteGuard] Error loading vendor profile:', vendorErr);
 
-      setVendor(vendorData);
+      if (vendorData) setVendor(vendorData);
 
       if (vendorData?.status === 'suspended') {
         setIsSuspended(true);
         setCheckingTerms(false);
+        setIsRevalidating(false);
+        initialCheckCompletedRef.current = true;
         return;
+      } else {
+        setIsSuspended(false);
       }
 
       // 2. Fetch active terms document
       const { data: docData } = await supabase.rpc('get_active_vendor_terms');
-      setActiveDoc(docData);
+      if (docData) setActiveDoc(docData);
 
       // 3. Check if terms acceptance is required via RPC
       const { data: reqTerms, error: rpcErr } = await supabase.rpc(
@@ -72,7 +110,6 @@ export default function VendorRouteGuard({ children }: VendorRouteGuardProps) {
 
       // 4. If legal terms accepted -> check onboarding transition
       if (!needsAcceptance) {
-        // If status was pending_terms_acceptance or pending, transition to 'onboarding'
         if (vendorData?.status === 'pending_terms_acceptance' || vendorData?.status === 'pending') {
           await supabase.from('vendors').update({ status: 'onboarding' }).eq('id', user!.id);
         }
@@ -85,7 +122,7 @@ export default function VendorRouteGuard({ children }: VendorRouteGuardProps) {
         const isComplete = onbData?.isComplete === true;
         const currentPath = location.pathname;
 
-        // Auto-redirect to onboarding if incomplete and visiting root vendor path
+        // Auto-redirect to onboarding if incomplete and visiting root vendor path (only on initial or root)
         if (!isComplete && (currentPath === '/vendor' || currentPath === '/vendor/')) {
           const searchParams = new URLSearchParams(location.search);
           const tab = searchParams.get('tab');
@@ -112,19 +149,25 @@ export default function VendorRouteGuard({ children }: VendorRouteGuardProps) {
         }
       }
     } catch (err) {
-      console.error('Error checking vendor terms requirement:', err);
-      setRequiresTerms(true);
+      console.error('[VendorRouteGuard] Error during revalidation:', err);
+      // On silent revalidation failure, do NOT block the user if we already have initial state
+      if (isInitial) {
+        setRequiresTerms(true);
+      }
     } finally {
+      initialCheckCompletedRef.current = true;
       setCheckingTerms(false);
+      setIsRevalidating(false);
     }
   }
 
-  if (authLoading || checkingTerms) {
+  // 1. Initial Load Only: Show non-intrusive full-screen loader while resolving first time
+  if (authLoading || (checkingTerms && !initialCheckCompletedRef.current)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
         <div className="flex flex-col items-center gap-3">
           <div className="animate-spin w-10 h-10 border-4 border-primary-500 border-t-transparent rounded-full" />
-          <p className="text-xs text-gray-400 font-semibold tracking-wider uppercase">Verificando permisos y estado de vendedor...</p>
+          <p className="text-xs text-gray-400 font-semibold tracking-wider uppercase">Preparando tu panel...</p>
         </div>
       </div>
     );
@@ -159,12 +202,12 @@ export default function VendorRouteGuard({ children }: VendorRouteGuardProps) {
     );
   }
 
-  // 1. Legal Acceptance Mandatory Check (Blocking)
+  // 2. Legal Acceptance Mandatory Check (Blocking)
   if (requiresTerms) {
-    return <VendorTermsAcceptance onAccepted={() => checkVendorTermsAndStatus()} />;
+    return <VendorTermsAcceptance onAccepted={() => checkVendorTermsAndStatus({ isInitial: true })} />;
   }
 
-  // 2. Legal Accepted -> Render Panel with optional Notice Reminder Modal
+  // 3. Legal Accepted -> Render Panel with optional Notice Reminder Modal
   return (
     <>
       {showReminder && activeDoc && (
