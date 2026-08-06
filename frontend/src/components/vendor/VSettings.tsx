@@ -218,9 +218,12 @@ export default function VSettings() {
     }
   }, [activeTab]);
 
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
   const handleSave = async () => {
     if (!user) return;
     setSaving(true);
+    setSaveStatus('saving');
     try {
       if (activeTab === 'notifications') {
         const numbers = notificationSettings.whatsapp_numbers || [];
@@ -285,8 +288,12 @@ export default function VSettings() {
         if (error) throw error;
         toast.success('Configuración guardada exitosamente');
       }
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 3000);
     } catch (err: any) {
+      setSaveStatus('error');
       toast.error(err.message || 'Error al guardar');
+      setTimeout(() => setSaveStatus('idle'), 4000);
     } finally {
       setSaving(false);
     }
@@ -343,14 +350,36 @@ export default function VSettings() {
   };
 
   const tabs = [
-    { id: 'profile', label: 'Perfil', icon: User },
-    { id: 'billing', label: 'Cobros', icon: CreditCard },
-    { id: 'shipping', label: 'Envíos', icon: Truck },
-    { id: 'notifications', label: 'Notificaciones', icon: Bell },
-    { id: 'mercadolibre', label: 'Mercado Libre', icon: Link2 },
-    { id: 'documents', label: 'Documentación', icon: FileText },
-    { id: 'terms', label: 'Términos y Condiciones', icon: ShieldCheck },
+    { id: 'profile', label: 'Perfil', fullLabel: 'Perfil', icon: User },
+    { id: 'billing', label: 'Cobros', fullLabel: 'Cobros', icon: CreditCard },
+    { id: 'shipping', label: 'Envíos', fullLabel: 'Envíos', icon: Truck },
+    { id: 'notifications', label: 'Notificaciones', fullLabel: 'Notificaciones', icon: Bell },
+    { id: 'mercadolibre', label: 'Mercado Libre', fullLabel: 'Mercado Libre', icon: Link2 },
+    { id: 'documents', label: 'Documentación', fullLabel: 'Documentación', icon: FileText },
+    { id: 'terms', label: 'Términos', fullLabel: 'Términos y Condiciones', icon: ShieldCheck },
   ];
+
+  const handleTabKeyDown = (e: React.KeyboardEvent, index: number) => {
+    let nextIndex = index;
+    if (e.key === 'ArrowRight') {
+      nextIndex = (index + 1) % tabs.length;
+    } else if (e.key === 'ArrowLeft') {
+      nextIndex = (index - 1 + tabs.length) % tabs.length;
+    } else if (e.key === 'Home') {
+      nextIndex = 0;
+    } else if (e.key === 'End') {
+      nextIndex = tabs.length - 1;
+    } else {
+      return;
+    }
+    e.preventDefault();
+    const nextTab = tabs[nextIndex];
+    setActiveTab(nextTab.id);
+    setTimeout(() => {
+      const el = document.getElementById(`tab-${nextTab.id}`);
+      if (el) el.focus();
+    }, 0);
+  };
 
   if (loading) {
     return <div className="p-8 text-center text-gray-500">Cargando configuración...</div>;
@@ -361,42 +390,106 @@ export default function VSettings() {
   const showSaveButton = activeTab === 'profile' || activeTab === 'billing' || activeTab === 'notifications';
 
   return (
-    <div className="max-w-full w-full space-y-8 pb-20 animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between border-b border-gray-200 pb-6 gap-4">
+    <div className="max-w-6xl w-full space-y-6 pb-20 animate-fade-in">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-200 pb-6 gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-gray-900">Configuración</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Configuración</h2>
           <p className="text-sm text-gray-500 mt-1">Gestioná los datos de tu tienda, cobros, envíos e integraciones.</p>
         </div>
         {showSaveButton && (
-          <button 
-            onClick={handleSave}
-            disabled={saving}
-            className="bg-black text-white px-6 py-2.5 rounded-lg font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 flex items-center gap-2 text-sm shadow-sm shrink-0"
-          >
-            <Save className="w-4 h-4" />
-            {saving ? 'Guardando...' : 'Guardar cambios'}
-          </button>
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <button 
+              onClick={handleSave}
+              disabled={saving}
+              className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-sm shadow-sm shrink-0 ${
+                saveStatus === 'saved'
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  : saveStatus === 'error'
+                    ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                    : 'bg-black hover:bg-gray-800 text-white'
+              }`}
+            >
+              {saving ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Guardando...</span>
+                </>
+              ) : saveStatus === 'saved' ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-white" />
+                  <span>¡Cambios guardados!</span>
+                </>
+              ) : saveStatus === 'error' ? (
+                <>
+                  <AlertCircle className="w-4 h-4 text-white" />
+                  <span>Error al guardar</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  <span>Guardar cambios</span>
+                </>
+              )}
+            </button>
+          </div>
         )}
       </div>
 
-      <div className="flex gap-1 sm:gap-2 border-b border-gray-200 overflow-x-auto pb-0.5 scrollbar-thin">
-        {tabs.map(tab => (
-          <button 
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-3 py-2.5 sm:px-4 sm:py-3 border-b-2 text-xs sm:text-sm font-semibold transition-colors whitespace-nowrap ${
-              activeTab === tab.id 
-                ? 'border-black text-black bg-gray-50/50' 
-                : 'border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300'
-            }`}
+      {/* Navigation: Mobile Select (< md) & Desktop/Tablet Tabs (>= md) */}
+      <div>
+        {/* Mobile Dropdown */}
+        <div className="md:hidden">
+          <label htmlFor="vendor-settings-tab-select" className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+            Sección de configuración
+          </label>
+          <select
+            id="vendor-settings-tab-select"
+            value={activeTab}
+            onChange={(e) => setActiveTab(e.target.value)}
+            className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-sm font-semibold text-gray-900 shadow-sm focus:ring-2 focus:ring-black focus:border-black transition-all cursor-pointer"
           >
-            <tab.icon className="w-4 h-4 shrink-0" />
-            {tab.label}
-          </button>
-        ))}
+            {tabs.map(tab => (
+              <option key={tab.id} value={tab.id}>
+                {tab.fullLabel || tab.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Desktop/Tablet Horizontal Tablist */}
+        <div
+          role="tablist"
+          aria-label="Secciones de configuración"
+          className="hidden md:flex items-center gap-1.5 border-b border-gray-200 overflow-x-auto pb-0.5 scrollbar-thin scroll-smooth focus:outline-none"
+        >
+          {tabs.map((tab, index) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button 
+                key={tab.id}
+                id={`tab-${tab.id}`}
+                role="tab"
+                aria-selected={isActive}
+                aria-controls={`panel-${tab.id}`}
+                tabIndex={isActive ? 0 : -1}
+                onClick={() => setActiveTab(tab.id)}
+                onKeyDown={(e) => handleTabKeyDown(e, index)}
+                className={`flex items-center gap-2 px-3.5 py-2.5 border-b-2 text-xs lg:text-sm font-semibold transition-all whitespace-nowrap flex-shrink-0 rounded-t-lg ${
+                  isActive 
+                    ? 'border-black text-black bg-gray-100/80 font-bold shadow-sm' 
+                    : 'border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300 hover:bg-gray-50/50'
+                }`}
+              >
+                <tab.icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-black' : 'text-gray-400'}`} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      <div className="pt-4">
+      <div role="tabpanel" id={`panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`} className="pt-2">
         {/* TAB PERFIL */}
         {activeTab === 'profile' && (
           <div className="space-y-6">
