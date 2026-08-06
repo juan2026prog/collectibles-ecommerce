@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Package, Truck, FileText, Search, Eye, RefreshCw } from 'lucide-react';
+import { Package, Truck, FileText, RefreshCw, AlertTriangle, CheckCircle, Clock, XCircle, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import ShipmentLabelModal from '../ShipmentLabelModal';
 
@@ -35,6 +35,9 @@ export default function VOrders() {
           parentOrder:orders (
             id,
             status,
+            payment_status,
+            payment_provider,
+            payment_method,
             customer_phone,
             shipping_address
           )
@@ -56,6 +59,72 @@ export default function VOrders() {
     setSelectedSuborderId(suborderId);
   }
 
+  function renderPaymentOperationalBadge(parentOrder: any) {
+    const payStatus = parentOrder?.payment_status || (parentOrder?.status === 'paid' ? 'approved' : 'pending');
+
+    switch (payStatus) {
+      case 'approved':
+        return (
+          <div className="flex flex-col gap-0.5">
+            <span className="inline-flex items-center gap-1 w-fit px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300">
+              <CheckCircle className="w-3 h-3 text-emerald-600" /> PAGO CONFIRMADO
+            </span>
+            <span className="text-[10px] text-emerald-700 font-medium">Podés preparar el pedido.</span>
+          </div>
+        );
+      case 'initiated':
+      case 'pending':
+      case 'processing':
+        return (
+          <div className="flex flex-col gap-0.5">
+            <span className="inline-flex items-center gap-1 w-fit px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md bg-amber-100 text-amber-900 border border-amber-300">
+              <Clock className="w-3 h-3 text-amber-600" /> PAGO AÚN NO CONFIRMADO
+            </span>
+            <span className="text-[10px] text-amber-700 font-medium">No prepares ni despaches este pedido.</span>
+          </div>
+        );
+      case 'rejected':
+      case 'failed':
+        return (
+          <div className="flex flex-col gap-0.5">
+            <span className="inline-flex items-center gap-1 w-fit px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md bg-rose-100 text-rose-900 border border-rose-300">
+              <XCircle className="w-3 h-3 text-rose-600" /> PAGO RECHAZADO
+            </span>
+            <span className="text-[10px] text-rose-700 font-medium">El comprador no completó el pago.</span>
+          </div>
+        );
+      case 'expired':
+        return (
+          <div className="flex flex-col gap-0.5">
+            <span className="inline-flex items-center gap-1 w-fit px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md bg-slate-200 text-slate-800 border border-slate-300">
+              <XCircle className="w-3 h-3 text-slate-500" /> PAGO EXPIRADO
+            </span>
+            <span className="text-[10px] text-slate-600 font-medium">La sesión venció. No prepares el pedido.</span>
+          </div>
+        );
+      case 'refunded':
+      case 'partially_refunded':
+      case 'cancelled':
+        return (
+          <div className="flex flex-col gap-0.5">
+            <span className="inline-flex items-center gap-1 w-fit px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md bg-purple-100 text-purple-900 border border-purple-300">
+              <AlertTriangle className="w-3 h-3 text-purple-600" /> PAGO CANCELADO / REEMBOLSADO
+            </span>
+            <span className="text-[10px] text-purple-700 font-medium">Pedido cancelado. No despachar.</span>
+          </div>
+        );
+      default:
+        return (
+          <div className="flex flex-col gap-0.5">
+            <span className="inline-flex items-center gap-1 w-fit px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md bg-orange-100 text-orange-900 border border-orange-300">
+              <ShieldAlert className="w-3 h-3 text-orange-600" /> PAGO EN REVISIÓN
+            </span>
+            <span className="text-[10px] text-orange-700 font-medium">No despaches hasta confirmación de Collectibles.</span>
+          </div>
+        );
+    }
+  }
+
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-20 animate-fade-in">
       <div className="flex justify-between items-end">
@@ -64,7 +133,7 @@ export default function VOrders() {
             <Package className="w-6 h-6 text-emerald-600" />
             Gestión de Pedidos (Subórdenes)
           </h1>
-          <p className="text-gray-500 mt-1">Cada suborden genera sus etiquetas de envío y slips de preparación de forma independiente.</p>
+          <p className="text-gray-500 mt-1">Monitoreo de estado de pago, preparación e información financiera de cada paquete.</p>
         </div>
         <button 
           onClick={fetchSuborders}
@@ -81,17 +150,18 @@ export default function VOrders() {
               <tr>
                 <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Suborden / Fecha</th>
                 <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Cliente</th>
-                <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Pago / Estado</th>
+                <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Estado de Pago</th>
+                <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Finanzas Estimadas</th>
                 <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Logística / Tracking</th>
-                <th className="px-6 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest">Etiquetas</th>
+                <th className="px-6 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest">Acciones Operativas</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {loading ? (
-                <tr><td colSpan={5} className="p-8 text-center text-gray-500">Cargando...</td></tr>
+                <tr><td colSpan={6} className="p-8 text-center text-gray-500">Cargando subórdenes...</td></tr>
               ) : suborders.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-12 text-center text-gray-400">
+                  <td colSpan={6} className="p-12 text-center text-gray-400">
                     <Package className="w-12 h-12 mx-auto mb-3 text-gray-200" />
                     <p className="font-semibold">No hay subórdenes registradas para tu tienda.</p>
                   </td>
@@ -100,6 +170,13 @@ export default function VOrders() {
                 suborders.map(sub => {
                   const addr = sub.parentOrder?.shipping_address || {};
                   const clientName = `${addr.first_name || ''} ${addr.last_name || ''}`.trim() || 'Cliente Oculto';
+                  const isPaymentApproved = (sub.parentOrder?.payment_status === 'approved') || (sub.parentOrder?.status === 'paid');
+
+                  const gross = Number(sub.product_subtotal || 0);
+                  const shipCost = Number(sub.shipping_cost || 0);
+                  const mktFee = Number(sub.marketplace_fee || 0);
+                  const feeShare = Number(sub.payment_fee_share || 0);
+                  const net = Number(sub.vendor_net_amount || (gross + shipCost - mktFee - feeShare));
                   
                   return (
                     <tr key={sub.id} className="hover:bg-gray-50">
@@ -111,11 +188,14 @@ export default function VOrders() {
                         {clientName}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex flex-col gap-1">
-                          <span className={`inline-flex items-center w-fit px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-md ${sub.parentOrder?.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
-                            {sub.parentOrder?.status || 'pending'}
+                        {renderPaymentOperationalBadge(sub.parentOrder)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-xs">
+                        <div className="flex flex-col">
+                          <span className="font-bold text-gray-900">Neto: ${net.toFixed(2)} UYU</span>
+                          <span className="text-[10px] text-gray-500">
+                            Prod: ${gross} | Com: -${mktFee} | Liq: <span className="font-semibold capitalize text-emerald-700">{sub.liquidation_status || 'pendiente'}</span>
                           </span>
-                          <span className="text-[10px] font-bold text-slate-500 capitalize">Preparación: {sub.status}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -137,19 +217,29 @@ export default function VOrders() {
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         <div className="flex justify-center items-center gap-2">
                           <button
-                            onClick={() => handleOpenModal(sub.id, 'label')}
-                            className="flex items-center gap-1 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-3 py-1.5 rounded-lg transition-all shadow-sm"
-                            title="Ver Etiqueta de Envío"
+                            onClick={() => isPaymentApproved && handleOpenModal(sub.id, 'label')}
+                            disabled={!isPaymentApproved}
+                            className={`flex items-center gap-1 font-bold text-xs px-3 py-1.5 rounded-lg transition-all shadow-sm ${
+                              isPaymentApproved
+                                ? 'bg-slate-900 hover:bg-slate-800 text-white cursor-pointer'
+                                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                            }`}
+                            title={isPaymentApproved ? "Ver Etiqueta de Envío" : "Bloqueado: El pago aún no está confirmado."}
                           >
                             <Truck className="w-3.5 h-3.5" /> Etiqueta
                           </button>
                           
                           <button
-                            onClick={() => handleOpenModal(sub.id, 'slip')}
-                            className="flex items-center gap-1 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold text-xs px-3 py-1.5 rounded-lg transition-all"
-                            title="Ver Packing Slip de Preparación"
+                            onClick={() => isPaymentApproved && handleOpenModal(sub.id, 'slip')}
+                            disabled={!isPaymentApproved}
+                            className={`flex items-center gap-1 font-bold text-xs px-3 py-1.5 rounded-lg transition-all ${
+                              isPaymentApproved
+                                ? 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 cursor-pointer'
+                                : 'bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed'
+                            }`}
+                            title={isPaymentApproved ? "Ver Packing Slip de Preparación" : "Bloqueado: El pago aún no está confirmado."}
                           >
-                            <FileText className="w-3.5 h-3.5 text-slate-500" /> Packing Slip
+                            <FileText className="w-3.5 h-3.5" /> Packing Slip
                           </button>
                         </div>
                       </td>
