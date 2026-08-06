@@ -151,9 +151,56 @@ serve(async (req: Request) => {
     // El init_point o sandbox_init_point es la URL a la que el usuario va para pagar
     const redirectUrl = MP_ACCESS_TOKEN.includes("TEST") ? mpData.sandbox_init_point : mpData.init_point;
 
+    // Determine next attempt number
+    const { data: existingAttempts } = await supabaseClient
+      .from("payment_attempts")
+      .select("attempt_number")
+      .eq("order_id", order.id);
+    
+    const attemptNumber = (existingAttempts && existingAttempts.length > 0)
+      ? Math.max(...existingAttempts.map((a: any) => a.attempt_number)) + 1
+      : 1;
+
+    const { data: attempt } = await supabaseClient
+      .from("payment_attempts")
+      .insert({
+        order_id: order.id,
+        user_id: order.customer_id,
+        provider: "mercadopago",
+        payment_method_type: "mercadopago",
+        attempt_number: attemptNumber,
+        amount: order.total_amount,
+        currency: order.currency || "UYU",
+        normalized_status: "initiated",
+        provider_status: "preference_created",
+        external_preference_id: mpData.id,
+        initiated_at: new Date().toISOString(),
+        metadata: { preference_id: mpData.id, init_point: redirectUrl }
+      })
+      .select()
+      .single();
+
+    await supabaseClient.from("payment_events").insert({
+      order_id: order.id,
+      payment_attempt_id: attempt?.id,
+      provider: "mercadopago",
+      event_type: "preference_created",
+      normalized_status: "initiated",
+      provider_status: "preference_created",
+      source: "checkout",
+      payload_sanitized: { preference_id: mpData.id, redirect_url: redirectUrl },
+      processing_result: "Preferencia de Mercado Pago creada exitosamente"
+    });
+
     await supabaseClient
       .from("orders")
-      .update({ payment_id: mpData.id })
+      .update({ 
+        payment_id: mpData.id,
+        payment_provider: "mercadopago",
+        payment_status: "initiated",
+        last_payment_attempt_id: attempt?.id,
+        updated_at: new Date().toISOString()
+      })
       .eq("id", order.id);
 
     return new Response(JSON.stringify({ redirect_url: redirectUrl }), {

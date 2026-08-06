@@ -399,10 +399,54 @@ Deno.serve(async (req: Request) => {
       })
       .eq("id", paymentRow.id);
 
+    // Record payment_attempt & payment_event
+    const { data: existingAttempts } = await supabaseAdmin
+      .from("payment_attempts")
+      .select("attempt_number")
+      .eq("order_id", orderId);
+    
+    const attemptNumber = (existingAttempts && existingAttempts.length > 0)
+      ? Math.max(...existingAttempts.map((a: any) => a.attempt_number)) + 1
+      : 1;
+
+    const { data: attempt } = await supabaseAdmin
+      .from("payment_attempts")
+      .insert({
+        order_id: orderId,
+        user_id: order.customer_id,
+        provider: "handy",
+        payment_method_type: "handy",
+        attempt_number: attemptNumber,
+        amount: order.total_amount,
+        currency: order.currency || "UYU",
+        normalized_status: "initiated",
+        provider_status: "redirected",
+        external_payment_id: transactionExternalId,
+        checkout_session_id: transactionExternalId,
+        initiated_at: new Date().toISOString(),
+        metadata: { payment_url: paymentUrl }
+      })
+      .select()
+      .single();
+
+    await supabaseAdmin.from("payment_events").insert({
+      order_id: orderId,
+      payment_attempt_id: attempt?.id,
+      provider: "handy",
+      event_type: "session_created",
+      normalized_status: "initiated",
+      provider_status: "redirected",
+      source: "checkout",
+      payload_sanitized: { transaction_external_id: transactionExternalId, payment_url: paymentUrl },
+      processing_result: "Sesión de Handy generada exitosamente"
+    });
+
     await supabaseAdmin
       .from("orders")
       .update({
-        payment_status: "redirected",
+        payment_status: "initiated",
+        payment_provider: "handy",
+        last_payment_attempt_id: attempt?.id,
         updated_at: new Date().toISOString(),
       })
       .eq("id", orderId);

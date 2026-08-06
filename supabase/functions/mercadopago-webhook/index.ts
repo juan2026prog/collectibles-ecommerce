@@ -139,6 +139,90 @@ Deno.serve(async (req: Request) => {
         });
       }
 
+      const nowStr = new Date().toISOString();
+      const mpStatus = paymentData.status;
+
+      const { data: normStatus } = await supabaseAdmin.rpc("normalize_payment_status", {
+        p_provider: "mercadopago",
+        p_provider_status: mpStatus,
+        p_status_detail: paymentData.status_detail || "",
+      });
+      const normalizedStatus = normStatus || mpStatus;
+
+      // Update or insert payment_attempts
+      const { data: existingAttempt } = await supabaseAdmin
+        .from("payment_attempts")
+        .select("id")
+        .eq("order_id", orderId)
+        .order("attempt_number", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      let currentAttemptId = existingAttempt?.id;
+
+      if (existingAttempt) {
+        await supabaseAdmin
+          .from("payment_attempts")
+          .update({
+            normalized_status: normalizedStatus,
+            provider_status: mpStatus,
+            provider_status_detail: paymentData.status_detail || "",
+            external_payment_id: paymentId.toString(),
+            approved_at: (normalizedStatus === "approved") ? nowStr : undefined,
+            rejected_at: (normalizedStatus === "rejected") ? nowStr : undefined,
+            cancelled_at: (normalizedStatus === "cancelled") ? nowStr : undefined,
+            error_code: paymentData.status_detail,
+            updated_at: nowStr,
+          })
+          .eq("id", existingAttempt.id);
+      } else {
+        const { data: newAttempt } = await supabaseAdmin
+          .from("payment_attempts")
+          .insert({
+            order_id: orderId,
+            provider: "mercadopago",
+            payment_method_type: "mercadopago",
+            attempt_number: 1,
+            amount: paymentData.transaction_amount || 0,
+            currency: paymentData.currency_id || "UYU",
+            normalized_status: normalizedStatus,
+            provider_status: mpStatus,
+            provider_status_detail: paymentData.status_detail || "",
+            external_payment_id: paymentId.toString(),
+            initiated_at: nowStr,
+            approved_at: (normalizedStatus === "approved") ? nowStr : undefined,
+          })
+          .select()
+          .single();
+        if (newAttempt) currentAttemptId = newAttempt.id;
+      }
+
+      // Insert payment_events (Append-Only)
+      await supabaseAdmin.from("payment_events").insert({
+        order_id: orderId,
+        payment_attempt_id: currentAttemptId,
+        provider: "mercadopago",
+        event_type: `webhook_${mpStatus}`,
+        normalized_status: normalizedStatus,
+        provider_status: mpStatus,
+        provider_event_id: `mp-wh-${paymentId}-${body.action || Date.now()}`,
+        source: "webhook",
+        payload_sanitized: { payment_id: paymentId, status: mpStatus, detail: paymentData.status_detail },
+        processing_result: `Webhook Mercado Pago procesado: ${normalizedStatus}`,
+        occurred_at: nowStr,
+      });
+
+      // Update order payment status
+      await supabaseAdmin
+        .from("orders")
+        .update({
+          payment_status: normalizedStatus,
+          payment_provider: "mercadopago",
+          last_payment_attempt_id: currentAttemptId,
+          updated_at: nowStr,
+        })
+        .eq("id", orderId);
+
       // Check order current status + idempotency
       const { data: order } = await supabaseAdmin.from('orders').select('status, payment_processed_at').eq('id', orderId).single();
       

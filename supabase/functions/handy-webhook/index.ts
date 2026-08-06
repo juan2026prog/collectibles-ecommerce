@@ -60,6 +60,49 @@ Deno.serve(async (req: Request) => {
       .update(paymentUpdate)
       .eq("id", payment.id);
 
+    const nowStr = new Date().toISOString();
+    const providerEventId = webhookData.providerTransactionId || webhookData.transactionExternalId || `handy-wh-${Date.now()}`;
+
+    // Update payment_attempts
+    const { data: attempt } = await supabaseAdmin
+      .from("payment_attempts")
+      .select("id")
+      .eq("order_id", payment.order_id)
+      .order("attempt_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (attempt) {
+      await supabaseAdmin
+        .from("payment_attempts")
+        .update({
+          normalized_status: webhookData.mappedStatus,
+          provider_status: webhookData.rawStatus || webhookData.mappedStatus,
+          external_payment_id: webhookData.providerTransactionId || payment.transaction_external_id,
+          approved_at: webhookData.mappedStatus === "approved" ? nowStr : undefined,
+          rejected_at: (webhookData.mappedStatus === "rejected" || webhookData.mappedStatus === "failed") ? nowStr : undefined,
+          cancelled_at: webhookData.mappedStatus === "cancelled" ? nowStr : undefined,
+          expired_at: webhookData.mappedStatus === "expired" ? nowStr : undefined,
+          updated_at: nowStr,
+        })
+        .eq("id", attempt.id);
+    }
+
+    // Insert payment_events (Append-Only)
+    await supabaseAdmin.from("payment_events").insert({
+      order_id: payment.order_id,
+      payment_attempt_id: attempt?.id,
+      provider: "handy",
+      event_type: `webhook_${webhookData.mappedStatus}`,
+      normalized_status: webhookData.mappedStatus,
+      provider_status: webhookData.rawStatus || webhookData.mappedStatus,
+      provider_event_id: providerEventId,
+      source: "webhook",
+      payload_sanitized: payload,
+      processing_result: `Webhook de Handy procesado: ${webhookData.mappedStatus}`,
+      occurred_at: nowStr,
+    });
+
     if (webhookData.mappedStatus === "approved") {
       await finalizeOrderIfNeeded(
         supabaseAdmin,
@@ -74,7 +117,7 @@ Deno.serve(async (req: Request) => {
         .update({
           status: "cancelada",
           payment_status: "refunded",
-          updated_at: new Date().toISOString(),
+          updated_at: nowStr,
         })
         .eq("id", payment.order_id);
 
@@ -83,7 +126,7 @@ Deno.serve(async (req: Request) => {
         .update({
           status: "refunded",
           liquidation_status: "cancelled",
-          updated_at: new Date().toISOString(),
+          updated_at: nowStr,
         })
         .eq("parent_order_id", payment.order_id)
         .neq("liquidation_status", "paid");
@@ -104,12 +147,12 @@ Deno.serve(async (req: Request) => {
           amount: payment.amount || 0,
           reason: "Reembolso notificado por webhook de Handy",
           status: "completed",
-          processed_at: new Date().toISOString(),
+          processed_at: nowStr,
           api_response: payload
         });
       }
     } else {
-      let orderPaymentStatus = "initiated";
+      let orderPaymentStatus = webhookData.mappedStatus;
       let orderStatus = "awaiting_payment";
 
       if (webhookData.mappedStatus === "pending") {
@@ -128,7 +171,7 @@ Deno.serve(async (req: Request) => {
         .update({
           status: orderStatus,
           payment_status: orderPaymentStatus,
-          updated_at: new Date().toISOString(),
+          updated_at: nowStr,
         })
         .eq("id", payment.order_id);
     }
