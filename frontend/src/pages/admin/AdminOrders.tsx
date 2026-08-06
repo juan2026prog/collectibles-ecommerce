@@ -158,6 +158,7 @@ export default function AdminOrders() {
   // Added for products and suborders
   const [orderItems, setOrderItems] = useState<any[]>([]);
   const [orderSuborders, setOrderSuborders] = useState<any[]>([]);
+  const [loadingItems, setLoadingItems] = useState(false);
   // Payment Traceability States
   const [paymentAttempts, setPaymentAttempts] = useState<any[]>([]);
   const [paymentEvents, setPaymentEvents] = useState<any[]>([]);
