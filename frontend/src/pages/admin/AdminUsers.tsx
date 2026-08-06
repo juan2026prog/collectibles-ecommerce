@@ -48,9 +48,25 @@ export default function AdminUsers() {
 
   async function toggleRole(userId: string, role: string, current: boolean) {
     setSaving(userId + role);
-    const { error } = await supabase.from('profiles').update({ [role]: !current }).eq('id', userId);
+    const newValue = !current;
+    const { error } = await supabase.from('profiles').update({ [role]: newValue }).eq('id', userId);
     if (!error) {
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, [role]: !current } : u));
+      if (role === 'is_vendor' && newValue) {
+        // Ensure vendor profile exists with pending_terms_acceptance status
+        const { data: existingVendor } = await supabase.from('vendors').select('id, status').eq('id', userId).maybeSingle();
+        if (!existingVendor) {
+          const userObj = users.find(u => u.id === userId);
+          const name = userObj?.first_name ? `${userObj.first_name} ${userObj.last_name || ''}`.trim() : 'Nuevo Vendor';
+          const slug = `vendor-${userId.slice(0, 8)}`;
+          await supabase.from('vendors').insert({
+            id: userId,
+            store_name: name,
+            slug: slug,
+            status: 'pending_terms_acceptance'
+          });
+        }
+      }
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, [role]: newValue } : u));
       toast.success('Rol actualizado');
     } else {
       toast.error('Error al actualizar rol');

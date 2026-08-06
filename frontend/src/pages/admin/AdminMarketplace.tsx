@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Store, ShieldCheck, CreditCard, Link2, Trophy, Tag, Truck, Award, Sliders, AlertTriangle } from 'lucide-react';
+import { Store, ShieldCheck, CreditCard, Link2, Trophy, Tag, Truck, Award, Sliders, AlertTriangle, FileText, Sparkles } from 'lucide-react';
 import AdminVendors from './AdminVendors';
 import AdminVendorKyc from './AdminVendorKyc';
+import AdminVendorsOnboarding from '../../components/admin/AdminVendorsOnboarding';
 import AdminVendorPayouts from './AdminVendorPayouts';
 import AdminLogisticsConnections from './AdminLogisticsConnections';
 import AdminMercadoLibre from './AdminMercadoLibre';
@@ -10,6 +11,7 @@ import AdminBuyBox from './AdminBuyBox';
 import AdminCatalogCenter from './AdminCatalogCenter';
 import AdminLogisticsLabels from '../../components/admin/AdminLogisticsLabels';
 import AdminOfficialStores from './AdminOfficialStores';
+import AdminLegalDocuments from '../../components/admin/AdminLegalDocuments';
 import { useFeatures } from '../../contexts/FeatureToggleContext';
 import { supabase } from '../../lib/supabase';
 
@@ -62,12 +64,14 @@ export default function AdminMarketplace() {
 
   const tabs = [
     { id: 'vendors', label: 'Vendors', icon: Store },
+    { id: 'onboarding', label: 'Revisión Onboarding', icon: Sparkles },
     { id: 'kyc', label: 'KYC', icon: ShieldCheck },
     { id: 'stores', label: 'Tiendas Oficiales', icon: Award },
     { id: 'taxonomias', label: 'Taxonomías', icon: Sliders },
     { id: 'logistica', label: 'Logística', icon: Truck },
     { id: 'liquidaciones', label: 'Liquidaciones', icon: CreditCard },
     { id: 'conexiones', label: 'Conexiones', icon: Link2 },
+    { id: 'legal', label: 'Términos & Legal', icon: FileText },
     { id: 'analytics', label: 'Analytics', icon: Trophy },
   ];
 
@@ -112,11 +116,13 @@ export default function AdminMarketplace() {
 
       <div className="mt-6">
         {currentTab === 'vendors' && <AdminVendors />}
+        {currentTab === 'onboarding' && <AdminVendorsOnboarding />}
         {currentTab === 'kyc' && <AdminVendorKyc />}
         {currentTab === 'stores' && <AdminOfficialStores />}
         {currentTab === 'taxonomias' && <AdminCatalogCenter />}
         {currentTab === 'logistica' && <AdminLogisticsLabels />}
         {currentTab === 'liquidaciones' && <AdminVendorPayouts />}
+        {currentTab === 'legal' && <AdminLegalDocuments />}
         {currentTab === 'conexiones' && (
           <div className="space-y-12">
             <section>

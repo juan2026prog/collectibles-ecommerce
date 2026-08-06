@@ -2,7 +2,7 @@ import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-r
 import { 
   LayoutDashboard, ShoppingBag, Settings, LogOut, Package, 
   CreditCard, Truck, Layers, HelpCircle, ExternalLink, Store, Search,
-  FolderOpen, Tag, Image, Percent
+  FolderOpen, Tag, Image, Percent, Sparkles
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LocaleSwitcher from '../components/LocaleSwitcher';
@@ -74,6 +74,7 @@ export default function VendorLayout() {
 
   const secondaryNavItems = [
     { name: 'Mercado Libre', path: '/vendor?tab=mercadolibre', tab: 'mercadolibre', icon: Layers },
+    { name: 'Guía de Inicio', path: '/vendor/onboarding', tab: 'onboarding', icon: Sparkles },
     { name: 'Configuración', path: '/vendor?tab=settings', tab: 'settings', icon: Settings },
     { name: 'Ayuda', path: '/vendor?tab=help', tab: 'help', icon: HelpCircle },
   ];

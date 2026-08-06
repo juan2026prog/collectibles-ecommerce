@@ -48,6 +48,7 @@ const LoginVendors = lazy(() => import('./pages/LoginVendors'));
 const CustomerPortal = lazy(() => import('./pages/CustomerPortal'));
 const Wishlist = lazy(() => import('./pages/Wishlist'));
 const VendorDashboard = lazy(() => import('./pages/VendorDashboard'));
+const VendorOnboarding = lazy(() => import('./pages/VendorOnboarding'));
 const ArtistDashboard = lazy(() => import('./pages/ArtistDashboard'));
 const AffiliateDashboard = lazy(() => import('./pages/AffiliateDashboard'));
 const Star2FanDashboard = lazy(() => import('./pages/Star2FanDashboard'));
@@ -93,6 +94,7 @@ const AdminRefunds = lazy(() => import('./pages/admin/AdminRefunds'));
 import { useReferralTracking } from './hooks/useReferralTracking';
 import MetaPixelTracker from './components/MetaPixelTracker';
 import MarketplaceGuard from './components/MarketplaceGuard';
+import VendorRouteGuard from './components/VendorRouteGuard';
 
 function ReferralTracker() {
   useReferralTracking();
@@ -159,15 +161,33 @@ function App() {
                 {/* Isolated Portals with Lateral Navigation */}
                 <Route path="/vendor" element={
                   <ProtectedRoute requireVendor>
-                    <MarketplaceGuard>
-                    <Suspense fallback={<PageSkeleton />}>
-                      <VendorLayout />
-                    </Suspense>
-                    </MarketplaceGuard>
+                    <VendorRouteGuard>
+                      <MarketplaceGuard>
+                      <Suspense fallback={<PageSkeleton />}>
+                        <VendorLayout />
+                      </Suspense>
+                      </MarketplaceGuard>
+                    </VendorRouteGuard>
                   </ProtectedRoute>
                 }>
                   <Route index element={<VendorDashboard />} />
                 </Route>
+                
+                <Route path="/vendor/accept-terms" element={
+                  <ProtectedRoute requireVendor>
+                    <VendorRouteGuard>
+                      <Navigate to="/vendor" replace />
+                    </VendorRouteGuard>
+                  </ProtectedRoute>
+                } />
+
+                <Route path="/vendor/onboarding" element={
+                  <ProtectedRoute requireVendor>
+                    <VendorRouteGuard>
+                      <VendorOnboarding />
+                    </VendorRouteGuard>
+                  </ProtectedRoute>
+                } />
                 
                 {/* International Checkout Simulation */}
                 <Route path="/internacional/cart" element={
