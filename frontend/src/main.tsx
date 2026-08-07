@@ -1,25 +1,24 @@
-// Microsoft Clarity fail-safe global guard for production
-if (import.meta.env.PROD) {
-  const clarityErrorHandler = (event: any) => {
-    const error = event.reason || event.error;
-    const message = event.message || (error && error.message) || '';
-    const stack = (error && error.stack) || '';
-    const filename = event.filename || '';
+// Microsoft Clarity fail-safe global guard for third-party scripts
+const clarityErrorHandler = (event: any) => {
+  const error = event.reason || event.error;
+  const message = event.message || (error && error.message) || '';
+  const stack = (error && error.stack) || '';
+  const filename = event.filename || '';
 
-    if (
-      message.includes('clarity') ||
-      stack.includes('clarity') ||
-      filename.includes('clarity')
-    ) {
-      // Prevent Clarity errors from crashing or spamming console/analytics in production
-      event.preventDefault();
-      return true;
-    }
-  };
+  if (
+    message.includes('clarity') ||
+    message.includes("reading 'sequence'") ||
+    stack.includes('clarity') ||
+    filename.includes('clarity')
+  ) {
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    return true;
+  }
+};
 
-  window.addEventListener('error', clarityErrorHandler, true);
-  window.addEventListener('unhandledrejection', clarityErrorHandler, true);
-}
+window.addEventListener('error', clarityErrorHandler, true);
+window.addEventListener('unhandledrejection', clarityErrorHandler, true);
 
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
