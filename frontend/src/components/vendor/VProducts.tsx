@@ -8,6 +8,7 @@ import { getProductImage } from '../../lib/imageUtils';
 import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
 import { useAuth } from '../../contexts/AuthContext';
+import { slugify, generateUniqueSlug } from '../../lib/slugUtils';
 
 interface InlineEditProps {
   value: string | number;
@@ -228,7 +229,7 @@ export default function VProducts() {
 
   async function handleSave() {
     try {
-      if (!form.title) throw new Error("El título es obligatorio");
+      if (!form.title || !form.title.trim()) throw new Error("El título es obligatorio");
 
       if (form.status === 'published') {
         const errors = [];
@@ -259,12 +260,12 @@ export default function VProducts() {
         }
       }
 
-      let titleSlug = form.slug || form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'); if (!editing && !form.slug) { titleSlug = `${titleSlug.replace(/-+$/, '')}-`; }
+      const slug = await generateUniqueSlug(form.title, editing?.id);
 
       const selectedBrandId = form.brands[0] || null;
 
       const payload = {
-        title: form.title, slug: titleSlug, description: form.description, short_description: form.short_description,
+        title: form.title.trim(), slug, description: form.description, short_description: form.short_description,
         base_price: parseFloat(form.base_price) || 0, compare_at_price: form.compare_at_price ? parseFloat(form.compare_at_price) : null,
         status: form.status, badge: form.badge || null, is_featured: form.is_featured,
         is_active: form.is_active,
@@ -272,7 +273,10 @@ export default function VProducts() {
         vendor_store_id: form.vendor_store_id || null
       };
 
-        let productId = editing?.id;
+      console.log('[VENDOR_PRODUCTS_SAVE_VERSION]', 'TITLESLUG_FIXED_V2');
+      console.log('[PRODUCT_SAVE_PAYLOAD]', payload);
+
+      let productId = editing?.id;
         if (editing) {
           const { error: updProdErr } = await supabase.from('products').update(payload).eq('id', productId).select().single();
           if (updProdErr) throw updProdErr;
@@ -338,6 +342,8 @@ export default function VProducts() {
       fetchMeta();
       toast.success(editing ? 'Producto actualizado' : 'Producto creado');
     } catch (err: any) {
+      console.error('[VProducts handleSave Runtime Error]', err);
+      console.trace(err);
       toast.error(`Error: ${err.message}`);
     }
   }
@@ -512,9 +518,7 @@ export default function VProducts() {
 
       // 2. Insert new product
       const newTitle = `${product.title} (Copia)`;
-      const baseSlug = product.slug ? `${product.slug}-copia` : newTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-      // Ensure slug is unique by appending a random suffix
-      const newSlug = `${baseSlug.replace(/-+$/, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
+      const newSlug = await generateUniqueSlug(newTitle);
 
       const brandId = product.brand?.id || product.brand_id || null;
       const catId = product.category?.id || product.category_id || null;
@@ -644,9 +648,7 @@ export default function VProducts() {
         }
 
         // Generate dynamic unique slug
-        let baseSlug = p.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
-        if (!baseSlug) baseSlug = 'producto';
-        const uniqueSlug = `${baseSlug}-${Math.random().toString(36).substring(2, 7)}`;
+        const uniqueSlug = await generateUniqueSlug(p.title);
 
         // Insert Product
         const { data: newProd, error: prodErr } = await supabase
@@ -1158,7 +1160,7 @@ export default function VProducts() {
                           <div className="flex items-center gap-2 text-xs text-gray-500 px-1">
                              <span className="font-bold">Enlace permanente:</span>
                              <span className="text-blue-500 underline">https://collectibles-ecommerce.com/p/</span>
-                             <input className="bg-transparent border-none outline-none text-blue-500 p-0 hover:bg-white focus:bg-white w-full" value={form.slug} onChange={e => setForm({...form, slug: e.target.value})} />
+                             <span className="text-blue-600 font-mono select-all bg-blue-50 px-2 py-0.5 rounded font-semibold">{slugify(form.title) || form.slug || 'slug-automatico'}</span>
                           </div>
                        </div>
 

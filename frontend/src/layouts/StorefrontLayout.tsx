@@ -23,6 +23,8 @@ import { sanitizeHeadMarkup, sanitizeRichHtml } from '../lib/sanitize';
 import { FacebookIcon, InstagramIcon, TwitterIcon, YoutubeIcon, TiktokIcon, WhatsappIcon } from '../components/SocialIcons';
 import { CurrencySelector } from '../components/CurrencySelector';
 import AdminModeToggle from '../components/AdminModeToggle';
+import { ToastProvider } from '../components/admin/Toast';
+import { ImageProtectionGlobalListener } from '../hooks/useImageProtection';
 import React from 'react';
 
 import { trackContact, trackFindLocation, generateMetaEventId } from '../lib/meta/metaPixel';
@@ -272,6 +274,8 @@ export default function StorefrontLayout() {
   const isHome = location.pathname === '/';
 
   return (
+    <ToastProvider>
+    <ImageProtectionGlobalListener />
     <div className="min-h-screen flex flex-col bg-[#05070f] text-[#f8fafc] gamger-grid">
       {settings['theme_color_primary'] && (
         <style dangerouslySetInnerHTML={{
@@ -784,6 +788,7 @@ export default function StorefrontLayout() {
       `}} />
       <AdminModeToggle />
     </div>
+    </ToastProvider>
   );
 }
 

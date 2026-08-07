@@ -81,6 +81,7 @@ export async function triggerPostPaymentActions(
         if (provider.includes("dac") || method.includes("dac")) resolvedCode = "dac";
         else if (provider.includes("soydelivery") || method.includes("soydelivery")) resolvedCode = "soydelivery";
         else if (provider.includes("ues") || method.includes("ues")) resolvedCode = "ues";
+        else if (provider.includes("distrilogic") || method.includes("distrilogic")) resolvedCode = "distrilogic";
         
         // Only trigger if provider is active globally
         if (resolvedCode && activeCodes.includes(resolvedCode)) {

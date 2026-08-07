@@ -1,6 +1,7 @@
 import React from 'react';
 import { Package, Store, CheckCircle2, Info, Sparkles, MapPin, Tag } from 'lucide-react';
 import ShippingMethodCard from './ShippingMethodCard';
+import { useImageProtection } from '../../hooks/useImageProtection';
 
 export interface PackageCardProps {
   packageIndex: number;
@@ -52,6 +53,7 @@ export const PackageCard: React.FC<PackageCardProps> = ({
   onSelectMethod,
   onSelectAgency,
 }) => {
+  const { getImageProps, handleDragStart } = useImageProtection({ isProduct: true });
   const isPlatform = storeKey === 'collectibles' || storeKey === 'platform';
   const isInternational = storeKey === 'international';
 
@@ -82,7 +84,7 @@ export const PackageCard: React.FC<PackageCardProps> = ({
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-neutral-800 border border-neutral-700/80 flex items-center justify-center overflow-hidden flex-shrink-0">
             {vendorLogo ? (
-              <img src={vendorLogo} alt={vendorName} className="w-full h-full object-cover" />
+              <img src={vendorLogo} alt={vendorName} draggable={false} onDragStart={handleDragStart} className="w-full h-full object-cover img-protected" />
             ) : isPlatform ? (
               <Package className="w-5 h-5 text-[#f00856]" />
             ) : (
@@ -130,7 +132,7 @@ export const PackageCard: React.FC<PackageCardProps> = ({
               <img
                 src={item.image_url || '/placeholder.png'}
                 alt={item.title}
-                className="w-10 h-10 object-cover rounded-md bg-neutral-800"
+                {...getImageProps("w-10 h-10 object-cover rounded-md bg-neutral-800")}
               />
               <div className="max-w-[140px] md:max-w-[180px]">
                 <p className="text-xs font-medium text-white truncate">{item.title}</p>

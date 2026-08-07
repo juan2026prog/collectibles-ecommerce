@@ -8,6 +8,7 @@ import { useLocale } from '../contexts/LocaleContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { URUGUAY_LOCATIONS, DEPARTAMENTOS } from '../utils/uruguayLocations';
 import AddressAutocomplete from '../components/AddressAutocomplete';
+import { useImageProtection } from '../hooks/useImageProtection';
 
 function getOrderItemImage(item: any): string {
   const img = item.products?.images?.[0];
@@ -31,6 +32,7 @@ const EMPTY_ADDRESS: SavedAddress = {
 };
 
 export default function CustomerPortal() {
+  const { getImageProps } = useImageProtection({ isProduct: true });
   const { user } = useAuth();
   const { language, currency, setLanguage, setCurrency } = useLocale();
   const { formatCurrencyPrice } = useCurrency();
@@ -897,7 +899,11 @@ export default function CustomerPortal() {
                     {order.order_items.map((item: any, i: number) => (
                       <div key={i} className="flex gap-4 py-3 border-b last:border-0 last:pb-0 items-center">
                         <Link to={item.products?.slug ? `/p/${item.products.slug}` : '#'}>
-                          <img src={getOrderItemImage(item)} className="w-16 h-16 object-contain  border bg-white/5 p-1 hover:border-primary-300 transition-colors" />
+                          <img 
+                            src={getOrderItemImage(item)} 
+                            alt=""
+                            {...getImageProps("w-16 h-16 object-contain border bg-white/5 p-1 hover:border-primary-300 transition-colors")}
+                          />
                         </Link>
                         <div className="flex-1 min-w-0">
                           <Link to={item.products?.slug ? `/p/${item.products.slug}` : '#'} className="font-bold text-white hover:text-primary-600 transition-colors line-clamp-1">{item.products?.title}</Link>

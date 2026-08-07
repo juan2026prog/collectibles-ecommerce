@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useImageProtection } from '../hooks/useImageProtection';
 
 interface Banner {
   id: string;
@@ -30,6 +31,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
   const autoplayTimer = useRef<NodeJS.Timeout | null>(null);
+  const { getImageProps } = useImageProtection({ isProduct: false });
 
   // Filter active banners (memoized to prevent render loops)
   const activeBanners = useMemo(() => banners.filter(b => b.image_url), [banners]);
@@ -205,13 +207,13 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
               <img
                 src={banner.image_url}
                 alt={banner.title || 'Slide'}
-                className="absolute inset-0 w-full h-full object-cover object-center transform scale-100 transition-transform duration-[8000ms] ease-out"
                 style={{
                   transform: isCurrent ? 'scale(1.05)' : 'scale(1.00)'
                 }}
                 loading={index === 0 ? "eager" : "lazy"}
                 fetchPriority={index === 0 ? "high" : "auto"}
                 decoding="async"
+                {...getImageProps("absolute inset-0 w-full h-full object-cover object-center transform scale-100 transition-transform duration-[8000ms] ease-out")}
               />
             </picture>
 

@@ -122,7 +122,7 @@ export default function InternationalReview() {
             <div className="space-y-4">
               {items.map((item) => (
                 <div key={item.variant_id} className="flex gap-4">
-                  <img src={item.image_url} alt={item.title} className="w-16 h-16 rounded object-cover" />
+                  <img src={item.image_url} alt={item.title} draggable={false} onDragStart={(e) => e.preventDefault()} className="w-16 h-16 rounded object-cover img-protected" />
                   <div className="flex-1">
                     <p className="text-sm text-white font-bold line-clamp-2 leading-tight">{item.title}</p>
                     <p className="text-xs text-slate-400 mt-1">Cant: {item.quantity}</p>

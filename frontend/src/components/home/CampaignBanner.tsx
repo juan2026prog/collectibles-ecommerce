@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
+import { useImageProtection } from '../../hooks/useImageProtection';
 
 interface CampaignSlide {
   image_url: string;
@@ -36,6 +37,7 @@ export default function CampaignBanner({
 }: CampaignBannerProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const { getImageProps } = useImageProtection({ isProduct: false });
   const hasSlides = slides.length > 0;
   const isSlider = slides.length > 1;
   const alignCenter = text_align === 'center';
@@ -157,7 +159,7 @@ export default function CampaignBanner({
                         src={slide.image_url}
                         alt={`${title} — ${index + 1}`}
                         loading="lazy"
-                        className="w-full h-full object-cover object-center"
+                        {...getImageProps("w-full h-full object-cover object-center")}
                       />
                     </picture>
 

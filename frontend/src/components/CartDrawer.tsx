@@ -9,9 +9,11 @@ import { useSiteSettings } from '../hooks/useSiteSettings';
 import { resolveImage } from '../lib/imageUtils';
 import { usePromotions, evaluateItemDiscount } from '../hooks/usePromotions';
 import { trackGA4Event, trackClarityEvent, mapCartItemsToGA4 } from '../lib/analyticsTracker';
+import { useImageProtection } from '../hooks/useImageProtection';
 
 export default function CartDrawer() {
   const navigate = useNavigate();
+  const { getImageProps } = useImageProtection({ isProduct: true });
   const { 
     items, 
     updateQuantity, 
@@ -291,7 +293,7 @@ export default function CartDrawer() {
                     <img 
                       src={resolveImage(item.image) || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect fill="%230f172a" width="80" height="80" rx="8"/></svg>'} 
                       alt="" 
-                      className="w-20 h-20 object-contain rounded-xl bg-white/5 p-1 shrink-0" 
+                      {...getImageProps("w-20 h-20 object-contain rounded-xl bg-white/5 p-1 shrink-0")}
                     />
                     
                     <div className="flex-1 min-w-0 flex flex-col justify-between">

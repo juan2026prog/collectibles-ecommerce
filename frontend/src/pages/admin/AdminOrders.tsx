@@ -62,7 +62,7 @@ function getEffectivePaymentInfo(order: any, attempts: any[] = [], events: any[]
   } else if (normalizedStatus === 'expired') {
     statusLabel = 'PAGO EXPIRADO';
     badgeColor = 'bg-slate-200 text-slate-800 border-slate-300';
-    explanatoryMessage = 'El comprador inició el pago, pero no lo completó antes del vencimiento de la sesión.';
+    explanatoryMessage = 'No se encontró confirmación de pago antes del vencimiento de la sesión de reserva.';
   } else if (['rejected', 'failed'].includes(normalizedStatus)) {
     statusLabel = 'PAGO RECHAZADO';
     badgeColor = 'bg-rose-100 text-rose-800 border-rose-300';
@@ -77,6 +77,13 @@ function getEffectivePaymentInfo(order: any, attempts: any[] = [], events: any[]
     explanatoryMessage = 'El cliente no ha iniciado ningún intento de pago en la pasarela.';
   }
 
+  const confidence = isApproved || hasWebhook ? 'Alta' : (normalizedStatus === 'expired' && rawProvider === 'handy') ? 'Media' : 'Baja';
+  const evidenceSource = hasWebhook 
+    ? 'Webhook Validado' 
+    : (events.some(e => e.source === 'reconciliation') ? 'Conciliación Server-Side' : (events.some(e => e.source === 'migration') ? 'Backfill Histórico' : 'Cron Local / Sin Webhook'));
+
+  const lastReconciledAt = order.last_reconciled_at || events.find(e => e.source === 'reconciliation')?.created_at || latestAttempt?.last_checked_at || latestAttempt?.updated_at || order.created_at;
+  const formattedLastReconciled = lastReconciledAt ? new Date(lastReconciledAt).toLocaleString('es-UY', { timeZone: 'America/Montevideo' }) : 'N/A';
   const initiatedAtDate = latestAttempt?.initiated_at || order.created_at;
   const formattedInitiatedAt = initiatedAtDate ? new Date(initiatedAtDate).toLocaleString('es-UY', { timeZone: 'America/Montevideo' }) : 'N/A';
 
@@ -94,8 +101,11 @@ function getEffectivePaymentInfo(order: any, attempts: any[] = [], events: any[]
     initiatedAtFormatted: formattedInitiatedAt,
     reconciliationStatus: order.reconciliation_status === 'reconciled' ? 'Confirmado server-side' : 'Sin confirmación de pago',
     preparationStatus: isApproved ? 'Habilitada' : 'Bloqueada',
-    shippingStatus: isApproved ? 'Habilitado' : 'No habilitado',
-    liquidationStatus: isApproved ? 'Elegible' : 'No elegible'
+    shippingStatus: isApproved ? 'Habilitado' : 'No disponible',
+    liquidationStatus: isApproved ? 'Elegible' : 'No elegible',
+    confidence,
+    evidenceSource,
+    lastReconciledFormatted: formattedLastReconciled
   };
 }
 
@@ -1198,12 +1208,14 @@ export default function AdminOrders() {
                       </div>
 
                       <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Estado Original Pasarela</span>
-                        <span className="font-mono text-[11px] text-gray-800 capitalize">{payInfo.origStatus}</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Nivel de Certeza</span>
+                        <span className={`font-bold text-xs ${payInfo.confidence === 'Alta' ? 'text-emerald-700' : payInfo.confidence === 'Media' ? 'text-amber-700' : 'text-rose-700'}`}>
+                          {payInfo.confidence}
+                        </span>
                       </div>
                       <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Fecha de Inicio</span>
-                        <span className="font-medium text-gray-800 text-[11px]">{payInfo.initiatedAtFormatted}</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Fuente de Evidencia</span>
+                        <span className="font-medium text-slate-800 text-[11px]">{payInfo.evidenceSource}</span>
                       </div>
 
                       <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
@@ -1213,8 +1225,8 @@ export default function AdminOrders() {
                         </span>
                       </div>
                       <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Resultado Conciliación</span>
-                        <span className="font-medium text-gray-700 text-[11px]">{payInfo.reconciliationStatus}</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Última Conciliación</span>
+                        <span className="font-medium text-gray-700 text-[11px]">{payInfo.lastReconciledFormatted}</span>
                       </div>
 
                       <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
@@ -1233,14 +1245,38 @@ export default function AdminOrders() {
 
                     {/* Operational Restrictions Banner if not approved */}
                     {!payInfo.isApproved && (
-                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 space-y-1">
-                        <p className="font-bold flex items-center gap-1 text-amber-800">
-                          <ShieldAlert className="w-3.5 h-3.5 text-amber-600" /> Restricción Operativa Activa:
+                      <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="font-bold flex items-center gap-1.5 text-amber-900 text-xs">
+                            <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" /> Restricción Operativa Activa
+                          </p>
+                          <button
+                            onClick={() => setShowTimelineModal(true)}
+                            className="text-[11px] font-bold text-amber-800 underline hover:text-amber-950 flex items-center gap-1 shrink-0"
+                          >
+                            <Clock className="w-3 h-3" /> Ver evidencia del pago
+                          </button>
+                        </div>
+                        <p className="text-[11px] text-amber-900 font-medium">
+                          Esta orden no puede avanzar porque no existe un pago aprobado.
                         </p>
-                        <ul className="list-disc pl-4 space-y-0.5 text-[11px] text-amber-800">
-                          <li>Preparación y empaquetado: <strong>{payInfo.preparationStatus}</strong></li>
-                          <li>Generación de etiquetas DAC / envíos: <strong>{payInfo.shippingStatus}</strong></li>
-                          <li>Liquidación a vendedores: <strong>{payInfo.liquidationStatus}</strong></li>
+                        <ul className="space-y-1 text-[11px] text-amber-900 pl-1">
+                          <li className="flex items-start gap-1.5">
+                            <span className="font-bold text-rose-700 shrink-0">• Preparación:</span>
+                            <span>Bloqueada porque el pago no está aprobado.</span>
+                          </li>
+                          <li className="flex items-start gap-1.5">
+                            <span className="font-bold text-rose-700 shrink-0">• Etiqueta DAC:</span>
+                            <span>No disponible hasta confirmar el pago.</span>
+                          </li>
+                          <li className="flex items-start gap-1.5">
+                            <span className="font-bold text-rose-700 shrink-0">• Envío:</span>
+                            <span>No se creará mientras el pago no esté aprobado.</span>
+                          </li>
+                          <li className="flex items-start gap-1.5">
+                            <span className="font-bold text-rose-700 shrink-0">• Liquidación:</span>
+                            <span>No elegible porque no existe importe cobrado confirmado.</span>
+                          </li>
                         </ul>
                       </div>
                     )}

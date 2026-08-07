@@ -160,7 +160,7 @@ export default function InternationalLaboratory() {
                         </div>
                       )}
                       <div className="bg-white rounded-xl p-4 mb-4 h-48 flex items-center justify-center relative overflow-hidden">
-                        <img src={p.images?.[0]?.url || p.image_url} alt={p.title} className="max-w-full max-h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-500" />
+                        <img src={p.images?.[0]?.url || p.image_url} alt={p.title} draggable={false} onDragStart={(e) => e.preventDefault()} className="max-w-full max-h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-500 img-protected" />
                         <div className="absolute top-2 left-2 flex gap-1 flex-col">
                           <span className="bg-black/80 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider shadow-sm flex items-center gap-1">
                             🌎 Internacional
@@ -269,7 +269,7 @@ export default function InternationalLaboratory() {
                       <div key={item.variant_id} className="bg-black/40 p-6 rounded-2xl border border-white/5">
                         <div className="flex justify-between gap-6">
                           <div className="flex gap-4 items-center flex-1">
-                            <img src={item.image_url} alt={item.title} className="w-16 h-16 object-cover bg-white rounded" />
+                            <img src={item.image_url} alt={item.title} draggable={false} onDragStart={(e) => e.preventDefault()} className="w-16 h-16 object-cover bg-white rounded img-protected" />
                             <div>
                               <h3 className="font-bold text-white line-clamp-1">{item.title}</h3>
                               <p className="text-sm text-slate-400">Cant: {item.quantity}</p>

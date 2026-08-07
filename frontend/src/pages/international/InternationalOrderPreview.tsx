@@ -88,7 +88,7 @@ export default function InternationalOrderPreview() {
           <div className="space-y-3">
             {order.items.map((item: any) => (
               <div key={item.variant_id} className="flex gap-4 items-center bg-black/20 p-3 rounded-xl border border-white/5">
-                <img src={item.image_url} alt={item.title} className="w-12 h-12 rounded object-cover" />
+                <img src={item.image_url} alt={item.title} draggable={false} onDragStart={(e) => e.preventDefault()} className="w-12 h-12 rounded object-cover img-protected" />
                 <div className="flex-1">
                   <p className="text-sm text-white font-bold line-clamp-1">{item.title}</p>
                   <p className="text-xs text-slate-400">Cant: {item.quantity} | Peso est: {item.weight_kg?.toFixed(2)}kg</p>

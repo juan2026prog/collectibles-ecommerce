@@ -3,11 +3,13 @@ import { useInternationalCartContext } from '../../contexts/InternationalCartCon
 import { Trash2, Package, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { calculateUruboxEstimate, getEstimatedWeightKg } from '../../lib/urubox';
+import { useImageProtection } from '../../hooks/useImageProtection';
 
 export default function InternationalCart() {
   const { items, removeItem, updateQuantity, totalUsd } = useInternationalCartContext();
   const { formatCurrencyPrice } = useCurrency();
   const navigate = useNavigate();
+  const { getImageProps } = useImageProtection({ isProduct: true });
 
   // Calcular estimado Urubox global
   const totalWeightKg = items.reduce((acc, item) => {
@@ -56,7 +58,11 @@ export default function InternationalCart() {
             const itemUrubox = itemUruboxEstimate.total_urubox_usd * item.quantity;
             return (
               <div key={item.variant_id} className="glass p-4 rounded-2xl flex gap-4 border border-white/5 relative">
-                <img src={item.image_url} alt={item.title} className="w-24 h-24 object-cover rounded-xl bg-slate-800" />
+                <img 
+                  src={item.image_url} 
+                  alt={item.title} 
+                  {...getImageProps("w-24 h-24 object-cover rounded-xl bg-slate-800")} 
+                />
                 <div className="flex-1">
                   <h3 className="font-bold text-white text-lg leading-tight line-clamp-2">{item.title}</h3>
                   <div className="text-xs text-slate-400 mt-1 uppercase tracking-widest flex gap-2">

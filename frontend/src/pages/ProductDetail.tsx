@@ -22,6 +22,7 @@ import AdminTechnicalPanel from '../components/AdminTechnicalPanel';
 import { calculateUruboxEstimate, getEstimatedWeightKg } from '../lib/urubox';
 import { isValidInternalSku } from '../lib/skuUtils';
 import { ProductGridCard } from '../components/ProductGridCard';
+import { useImageProtection } from '../hooks/useImageProtection';
 
 // ── COMPONENTE SECCIÓN PRODUCTOS RELACIONADOS ──
 function RelatedProductsSection({ currentProductId, categorySlug }: { currentProductId: string; categorySlug?: string }) {
@@ -57,8 +58,9 @@ export default function ProductDetail() {
   const navigate = useNavigate();
   const viewTrackedRef = useRef('');
   const { settings } = useSiteSettings();
-  const { slug } = useParams();
-  const { product, loading } = useProduct(slug);
+  const { slug } = useParams<{ slug: string }>();
+  const { product, loading: productLoading } = useProduct(slug || '');
+  const { getImageProps, handleDragStart } = useImageProtection({ isProduct: true });
   const groupBadge = getProductGroupBadge(product);
   const { buyBox } = useProductBuyBox(product?.id);
   const cart = useCartContext();
@@ -300,7 +302,9 @@ export default function ProductDetail() {
         {/* GALLERY SECTION (Requirement 10 & 11) */}
         <section className="flex flex-col gap-4 lg:sticky lg:top-28">
           <div
-            className="w-full aspect-square max-h-[660px] rounded-3xl bg-white flex items-center justify-center relative overflow-hidden group cursor-crosshair border border-white/10 shadow-2xl p-3 sm:p-6 transition-all duration-300"
+            className="w-full aspect-square max-h-[660px] rounded-3xl bg-white flex items-center justify-center relative overflow-hidden group cursor-crosshair border border-white/10 shadow-2xl p-3 sm:p-6 transition-all duration-300 img-protected"
+            data-protected-image="true"
+            data-product-image="true"
             onMouseMove={handleMouseMove}
             onMouseEnter={() => setIsHovering(true)}
             onMouseLeave={() => setIsHovering(false)}
@@ -313,7 +317,9 @@ export default function ProductDetail() {
                 <img
                   src={groupBadge.url}
                   alt={groupBadge.alt}
-                  className="w-full h-full object-contain"
+                  draggable={false}
+                  onDragStart={handleDragStart}
+                  className="w-full h-full object-contain img-protected"
                 />
               </div>
             )}
@@ -321,7 +327,7 @@ export default function ProductDetail() {
               src={displayImage}
               alt={product.title}
               referrerPolicy="no-referrer"
-              className={`w-full h-full max-h-[580px] object-contain mix-blend-multiply transition-all duration-500 ease-out ${isHovering ? 'scale-105' : 'scale-100'}`}
+              {...getImageProps(`w-full h-full max-h-[580px] object-contain mix-blend-multiply transition-all duration-500 ease-out ${isHovering ? 'scale-105' : 'scale-100'}`)}
             />
             
             {/* Magnifier Lens */}
@@ -352,13 +358,21 @@ export default function ProductDetail() {
                     key={img.id || i}
                     onClick={() => setSelectedImage(i)}
                     onMouseEnter={() => setSelectedImage(i)}
-                    className={`relative rounded-2xl aspect-square overflow-hidden transition-all duration-200 bg-white cursor-pointer hover:scale-105 ${
+                    data-protected-image="true"
+                    data-product-image="true"
+                    className={`relative rounded-2xl aspect-square overflow-hidden transition-all duration-200 bg-white cursor-pointer hover:scale-105 img-protected ${
                       i === selectedImage
                         ? 'ring-2 ring-[#f00856] ring-offset-2 ring-offset-[#05070f] scale-[0.98] opacity-100 shadow-md'
                         : 'border border-white/10 opacity-60 hover:opacity-100 hover:border-white/30'
                     }`}
                   >
-                    <img src={src} alt="" referrerPolicy="no-referrer" loading="lazy" className="w-full h-full object-contain p-2 mix-blend-multiply" />
+                    <img 
+                      src={src} 
+                      alt="" 
+                      referrerPolicy="no-referrer" 
+                      loading="lazy" 
+                      {...getImageProps("w-full h-full object-contain p-2 mix-blend-multiply")}
+                    />
                   </button>
                 );
               })}
@@ -717,7 +731,7 @@ export default function ProductDetail() {
                 src={displayImage}
                 alt={product.title}
                 referrerPolicy="no-referrer"
-                className="w-12 h-12 rounded-lg object-contain bg-white p-1 flex-shrink-0"
+                {...getImageProps("w-12 h-12 rounded-lg object-contain bg-white p-1 flex-shrink-0")}
               />
               <div className="overflow-hidden">
                 <p className="text-white font-black text-sm truncate uppercase tracking-tight">{product.title}</p>

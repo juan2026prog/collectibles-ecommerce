@@ -80,29 +80,28 @@ Deno.serve(async (req: Request) => {
       }
     } else if (provider === "handy") {
       try {
-        const handyConfig = await getHandyProviderConfig(supabaseAdmin);
-        // Handy reconciliation query if merchant API exists or fallback to database session status
-        const { data: py } = await supabaseAdmin
-          .from("payments")
-          .select("*")
-          .eq("order_id", order_id)
-          .eq("provider", "handy")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+        const { data: effStatus } = await supabaseAdmin.rpc("get_effective_payment_status", {
+          p_order_id: order_id,
+        });
 
-        if (py) {
-          externalStatus = py.status || "redirected";
-          rawApiResponse = py.raw_request || {};
-          const { data: norm } = await supabaseAdmin.rpc("normalize_payment_status", {
-            p_provider: "handy",
-            p_provider_status: externalStatus,
-          });
-          normalizedStatus = norm || externalStatus;
+        if (effStatus) {
+          normalizedStatus = effStatus.normalized_status || normalizedStatus;
+          externalStatus = effStatus.evidence_source || "reconciliation";
+          externalStatusDetail = effStatus.reason || "";
+          rawApiResponse = effStatus;
         }
       } catch (err: any) {
         console.error("[Reconciliation] Handy query error:", err);
       }
+    }
+
+    // Call get_effective_payment_status to finalize normalized view
+    const { data: effectiveInfo } = await supabaseAdmin.rpc("get_effective_payment_status", {
+      p_order_id: order_id,
+    });
+
+    if (effectiveInfo) {
+      normalizedStatus = effectiveInfo.normalized_status || normalizedStatus;
     }
 
     function LOWER(s: string) {

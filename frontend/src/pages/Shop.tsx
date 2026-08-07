@@ -15,6 +15,7 @@ import { trackSearch, generateMetaEventId } from '../lib/meta/metaPixel';
 import { trackGA4Event, trackClarityEvent, mapCartItemsToGA4 } from '../lib/analyticsTracker';
 import SEO from '../components/SEO';
 import { resolveCartItemPrice } from '../lib/priceResolver';
+import { useImageProtection } from '../hooks/useImageProtection';
 
 function getVisiblePages(currentPage: number, total: number) {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i);
@@ -31,6 +32,7 @@ function normalizeText(str: string): string {
 }
 
 export default function Shop({ isInternational }: { isInternational?: boolean } = {}) {
+  const { handleDragStart } = useImageProtection({ isProduct: false });
   const lastTrackedProductsRef = useRef<string>('');
   const [searchParams, setSearchParams] = useSearchParams();
   const { categorySlug: catParam, brandSlug: brandParam, slug: groupSlug } = useParams<{ categorySlug?: string; brandSlug?: string; slug?: string }>();
@@ -821,7 +823,13 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
               <div className="flex items-center gap-4 text-left">
                 <div className="w-16 h-16 rounded-2xl bg-[#0a0d16] border border-white/10 overflow-hidden flex-shrink-0 flex items-center justify-center p-1">
                   {matchedStore.logo_url ? (
-                    <img src={matchedStore.logo_url} alt={matchedStore.store_name} className="w-full h-full object-contain" />
+                    <img 
+                      src={matchedStore.logo_url} 
+                      alt={matchedStore.store_name} 
+                      draggable={false}
+                      onDragStart={handleDragStart}
+                      className="w-full h-full object-contain img-protected" 
+                    />
                   ) : (
                     <Store className="w-8 h-8 text-white/20" />
                   )}

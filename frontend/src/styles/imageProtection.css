@@ -1,0 +1,54 @@
+/* ==========================================================================
+   PROTECCIÓN DE IMÁGENES — COLLECTIBLES.UY
+   Estilos globales para evitar copia casual mediante clic derecho, arrastrar (drag & drop),
+   selección e inspección/menu por pulsación prolongada (long press) en mobile.
+   ========================================================================== */
+
+/* Aplicación global a todas las imágenes y contenedores protegidos del storefront */
+img,
+.img-protected,
+[data-protected-image] {
+  /* Evitar selección de la imagen en navegadores webkit, moz y ms */
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  user-select: none !important;
+
+  /* Deshabilitar menú contextual por pulsación prolongada en Safari / Chrome Mobile */
+  -webkit-touch-callout: none !important;
+
+  /* Deshabilitar arrastre por CSS en Safari/Chrome/Firefox */
+  -webkit-user-drag: none !important;
+  user-drag: none !important;
+
+  /* Permitir interacción de eventos (hover zoom, lightbox, clicks de navegación) */
+  pointer-events: auto;
+}
+
+/* Excepción explícita para asegurar que formularios e inputs mantengan la selección de texto */
+input,
+textarea,
+select,
+[contenteditable="true"] {
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  user-select: text !important;
+}
+
+/* Utilitarios específicos */
+.no-select {
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  user-select: none !important;
+}
+
+.no-touch-callout {
+  -webkit-touch-callout: none !important;
+}
+
+.no-drag {
+  -webkit-user-drag: none !important;
+  user-drag: none !important;
+}

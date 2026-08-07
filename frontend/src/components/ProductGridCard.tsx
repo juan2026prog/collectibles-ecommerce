@@ -8,6 +8,7 @@ import { useAdminMode } from '../contexts/AdminModeContext';
 import { useLocale } from '../contexts/LocaleContext';
 import { trackGA4Event } from '../lib/analyticsTracker';
 import { getProductGroupBadge } from '../hooks/useData';
+import { useImageProtection } from '../hooks/useImageProtection';
 
 interface ProductGridCardProps {
   product: any;
@@ -24,6 +25,7 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
   const { toggleWishlist, isInWishlist } = useWishlistContext();
   const { isAdminMode } = useAdminMode();
   const { language } = useLocale();
+  const { getImageProps, handleDragStart } = useImageProtection({ isProduct: true });
   const img = getProductImage(product);
   const finalPrice = Number(product.base_price || 0) + Number(product.variants?.[0]?.price_adjustment || 0);
 
@@ -85,7 +87,7 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
             referrerPolicy="no-referrer"
             loading="lazy"
             decoding="async"
-            className="max-w-full max-h-full object-contain transition-transform duration-300 group-hover:scale-105"
+            {...getImageProps('max-w-full max-h-full object-contain transition-transform duration-300 group-hover:scale-105')}
           />
         </Link>
 
@@ -110,7 +112,9 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
               <img
                 src={groupBadge.url}
                 alt={groupBadge.alt}
-                className="w-full h-full object-contain"
+                draggable={false}
+                onDragStart={handleDragStart}
+                className="w-full h-full object-contain img-protected"
               />
             </div>
           );

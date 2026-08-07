@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
+import { useImageProtection } from '../../hooks/useImageProtection';
 
 interface MiniBannerProps {
   image_url: string;
@@ -25,6 +26,7 @@ export default function MiniBannerCard({
   text_align = 'left',
 }: MiniBannerProps) {
   const alignCenter = text_align === 'center';
+  const { getImageProps } = useImageProtection({ isProduct: false });
 
   const content = (
     <div className="group relative aspect-[4/3] md:aspect-[16/7] min-h-[250px] sm:min-h-0 w-full rounded-2xl overflow-hidden border border-white/10 bg-[#05070f]">
@@ -37,7 +39,7 @@ export default function MiniBannerCard({
           src={image_url}
           alt={title}
           loading="lazy"
-          className="absolute inset-0 w-full h-full object-cover object-center transition-transform duration-700 ease-out group-hover:scale-105"
+          {...getImageProps("absolute inset-0 w-full h-full object-cover object-center transition-transform duration-700 ease-out group-hover:scale-105")}
         />
       </picture>
 

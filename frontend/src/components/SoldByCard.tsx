@@ -1,6 +1,7 @@
 import React from 'react';
 import { Store, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useImageProtection } from '../hooks/useImageProtection';
 
 interface SoldByCardProps {
   vendorId?: string;
@@ -11,6 +12,7 @@ interface SoldByCardProps {
 }
 
 export default function SoldByCard({ vendorId, vendorName, vendorLogo, vendorSlug, badges }: SoldByCardProps) {
+  const { getImageProps } = useImageProtection({ isProduct: false });
   if (!vendorId && !vendorName) return null;
 
   const isPlatform = !vendorId || vendorId === 'platform';
@@ -21,7 +23,11 @@ export default function SoldByCard({ vendorId, vendorName, vendorLogo, vendorSlu
     <div className="flex items-center justify-between gap-4 py-3.5 border-t border-white/10">
       <div className="flex items-center gap-3.5 min-w-0">
         {vendorLogo ? (
-          <img src={vendorLogo} alt={name} className="w-9 h-9 rounded-xl object-contain bg-white p-1 border border-white/10 shrink-0 shadow-sm" />
+          <img 
+            src={vendorLogo} 
+            alt={name} 
+            {...getImageProps("w-9 h-9 rounded-xl object-contain bg-white p-1 border border-white/10 shrink-0 shadow-sm")}
+          />
         ) : (
           <div className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
             <Store className="w-4 h-4 text-[#f00856]" />

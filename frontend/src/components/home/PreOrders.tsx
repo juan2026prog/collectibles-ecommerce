@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Clock as ClockIcon } from 'lucide-react';
+import { useImageProtection } from '../../hooks/useImageProtection';
 
 export interface PreorderItem {
   enabled: boolean;
@@ -60,6 +61,7 @@ export default function PreOrders({ preorders }: PreOrdersProps) {
 
 function PreorderCard({ item }: { item: PreorderItem }) {
   const [timeLeft, setTimeLeft] = useState<{ days: number; hours: number; minutes: number; seconds: number } | null>(null);
+  const { getImageProps } = useImageProtection({ isProduct: true });
 
   useEffect(() => {
     if (!item.countdown_date) {
@@ -109,7 +111,7 @@ function PreorderCard({ item }: { item: PreorderItem }) {
           src={item.image_url}
           alt={item.title}
           loading="lazy"
-          className="w-full h-full object-cover object-center opacity-100 group-hover:scale-[1.02] transition-all duration-700 ease-out"
+          {...getImageProps("w-full h-full object-cover object-center opacity-100 group-hover:scale-[1.02] transition-all duration-700 ease-out")}
         />
       </picture>
 

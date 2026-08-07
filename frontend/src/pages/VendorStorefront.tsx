@@ -6,6 +6,7 @@ import {
   ChevronLeft, ChevronRight, Search, SlidersHorizontal, X
 } from 'lucide-react';
 import { ProductGridCard } from '../components/ProductGridCard';
+import { useImageProtection } from '../hooks/useImageProtection';
 import { useCartContext } from '../contexts/CartContext';
 import { getProductImage } from '../lib/imageUtils';
 import { Helmet } from 'react-helmet-async';
@@ -28,6 +29,7 @@ function normalizeText(str: string): string {
 
 export default function VendorStorefront() {
   const { slug } = useParams<{ slug: string }>();
+  const { getImageProps, handleDragStart } = useImageProtection({ isProduct: false });
   const [searchParams, setSearchParams] = useSearchParams();
   const [store, setStore] = useState<any>(null);
   const [kycStatus, setKycStatus] = useState<string | null>(null);
@@ -743,11 +745,11 @@ export default function VendorStorefront() {
                       <img
                         src={store.banner_url}
                         alt={store.store_name}
-                        className="w-full h-full object-cover"
                         style={{
                           objectPosition: store.banner_position || 'center'
                         }}
                         loading="lazy"
+                        {...getImageProps("w-full h-full object-cover")}
                       />
                     </picture>
                   </div>
@@ -769,7 +771,13 @@ export default function VendorStorefront() {
                       }`}
                     >
                       {store.logo_url ? (
-                        <img src={store.logo_url} alt={store.store_name} className="w-full h-full object-contain" />
+                        <img 
+                          src={store.logo_url} 
+                          alt={store.store_name} 
+                          draggable={false}
+                          onDragStart={handleDragStart}
+                          className="w-full h-full object-contain img-protected" 
+                        />
                       ) : (
                         <Store className="w-10 h-10 text-white/20" />
                       )}
@@ -854,7 +862,13 @@ export default function VendorStorefront() {
                   {/* Store Logo */}
                   <div className="w-24 h-24 rounded-2xl border border-white/10 bg-[#0a0d16] overflow-hidden flex-shrink-0 flex items-center justify-center p-2">
                     {store.logo_url ? (
-                      <img src={store.logo_url} alt={store.store_name} className="w-full h-full object-contain" />
+                      <img 
+                        src={store.logo_url} 
+                        alt={store.store_name} 
+                        draggable={false}
+                        onDragStart={handleDragStart}
+                        className="w-full h-full object-contain img-protected" 
+                      />
                     ) : (
                       <Store className="w-10 h-10 text-white/20" />
                     )}

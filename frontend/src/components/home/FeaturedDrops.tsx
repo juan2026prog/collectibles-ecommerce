@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { useImageProtection } from '../../hooks/useImageProtection';
 
 export interface FeaturedDrop {
   enabled: boolean;
@@ -23,6 +24,7 @@ export default function FeaturedDrops({ drops }: FeaturedDropsProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [showLeft, setShowLeft] = useState(false);
   const [showRight, setShowRight] = useState(true);
+  const { getImageProps } = useImageProtection({ isProduct: false });
 
   const activeDrops = drops
     .filter(d => d.enabled !== false)
@@ -121,7 +123,7 @@ export default function FeaturedDrops({ drops }: FeaturedDropsProps) {
                 src={drop.image_url}
                 alt={drop.title}
                 loading="lazy"
-                className="w-full h-full object-cover object-center opacity-100 group-hover:scale-[1.03] transition-all duration-700 ease-out"
+                {...getImageProps("w-full h-full object-cover object-center opacity-100 group-hover:scale-[1.03] transition-all duration-700 ease-out")}
               />
             </picture>
 

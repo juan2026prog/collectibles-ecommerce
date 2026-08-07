@@ -127,7 +127,9 @@ export function ProductBadge({
           key={`${b.id}-${index}`}
           src={conf.url} 
           alt={label || 'Badge'} 
-          className={`${sizeClass} object-contain drop-shadow-md pointer-events-none`}
+          draggable={false}
+          onDragStart={(e) => e.preventDefault()}
+          className={`${sizeClass} object-contain drop-shadow-md pointer-events-none img-protected`}
         />
       );
     }
