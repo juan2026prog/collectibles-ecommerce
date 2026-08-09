@@ -143,7 +143,7 @@ export default function ProductDetail() {
     }
   }, [product, user]);
 
-  if (loading) {
+  if (productLoading) {
     return (
       <div className="max-w-[1500px] mx-auto px-6 py-20 flex justify-center items-center min-h-[50vh]">
         <div className="w-10 h-10 border-4 border-[#f00856] border-t-transparent rounded-full animate-spin" />
