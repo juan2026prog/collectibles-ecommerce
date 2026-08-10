@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Plus, Pencil, Trash2, Search, Eye, X, Upload, Save, AlertCircle, Check, Loader2, ImageIcon, ChevronUp, ChevronDown, Trash, Copy } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Eye, X, Upload, Save, AlertCircle, Check, Loader2, ImageIcon, ChevronUp, ChevronDown, Trash, Copy, AlertTriangle, ExternalLink, CheckCircle2 } from 'lucide-react';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
 import ImportModal from '../../components/admin/ImportModal';
 import type { ParsedProduct } from '../../lib/bulkImportUtils';
@@ -65,7 +65,7 @@ function InlineEdit({ value, type = 'text', options = [], onSave, className = ''
   );
 }
 
-// �"��"��"� REUSABLE SIDEBAR UI WIDGET �"��"��"�
+// 📦 REUSABLE SIDEBAR UI WIDGET 📦
 function SidebarWidget({ title, children, onToggle }: { title: string, children: React.ReactNode, onToggle?: () => void }) {
   const [isOpen, setIsOpen] = useState(true);
   return (
@@ -103,6 +103,15 @@ interface Product {
   created_at: string;
 }
 
+interface DuplicateCandidateInfo {
+  matched_product_id: string;
+  similarity_score: number;
+  match_type: string;
+  title?: string;
+  vendor_name?: string;
+  sku?: string;
+}
+
 export default function AdminProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,6 +124,9 @@ export default function AdminProducts() {
   const [loadingAI, setLoadingAI] = useState(false);
   const [inlineEdit, setInlineEdit] = useState<{ id: string, field: string } | null>(null);
   const [inlineValue, setInlineValue] = useState<any>(null);
+
+  const [duplicateWarning, setDuplicateWarning] = useState<DuplicateCandidateInfo | null>(null);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
 
   const { toast } = useToast();
   const { confirm } = useConfirmModal();
@@ -211,7 +223,7 @@ export default function AdminProducts() {
     setShowForm(true);
   }
 
-  async function handleSave() {
+  async function handleSave(options?: { allowDuplicateOverride?: boolean }) {
     try {
       if (!form.title || !form.title.trim()) throw new Error("El título es obligatorio");
 
@@ -223,24 +235,45 @@ export default function AdminProducts() {
         if ((parseInt(form.stock) || 0) < 0) errors.push("Stock inválido (no puede ser negativo)");
         if (!form.image_url) errors.push("Imágenes suficientes (se requiere al menos una imagen)");
 
-        // Duplicate check
-        const { data: dupData } = await supabase.rpc('check_duplicate_product', {
-          p_title: form.title,
-          p_brand_id: form.brands[0] || null,
-          p_sku: form.sku || null,
-          p_gtin: null,
-          p_asin: null
-        });
-
-        if (dupData && dupData.length > 0) {
-          const otherDup = dupData.find((d: any) => d.matched_product_id !== editing?.id && d.similarity_score >= 0.95);
-          if (otherDup) {
-            errors.push(`Conflicto de duplicado detectado (Similitud >= 95% con producto ID: ${otherDup.matched_product_id})`);
-          }
-        }
-
         if (errors.length > 0) {
           throw new Error("Reglas de Publicación no cumplidas:\n- " + errors.join("\n- "));
+        }
+
+        // Duplicate check (Soft Warning for Admin Override)
+        if (!options?.allowDuplicateOverride) {
+          const { data: dupData } = await supabase.rpc('check_duplicate_product', {
+            p_title: form.title,
+            p_brand_id: form.brands[0] || null,
+            p_sku: form.sku || null,
+            p_gtin: null,
+            p_asin: null
+          });
+
+          if (dupData && dupData.length > 0) {
+            const otherDup = dupData.find((d: any) => d.matched_product_id !== editing?.id && d.similarity_score >= 0.95);
+            if (otherDup) {
+              // Fetch candidate product details for interactive modal
+              const { data: candidateProd } = await supabase
+                .from('products')
+                .select('id, title, vendor_id, vendor_store:vendor_stores(store_name), variants:product_variants(sku)')
+                .eq('id', otherDup.matched_product_id)
+                .maybeSingle();
+
+              const vendorName = (candidateProd as any)?.vendor_store?.store_name || (candidateProd?.vendor_id ? 'Vendedor Marketplace' : 'Collectibles.uy');
+              const candidateSku = (candidateProd as any)?.variants?.[0]?.sku || form.sku || 'N/A';
+
+              setDuplicateWarning({
+                matched_product_id: otherDup.matched_product_id,
+                similarity_score: otherDup.similarity_score,
+                match_type: otherDup.match_type,
+                title: candidateProd?.title || form.title,
+                vendor_name: vendorName,
+                sku: candidateSku
+              });
+              setShowDuplicateModal(true);
+              return; // STOP execution, open override modal
+            }
+          }
         }
       }
 
@@ -255,8 +288,6 @@ export default function AdminProducts() {
         status: form.status, badge: form.badge || null, is_featured: form.is_featured, is_active: form.is_active,
         brand_id: form.brands[0] || null, category_id: form.categories[0] || null
       };
-      // Platform products created by Admin have vendor_id = null
-      // Do NOT set payload.vendor_id = currentUserId as fetchProducts() queries .is('vendor_id', null)
 
       console.log('[ADMIN_PRODUCTS_SAVE_VERSION]', 'TITLESLUG_FIXED_V2');
       console.log('[PRODUCT_SAVE_PAYLOAD]', payload);
@@ -273,7 +304,7 @@ export default function AdminProducts() {
 
       if (!productId) return;
 
-      // �"��"��"� Media �"��"��"�
+      // 📦 Media 📦
       await supabase.from('product_images').delete().eq('product_id', productId);
       const imagesPayload = [];
       if (form.image_url) imagesPayload.push({ product_id: productId, url: form.image_url, is_primary: true, sort_order: 0 });
@@ -323,6 +354,23 @@ export default function AdminProducts() {
         }
       }
 
+      // 📜 Audit Trail: Record Admin Duplicate Override decision if applicable 📜
+      if (options?.allowDuplicateOverride && duplicateWarning?.matched_product_id) {
+        try {
+          await supabase.from('product_duplicate_history').insert({
+            product_id: productId,
+            related_product_id: duplicateWarning.matched_product_id,
+            action_type: 'admin_duplicate_override',
+            admin_id: currentUserId || null,
+            details: `Admin override autorizó creación con similitud ${Math.round(duplicateWarning.similarity_score * 100)}% contra candidato ${duplicateWarning.matched_product_id}`
+          });
+        } catch (auditErr) {
+          console.warn('[product_duplicate_history audit error]', auditErr);
+        }
+      }
+
+      setShowDuplicateModal(false);
+      setDuplicateWarning(null);
       setShowForm(false);
       fetchProducts();
       fetchMeta();
@@ -1391,6 +1439,61 @@ export default function AdminProducts() {
 
       {showImport && (
         <ImportModal onClose={() => setShowImport(false)} onConfirm={handleImportConfirm} />
+      )}
+
+      {/* ⚠️ ADMIN DUPLICATE OVERRIDE MODAL ⚠️ */}
+      {showDuplicateModal && duplicateWarning && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 text-white shadow-2xl space-y-6">
+            <div className="flex items-center gap-3 text-amber-400">
+              <div className="p-3 bg-amber-500/20 rounded-xl">
+                <AlertTriangle className="w-7 h-7" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold">Posible Duplicado Detectado</h3>
+                <p className="text-xs text-slate-400">Similitud del {Math.round(duplicateWarning.similarity_score * 100)}% en el catálogo</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-800/80 border border-slate-700/60 rounded-xl p-4 space-y-2 text-sm">
+              <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Producto Existente Candidato</div>
+              <p className="font-bold text-base text-white">{duplicateWarning.title}</p>
+              <div className="grid grid-cols-2 gap-2 text-xs text-slate-300 pt-2 border-t border-slate-700/50">
+                <div><span className="text-slate-500">Vendedor:</span> {duplicateWarning.vendor_name || 'Collectibles.uy'}</div>
+                <div><span className="text-slate-500">SKU:</span> {duplicateWarning.sku || 'N/A'}</div>
+                <div className="col-span-2 text-slate-500 text-[10px] truncate">ID: {duplicateWarning.matched_product_id}</div>
+              </div>
+            </div>
+
+            <div className="p-3 bg-slate-800/40 border border-slate-700/40 rounded-lg text-xs text-slate-300">
+              ℹ️ <strong>Nota de Administrador:</strong> Puedes ver el producto candidato o forzar la publicación si se trata de una variante, edición especial o nuevo vendedor.
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => window.open(`/product/${duplicateWarning.matched_product_id}`, '_blank')}
+                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-medium text-xs flex items-center justify-center gap-2 transition-colors"
+              >
+                <ExternalLink className="w-4 h-4" /> Ver Existente
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowDuplicateModal(false); setDuplicateWarning(null); }}
+                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium text-xs flex items-center justify-center transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSave({ allowDuplicateOverride: true })}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs flex-1 flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30 transition-all"
+              >
+                <CheckCircle2 className="w-4 h-4" /> Crear de Todas Formas
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
