@@ -255,9 +255,8 @@ export default function AdminProducts() {
         status: form.status, badge: form.badge || null, is_featured: form.is_featured, is_active: form.is_active,
         brand_id: form.brands[0] || null, category_id: form.categories[0] || null
       };
-      if (!editing && currentUserId) {
-        payload.vendor_id = currentUserId;
-      }
+      // Platform products created by Admin have vendor_id = null
+      // Do NOT set payload.vendor_id = currentUserId as fetchProducts() queries .is('vendor_id', null)
 
       console.log('[ADMIN_PRODUCTS_SAVE_VERSION]', 'TITLESLUG_FIXED_V2');
       console.log('[PRODUCT_SAVE_PAYLOAD]', payload);
@@ -303,7 +302,10 @@ export default function AdminProducts() {
       if (delTags.error) throw delTags.error;
       
       if (form.categories.length > 0) {
-        const { error: insCatErr } = await supabase.from('product_categories').insert(form.categories.map(cid => ({ product_id: productId, category_id: cid })));
+        const { error: insCatErr } = await supabase.from('product_categories').upsert(
+          form.categories.map(cid => ({ product_id: productId, category_id: cid })),
+          { onConflict: 'product_id,category_id' }
+        );
         if (insCatErr) throw insCatErr;
       }
 

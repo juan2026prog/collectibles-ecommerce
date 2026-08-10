@@ -319,7 +319,10 @@ export default function VProducts() {
       if (delTags.error) throw delTags.error;
       
       if (form.categories.length > 0) {
-        const { error: insCatErr } = await supabase.from('product_categories').insert(form.categories.map(cid => ({ product_id: productId, category_id: cid })));
+        const { error: insCatErr } = await supabase.from('product_categories').upsert(
+          form.categories.map(cid => ({ product_id: productId, category_id: cid })),
+          { onConflict: 'product_id,category_id' }
+        );
         if (insCatErr) throw insCatErr;
       }
 
