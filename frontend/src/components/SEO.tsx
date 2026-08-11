@@ -29,16 +29,31 @@ export default function SEO({
   const organizationSchema = {
     "@context": "https://schema.org",
     "@type": "Organization",
-    "name": "Collectibles Uruguay",
+    "name": "Collectibles Uruguay - Juguetes Retro y Coleccionables",
+    "alternateName": "Juguetes Retro Uruguay",
     "url": "https://collectibles.uy",
     "logo": "https://cobtsgkwcftvexaarwmo.supabase.co/storage/v1/object/public/public-assets/1775828705619-isologocolle.jpg",
+    "description": "La tienda N°1 de juguetes retro, figuras vintage, cartas y coleccionables en Uruguay.",
     "sameAs": [
       settings['social_instagram'] || "https://instagram.com/collectibles.uy",
       settings['social_facebook'] || "https://facebook.com/collectibles.uy"
     ]
   };
 
-  const schemas = [organizationSchema];
+  const webSiteSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "Collectibles Uruguay",
+    "alternateName": "Juguetes Retro Uruguay",
+    "url": "https://collectibles.uy",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": "https://collectibles.uy/shop?q={search_term_string}",
+      "query-input": "required name=search_term_string"
+    }
+  };
+
+  const schemas: any[] = [organizationSchema, webSiteSchema];
   if (schema) {
     if (Array.isArray(schema)) {
       schemas.push(...schema);
