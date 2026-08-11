@@ -335,7 +335,7 @@ export default function AdminProducts() {
       if (form.categories.length > 0) {
         const { error: insCatErr } = await supabase.from('product_categories').upsert(
           form.categories.map(cid => ({ product_id: productId, category_id: cid })),
-          { onConflict: 'product_id,category_id' }
+          { onConflict: 'product_id,category_id', ignoreDuplicates: true }
         );
         if (insCatErr) throw insCatErr;
       }
@@ -355,15 +355,18 @@ export default function AdminProducts() {
       }
 
       // 📜 Audit Trail: Record Admin Duplicate Override decision if applicable 📜
-      if (options?.allowDuplicateOverride && duplicateWarning?.matched_product_id) {
+      if (options?.allowDuplicateOverride && duplicateWarning?.matched_product_id && productId) {
         try {
-          await supabase.from('product_duplicate_history').insert({
+          const auditPayload: any = {
             product_id: productId,
             related_product_id: duplicateWarning.matched_product_id,
             action_type: 'admin_duplicate_override',
-            admin_id: currentUserId || null,
             details: `Admin override autorizó creación con similitud ${Math.round(duplicateWarning.similarity_score * 100)}% contra candidato ${duplicateWarning.matched_product_id}`
-          });
+          };
+          if (currentUserId) {
+            auditPayload.admin_id = currentUserId;
+          }
+          await supabase.from('product_duplicate_history').insert(auditPayload);
         } catch (auditErr) {
           console.warn('[product_duplicate_history audit error]', auditErr);
         }

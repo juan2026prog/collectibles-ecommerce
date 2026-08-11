@@ -321,7 +321,7 @@ export default function VProducts() {
       if (form.categories.length > 0) {
         const { error: insCatErr } = await supabase.from('product_categories').upsert(
           form.categories.map(cid => ({ product_id: productId, category_id: cid })),
-          { onConflict: 'product_id,category_id' }
+          { onConflict: 'product_id,category_id', ignoreDuplicates: true }
         );
         if (insCatErr) throw insCatErr;
       }
