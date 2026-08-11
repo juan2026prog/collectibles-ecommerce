@@ -283,11 +283,11 @@ export default function VSettings() {
           vendor_payment_settings: formData.vendor_payment_settings
         };
 
-        const { error } = await supabase.from('vendors').update(payload).eq('id', user.id);
-        if (error) throw error;
+        const { error: vendorError } = await supabase.from('vendors').update(payload).eq('id', user.id);
+        if (vendorError) throw vendorError;
 
-        // Sync store name and branding attributes to public vendor_stores
-        await supabase
+        // Sync store name and branding attributes to public vendor_stores with explicit error handling
+        const { error: storeError } = await supabase
           .from('vendor_stores')
           .update({
             store_name: formData.store_name,
@@ -301,6 +301,8 @@ export default function VSettings() {
             updated_at: new Date().toISOString()
           })
           .eq('vendor_id', user.id);
+
+        if (storeError) throw storeError;
 
         toast.success('Configuración guardada exitosamente');
       }

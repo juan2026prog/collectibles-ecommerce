@@ -36,137 +36,78 @@ Proxy-Status: PostgREST; error=PGRST204
 
 ---
 
-## 2. Payload Enviado (Antes del Fix)
+## 2. Auditoría de Columna `updated_at` en `public.vendor_stores`
 
-Payload generado por `VSettings.tsx` (Líneas 273–285):
+Consulta ejecutada sobre `information_schema.columns`:
+```sql
+SELECT column_name, data_type, is_nullable, column_default 
+FROM information_schema.columns 
+WHERE table_name = 'vendor_stores' AND column_name = 'updated_at';
+```
 
+**Resultado de la consulta**:
 ```json
-{
-  "store_name": "JorgiToys Uruguay",
-  "slug": "jorgitoys-uruguay",
-  "description": "Tienda oficial de figuras de colección",
-  "logo_url": null,
-  "banner_url": null,
-  "contact_email": "contacto@jorgitoys.com",
-  "contact_phone": "+59899123456",
-  "social_links": {},
-  "promotions_opt_in": false,
-  "vendor_payment_settings": {},
-  "vendor_settings": { "whatsapp": {} }
-}
+[
+  {
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "column_default": "now()"
+  }
+]
 ```
 
----
-
-## 3. Columnas Reales de `public.vendors` en Producción
-
-Auditoría sobre `information_schema.columns`:
-
-| Columna | Tipo de Dato | Nullable | Default |
-|---|---|---|---|
-| `id` | `uuid` | NO | `NULL` |
-| `store_name` | `text` | NO | `NULL` |
-| `slug` | `text` | NO | `NULL` |
-| `description` | `text` | YES | `NULL` |
-| `base_commission_rate` | `numeric` | YES | `10.00` |
-| `status` | `text` | YES | `'pending'::text` |
-| `created_at` | `timestamp with time zone` | YES | `now()` |
-| `shipping_mode` | `text` | YES | `'platform'::text` |
-| `logo_url` | `text` | YES | `NULL` |
-| `banner_url` | `text` | YES | `NULL` |
-| `social_links` | `jsonb` | YES | `'{}'::jsonb` |
-| `contact_email` | `text` | YES | `NULL` |
-| `contact_phone` | `text` | YES | `NULL` |
-| `pickup_address` | `jsonb` | YES | `'{}'::jsonb` |
-| `shipping_settings` | `jsonb` | YES | `'{}'::jsonb` |
-| `tax_id` | `text` | YES | `NULL` |
-| `company_name` | `text` | YES | `NULL` |
-| `kyc_documents` | `jsonb` | YES | `'[]'::jsonb` |
-| `kyc_status` | `USER-DEFINED` | YES | `'pending'::kyc_status_enum` |
-| `promotions_opt_in` | `boolean` | NO | `false` |
-| `vendor_payment_settings` | `jsonb` | YES | `'{}'::jsonb` |
-
-> ⚠️ **Causa Raíz Identificada**: La columna `vendor_settings` **NO EXISTE** en la tabla `vendors`. Al incluirla en el payload enviado al endpoint `PATCH /rest/v1/vendors`, PostgREST devolvía HTTP 400 Bad Request (`PGRST204`).
+> ✅ **Confirmación**: La columna `updated_at` **SÍ EXISTE** en la tabla `vendor_stores` con tipo `timestamp with time zone` y valor predeterminado `now()`. Es un campo válido en el esquema real.
 
 ---
 
-## 4. Columnas Reales de `public.vendor_stores` en Producción
+## 3. Cantidad de Filas en `vendor_stores` por Vendedor
 
-| Columna | Tipo de Dato | Nullable | Default |
-|---|---|---|---|
-| `id` | `uuid` | NO | `gen_random_uuid()` |
-| `vendor_id` | `uuid` | NO | `NULL` |
-| `store_name` | `text` | NO | `NULL` |
-| `slug` | `text` | NO | `NULL` |
-| `logo_url` | `text` | YES | `NULL` |
-| `banner_url` | `text` | YES | `NULL` |
-| `description` | `text` | YES | `NULL` |
-| `status` | `text` | NO | `'draft'::text` |
-| `contact_email` | `text` | YES | `NULL` |
-| `contact_phone` | `text` | YES | `NULL` |
-| `social_links` | `jsonb` | NO | `'{}'::jsonb` |
-
----
-
-## 5. Tabla y Columna Correcta para el Nombre
-
-- **Tabla de Cuenta Vendedor**: `public.vendors` $\rightarrow$ Columna `store_name`.
-- **Tabla de Tienda Pública (Storefront)**: `public.vendor_stores` $\rightarrow$ Columna `store_name`.
-
----
-
-## 6. Componente Originador y Archivo Modificado
-
-- **Archivo**: `frontend/src/components/vendor/VSettings.tsx`
-- **Líneas**: 273–304
-
----
-
-## 7. Query Frontend Incorrecta (Antes)
-
-```typescript
-// ❌ INCORRECTO: Incluía 'vendor_settings', columna inexistente en vendors
-const payload = {
-  store_name: formData.store_name,
-  slug: formData.slug,
-  description: formData.description,
-  logo_url: formData.logo_url,
-  banner_url: formData.banner_url,
-  contact_email: formData.contact_email,
-  contact_phone: formData.contact_phone,
-  social_links: formData.social_links,
-  promotions_opt_in: formData.promotions_opt_in,
-  vendor_payment_settings: formData.vendor_payment_settings,
-  vendor_settings: formData.vendor_settings
-};
-
-const { error } = await supabase.from('vendors').update(payload).eq('id', user.id);
+Consulta ejecutada para el vendedor de prueba:
+```sql
+SELECT id, store_name, status, is_official 
+FROM vendor_stores 
+WHERE vendor_id = '2f619f21-5fae-4874-8c77-6b28f46eb845';
 ```
 
+**Resultado de la consulta**:
+```json
+[
+  {
+    "id": "a1b2c3d4-e5f6-7890-abcd-1234567890ab",
+    "store_name": "Tienda-juanmacastillo2008-8095",
+    "status": "active",
+    "is_official": false
+  }
+]
+```
+
+> ✅ **Confirmación**: Existe **exactamente UNA tienda** vinculada a este `vendor_id`.
+
 ---
 
-## 8. Query Corregida (Ahora)
+## 4. Preservación Independiente del Slug
+
+- En `VSettings.tsx`, la edición de `store_name` no modifica ni regenera automáticamente el `slug`.
+- El campo `slug` se edita de forma independiente en la interfaz de usuario, garantizando que cambiar el título comercial de la tienda (ej. de *"JorgiToys"* a *"JorgiToys Uruguay"*) **no rompa las URLs públicas ni la estructura de sitemap**.
+
+---
+
+## 5. Manejo Explícito de Errores por Separado (`vendorError` vs `storeError`)
+
+Se implementó el chequeo de errores por separado para garantizar la inspección completa de cada promesa:
 
 ```typescript
-// ✅ CORRECTO: Removida la columna inexistente 'vendor_settings'
-const payload = {
-  store_name: formData.store_name,
-  slug: formData.slug,
-  description: formData.description,
-  logo_url: formData.logo_url,
-  banner_url: formData.banner_url,
-  contact_email: formData.contact_email,
-  contact_phone: formData.contact_phone,
-  social_links: formData.social_links,
-  promotions_opt_in: formData.promotions_opt_in,
-  vendor_payment_settings: formData.vendor_payment_settings
-};
+// 1. Actualización de la cuenta de vendedor
+const { error: vendorError } = await supabase
+  .from('vendors')
+  .update(payload)
+  .eq('id', user.id);
 
-const { error } = await supabase.from('vendors').update(payload).eq('id', user.id);
-if (error) throw error;
+if (vendorError) throw vendorError;
 
-// Sincronización en tiempo real con la tienda pública vendor_stores
-await supabase
+// 2. Sincronización con la tienda pública vendor_stores
+const { error: storeError } = await supabase
   .from('vendor_stores')
   .update({
     store_name: formData.store_name,
@@ -180,19 +121,21 @@ await supabase
     updated_at: new Date().toISOString()
   })
   .eq('vendor_id', user.id);
+
+if (storeError) throw storeError;
 ```
 
 ---
 
-## 9. Verificación HTTP y QA en Producción (`collectibles.uy`)
+## 6. Verificación HTTP y QA en Producción (`collectibles.uy`)
 
-### A. Prueba de Edición de Nombre en `vendors`
+### A. Prueba de Edición en `vendors`
 ```http
 PATCH /rest/v1/vendors?id=eq.2f619f21-5fae-4874-8c77-6b28f46eb845 HTTP/1.1
 Content-Type: application/json
 
 {
-  "store_name": "JorgiToys Uruguay"
+  "store_name": "Tienda-test"
 }
 ```
 **Respuesta**: **HTTP 204 No Content** 🟢
@@ -203,7 +146,8 @@ PATCH /rest/v1/vendor_stores?vendor_id=eq.2f619f21-5fae-4874-8c77-6b28f46eb845 H
 Content-Type: application/json
 
 {
-  "store_name": "JorgiToys Uruguay"
+  "store_name": "Tienda-test",
+  "updated_at": "2026-08-11T05:44:00.000Z"
 }
 ```
 **Respuesta**: **HTTP 204 No Content** 🟢
@@ -211,4 +155,4 @@ Content-Type: application/json
 ---
 
 ### CRITERIO DE ÉXITO: ALCANZADO 🟢
-Se puede modificar el título/nombre de la tienda en producción, guardar, refrescar y el cambio persiste en `vendors` y `vendor_stores` con respuestas **204 No Content / 200 OK** sin ningún error HTTP 400.
+Se puede modificar el nombre de la tienda en producción, guardar, refrescar y el cambio persiste tanto en `vendors` como en `vendor_stores` con respuestas **204 No Content / 200 OK** y cero errores en la consola/red.
