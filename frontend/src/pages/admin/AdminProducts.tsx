@@ -374,7 +374,7 @@ export default function AdminProducts() {
           const auditPayload: any = {
             product_id: productId,
             related_product_id: duplicateWarning.matched_product_id,
-            action_type: 'admin_duplicate_override',
+            action_type: 'ignorado',
             details: `Admin override autorizó creación con similitud ${Math.round(duplicateWarning.similarity_score * 100)}% contra candidato ${duplicateWarning.matched_product_id}`
           };
           if (currentUserId) {
