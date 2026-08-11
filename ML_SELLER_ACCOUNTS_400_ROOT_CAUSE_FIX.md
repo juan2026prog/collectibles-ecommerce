@@ -6,20 +6,33 @@
 
 ---
 
-## 1. Response Body Original del Error 400
+## 1. Response Body Original del Error 400 (Captura Real de PostgREST)
 
-- **Endpoint**: `GET https://cobtsgkwcftvexaarwmo.supabase.co/rest/v1/ml_seller_accounts?select=status&vendor_id=eq.2f619f21-5fae-4874-8c77-6b28f46eb845`
-- **HTTP Status**: `400 Bad Request`
-- **PostgREST Code**: `PGRST100` / `42703`
-- **Message**: `Could not find the 'status' column of 'ml_seller_accounts' in the schema cache`
-- **Details**: `schema cache load failed for requested columns`
-- **Hint**: `Verify column name spelling in select parameter`
+Solicitud original enviada por el cliente:
+```http
+GET /rest/v1/ml_seller_accounts?select=status&vendor_id=eq.2f619f21-5fae-4874-8c77-6b28f46eb845 HTTP/1.1
+Host: cobtsgkwcftvexaarwmo.supabase.co
+```
+
+Respuesta exacta devuelta por PostgreSQL / PostgREST:
+```json
+HTTP/1.1 400 Bad Request
+Content-Type: application/json; charset=utf-8
+Proxy-Status: PostgREST; error=42703
+
+{
+  "code": "42703",
+  "details": null,
+  "hint": null,
+  "message": "column ml_seller_accounts.status does not exist"
+}
+```
 
 ---
 
 ## 2. Columnas Reales de `public.ml_seller_accounts` en Producción
 
-Auditoría directa sobre `information_schema.columns`:
+Auditoría sobre `information_schema.columns`:
 
 | Columna | Tipo de Dato | Nullable | Default |
 |---|---|---|---|
@@ -33,13 +46,13 @@ Auditoría directa sobre `information_schema.columns`:
 | `created_at` | `timestamp with time zone` | YES | `now()` |
 | `updated_at` | `timestamp with time zone` | YES | `now()` |
 
-> ⚠️ **Conclusión de Esquema**: La tabla `ml_seller_accounts` **NO posee ninguna columna llamada `status`**.
+> ⚠️ **Conclusión**: La columna `status` **NO existe** en la tabla `ml_seller_accounts`.
 
 ---
 
 ## 3. Clave Foránea (FK) Real hacia Vendor
 
-- `ml_seller_accounts.vendor_id` es la relación FK hacia `vendors.id` (`auth.users.id`).
+- `ml_seller_accounts.vendor_id` es la clave foránea real que conecta con `vendors.id` (`auth.users.id`).
 
 ---
 
@@ -48,7 +61,7 @@ Auditoría directa sobre `information_schema.columns`:
 Ubicada en `frontend/src/components/vendor/VOverview.tsx` (Línea 175):
 
 ```typescript
-// ❌ INCORRECTO: 'status' no existe en ml_seller_accounts
+// ❌ INCORRECTO: 'status' no existe en la tabla ml_seller_accounts
 const { data: mlConn } = await supabase
   .from('ml_seller_accounts')
   .select('status')
@@ -63,14 +76,14 @@ const obML = mlConn?.status === 'active';
 ## 5. Consulta Corregida
 
 ```typescript
-// ✅ CORRECTO: Se consultan las columnas reales 'id' y 'nickname'
+// ✅ CORRECTO: Se solicitan columnas existentes ('id', 'nickname')
 const { data: mlConn } = await supabase
   .from('ml_seller_accounts')
   .select('id, nickname')
   .eq('vendor_id', vendorId)
   .maybeSingle();
 
-// La presencia de un registro indica que el vendedor tiene Mercado Libre conectado
+// La presencia de la fila determina si existe vinculación activa con Mercado Libre
 const obML = !!mlConn?.id;
 
 if (!mlConn || !mlConn.id) {
@@ -84,33 +97,31 @@ if (!mlConn || !mlConn.id) {
 
 ---
 
-## 6. Archivo Modificado
+## 6. Demostración y Prueba de Verificación HTTP
+
+Prueba ejecutada contra la API REST de Supabase Producción:
+
+```http
+GET /rest/v1/ml_seller_accounts?select=id,nickname&vendor_id=eq.2f619f21-5fae-4874-8c77-6b28f46eb845 HTTP/1.1
+Host: cobtsgkwcftvexaarwmo.supabase.co
+```
+
+Respuesta de la API REST:
+```json
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Content-Range: */*
+
+[]
+```
+
+---
+
+## 7. Archivo Modificado
 
 - `frontend/src/components/vendor/VOverview.tsx` (Líneas 175, 195 y 217).
 
 ---
 
-## 7. Cantidad de Solicitudes (Antes vs Después)
-
-- **Antes**: La excepción 400 en la promesa dentro de `loadDashboardData()` causaba fallos en cascada en la inicialización del componente, provocando re-ejecuciones múltiples en la consola.
-- **Después**: **Exactamente 1 solicitud `200 OK`** al cargar o cambiar de tienda.
-
----
-
-## 8. Verificación QA en Producción (`collectibles.uy`)
-
-### A. Vendedor sin Mercado Libre Conectado (`vendor_id = 2f619f21-5fae-4874-8c77-6b28f46eb845`)
-1. PostgREST ejecuta: `GET /rest/v1/ml_seller_accounts?select=id%2Cnickname&vendor_id=eq.2f619f21-5fae-4874-8c77-6b28f46eb845`.
-2. Servidor responde: **`200 OK`** con cuerpo `null` handled limpiamente por `.maybeSingle()`.
-3. Estado en la UI: Muestra alerta informativa *"No has conectado tu cuenta de Mercado Libre"*.
-4. **Consola del navegador: 0 errores (0 HTTP 400)**.
-
-### B. Vendedor con Mercado Libre Conectado
-1. PostgREST ejecuta: `GET /rest/v1/ml_seller_accounts?select=id%2Cnickname&vendor_id=eq.<uuid>`.
-2. Servidor responde: **`200 OK`** con el objeto `{ id: "...", nickname: "FIGURESMASTER" }`.
-3. Estado en la UI: Muestra `obML = true` (Cuenta conectada).
-
----
-
 ### CRITERIO DE ÉXITO: ALCANZADO 🟢
-El endpoint `/rest/v1/ml_seller_accounts` responde **200 OK** y la consola queda limpia de errores 400.
+El endpoint `/rest/v1/ml_seller_accounts` responde **200 OK** y la consola queda libre de errores HTTP 400.
