@@ -280,12 +280,28 @@ export default function VSettings() {
           contact_phone: formData.contact_phone,
           social_links: formData.social_links,
           promotions_opt_in: formData.promotions_opt_in,
-          vendor_payment_settings: formData.vendor_payment_settings,
-          vendor_settings: formData.vendor_settings
+          vendor_payment_settings: formData.vendor_payment_settings
         };
 
         const { error } = await supabase.from('vendors').update(payload).eq('id', user.id);
         if (error) throw error;
+
+        // Sync store name and branding attributes to public vendor_stores
+        await supabase
+          .from('vendor_stores')
+          .update({
+            store_name: formData.store_name,
+            slug: formData.slug,
+            description: formData.description,
+            logo_url: formData.logo_url,
+            banner_url: formData.banner_url,
+            contact_email: formData.contact_email,
+            contact_phone: formData.contact_phone,
+            social_links: formData.social_links,
+            updated_at: new Date().toISOString()
+          })
+          .eq('vendor_id', user.id);
+
         toast.success('Configuración guardada exitosamente');
       }
       setSaveStatus('saved');
