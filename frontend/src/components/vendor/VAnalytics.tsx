@@ -23,8 +23,8 @@ export default function VAnalytics({ activeStoreId }: VAnalyticsProps) {
         let query = supabase
           .from('order_items')
           .select(`
-            id, price, quantity, created_at, vendor_store_id,
-            order:orders(id, status, shipping_address),
+            id, unit_price, quantity, vendor_store_id,
+            order:orders(id, status, created_at, shipping_address),
             product:products(id, title)
           `)
           .eq('vendor_id', vendorId);
@@ -62,7 +62,7 @@ export default function VAnalytics({ activeStoreId }: VAnalyticsProps) {
             productSales[prodId] = { name: title, sold: 0, revenue: 0 };
           }
           productSales[prodId].sold += item.quantity;
-          productSales[prodId].revenue += Number(item.price) * item.quantity;
+          productSales[prodId].revenue += Number(item.unit_price || item.price || 0) * item.quantity;
         });
         const topProducts = Object.values(productSales)
           .sort((a, b) => b.revenue - a.revenue)

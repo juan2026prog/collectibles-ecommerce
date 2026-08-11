@@ -79,7 +79,7 @@ export default function VOverview({ onChangeTab, activeStoreId }: VOverviewProps
 
       let salesQuery = supabase
         .from('order_items')
-        .select('price, quantity, created_at, order:orders(status, payment_status, is_test_order, payment_provider, payment_provider_reference, payment_id)')
+        .select('unit_price, quantity, order:orders(created_at, status, payment_status, is_test_order, payment_provider, payment_provider_reference, payment_id)')
         .eq('vendor_id', vendorId);
 
       if (activeStoreId) {
@@ -88,8 +88,8 @@ export default function VOverview({ onChangeTab, activeStoreId }: VOverviewProps
 
       const { data: allItems } = await salesQuery;
       const salesM = (allItems || [])
-        .filter(item => item.created_at >= startOfMonth && isRealPaidOrder(item.order))
-        .reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0);
+        .filter(item => (item.order as any)?.created_at >= startOfMonth && isRealPaidOrder(item.order))
+        .reduce((sum, item) => sum + Number((item as any).unit_price || (item as any).price || 0) * Number(item.quantity), 0);
 
       // 2. Fetch Active Products
       let activeProductsQuery = supabase
@@ -110,7 +110,7 @@ export default function VOverview({ onChangeTab, activeStoreId }: VOverviewProps
         .from('order_items')
         .select(`
           order_id,
-          price,
+          unit_price,
           quantity,
           vendor_store_id,
           order:orders(id, created_at, status)
@@ -122,45 +122,45 @@ export default function VOverview({ onChangeTab, activeStoreId }: VOverviewProps
       }
 
       const { data: orderItems } = await orderItemsQuery
-        .order('created_at', { ascending: false })
         .limit(20);
 
       // Unique orders mapping
       const uniqueOrdersMap = new Map();
       (orderItems || []).forEach((oi: any) => {
         if (!oi.order) return;
+        const itemPrice = Number(oi.unit_price || oi.price || 0);
         if (!uniqueOrdersMap.has(oi.order_id)) {
           uniqueOrdersMap.set(oi.order_id, {
             ...oi.order,
-            total_amount: Number(oi.price) * Number(oi.quantity)
+            total_amount: itemPrice * Number(oi.quantity)
           });
         } else {
           const existing = uniqueOrdersMap.get(oi.order_id);
-          existing.total_amount += Number(oi.price) * Number(oi.quantity);
+          existing.total_amount += itemPrice * Number(oi.quantity);
         }
       });
-      const uniqueOrders = Array.from(uniqueOrdersMap.values()).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      const uniqueOrders = Array.from(uniqueOrdersMap.values()).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-      // 4. Fetch Low Stock (Directly from products)
+      // 4. Fetch Low Stock (From product_variants)
       let lowStockQuery = supabase
-        .from('products')
-        .select('id, title, stock, vendor_id, vendor_store_id')
-        .eq('vendor_id', vendorId)
-        .lt('stock', 5);
+        .from('product_variants')
+        .select('id, sku, inventory_count, product:products!inner(id, title, vendor_id, vendor_store_id)')
+        .eq('product.vendor_id', vendorId)
+        .lt('inventory_count', 5);
 
       if (activeStoreId) {
-        lowStockQuery = lowStockQuery.eq('vendor_store_id', activeStoreId);
+        lowStockQuery = lowStockQuery.eq('product.vendor_store_id', activeStoreId);
       }
 
       const { data: rawLowStock } = await lowStockQuery
-        .order('stock', { ascending: true })
+        .order('inventory_count', { ascending: true })
         .limit(5);
         
-      const lowStockData = (rawLowStock || []).map(p => ({
-        id: p.id,
-        sku: p.id.substring(0, 8),
-        inventory_count: p.stock || 0,
-        product: { id: p.id, title: p.title }
+      const lowStockData = (rawLowStock || []).map((v: any) => ({
+        id: v.id,
+        sku: v.sku || (v.product?.id ? v.product.id.substring(0, 8) : 'N/A'),
+        inventory_count: v.inventory_count || 0,
+        product: { id: v.product?.id, title: v.product?.title }
       }));
 
       // 5. Build Alerts (KYC, ML, Logistics) & Onboarding

@@ -224,7 +224,20 @@ export default function AdminProducts() {
   }
 
   async function handleSave(options?: { allowDuplicateOverride?: boolean }) {
+    let createdProductId: string | null = null;
     try {
+      console.group("[PRODUCT_SAVE_AUDIT]");
+      console.log("editing", editing);
+      console.log("form", form);
+      console.log("RAW PRICE", form.base_price);
+      console.log("RAW PRICE TYPE", typeof form.base_price);
+      console.log("PARSED PRICE", Number(form.base_price));
+      console.log("RAW BRAND", form.brand_id);
+      console.log("RAW CATEGORY", form.category_id);
+      console.log("CATEGORIES", form.categories);
+      console.log("STATUS", form.status);
+      console.groupEnd();
+
       if (!form.title || !form.title.trim()) throw new Error("El título es obligatorio");
 
       if (form.status === 'published') {
@@ -300,6 +313,7 @@ export default function AdminProducts() {
         const { data: newProd, error: insertError } = await supabase.from('products').insert(payload).select().single();
         if (insertError) throw insertError;
         productId = newProd.id;
+        createdProductId = newProd.id;
       }
 
       if (!productId) return;
@@ -315,7 +329,7 @@ export default function AdminProducts() {
       }
 
       // 📦 Variants 📦
-      const skuVal = form.sku?.trim() || `SKU-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+      const skuVal = form.sku?.trim() || null;
       if (editing && editing.variants?.[0]?.id) {
         const { error: varErr } = await supabase.from('product_variants').update({ sku: skuVal, inventory_count: parseInt(form.stock) || 0 }).eq('id', editing.variants[0].id);
         if (varErr) throw varErr;
@@ -379,6 +393,14 @@ export default function AdminProducts() {
       fetchMeta();
       toast.success(editing ? 'Producto actualizado' : 'Producto creado');
     } catch (err: any) {
+      if (createdProductId && !editing) {
+        try {
+          await supabase.from('products').delete().eq('id', createdProductId);
+          console.warn('[Emergency Cleanup] Rolled back orphaned product row:', createdProductId);
+        } catch (rollbackErr) {
+          console.error('[Emergency Rollback Failed]', rollbackErr);
+        }
+      }
       console.error('[AdminProducts handleSave Runtime Error]', err);
       console.trace(err);
       toast.error(`Error: ${err.message}`);
