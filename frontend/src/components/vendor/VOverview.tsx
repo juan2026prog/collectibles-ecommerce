@@ -172,7 +172,7 @@ export default function VOverview({ onChangeTab, activeStoreId }: VOverviewProps
 
       const { data: mlConn } = await supabase
         .from('ml_seller_accounts')
-        .select('status')
+        .select('id, nickname')
         .eq('vendor_id', vendorId)
         .maybeSingle();
 
@@ -196,7 +196,7 @@ export default function VOverview({ onChangeTab, activeStoreId }: VOverviewProps
       const obProfile = !!vendorData?.store_name;
       const obBilling = !!vendorData?.vendor_payment_settings?.account_number;
       const obShipping = hasShipping;
-      const obML = mlConn?.status === 'active';
+      const obML = !!mlConn?.id;
 
       setOnboarding({
         profile: obProfile,
@@ -214,7 +214,7 @@ export default function VOverview({ onChangeTab, activeStoreId }: VOverviewProps
       if (vendorData?.kyc_status === 'rejected') {
         newAlerts.push({ type: 'error', msg: 'Tus documentos KYC fueron rechazados. Por favor revisa y vuelve a enviarlos.', link: '/vendor?tab=settings' });
       }
-      if (!mlConn || mlConn.status !== 'active') {
+      if (!mlConn || !mlConn.id) {
         newAlerts.push({ type: 'info', msg: 'No has conectado tu cuenta de Mercado Libre. Pierdes alcance de ventas.', link: '/vendor?tab=mercadolibre' });
       }
       if (!hasDac && !hasSoyDelivery) {
