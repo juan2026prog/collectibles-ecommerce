@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { Plus, Pencil, Trash2, Search, Eye, X, Upload, Save, AlertCircle, Check, Loader2, ImageIcon, ChevronUp, ChevronDown, Trash, Copy, AlertTriangle, ExternalLink, CheckCircle2 } from 'lucide-react';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
@@ -81,6 +82,12 @@ function SidebarWidget({ title, children, onToggle }: { title: string, children:
   );
 }
 
+interface VendorOption {
+  id: string;
+  store_name: string;
+  company_name?: string;
+}
+
 interface Product {
   id: string;
   title: string;
@@ -93,6 +100,8 @@ interface Product {
   is_active: boolean;
   badge: string | null;
   is_featured: boolean;
+  vendor_id?: string | null;
+  vendor?: { id: string; store_name?: string; company_name?: string } | null;
   category: { id?: string, name: string } | null;
   brand: { id?: string, name: string } | null;
   images: { id?: string, url: string }[];
@@ -113,6 +122,7 @@ interface DuplicateCandidateInfo {
 }
 
 export default function AdminProducts() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
@@ -138,15 +148,18 @@ export default function AdminProducts() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [filterCategory, setFilterCategory] = useState<string>('');
   const [filterBrand, setFilterBrand] = useState<string>('');
+  const [filterVendor, setFilterVendor] = useState<string>(searchParams.get('vendor') || 'all');
   
   const [categories, setCategories] = useState<any[]>([]);
   const [brands, setBrands] = useState<any[]>([]);
   const [tags, setTags] = useState<any[]>([]);
+  const [vendors, setVendors] = useState<VendorOption[]>([]);
   
   const [form, setForm] = useState({
     title: '', slug: '', description: '', short_description: '',
     base_price: '', compare_at_price: '', sku: '', stock: '10', status: 'published',
     badge: '', is_featured: false, is_active: true, category_id: '', brand_id: '',
+    vendor_id: 'platform',
     image_url: '', video_url: '',
     // Many-to-many
     categories: [] as string[],
@@ -161,31 +174,44 @@ export default function AdminProducts() {
 
   useEffect(() => { fetchProducts(); fetchMeta(); }, []);
 
+  const handleVendorFilterChange = (val: string) => {
+    setFilterVendor(val);
+    setCurrentPage(1);
+    const newParams = new URLSearchParams(searchParams);
+    if (val === 'all') {
+      newParams.delete('vendor');
+    } else {
+      newParams.set('vendor', val);
+    }
+    setSearchParams(newParams);
+  };
+
   async function fetchProducts() {
     setLoading(true);
     const { data } = await supabase
       .from('products')
-      .select('*, product_categories(categories(id, name)), brand:brands(id, name), images:product_images(id, url), variants:product_variants(id, inventory_count, sku)')
-      .is('vendor_id', null)
+      .select('*, vendor:vendors(id, store_name, company_name), product_categories(categories(id, name)), brand:brands(id, name), images:product_images(id, url), variants:product_variants(id, inventory_count, sku)')
       .order('created_at', { ascending: false });
     setProducts(data || []);
     setLoading(false);
   }
 
   async function fetchMeta() {
-    const [{ data: cats }, { data: brs }, { data: tgs }] = await Promise.all([
+    const [{ data: cats }, { data: brs }, { data: tgs }, { data: vds }] = await Promise.all([
       supabase.from('categories').select('id, name').order('sort_order'),
       supabase.from('brands').select('id, name').order('sort_order'),
       supabase.from('tags').select('id, name').order('name'),
+      supabase.from('vendors').select('id, store_name, company_name').order('store_name'),
     ]);
     setCategories(cats || []);
     setBrands(brs || []);
     setTags(tgs || []);
+    setVendors(vds || []);
   }
 
   function openCreate() {
     setEditing(null);
-    setForm({ title: '', slug: '', description: '', short_description: '', base_price: '', compare_at_price: '', sku: `${Date.now()}`, stock: '10', status: 'published', badge: '', is_featured: false, is_active: true, category_id: '', brand_id: '', image_url: '', video_url: '', categories: [], tags: [], brands: [], gallery: [] });
+    setForm({ title: '', slug: '', description: '', short_description: '', base_price: '', compare_at_price: '', sku: `${Date.now()}`, stock: '10', status: 'published', badge: '', is_featured: false, is_active: true, category_id: '', brand_id: '', vendor_id: 'platform', image_url: '', video_url: '', categories: [], tags: [], brands: [], gallery: [] });
     setShowForm(true);
   }
 
@@ -213,6 +239,7 @@ export default function AdminProducts() {
       is_active: product.is_active !== false,
       category_id: product.category?.id || '', 
       brand_id: product.brand?.id || '',
+      vendor_id: product.vendor_id || 'platform',
       image_url: product.images?.[0]?.url || '', 
       video_url: '',
       categories: pCats?.map(c => c.category_id) || [],
@@ -295,11 +322,14 @@ export default function AdminProducts() {
 
       const slug = await generateUniqueSlug(form.title, editing?.id);
 
+      const targetVendorId = form.vendor_id === 'platform' ? null : form.vendor_id;
+
       const payload: any = {
         title: form.title.trim(), slug, description: form.description, short_description: form.short_description,
         base_price: parseFloat(form.base_price) || 0, compare_at_price: form.compare_at_price ? parseFloat(form.compare_at_price) : null,
         status: form.status, badge: form.badge || null, is_featured: form.is_featured, is_active: form.is_active,
-        brand_id: form.brands[0] || null, category_id: form.categories[0] || null
+        brand_id: form.brands[0] || null, category_id: form.categories[0] || null,
+        vendor_id: targetVendorId
       };
 
       console.log('[ADMIN_PRODUCTS_SAVE_VERSION]', 'TITLESLUG_FIXED_V2');
@@ -578,10 +608,15 @@ export default function AdminProducts() {
     } catch (err: any) { toast.error(err.message); }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!(await confirm(`¿Eliminar producto permanentemente?`, { danger: true }))) return;
+  const handleDelete = async (product: Product) => {
+    const vendorName = product.vendor?.store_name || product.vendor?.company_name;
+    const confirmMsg = product.vendor_id && vendorName
+      ? `¿Eliminar el producto "${product.title}" vendido por ${vendorName}? Esta acción no se puede deshacer.`
+      : `¿Eliminar el producto "${product.title}" permanentemente? Esta acción no se puede deshacer.`;
+
+    if (!(await confirm(confirmMsg, { danger: true }))) return;
     try {
-       await supabase.from('products').delete().eq('id', id);
+       await supabase.from('products').delete().eq('id', product.id);
        fetchProducts();
        toast.success(`Producto eliminado`);
     } catch (err: any) { toast.error(err.message); }
@@ -603,9 +638,6 @@ export default function AdminProducts() {
       const newTitle = `${product.title} (Copia)`;
       const newSlug = await generateUniqueSlug(newTitle);
 
-      const { data: { session } } = await supabase.auth.getSession();
-      const currentUserId = session?.user?.id;
-
       const payload: any = {
         title: newTitle,
         slug: newSlug,
@@ -618,11 +650,9 @@ export default function AdminProducts() {
         badge: product.badge,
         is_featured: product.is_featured,
         brand_id: product.brand?.id || product.brand_id || null,
-        category_id: product.category?.id || product.category_id || null
+        category_id: product.category?.id || product.category_id || null,
+        vendor_id: product.vendor_id || null
       };
-      if (currentUserId) {
-        payload.vendor_id = currentUserId;
-      }
 
       const { data: newProd, error: insertError } = await supabase.from('products').insert(payload).select().single();
       if (insertError) throw insertError;
@@ -831,6 +861,10 @@ export default function AdminProducts() {
           valA = a.brand?.name || '';
           valB = b.brand?.name || '';
           break;
+        case 'vendor':
+          valA = a.vendor?.store_name || a.vendor?.company_name || (a.vendor_id ? 'Vendor' : 'Collectibles');
+          valB = b.vendor?.store_name || b.vendor?.company_name || (b.vendor_id ? 'Vendor' : 'Collectibles');
+          break;
         case 'stock':
           valA = a.variants?.[0]?.inventory_count || 0;
           valB = b.variants?.[0]?.inventory_count || 0;
@@ -878,12 +912,25 @@ export default function AdminProducts() {
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
-      const matchesSearch = p.title.toLowerCase().includes(search.toLowerCase());
+      const vendorName = p.vendor?.store_name || p.vendor?.company_name || '';
+      const skuVal = p.variants?.[0]?.sku || '';
+      const matchesSearch = p.title.toLowerCase().includes(search.toLowerCase()) ||
+        (skuVal && skuVal.toLowerCase().includes(search.toLowerCase())) ||
+        (vendorName && vendorName.toLowerCase().includes(search.toLowerCase()));
+      
       const matchesCategory = filterCategory === '' || p.category_id === filterCategory || p.product_categories?.[0]?.categories?.id === filterCategory || p.category?.id === filterCategory;
       const matchesBrand = filterBrand === '' || p.brand?.id === filterBrand || p.brand_id === filterBrand;
-      return matchesSearch && matchesCategory && matchesBrand;
+      
+      let matchesVendor = true;
+      if (filterVendor === 'platform') {
+        matchesVendor = !p.vendor_id;
+      } else if (filterVendor && filterVendor !== 'all') {
+        matchesVendor = p.vendor_id === filterVendor;
+      }
+
+      return matchesSearch && matchesCategory && matchesBrand && matchesVendor;
     });
-  }, [products, search, filterCategory, filterBrand]);
+  }, [products, search, filterCategory, filterBrand, filterVendor]);
 
   return (
     <div className="max-w-full">
@@ -895,7 +942,7 @@ export default function AdminProducts() {
                <h2 className="text-2xl font-black text-dark-900">Productos <span className="bg-blue-600 text-white text-[8px] px-1 py-0.5 rounded ml-2 relative -top-1">v2</span></h2>
                {!loading && (
                  <span className="bg-gray-100/80 border border-gray-200 text-gray-500 text-[10px] font-black uppercase px-2 py-1 rounded-md tracking-widest hidden md:inline-flex items-center gap-1">
-                   {products.length} {products.length === 1 ? 'Producto' : 'Productos'}
+                   {filteredProducts.length} {filteredProducts.length === 1 ? 'Producto' : 'Productos'}
                  </span>
                )}
             </div>
@@ -907,7 +954,7 @@ export default function AdminProducts() {
               <input 
                 type="checkbox" 
                 className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer" 
-                checked={products.length > 0 && products.slice(0, itemsPerPage === 'Todos' ? products.length : itemsPerPage).every(p => selectedProducts.includes(p.id)) && selectedProducts.length !== products.length}
+                checked={filteredProducts.length > 0 && filteredProducts.slice(0, itemsPerPage === 'Todos' ? filteredProducts.length : itemsPerPage).every(p => selectedProducts.includes(p.id)) && selectedProducts.length !== filteredProducts.length}
                 onChange={(e) => {
                   const filtered = getSortedProducts(filteredProducts);
                   const currentSubset = itemsPerPage === 'Todos' ? filtered : filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -929,13 +976,13 @@ export default function AdminProducts() {
               <input 
                 type="checkbox" 
                 className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer" 
-                checked={products.length > 0 && products.length === selectedProducts.length}
+                checked={filteredProducts.length > 0 && filteredProducts.length === selectedProducts.length}
                 onChange={(e) => {
-                  if (e.target.checked) setSelectedProducts(products.map(p => p.id));
+                  if (e.target.checked) setSelectedProducts(filteredProducts.map(p => p.id));
                   else setSelectedProducts([]);
                 }}
               />
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest group-hover:text-blue-600 transition-colors">Todos ({products.length})</span>
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest group-hover:text-blue-600 transition-colors">Todos ({filteredProducts.length})</span>
             </label>
           </div>
         </div>
@@ -970,6 +1017,11 @@ export default function AdminProducts() {
                   <select className="border-gray-200 border rounded px-2 py-1 text-xs outline-none bg-white" value={filterBrand} onChange={e => { setFilterBrand(e.target.value); setCurrentPage(1); }}>
                     <option value="">Todas las marcas</option>
                     {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  </select>
+                  <select className="border-gray-200 border rounded px-2 py-1 text-xs outline-none bg-white font-bold" value={filterVendor} onChange={e => handleVendorFilterChange(e.target.value)}>
+                    <option value="all">Todos los vendedores</option>
+                    <option value="platform">Collectibles</option>
+                    {vendors.map(v => <option key={v.id} value={v.id}>{v.store_name || v.company_name || v.id}</option>)}
                   </select>
                </div>
             </div>
@@ -1020,6 +1072,9 @@ export default function AdminProducts() {
                    <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('brand')}>
                      Marca {sortField === 'brand' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
                    </th>
+                   <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('vendor')}>
+                     Vendedor {sortField === 'vendor' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+                   </th>
                    <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('stock')}>
                      Stock {sortField === 'stock' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
                    </th>
@@ -1036,7 +1091,7 @@ export default function AdminProducts() {
                </thead>
                <tbody className="divide-y divide-gray-100">
                  {loading ? (
-                    <tr><td colSpan={9} className="px-6 py-12 text-center text-gray-400 animate-pulse">Cargando catálogo...</td></tr>
+                    <tr><td colSpan={10} className="px-6 py-12 text-center text-gray-400 animate-pulse">Cargando catálogo...</td></tr>
                  ) : (() => {
                     const filtered = getSortedProducts(filteredProducts);
                     const currentSubset = itemsPerPage === 'Todos' ? filtered : filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -1117,6 +1172,23 @@ export default function AdminProducts() {
                           p.brand?.name || '-'
                         )}
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {p.vendor_id ? (
+                          <span 
+                            className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-200"
+                            title={`Producto vendido por ${p.vendor?.store_name || p.vendor?.company_name || 'Vendor'}`}
+                          >
+                            {p.vendor?.store_name || p.vendor?.company_name || 'Vendor Marketplace'}
+                          </span>
+                        ) : (
+                          <span 
+                            className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-100"
+                            title="Producto propio de Collectibles"
+                          >
+                            COLLECTIBLES
+                          </span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'stock'}); setInlineValue(p.variants?.[0]?.inventory_count || 0); }}>
                          {inlineEdit?.id === p.id && inlineEdit.field === 'stock' ? (
                             <input autoFocus type="number" className="w-16 p-1 border rounded text-xs font-bold text-center" value={inlineValue} onChange={e => setInlineValue(e.target.value)} onBlur={() => handleInlineUpdate(p.id, 'stock', inlineValue)} onKeyDown={e => e.key === 'Enter' && handleInlineUpdate(p.id, 'stock', inlineValue)} onClick={e => e.stopPropagation()} />
@@ -1168,7 +1240,7 @@ export default function AdminProducts() {
                           <button onClick={(e) => handleDuplicate(p, e)} className="text-gray-500 hover:text-blue-600 transition-colors" title="Duplicar producto">
                              <Copy className="w-4 h-4" />
                           </button>
-                          <button onClick={(e) => { e.stopPropagation(); handleDelete(p.id); }} className="text-red-400 hover:text-red-600 transition-colors" title="Eliminar producto">
+                          <button onClick={(e) => { e.stopPropagation(); handleDelete(p); }} className="text-red-400 hover:text-red-600 transition-colors" title="Eliminar producto">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
@@ -1288,7 +1360,7 @@ export default function AdminProducts() {
                                 Datos de Mercado Libre (Solo lectura)
                              </h4>
                              <p className="text-xs text-blue-100 max-w-lg">Este producto está vinculado a una publicación de Mercado Libre. La sincronización automática actualizará el stock y los precios según tus reglas.</p>
-                             <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-4 text-xs font-mono bg-blue-700/50 p-4 rounded-lg">
+                            <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-4 text-xs font-mono bg-blue-700/50 p-4 rounded-lg">
                                 <div><span className="opacity-50">ID Item:</span> {editing.ml_item_id}</div>
                                 <div><span className="opacity-50">Estado ML:</span> {editing.metadata?.ml_status || 'Active'}</div>
                                 <div><span className="opacity-50">Vendidos:</span> {editing.metadata?.sold_quantity || 0}</div>
@@ -1300,6 +1372,28 @@ export default function AdminProducts() {
 
                     {/* Sidebar Widgets (Right) */}
                     <div className="lg:col-span-1 space-y-6">
+                       
+                       {/* WIDGET: VENDEDOR / PROPIEDAD */}
+                       <SidebarWidget title="Vendedor / Propiedad">
+                          <div className="space-y-2">
+                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Vendido por</label>
+                             <select 
+                               className="w-full border-gray-200 border rounded p-2 text-xs font-bold bg-white outline-none focus:border-blue-500"
+                               value={form.vendor_id}
+                               onChange={e => setForm({ ...form, vendor_id: e.target.value })}
+                             >
+                               <option value="platform">Collectibles (Propio)</option>
+                               {vendors.map(v => (
+                                 <option key={v.id} value={v.id}>{v.store_name || v.company_name || v.id}</option>
+                               ))}
+                             </select>
+                             <p className="text-[10px] text-gray-400 italic">
+                               {form.vendor_id === 'platform' 
+                                 ? 'Producto gestionado y vendido directamente por Collectibles.' 
+                                 : `Producto de la tienda marketplace ${vendors.find(v => v.id === form.vendor_id)?.store_name || 'Vendor'}.`}
+                             </p>
+                          </div>
+                       </SidebarWidget>
                        
                        {/* WIDGET: PUBLICAR */}
                        <SidebarWidget title="Publicar">
