@@ -1,7 +1,7 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import { ShoppingCart, Minus, Plus, Star, ChevronDown, Heart, Zap } from 'lucide-react';
-import { useProduct, useProductBuyBox, useProducts, getProductGroupBadge } from '../hooks/useData';
+import { useProduct, useProductBuyBox, useProducts, getProductGroupBadge, getAllProductGroupBadges } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
 import { useInternationalCartContext } from '../contexts/InternationalCartContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -312,17 +312,25 @@ export default function ProductDetail() {
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
           >
-            {groupBadge && (
-              <div className="absolute top-5 left-5 z-20 w-16 h-16 pointer-events-none drop-shadow-md select-none">
-                <img
-                  src={groupBadge.url}
-                  alt={groupBadge.alt}
-                  draggable={false}
-                  onDragStart={handleDragStart}
-                  className="w-full h-full object-contain img-protected"
-                />
-              </div>
-            )}
+            {(() => {
+              const groupBadges = getAllProductGroupBadges(product);
+              if (groupBadges.length === 0) return null;
+              return (
+                <div className="absolute top-5 left-5 z-20 flex flex-col gap-2 pointer-events-none drop-shadow-md select-none">
+                  {groupBadges.map((gb, idx) => (
+                    <div key={`${gb.url}-${idx}`} className="w-16 h-16">
+                      <img
+                        src={gb.url}
+                        alt={gb.alt}
+                        draggable={false}
+                        onDragStart={handleDragStart}
+                        className="w-full h-full object-contain img-protected"
+                      />
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
             <img
               src={displayImage}
               alt={product.title}

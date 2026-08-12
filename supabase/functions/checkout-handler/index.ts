@@ -92,11 +92,34 @@ Deno.serve(async (req: any) => {
 
     const { data: products, error: prodErr } = await supabase
       .from('products')
-      .select('id, price')
+      .select('id, price, product_group_items(group:product_groups(allowed_payment_providers, payment_method_restriction, is_active))')
       .in('id', productIds);
 
     if (prodErr || !products) {
       throw new Error('No se pudieron verificar los precios de los productos.');
+    }
+
+    // Server-side payment restrictions verification
+    let allowedProvidersIntersection: string[] | null = null;
+    for (const p of products) {
+      const items = (p.product_group_items || []) as any[];
+      const activeGroups = items.map(i => i.group).filter(g => g && g.is_active);
+      for (const g of activeGroups) {
+        if (Array.isArray(g.allowed_payment_providers) && g.allowed_payment_providers.length > 0) {
+          if (allowedProvidersIntersection === null) {
+            allowedProvidersIntersection = [...g.allowed_payment_providers];
+          } else {
+            allowedProvidersIntersection = allowedProvidersIntersection.filter(prov => g.allowed_payment_providers.includes(prov));
+          }
+        }
+      }
+    }
+
+    if (allowedProvidersIntersection !== null && !allowedProvidersIntersection.includes(payload.payment_method)) {
+      return new Response(JSON.stringify({ error: `El método de pago ${payload.payment_method} no está autorizado para uno o más productos de este pedido.` }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
 
     // Build price lookup: variant price > product price

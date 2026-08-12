@@ -78,6 +78,36 @@ serve(async (req: Request) => {
       throw new Error("La orden no tiene items para procesar el pago.");
     }
 
+    // Verify payment provider restrictions
+    const productIds = safeOrderItems.map((item: any) => item.product_id).filter(Boolean);
+    if (productIds.length > 0) {
+      const { data: dbProducts } = await supabaseAdmin
+        .from("products")
+        .select("id, product_group_items(group:product_groups(allowed_payment_providers, is_active))")
+        .in("id", productIds);
+
+      if (dbProducts) {
+        let allowedProvidersIntersection: string[] | null = null;
+        for (const p of dbProducts) {
+          const items = (p.product_group_items || []) as any[];
+          const activeGroups = items.map(i => i.group).filter(g => g && g.is_active);
+          for (const g of activeGroups) {
+            if (Array.isArray(g.allowed_payment_providers) && g.allowed_payment_providers.length > 0) {
+              if (allowedProvidersIntersection === null) {
+                allowedProvidersIntersection = [...g.allowed_payment_providers];
+              } else {
+                allowedProvidersIntersection = allowedProvidersIntersection.filter(prov => g.allowed_payment_providers.includes(prov));
+              }
+            }
+          }
+        }
+
+        if (allowedProvidersIntersection !== null && !allowedProvidersIntersection.includes(provider)) {
+          throw new Error(`El proveedor de pago ${provider} no está permitido para uno o más productos de esta orden.`);
+        }
+      }
+    }
+
     const amount = Number(order.total_amount);
     if (!Number.isFinite(amount) || amount <= 0) {
       throw new Error("INVALID_CHECKOUT_TOTAL: La orden no tiene un total valido para cobrar.");

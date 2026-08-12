@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { ChevronRight, ChevronLeft, ChevronDown, Truck, Store, Tag, Sparkles, X, Home, Ticket, Share2, Clock, AlertCircle, MapPin, Building2, Search, Check, Trash2, Plus, Minus, XCircle, RefreshCcw, Info, CheckCircle, AlertTriangle, Package } from 'lucide-react';
 import { useCartContext } from '../contexts/CartContext';
 import { useCurrency } from '../contexts/CurrencyContext';
@@ -12,6 +12,7 @@ import { createCheckoutOrder, getPublicPaymentProviders, startCheckoutPayment, t
 import { URUGUAY_LOCATIONS, DEPARTAMENTOS, calculateShipping, isLocationInSoyDeliveryZone, isSoyDeliveryAvailableForVendor } from '../utils/uruguayLocations';
 import { getProductImage, resolveImage } from '../lib/imageUtils';
 import { usePromotions, evaluateItemDiscount, evaluateItemDiscountDetailed } from '../hooks/usePromotions';
+import { getProductPaymentRestrictions } from '../hooks/useData';
 import { trackGA4Event, trackClarityEvent, mapCartItemsToGA4 } from '../lib/analyticsTracker';
 import { resolveCartItemPrice } from '../lib/priceResolver';
 import { generateMetaEventId, trackInitiateCheckout, trackAddPaymentInfo } from '../lib/meta/metaPixel';
@@ -170,6 +171,70 @@ export default function Checkout() {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'mercadopago' | 'dlocalgo' | 'paypal' | 'handy'>('mercadopago');
   const prevPaymentMethodRef = useRef(paymentMethod);
+
+  // ═══ Payment restrictions intersection for all cart items ═══
+  const cartPaymentRules = useMemo(() => {
+    if (!items || items.length === 0) {
+      return {
+        allowedProviders: ['mercadopago', 'dlocalgo', 'paypal', 'handy'],
+        restrictionType: 'all',
+        hasConflict: false,
+        itemRules: []
+      };
+    }
+
+    let intersectionProviders: string[] | null = null;
+    let overallRestriction = 'all';
+    const itemRules: { id: string; title: string; providers: string[] | null; restriction: string }[] = [];
+
+    for (const item of items) {
+      const prod = item.product || item;
+      const { allowedProviders, restrictionType } = getProductPaymentRestrictions(prod);
+      itemRules.push({
+        id: prod.id || item.id,
+        title: prod.title || item.title || 'Producto',
+        providers: allowedProviders,
+        restriction: restrictionType
+      });
+
+      if (allowedProviders !== null) {
+        if (intersectionProviders === null) {
+          intersectionProviders = [...allowedProviders];
+        } else {
+          intersectionProviders = intersectionProviders.filter(p => allowedProviders.includes(p));
+        }
+      }
+
+      if (restrictionType === 'transfer_only') {
+        overallRestriction = 'transfer_only';
+      } else if (restrictionType === 'cards_only' && overallRestriction !== 'transfer_only') {
+        overallRestriction = 'cards_only';
+      }
+    }
+
+    const finalProviders = intersectionProviders !== null
+      ? intersectionProviders
+      : ['mercadopago', 'dlocalgo', 'paypal', 'handy'];
+
+    const hasConflict = finalProviders.length === 0;
+
+    return {
+      allowedProviders: finalProviders,
+      restrictionType: overallRestriction,
+      hasConflict,
+      itemRules
+    };
+  }, [items]);
+
+  // Auto-switch payment method if current is disallowed by cart restrictions
+  useEffect(() => {
+    if (!cartPaymentRules.hasConflict && cartPaymentRules.allowedProviders.length > 0) {
+      if (!cartPaymentRules.allowedProviders.includes(paymentMethod)) {
+        setPaymentMethod(cartPaymentRules.allowedProviders[0] as any);
+      }
+    }
+  }, [cartPaymentRules, paymentMethod]);
+
   useEffect(() => {
     if (paymentMethod && paymentMethod !== prevPaymentMethodRef.current) {
       trackClarityEvent('payment_method_selected');
@@ -3889,51 +3954,90 @@ export default function Checkout() {
             {/* ═══════════════════════════════════════════════════════════ */}
             {currentStep === 3 && (
               <div className="checkout-step-content" key="step-3">
-                <div className="bg-neutral-900/90 border border-neutral-800 rounded-2xl p-6 shadow-xl">
-                  <CheckoutSectionHeader
-                    title="Elegí cómo querés pagar"
-                    subtitle="Seleccioná tu pasarela o método de pago preferido para confirmar la compra."
-                  />
-                  <div className="space-y-3">
-                    {mercadopagoEnabled && (
-                      <PaymentMethodCard
-                        id="mercadopago"
-                        title="Mercado Pago"
-                        description="Pagá de forma segura con tarjetas de crédito, débito o dinero en cuenta."
-                        badge="RECOMENDADO"
-                        isSelected={paymentMethod === 'mercadopago'}
-                        onSelect={() => setPaymentMethod('mercadopago')}
-                      />
-                    )}
-                    {dlocalgoEnabled && (
-                      <PaymentMethodCard
-                        id="dlocalgo"
-                        title="Tarjetas y Redes de Cobranza (dLocal)"
-                        description="OCA, Visa, Mastercard, Diners, Lider, Abitab y Redpagos."
-                        isSelected={paymentMethod === 'dlocalgo'}
-                        onSelect={() => setPaymentMethod('dlocalgo')}
-                      />
-                    )}
-                    {paypalEnabled && (
-                      <PaymentMethodCard
-                        id="paypal"
-                        title="PayPal"
-                        description="Pago internacional rápido y seguro en USD."
-                        isSelected={paymentMethod === 'paypal'}
-                        onSelect={() => setPaymentMethod('paypal')}
-                      />
-                    )}
-                    {handyEnabled && (
-                      <PaymentMethodCard
-                        id="handy"
-                        title="Handy Pago Directo"
-                        description="Pago con tarjetas locales y redes de cobranza."
-                        isSelected={paymentMethod === 'handy'}
-                        onSelect={() => setPaymentMethod('handy')}
-                      />
-                    )}
+                {cartPaymentRules.hasConflict ? (
+                  <div className="bg-red-500/10 border-2 border-red-500/30 rounded-2xl p-6 text-white space-y-4">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="w-6 h-6 text-red-500 flex-shrink-0 mt-1" />
+                      <div>
+                        <h3 className="font-bold text-lg text-red-400">Condiciones de pago incompatibles</h3>
+                        <p className="text-sm text-slate-300 mt-1">
+                          Los productos en tu carrito pertenecen a colecciones con restricciones de medio de pago incompatibles y no pueden comprarse juntos en la misma orden.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="bg-black/40 rounded-xl p-4 divide-y divide-white/10 text-xs space-y-2">
+                      {cartPaymentRules.itemRules.map((ir, idx) => (
+                        <div key={idx} className="pt-2 first:pt-0 flex justify-between items-center gap-4">
+                          <span className="font-medium text-slate-200 truncate">{ir.title}</span>
+                          <span className="font-bold text-amber-400 whitespace-nowrap">
+                            {ir.providers ? ir.providers.join(' + ').toUpperCase() : 'Todos los medios'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-2">
+                      <Link to="/cart" className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-xl text-xs font-bold text-white transition-colors">
+                        Volver al carrito para modificar productos
+                      </Link>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="bg-neutral-900/90 border border-neutral-800 rounded-2xl p-6 shadow-xl space-y-4">
+                    <CheckoutSectionHeader
+                      title="Elegí cómo querés pagar"
+                      subtitle="Seleccioná tu pasarela o método de pago preferido para confirmar la compra."
+                    />
+
+                    {cartPaymentRules.restrictionType !== 'all' && (
+                      <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-300 font-medium flex items-center gap-2">
+                        <Info className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                        <span>Restricción activa en tu pedido: {cartPaymentRules.restrictionType === 'cards_only' ? 'Solo tarjetas de crédito/débito permitidas' : 'Solo transferencia bancaria o redes de cobranza permitidas'}.</span>
+                      </div>
+                    )}
+
+                    <div className="space-y-3">
+                      {mercadopagoEnabled && cartPaymentRules.allowedProviders.includes('mercadopago') && (
+                        <PaymentMethodCard
+                          id="mercadopago"
+                          title="Mercado Pago"
+                          description="Pagá de forma segura con tarjetas de crédito, débito o dinero en cuenta."
+                          badge="RECOMENDADO"
+                          isSelected={paymentMethod === 'mercadopago'}
+                          onSelect={() => setPaymentMethod('mercadopago')}
+                        />
+                      )}
+                      {dlocalgoEnabled && cartPaymentRules.allowedProviders.includes('dlocalgo') && (
+                        <PaymentMethodCard
+                          id="dlocalgo"
+                          title="Tarjetas y Redes de Cobranza (dLocal)"
+                          description="OCA, Visa, Mastercard, Diners, Lider, Abitab y Redpagos."
+                          isSelected={paymentMethod === 'dlocalgo'}
+                          onSelect={() => setPaymentMethod('dlocalgo')}
+                        />
+                      )}
+                      {paypalEnabled && cartPaymentRules.allowedProviders.includes('paypal') && (
+                        <PaymentMethodCard
+                          id="paypal"
+                          title="PayPal"
+                          description="Pago internacional rápido y seguro en USD."
+                          isSelected={paymentMethod === 'paypal'}
+                          onSelect={() => setPaymentMethod('paypal')}
+                        />
+                      )}
+                      {handyEnabled && cartPaymentRules.allowedProviders.includes('handy') && (
+                        <PaymentMethodCard
+                          id="handy"
+                          title="Handy Pago Directo"
+                          description="Pago con tarjetas locales y redes de cobranza."
+                          isSelected={paymentMethod === 'handy'}
+                          onSelect={() => setPaymentMethod('handy')}
+                        />
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Bank promotions (relocated here under payment options) */}
                 {(paymentMethod === 'dlocalgo' || paymentMethod === 'mercadopago') && bankPromos.length > 0 && (

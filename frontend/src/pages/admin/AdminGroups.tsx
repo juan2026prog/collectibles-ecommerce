@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
-import { Layers, Plus, Trash2, Save, X, Search, GripVertical, Link2, Copy, Check, Upload } from 'lucide-react';
+import { Layers, Plus, Trash2, Save, X, Search, GripVertical, Link2, Copy, Check, Upload, CreditCard } from 'lucide-react';
 
 interface ProductGroup {
   id?: string;
@@ -17,6 +17,8 @@ interface ProductGroup {
   badge_storage_path?: string | null;
   badge_alt_text?: string | null;
   badge_updated_at?: string | null;
+  allowed_payment_providers?: string[] | null;
+  payment_method_restriction?: 'all' | 'cards_only' | 'transfer_only' | string;
 }
 
 interface VendorOption {
@@ -30,6 +32,7 @@ export default function AdminGroups() {
   const [groups, setGroups] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [vendors, setVendors] = useState<VendorOption[]>([]);
+  const [availableBadges, setAvailableBadges] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [editing, setEditing] = useState<ProductGroup | null>(null);
@@ -57,7 +60,7 @@ export default function AdminGroups() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  useEffect(() => { fetchGroups(); fetchProducts(); fetchVendors(); }, []);
+  useEffect(() => { fetchGroups(); fetchProducts(); fetchVendors(); fetchBadges(); }, []);
 
   async function fetchGroups() {
     setLoading(true);
@@ -69,6 +72,11 @@ export default function AdminGroups() {
   async function fetchVendors() {
     const { data } = await supabase.from('vendors').select('id, store_name, company_name').order('store_name');
     setVendors(data || []);
+  }
+
+  async function fetchBadges() {
+    const { data } = await supabase.from('badges').select('*').eq('is_active', true).order('sort_order');
+    setAvailableBadges(data || []);
   }
 
   async function fetchProducts() {
@@ -138,7 +146,9 @@ export default function AdminGroups() {
       badge_image_url: null,
       badge_storage_path: null,
       badge_alt_text: '',
-      badge_updated_at: null
+      badge_updated_at: null,
+      allowed_payment_providers: null,
+      payment_method_restriction: 'all'
     });
     setOriginalBadgePath(null);
     setSelectedProducts([]);
@@ -151,7 +161,9 @@ export default function AdminGroups() {
     setEditing({
       ...g,
       show_on_home: g.show_on_home !== false,
-      badge_alt_text: g.badge_alt_text || ''
+      badge_alt_text: g.badge_alt_text || '',
+      allowed_payment_providers: g.allowed_payment_providers || null,
+      payment_method_restriction: g.payment_method_restriction || 'all'
     });
     setOriginalBadgePath(g.badge_storage_path || null);
     setSelectedProducts((g.product_group_items || []).map((pi: any) => pi.product_id));
@@ -491,7 +503,34 @@ export default function AdminGroups() {
 
           {/* Cocarda del grupo o colección */}
           <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/50 space-y-4">
-            <h4 className="font-bold text-sm text-gray-800 uppercase tracking-wider">Cocarda de la grupo o colección</h4>
+            <div className="flex items-center justify-between">
+              <h4 className="font-bold text-sm text-gray-800 uppercase tracking-wider">Cocarda de la grupo o colección</h4>
+              {availableBadges.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 font-medium">Plantilla:</span>
+                  <select
+                    className="form-input text-xs font-bold py-1 px-2.5 bg-white border-gray-300"
+                    onChange={e => {
+                      const selected = availableBadges.find(b => b.id === e.target.value);
+                      if (selected) {
+                        setEditing(prev => prev ? {
+                          ...prev,
+                          badge_image_url: selected.custom_image || null,
+                          badge_alt_text: selected.label || '',
+                          badge_updated_at: new Date().toISOString()
+                        } : null);
+                      }
+                    }}
+                    defaultValue=""
+                  >
+                    <option value="" disabled>Seleccionar cocarda existente...</option>
+                    {availableBadges.map(b => (
+                      <option key={b.id} value={b.id}>{b.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Upload Zone */}
@@ -515,7 +554,7 @@ export default function AdminGroups() {
                   <div className="w-10 h-10 bg-primary-50 text-primary-600 rounded-full flex items-center justify-center mx-auto mb-2">
                     <Upload className="w-5 h-5" />
                   </div>
-                  <p className="text-xs font-bold text-gray-700">Arrastra o haz clic para subir cocarda</p>
+                  <p className="text-xs font-bold text-gray-700">Arrastra o haz clic para subir cocarda personalizada</p>
                   <p className="text-[10px] text-gray-400 mt-1">PNG o WebP · Máx. 1 MB</p>
                 </div>
                 
@@ -547,6 +586,12 @@ export default function AdminGroups() {
                       <div className="text-xs text-gray-300 text-center font-medium">Sin cocarda</div>
                     )}
                   </div>
+
+                  {editing.badge_image_url && selectedProducts.length > 0 && (
+                    <div className="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 p-2 rounded-lg leading-tight">
+                      ✨ {editing.badge_alt_text || editing.name || 'Cocarda'} → se aplicará automáticamente a los {selectedProducts.length.toLocaleString()} productos integrantes
+                    </div>
+                  )}
                   
                   {/* Status Messages */}
                   {badgeError && <p className="text-[11px] text-red-600 font-bold bg-red-50 border border-red-100 p-2 rounded-lg">{badgeError}</p>}
@@ -583,6 +628,92 @@ export default function AdminGroups() {
                       placeholder="Ej: Oferta Especial de Verano"
                     />
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Medios de Pago Habilitados para la Colección */}
+          <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/50 space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="font-bold text-sm text-gray-800 uppercase tracking-wider flex items-center gap-2">
+                <CreditCard className="w-4 h-4 text-primary-600" /> Medios de Pago Habilitados
+              </h4>
+              <span className="text-xs font-bold text-gray-500">Configuración por colección</span>
+            </div>
+
+            <div className="space-y-4 bg-white p-4 rounded-lg border border-gray-200">
+              <div>
+                <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-2">
+                  Pasarelas de Pago Permitidas
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { id: 'mercadopago', label: 'Mercado Pago', desc: 'Tarjetas, Dinero en cuenta' },
+                    { id: 'dlocalgo', label: 'dLocal Go', desc: 'Tarjetas, Redpagos, Abitab' },
+                    { id: 'paypal', label: 'PayPal', desc: 'Pagos en USD' },
+                    { id: 'handy', label: 'Handy', desc: 'Pago directo' }
+                  ].map(p => {
+                    const isChecked = !editing.allowed_payment_providers || editing.allowed_payment_providers.includes(p.id);
+                    return (
+                      <label key={p.id} className={`flex items-start gap-2 p-3 rounded-lg border cursor-pointer transition-all ${
+                        isChecked ? 'border-primary-500 bg-primary-50/20' : 'border-gray-200 bg-white opacity-60'
+                      }`}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            const current = editing.allowed_payment_providers;
+                            let next: string[] | null;
+                            if (!current) {
+                              next = ['mercadopago', 'dlocalgo', 'paypal', 'handy'].filter(x => x !== p.id);
+                            } else if (current.includes(p.id)) {
+                              next = current.filter(x => x !== p.id);
+                              if (next.length === 0 || next.length === 4) next = null;
+                            } else {
+                              next = [...current, p.id];
+                              if (next.length === 4) next = null;
+                            }
+                            setEditing({ ...editing, allowed_payment_providers: next });
+                          }}
+                          className="w-4 h-4 rounded text-primary-600 focus:ring-primary-500 mt-0.5"
+                        />
+                        <div>
+                          <p className="text-xs font-bold text-gray-800">{p.label}</p>
+                          <p className="text-[10px] text-gray-400">{p.desc}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-gray-100">
+                <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-2">
+                  Restricción de Métodos de Pago
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {[
+                    { id: 'all', label: 'Todos los métodos', desc: 'Sin restricciones adicionales' },
+                    { id: 'cards_only', label: 'Solo tarjetas', desc: 'Crédito y Débito únicamente' },
+                    { id: 'transfer_only', label: 'Solo transferencia / efectivo', desc: 'Transferencias o redes de cobranza' }
+                  ].map(r => (
+                    <label key={r.id} className={`flex items-start gap-2 p-3 rounded-lg border cursor-pointer transition-all ${
+                      (editing.payment_method_restriction || 'all') === r.id ? 'border-primary-500 bg-primary-50/20' : 'border-gray-200 bg-white'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="payment_restriction"
+                        checked={(editing.payment_method_restriction || 'all') === r.id}
+                        onChange={() => setEditing({ ...editing, payment_method_restriction: r.id as any })}
+                        className="w-4 h-4 text-primary-600 focus:ring-primary-500 mt-0.5"
+                      />
+                      <div>
+                        <p className="text-xs font-bold text-gray-800">{r.label}</p>
+                        <p className="text-[10px] text-gray-400">{r.desc}</p>
+                      </div>
+                    </label>
+                  ))}
                 </div>
               </div>
             </div>
@@ -819,6 +950,32 @@ export default function AdminGroups() {
                     <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest bg-blue-50 text-blue-600 border border-blue-100">
                       {g.type === 'manual' ? 'Manual' : 'Auto'}
                     </span>
+
+                    {/* Payment Restriction Badge Pill */}
+                    {(() => {
+                      const provs = g.allowed_payment_providers;
+                      const rest = g.payment_method_restriction;
+                      let text = 'TODOS LOS PAGOS';
+                      let badgeStyle = 'bg-slate-100 text-slate-700 border-slate-200';
+
+                      if (provs && provs.length > 0 && provs.length < 4) {
+                        text = provs.map((p: string) => p.toUpperCase()).join(' + ');
+                        badgeStyle = 'bg-[#f00856]/10 text-[#f00856] border-[#f00856]/20';
+                      }
+                      if (rest === 'cards_only') {
+                        text += ' (SOLO TARJETAS)';
+                        badgeStyle = 'bg-purple-100 text-purple-700 border-purple-200';
+                      } else if (rest === 'transfer_only') {
+                        text += ' (SOLO TRANSFERENCIA)';
+                        badgeStyle = 'bg-amber-100 text-amber-700 border-amber-200';
+                      }
+
+                      return (
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest border ${badgeStyle}`}>
+                          💳 {text}
+                        </span>
+                      );
+                    })()}
                   </div>
                   <p className="text-sm text-gray-500 mt-0.5">{g.description || 'Sin descripción'} · <span className="font-bold">{g.product_group_items?.length || 0} productos</span></p>
                   {g.is_active && (

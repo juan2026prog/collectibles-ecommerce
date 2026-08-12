@@ -189,7 +189,8 @@ export function useProducts(filters: ProductFilters = {}) {
         images:product_images(id, url, alt_text, is_primary),
         variants:product_variants(id, sku, price_adjustment, inventory_count),
         vendor:vendors(id, store_name, slug, logo_url),
-        vendor_store:vendor_stores(id, store_name, slug, logo_url, is_official)
+        vendor_store:vendor_stores(id, store_name, slug, logo_url, is_official),
+        product_group_items(group_id, group:product_groups(id, name, slug, is_active, sort_order, badge_image_url, badge_storage_path, badge_alt_text, allowed_payment_providers, payment_method_restriction))
         ${categoryId ? ', product_categories!inner(category_id)' : ''}
     `;
 
@@ -927,9 +928,15 @@ export function useStoreBadges(storeId: string | undefined) {
   return { badges, loading };
 }
 
-// Helper to resolve product group badge based on priority rules
+// Helper to resolve primary product group badge based on priority rules
 export function getProductGroupBadge(product: any) {
-  if (!product || !product.product_group_items) return null;
+  const badges = getAllProductGroupBadges(product);
+  return badges.length > 0 ? badges[0] : null;
+}
+
+// Helper to resolve all active product group badges (deduplicated by image URL)
+export function getAllProductGroupBadges(product: any) {
+  if (!product || !product.product_group_items) return [];
   const items = Array.isArray(product.product_group_items) ? product.product_group_items : [];
 
   // Find active group badges, filter by active status & presence of badge image, and sort by group sort_order ascending
@@ -938,12 +945,55 @@ export function getProductGroupBadge(product: any) {
     .filter((g: any) => g && g.is_active && g.badge_image_url)
     .sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
 
-  if (activeGroupBadges.length > 0) {
-    return {
-      url: activeGroupBadges[0].badge_image_url,
-      alt: activeGroupBadges[0].badge_alt_text || activeGroupBadges[0].name || 'Cocarda de colección',
-      groupName: activeGroupBadges[0].name
-    };
+  const seenUrls = new Set<string>();
+  const badges: { url: string; alt: string; groupName: string }[] = [];
+
+  for (const g of activeGroupBadges) {
+    if (g.badge_image_url && !seenUrls.has(g.badge_image_url)) {
+      seenUrls.add(g.badge_image_url);
+      badges.push({
+        url: g.badge_image_url,
+        alt: g.badge_alt_text || g.name || 'Cocarda de colección',
+        groupName: g.name
+      });
+    }
   }
-  return null;
+
+  return badges;
+}
+
+// Helper to resolve payment restrictions from all active groups a product belongs to
+export function getProductPaymentRestrictions(product: any) {
+  if (!product || !product.product_group_items) {
+    return { allowedProviders: null, restrictionType: 'all' };
+  }
+  const items = Array.isArray(product.product_group_items) ? product.product_group_items : [];
+  const activeGroups = items.map((item: any) => item.group).filter((g: any) => g && g.is_active);
+
+  if (activeGroups.length === 0) {
+    return { allowedProviders: null, restrictionType: 'all' };
+  }
+
+  let allowedProviders: string[] | null = null;
+  let restrictionType = 'all';
+
+  for (const g of activeGroups) {
+    // Intersect allowed payment providers
+    if (Array.isArray(g.allowed_payment_providers) && g.allowed_payment_providers.length > 0) {
+      if (allowedProviders === null) {
+        allowedProviders = [...g.allowed_payment_providers];
+      } else {
+        allowedProviders = allowedProviders.filter(p => g.allowed_payment_providers.includes(p));
+      }
+    }
+
+    // Precedence: transfer_only > cards_only > all
+    if (g.payment_method_restriction === 'transfer_only') {
+      restrictionType = 'transfer_only';
+    } else if (g.payment_method_restriction === 'cards_only' && restrictionType !== 'transfer_only') {
+      restrictionType = 'cards_only';
+    }
+  }
+
+  return { allowedProviders, restrictionType };
 }

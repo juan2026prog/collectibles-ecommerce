@@ -7,7 +7,7 @@ import { useWishlistContext } from '../contexts/WishlistContext';
 import { useAdminMode } from '../contexts/AdminModeContext';
 import { useLocale } from '../contexts/LocaleContext';
 import { trackGA4Event } from '../lib/analyticsTracker';
-import { getProductGroupBadge } from '../hooks/useData';
+import { getProductGroupBadge, getAllProductGroupBadges } from '../hooks/useData';
 import { useImageProtection } from '../hooks/useImageProtection';
 
 interface ProductGridCardProps {
@@ -104,18 +104,23 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
           <Heart className={`w-4 h-4 transition-colors ${isInWishlist(product.id) ? 'fill-[#f00856] text-[#f00856]' : 'text-white/70 group-hover:text-white'}`} />
         </button>
 
-        {/* Cocarda del Grupo/Colección */}
+        {/* Cocardas de Grupo/Colección Heredadas */}
         {(() => {
-          const groupBadge = getProductGroupBadge(product);
-          return groupBadge && (
-            <div className="absolute top-12 left-2 z-20 w-10 h-10 md:w-12 md:h-12 pointer-events-none drop-shadow-md select-none">
-              <img
-                src={groupBadge.url}
-                alt={groupBadge.alt}
-                draggable={false}
-                onDragStart={handleDragStart}
-                className="w-full h-full object-contain img-protected"
-              />
+          const groupBadges = getAllProductGroupBadges(product);
+          if (groupBadges.length === 0) return null;
+          return (
+            <div className="absolute top-12 left-2 z-20 flex flex-col gap-1 pointer-events-none drop-shadow-md select-none">
+              {groupBadges.map((gb, idx) => (
+                <div key={`${gb.url}-${idx}`} className="w-10 h-10 md:w-12 md:h-12">
+                  <img
+                    src={gb.url}
+                    alt={gb.alt}
+                    draggable={false}
+                    onDragStart={handleDragStart}
+                    className="w-full h-full object-contain img-protected"
+                  />
+                </div>
+              ))}
             </div>
           );
         })()}
