@@ -18,12 +18,21 @@ interface ProductGroup {
   badge_updated_at?: string | null;
 }
 
+interface VendorOption {
+  id: string;
+  store_name: string;
+  company_name?: string;
+}
+
 export default function AdminGroups() {
   const [groups, setGroups] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [vendors, setVendors] = useState<VendorOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingProducts, setLoadingProducts] = useState(false);
   const [editing, setEditing] = useState<ProductGroup | null>(null);
   const [search, setSearch] = useState('');
+  const [filterVendor, setFilterVendor] = useState<string>('all');
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -46,7 +55,7 @@ export default function AdminGroups() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  useEffect(() => { fetchGroups(); fetchProducts(); }, []);
+  useEffect(() => { fetchGroups(); fetchProducts(); fetchVendors(); }, []);
 
   async function fetchGroups() {
     setLoading(true);
@@ -55,9 +64,51 @@ export default function AdminGroups() {
     setLoading(false);
   }
 
+  async function fetchVendors() {
+    const { data } = await supabase.from('vendors').select('id, store_name, company_name').order('store_name');
+    setVendors(data || []);
+  }
+
   async function fetchProducts() {
-    const { data } = await supabase.from('products').select('id, title, base_price, status').order('title');
-    setProducts(data || []);
+    setLoadingProducts(true);
+    try {
+      let allProducts: any[] = [];
+      let page = 0;
+      const pageSize = 500;
+      let hasMore = true;
+
+      while (hasMore) {
+        const from = page * pageSize;
+        const to = from + pageSize - 1;
+        const { data, error } = await supabase
+          .from('products')
+          .select('id, title, base_price, status, vendor_id, vendor:vendors(id, store_name, company_name), variants:product_variants(sku)')
+          .order('title')
+          .range(from, to);
+
+        if (error) {
+          console.error('Error fetching paginated products:', error);
+          break;
+        }
+
+        if (data && data.length > 0) {
+          allProducts = allProducts.concat(data);
+          if (data.length < pageSize) {
+            hasMore = false;
+          } else {
+            page++;
+          }
+        } else {
+          hasMore = false;
+        }
+      }
+
+      setProducts(allProducts);
+    } catch (err) {
+      console.error('Failed to load full products catalog:', err);
+    } finally {
+      setLoadingProducts(false);
+    }
   }
 
   // Client-side UUID generator to support folder structuring in Storage before database INSERT
@@ -320,9 +371,23 @@ export default function AdminGroups() {
     }
   };
 
-  const filteredProducts = products.filter(p =>
-    !search || p.title.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredProducts = products.filter(p => {
+    const vendorName = p.vendor?.store_name || p.vendor?.company_name || '';
+    const skuVal = p.variants?.[0]?.sku || '';
+    const matchesSearch = !search ||
+      p.title.toLowerCase().includes(search.toLowerCase()) ||
+      (skuVal && skuVal.toLowerCase().includes(search.toLowerCase())) ||
+      (vendorName && vendorName.toLowerCase().includes(search.toLowerCase()));
+
+    let matchesVendor = true;
+    if (filterVendor === 'platform') {
+      matchesVendor = !p.vendor_id;
+    } else if (filterVendor && filterVendor !== 'all') {
+      matchesVendor = p.vendor_id === filterVendor;
+    }
+
+    return matchesSearch && matchesVendor;
+  });
 
   const filteredGroups = groups.filter(g => {
     if (badgeFilter === 'with_badge') return !!g.badge_image_url;
@@ -496,23 +561,78 @@ export default function AdminGroups() {
           {/* Product Selector for manual type */}
           {editing.type === 'manual' && (
             <div className="border rounded-xl overflow-hidden bg-gray-50">
-              <div className="p-3 border-b bg-white">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input className="form-input pl-10 w-full text-sm" placeholder="Buscar productos para agregar..." value={search} onChange={e => setSearch(e.target.value)} />
+              <div className="p-3 border-b bg-white space-y-3">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      className="form-input pl-10 w-full text-sm"
+                      placeholder="Buscar por título, SKU o vendedor..."
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                    />
+                  </div>
+                  <select
+                    className="form-input text-xs font-bold bg-white text-gray-700 sm:w-56 border-gray-300"
+                    value={filterVendor}
+                    onChange={e => setFilterVendor(e.target.value)}
+                  >
+                    <option value="all">Todos los vendedores</option>
+                    <option value="platform">Collectibles</option>
+                    {vendors.map(v => (
+                      <option key={v.id} value={v.id}>
+                        {v.store_name || v.company_name || v.id}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <p className="text-xs text-gray-500 mt-2">{selectedProducts.length} productos seleccionados</p>
+
+                <div className="flex justify-between items-center text-xs text-gray-500 font-medium">
+                  <span className="font-bold text-slate-700">{selectedProducts.length} productos seleccionados</span>
+                  {loadingProducts && <span className="text-blue-600 animate-pulse font-bold">Cargando catálogo completo ({products.length} cargados)...</span>}
+                  {!loadingProducts && (
+                    <span className="text-gray-400">Mostrando {filteredProducts.length} de {products.length} productos</span>
+                  )}
+                </div>
               </div>
-              <div className="max-h-48 overflow-y-auto divide-y divide-gray-100">
-                {filteredProducts.map(p => (
-                  <label key={p.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-white cursor-pointer transition-colors">
-                    <input type="checkbox" checked={selectedProducts.includes(p.id)} onChange={() => {
-                      setSelectedProducts(prev => prev.includes(p.id) ? prev.filter(x => x !== p.id) : [...prev, p.id]);
-                    }} className="w-4 h-4 rounded" />
-                    <span className="text-sm font-medium text-gray-700 flex-1">{p.title}</span>
-                    <span className="text-xs font-bold text-gray-400">${p.base_price}</span>
-                  </label>
-                ))}
+
+              <div className="max-h-60 overflow-y-auto divide-y divide-gray-100">
+                {filteredProducts.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-gray-400 font-medium">
+                    No se encontraron productos que coincidan con la búsqueda y filtro.
+                  </div>
+                ) : (
+                  filteredProducts.map(p => (
+                    <label key={p.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-white cursor-pointer transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={selectedProducts.includes(p.id)}
+                        onChange={() => {
+                          setSelectedProducts(prev => prev.includes(p.id) ? prev.filter(x => x !== p.id) : [...prev, p.id]);
+                        }}
+                        className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{p.title}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {p.vendor_id ? (
+                            <span className="text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded">
+                              {p.vendor?.store_name || p.vendor?.company_name || 'Vendor Marketplace'}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-black uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded">
+                              COLLECTIBLES
+                            </span>
+                          )}
+                          {p.variants?.[0]?.sku && (
+                            <span className="text-[10px] font-mono text-gray-400">SKU: {p.variants[0].sku}</span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-xs font-black text-gray-700 whitespace-nowrap">UYU {p.base_price?.toLocaleString()}</span>
+                    </label>
+                  ))
+                )}
               </div>
             </div>
           )}
