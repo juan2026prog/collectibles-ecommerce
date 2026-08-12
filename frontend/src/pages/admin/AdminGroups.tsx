@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
+import { useConfirmModal } from '../../components/admin/ConfirmModal';
 import { Layers, Plus, Trash2, Save, X, Search, GripVertical, Link2, Copy, Check, Upload } from 'lucide-react';
 
 interface ProductGroup {
@@ -25,6 +26,7 @@ interface VendorOption {
 }
 
 export default function AdminGroups() {
+  const { confirm } = useConfirmModal();
   const [groups, setGroups] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [vendors, setVendors] = useState<VendorOption[]>([]);
@@ -337,7 +339,7 @@ export default function AdminGroups() {
   }
 
   async function deleteGroup(id: string) {
-    if (!confirm('¿Eliminar esta colección?')) return;
+    if (!(await confirm('¿Eliminar esta colección?', { danger: true }))) return;
     
     // Find the group to delete its badge from storage
     const groupToDelete = groups.find(x => x.id === id);
@@ -388,6 +390,56 @@ export default function AdminGroups() {
 
     return matchesSearch && matchesVendor;
   });
+
+  const visibleIds = useMemo(() => filteredProducts.map(p => p.id), [filteredProducts]);
+
+  const selectedVisibleCount = useMemo(() => {
+    return visibleIds.filter(id => selectedProducts.includes(id)).length;
+  }, [visibleIds, selectedProducts]);
+
+  const allVisibleSelected = visibleIds.length > 0 && selectedVisibleCount === visibleIds.length;
+  const someVisibleSelected = selectedVisibleCount > 0 && selectedVisibleCount < visibleIds.length;
+
+  const handleToggleMasterCheckbox = async () => {
+    if (visibleIds.length === 0) return;
+
+    if (allVisibleSelected) {
+      // Deselect ONLY the currently visible filtered products
+      setSelectedProducts(prev => prev.filter(id => !visibleIds.includes(id)));
+    } else {
+      // Select all visible filtered products (preserving any already selected product IDs)
+      if (visibleIds.length > 250) {
+        const ok = await confirm(
+          `Vas a seleccionar ${visibleIds.length.toLocaleString()} productos para esta colección. ¿Deseas continuar?`,
+          {
+            title: 'Selección Masiva Grande',
+            confirmText: `Seleccionar ${visibleIds.length.toLocaleString()} productos`,
+            cancelText: 'Cancelar'
+          }
+        );
+        if (!ok) return;
+      }
+
+      setSelectedProducts(prev => Array.from(new Set([...prev, ...visibleIds])));
+    }
+  };
+
+  const handleClearAllSelected = async () => {
+    if (selectedProducts.length === 0) return;
+    if (selectedProducts.length > 50) {
+      const ok = await confirm(
+        `¿Deseas eliminar los ${selectedProducts.length.toLocaleString()} productos seleccionados de esta colección?`,
+        {
+          title: 'Limpiar Selección',
+          danger: true,
+          confirmText: 'Limpiar selección',
+          cancelText: 'Cancelar'
+        }
+      );
+      if (!ok) return;
+    }
+    setSelectedProducts([]);
+  };
 
   const filteredGroups = groups.filter(g => {
     if (badgeFilter === 'with_badge') return !!g.badge_image_url;
@@ -587,12 +639,51 @@ export default function AdminGroups() {
                   </select>
                 </div>
 
-                <div className="flex justify-between items-center text-xs text-gray-500 font-medium">
-                  <span className="font-bold text-slate-700">{selectedProducts.length} productos seleccionados</span>
-                  {loadingProducts && <span className="text-blue-600 animate-pulse font-bold">Cargando catálogo completo ({products.length} cargados)...</span>}
-                  {!loadingProducts && (
-                    <span className="text-gray-400">Mostrando {filteredProducts.length} de {products.length} productos</span>
-                  )}
+                {/* Master Checkbox & Selection Stats Bar */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-gray-100 text-xs">
+                  <div className="flex items-center gap-2">
+                    {filteredProducts.length > 0 ? (
+                      <label className="flex items-center gap-2 cursor-pointer select-none font-bold text-gray-800 hover:text-primary-600 transition-colors">
+                        <input
+                          type="checkbox"
+                          ref={(el) => {
+                            if (el) el.indeterminate = someVisibleSelected;
+                          }}
+                          checked={allVisibleSelected}
+                          onChange={handleToggleMasterCheckbox}
+                          className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 cursor-pointer"
+                        />
+                        <span>
+                          {allVisibleSelected
+                            ? `${filteredProducts.length.toLocaleString()} resultados seleccionados`
+                            : `Seleccionar los ${filteredProducts.length.toLocaleString()} resultados`}
+                        </span>
+                      </label>
+                    ) : (
+                      <span className="text-gray-400 font-medium">Sin resultados para seleccionar</span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-3 font-medium">
+                    <span className="font-bold text-slate-800 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+                      {selectedProducts.length.toLocaleString()} seleccionados en total
+                    </span>
+                    {selectedProducts.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleClearAllSelected}
+                        className="text-red-600 hover:text-red-800 font-bold hover:underline transition-colors"
+                        title="Eliminar todos los productos seleccionados de esta colección"
+                      >
+                        Limpiar selección
+                      </button>
+                    )}
+                    {loadingProducts && (
+                      <span className="text-blue-600 animate-pulse font-bold ml-1">
+                        Cargando catálogo...
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 

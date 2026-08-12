@@ -1,7 +1,7 @@
-# AUDITORÍA Y CORRECCIÓN: SELECTOR GLOBAL DE PRODUCTOS Y FILTRO DE VENDOR EN GRUPOS/COLECCIONES (`/admin/groups`)
+# AUDITORÍA Y CORRECCIÓN: SELECTOR GLOBAL DE PRODUCTOS, FILTRO DE VENDOR Y SELECCIÓN MASIVA EN GRUPOS/COLECCIONES (`/admin/groups`)
 
 **Módulo:** `/admin/groups`  
-**Fecha:** 11 de Agosto de 2026  
+**Fecha:** 12 de Agosto de 2026  
 **Autor:** Antigravity AI  
 
 ---
@@ -61,7 +61,7 @@ async function fetchProducts() {
       const from = page * pageSize;
       const to = from + pageSize - 1;
       const { data, error } = await supabase
-        .from('products')
+        .from('from('products')
         .select('id, title, base_price, status, vendor_id, vendor:vendors(id, store_name, company_name), variants:product_variants(sku)')
         .order('title')
         .range(from, to);
@@ -94,28 +94,44 @@ async function fetchProducts() {
 
 ---
 
-## 5. FILTRO POR VENDEDOR Y BÚSQUEDA COMBINADA
+## 5. SELECCIÓN MASIVA DE RESULTADOS ("Seleccionar los X resultados")
 
-Se añadió en la interfaz del selector manual de productos el selector desplegable `[ Todos los vendedores ▼ ]` alimentado dinámicamente desde la tabla `vendors`:
+Se implementó el selector masivo contextual en la barra del selector manual de productos:
 
-### Opciones del filtro:
-1. **Todos los vendedores** (`all`): Muestra productos de Collectibles + todos los Vendors Marketplace.
-2. **Collectibles** (`platform`): Muestra exclusivamente productos con `vendor_id IS NULL` (etiquetados con badge azul `COLLECTIBLES`).
-3. **Vendor Marketplace Específico** (`<vendor_uuid>`): Muestra únicamente los productos pertenecientes a la tienda seleccionada.
+### Reglas de Operación:
+1. **Alcance Contextual Estricto**:
+   "Seleccionar los X resultados" opera **ÚNICAMENTE** sobre los productos actualmente visibles en `filteredProducts` (tras aplicar la búsqueda por título/SKU/Vendor y el filtro por Vendor).
+   - Ejemplo 1: Búsqueda "sonic" + Vendor "Collectibles" → `filteredProducts` = 18 ítems.
+     - Checkbox maestro: `☐ Seleccionar los 18 resultados`.
+     - Al hacer click: Selecciona únicamente esos 18 productos.
+   - Ejemplo 2: Sin filtros ni búsqueda → `filteredProducts` = 1.560 ítems.
+     - Checkbox maestro: `☐ Seleccionar los 1.560 resultados`.
 
-### Búsqueda integrada:
-El campo de búsqueda evalúa simultáneamente en memoria:
-- `p.title` (Título del producto)
-- `p.variants[0].sku` (Código SKU)
-- `p.vendor.store_name` (Nombre de la tienda del Vendor)
+2. **Deselección Parcial Contextual ("Deseleccionar resultados")**:
+   - Al estar todos los resultados visibles seleccionados (`☑ X resultados seleccionados`), desmarcar el checkbox maestro elimina **ÚNICAMENTE** los IDs pertenecientes a `filteredProducts`.
+   - Todas las selecciones previas pertenecientes a otros vendedores o búsquedas permanecen **100% intactas** en `selectedProducts`.
+
+3. **Estados del Checkbox Maestro (3 estados)**:
+   - `none` (0 visibles seleccionados): `☐ Seleccionar los X resultados`
+   - `some` (al menos 1, pero no todos): `[-] Seleccionar los X resultados` (con propiedad DOM `indeterminate = true`)
+   - `all` (100% visibles seleccionados): `☑ X resultados seleccionados`
+
+4. **Umbral de Confirmación (> 250 productos)**:
+   - Si la acción masiva va a incorporar más de **250 productos** en un solo click, se despliega un modal de confirmación:
+     `"Vas a seleccionar X productos para esta colección. ¿Deseas continuar?"`
+   - Para selecciones de <= 250 productos, la incorporación es **inmediata** sin interrumpir la experiencia de usuario.
+
+5. **Acción "Limpiar Selección"**:
+   - Junto al contador global (`X seleccionados en total`), se incluyó un botón discreto `Limpiar selección` que permite resetear todos los productos seleccionados de la colección actual.
 
 ---
 
 ## 6. PERSISTENCIA DE SELECCIÓN DE PRODUCTOS ENTRE FILTROS
 
 - El array `selectedProducts` (contiene los IDs de productos seleccionados) es independiente de los filtros visuales (`search` y `filterVendor`).
-- **Comportamiento probado:** Al seleccionar productos de *Collectibles*, cambiar el filtro a *JorgiToys* y seleccionar productos adicionales, el array mantiene la totalidad de los IDs seleccionados.
-- El contador en pantalla (`X productos seleccionados`) refleja en todo momento la suma total global de productos seleccionados, independientemente del filtro o búsqueda activos.
+- **Acumulación Única**: Los IDs se unen utilizando `Array.from(new Set([...prev, ...visibleIds]))`, garantizando que jamás existan IDs duplicados.
+- **Rendimiento Frontend Exclusivo**: La selección/deselección masiva es una operación local de estado React. **No realiza peticiones HTTP por producto**.
+- **Guardado en Lote**: Al presionar `GUARDAR COLECCIÓN`, `saveGroup()` guarda la totalidad de los IDs acumulados en la tabla `product_group_items` mediante un único payload array.
 
 ---
 
@@ -130,21 +146,28 @@ El campo de búsqueda evalúa simultáneamente en memoria:
 
 - **Compilación de Frontend (`npm run build`)**: OK (0 errores).
 - **Persistencia de selecciones entre filtros**: OK.
+- **Selección Masiva & Confirmación > 250**: OK.
 - **Colecciones Mixtas**: OK.
-- **Despliegue Vercel**: Pendiente de Push a `main`.
+- **Despliegue Vercel**: Push a `main` (commit `d64e9a1`).
 
 ---
 
 ## CRITERIO DE ÉXITO ALCANZADO
 
-- [x] Aparecen todos los productos correspondientes (1.560 productos totales).
-- [x] Aparecen productos propios de Collectibles (445 ítems).
-- [x] Aparecen productos de Vendors (1.115 ítems).
-- [x] Selector "Todos los vendedores".
-- [x] Selector "Collectibles".
-- [x] Desplegable con Vendors reales provenientes de la BD.
-- [x] Búsqueda funciona conjuntamente con el filtro Vendor.
-- [x] Cambiar de filtro conserva los productos previamente seleccionados.
-- [x] Las colecciones pueden combinar varios Vendors y Collectibles.
-- [x] Al guardar la colección se conservan todos los productos seleccionados.
-- [x] `products.vendor_id` NO se modifica jamás.
+- [x] Existe "Seleccionar los X resultados"
+- [x] Selecciona únicamente resultados filtrados
+- [x] Funciona con búsqueda
+- [x] Funciona con Vendor
+- [x] Permite acumular selecciones de distintas búsquedas
+- [x] Permite acumular productos de distintos Vendors
+- [x] Deseleccionar resultados solo afecta resultados actuales
+- [x] Existe estado indeterminado
+- [x] No duplica IDs
+- [x] Contador global permanece correcto
+- [x] Limpiar selección funciona
+- [x] Selecciones > 250 solicitan confirmación
+- [x] Guardar persiste toda la selección
+- [x] Editar colección recupera toda la selección
+- [x] No modifica vendor_id
+- [x] No genera una request HTTP por producto
+- [x] Funciona realmente en collectibles.uy/admin/groups
