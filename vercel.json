@@ -37,6 +37,10 @@
       "destination": "/api/sitemap"
     },
     {
+      "source": "/meta-catalog.csv",
+      "destination": "/api/meta-catalog"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
