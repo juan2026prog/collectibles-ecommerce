@@ -41,6 +41,10 @@
       "destination": "/api/meta-catalog"
     },
     {
+      "source": "/catalog-images/(.*)",
+      "destination": "/api/catalog-image?path=$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

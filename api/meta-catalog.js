@@ -5,7 +5,6 @@ const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLI
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const SUPABASE_STORAGE_BUCKET = 'product-images';
 const BASE_SITE_URL = 'https://collectibles.uy';
 
 /**
@@ -21,23 +20,41 @@ function cleanText(text) {
 }
 
 /**
- * Resolves product image paths to full public HTTPS URLs.
+ * Resolves product image paths to public HTTPS URLs served by the first-party catalog-images proxy.
  */
 function resolveImageUrl(imgUrl) {
   if (!imgUrl || typeof imgUrl !== 'string') return '';
   const trimmed = imgUrl.trim();
   if (!trimmed) return '';
-  
-  if (/^(https?:\/\/)/.test(trimmed)) {
+
+  if (trimmed.startsWith('https://collectibles.uy/catalog-images/')) {
     return trimmed;
   }
+
+  if (trimmed.includes('cobtsgkwcftvexaarwmo.supabase.co/storage/v1/object/public/')) {
+    const pathPart = trimmed.split('/storage/v1/object/public/')[1];
+    return `${BASE_SITE_URL}/catalog-images/${pathPart}`;
+  }
+
+  if (trimmed.includes('http2.mlstatic.com/')) {
+    const pathPart = trimmed.split('http2.mlstatic.com/')[1];
+    return `${BASE_SITE_URL}/catalog-images/external/http2.mlstatic.com/${pathPart}`;
+  }
+
+  if (/^(https?:\/\/)/.test(trimmed)) {
+    const withoutProtocol = trimmed.replace(/^https?:\/\//, '');
+    return `${BASE_SITE_URL}/catalog-images/external/${withoutProtocol}`;
+  }
+
   if (/^[a-f0-9-]{36}$/i.test(trimmed)) {
-    return `${supabaseUrl}/storage/v1/object/public/${SUPABASE_STORAGE_BUCKET}/${trimmed}`;
+    return `${BASE_SITE_URL}/catalog-images/product-images/${trimmed}`;
   }
-  if (!trimmed.startsWith('/')) {
-    return `${supabaseUrl}/storage/v1/object/public/${SUPABASE_STORAGE_BUCKET}/${trimmed}`;
+
+  if (trimmed.startsWith('/')) {
+    return `${BASE_SITE_URL}/catalog-images/product-images${trimmed}`;
   }
-  return `${supabaseUrl}/storage/v1/object/public/${SUPABASE_STORAGE_BUCKET}${trimmed}`;
+
+  return `${BASE_SITE_URL}/catalog-images/product-images/${trimmed}`;
 }
 
 /**
@@ -143,19 +160,34 @@ export default async function handler(req, res) {
           return (a.sort_order || 0) - (b.sort_order || 0);
         });
 
+        // Separate Supabase Storage images (Priority 1 & 2) from External images (Priority 3 & 4)
+        const supabaseCandidates = [];
+        const externalCandidates = [];
+
         sortedImages.forEach((img) => {
           const resolved = resolveImageUrl(img.url);
           if (resolved && resolved.startsWith('https://')) {
-            if (!mainImageUrl) {
-              mainImageUrl = resolved;
-            } else if (!additionalImages.includes(resolved) && resolved !== mainImageUrl) {
-              additionalImages.push(resolved);
+            const isSupabase = img.url.includes('supabase.co') || /^[a-f0-9-]{36}$/i.test(img.url) || !img.url.startsWith('http');
+            if (isSupabase) {
+              if (!supabaseCandidates.includes(resolved)) supabaseCandidates.push(resolved);
+            } else {
+              if (!externalCandidates.includes(resolved)) externalCandidates.push(resolved);
             }
+          }
+        });
+
+        const allCandidates = [...supabaseCandidates, ...externalCandidates];
+
+        allCandidates.forEach((imgUrl) => {
+          if (!mainImageUrl) {
+            mainImageUrl = imgUrl;
+          } else if (!additionalImages.includes(imgUrl) && imgUrl !== mainImageUrl) {
+            additionalImages.push(imgUrl);
           }
         });
       }
 
-      // Exclude products without a valid public HTTPS main image
+      // Exclude products without any valid main image (Requirement 7)
       if (!mainImageUrl) return;
 
       const totalInventory = (p.variants || []).reduce(
