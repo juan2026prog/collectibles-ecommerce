@@ -115,6 +115,35 @@ export default function ProductDetail() {
 
 
 
+  useEffect(() => {
+    if (product && viewTrackedRef.current !== product.id) {
+      viewTrackedRef.current = product.id;
+      const basePrice = Number(product.base_price || 0);
+      const metaEventId = generateMetaEventId('ViewContent', product.id);
+
+      trackViewContent(metaEventId, {
+        content_ids: [product.id],
+        content_name: product.title,
+        category: product.category?.name,
+        brand: product.brand?.name,
+        value: basePrice,
+        currency: 'UYU'
+      });
+
+      trackGA4Event('view_item', {
+        currency: 'UYU',
+        value: basePrice,
+        items: [{
+          item_id: String(product.id),
+          item_name: String(product.title),
+          item_brand: product.brand?.name || undefined,
+          item_category: product.category?.name || undefined,
+          price: basePrice
+        }]
+      });
+    }
+  }, [product]);
+
   if (productLoading) {
     return (
       <div className="max-w-[1500px] mx-auto px-6 py-20 flex justify-center items-center min-h-[50vh]">
@@ -167,35 +196,6 @@ export default function ProductDetail() {
   const displayOldPrice = basePriceWithVariant;
   const hasDiscount = promoResult.discount > 0;
   const discountPercent = hasDiscount ? Math.round((promoResult.discount / basePriceWithVariant) * 100) : 0;
-
-  useEffect(() => {
-    if (product && viewTrackedRef.current !== product.id) {
-      viewTrackedRef.current = product.id;
-      const effectivePrice = Number(finalPrice || product.base_price || 0);
-      const metaEventId = generateMetaEventId('ViewContent', product.id);
-
-      trackViewContent(metaEventId, {
-        content_ids: [product.id],
-        content_name: product.title,
-        category: product.category?.name,
-        brand: product.brand?.name,
-        value: effectivePrice,
-        currency: 'UYU'
-      });
-
-      trackGA4Event('view_item', {
-        currency: 'UYU',
-        value: effectivePrice,
-        items: [{
-          item_id: String(product.id),
-          item_name: String(product.title),
-          item_brand: product.brand?.name || undefined,
-          item_category: product.category?.name || undefined,
-          price: effectivePrice
-        }]
-      });
-    }
-  }, [product, finalPrice]);
 
   const images = Array.isArray(product.images) && product.images.length > 0
     ? [...product.images].sort((a: any, b: any) => (a.sort_order || a.position || 0) - (b.sort_order || b.position || 0))
