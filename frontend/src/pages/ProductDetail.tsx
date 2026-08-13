@@ -12,6 +12,7 @@ import { useLocale } from '../contexts/LocaleContext';
 import { resolveImage, FALLBACK_IMAGE } from '../lib/imageUtils';
 import { analytics } from '../lib/analytics';
 import { trackGA4Event } from '../lib/analyticsTracker';
+import { trackViewContent, generateMetaEventId } from '../lib/meta/metaPixel';
 import SEO from '../components/SEO';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { formatUSD } from '../lib/formatters';
@@ -112,36 +113,7 @@ export default function ProductDetail() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  useEffect(() => {
-    if (product) {
-      analytics.track({
-        eventName: 'ViewContent',
-        eventData: {
-          content_name: product.title,
-          content_ids: [product.id],
-          content_type: 'product',
-          value: product.base_price,
-          currency: 'UYU'
-        },
-        user: { email: user?.email || undefined }
-      });
-      
-      if (viewTrackedRef.current !== product.id) {
-        viewTrackedRef.current = product.id;
-        trackGA4Event('view_item', {
-          currency: 'UYU',
-          value: product.base_price,
-          items: [{
-            item_id: String(product.id),
-            item_name: String(product.title),
-            item_brand: product.brand?.name || undefined,
-            item_category: product.category?.name || undefined,
-            price: Number(product.base_price)
-          }]
-        });
-      }
-    }
-  }, [product, user]);
+
 
   if (productLoading) {
     return (
@@ -195,6 +167,35 @@ export default function ProductDetail() {
   const displayOldPrice = basePriceWithVariant;
   const hasDiscount = promoResult.discount > 0;
   const discountPercent = hasDiscount ? Math.round((promoResult.discount / basePriceWithVariant) * 100) : 0;
+
+  useEffect(() => {
+    if (product && viewTrackedRef.current !== product.id) {
+      viewTrackedRef.current = product.id;
+      const effectivePrice = Number(finalPrice || product.base_price || 0);
+      const metaEventId = generateMetaEventId('ViewContent', product.id);
+
+      trackViewContent(metaEventId, {
+        content_ids: [product.id],
+        content_name: product.title,
+        category: product.category?.name,
+        brand: product.brand?.name,
+        value: effectivePrice,
+        currency: 'UYU'
+      });
+
+      trackGA4Event('view_item', {
+        currency: 'UYU',
+        value: effectivePrice,
+        items: [{
+          item_id: String(product.id),
+          item_name: String(product.title),
+          item_brand: product.brand?.name || undefined,
+          item_category: product.category?.name || undefined,
+          price: effectivePrice
+        }]
+      });
+    }
+  }, [product, finalPrice]);
 
   const images = Array.isArray(product.images) && product.images.length > 0
     ? [...product.images].sort((a: any, b: any) => (a.sort_order || a.position || 0) - (b.sort_order || b.position || 0))

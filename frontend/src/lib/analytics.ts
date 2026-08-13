@@ -24,7 +24,7 @@ export const analytics = {
    */
   async track(event: AnalyticsEvent) {
     const eventId = `ev_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-    const pixelId = import.meta.env.VITE_META_PIXEL_ID;
+    const pixelId = import.meta.env.VITE_META_PIXEL_ID || '1623445247816011';
     const capiEnabled = import.meta.env.VITE_META_CAPI_ENABLED === 'true';
 
     // 1. Client-Side: Meta Pixel (FBQ)
