@@ -25,6 +25,9 @@ export default function AnalyticsProvider({ children }: { children: React.ReactN
   }, [pixelId]);
 
   const trackEvent = useCallback((eventName: string, params?: Record<string, any>) => {
+    // AddToCart is managed exclusively by CartContext via metaPixel.trackAddToCart with eventID deduplication
+    if (eventName === 'AddToCart') return;
+
     if ((window as any).fbq) {
       (window as any).fbq('track', eventName, params);
       if (import.meta.env.DEV) console.log(`[Analytics] Tracked Event: ${eventName}`, params);

@@ -596,20 +596,6 @@ export function useCart() {
     // Ensure the item always stores the price as a number type
     const safeItem = { ...item, price: numericPrice };
 
-    // 📊 Track Analytics (Non-blocking)
-    try {
-      if (typeof trackEvent === 'function') {
-        trackEvent('AddToCart', {
-          content_name: safeItem.title,
-          content_ids: [safeItem.product_id],
-          value: safeItem.price * safeItem.quantity,
-          currency: 'UYU'
-        });
-      }
-    } catch (err) {
-      console.warn('[Cart] Analytics failed, but item will be added:', err);
-    }
-
     setItems(prev => {
       const existing = prev.find(i => i.variant_id === safeItem.variant_id && i.vendor_id === safeItem.vendor_id);
       if (existing) {

@@ -47,6 +47,7 @@ export function initPixel(userData?: any) {
   }
 
   if (IS_DEBUG) console.log(`[Meta] Initializing Pixel ID: ${PIXEL_ID} with EMQ`, userData);
+  window.fbq('set', 'autoConfig', false, PIXEL_ID);
   window.fbq('init', PIXEL_ID, userData);
 
   window._metaPixelInitialized = true;
