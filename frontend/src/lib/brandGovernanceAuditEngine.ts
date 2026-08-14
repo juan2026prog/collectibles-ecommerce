@@ -69,14 +69,14 @@ export const KNOWN_LICENSES_LIST = [
 ];
 
 export const KNOWN_MANUFACTURERS_MAP: Record<string, string[]> = {
-  'Hasbro': ['hasbro', 'kenner', 'marvel legends', 'star wars black series'],
-  'Funko': ['funko', 'funko pop', 'pop!'],
-  'Bandai': ['bandai', 'tamashii', 'tamashii nations', 'banpresto', 'sh figuarts', 's.h. figuarts', 'bandai spirits'],
-  'Mattel': ['mattel', 'hot wheels', 'barbie'],
+  'Hasbro': ['hasbro', 'kenner', 'marvel legends', 'star wars black series', 'the black series', 'black series'],
+  'Funko': ['funko', 'funko pop', 'pop!', 'pop'],
+  'Bandai': ['bandai', 'tamashii', 'tamashii nations', 'banpresto', 'sh figuarts', 's.h. figuarts', 'bandai spirits', 'figuarts'],
+  'Mattel': ['mattel', 'hot wheels', 'barbie', 'fisher-price'],
   'Takara Tomy': ['takara tomy', 'takaratomy', 'takara', 'tomy'],
   'Good Smile Company': ['good smile', 'gsc', 'goodsmile', 'nendoroid', 'good smile company'],
   'Kotobukiya': ['kotobukiya', 'koto', 'artfx'],
-  'McFarlane Toys': ['mcfarlane', 'mcfarlane toys'],
+  'McFarlane Toys': ['mcfarlane', 'mcfarlane toys', 'dc multiverse'],
   'NECA': ['neca'],
   'Super7': ['super7', 'ultimates', 'reaction'],
   'Iron Studios': ['iron studios'],
@@ -84,9 +84,11 @@ export const KNOWN_MANUFACTURERS_MAP: Record<string, string[]> = {
   'Mezco': ['mezco', 'mezco toyz'],
   'Jakks Pacific': ['jakks', 'jakks pacific'],
   'Jada Toys': ['jada', 'jada toys'],
-  'PhatMojo': ['phatmojo'],
+  'PhatMojo': ['phatmojo', 'phat mojo'],
   'Spin Master': ['spin master'],
-  'LEGO': ['lego']
+  'LEGO': ['lego'],
+  'Playmates': ['playmates'],
+  'Rubies': ['rubies', "rubie's"]
 };
 
 /**
@@ -198,7 +200,6 @@ export function auditProductUnified(
   let recommendedAction: RecommendedAction = 'KEEP';
 
   // ── Step 1: Detect License Signal ──
-  // Check if current brand IS a license (e.g. Marvel, Disney, Star Wars)
   let brandIsLicense = false;
   let matchedLicense = licenseNameMap.get(currentBrandLower);
 
@@ -281,26 +282,23 @@ export function auditProductUnified(
     }
   }
 
-  // Signal C: Title Keyword Match against Manufacturer Map
+  // Signal C: Title & Metadata Keyword Matches against Manufacturer Map
   if (!detectedMfrBrand) {
     for (const [mfrName, synonyms] of Object.entries(KNOWN_MANUFACTURERS_MAP)) {
-      const matchedInTitle = synonyms.some(syn => containsKeyword(title, syn));
-      const matchedInMl = (mlBrand && synonyms.some(syn => containsKeyword(mlBrand, syn))) ||
-                          (mlMfr && synonyms.some(syn => containsKeyword(mlMfr, syn)));
+      const matchedSynonymsInTitle = synonyms.filter(syn => containsKeyword(title, syn));
+      const matchedSynonymsInMl = (mlBrand ? synonyms.filter(syn => containsKeyword(mlBrand, syn)) : [])
+        .concat(mlMfr ? synonyms.filter(syn => containsKeyword(mlMfr, syn)) : []);
 
-      if (matchedInTitle || matchedInMl) {
+      const totalMatchedKeywords = matchedSynonymsInTitle.length + matchedSynonymsInMl.length;
+
+      if (totalMatchedKeywords > 0) {
         const dbMatch = brandNameMap.get(mfrName.toLowerCase()) ||
                         dbBrands.find(b => synonyms.some(syn => b.name.toLowerCase().includes(syn)));
         if (dbMatch) {
           detectedMfrBrand = dbMatch;
-          if (matchedInTitle) {
-            structuredSignalsCount += 1;
-            evidence.push(`TITLE_MANUFACTURER_MATCH:${dbMatch.name}`);
-          }
-          if (matchedInMl) {
-            structuredSignalsCount += 1;
-            evidence.push(`ML_MANUFACTURER_KEYWORD_MATCH:${dbMatch.name}`);
-          }
+          structuredSignalsCount += totalMatchedKeywords;
+          matchedSynonymsInTitle.forEach(syn => evidence.push(`TITLE_MANUFACTURER_MATCH:${syn}`));
+          matchedSynonymsInMl.forEach(syn => evidence.push(`ML_MANUFACTURER_MATCH:${syn}`));
           break;
         }
       }
@@ -368,7 +366,7 @@ export function auditProductUnified(
   } else if (classification === 'LICENSE_AS_BRAND' && !suggestedBrandId) {
     // License detected, but NO manufacturer found -> MANUAL_REVIEW, NEVER invent manufacturer
     recommendedAction = 'MANUAL_REVIEW';
-    reason += ' | No se detectó evidencia confiable del fabricante real. Se requiere revisión manual.';
+    reason += ' | No se detectó evidencia del fabricante real. Se requiere revisión manual sin inventar marca.';
   } else if (classification === 'GENERIC_BRAND' || classification === 'MISSING_BRAND') {
     recommendedAction = 'REQUIRES_VENDOR_ATTENTION';
   } else {

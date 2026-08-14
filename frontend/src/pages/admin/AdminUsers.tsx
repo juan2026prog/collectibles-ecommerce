@@ -70,7 +70,7 @@ export default function AdminUsers() {
           const v = vendorMap.get(p.id);
           const vs = vendorStoreMap.get(p.id);
 
-          // Canonical store name resolution: vendor_stores.store_name -> vendors.store_name -> '—'
+          // Canonical store name resolution: vendor_stores.store_name -> vendors.store_name -> 'Vendor sin nombre'
           let canonicalStoreName = '—';
           if (p.is_vendor) {
             canonicalStoreName = vs?.store_name || v?.store_name || 'Vendor sin nombre';
@@ -84,7 +84,7 @@ export default function AdminUsers() {
             can_request_categories: v?.can_request_categories ?? false,
             can_request_brands: v?.can_request_brands ?? false,
             can_request_licenses: v?.can_request_licenses ?? false,
-            vendor_status: v?.status || vs?.status || 'pending'
+            vendor_status: v?.status || vs?.status || 'active'
           };
         });
 
@@ -112,7 +112,7 @@ export default function AdminUsers() {
     if (role === 'is_vendor') {
       const u = users.find(usr => usr.id === userId);
       if (u) {
-        openVendorModal(u);
+        await openVendorModal(u);
         return;
       }
     }
@@ -129,7 +129,7 @@ export default function AdminUsers() {
     setSaving(null);
   }
 
-  function openVendorModal(u: any) {
+  async function openVendorModal(u: any) {
     const defaultStoreName = u.canonical_store_name !== '—'
       ? u.canonical_store_name
       : (u.first_name ? `${u.first_name} ${u.last_name || ''}`.trim() : 'Mi Tienda');
@@ -141,6 +141,26 @@ export default function AdminUsers() {
       canRequestBrands: u.can_request_brands ?? false,
       canRequestLicenses: u.can_request_licenses ?? false
     });
+
+    // Fetch real-time values from DB to guarantee accurate state
+    try {
+      const { data: vRecord } = await supabase
+        .from('vendors')
+        .select('store_name, can_request_categories, can_request_brands, can_request_licenses')
+        .eq('id', u.id)
+        .maybeSingle();
+
+      if (vRecord) {
+        setVendorModalForm({
+          storeName: vRecord.store_name || defaultStoreName,
+          canRequestCategories: !!vRecord.can_request_categories,
+          canRequestBrands: !!vRecord.can_request_brands,
+          canRequestLicenses: !!vRecord.can_request_licenses
+        });
+      }
+    } catch (e) {
+      // Fallback to local state if fetch fails
+    }
   }
 
   async function handleSaveVendorModal() {
@@ -150,7 +170,7 @@ export default function AdminUsers() {
       const userId = selectedVendorUser.id;
       const isNewVendor = !selectedVendorUser.is_vendor;
 
-      // 1. Update profile role if new vendor
+      // 1. Update profile role if turning into vendor
       if (isNewVendor) {
         const { error: profErr } = await supabase
           .from('profiles')
@@ -159,7 +179,7 @@ export default function AdminUsers() {
         if (profErr) throw profErr;
       }
 
-      // 2. Fetch existing vendor or prepare data
+      // 2. Fetch existing vendor record
       const { data: existingVendor } = await supabase
         .from('vendors')
         .select('*')
@@ -185,7 +205,7 @@ export default function AdminUsers() {
 
       if (vendorErr) throw vendorErr;
 
-      // 3. Upsert vendor_stores
+      // 3. Update vendor_stores store_name if exists (without duplicating)
       const { data: existingVS } = await supabase
         .from('vendor_stores')
         .select('id')
@@ -197,15 +217,6 @@ export default function AdminUsers() {
           .from('vendor_stores')
           .update({ store_name: storeName })
           .eq('id', existingVS.id);
-      } else {
-        await supabase
-          .from('vendor_stores')
-          .insert({
-            vendor_id: userId,
-            store_name: storeName,
-            slug: slug,
-            status: 'active'
-          });
       }
 
       // 4. Record Audit Log
@@ -230,12 +241,26 @@ export default function AdminUsers() {
         }
       });
 
-      toast.success(isNewVendor ? 'Vendor autorizado con éxito' : 'Permisos de Vendor actualizados');
+      // 5. Update local users state IMMEDIATELY for seamless UI update
+      setUsers(prev => prev.map(u => {
+        if (u.id === userId) {
+          return {
+            ...u,
+            is_vendor: true,
+            canonical_store_name: storeName,
+            can_request_categories: vendorModalForm.canRequestCategories,
+            can_request_brands: vendorModalForm.canRequestBrands,
+            can_request_licenses: vendorModalForm.canRequestLicenses
+          };
+        }
+        return u;
+      }));
+
+      toast.success('Permisos del Vendor actualizados correctamente.');
       setSelectedVendorUser(null);
-      await fetchUsers();
       await fetchAuditLogs();
     } catch (err: any) {
-      toast.error('Error al guardar datos del vendor: ' + err.message);
+      toast.error('Error al guardar datos del vendor: ' + (err.message || err.details || 'Permiso denegado'));
     } finally {
       setVendorModalSaving(false);
     }
@@ -464,19 +489,34 @@ export default function AdminUsers() {
                         <td className="px-6 py-4">
                           {u.is_vendor ? (
                             <div className="flex items-center gap-1.5">
-                              <span title="Cat = Puede solicitar categorías" className={`px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-0.5 ${
-                                u.can_request_categories ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-gray-100 text-gray-400 border border-gray-200'
-                              }`}>
+                              <span 
+                                title={u.can_request_categories ? "Puede solicitar nuevas categorías" : "No puede solicitar categorías"} 
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-0.5 border ${
+                                  u.can_request_categories 
+                                    ? 'bg-green-100 text-green-800 border-green-300' 
+                                    : 'bg-gray-100 text-gray-400 border-gray-200'
+                                }`}
+                              >
                                 Cat {u.can_request_categories ? '✓' : '—'}
                               </span>
-                              <span title="Marca = Puede solicitar marcas" className={`px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-0.5 ${
-                                u.can_request_brands ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-gray-100 text-gray-400 border border-gray-200'
-                              }`}>
+                              <span 
+                                title={u.can_request_brands ? "Puede solicitar nuevas marcas/fabricantes" : "No puede solicitar marcas"} 
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-0.5 border ${
+                                  u.can_request_brands 
+                                    ? 'bg-green-100 text-green-800 border-green-300' 
+                                    : 'bg-gray-100 text-gray-400 border-gray-200'
+                                }`}
+                              >
                                 Marca {u.can_request_brands ? '✓' : '—'}
                               </span>
-                              <span title="Lic = Puede solicitar licencias" className={`px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-0.5 ${
-                                u.can_request_licenses ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-gray-100 text-gray-400 border border-gray-200'
-                              }`}>
+                              <span 
+                                title={u.can_request_licenses ? "Puede solicitar nuevas licencias/franquicias" : "No puede solicitar licencias"} 
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-0.5 border ${
+                                  u.can_request_licenses 
+                                    ? 'bg-green-100 text-green-800 border-green-300' 
+                                    : 'bg-gray-100 text-gray-400 border-gray-200'
+                                }`}
+                              >
                                 Lic {u.can_request_licenses ? '✓' : '—'}
                               </span>
                             </div>
@@ -492,10 +532,35 @@ export default function AdminUsers() {
 
                         {/* ACCIONES */}
                         <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex justify-center items-center gap-1">
+                          <div className="flex justify-center items-center gap-2">
+                            {/* Explicit GESTIONAR VENDOR button for Vendor users */}
+                            {u.is_vendor ? (
+                              <button
+                                type="button"
+                                onClick={() => openVendorModal(u)}
+                                className="px-3 py-1.5 text-xs font-bold text-purple-700 bg-purple-100 hover:bg-purple-200 border border-purple-300 rounded-lg flex items-center gap-1.5 shadow-sm transition-all"
+                                title="Gestionar Tienda y Permisos de Catálogo"
+                              >
+                                <Store className="w-3.5 h-3.5 text-purple-600" />
+                                <span>GESTIONAR VENDOR</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => openVendorModal(u)}
+                                className="px-2 py-1 text-[11px] font-bold text-gray-500 bg-gray-50 hover:bg-purple-50 hover:text-purple-700 border border-gray-200 rounded-lg flex items-center gap-1 transition-all"
+                                title="Autorizar como Vendor"
+                              >
+                                <Store className="w-3.5 h-3.5" />
+                                <span>Autorizar Vendor</span>
+                              </button>
+                            )}
+
+                            <div className="w-px h-5 bg-gray-200 mx-0.5" />
+
+                            {/* Other Role Toggles */}
                             {[
                               { role: 'is_admin', icon: ShieldCheck, label: 'Admin', active: u.is_admin, color: 'text-blue-600 bg-blue-50 hover:bg-blue-100' },
-                              { role: 'is_vendor', icon: Store, label: 'Gestionar Vendor', active: u.is_vendor, color: 'text-purple-600 bg-purple-50 hover:bg-purple-100' },
                               { role: 'is_artist', icon: Star, label: 'Artist', active: u.is_artist, color: 'text-yellow-600 bg-yellow-50 hover:bg-yellow-100' },
                               { role: 'is_affiliate', icon: Share2, label: 'Affiliate', active: u.is_affiliate, color: 'text-pink-600 bg-pink-50 hover:bg-pink-100' },
                             ].map(r => (
@@ -506,7 +571,7 @@ export default function AdminUsers() {
                               </button>
                             ))}
                             
-                            <div className="w-px h-5 bg-gray-200 mx-1" />
+                            <div className="w-px h-5 bg-gray-200 mx-0.5" />
 
                             <button 
                               onClick={() => handleBlockToggle(u.id, !!u.is_blocked, u.email)}
@@ -594,7 +659,7 @@ export default function AdminUsers() {
               <div>
                 <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2">
                   <Store className="w-5 h-5 text-purple-600" /> 
-                  {selectedVendorUser.is_vendor ? 'GESTIONAR VENDOR' : 'AUTORIZAR VENDOR'}
+                  GESTIONAR VENDOR
                 </h3>
                 <p className="text-xs text-gray-500 mt-0.5">Configura tienda y permisos de catálogo</p>
               </div>
@@ -633,21 +698,33 @@ export default function AdminUsers() {
               <div className="pt-3 border-t border-gray-100 space-y-3">
                 <p className="text-xs font-black uppercase tracking-wider text-gray-500">PERMISOS DE CATÁLOGO</p>
                 <p className="text-[11px] text-gray-400 leading-tight">
-                  Define si este Vendor puede solicitar incorporación de nuevos elementos al catálogo (las solicitudes requieren aprobación del Admin).
+                  Define si este Vendor puede solicitar la incorporación de nuevos elementos al catálogo (las solicitudes requieren aprobación del Admin).
                 </p>
 
                 <div className="space-y-2.5 pt-1">
                   {[
-                    { key: 'canRequestCategories', label: 'Solicitar nuevas categorías', desc: 'Permite sugerir categorías no listadas' },
-                    { key: 'canRequestBrands', label: 'Solicitar nuevas marcas', desc: 'Permite solicitar nuevos fabricantes' },
-                    { key: 'canRequestLicenses', label: 'Solicitar nuevas licencias', desc: 'Permite solicitar nuevas franquicias' }
+                    { 
+                      key: 'canRequestCategories', 
+                      label: 'Categorías', 
+                      desc: 'Permitir que este Vendor solicite nuevas categorías.' 
+                    },
+                    { 
+                      key: 'canRequestBrands', 
+                      label: 'Marcas', 
+                      desc: 'Permitir que este Vendor solicite nuevas marcas/fabricantes.' 
+                    },
+                    { 
+                      key: 'canRequestLicenses', 
+                      label: 'Licencias', 
+                      desc: 'Permitir que este Vendor solicite nuevas licencias/franquicias.' 
+                    }
                   ].map(perm => {
                     const isChecked = (vendorModalForm as any)[perm.key];
                     return (
                       <div key={perm.key} className="flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100/80 rounded-xl border border-gray-200/60 transition-colors">
-                        <div>
+                        <div className="pr-3">
                           <p className="text-xs font-bold text-gray-800">{perm.label}</p>
-                          <p className="text-[10px] text-gray-400">{perm.desc}</p>
+                          <p className="text-[10px] text-gray-500 mt-0.5">{perm.desc}</p>
                         </div>
                         <button
                           type="button"
@@ -655,7 +732,7 @@ export default function AdminUsers() {
                             ...vendorModalForm,
                             [perm.key]: !isChecked
                           })}
-                          className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors ${
+                          className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors flex-shrink-0 ${
                             isChecked ? 'bg-green-600 justify-end' : 'bg-gray-300 justify-start'
                           }`}
                         >
@@ -673,7 +750,7 @@ export default function AdminUsers() {
                   onClick={() => setSelectedVendorUser(null)} 
                   className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                 >
-                  Cancelar
+                  CANCELAR
                 </button>
                 <button 
                   type="button" 
@@ -681,7 +758,7 @@ export default function AdminUsers() {
                   onClick={handleSaveVendorModal}
                   className="px-5 py-2 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded-lg transition-all shadow-md shadow-purple-200"
                 >
-                  {vendorModalSaving ? 'Guardando...' : selectedVendorUser.is_vendor ? 'Guardar cambios' : 'Autorizar Vendor'}
+                  {vendorModalSaving ? 'GUARDANDO...' : 'GUARDAR CAMBIOS'}
                 </button>
               </div>
             </div>
