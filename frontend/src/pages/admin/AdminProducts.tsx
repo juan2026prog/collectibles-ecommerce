@@ -10,6 +10,8 @@ import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
 import { slugify, generateUniqueSlug } from '../../lib/slugUtils';
 import { getConditionLabel } from '../../config/conditionConfig';
+import { CardDetailsFormSection } from '../../components/vendor/CardDetailsFormSection';
+import { type CardDetails, buildCategoryTreeOptions, isSportsCardCategory, isTCGCategory } from '../../config/tcgConfig';
 
 interface InlineEditProps {
   value: string | number;
@@ -162,6 +164,11 @@ export default function AdminProducts() {
     badge: '', is_featured: false, is_active: true, category_id: '', brand_id: '',
     vendor_id: 'platform',
     image_url: '', video_url: '',
+    card_details: {
+      sport: '', player_character: '', team: '', set_collection: '', year_season: '',
+      card_number: '', format: 'Single Card', is_rookie: false, is_autograph: false,
+      is_graded: false, grading_company: 'PSA', grade: '10', game: '', rarity: '', language: 'Español'
+    } as CardDetails,
     // Many-to-many
     categories: [] as string[],
     tags: [] as string[],
@@ -213,7 +220,7 @@ export default function AdminProducts() {
 
   async function fetchMeta() {
     const [{ data: cats }, { data: brs }, { data: tgs }, { data: vds }] = await Promise.all([
-      supabase.from('categories').select('id, name').order('sort_order'),
+      supabase.from('categories').select('id, name, slug, parent_id').order('sort_order'),
       supabase.from('brands').select('id, name').order('sort_order'),
       supabase.from('tags').select('id, name').order('name'),
       supabase.from('vendors').select('id, store_name, company_name').order('store_name'),
@@ -226,7 +233,15 @@ export default function AdminProducts() {
 
   function openCreate() {
     setEditing(null);
-    setForm({ title: '', slug: '', description: '', short_description: '', base_price: '', compare_at_price: '', sku: `${Date.now()}`, stock: '10', status: 'published', badge: '', is_featured: false, is_active: true, category_id: '', brand_id: '', vendor_id: 'platform', image_url: '', video_url: '', categories: [], tags: [], brands: [], gallery: [] });
+    setForm({ 
+      title: '', slug: '', description: '', short_description: '', base_price: '', compare_at_price: '', sku: `${Date.now()}`, stock: '10', status: 'published', badge: '', is_featured: false, is_active: true, category_id: '', brand_id: '', vendor_id: 'platform', image_url: '', video_url: '', 
+      card_details: {
+        sport: '', player_character: '', team: '', set_collection: '', year_season: '',
+        card_number: '', format: 'Single Card', is_rookie: false, is_autograph: false,
+        is_graded: false, grading_company: 'PSA', grade: '10', game: '', rarity: '', language: 'Español'
+      },
+      categories: [], tags: [], brands: [], gallery: [] 
+    });
     setShowForm(true);
   }
 
@@ -238,6 +253,8 @@ export default function AdminProducts() {
        supabase.from('product_categories').select('category_id').eq('product_id', product.id),
        supabase.from('product_tags').select('tags(id, name)').eq('product_id', product.id)
     ]);
+
+    const existingCardDetails = (product as any).metadata?.card_details || {};
 
     setForm({
       title: product.title, 
@@ -257,6 +274,23 @@ export default function AdminProducts() {
       vendor_id: product.vendor_id || 'platform',
       image_url: product.images?.[0]?.url || '', 
       video_url: '',
+      card_details: {
+        sport: existingCardDetails.sport || '',
+        player_character: existingCardDetails.player_character || '',
+        team: existingCardDetails.team || '',
+        set_collection: existingCardDetails.set_collection || '',
+        year_season: existingCardDetails.year_season || '',
+        card_number: existingCardDetails.card_number || '',
+        format: existingCardDetails.format || 'Single Card',
+        is_rookie: !!existingCardDetails.is_rookie,
+        is_autograph: !!existingCardDetails.is_autograph,
+        is_graded: !!existingCardDetails.is_graded,
+        grading_company: existingCardDetails.grading_company || 'PSA',
+        grade: existingCardDetails.grade || '10',
+        game: existingCardDetails.game || '',
+        rarity: existingCardDetails.rarity || '',
+        language: existingCardDetails.language || 'Español'
+      },
       categories: pCats?.map(c => c.category_id) || [],
       tags: (pTags as any)?.map((t:any) => t.tags.name) || [],
       brands: product.brand?.id ? [product.brand.id] : [],
@@ -339,12 +373,20 @@ export default function AdminProducts() {
 
       const targetVendorId = form.vendor_id === 'platform' ? null : form.vendor_id;
 
+      const currentMetadata = (editing as any)?.metadata || {};
+      const selectedCatId = form.categories[0] || form.category_id;
+      const isCardCategory = isSportsCardCategory(selectedCatId, categories) || isTCGCategory(selectedCatId, categories);
+
       const payload: any = {
         title: form.title.trim(), slug, description: form.description, short_description: form.short_description,
         base_price: parseFloat(form.base_price) || 0, compare_at_price: form.compare_at_price ? parseFloat(form.compare_at_price) : null,
         status: form.status, badge: form.badge || null, is_featured: form.is_featured, is_active: form.is_active,
         brand_id: form.brands[0] || null, category_id: form.categories[0] || null,
-        vendor_id: targetVendorId
+        vendor_id: targetVendorId,
+        metadata: {
+          ...currentMetadata,
+          ...(isCardCategory ? { card_details: form.card_details } : {})
+        }
       };
 
       console.log('[ADMIN_PRODUCTS_SAVE_VERSION]', 'TITLESLUG_FIXED_V2');
@@ -1378,6 +1420,14 @@ export default function AdminProducts() {
                              </div>
                           </div>
                        </div>
+
+                       {/* 🃏 CARD DETAILS (ALWAYS ACTIVE FOR ADMIN WHEN CARD CATEGORY IS SELECTED) */}
+                       <CardDetailsFormSection
+                         categoryId={form.categories[0] || form.category_id}
+                         categories={categories}
+                         cardDetails={form.card_details}
+                         onChange={updated => setForm(prev => ({ ...prev, card_details: updated }))}
+                       />
 
                        {/* ML Special Data */}
                        {editing?.ml_item_id && (

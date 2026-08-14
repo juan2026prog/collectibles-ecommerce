@@ -480,13 +480,15 @@ export default function AdminUsers() {
                               <div className="flex items-center gap-1.5 mt-1">
                                 <span className="text-[10px] text-gray-400 capitalize">{u.vendor_status || 'Activo'}</span>
                                 <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border ${
-                                  u.store_type === 'vintage'
+                                  u.store_type === 'tcg'
+                                    ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                                    : u.store_type === 'vintage'
                                     ? 'bg-purple-100 text-purple-800 border-purple-200'
                                     : u.store_type === 'mixed'
                                     ? 'bg-amber-100 text-amber-800 border-amber-200'
                                     : 'bg-blue-50 text-blue-700 border-blue-200'
                                 }`}>
-                                  {u.store_type === 'vintage' ? 'VINTAGE' : u.store_type === 'mixed' ? 'MIXED' : 'STANDARD'}
+                                  {u.store_type === 'tcg' ? 'TCG STORE' : u.store_type === 'vintage' ? 'VINTAGE' : u.store_type === 'mixed' ? 'MIXED' : 'STANDARD'}
                                 </span>
                               </div>
                             </div>

@@ -376,12 +376,12 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
             : (() => {
                 const parentCategories = visibleCategories.filter(c => c.parent_id === null && c.published_products_count > 0 && c.status === 'approved');
                 return parentCategories.map(parent => {
-                  const subcategories = visibleCategories.filter(
+                  const children = visibleCategories.filter(
                     sub => sub.parent_id === parent.id && sub.published_products_count > 0 && sub.status === 'approved'
                   );
                   const isParentActive = categorySlug === parent.slug;
-                  const isAnySubActive = subcategories.some(sub => categorySlug === sub.slug);
-                  const isExpanded = expandedCategoryId === parent.id;
+                  const isAnySubActive = children.some(sub => categorySlug === sub.slug || visibleCategories.some(grand => grand.parent_id === sub.id && categorySlug === grand.slug));
+                  const isExpanded = expandedCategoryId === parent.id || isParentActive || isAnySubActive;
 
                   return (
                     <div key={parent.id} className="flex flex-col">
@@ -399,7 +399,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                       >
                         <div className="flex items-center gap-1 min-w-0 pr-2">
                           <span className="truncate">{parent.name}</span>
-                          {subcategories.length > 0 && (
+                          {children.length > 0 && (
                             <ChevronRight 
                               className={`w-3 h-3 text-slate-500 shrink-0 transition-transform duration-200 ${
                                 isExpanded ? 'rotate-90 text-white' : ''
@@ -415,26 +415,55 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                       {/* Accordion container */}
                       <div className={`category-accordion-wrapper ${isExpanded ? 'category-accordion-wrapper--open' : ''}`}>
                         <div className="category-accordion-content">
-                          {isExpanded && subcategories.length > 0 && (
+                          {isExpanded && children.length > 0 && (
                             <div className="pl-3 flex flex-col gap-1 border-l border-white/5 ml-1.5 mt-0.5 mb-1">
-                              {subcategories.map((sub, index) => {
+                              {children.map((sub, index) => {
                                 const isSubActive = categorySlug === sub.slug;
+                                const grandchildren = visibleCategories.filter(g => g.parent_id === sub.id && g.published_products_count > 0 && g.status === 'approved');
+                                const isAnyGrandActive = grandchildren.some(g => categorySlug === g.slug);
+
                                 return (
-                                  <button
-                                    key={sub.id}
-                                    onClick={() => handleCategorySelect(sub.slug)}
-                                    className={`subcategory-stagger-item w-full flex items-center justify-between text-left text-xs py-0.5 transition-all ${
-                                      isSubActive
-                                        ? 'text-[#f00856] font-bold'
-                                        : 'text-slate-400 hover:text-white font-medium'
-                                    }`}
-                                    style={{ animationDelay: `${index * 15}ms` }}
-                                  >
-                                    <span className="text-[11px] truncate pr-2">{sub.name}</span>
-                                    <span className="text-[10px] font-mono shrink-0">
-                                      [{sub.published_products_count}]
-                                    </span>
-                                  </button>
+                                  <div key={sub.id} className="flex flex-col">
+                                    <button
+                                      onClick={() => handleCategorySelect(sub.slug)}
+                                      className={`subcategory-stagger-item w-full flex items-center justify-between text-left text-xs py-0.5 transition-all ${
+                                        isSubActive || isAnyGrandActive
+                                          ? 'text-[#f00856] font-bold'
+                                          : 'text-slate-400 hover:text-white font-medium'
+                                      }`}
+                                      style={{ animationDelay: `${index * 15}ms` }}
+                                    >
+                                      <span className="text-[11px] truncate pr-2">{sub.name}</span>
+                                      <span className="text-[10px] font-mono shrink-0">
+                                        [{sub.published_products_count}]
+                                      </span>
+                                    </button>
+
+                                    {/* Grandchildren (e.g. Comics -> Marvel) */}
+                                    {grandchildren.length > 0 && (
+                                      <div className="pl-2 border-l border-[#f00856]/20 ml-1.5 my-0.5 flex flex-col gap-0.5">
+                                        {grandchildren.map(grand => {
+                                          const isGrandActive = categorySlug === grand.slug;
+                                          return (
+                                            <button
+                                              key={grand.id}
+                                              onClick={() => handleCategorySelect(grand.slug)}
+                                              className={`w-full flex items-center justify-between text-left text-[11px] py-0.5 transition-all ${
+                                                isGrandActive
+                                                  ? 'text-[#f00856] font-bold'
+                                                  : 'text-slate-400 hover:text-white font-normal'
+                                              }`}
+                                            >
+                                              <span className="truncate pr-2">{grand.name}</span>
+                                              <span className="text-[9px] font-mono shrink-0">
+                                                [{grand.published_products_count}]
+                                              </span>
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
                                 );
                               })}
                             </div>

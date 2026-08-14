@@ -634,6 +634,104 @@ export default function ProductDetail() {
               <span className="text-slate-400 font-bold uppercase tracking-wider">Disponibilidad</span>
               <b className={stockInfo.className}>{stockInfo.text}</b>
             </div>
+
+            {/* 🃏 CARD DETAILS (PDP SPECIFICATIONS) */}
+            {(() => {
+              const cd = (product as any)?.metadata?.card_details;
+              if (!cd || typeof cd !== 'object') return null;
+              const hasVals = Object.values(cd).some(val => val !== '' && val !== false && val !== null && val !== undefined);
+              if (!hasVals) return null;
+
+              return (
+                <div className="mt-4 p-4 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 space-y-3">
+                  <div className="flex items-center justify-between border-b border-emerald-500/20 pb-2">
+                    <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>🃏</span> Ficha Técnica de la Carta
+                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {cd.is_rookie && (
+                        <span className="text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded">
+                          ROOKIE
+                        </span>
+                      )}
+                      {cd.is_autograph && (
+                        <span className="text-[10px] font-black uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded">
+                          AUTO
+                        </span>
+                      )}
+                      {cd.is_graded && (
+                        <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 px-2.5 py-0.5 rounded">
+                          GRADED {cd.grading_company || ''} {cd.grade || ''}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {cd.sport && (
+                      <div className="p-2 rounded-lg bg-white/[0.03]">
+                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Deporte</span>
+                        <span className="text-white font-semibold">{cd.sport}</span>
+                      </div>
+                    )}
+                    {cd.game && (
+                      <div className="p-2 rounded-lg bg-white/[0.03]">
+                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Juego / TCG</span>
+                        <span className="text-white font-semibold">{cd.game}</span>
+                      </div>
+                    )}
+                    {cd.player_character && (
+                      <div className="p-2 rounded-lg bg-white/[0.03]">
+                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Jugador / Personaje</span>
+                        <span className="text-white font-semibold">{cd.player_character}</span>
+                      </div>
+                    )}
+                    {cd.team && (
+                      <div className="p-2 rounded-lg bg-white/[0.03]">
+                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Equipo / Selección</span>
+                        <span className="text-white font-semibold">{cd.team}</span>
+                      </div>
+                    )}
+                    {cd.set_collection && (
+                      <div className="p-2 rounded-lg bg-white/[0.03]">
+                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Set / Colección</span>
+                        <span className="text-white font-semibold">{cd.set_collection}</span>
+                      </div>
+                    )}
+                    {cd.year_season && (
+                      <div className="p-2 rounded-lg bg-white/[0.03]">
+                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Año / Temporada</span>
+                        <span className="text-white font-semibold">{cd.year_season}</span>
+                      </div>
+                    )}
+                    {cd.card_number && (
+                      <div className="p-2 rounded-lg bg-white/[0.03]">
+                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Número de Carta</span>
+                        <span className="text-emerald-300 font-mono font-bold">{cd.card_number}</span>
+                      </div>
+                    )}
+                    {cd.format && (
+                      <div className="p-2 rounded-lg bg-white/[0.03]">
+                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Formato</span>
+                        <span className="text-white font-semibold">{cd.format}</span>
+                      </div>
+                    )}
+                    {cd.rarity && (
+                      <div className="p-2 rounded-lg bg-white/[0.03]">
+                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Rareza</span>
+                        <span className="text-amber-300 font-semibold">{cd.rarity}</span>
+                      </div>
+                    )}
+                    {cd.language && (
+                      <div className="p-2 rounded-lg bg-white/[0.03]">
+                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Idioma</span>
+                        <span className="text-white font-semibold">{cd.language}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       </section>

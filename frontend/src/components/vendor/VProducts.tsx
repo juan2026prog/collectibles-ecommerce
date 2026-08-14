@@ -10,6 +10,8 @@ import { useConfirmModal } from '../../components/admin/ConfirmModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { slugify, generateUniqueSlug } from '../../lib/slugUtils';
 import { CONDITION_OPTIONS, type StoreType, getConditionLabel } from '../../config/conditionConfig';
+import { CardDetailsFormSection } from './CardDetailsFormSection';
+import { type CardDetails, buildCategoryTreeOptions, isSportsCardCategory, isTCGCategory } from '../../config/tcgConfig';
 
 interface InlineEditProps {
   value: string | number;
@@ -145,6 +147,11 @@ export default function VProducts() {
     condition: '',
     condition_notes: '',
     image_url: '', video_url: '',
+    card_details: {
+      sport: '', player_character: '', team: '', set_collection: '', year_season: '',
+      card_number: '', format: 'Single Card', is_rookie: false, is_autograph: false,
+      is_graded: false, grading_company: 'PSA', grade: '10', game: '', rarity: '', language: 'Español'
+    } as CardDetails,
     // Many-to-many
     categories: [] as string[],
     tags: [] as string[],
@@ -193,11 +200,11 @@ export default function VProducts() {
 
   async function fetchMeta() {
     const [{ data: cats }, { data: brs }, { data: lics }, { data: tgs }, { data: strs }, { data: stBrs }] = await Promise.all([
-      supabase.from('categories').select('id, name, status, parent_id').or(`owner_vendor_id.eq.${user?.id},status.eq.approved`).order('sort_order'),
+      supabase.from('categories').select('id, name, slug, status, parent_id').or(`owner_vendor_id.eq.${user?.id},status.eq.approved`).order('sort_order'),
       supabase.from('brands').select('id, name, status, brand_type, is_vendor_selectable').eq('status', 'approved').order('name'),
       supabase.from('licenses').select('id, name, slug').eq('is_active', true).order('name'),
       supabase.from('tags').select('id, name').order('name'),
-      supabase.from('vendor_stores').select('id, store_name, status').eq('vendor_id', user?.id).eq('status', 'active'),
+      supabase.from('vendor_stores').select('id, store_name, status, store_type').eq('vendor_id', user?.id).eq('status', 'active'),
       supabase.from('vendor_store_brands').select('vendor_store_id, brand_id').eq('vendor_id', user?.id).eq('status', 'approved')
     ]);
 
@@ -208,8 +215,10 @@ export default function VProducts() {
         .eq('id', user.id)
         .maybeSingle();
 
+      const resolvedStoreType = (vPerm?.store_type || strs?.[0]?.store_type || 'standard') as StoreType;
+      setVendorStoreType(resolvedStoreType);
+
       if (vPerm) {
-        setVendorStoreType((vPerm.store_type || 'standard') as StoreType);
         setVendorPermissions({
           can_request_categories: !!vPerm.can_request_categories,
           can_request_brands: !!vPerm.can_request_brands,
@@ -243,7 +252,13 @@ export default function VProducts() {
       vendor_store_id: activeStores.length === 1 ? activeStores[0].id : '',
       condition: '',
       condition_notes: '',
-      image_url: '', video_url: '', categories: [], tags: [], brands: [], gallery: [] 
+      image_url: '', video_url: '',
+      card_details: {
+        sport: '', player_character: '', team: '', set_collection: '', year_season: '',
+        card_number: '', format: 'Single Card', is_rookie: false, is_autograph: false,
+        is_graded: false, grading_company: 'PSA', grade: '10', game: '', rarity: '', language: 'Español'
+      },
+      categories: [], tags: [], brands: [], gallery: [] 
     });
     setShowForm(true);
   }
@@ -256,6 +271,8 @@ export default function VProducts() {
        supabase.from('product_categories').select('category_id').eq('product_id', product.id),
        supabase.from('product_tags').select('tags(id, name)').eq('product_id', product.id)
     ]);
+
+    const existingCardDetails = (product as any).metadata?.card_details || {};
 
     setForm({
       title: product.title, 
@@ -277,6 +294,23 @@ export default function VProducts() {
       condition_notes: (product as any).condition_notes || '',
       image_url: product.images?.[0]?.url || '', 
       video_url: '',
+      card_details: {
+        sport: existingCardDetails.sport || '',
+        player_character: existingCardDetails.player_character || '',
+        team: existingCardDetails.team || '',
+        set_collection: existingCardDetails.set_collection || '',
+        year_season: existingCardDetails.year_season || '',
+        card_number: existingCardDetails.card_number || '',
+        format: existingCardDetails.format || 'Single Card',
+        is_rookie: !!existingCardDetails.is_rookie,
+        is_autograph: !!existingCardDetails.is_autograph,
+        is_graded: !!existingCardDetails.is_graded,
+        grading_company: existingCardDetails.grading_company || 'PSA',
+        grade: existingCardDetails.grade || '10',
+        game: existingCardDetails.game || '',
+        rarity: existingCardDetails.rarity || '',
+        language: existingCardDetails.language || 'Español'
+      },
       categories: pCats?.map(c => c.category_id) || [],
       tags: (pTags as any)?.map((t:any) => t.tags.name) || [],
       brands: product.brand?.id ? [product.brand.id] : [],
@@ -334,6 +368,12 @@ export default function VProducts() {
 
       const selectedBrandId = form.brands[0] || null;
 
+      const currentMetadata = (editing as any)?.metadata || {};
+      const updatedMetadata = {
+        ...currentMetadata,
+        ...(vendorStoreType === 'tcg' ? { card_details: form.card_details } : {})
+      };
+
       const payload = {
         title: form.title.trim(), slug, description: form.description, short_description: form.short_description,
         base_price: parseFloat(form.base_price) || 0, compare_at_price: form.compare_at_price ? parseFloat(form.compare_at_price) : null,
@@ -342,7 +382,8 @@ export default function VProducts() {
         brand_id: selectedBrandId, category_id: form.categories[0] || null,
         vendor_store_id: form.vendor_store_id || null,
         condition: form.condition || null,
-        condition_notes: form.condition_notes ? form.condition_notes.trim() : null
+        condition_notes: form.condition_notes ? form.condition_notes.trim() : null,
+        metadata: updatedMetadata
       };
 
       console.log('[VENDOR_PRODUCTS_SAVE_VERSION]', 'TITLESLUG_FIXED_V2');
@@ -1325,6 +1366,16 @@ export default function VProducts() {
                                 <input type="number" className="w-full p-2.5 border rounded-lg text-sm bg-gray-50 focus:bg-white outline-none font-bold text-blue-600" value={form.stock} onChange={e => setForm({...form, stock: e.target.value})} />
                              </div>
                           </div>
+
+                         {/* 🃏 CARD DETAILS (TCG STORE & SPECIALIZED CATEGORIES) */}
+                         {vendorStoreType === 'tcg' && (
+                            <CardDetailsFormSection
+                              categoryId={form.categories[0] || form.category_id}
+                              categories={categories}
+                              cardDetails={form.card_details}
+                              onChange={updated => setForm(prev => ({ ...prev, card_details: updated }))}
+                            />
+                         )}
 
                         {/* 🏷️ CONDITION & CONDITION NOTES (VINTAGE / MIXED STORE) */}
                         {(vendorStoreType === 'vintage' || vendorStoreType === 'mixed') && (

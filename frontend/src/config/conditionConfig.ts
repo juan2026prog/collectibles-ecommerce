@@ -1,4 +1,4 @@
-export type StoreType = 'standard' | 'vintage' | 'mixed';
+export type StoreType = 'standard' | 'vintage' | 'mixed' | 'tcg';
 
 export type ProductCondition = 
   | 'new_sealed'
@@ -39,6 +39,11 @@ export const STORE_TYPE_OPTIONS: { value: StoreType; label: string; desc: string
     label: 'Mixed Store', 
     desc: 'Tienda con catálogo combinado de productos nuevos y pre-owned.' 
   },
+  { 
+    value: 'tcg', 
+    label: 'TCG STORE', 
+    desc: 'Tienda especializada en TCG, Trading Cards / Sports Cards y Board Games.' 
+  },
 ];
 
 export function getConditionLabel(value?: string | null): string {
@@ -51,6 +56,7 @@ export function getStoreTypeLabel(value?: string | null): string {
   switch (value) {
     case 'vintage': return 'Vintage / Pre-Owned Store';
     case 'mixed': return 'Mixed Store';
+    case 'tcg': return 'TCG STORE';
     case 'standard':
     default:
       return 'Standard Store';
