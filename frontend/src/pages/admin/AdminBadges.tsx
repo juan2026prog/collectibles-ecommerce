@@ -51,7 +51,7 @@ export default function AdminBadges() {
   async function fetchData() {
     setLoading(true);
     const [prodRes, catRes, brandRes] = await Promise.all([
-      supabase.from('products').select('id, title, badge, category_id, brand_id, category:categories(name), brand:brands(name)').order('title'),
+      supabase.from('products').select('id, title, badge, category_id, brand_id, category:categories(name), brand:brands!products_brand_id_fkey(name)').order('title'),
       supabase.from('categories').select('id, name').order('name'),
       supabase.from('brands').select('id, name').order('name')
     ]);

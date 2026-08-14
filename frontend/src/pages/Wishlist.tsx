@@ -31,7 +31,7 @@ export default function Wishlist() {
         .from('products')
         .select(`
           *,
-          brand:brands(*),
+          brand:brands!products_brand_id_fkey(*),
           category:categories(*),
           product_images(*),
           variants:product_variants(*),

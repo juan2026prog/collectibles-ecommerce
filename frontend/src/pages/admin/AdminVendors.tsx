@@ -95,7 +95,7 @@ export default function AdminVendors() {
           ),
           products(
             *,
-            brand:brands(name),
+            brand:brands!products_brand_id_fkey(name),
             product_variants(inventory_count)
           ),
           ml_seller_accounts(id, nickname)

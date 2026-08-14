@@ -51,7 +51,7 @@ export default function VendorPrueba() {
         .select(`
           *,
           vendor:vendors(id, store_name),
-          brand:brands(id, name),
+          brand:brands!products_brand_id_fkey(id, name),
           categories:product_categories(category:categories(id, name)),
           variants:product_variants(id, sku, inventory_count),
           images:product_images(id, url, alt_text, sort_order, is_primary),

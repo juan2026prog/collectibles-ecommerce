@@ -411,7 +411,7 @@ export default function Home() {
         .select(`
           *,
           category:categories(id, name, slug),
-          brand:brands(id, name, slug, logo_url),
+          brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
           images:product_images(id, url, alt_text, sort_order, is_primary),
           variants:product_variants(id, sku, name, price_adjustment, inventory_count)
         `)

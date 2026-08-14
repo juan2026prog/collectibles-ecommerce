@@ -221,7 +221,7 @@ export function useProducts(filters: ProductFilters = {}) {
     const selectStr = `
         id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, created_at,
         category:categories(id, name, slug),
-        brand:brands(id, name, slug, logo_url),
+        brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
         images:product_images(id, url, alt_text, is_primary),
         variants:product_variants(id, sku, price_adjustment, inventory_count),
         vendor:vendors(id, store_name, slug, logo_url),
@@ -267,7 +267,16 @@ export function useProducts(filters: ProductFilters = {}) {
     query = query.range(offset, offset + limit - 1);
 
     const { data, count: totalCount, error } = await query;
-    if (!error && data) {
+    if (error) {
+      console.error('[USE_PRODUCTS_QUERY_ERROR]', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      });
+      setProducts([]);
+      setCount(0);
+    } else if (data) {
       setProducts(data);
       setCount(totalCount || 0);
     }
@@ -298,7 +307,7 @@ export function useProduct(slug: string | undefined) {
           .select(`
             *,
             category:categories(id, name, slug),
-            brand:brands(id, name, slug),
+            brand:brands!products_brand_id_fkey(id, name, slug),
             images:product_images(id, url, alt_text, sort_order, is_primary),
             variants:product_variants(id, sku, legacy_sku, name, price_adjustment, inventory_count),
             product_tags:product_tags(tag_id),
@@ -677,7 +686,7 @@ export function useProductGroups() {
             product:products (
               id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id,
               category:categories(id, name, slug),
-              brand:brands(id, name, slug),
+              brand:brands!products_brand_id_fkey(id, name, slug),
               images:product_images(id, url, alt_text, sort_order, is_primary),
               variants:product_variants(id, sku, legacy_sku, name, price_adjustment, inventory_count),
               product_tags:product_tags(tag_id),
@@ -716,7 +725,7 @@ export function useProductGroup(slug: string | undefined) {
             product:products (
               *,
               category:categories(id, name, slug),
-              brand:brands(id, name, slug),
+              brand:brands!products_brand_id_fkey(id, name, slug),
               images:product_images(id, url, alt_text, sort_order, is_primary),
               variants:product_variants(id, sku, legacy_sku, name, price_adjustment, inventory_count),
               product_tags:product_tags(tag_id),

@@ -188,11 +188,25 @@ export default function AdminProducts() {
 
   async function fetchProducts() {
     setLoading(true);
-    const { data } = await supabase
+    console.log('[PRODUCT_QUERY_HOTFIX_VERSION]', 'FK_EXPLICIT_V1');
+    const { data, error, count } = await supabase
       .from('products')
-      .select('*, vendor:vendors(id, store_name, company_name), product_categories(categories(id, name)), brand:brands(id, name), images:product_images(id, url), variants:product_variants(id, inventory_count, sku)')
+      .select('*, vendor:vendors(id, store_name, company_name), product_categories(categories(id, name)), brand:brands!products_brand_id_fkey(id, name), images:product_images(id, url), variants:product_variants(id, inventory_count, sku)', { count: 'exact' })
       .order('created_at', { ascending: false });
-    setProducts(data || []);
+
+    if (error) {
+      console.error('[ADMIN_PRODUCTS_QUERY ERROR]', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      });
+      toast.error('Error al cargar productos: ' + error.message);
+      setProducts([]);
+    } else {
+      console.log('[ADMIN_PRODUCTS_QUERY SUCCESS]', { dataLength: data?.length, count });
+      setProducts(data || []);
+    }
     setLoading(false);
   }
 

@@ -171,12 +171,19 @@ export default function VProducts() {
 
   async function fetchProducts() {
     setLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('products')
-      .select('*, product_categories(categories(id, name)), brand:brands(id, name), product_licenses(license:licenses(id, name)), images:product_images(id, url), variants:product_variants(id, inventory_count, sku)')
+      .select('*, product_categories(categories(id, name)), brand:brands!products_brand_id_fkey(id, name), product_licenses(license:licenses(id, name)), images:product_images(id, url), variants:product_variants(id, inventory_count, sku)')
       .eq('vendor_id', user?.id)
       .order('created_at', { ascending: false });
-    setProducts(data || []);
+
+    if (error) {
+      console.error('[VPRODUCTS_FETCH_ERROR]', error);
+      toast.error('Error al cargar productos del vendedor: ' + error.message);
+      setProducts([]);
+    } else {
+      setProducts(data || []);
+    }
     setLoading(false);
   }
 
