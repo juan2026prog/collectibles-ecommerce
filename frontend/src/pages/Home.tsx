@@ -1089,37 +1089,6 @@ export default function Home() {
         </div>
       ))}
 
-      {/* SEO Content Section for Juguetes Retro Uruguay */}
-      <section className="border-t border-white/10 bg-[#070a16] py-16 px-6">
-        <div className="max-w-[1400px] mx-auto space-y-8">
-          <div className="max-w-3xl space-y-4">
-            <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight">
-              Juguetes Retro Uruguay & Tu Tienda de Coleccionables Premium
-            </h2>
-            <p className="text-sm md:text-base text-gray-400 leading-relaxed">
-              En <strong className="text-white">Collectibles Uruguay</strong> somos especialistas en la venta de 
-              <strong className="text-indigo-400"> juguetes retro en Uruguay</strong>, figuras de acción vintage, estatuas de colección, 
-              réplicas cinematográficas, cartas y merchandising geek. Si buscas juguetes retro de los 80s y 90s, reliquias nostálgicas o las últimas novedades de colección, aquí encontrarás el catálogo más variado con envíos a Montevideo y todo el interior del país.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs text-gray-400">
-            <div className="p-5 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
-              <h3 className="font-bold text-white text-sm">🎮 Juguetes Retro & Vintage</h3>
-              <p>Figuras clásicas, réplicas y coleccionables icónicos con garantía de autenticidad.</p>
-            </div>
-            <div className="p-5 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
-              <h3 className="font-bold text-white text-sm">⭐ Figuras de Acción de Colección</h3>
-              <p>Ediciones oficiales de Hot Toys, Bandai, Hasbro, Funko, NECA y estatuas escala 1/6.</p>
-            </div>
-            <div className="p-5 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
-              <h3 className="font-bold text-white text-sm">🚚 Envíos a todo Uruguay</h3>
-              <p>Entregas rápidas y protegidas en todo el país mediante DAC, Soy Delivery y Mercado Envíos.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-
 
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes marquee {
