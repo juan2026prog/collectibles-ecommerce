@@ -9,6 +9,7 @@ interface ProductFilters {
   license?: string;
   search?: string;
   badge?: string;
+  condition?: string;
   minPrice?: number;
   maxPrice?: number;
   sortBy?: string;
@@ -219,7 +220,7 @@ export function useProducts(filters: ProductFilters = {}) {
     }
 
     const selectStr = `
-        id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, created_at,
+        id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, condition_notes, created_at,
         category:categories(id, name, slug),
         brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
         images:product_images(id, url, alt_text, is_primary),
@@ -243,6 +244,18 @@ export function useProducts(filters: ProductFilters = {}) {
     if (filters.vendor_store_id) query = query.eq('vendor_store_id', filters.vendor_store_id);
     if (filters.badge) query = query.eq('badge', filters.badge);
     if (filters.featured) query = query.eq('is_featured', true);
+
+    // Condition filter (New, Used, Loose)
+    if (filters.condition) {
+      if (filters.condition === 'new') {
+        query = query.or('condition.eq.new_sealed,condition.eq.new_open_box,condition.is.null');
+      } else if (filters.condition === 'used') {
+        query = query.in('condition', ['used_complete', 'used_incomplete']);
+      } else if (filters.condition === 'loose') {
+        query = query.in('condition', ['loose_complete', 'loose_incomplete']);
+      }
+    }
+
     if (filters.minPrice) query = query.gte('base_price', filters.minPrice);
     if (filters.maxPrice) query = query.lte('base_price', filters.maxPrice);
     if (filters.search) {

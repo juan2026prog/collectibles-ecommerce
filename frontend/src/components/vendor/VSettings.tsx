@@ -10,11 +10,13 @@ import VTermsSettings from './VTermsSettings';
 import { User, CreditCard, Truck, Link2, FileText, Save, UploadCloud, Bell, AlertCircle, CheckCircle2, RefreshCw, ToggleLeft, ToggleRight, ShieldCheck } from 'lucide-react';
 
 import { normalizeSettingsTab } from '../../config/vendorNavigation';
+import { getStoreTypeLabel, type StoreType } from '../../config/conditionConfig';
 
 export default function VSettings() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [storeType, setStoreType] = useState<StoreType>('standard');
   
   const rawSub = searchParams.get('sub') || searchParams.get('section') || searchParams.get('settingsTab');
   const activeTab = normalizeSettingsTab(rawSub);
@@ -185,6 +187,7 @@ export default function VSettings() {
         const { data, error } = await supabase.from('vendors').select('*').eq('id', user!.id).single();
         if (error) throw error;
         if (data) {
+          setStoreType((data.store_type || 'standard') as StoreType);
           setFormData({
             store_name: data.store_name || '',
             slug: data.slug || '',
@@ -512,7 +515,7 @@ export default function VSettings() {
         {/* TAB PERFIL */}
         {activeTab === 'profile' && (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nombre de Tienda</label>
                 <input 
@@ -530,6 +533,14 @@ export default function VSettings() {
                   onChange={(e) => updateField('slug', e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-black focus:border-black bg-gray-50"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Tienda (Store Type)</label>
+                <div className="w-full px-4 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm font-bold text-gray-800 flex items-center justify-between">
+                  <span>{getStoreTypeLabel(storeType)}</span>
+                  <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-gray-200 text-gray-600">Solo lectura</span>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1 leading-tight">El tipo de tienda es configurado por Collectibles.</p>
               </div>
             </div>
 

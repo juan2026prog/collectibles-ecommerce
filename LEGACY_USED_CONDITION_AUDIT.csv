@@ -1,0 +1,3 @@
+product_id,title,vendor_id,vendor_name,store_type,status,current_condition,legacy_condition_detected,evidence,recommended_action
+c66820c2-7228-4e74-ba5e-ad3288ec5ca0,"Bonnie Original Funko Five Nights At Freddy's Muñeco",61a48094-7453-4b7f-9563-e51f184832f9,JorgiToys,standard,published,new_sealed,used,"Mercado Libre raw_payload condition = 'used' (MLU1007921528)",RESET_TO_NULL
+2c0ee182-66e3-4ba7-8964-12e367db73ae,"Super Skrull Avengers Marvel Legends Hasbro Loose",61a48094-7453-4b7f-9563-e51f184832f9,JorgiToys,standard,published,new_sealed,loose,"Title explicitly contains 'Loose'",RESET_TO_NULL

@@ -9,6 +9,7 @@ import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { slugify, generateUniqueSlug } from '../../lib/slugUtils';
+import { CONDITION_OPTIONS, type StoreType, getConditionLabel } from '../../config/conditionConfig';
 
 interface InlineEditProps {
   value: string | number;
@@ -134,12 +135,15 @@ export default function VProducts() {
   const [tags, setTags] = useState<any[]>([]);
   const [activeStores, setActiveStores] = useState<any[]>([]);
   const [storeBrands, setStoreBrands] = useState<any[]>([]);
+  const [vendorStoreType, setVendorStoreType] = useState<StoreType>('standard');
   
   const [form, setForm] = useState({
     title: '', slug: '', description: '', short_description: '',
     base_price: '', compare_at_price: '', sku: '', stock: '10', status: 'published',
     badge: '', is_featured: false, is_active: true, category_id: '', brand_id: '',
     vendor_store_id: '',
+    condition: '',
+    condition_notes: '',
     image_url: '', video_url: '',
     // Many-to-many
     categories: [] as string[],
@@ -200,11 +204,12 @@ export default function VProducts() {
     if (user?.id) {
       const { data: vPerm } = await supabase
         .from('vendors')
-        .select('can_request_categories, can_request_brands, can_request_licenses')
+        .select('store_type, can_request_categories, can_request_brands, can_request_licenses')
         .eq('id', user.id)
         .maybeSingle();
 
       if (vPerm) {
+        setVendorStoreType((vPerm.store_type || 'standard') as StoreType);
         setVendorPermissions({
           can_request_categories: !!vPerm.can_request_categories,
           can_request_brands: !!vPerm.can_request_brands,
@@ -236,6 +241,8 @@ export default function VProducts() {
       sku: `${Date.now()}`, stock: '10', status: 'published', badge: '', is_featured: false, is_active: true, 
       category_id: '', brand_id: '', 
       vendor_store_id: activeStores.length === 1 ? activeStores[0].id : '',
+      condition: '',
+      condition_notes: '',
       image_url: '', video_url: '', categories: [], tags: [], brands: [], gallery: [] 
     });
     setShowForm(true);
@@ -266,6 +273,8 @@ export default function VProducts() {
       category_id: product.category?.id || '', 
       brand_id: product.brand?.id || '',
       vendor_store_id: (product as any).vendor_store_id || '',
+      condition: (product as any).condition || '',
+      condition_notes: (product as any).condition_notes || '',
       image_url: product.images?.[0]?.url || '', 
       video_url: '',
       categories: pCats?.map(c => c.category_id) || [],
@@ -282,6 +291,12 @@ export default function VProducts() {
 
       if (form.status === 'published') {
         const errors: string[] = [];
+
+        // Condition Rule for Vintage and Mixed stores
+        if ((vendorStoreType === 'vintage' || vendorStoreType === 'mixed') && (!form.condition || !form.condition.trim())) {
+          throw new Error("Este producto necesita que indiques su Condition.");
+        }
+
         const selectedBrandId = form.brands[0] || form.brand_id;
         const selectedBrandObj = brands.find(b => b.id === selectedBrandId);
         const GENERIC_LIST = ['genérica', 'generica', 'generic', 'sin marca', 'no brand', 'n/a', 'na', 'desconocido', 'ninguna', '—', '-'];
@@ -325,7 +340,9 @@ export default function VProducts() {
         status: form.status, badge: form.badge || null, is_featured: form.is_featured,
         is_active: form.is_active,
         brand_id: selectedBrandId, category_id: form.categories[0] || null,
-        vendor_store_id: form.vendor_store_id || null
+        vendor_store_id: form.vendor_store_id || null,
+        condition: form.condition || null,
+        condition_notes: form.condition_notes ? form.condition_notes.trim() : null
       };
 
       console.log('[VENDOR_PRODUCTS_SAVE_VERSION]', 'TITLESLUG_FIXED_V2');
@@ -701,6 +718,8 @@ export default function VProducts() {
 
         // Generate dynamic unique slug
         const uniqueSlug = await generateUniqueSlug(p.title);
+        const isVintageOrMixed = vendorStoreType === 'vintage' || vendorStoreType === 'mixed';
+        const importStatus = (isVintageOrMixed && !p.condition) ? 'draft' : 'published';
 
         // Insert Product
         const { data: newProd, error: prodErr } = await supabase
@@ -711,10 +730,12 @@ export default function VProducts() {
             description: p.description || null,
             base_price: p.base_price,
             compare_at_price: p.compare_at_price || null,
-            status: 'published',
+            status: importStatus,
             is_active: true,
             category_id: categoryId,
             brand_id: brandId,
+            condition: p.condition || null,
+            condition_notes: p.condition_notes || null,
             is_featured: false
           })
           .select()
@@ -1304,6 +1325,60 @@ export default function VProducts() {
                                 <input type="number" className="w-full p-2.5 border rounded-lg text-sm bg-gray-50 focus:bg-white outline-none font-bold text-blue-600" value={form.stock} onChange={e => setForm({...form, stock: e.target.value})} />
                              </div>
                           </div>
+
+                        {/* 🏷️ CONDITION & CONDITION NOTES (VINTAGE / MIXED STORE) */}
+                        {(vendorStoreType === 'vintage' || vendorStoreType === 'mixed') && (
+                           <div className="bg-white border shadow-sm rounded-lg overflow-hidden">
+                              <div className="px-4 py-2.5 border-b bg-purple-50/70 flex items-center justify-between">
+                                 <div className="flex items-center gap-2">
+                                    <span className="text-purple-900 font-bold text-sm">🏷️ Condition (Estado del Producto)</span>
+                                    <span className="text-[10px] font-black uppercase tracking-wider bg-purple-200 text-purple-900 px-2 py-0.5 rounded">Obligatorio al publicar</span>
+                                 </div>
+                              </div>
+                              <div className="p-6 space-y-4">
+                                 {!form.condition && (
+                                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2.5 text-amber-900 text-xs font-bold shadow-sm">
+                                       <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                                       <span>Este producto necesita que indiques su Condition.</span>
+                                    </div>
+                                 )}
+                                 <div>
+                                    <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest block mb-1">
+                                       Condition *
+                                    </label>
+                                    <select
+                                       value={form.condition}
+                                       onChange={e => setForm({...form, condition: e.target.value})}
+                                       className="w-full p-2.5 border rounded-lg text-sm bg-white font-bold text-gray-800 border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
+                                    >
+                                       <option value="">[ Select condition... ▼ ]</option>
+                                       {CONDITION_OPTIONS.map(c => (
+                                          <option key={c.value} value={c.value}>{c.label}</option>
+                                       ))}
+                                    </select>
+                                    <p className="text-[10px] text-gray-400 mt-1">
+                                       Para publicar en tiendas {vendorStoreType === 'vintage' ? 'Vintage' : 'Mixed'}, debes seleccionar el estado comercial exacto.
+                                    </p>
+                                 </div>
+
+                                 <div>
+                                    <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest block mb-1">
+                                       Condition Notes (Notas del Estado)
+                                    </label>
+                                    <input
+                                       type="text"
+                                       value={form.condition_notes}
+                                       onChange={e => setForm({...form, condition_notes: e.target.value})}
+                                       placeholder="Ej.: box has shelf wear, missing weapon, minor paint wear..."
+                                       className="w-full p-2.5 border rounded-lg text-sm bg-gray-50 focus:bg-white border-gray-300 outline-none"
+                                    />
+                                    <p className="text-[10px] text-gray-400 mt-1">
+                                       Detalles opcionales sobre el empaque, accesorios faltantes o desgaste.
+                                    </p>
+                                 </div>
+                              </div>
+                           </div>
+                        )}
                        </div>
 
                        {/* 🔒 Identificadores de Integración (Técnico / Solo Lectura) */}

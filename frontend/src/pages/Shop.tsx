@@ -44,6 +44,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   const brandSlug = isBrandRoute ? brandParam : (searchParams.get('brand') || '');
   const badge = searchParams.get('badge') || '';
   const searchQ = searchParams.get('q') || '';
+  const conditionFilter = searchParams.get('condition') || '';
   const [sortBy, setSortBy] = useState('default');
   const [mobileFilters, setMobileFilters] = useState(false);
   const [gridCols, setGridCols] = useState<number>(() => {
@@ -168,6 +169,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
     category: categorySlug || undefined,
     brand: brandSlug || undefined,
     badge: badge || undefined,
+    condition: conditionFilter || undefined,
     search: searchQ || undefined,
     group: groupSlug || undefined,
     minPrice: priceMin ? Number(priceMin) : undefined,
@@ -318,6 +320,17 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
       setSearchInput('');
       setPage(0);
     }
+  }
+
+  function handleConditionSelect(val: string) {
+    const newParams = new URLSearchParams(searchParams);
+    if (val) {
+      newParams.set('condition', val);
+    } else {
+      newParams.delete('condition');
+    }
+    newParams.delete('page');
+    setSearchParams(newParams);
   }
 
   function applyPriceFilter() {
@@ -594,8 +607,35 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
         </button>
       </div>
 
+      {/* 🏷️ Condition Filter (New, Used, Loose) */}
+      <div>
+        <h3 className="font-bold text-slate-400 uppercase text-[10px] tracking-widest mb-2 block">Estado</h3>
+        <div className="flex flex-col gap-1">
+          {[
+            { id: '', label: 'Todos' },
+            { id: 'new', label: 'New (Nuevo / Sealed)' },
+            { id: 'used', label: 'Used (Usado)' },
+            { id: 'loose', label: 'Loose (Suelto sin caja)' }
+          ].map(c => {
+            const isSelected = (conditionFilter || '') === c.id;
+            return (
+              <button
+                key={c.id}
+                onClick={() => handleConditionSelect(c.id)}
+                className={`w-full flex items-center justify-between text-left py-1 text-xs transition-all ${
+                  isSelected ? 'text-[#f00856] font-bold' : 'text-slate-400 hover:text-white font-medium'
+                }`}
+              >
+                <span>{c.label}</span>
+                {isSelected && <span className="text-[10px] text-[#f00856]">✓</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Clear filters */}
-      {(categorySlug || brandSlug || searchQ || priceMin || priceMax || groupSlug) && (
+      {(categorySlug || brandSlug || searchQ || priceMin || priceMax || groupSlug || conditionFilter) && (
         <button
           onClick={clearAllFilters}
           className="w-full py-1.5 text-xs font-bold text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/5 transition-colors"

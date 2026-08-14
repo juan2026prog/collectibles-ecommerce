@@ -4,6 +4,7 @@ import { Shield, ShieldCheck, Store, Star, Share2, Search, RefreshCw, UserCog, C
 import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
 import CustomerFileModal from '../../components/admin/crm/CustomerFileModal';
+import { STORE_TYPE_OPTIONS, type StoreType } from '../../config/conditionConfig';
 
 export default function AdminUsers() {
   const [users, setUsers] = useState<any[]>([]);
@@ -29,6 +30,7 @@ export default function AdminUsers() {
   const [selectedVendorUser, setSelectedVendorUser] = useState<any | null>(null);
   const [vendorModalForm, setVendorModalForm] = useState({
     storeName: '',
+    storeType: 'standard' as StoreType,
     canRequestCategories: false,
     canRequestBrands: false,
     canRequestLicenses: false
@@ -54,13 +56,13 @@ export default function AdminUsers() {
         // 2. Batch fetch vendors
         const { data: vendorsData } = await supabase
           .from('vendors')
-          .select('id, store_name, slug, status, can_request_categories, can_request_brands, can_request_licenses')
+          .select('id, store_name, slug, status, can_request_categories, can_request_brands, can_request_licenses, store_type')
           .in('id', userIds);
 
         // 3. Batch fetch vendor_stores
         const { data: vendorStoresData } = await supabase
           .from('vendor_stores')
-          .select('id, vendor_id, store_name, status')
+          .select('id, vendor_id, store_name, status, store_type')
           .in('vendor_id', userIds);
 
         const vendorMap = new Map(vendorsData?.map(v => [v.id, v]) || []);
@@ -84,6 +86,7 @@ export default function AdminUsers() {
             can_request_categories: v?.can_request_categories ?? false,
             can_request_brands: v?.can_request_brands ?? false,
             can_request_licenses: v?.can_request_licenses ?? false,
+            store_type: (v?.store_type || vs?.store_type || 'standard') as StoreType,
             vendor_status: v?.status || vs?.status || 'active'
           };
         });
@@ -137,6 +140,7 @@ export default function AdminUsers() {
     setSelectedVendorUser(u);
     setVendorModalForm({
       storeName: defaultStoreName,
+      storeType: (u.store_type || 'standard') as StoreType,
       canRequestCategories: u.can_request_categories ?? false,
       canRequestBrands: u.can_request_brands ?? false,
       canRequestLicenses: u.can_request_licenses ?? false
@@ -146,13 +150,14 @@ export default function AdminUsers() {
     try {
       const { data: vRecord } = await supabase
         .from('vendors')
-        .select('store_name, can_request_categories, can_request_brands, can_request_licenses')
+        .select('store_name, store_type, can_request_categories, can_request_brands, can_request_licenses')
         .eq('id', u.id)
         .maybeSingle();
 
       if (vRecord) {
         setVendorModalForm({
           storeName: vRecord.store_name || defaultStoreName,
+          storeType: (vRecord.store_type || 'standard') as StoreType,
           canRequestCategories: !!vRecord.can_request_categories,
           canRequestBrands: !!vRecord.can_request_brands,
           canRequestLicenses: !!vRecord.can_request_licenses
@@ -194,6 +199,7 @@ export default function AdminUsers() {
         store_name: storeName,
         slug: slug,
         status: existingVendor?.status || 'active',
+        store_type: vendorModalForm.storeType,
         can_request_categories: vendorModalForm.canRequestCategories,
         can_request_brands: vendorModalForm.canRequestBrands,
         can_request_licenses: vendorModalForm.canRequestLicenses
@@ -205,7 +211,7 @@ export default function AdminUsers() {
 
       if (vendorErr) throw vendorErr;
 
-      // 3. Update vendor_stores store_name if exists (without duplicating)
+      // 3. Update vendor_stores store_name & store_type if exists (without duplicating)
       const { data: existingVS } = await supabase
         .from('vendor_stores')
         .select('id')
@@ -215,7 +221,7 @@ export default function AdminUsers() {
       if (existingVS) {
         await supabase
           .from('vendor_stores')
-          .update({ store_name: storeName })
+          .update({ store_name: storeName, store_type: vendorModalForm.storeType })
           .eq('id', existingVS.id);
       }
 
@@ -228,6 +234,7 @@ export default function AdminUsers() {
         record_id: userId,
         old_data: {
           is_vendor: selectedVendorUser.is_vendor,
+          store_type: selectedVendorUser.store_type || 'standard',
           can_request_categories: selectedVendorUser.can_request_categories,
           can_request_brands: selectedVendorUser.can_request_brands,
           can_request_licenses: selectedVendorUser.can_request_licenses
@@ -235,6 +242,7 @@ export default function AdminUsers() {
         new_data: {
           is_vendor: true,
           store_name: storeName,
+          store_type: vendorModalForm.storeType,
           can_request_categories: vendorModalForm.canRequestCategories,
           can_request_brands: vendorModalForm.canRequestBrands,
           can_request_licenses: vendorModalForm.canRequestLicenses
@@ -248,6 +256,7 @@ export default function AdminUsers() {
             ...u,
             is_vendor: true,
             canonical_store_name: storeName,
+            store_type: vendorModalForm.storeType,
             can_request_categories: vendorModalForm.canRequestCategories,
             can_request_brands: vendorModalForm.canRequestBrands,
             can_request_licenses: vendorModalForm.canRequestLicenses
@@ -468,7 +477,18 @@ export default function AdminUsers() {
                                 <Store className="w-3.5 h-3.5 text-purple-600 inline" />
                                 {u.canonical_store_name}
                               </p>
-                              <span className="text-[10px] text-gray-400 capitalize">{u.vendor_status || 'Activo'}</span>
+                              <div className="flex items-center gap-1.5 mt-1">
+                                <span className="text-[10px] text-gray-400 capitalize">{u.vendor_status || 'Activo'}</span>
+                                <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border ${
+                                  u.store_type === 'vintage'
+                                    ? 'bg-purple-100 text-purple-800 border-purple-200'
+                                    : u.store_type === 'mixed'
+                                    ? 'bg-amber-100 text-amber-800 border-amber-200'
+                                    : 'bg-blue-50 text-blue-700 border-blue-200'
+                                }`}>
+                                  {u.store_type === 'vintage' ? 'VINTAGE' : u.store_type === 'mixed' ? 'MIXED' : 'STANDARD'}
+                                </span>
+                              </div>
                             </div>
                           ) : (
                             <span className="text-gray-300 text-xs font-mono">—</span>
@@ -693,6 +713,51 @@ export default function AdminUsers() {
                 }`}>
                   ● {selectedVendorUser.vendor_status || 'Activo'}
                 </span>
+              </div>
+
+              {/* TIPO DE TIENDA */}
+              <div className="pt-3 border-t border-gray-100 space-y-3">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wider text-purple-900">TIPO DE TIENDA</p>
+                  <p className="text-[11px] text-gray-400 leading-tight mt-0.5">
+                    Configuración privada por Vendor. Determina el comportamiento del sistema Condition al publicar productos.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  {STORE_TYPE_OPTIONS.map(opt => {
+                    const isSelected = vendorModalForm.storeType === opt.value;
+                    return (
+                      <label
+                        key={opt.value}
+                        htmlFor={`store_type_${opt.value}`}
+                        className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                          isSelected
+                            ? 'border-purple-500 bg-purple-50/70 shadow-sm'
+                            : 'border-gray-200 bg-white hover:border-gray-300'
+                        }`}
+                      >
+                        <input
+                          id={`store_type_${opt.value}`}
+                          type="radio"
+                          name="storeTypeRadio"
+                          value={opt.value}
+                          checked={isSelected}
+                          onChange={() => setVendorModalForm({ ...vendorModalForm, storeType: opt.value })}
+                          className="mt-0.5 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                        />
+                        <div>
+                          <p className="text-xs font-bold text-gray-900 flex items-center gap-2">
+                            {opt.label}
+                            {opt.value === 'standard' && (
+                              <span className="text-[9px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">Default</span>
+                            )}
+                          </p>
+                          <p className="text-[10px] text-gray-500 mt-0.5 leading-normal">{opt.desc}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="pt-3 border-t border-gray-100 space-y-3">

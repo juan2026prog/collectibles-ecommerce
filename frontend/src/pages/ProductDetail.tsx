@@ -24,6 +24,7 @@ import { calculateUruboxEstimate, getEstimatedWeightKg } from '../lib/urubox';
 import { isValidInternalSku } from '../lib/skuUtils';
 import { ProductGridCard } from '../components/ProductGridCard';
 import { useImageProtection } from '../hooks/useImageProtection';
+import { getConditionLabel } from '../config/conditionConfig';
 
 // ── COMPONENTE SECCIÓN PRODUCTOS RELACIONADOS ──
 function RelatedProductsSection({ currentProductId, categorySlug }: { currentProductId: string; categorySlug?: string }) {
@@ -453,6 +454,11 @@ export default function ProductDetail() {
                   Original · {product.brand.name}
                 </span>
               )}
+              {product.condition && (
+                <span className="text-xs font-bold px-3 py-1 rounded-full border border-purple-500/30 bg-purple-500/10 text-purple-300">
+                  🏷️ {getConditionLabel(product.condition)}
+                </span>
+              )}
             </div>
           </div>
 
@@ -610,6 +616,18 @@ export default function ProductDetail() {
               <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/5 flex justify-between items-center text-xs">
                 <span className="text-slate-400 font-bold uppercase tracking-wider">SKU</span>
                 <b className="text-white font-mono">{selectedVariant.sku}</b>
+              </div>
+            )}
+            {product.condition && (
+              <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/20 flex justify-between items-center text-xs">
+                <span className="text-purple-300 font-bold uppercase tracking-wider">Estado (Condition)</span>
+                <b className="text-purple-200 font-bold">{getConditionLabel(product.condition)}</b>
+              </div>
+            )}
+            {product.condition_notes && (
+              <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/5 flex flex-col gap-1 text-xs">
+                <span className="text-slate-400 font-bold uppercase tracking-wider">Notas de Condición</span>
+                <p className="text-slate-300 italic">{product.condition_notes}</p>
               </div>
             )}
             <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/5 flex justify-between items-center text-xs">

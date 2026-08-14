@@ -1413,7 +1413,7 @@ Deno.serve(async (req) => {
                 currency_id: "UYU",
                 available_quantity: Math.max(1, p.product_variants?.[0]?.inventory_count || 1), // ML requires >0 to publish
                 buying_mode: "buy_it_now",
-                condition: p.condition || "new",
+                condition: (p.condition && (p.condition.startsWith('used_') || p.condition.startsWith('loose_'))) ? "used" : "new",
                 listing_type_id: "gold_special",
                 pictures: pictures,
                 attributes: attributes

@@ -9,6 +9,7 @@ import { getProductImage } from '../../lib/imageUtils';
 import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
 import { slugify, generateUniqueSlug } from '../../lib/slugUtils';
+import { getConditionLabel } from '../../config/conditionConfig';
 
 interface InlineEditProps {
   value: string | number;
@@ -793,6 +794,8 @@ export default function AdminProducts() {
             is_active: true,
             category_id: categoryId,
             brand_id: brandId,
+            condition: p.condition || null,
+            condition_notes: p.condition_notes || null,
             is_featured: false
           })
           .select()
@@ -1098,6 +1101,7 @@ export default function AdminProducts() {
                     <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('status')}>
                       Estado {sortField === 'status' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
                     </th>
+                   <th className="px-6 py-4">Condition</th>
                    <th className="px-6 py-4 text-right cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('created_at')}>
                      Fecha {sortField === 'created_at' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
                    </th>
@@ -1247,6 +1251,15 @@ export default function AdminProducts() {
                              {p.status === 'published' ? 'Visible' : 'Oculto'}
                           </span>
                         )}
+                      </td>
+                      <td className="px-6 py-4 text-xs font-bold text-gray-700 whitespace-nowrap">
+                         {p.condition ? (
+                           <span className="px-2 py-1 rounded bg-gray-100 border border-gray-200 text-gray-800 font-semibold">
+                             {getConditionLabel(p.condition)}
+                           </span>
+                         ) : (
+                           <span className="text-gray-300 font-mono">—</span>
+                         )}
                       </td>
                       <td className="px-6 py-4 text-right text-xs font-medium text-gray-400">
                         <div className="flex justify-end gap-3 items-center mb-1">

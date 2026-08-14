@@ -9,6 +9,7 @@ import { useLocale } from '../contexts/LocaleContext';
 import { trackGA4Event } from '../lib/analyticsTracker';
 import { getProductGroupBadge, getAllProductGroupBadges } from '../hooks/useData';
 import { useImageProtection } from '../hooks/useImageProtection';
+import { getConditionBadgeInfo } from '../config/conditionConfig';
 
 interface ProductGridCardProps {
   product: any;
@@ -146,6 +147,19 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
              </div>
            ))}
         </div>
+
+        {/* 🏷️ Badge Discreto de Condición (LOOSE / USED / OPEN BOX) */}
+        {(() => {
+           const condBadge = getConditionBadgeInfo(product.condition);
+           if (!condBadge) return null;
+           return (
+              <div className="absolute bottom-2 left-2 z-20 pointer-events-none">
+                 <span className={`px-2 py-0.5 text-[8px] font-black uppercase tracking-widest rounded shadow-md border ${condBadge.badgeClass}`}>
+                    {condBadge.label}
+                 </span>
+              </div>
+           );
+        })()}
 
         {/* CTA COMPACTO */}
         <button
