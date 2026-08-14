@@ -29,9 +29,10 @@ export interface CatalogStatus {
   capApplied: '49%' | '69%' | '40%' | null;
 }
 
-type TabType = 'inbox' | 'rules' | 'dictionary' | 'ml_categories' | 'history' | 'conflicts' | 'quality_dashboard' | 'duplicates';
+type TabType = 'inbox' | 'rules' | 'dictionary' | 'ml_categories' | 'history' | 'conflicts' | 'quality_dashboard' | 'duplicates' | 'brand_governance';
 type ProductStatusType = 'all' | 'pending' | 'cataloged' | 'conflicts' | 'duplicates' | 'published';
 
+import { BrandGovernanceDashboard } from '../../components/admin/BrandGovernanceDashboard';
 import { 
   runQualityEngineCheck, 
   detectBrandLicenceCollection, 
@@ -1976,6 +1977,7 @@ export default function AdminCatalogCenter() {
           <div className="flex flex-wrap gap-1 bg-slate-800/80 p-1.5 rounded-xl border border-slate-700">
             {[
               { id: 'inbox', label: 'Bandeja de Productos' },
+              { id: 'brand_governance', label: 'Gobernanza Marcas Vendor' },
               { id: 'rules', label: 'Reglas V3' },
               { id: 'dictionary', label: 'Diccionario Inteligente' },
               { id: 'ml_categories', label: 'Equivalencias ML' },
@@ -3622,6 +3624,11 @@ export default function AdminCatalogCenter() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* --- TAB: BRAND GOVERNANCE --- */}
+      {activeSubTab === 'brand_governance' && (
+        <BrandGovernanceDashboard />
       )}
 
       {/* --- TAB 8: DUPLICATE ENGINE --- */}

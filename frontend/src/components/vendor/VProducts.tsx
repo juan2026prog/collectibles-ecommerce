@@ -152,13 +152,28 @@ export default function VProducts() {
   const [newCatInput, setNewCatInput] = useState('');
   const [newBrandInput, setNewBrandInput] = useState('');
 
+  const [licenses, setLicenses] = useState<any[]>([]);
+  const [showBrandRequestModal, setShowBrandRequestModal] = useState(false);
+  const [requestedBrandName, setRequestedBrandName] = useState('');
+  const [brandRequestLoading, setBrandRequestLoading] = useState(false);
+
+  const [showLicenseRequestModal, setShowLicenseRequestModal] = useState(false);
+  const [requestedLicenseName, setRequestedLicenseName] = useState('');
+  const [licenseRequestLoading, setLicenseRequestLoading] = useState(false);
+
+  const [vendorPermissions, setVendorPermissions] = useState({
+    can_request_categories: false,
+    can_request_brands: false,
+    can_request_licenses: false
+  });
+
   useEffect(() => { fetchProducts(); fetchMeta(); }, []);
 
   async function fetchProducts() {
     setLoading(true);
     const { data } = await supabase
       .from('products')
-      .select('*, product_categories(categories(id, name)), brand:brands(id, name), images:product_images(id, url), variants:product_variants(id, inventory_count, sku)')
+      .select('*, product_categories(categories(id, name)), brand:brands(id, name), product_licenses(license:licenses(id, name)), images:product_images(id, url), variants:product_variants(id, inventory_count, sku)')
       .eq('vendor_id', user?.id)
       .order('created_at', { ascending: false });
     setProducts(data || []);
@@ -166,15 +181,42 @@ export default function VProducts() {
   }
 
   async function fetchMeta() {
-    const [{ data: cats }, { data: brs }, { data: tgs }, { data: strs }, { data: stBrs }] = await Promise.all([
+    const [{ data: cats }, { data: brs }, { data: lics }, { data: tgs }, { data: strs }, { data: stBrs }] = await Promise.all([
       supabase.from('categories').select('id, name, status, parent_id').or(`owner_vendor_id.eq.${user?.id},status.eq.approved`).order('sort_order'),
-      supabase.from('brands').select('id, name, status').or(`owner_vendor_id.eq.${user?.id},status.eq.approved`).order('sort_order'),
+      supabase.from('brands').select('id, name, status, brand_type, is_vendor_selectable').eq('status', 'approved').order('name'),
+      supabase.from('licenses').select('id, name, slug').eq('is_active', true).order('name'),
       supabase.from('tags').select('id, name').order('name'),
       supabase.from('vendor_stores').select('id, store_name, status').eq('vendor_id', user?.id).eq('status', 'active'),
       supabase.from('vendor_store_brands').select('vendor_store_id, brand_id').eq('vendor_id', user?.id).eq('status', 'approved')
     ]);
+
+    if (user?.id) {
+      const { data: vPerm } = await supabase
+        .from('vendors')
+        .select('can_request_categories, can_request_brands, can_request_licenses')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (vPerm) {
+        setVendorPermissions({
+          can_request_categories: !!vPerm.can_request_categories,
+          can_request_brands: !!vPerm.can_request_brands,
+          can_request_licenses: !!vPerm.can_request_licenses
+        });
+      }
+    }
+
+    // Filter brands for vendors: approved, manufacturer/other (no generic), is_vendor_selectable = true
+    const GENERIC_NAMES = ['genérica', 'generica', 'generic', 'sin marca', 'no brand', 'n/a', 'na', 'desconocido', 'ninguna', '—', '-'];
+    const validVendorBrands = (brs || []).filter(b => 
+      b.brand_type !== 'generic' && 
+      b.is_vendor_selectable !== false &&
+      !GENERIC_NAMES.includes(b.name.toLowerCase().trim())
+    );
+
     setCategories(cats || []);
-    setBrands(brs || []);
+    setBrands(validVendorBrands);
+    setLicenses(lics || []);
     setTags(tgs || []);
     setActiveStores(strs || []);
     setStoreBrands(stBrs || []);
@@ -232,9 +274,15 @@ export default function VProducts() {
       if (!form.title || !form.title.trim()) throw new Error("El título es obligatorio");
 
       if (form.status === 'published') {
-        const errors = [];
-        if (!form.categories[0]) errors.push("Falta categoría válida");
-        if (!form.brands[0]) errors.push("Falta marca válida");
+        const errors: string[] = [];
+        const selectedBrandId = form.brands[0] || form.brand_id;
+        const selectedBrandObj = brands.find(b => b.id === selectedBrandId);
+        const GENERIC_LIST = ['genérica', 'generica', 'generic', 'sin marca', 'no brand', 'n/a', 'na', 'desconocido', 'ninguna', '—', '-'];
+        
+        if (!selectedBrandId || !selectedBrandObj || GENERIC_LIST.includes(selectedBrandObj.name.toLowerCase().trim())) {
+          throw new Error("No podés publicar este producto todavía.\nSeleccioná una marca/fabricante válida del catálogo de Collectibles.");
+        }
+        if (!form.categories[0] && !form.category_id) errors.push("Falta categoría válida");
         if ((parseFloat(form.base_price) || 0) <= 0) errors.push("Precio inválido (debe ser mayor a 0)");
         if ((parseInt(form.stock) || 0) < 0) errors.push("Stock inválido (no puede ser negativo)");
         if (!form.image_url) errors.push("Imágenes suficientes (se requiere al menos una imagen)");
@@ -242,7 +290,7 @@ export default function VProducts() {
         // Duplicate check
         const { data: dupData } = await supabase.rpc('check_duplicate_product', {
           p_title: form.title,
-          p_brand_id: form.brands[0] || null,
+          p_brand_id: selectedBrandId || null,
           p_sku: form.sku || null,
           p_gtin: null,
           p_asin: null
@@ -388,31 +436,25 @@ export default function VProducts() {
   };
 
   const handleAddCategory = async () => {
+    if (!vendorPermissions.can_request_categories) {
+      return toast.error("No tienes permiso para solicitar nuevas categorías. Contacta al Administrador.");
+    }
     if (!newCatInput.trim() || !user) return;
     try {
-      let slug = newCatInput.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
-      slug = `${slug}-v${user.id.substring(0, 4)}`;
-      const { data, error } = await supabase.from('categories').insert({ name: newCatInput.trim(), slug, owner_vendor_id: user.id, status: 'pending_review', is_active: true }).select().single();
+      const { error } = await supabase.from('vendor_category_requests').insert({
+        vendor_id: user.id,
+        requested_name: newCatInput.trim(),
+        source: 'vendor_form',
+        status: 'pending'
+      });
       if (error) throw error;
-      setCategories([...categories, data]);
-      toggleCategory(data.id);
       setNewCatInput('');
-      toast.success('Categoría propuesta (pendiente de revisión)');
+      toast.success('Solicitud de nueva categoría enviada al Administrador.');
     } catch (err: any) { toast.error(err.message); }
   };
 
   const handleAddBrand = async () => {
-    if (!newBrandInput.trim() || !user) return;
-    try {
-      let slug = newBrandInput.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
-      slug = `${slug}-v${user.id.substring(0, 4)}`;
-      const { data, error } = await supabase.from('brands').insert({ name: newBrandInput.trim(), slug, owner_vendor_id: user.id, status: 'pending_review', is_active: false, is_public: false, source: 'manual' }).select().single();
-      if (error) throw error;
-      setBrands([...brands, data]);
-      toggleBrand(data.id);
-      setNewBrandInput('');
-      toast.success('Marca propuesta (pendiente de revisión)');
-    } catch (err: any) { toast.error(err.message); }
+    toast.error("No se permite crear marcas personalizadas. Debes seleccionar una marca oficial aprobada del catálogo.");
   };
 
   const handleInlineUpdate = async (id: string, field: string, value: any) => {
@@ -813,8 +855,35 @@ export default function VProducts() {
     });
   }, [products, search, filterCategory, filterBrand]);
 
+  const brandReviewCount = useMemo(() => {
+    const GENERIC_LIST = ['genérica', 'generica', 'generic', 'sin marca', 'no brand', 'n/a', 'na', 'desconocido', 'ninguna', '—', '-'];
+    return products.filter(p => {
+      if (p.status !== 'published') return false;
+      if ((p as any).needs_brand_review) return true;
+      if (!p.brand?.id && !(p as any).brand_id) return true;
+      const bName = p.brand?.name || '';
+      if (bName && GENERIC_LIST.includes(bName.toLowerCase().trim())) return true;
+      return false;
+    }).length;
+  }, [products]);
+
   return (
     <div className="max-w-full">
+      {/* Brand Review Alert Banner */}
+      {brandReviewCount > 0 && (
+        <div className="mb-6 p-4 bg-amber-500/10 border-2 border-amber-500/30 rounded-2xl flex items-center gap-3 animate-fade-in">
+          <AlertCircle className="w-6 h-6 text-amber-600 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-bold text-amber-900">
+              Tienes {brandReviewCount} producto(s) publicado(s) que requieren revisión de marca.
+            </p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Por reglas de catálogo y calidad, la marca actual no cumple con los estándares oficiales. Debes seleccionar una marca válida antes de re-publicar o guardar cambios.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-6">
@@ -1150,6 +1219,16 @@ export default function VProducts() {
 
               {/* Editor Layout */}
               <div className="flex-1 overflow-y-auto p-8">
+                 {(!form.brands[0] || (brands.find(b => b.id === form.brands[0]) && ['genérica', 'generica', 'generic', 'sin marca', 'no brand', 'n/a', 'na', 'desconocido', 'ninguna', '—', '-'].includes((brands.find(b => b.id === form.brands[0])?.name || '').toLowerCase().trim()))) && (
+                    <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-2xl flex items-center gap-3 text-red-800 text-xs font-bold shadow-sm">
+                       <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                       <div>
+                         <p className="text-sm font-bold text-red-900">La marca actual no cumple con las reglas del catálogo.</p>
+                         <p className="font-normal text-red-700 mt-0.5">Debes seleccionar una marca válida aprobada en el panel lateral antes de publicar o guardar cambios.</p>
+                       </div>
+                    </div>
+                 )}
+
                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
                     
                     {/* Main Content (Left) */}
@@ -1298,17 +1377,23 @@ export default function VProducts() {
                                    </label>
                                 ))}
                              </div>
-                              <div className="flex gap-2">
-                                <input 
-                                  value={newCatInput} onChange={e => setNewCatInput(e.target.value)}
-                                  placeholder="Nueva categoría..." className="flex-1 text-xs p-1.5 border rounded outline-none focus:border-blue-500" 
-                                />
-                                <button type="button" onClick={handleAddCategory} className="bg-blue-50 text-blue-600 px-3 rounded font-bold text-[10px] hover:bg-blue-100">
-                                   Añadir
-                                </button>
-                              </div>
-                          </div>
-                       </SidebarWidget>
+                               {vendorPermissions.can_request_categories ? (
+                                 <div className="flex gap-2">
+                                   <input 
+                                     value={newCatInput} onChange={e => setNewCatInput(e.target.value)}
+                                     placeholder="Solicitar nueva categoría..." className="flex-1 text-xs p-1.5 border rounded outline-none focus:border-blue-500" 
+                                   />
+                                   <button type="button" onClick={handleAddCategory} className="bg-blue-50 text-blue-600 px-3 rounded font-bold text-[10px] hover:bg-blue-100">
+                                      Solicitar
+                                   </button>
+                                 </div>
+                               ) : (
+                                 <p className="text-[10px] text-gray-400 italic">
+                                    Solicitud de nuevas categorías deshabilitada. Selecciona una categoría existente.
+                                 </p>
+                               )}
+                           </div>
+                        </SidebarWidget>
 
                        {/* WIDGET: ETIQUETAS */}
                        <SidebarWidget title="Etiquetas del producto">
@@ -1346,28 +1431,81 @@ export default function VProducts() {
                            </div>
                         </SidebarWidget>
 
-                        {/* WIDGET: MARCAS */}
-                       <SidebarWidget title="Marcas (Brands)">
-                          <div className="space-y-3">
-                             <div className="border rounded-md max-h-48 overflow-y-auto p-2 bg-gray-50/30">
-                                {brands.map(b => (
-                                   <label key={b.id} className="flex items-center gap-2 py-1 px-1 hover:bg-white rounded transition-colors cursor-pointer text-xs">
-                                      <input type="checkbox" checked={form.brands.includes(b.id)} onChange={() => toggleBrand(b.id)} className="rounded border-gray-300 text-blue-600" />
-                                      {b.name}
-                                   </label>
-                                ))}
-                             </div>
-                              <div className="flex gap-2">
-                                <input 
-                                  value={newBrandInput} onChange={e => setNewBrandInput(e.target.value)}
-                                  placeholder="Nueva marca..." className="flex-1 text-xs p-1.5 border rounded outline-none focus:border-blue-500" 
-                                />
-                                <button type="button" onClick={handleAddBrand} className="bg-blue-50 text-blue-600 px-3 rounded font-bold text-[10px] hover:bg-blue-100">
-                                   Añadir
-                                </button>
+                        {/* WIDGET: MARCA / FABRICANTE */}
+                        <SidebarWidget title="MARCA / FABRICANTE *">
+                           <div className="space-y-3">
+                              <select
+                                 value={form.brands[0] || ''}
+                                 onChange={e => {
+                                    const val = e.target.value;
+                                    setForm(prev => ({ ...prev, brand_id: val, brands: val ? [val] : [] }));
+                                 }}
+                                 className="w-full text-xs p-2 border rounded bg-white outline-none focus:border-blue-500 font-bold text-gray-800"
+                              >
+                                 <option value="">-- Seleccionar Marca Oficial --</option>
+                                 {brands.map(b => (
+                                    <option key={b.id} value={b.id}>{b.name}</option>
+                                 ))}
+                              </select>
+                              <p className="text-[10px] text-gray-400">
+                                 Indica quién fabrica/comercializa el producto (Obligatoria para publicar). Ej: Hasbro, Funko, Mattel, NECA.
+                              </p>
+                              <div className="pt-2 border-t flex justify-between items-center text-xs">
+                                 <span className="text-gray-500 text-[11px]">¿No encontrás la marca?</span>
+                                 {vendorPermissions.can_request_brands ? (
+                                   <button
+                                      type="button"
+                                      onClick={() => { setRequestedBrandName(''); setShowBrandRequestModal(true); }}
+                                      className="text-blue-600 hover:underline font-bold text-[11px]"
+                                   >
+                                      Solicitar nueva marca
+                                   </button>
+                                 ) : (
+                                   <span className="text-gray-400 text-[10px] italic">
+                                      Solicitud de marcas deshabilitada
+                                   </span>
+                                 )}
                               </div>
-                          </div>
-                       </SidebarWidget>
+                           </div>
+                        </SidebarWidget>
+
+                        {/* WIDGET: LICENCIA / FRANQUICIA */}
+                        <SidebarWidget title="LICENCIA / FRANQUICIA">
+                           <div className="space-y-3">
+                              <select
+                                 value={(form as any).license_id || ''}
+                                 onChange={e => {
+                                    const val = e.target.value;
+                                    setForm(prev => ({ ...prev, license_id: val } as any));
+                                 }}
+                                 className="w-full text-xs p-2 border rounded bg-white outline-none focus:border-blue-500 text-gray-800 font-semibold"
+                              >
+                                 <option value="">-- Sin Licencia / Opcional --</option>
+                                 {licenses.map(l => (
+                                    <option key={l.id} value={l.id}>{l.name}</option>
+                                 ))}
+                              </select>
+                              <p className="text-[10px] text-gray-400">
+                                 Indica la propiedad/personaje/universo cuando corresponda (Opcional). Ej: Marvel, Disney, Pokémon, Star Wars.
+                              </p>
+                              <div className="pt-2 border-t flex justify-between items-center text-xs">
+                                 <span className="text-gray-500 text-[11px]">¿No encontrás la licencia?</span>
+                                 {vendorPermissions.can_request_licenses ? (
+                                   <button
+                                      type="button"
+                                      onClick={() => { setRequestedLicenseName(''); setShowLicenseRequestModal(true); }}
+                                      className="text-blue-600 hover:underline font-bold text-[11px]"
+                                   >
+                                      Solicitar nueva licencia
+                                   </button>
+                                 ) : (
+                                   <span className="text-gray-400 text-[10px] italic">
+                                      Solicitud de licencias deshabilitada
+                                   </span>
+                                 )}
+                              </div>
+                           </div>
+                        </SidebarWidget>
 
                        {/* WIDGET: IMAGEN DESTACADA */}
                        <SidebarWidget title="Imagen del producto">
@@ -1411,12 +1549,10 @@ export default function VProducts() {
               </div>
 
            </div>
-
-           {/* Media Picker handled outside the big modal component logic but uses setForm */}
         </div>
       )}
 
-      {/* �"��"��"� MODALS & OVERLAYS �"��"��"� */}
+      {/* MODALS & OVERLAYS */}
       <MediaPickerModal 
         isOpen={showMediaPicker !== false} 
         onClose={() => setShowMediaPicker(false)} 
@@ -1439,6 +1575,145 @@ export default function VProducts() {
 
       {showImport && (
         <ImportModal onClose={() => setShowImport(false)} onConfirm={handleImportConfirm} />
+      )}
+
+      {/* MODAL: SOLICITAR NUEVA MARCA */}
+      {showBrandRequestModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-200 rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="font-bold text-gray-900 text-base">Solicitar Nueva Marca</h3>
+              <button onClick={() => setShowBrandRequestModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-xs text-gray-500">
+                Si la marca del fabricante de tus productos no se encuentra en el catálogo oficial de Collectibles, podés solicitar su incorporación. El Administrador revisará y aprobará la solicitud.
+              </p>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Nombre del Fabricante / Marca *</label>
+                <input
+                  type="text"
+                  placeholder="Ej: Hasbro, Funko, PhatMojo..."
+                  value={requestedBrandName}
+                  onChange={(e) => setRequestedBrandName(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border rounded-xl focus:outline-none focus:border-blue-500 font-semibold"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t">
+              <button
+                type="button"
+                onClick={() => setShowBrandRequestModal(false)}
+                className="px-4 py-2 bg-gray-100 text-gray-700 text-xs font-bold rounded-xl hover:bg-gray-200"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                disabled={!requestedBrandName.trim() || brandRequestLoading}
+                onClick={async () => {
+                  setBrandRequestLoading(true);
+                  try {
+                    const { error } = await supabase.from('vendor_brand_requests').insert({
+                      vendor_id: user?.id,
+                      requested_name: requestedBrandName.trim(),
+                      source: 'vendor_form',
+                      status: 'pending'
+                    });
+                    if (error) throw error;
+                    toast.success('Solicitud de nueva marca enviada al Administrador.');
+                    setShowBrandRequestModal(false);
+                    setRequestedBrandName('');
+                  } catch (err: any) {
+                    toast.error('Error al solicitar marca: ' + err.message);
+                  } finally {
+                    setBrandRequestLoading(false);
+                  }
+                }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl disabled:opacity-50"
+              >
+                {brandRequestLoading ? 'Enviando...' : 'Enviar Solicitud'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL SOLICITAR NUEVA LICENCIA */}
+      {showLicenseRequestModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-4">
+            <div className="flex justify-between items-center pb-2 border-b">
+              <h3 className="font-bold text-gray-900 text-base">Solicitar Nueva Licencia / Franquicia</h3>
+              <button
+                onClick={() => setShowLicenseRequestModal(false)}
+                className="text-gray-400 hover:text-gray-600 text-lg font-bold"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-xs text-gray-500">
+                Si la franquicia o propiedad intelectual de tus productos no se encuentra disponible, podés solicitar su incorporación. El Administrador la revisará y asociará al catálogo.
+              </p>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Nombre de la Licencia / Franquicia *</label>
+                <input
+                  type="text"
+                  placeholder="Ej: Star Wars, Marvel, Transformers..."
+                  value={requestedLicenseName}
+                  onChange={(e) => setRequestedLicenseName(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border rounded-xl focus:outline-none focus:border-blue-500 font-semibold"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t">
+              <button
+                type="button"
+                onClick={() => setShowLicenseRequestModal(false)}
+                className="px-4 py-2 bg-gray-100 text-gray-700 text-xs font-bold rounded-xl hover:bg-gray-200"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                disabled={!requestedLicenseName.trim() || licenseRequestLoading}
+                onClick={async () => {
+                  setLicenseRequestLoading(true);
+                  try {
+                    const { error } = await supabase.from('vendor_license_requests').insert({
+                      vendor_id: user?.id,
+                      requested_name: requestedLicenseName.trim(),
+                      source: 'vendor_form',
+                      status: 'pending'
+                    });
+                    if (error) throw error;
+                    toast.success('Solicitud de nueva licencia enviada al Administrador.');
+                    setShowLicenseRequestModal(false);
+                    setRequestedLicenseName('');
+                  } catch (err: any) {
+                    toast.error('Error al solicitar licencia: ' + err.message);
+                  } finally {
+                    setLicenseRequestLoading(false);
+                  }
+                }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl disabled:opacity-50"
+              >
+                {licenseRequestLoading ? 'Enviando...' : 'Enviar Solicitud'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

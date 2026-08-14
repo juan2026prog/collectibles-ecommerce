@@ -8,6 +8,7 @@ export interface ParsedProduct {
   stock: number;
   category_name?: string;
   brand_name?: string;
+  license_name?: string;
   image_url?: string;
   description?: string;
   raw_row?: any;
@@ -113,7 +114,10 @@ export async function parseProductsFile(file: File): Promise<ParsedProduct[]> {
           const category_name = (findValue(processedRow, ['category_name', 'category', 'categoría', 'categoria', 'rubro', 'grupo']) || '').toString().trim();
 
           // Resolve Brand
-          const brand_name = (findValue(processedRow, ['brand_name', 'brand', 'marca']) || '').toString().trim();
+          const brand_name = (findValue(processedRow, ['brand_name', 'brand', 'marca', 'fabricante', 'manufacturer']) || '').toString().trim();
+
+          // Resolve License
+          const license_name = (findValue(processedRow, ['license_name', 'license', 'licencia', 'franquicia', 'franchise', 'propiedad', 'universo']) || '').toString().trim();
 
           // Resolve Image URL
           const image_url = (findValue(processedRow, ['image_url', 'image', 'imagen', 'foto', 'url imagen', 'url_imagen', 'img']) || '').toString().trim();
@@ -129,6 +133,7 @@ export async function parseProductsFile(file: File): Promise<ParsedProduct[]> {
             stock,
             category_name,
             brand_name,
+            license_name,
             image_url,
             description,
             raw_row: row

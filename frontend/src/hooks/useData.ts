@@ -6,6 +6,7 @@ import { useAnalytics } from '../contexts/AnalyticsContext';
 interface ProductFilters {
   category?: string;
   brand?: string;
+  license?: string;
   search?: string;
   badge?: string;
   minPrice?: number;
@@ -101,6 +102,41 @@ export function useProducts(filters: ProductFilters = {}) {
         .single();
       brandId = data?.id ?? null;
       if (!brandId) { setProducts([]); setCount(0); setLoading(false); return; }
+    }
+
+    if (filters.license) {
+      const { data: licData } = await supabase
+        .from('licenses')
+        .select('id')
+        .eq('slug', filters.license)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (licData) {
+        const { data: licItems } = await supabase
+          .from('product_licenses')
+          .select('product_id')
+          .eq('license_id', licData.id);
+        
+        if (licItems && licItems.length > 0) {
+          const licProdIds = licItems.map(x => x.product_id);
+          if (productIds) {
+            productIds = productIds.filter(id => licProdIds.includes(id));
+          } else {
+            productIds = licProdIds;
+          }
+        } else {
+          setProducts([]);
+          setCount(0);
+          setLoading(false);
+          return;
+        }
+      } else {
+        setProducts([]);
+        setCount(0);
+        setLoading(false);
+        return;
+      }
     }
 
     if (filters.collection_id) {
@@ -982,4 +1018,26 @@ export function getProductPaymentRestrictions(product: any) {
   }
 
   return { allowedProviders, restrictionType };
+}
+
+// ═══ useLicenses ═══
+export function useLicenses() {
+  const [licenses, setLicenses] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetch() {
+      const { data } = await supabase
+        .from('licenses')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true });
+      setLicenses(data || []);
+      setLoading(false);
+    }
+    fetch();
+  }, []);
+
+  return { licenses, loading };
 }

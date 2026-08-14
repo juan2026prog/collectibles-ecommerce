@@ -25,6 +25,47 @@ Deno.serve(async (req: any) => {
       .in('name', ['Recuperación Carrito (1H)', 'Recuperación Carrito + Cupón (48H)']);
     const getTemplate = (name: string) => templates?.find(t => t.name === name) || null;
 
+    // Helper to send real or simulated WhatsApp for cart recovery
+    const sendWhatsAppRecovery = async (phone: string, customerName: string, couponCode?: string) => {
+      const token = Deno.env.get("WHATSAPP_TOKEN");
+      const phoneId = Deno.env.get("WHATSAPP_PHONE_ID");
+      if (!token || token === 'mock-whatsapp-key' || !phoneId) {
+        console.log(`[WhatsApp Cart Recovery Simulated] To: ${phone} | Name: ${customerName} | Coupon: ${couponCode || 'None'}`);
+        return;
+      }
+      try {
+        const cleanPhone = phone.replace(/[\+\s\-]/g, '');
+        const templateName = couponCode ? 'customer_cart_recovery' : 'customer_cart_recovery';
+        const params = couponCode ? [customerName, couponCode] : [customerName, 'COMPRA10'];
+        
+        await fetch(`https://graph.facebook.com/v17.0/${phoneId}/messages`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            messaging_product: "whatsapp",
+            recipient_type: "individual",
+            to: cleanPhone,
+            type: "template",
+            template: {
+              name: templateName,
+              language: { code: "es" },
+              components: [
+                {
+                  type: "body",
+                  parameters: params.map(p => ({ type: "text", text: p }))
+                }
+              ]
+            }
+          })
+        });
+      } catch (err: any) {
+        console.error(`[WhatsApp Cart Recovery Error] To: ${phone}`, err.message);
+      }
+    };
+
     // 1. Process 1-Hour Carts (First Reminder)
     const { data: carts1h } = await supabase
       .from('abandoned_checkouts')
@@ -39,11 +80,9 @@ Deno.serve(async (req: any) => {
         const tpl = getTemplate('Recuperación Carrito (1H)');
         let finalHtml = tpl?.content || '<p>Hola {{nombre}}, vimos que dejaste artículos en tu carrito.</p>';
         finalHtml = finalHtml.replace('{{nombre}}', cart.email.split('@')[0]);
-        finalHtml = finalHtml.replace('{{checkout_url}}', 'https://tu-tienda.com/checkout');
+        finalHtml = finalHtml.replace('{{checkout_url}}', 'https://collectibles.uy/checkout');
 
         console.log(`Sending 1h recovery email to: ${cart.email}`);
-        console.log(`SUBJECT: ${tpl?.subject || '¿Olvidaste algo en tu carrito?'}`);
-        console.log(`HTML: ${finalHtml}`);
         
         await supabase
           .from('abandoned_checkouts')
@@ -67,16 +106,20 @@ Deno.serve(async (req: any) => {
 
     if (carts24h && carts24h.length > 0) {
       const emails24h = carts24h.map(c => c.email);
-      const { data: consents24h } = await supabase.from('customer_consents').select('email, whatsapp_opt_in').in('email', emails24h);
+      const { data: consents24h } = await supabase.from('customer_consents').select('email, whatsapp_opt_in, phone').in('email', emails24h);
       const consentMap24h = new Map(consents24h?.map(c => [c.email, c]) || []);
 
       for (const cart of carts24h) {
         let channel = 'email';
         console.log(`Sending 24h recovery email to: ${cart.email}`);
         
-        const hasWhatsappOptIn = consentMap24h.get(cart.email)?.whatsapp_opt_in;
-        if (hasWhatsappOptIn) {
-          console.log(`Sending 24h recovery WhatsApp to: ${cart.email}`);
+        const consent = consentMap24h.get(cart.email);
+        const hasWhatsappOptIn = consent?.whatsapp_opt_in;
+        const phone = consent?.phone || cart.phone;
+
+        if (hasWhatsappOptIn && phone) {
+          console.log(`Sending 24h recovery WhatsApp to: ${cart.email} (${phone})`);
+          await sendWhatsAppRecovery(phone, cart.email.split('@')[0]);
           channel = 'email+whatsapp';
         }
 
@@ -102,7 +145,7 @@ Deno.serve(async (req: any) => {
 
     if (carts48h && carts48h.length > 0) {
       const emails48h = carts48h.map(c => c.email);
-      const { data: consents48h } = await supabase.from('customer_consents').select('email, whatsapp_opt_in').in('email', emails48h);
+      const { data: consents48h } = await supabase.from('customer_consents').select('email, whatsapp_opt_in, phone').in('email', emails48h);
       const consentMap48h = new Map(consents48h?.map(c => [c.email, c]) || []);
 
       for (const cart of carts48h) {
@@ -122,15 +165,18 @@ Deno.serve(async (req: any) => {
         let finalHtml = tpl?.content || '<p>Hola {{nombre}}, vuelve y llévate tu pedido con 10% OFF usando el código {{cupon}}</p>';
         finalHtml = finalHtml.replace('{{nombre}}', cart.email.split('@')[0]);
         finalHtml = finalHtml.replace('{{cupon}}', uniqueCode);
-        finalHtml = finalHtml.replace('{{checkout_url}}', 'https://tu-tienda.com/checkout');
+        finalHtml = finalHtml.replace('{{checkout_url}}', 'https://collectibles.uy/checkout');
 
         console.log(`Sending 48h recovery email with coupon ${uniqueCode} to: ${cart.email}`);
-        console.log(`HTML: ${finalHtml}`);
         
         let channel = 'email';
-        const hasWhatsappOptIn = consentMap48h.get(cart.email)?.whatsapp_opt_in;
-        if (hasWhatsappOptIn) {
-          console.log(`Sending 48h recovery WhatsApp with coupon ${uniqueCode} to: ${cart.email}`);
+        const consent = consentMap48h.get(cart.email);
+        const hasWhatsappOptIn = consent?.whatsapp_opt_in;
+        const phone = consent?.phone || cart.phone;
+
+        if (hasWhatsappOptIn && phone) {
+          console.log(`Sending 48h recovery WhatsApp with coupon ${uniqueCode} to: ${cart.email} (${phone})`);
+          await sendWhatsAppRecovery(phone, cart.email.split('@')[0], uniqueCode);
           channel = 'email+whatsapp';
         }
 

@@ -136,21 +136,22 @@ export default function VSettings() {
           notify_test: !!data.notify_test,
           is_active: !!data.is_active
         });
-      } else {
+        const defaultPhone = formData.contact_phone || '';
+        const isDefaultPhoneValid = defaultPhone.startsWith('+598') && defaultPhone.length >= 11;
         setNotificationSettings({
           id: '',
           whatsapp_numbers: [
-            { label: 'Dueño', number: '', enabled: false },
+            { label: 'Dueño', number: defaultPhone, enabled: isDefaultPhoneValid },
             { label: 'Depósito', number: '', enabled: false },
             { label: 'Administración', number: '', enabled: false }
           ],
-          notify_new_sale: false,
-          notify_payment_received: false,
-          notify_order_shipped: false,
-          notify_low_stock: false,
-          notify_payout_paid: false,
+          notify_new_sale: true,
+          notify_payment_received: true,
+          notify_order_shipped: true,
+          notify_low_stock: true,
+          notify_payout_paid: true,
           notify_test: false,
-          is_active: false
+          is_active: true
         });
       }
     } catch (err: any) {

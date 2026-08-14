@@ -85,28 +85,56 @@ serve(async (req: Request) => {
       });
     };
 
-    // Helper to send real or simulated SMS/WhatsApp
-    const dispatchWhatsApp = async (phone: string, text: string): Promise<{ status: string; error: string | null }> => {
+    // Helper to send real or simulated SMS/WhatsApp (supports both text and Meta HSM templates)
+    const dispatchWhatsApp = async (
+      phone: string, 
+      text: string, 
+      templateName?: string, 
+      templateParams?: string[]
+    ): Promise<{ status: string; error: string | null }> => {
       if (!WHATSAPP_TOKEN || WHATSAPP_TOKEN === 'mock-whatsapp-key' || !WHATSAPP_TOKEN.startsWith('EAAG')) {
-        console.log(`[WhatsApp Simulated] To: ${phone} | Body: ${text}`);
+        console.log(`[WhatsApp Simulated] To: ${phone} | Template: ${templateName || 'None'} | Body: ${text}`);
         return { status: 'queued', error: 'pending provider connection' };
       }
 
       try {
         const cleanPhone = phone.replace(/[\+\s\-]/g, '');
+        
+        let payload: any;
+        if (templateName) {
+          payload = {
+            messaging_product: "whatsapp",
+            recipient_type: "individual",
+            to: cleanPhone,
+            type: "template",
+            template: {
+              name: templateName,
+              language: { code: "es" },
+              components: [
+                {
+                  type: "body",
+                  parameters: (templateParams || []).map(val => ({ type: "text", text: String(val) }))
+                }
+              ]
+            }
+          };
+        } else {
+          payload = {
+            messaging_product: "whatsapp",
+            recipient_type: "individual",
+            to: cleanPhone,
+            type: "text",
+            text: { body: text, preview_url: false }
+          };
+        }
+
         const response = await fetch(`https://graph.facebook.com/v17.0/${WHATSAPP_PHONE_ID}/messages`, {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${WHATSAPP_TOKEN}`,
             "Content-Type": "application/json"
           },
-          body: JSON.stringify({
-            messaging_product: "whatsapp",
-            recipient_type: "individual",
-            to: cleanPhone,
-            type: "text",
-            text: { body: text, preview_url: false }
-          })
+          body: JSON.stringify(payload)
         });
         
         const data = await response.json();
@@ -118,6 +146,44 @@ serve(async (req: Request) => {
         console.error(`[WhatsApp API Error] To: ${phone}`, err.message);
         return { status: 'failed', error: err.message };
       }
+    };
+
+    // Helper to resolve vendor target phone numbers with fallback to vendors.contact_phone
+    const getVendorNotificationNumbers = async (
+      vendorId: string, 
+      eventFlag: 'notify_new_sale' | 'notify_payout_paid' | 'notify_low_stock' | 'notify_order_shipped'
+    ): Promise<string[]> => {
+      const { data: settings } = await supabaseAdmin
+        .from('vendor_notification_settings')
+        .select('*')
+        .eq('vendor_id', vendorId)
+        .maybeSingle();
+
+      const targetNumbers: string[] = [];
+
+      if (settings && (settings.is_active ?? true) && (settings[eventFlag] ?? true) !== false) {
+        const numbers = (settings.whatsapp_numbers || []) as any[];
+        for (const n of numbers) {
+          if (n.enabled && n.number && n.number.trim()) {
+            targetNumbers.push(n.number.trim());
+          }
+        }
+      }
+
+      // Fallback to vendor contact_phone if no specific settings or active numbers were configured
+      if (targetNumbers.length === 0) {
+        const { data: vData } = await supabaseAdmin
+          .from('vendors')
+          .select('contact_phone')
+          .eq('id', vendorId)
+          .maybeSingle();
+        
+        if (vData?.contact_phone && vData.contact_phone.trim()) {
+          targetNumbers.push(vData.contact_phone.trim());
+        }
+      }
+
+      return targetNumbers;
     };
 
     // 2. Event Handlers & Data Loading
@@ -141,10 +207,14 @@ serve(async (req: Request) => {
       const orderIdShort = order.id.slice(0, 8).toUpperCase();
       
       let clientName = 'Cliente';
+      let clientPhone = order.customer_phone || '';
       if (order.shipping_address && typeof order.shipping_address === 'object') {
         const addr = order.shipping_address as any;
         if (addr.first_name) {
           clientName = `${addr.first_name} ${addr.last_name || ''}`.trim();
+        }
+        if (!clientPhone && addr.phone) {
+          clientPhone = addr.phone;
         }
       }
 
@@ -180,24 +250,19 @@ serve(async (req: Request) => {
 
       // A. Notify Vendors involved
       for (const [vendorId, group] of Object.entries(vendorItems)) {
-        const { data: settings } = await supabaseAdmin
-          .from('vendor_notification_settings')
-          .select('*')
-          .eq('vendor_id', vendorId)
-          .eq('is_active', true)
-          .eq('notify_new_sale', true)
-          .maybeSingle();
-
-        if (settings) {
+        const targetNumbers = await getVendorNotificationNumbers(vendorId, 'notify_new_sale');
+        if (targetNumbers.length > 0) {
           const productLines = group.items.map(it => `- ${it.products?.title} (x${it.quantity})`).join('\n');
           const message = `Nueva venta en tu tienda\n\nPedido: #${orderIdShort}\nTotal: $${group.total.toLocaleString()}\nProductos: ${group.items.length}\n${productLines}\nCliente: ${clientName}\nEstado: Pago aprobado\n\nVer en panel:\nhttps://collectibles.uy/vendor?tab=orders`;
           
-          const numbers = (settings.whatsapp_numbers || []) as any[];
-          for (const n of numbers) {
-            if (n.enabled && n.number) {
-              const res = await dispatchWhatsApp(n.number, message);
-              await logNotification('vendor', vendorId, n.number, res.status, res.error);
-            }
+          for (const num of targetNumbers) {
+            const res = await dispatchWhatsApp(
+              num, 
+              message, 
+              'vendor_new_sale', 
+              [group.store_name, orderIdShort, group.total.toLocaleString(), clientName]
+            );
+            await logNotification('vendor', vendorId, num, res.status, res.error);
           }
         }
       }
@@ -217,7 +282,12 @@ serve(async (req: Request) => {
           const message = `Nueva venta en Collectibles\n\nPedido: #${orderIdShort}\nTotal: $${collectiblesTotal.toLocaleString()}\nCliente: ${clientName}\nMétodo de pago: ${order.payment_method || 'Mercado Pago'}`;
           for (const n of numbers) {
             if (n.enabled && n.number) {
-              const res = await dispatchWhatsApp(n.number, message);
+              const res = await dispatchWhatsApp(
+                n.number, 
+                message, 
+                'vendor_new_sale', 
+                ['Collectibles', orderIdShort, collectiblesTotal.toLocaleString(), clientName]
+              );
               await logNotification('admin', null, n.number, res.status, res.error);
             }
           }
@@ -226,7 +296,6 @@ serve(async (req: Request) => {
         // Case 2: Vendor Sales for Admin
         if (hasVendorItems && adminSettings.notify_vendor_sales) {
           for (const [vendorId, group] of Object.entries(vendorItems)) {
-            // Estimate commission based on vendor's commission rate
             const { data: vendorData } = await supabaseAdmin
               .from('vendors')
               .select('base_commission_rate')
@@ -240,12 +309,31 @@ serve(async (req: Request) => {
             
             for (const n of numbers) {
               if (n.enabled && n.number) {
-                const res = await dispatchWhatsApp(n.number, message);
+                const res = await dispatchWhatsApp(
+                  n.number, 
+                  message, 
+                  'vendor_new_sale', 
+                  [group.store_name, orderIdShort, group.total.toLocaleString(), clientName]
+                );
                 await logNotification('admin', null, n.number, res.status, res.error);
               }
             }
           }
         }
+      }
+
+      // C. Notify Customer Comprador (New Feature)
+      if (clientPhone) {
+        const orderTotal = Number(order.total_amount || 0).toLocaleString();
+        const clientMsg = `¡Hola ${clientName}! Tu pedido #${orderIdShort} en Collectibles ha sido confirmado con éxito.\nTotal: $${orderTotal}\n\nGracias por tu compra. Te avisaremos cuando tu pedido sea enviado.`;
+        
+        const res = await dispatchWhatsApp(
+          clientPhone, 
+          clientMsg, 
+          'customer_order_confirmed', 
+          [clientName, orderIdShort, orderTotal]
+        );
+        await logNotification('admin', null, clientPhone, res.status, res.error);
       }
 
     } else if (event_type === 'payout_paid') {
@@ -257,24 +345,19 @@ serve(async (req: Request) => {
         .single();
       
       if (payout) {
-        const { data: settings } = await supabaseAdmin
-          .from('vendor_notification_settings')
-          .select('*')
-          .eq('vendor_id', payout.vendor_id)
-          .eq('is_active', true)
-          .eq('notify_payout_paid', true)
-          .maybeSingle();
-
-        if (settings) {
+        const targetNumbers = await getVendorNotificationNumbers(payout.vendor_id, 'notify_payout_paid');
+        if (targetNumbers.length > 0) {
           const dateStr = payout.paid_at ? new Date(payout.paid_at).toLocaleDateString('es-UY') : new Date().toLocaleDateString('es-UY');
           const message = `Liquidación pagada\n\nMonto: $${Number(payout.amount).toLocaleString()}\nFecha: ${dateStr}`;
           
-          const numbers = (settings.whatsapp_numbers || []) as any[];
-          for (const n of numbers) {
-            if (n.enabled && n.number) {
-              const res = await dispatchWhatsApp(n.number, message);
-              await logNotification('vendor', payout.vendor_id, n.number, res.status, res.error);
-            }
+          for (const num of targetNumbers) {
+            const res = await dispatchWhatsApp(
+              num, 
+              message, 
+              'vendor_payout_paid', 
+              [Number(payout.amount).toLocaleString(), dateStr]
+            );
+            await logNotification('vendor', payout.vendor_id, num, res.status, res.error);
           }
         }
       }
@@ -294,21 +377,16 @@ serve(async (req: Request) => {
 
         // A. Notify Vendor
         if (vendorId) {
-          const { data: settings } = await supabaseAdmin
-            .from('vendor_notification_settings')
-            .select('*')
-            .eq('vendor_id', vendorId)
-            .eq('is_active', true)
-            .eq('notify_low_stock', true)
-            .maybeSingle();
-
-          if (settings) {
-            const numbers = (settings.whatsapp_numbers || []) as any[];
-            for (const n of numbers) {
-              if (n.enabled && n.number) {
-                const res = await dispatchWhatsApp(n.number, message);
-                await logNotification('vendor', vendorId, n.number, res.status, res.error);
-              }
+          const targetNumbers = await getVendorNotificationNumbers(vendorId, 'notify_low_stock');
+          if (targetNumbers.length > 0) {
+            for (const num of targetNumbers) {
+              const res = await dispatchWhatsApp(
+                num, 
+                message, 
+                'vendor_low_stock', 
+                ['tu tienda', `${product.title} (${variant.name})`, String(variant.inventory_count)]
+              );
+              await logNotification('vendor', vendorId, num, res.status, res.error);
             }
           }
         }
@@ -325,7 +403,12 @@ serve(async (req: Request) => {
           const numbers = (adminSettings.whatsapp_numbers || []) as any[];
           for (const n of numbers) {
             if (n.enabled && n.number) {
-              const res = await dispatchWhatsApp(n.number, message);
+              const res = await dispatchWhatsApp(
+                n.number, 
+                message, 
+                'vendor_low_stock', 
+                ['Marketplace', `${product.title} (${variant.name})`, String(variant.inventory_count)]
+              );
               await logNotification('admin', null, n.number, res.status, res.error);
             }
           }
@@ -344,45 +427,47 @@ serve(async (req: Request) => {
         const orderIdShort = shipment.order_id.slice(0, 8).toUpperCase();
         let customerName = shipment.customer_name;
         let city = shipment.customer_city || 'Montevideo';
+        let customerPhone = shipment.orders?.customer_phone || '';
         
-        if (!customerName && shipment.orders && typeof shipment.orders === 'object') {
+        if (shipment.orders && typeof shipment.orders === 'object') {
           const ord = shipment.orders as any;
           if (ord.shipping_address && typeof ord.shipping_address === 'object') {
             const addr = ord.shipping_address;
-            if (addr.first_name) {
+            if (!customerName && addr.first_name) {
               customerName = `${addr.first_name} ${addr.last_name || ''}`.trim();
             }
             if (addr.city) {
               city = addr.city;
+            }
+            if (!customerPhone && addr.phone) {
+              customerPhone = addr.phone;
             }
           }
         }
         if (!customerName) customerName = 'Cliente';
         
         let message = '';
+        const trackingCode = shipment.tracking_code || shipment.external_guide || 'Ver panel';
+        const providerName = shipment.provider_key || 'Envío estándar';
+
         if (event_type === 'shipment_created') {
-          message = `Pedido enviado\n\nPedido: #${orderIdShort}\nDestino: ${city}\nProveedor: ${shipment.provider_key}\nGuía: ${shipment.tracking_code || shipment.external_guide || 'Ver panel'}`;
+          message = `Pedido enviado\n\nPedido: #${orderIdShort}\nDestino: ${city}\nProveedor: ${providerName}\nGuía: ${trackingCode}`;
         } else {
           message = `Pedido entregado\n\nPedido: #${orderIdShort}\nCliente: ${customerName}\nEstado: Entregado ✅`;
         }
 
         // A. Notify Vendor
         if (body_vendor_id) {
-          const { data: settings } = await supabaseAdmin
-            .from('vendor_notification_settings')
-            .select('*')
-            .eq('vendor_id', body_vendor_id)
-            .eq('is_active', true)
-            .eq('notify_order_shipped', true)
-            .maybeSingle();
-
-          if (settings) {
-            const numbers = (settings.whatsapp_numbers || []) as any[];
-            for (const n of numbers) {
-              if (n.enabled && n.number) {
-                const res = await dispatchWhatsApp(n.number, message);
-                await logNotification('vendor', body_vendor_id, n.number, res.status, res.error);
-              }
+          const targetNumbers = await getVendorNotificationNumbers(body_vendor_id, 'notify_order_shipped');
+          if (targetNumbers.length > 0) {
+            for (const num of targetNumbers) {
+              const res = await dispatchWhatsApp(
+                num, 
+                message, 
+                'customer_order_shipped', 
+                [customerName, orderIdShort, providerName, trackingCode]
+              );
+              await logNotification('vendor', body_vendor_id, num, res.status, res.error);
             }
           }
         }
@@ -399,10 +484,27 @@ serve(async (req: Request) => {
           const numbers = (adminSettings.whatsapp_numbers || []) as any[];
           for (const n of numbers) {
             if (n.enabled && n.number) {
-              const res = await dispatchWhatsApp(n.number, message);
+              const res = await dispatchWhatsApp(
+                n.number, 
+                message, 
+                'customer_order_shipped', 
+                [customerName, orderIdShort, providerName, trackingCode]
+              );
               await logNotification('admin', null, n.number, res.status, res.error);
             }
           }
+        }
+
+        // C. Notify Customer Comprador (New Feature)
+        if (customerPhone && event_type === 'shipment_created') {
+          const clientShipMsg = `¡Hola ${customerName}! Tu pedido #${orderIdShort} de Collectibles ha sido enviado por ${providerName}.\nGuía de seguimiento: ${trackingCode}`;
+          const res = await dispatchWhatsApp(
+            customerPhone, 
+            clientShipMsg, 
+            'customer_order_shipped', 
+            [customerName, orderIdShort, providerName, trackingCode]
+          );
+          await logNotification('admin', null, customerPhone, res.status, res.error);
         }
       }
     } else if (event_type === 'test_notification') {

@@ -1063,60 +1063,85 @@ Deno.serve(async (req) => {
                 // 4. Run Normalizer
                 const cleanTitleText = cleanTitle(titleOriginal);
                 
-                // Detect Brand from attributes or cleanTitleText
-                let brandId = null;
-                let brandName = item.attributes?.find((a: any) => a.id === 'BRAND')?.value_name || null;
-                if (brandName) {
-                   // Search for an existing brand (case insensitive check)
+                // Detect Brand & License from attributes or cleanTitleText
+                let brandId: string | null = null;
+                let detectedLicenseId: string | null = null;
+                let rawBrandAttr = item.attributes?.find((a: any) => a.id === 'BRAND' || a.id === 'MANUFACTURER')?.value_name || null;
+                let rawBrandLower = rawBrandAttr ? rawBrandAttr.trim().toLowerCase() : '';
+
+                const GENERIC_LIST = ['genérica', 'generica', 'generic', 'sin marca', 'no brand', 'n/a', 'na', 'desconocido', 'ninguna', '—', '-', 'unbranded'];
+                const KNOWN_LICENSES_NAMES = ['marvel', 'disney', 'star wars', 'dc', 'dc comics', 'pokémon', 'pokemon', 'sonic', 'minecraft', 'roblox', 'harry potter', 'dragon ball', 'naruto', 'one piece', 'zelda'];
+
+                // Check if raw brand is a known license
+                if (rawBrandAttr && KNOWN_LICENSES_NAMES.includes(rawBrandLower)) {
+                   const { data: matchedLic } = await supabase
+                     .from('licenses')
+                     .select('id')
+                     .ilike('name', rawBrandAttr.trim())
+                     .maybeSingle();
+                   if (matchedLic) {
+                     detectedLicenseId = matchedLic.id;
+                   }
+                   rawBrandAttr = null;
+                } else if (rawBrandAttr && GENERIC_LIST.includes(rawBrandLower)) {
+                   rawBrandAttr = null;
+                }
+
+                if (rawBrandAttr) {
                    const { data: existingBrands } = await supabase
                      .from('brands')
-                     .select('id, status, owner_vendor_id')
-                     .ilike('name', brandName.trim());
+                     .select('id, name, status, brand_type')
+                     .ilike('name', rawBrandAttr.trim());
                    
-                   const approvedBrand = existingBrands?.find((b: any) => b.status === 'approved');
-                   const vendorPendingBrand = targetVendorId ? existingBrands?.find((b: any) => b.status === 'pending_review' && b.owner_vendor_id === targetVendorId) : null;
-                   
+                   const approvedBrand = existingBrands?.find((b: any) => b.status === 'approved' && b.brand_type !== 'generic');
                    if (approvedBrand) {
                       brandId = approvedBrand.id;
-                   } else if (vendorPendingBrand) {
-                      brandId = vendorPendingBrand.id;
-                   } else {
-                      // Create a new brand proposal (pending review if created by vendor)
-                      const slugBrandBase = brandName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
-                      const slugBrand = targetVendorId ? `${slugBrandBase}-v${targetVendorId.substring(0, 4)}` : slugBrandBase;
-                      const { data: newBr, error: newBrErr } = await supabase
-                        .from('brands')
-                        .insert({
-                          name: brandName.trim(),
-                          slug: slugBrand,
-                          owner_vendor_id: targetVendorId || null,
-                          status: targetVendorId ? 'pending_review' : 'approved',
-                          is_active: targetVendorId ? false : true,
-                          is_public: targetVendorId ? false : true,
-                          source: targetVendorId ? 'vendor_import' : 'manual'
-                        })
-                        .select()
-                        .single();
-                      
-                      if (newBrErr) {
-                         console.error("Error creating brand during import:", newBrErr.message);
-                      } else if (newBr) {
-                         brandId = newBr.id;
-                      }
-                   }
-                } else {
-                   // Title search fallback for brand
-                   // We only match against approved brands
-                   const { data: allBrands } = await supabase
-                     .from('brands')
-                     .select('id, name')
-                     .eq('status', 'approved');
-                   if (allBrands) {
-                     const lowerCleanTitle = cleanTitleText.toLowerCase();
-                     const matchedBrand = allBrands.find((b: any) => lowerCleanTitle.includes(b.name.toLowerCase()));
-                     if (matchedBrand) {
-                       brandId = matchedBrand.id;
-                       brandName = matchedBrand.name;
+                   } else if (targetVendorId) {
+                       const { data: vPermission } = await supabase
+                         .from('vendors')
+                         .select('can_request_brands')
+                         .eq('id', targetVendorId)
+                         .maybeSingle();
+
+                       if (vPermission?.can_request_brands) {
+                         await supabase.from('vendor_brand_requests').insert({
+                            vendor_id: targetVendorId,
+                            requested_name: rawBrandAttr.trim(),
+                            source: 'ml_import',
+                            external_brand_name: rawBrandAttr.trim(),
+                            status: 'pending'
+                         });
+                       }
+                    }
+                }
+
+                // Fallback: Detect true manufacturer from title keywords
+                if (!brandId) {
+                   const mfrKeywordsMap: Record<string, string[]> = {
+                     'Hasbro': ['hasbro', 'kenner', 'marvel legends', 'star wars black series'],
+                     'Funko': ['funko', 'funko pop', 'pop!'],
+                     'Bandai': ['bandai', 'tamashii', 'banpresto', 'sh figuarts'],
+                     'Mattel': ['mattel', 'hot wheels', 'barbie'],
+                     'Takara Tomy': ['takara tomy', 'takaratomy'],
+                     'McFarlane Toys': ['mcfarlane'],
+                     'NECA': ['neca'],
+                     'Super7': ['super7'],
+                     'Hot Toys': ['hot toys'],
+                     'LEGO': ['lego']
+                   };
+
+                   for (const [mfrName, syns] of Object.entries(mfrKeywordsMap)) {
+                     if (syns.some(syn => cleanTitleText.toLowerCase().includes(syn))) {
+                       const { data: dbMfr } = await supabase
+                         .from('brands')
+                         .select('id')
+                         .ilike('name', mfrName)
+                         .eq('status', 'approved')
+                         .maybeSingle();
+                       if (dbMfr) {
+                         brandId = dbMfr.id;
+                         break;
+                       }
                      }
                    }
                 }

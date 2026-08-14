@@ -597,9 +597,15 @@ export default function ProductDetail() {
               <b className="text-white font-semibold">{product.category?.name || 'N/A'}</b>
             </div>
             <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/5 flex justify-between items-center text-xs">
-              <span className="text-slate-400 font-bold uppercase tracking-wider">Marca</span>
+              <span className="text-slate-400 font-bold uppercase tracking-wider">Marca / Fabricante</span>
               <b className="text-white font-semibold">{product.brand?.name || 'N/A'}</b>
             </div>
+            {product.product_licenses?.[0]?.license?.name && (
+              <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/5 flex justify-between items-center text-xs">
+                <span className="text-slate-400 font-bold uppercase tracking-wider">Licencia / Franquicia</span>
+                <b className="text-amber-400 font-semibold">{product.product_licenses[0].license.name}</b>
+              </div>
+            )}
             {selectedVariant?.sku && isValidInternalSku(selectedVariant.sku) && (
               <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/5 flex justify-between items-center text-xs">
                 <span className="text-slate-400 font-bold uppercase tracking-wider">SKU</span>
@@ -658,9 +664,15 @@ export default function ProductDetail() {
                 <b className="text-white">{product.category?.name || 'N/A'}</b>
               </div>
               <div className="p-3 rounded-xl bg-white/[0.02] flex justify-between items-center text-xs">
-                <span className="text-slate-400 font-bold uppercase tracking-wider">Marca</span>
+                <span className="text-slate-400 font-bold uppercase tracking-wider">Marca / Fabricante</span>
                 <b className="text-white">{product.brand?.name || 'N/A'}</b>
               </div>
+              {product.product_licenses?.[0]?.license?.name && (
+                <div className="p-3 rounded-xl bg-white/[0.02] flex justify-between items-center text-xs">
+                  <span className="text-slate-400 font-bold uppercase tracking-wider">Licencia / Franquicia</span>
+                  <b className="text-amber-400">{product.product_licenses[0].license.name}</b>
+                </div>
+              )}
               {selectedVariant?.sku && isValidInternalSku(selectedVariant.sku) && (
                 <div className="p-3 rounded-xl bg-white/[0.02] flex justify-between items-center text-xs">
                   <span className="text-slate-400 font-bold uppercase tracking-wider">SKU</span>

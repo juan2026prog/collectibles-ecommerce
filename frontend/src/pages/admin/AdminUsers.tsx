@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Shield, ShieldCheck, Store, Star, Share2, Search, RefreshCw, UserCog, Clock, ChevronDown, Trash2, Lock, Unlock } from 'lucide-react';
+import { Shield, ShieldCheck, Store, Star, Share2, Search, RefreshCw, UserCog, Clock, ChevronDown, Trash2, Lock, Unlock, CheckCircle2, XCircle } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
 import CustomerFileModal from '../../components/admin/crm/CustomerFileModal';
@@ -25,16 +25,78 @@ export default function AdminUsers() {
   });
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
 
+  // Vendor Management Modal State
+  const [selectedVendorUser, setSelectedVendorUser] = useState<any | null>(null);
+  const [vendorModalForm, setVendorModalForm] = useState({
+    storeName: '',
+    canRequestCategories: false,
+    canRequestBrands: false,
+    canRequestLicenses: false
+  });
+  const [vendorModalSaving, setVendorModalSaving] = useState(false);
+
   useEffect(() => { fetchUsers(); fetchAuditLogs(); }, []);
 
   async function fetchUsers() {
     setLoading(true);
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .order('created_at', { ascending: false });
-    setUsers(data || []);
-    setLoading(false);
+    try {
+      // 1. Fetch profiles
+      const { data: profilesData, error: profErr } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (profErr) throw profErr;
+
+      if (profilesData && profilesData.length > 0) {
+        const userIds = profilesData.map(p => p.id);
+
+        // 2. Batch fetch vendors
+        const { data: vendorsData } = await supabase
+          .from('vendors')
+          .select('id, store_name, slug, status, can_request_categories, can_request_brands, can_request_licenses')
+          .in('id', userIds);
+
+        // 3. Batch fetch vendor_stores
+        const { data: vendorStoresData } = await supabase
+          .from('vendor_stores')
+          .select('id, vendor_id, store_name, status')
+          .in('vendor_id', userIds);
+
+        const vendorMap = new Map(vendorsData?.map(v => [v.id, v]) || []);
+        const vendorStoreMap = new Map(vendorStoresData?.map(vs => [vs.vendor_id, vs]) || []);
+
+        const combined = profilesData.map(p => {
+          const v = vendorMap.get(p.id);
+          const vs = vendorStoreMap.get(p.id);
+
+          // Canonical store name resolution: vendor_stores.store_name -> vendors.store_name -> '—'
+          let canonicalStoreName = '—';
+          if (p.is_vendor) {
+            canonicalStoreName = vs?.store_name || v?.store_name || 'Vendor sin nombre';
+          }
+
+          return {
+            ...p,
+            vendor_info: v || null,
+            vendor_store_info: vs || null,
+            canonical_store_name: canonicalStoreName,
+            can_request_categories: v?.can_request_categories ?? false,
+            can_request_brands: v?.can_request_brands ?? false,
+            can_request_licenses: v?.can_request_licenses ?? false,
+            vendor_status: v?.status || vs?.status || 'pending'
+          };
+        });
+
+        setUsers(combined);
+      } else {
+        setUsers([]);
+      }
+    } catch (err: any) {
+      toast.error('Error cargando usuarios: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function fetchAuditLogs() {
@@ -47,31 +109,136 @@ export default function AdminUsers() {
   }
 
   async function toggleRole(userId: string, role: string, current: boolean) {
+    if (role === 'is_vendor') {
+      const u = users.find(usr => usr.id === userId);
+      if (u) {
+        openVendorModal(u);
+        return;
+      }
+    }
+
     setSaving(userId + role);
     const newValue = !current;
     const { error } = await supabase.from('profiles').update({ [role]: newValue }).eq('id', userId);
     if (!error) {
-      if (role === 'is_vendor' && newValue) {
-        // Ensure vendor profile exists with pending_terms_acceptance status
-        const { data: existingVendor } = await supabase.from('vendors').select('id, status').eq('id', userId).maybeSingle();
-        if (!existingVendor) {
-          const userObj = users.find(u => u.id === userId);
-          const name = userObj?.first_name ? `${userObj.first_name} ${userObj.last_name || ''}`.trim() : 'Nuevo Vendor';
-          const slug = `vendor-${userId.slice(0, 8)}`;
-          await supabase.from('vendors').insert({
-            id: userId,
-            store_name: name,
-            slug: slug,
-            status: 'pending_terms_acceptance'
-          });
-        }
-      }
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, [role]: newValue } : u));
       toast.success('Rol actualizado');
     } else {
       toast.error('Error al actualizar rol');
     }
     setSaving(null);
+  }
+
+  function openVendorModal(u: any) {
+    const defaultStoreName = u.canonical_store_name !== '—'
+      ? u.canonical_store_name
+      : (u.first_name ? `${u.first_name} ${u.last_name || ''}`.trim() : 'Mi Tienda');
+
+    setSelectedVendorUser(u);
+    setVendorModalForm({
+      storeName: defaultStoreName,
+      canRequestCategories: u.can_request_categories ?? false,
+      canRequestBrands: u.can_request_brands ?? false,
+      canRequestLicenses: u.can_request_licenses ?? false
+    });
+  }
+
+  async function handleSaveVendorModal() {
+    if (!selectedVendorUser) return;
+    setVendorModalSaving(true);
+    try {
+      const userId = selectedVendorUser.id;
+      const isNewVendor = !selectedVendorUser.is_vendor;
+
+      // 1. Update profile role if new vendor
+      if (isNewVendor) {
+        const { error: profErr } = await supabase
+          .from('profiles')
+          .update({ is_vendor: true })
+          .eq('id', userId);
+        if (profErr) throw profErr;
+      }
+
+      // 2. Fetch existing vendor or prepare data
+      const { data: existingVendor } = await supabase
+        .from('vendors')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      const slug = existingVendor?.slug || `vendor-${userId.slice(0, 8)}`;
+      const storeName = vendorModalForm.storeName.trim() || 'Mi Tienda';
+
+      const vendorPayload = {
+        id: userId,
+        store_name: storeName,
+        slug: slug,
+        status: existingVendor?.status || 'active',
+        can_request_categories: vendorModalForm.canRequestCategories,
+        can_request_brands: vendorModalForm.canRequestBrands,
+        can_request_licenses: vendorModalForm.canRequestLicenses
+      };
+
+      const { error: vendorErr } = await supabase
+        .from('vendors')
+        .upsert(vendorPayload, { onConflict: 'id' });
+
+      if (vendorErr) throw vendorErr;
+
+      // 3. Upsert vendor_stores
+      const { data: existingVS } = await supabase
+        .from('vendor_stores')
+        .select('id')
+        .eq('vendor_id', userId)
+        .maybeSingle();
+
+      if (existingVS) {
+        await supabase
+          .from('vendor_stores')
+          .update({ store_name: storeName })
+          .eq('id', existingVS.id);
+      } else {
+        await supabase
+          .from('vendor_stores')
+          .insert({
+            vendor_id: userId,
+            store_name: storeName,
+            slug: slug,
+            status: 'active'
+          });
+      }
+
+      // 4. Record Audit Log
+      const currentUser = (await supabase.auth.getUser()).data.user;
+      await supabase.from('audit_logs').insert({
+        user_id: currentUser?.id || null,
+        action: 'UPDATE',
+        table_name: 'vendors',
+        record_id: userId,
+        old_data: {
+          is_vendor: selectedVendorUser.is_vendor,
+          can_request_categories: selectedVendorUser.can_request_categories,
+          can_request_brands: selectedVendorUser.can_request_brands,
+          can_request_licenses: selectedVendorUser.can_request_licenses
+        },
+        new_data: {
+          is_vendor: true,
+          store_name: storeName,
+          can_request_categories: vendorModalForm.canRequestCategories,
+          can_request_brands: vendorModalForm.canRequestBrands,
+          can_request_licenses: vendorModalForm.canRequestLicenses
+        }
+      });
+
+      toast.success(isNewVendor ? 'Vendor autorizado con éxito' : 'Permisos de Vendor actualizados');
+      setSelectedVendorUser(null);
+      await fetchUsers();
+      await fetchAuditLogs();
+    } catch (err: any) {
+      toast.error('Error al guardar datos del vendor: ' + err.message);
+    } finally {
+      setVendorModalSaving(false);
+    }
   }
 
   async function handleBlockToggle(userId: string, isBlocked: boolean, email: string) {
@@ -163,7 +330,8 @@ export default function AdminUsers() {
     const matchSearch = !search || 
       (u.email || '').toLowerCase().includes(search.toLowerCase()) ||
       (u.first_name || '').toLowerCase().includes(search.toLowerCase()) ||
-      (u.last_name || '').toLowerCase().includes(search.toLowerCase());
+      (u.last_name || '').toLowerCase().includes(search.toLowerCase()) ||
+      (u.canonical_store_name || '').toLowerCase().includes(search.toLowerCase());
     const matchFilter = filter === 'all' ||
       (filter === 'admin' && u.is_admin) ||
       (filter === 'vendor' && u.is_vendor) ||
@@ -183,7 +351,7 @@ export default function AdminUsers() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Usuarios & Auditoría</h2>
-          <p className="text-sm text-gray-500 mt-1">{users.length} usuarios registrados · Gestión de roles y trazabilidad</p>
+          <p className="text-sm text-gray-500 mt-1">{users.length} usuarios registrados · Gestión de roles, tiendas y permisos de catálogo</p>
         </div>
         <div className="flex gap-2">
           <button onClick={() => setShowCreateModal(true)} className="btn-primary text-sm flex items-center gap-2 bg-green-600 hover:bg-green-700 border-green-700 text-white shadow-sm font-bold">
@@ -204,7 +372,7 @@ export default function AdminUsers() {
           <div className="flex flex-wrap gap-3 items-center">
             <div className="relative flex-1 min-w-[250px] max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input className="form-input pl-10 w-full" placeholder="Buscar por email o nombre..." value={search} onChange={e => setSearch(e.target.value)} />
+              <input className="form-input pl-10 w-full" placeholder="Buscar por email, nombre o tienda..." value={search} onChange={e => setSearch(e.target.value)} />
             </div>
             <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
               {[
@@ -225,7 +393,7 @@ export default function AdminUsers() {
           {/* Users Table */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             {loading ? (
-              <div className="p-12 text-center text-gray-400 animate-pulse">Cargando usuarios...</div>
+              <div className="p-12 text-center text-gray-400 animate-pulse">Cargando usuarios y tiendas...</div>
             ) : filtered.length === 0 ? (
               <div className="p-12 text-center text-gray-400">
                 <UserCog className="w-12 h-12 mx-auto mb-3 text-gray-200" />
@@ -237,7 +405,9 @@ export default function AdminUsers() {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Usuario</th>
+                      <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Tienda</th>
                       <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Roles</th>
+                      <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Permisos Catálogo</th>
                       <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Registro</th>
                       <th className="px-6 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest">Acciones</th>
                     </tr>
@@ -245,6 +415,7 @@ export default function AdminUsers() {
                   <tbody className="divide-y divide-gray-100">
                     {filtered.map(u => (
                       <tr key={u.id} className="hover:bg-gray-50/50 transition-colors group cursor-pointer" onClick={() => setSelectedCustomer(u.id)}>
+                        {/* USUARIO */}
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <div className="w-9 h-9 bg-gradient-to-br from-primary-400 to-primary-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
@@ -263,6 +434,23 @@ export default function AdminUsers() {
                             </div>
                           </div>
                         </td>
+
+                        {/* TIENDA */}
+                        <td className="px-6 py-4">
+                          {u.is_vendor ? (
+                            <div>
+                              <p className="text-xs font-bold text-purple-900 flex items-center gap-1">
+                                <Store className="w-3.5 h-3.5 text-purple-600 inline" />
+                                {u.canonical_store_name}
+                              </p>
+                              <span className="text-[10px] text-gray-400 capitalize">{u.vendor_status || 'Activo'}</span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-300 text-xs font-mono">—</span>
+                          )}
+                        </td>
+
+                        {/* ROLES */}
                         <td className="px-6 py-4">
                           <div className="flex flex-wrap gap-1">
                             {roleBadge(u.is_admin, 'Admin', 'bg-blue-100 text-blue-700 border-blue-200')}
@@ -271,18 +459,47 @@ export default function AdminUsers() {
                             {roleBadge(u.is_affiliate, 'Affiliate', 'bg-pink-100 text-pink-700 border-pink-200')}
                           </div>
                         </td>
+
+                        {/* PERMISOS CATÁLOGO */}
+                        <td className="px-6 py-4">
+                          {u.is_vendor ? (
+                            <div className="flex items-center gap-1.5">
+                              <span title="Cat = Puede solicitar categorías" className={`px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-0.5 ${
+                                u.can_request_categories ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-gray-100 text-gray-400 border border-gray-200'
+                              }`}>
+                                Cat {u.can_request_categories ? '✓' : '—'}
+                              </span>
+                              <span title="Marca = Puede solicitar marcas" className={`px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-0.5 ${
+                                u.can_request_brands ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-gray-100 text-gray-400 border border-gray-200'
+                              }`}>
+                                Marca {u.can_request_brands ? '✓' : '—'}
+                              </span>
+                              <span title="Lic = Puede solicitar licencias" className={`px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-0.5 ${
+                                u.can_request_licenses ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-gray-100 text-gray-400 border border-gray-200'
+                              }`}>
+                                Lic {u.can_request_licenses ? '✓' : '—'}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-300 text-xs font-mono">—</span>
+                          )}
+                        </td>
+
+                        {/* REGISTRO */}
                         <td className="px-6 py-4 text-xs text-gray-400">
                           {u.created_at ? new Date(u.created_at).toLocaleDateString('es') : '-'}
                         </td>
+
+                        {/* ACCIONES */}
                         <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                           <div className="flex justify-center items-center gap-1">
                             {[
                               { role: 'is_admin', icon: ShieldCheck, label: 'Admin', active: u.is_admin, color: 'text-blue-600 bg-blue-50 hover:bg-blue-100' },
-                              { role: 'is_vendor', icon: Store, label: 'Vendor', active: u.is_vendor, color: 'text-purple-600 bg-purple-50 hover:bg-purple-100' },
+                              { role: 'is_vendor', icon: Store, label: 'Gestionar Vendor', active: u.is_vendor, color: 'text-purple-600 bg-purple-50 hover:bg-purple-100' },
                               { role: 'is_artist', icon: Star, label: 'Artist', active: u.is_artist, color: 'text-yellow-600 bg-yellow-50 hover:bg-yellow-100' },
                               { role: 'is_affiliate', icon: Share2, label: 'Affiliate', active: u.is_affiliate, color: 'text-pink-600 bg-pink-50 hover:bg-pink-100' },
                             ].map(r => (
-                              <button key={r.role} onClick={() => toggleRole(u.id, r.role, r.active)} title={`Toggle ${r.label}`}
+                              <button key={r.role} onClick={() => toggleRole(u.id, r.role, r.active)} title={r.label}
                                 disabled={!!saving}
                                 className={`p-1.5 rounded-lg transition-all ${r.active ? r.color + ' ring-2 ring-offset-1 ring-current' : 'text-gray-300 bg-gray-50 hover:bg-gray-100 hover:text-gray-500'}`}>
                                 <r.icon className="w-4 h-4" />
@@ -327,7 +544,7 @@ export default function AdminUsers() {
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b bg-indigo-50/50">
             <h3 className="font-bold text-indigo-900 flex items-center gap-2"><Shield className="w-5 h-5" /> Registro de Auditoría</h3>
-            <p className="text-xs text-indigo-600 mt-1">Trazabilidad inmutable de cambios en tablas críticas (products, site_settings, profiles)</p>
+            <p className="text-xs text-indigo-600 mt-1">Trazabilidad inmutable de cambios en tablas críticas (vendors, products, site_settings, profiles)</p>
           </div>
           {auditLogs.length === 0 ? (
             <div className="p-12 text-center text-gray-400">No hay registros de auditoría aún.</div>
@@ -366,6 +583,109 @@ export default function AdminUsers() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* GESTIONAR VENDOR MODAL */}
+      {selectedVendorUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setSelectedVendorUser(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-purple-50/50">
+              <div>
+                <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2">
+                  <Store className="w-5 h-5 text-purple-600" /> 
+                  {selectedVendorUser.is_vendor ? 'GESTIONAR VENDOR' : 'AUTORIZAR VENDOR'}
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">Configura tienda y permisos de catálogo</p>
+              </div>
+              <button onClick={() => setSelectedVendorUser(null)} className="text-gray-400 hover:text-gray-600 transition-colors text-xl font-bold">&times;</button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              <div className="bg-gray-50 rounded-xl p-3 border border-gray-200/80 space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Usuario</span>
+                  <span className="text-[10px] font-mono text-gray-400">ID: {selectedVendorUser.id.slice(0, 8)}...</span>
+                </div>
+                <p className="text-sm font-bold text-gray-900">{selectedVendorUser.email}</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Nombre de la Tienda</label>
+                <input 
+                  type="text" 
+                  className="form-input w-full bg-gray-50 text-sm font-semibold" 
+                  placeholder="Ej: JorgiToys" 
+                  value={vendorModalForm.storeName} 
+                  onChange={e => setVendorModalForm({ ...vendorModalForm, storeName: e.target.value })} 
+                />
+              </div>
+
+              <div className="flex justify-between items-center text-xs">
+                <span className="font-bold text-gray-700">Estado</span>
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                  selectedVendorUser.vendor_status === 'active' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                }`}>
+                  ● {selectedVendorUser.vendor_status || 'Activo'}
+                </span>
+              </div>
+
+              <div className="pt-3 border-t border-gray-100 space-y-3">
+                <p className="text-xs font-black uppercase tracking-wider text-gray-500">PERMISOS DE CATÁLOGO</p>
+                <p className="text-[11px] text-gray-400 leading-tight">
+                  Define si este Vendor puede solicitar incorporación de nuevos elementos al catálogo (las solicitudes requieren aprobación del Admin).
+                </p>
+
+                <div className="space-y-2.5 pt-1">
+                  {[
+                    { key: 'canRequestCategories', label: 'Solicitar nuevas categorías', desc: 'Permite sugerir categorías no listadas' },
+                    { key: 'canRequestBrands', label: 'Solicitar nuevas marcas', desc: 'Permite solicitar nuevos fabricantes' },
+                    { key: 'canRequestLicenses', label: 'Solicitar nuevas licencias', desc: 'Permite solicitar nuevas franquicias' }
+                  ].map(perm => {
+                    const isChecked = (vendorModalForm as any)[perm.key];
+                    return (
+                      <div key={perm.key} className="flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100/80 rounded-xl border border-gray-200/60 transition-colors">
+                        <div>
+                          <p className="text-xs font-bold text-gray-800">{perm.label}</p>
+                          <p className="text-[10px] text-gray-400">{perm.desc}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setVendorModalForm({
+                            ...vendorModalForm,
+                            [perm.key]: !isChecked
+                          })}
+                          className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors ${
+                            isChecked ? 'bg-green-600 justify-end' : 'bg-gray-300 justify-start'
+                          }`}
+                        >
+                          <span className="w-4 h-4 bg-white rounded-full shadow-md" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="pt-4 border-t flex justify-end gap-3">
+                <button 
+                  type="button" 
+                  onClick={() => setSelectedVendorUser(null)} 
+                  className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="button" 
+                  disabled={vendorModalSaving}
+                  onClick={handleSaveVendorModal}
+                  className="px-5 py-2 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded-lg transition-all shadow-md shadow-purple-200"
+                >
+                  {vendorModalSaving ? 'Guardando...' : selectedVendorUser.is_vendor ? 'Guardar cambios' : 'Autorizar Vendor'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

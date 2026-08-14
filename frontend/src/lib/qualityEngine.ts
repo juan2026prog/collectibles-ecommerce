@@ -1,3 +1,5 @@
+import { auditProductBrand } from './brandGovernanceAuditEngine';
+
 export const MANUFACTURERS_DICT = [
   { id: 'takaratomy', name: 'Takara Tomy', synonyms: ['takara tomy', 'takaratomy', 'takara-tomy', 'takara', 'tomy'] },
   { id: 'banpresto', name: 'Banpresto', synonyms: ['banpresto', 'bp', 'bandai banpresto'] },
@@ -247,43 +249,20 @@ export function runQualityEngineCheck(
   let brandResult = 'Incompleto';
   let brandError = '';
   
-  const detection = detectBrandLicenceCollection(p.title || '', p.ml_brand || '', p.manufacturer || '');
-  const detectedBrand = detection.detectedBrand;
+  const brandAudit = auditProductBrand(p);
+  const detectedBrand = brandAudit.suggestedBrandName || detection.detectedBrand;
 
-  if (!assignedBrandId) {
+  if (!assignedBrandId || brandAudit.classification === 'MISSING_BRAND') {
     brandResult = 'Incompleto';
-    brandError = 'Falta marca en Collectibles (No existen datos oficiales asignados)';
+    brandError = brandAudit.reason || 'Falta marca en Collectibles (No existen datos oficiales asignados)';
     brandScore = 0;
+  } else if (brandAudit.classification === 'GENERIC_BRAND' || brandAudit.classification === 'LICENSE_AS_BRAND' || brandAudit.classification === 'AMBIGUOUS_BRAND' || brandAudit.classification === 'UNKNOWN_BRAND') {
+    brandResult = 'Conflicto';
+    brandScore = 0;
+    brandError = brandAudit.reason;
   } else {
-    let brandInconsistent = false;
-    const consistencyCheck = checkBrandConsistency(
-      assignedBrandName,
-      detectedBrand,
-      p.title || '',
-      p.ml_brand || '',
-      p.manufacturer || ''
-    );
-    if (!consistencyCheck.isConsistent) {
-      brandInconsistent = true;
-    }
-    if (LICENSES_LIST.includes(assignedBrandName.toLowerCase())) {
-      brandInconsistent = true;
-      brandError = `${assignedBrandName} es una Licencia, no un Fabricante`;
-    }
-
-    const assLower = assignedBrandName.toLowerCase().trim();
-    if (brandInconsistent) {
-      brandResult = 'Conflicto';
-      brandScore = 0;
-      if (assLower === 'hasbro' && (titleLower.includes('bandai') || titleLower.includes('banpresto'))) {
-        brandError = 'El título contiene Bandai/Banpresto, pero la marca asignada es Hasbro.';
-      } else if (!brandError) {
-        brandError = `Conflicto: Marca asignada "${assignedBrandName}" difiere de marca detectada "${detectedBrand || 'desconocida'}"`;
-      }
-    } else {
-      brandResult = 'Consistente';
-      brandScore = 20;
-    }
+    brandResult = 'Consistente';
+    brandScore = 20;
   }
 
   // 2. Category Validator (20 pts)

@@ -142,17 +142,52 @@ Deno.serve(async (req: any) => {
         } else {
            // Attempt sending
            try {
-             console.log(`[CAMPAIGN: ${campaign.name}] Sending to: ${consent.email} via ${channelUsed}`);
+             console.log(`[CAMPAIGN: ${campaign.name}] Processing ${consent.email} via ${channelUsed}`);
              
-             // Rate Limiting simulation: sleep 200ms between requests
+             // 1. Dispatch WhatsApp if channel includes whatsapp and opt-in is active
+             if ((channelUsed === 'whatsapp' || channelUsed === 'both') && consent.whatsapp_opt_in) {
+               const waToken = Deno.env.get("WHATSAPP_TOKEN");
+               const waPhoneId = Deno.env.get("WHATSAPP_PHONE_ID");
+               
+               if (waToken && waToken.startsWith("EAAG") && waPhoneId && consent.phone) {
+                 const cleanPhone = consent.phone.replace(/[\+\s\-]/g, '');
+                 const waRes = await fetch(`https://graph.facebook.com/v17.0/${waPhoneId}/messages`, {
+                   method: "POST",
+                   headers: {
+                     "Authorization": `Bearer ${waToken}`,
+                     "Content-Type": "application/json"
+                   },
+                   body: JSON.stringify({
+                     messaging_product: "whatsapp",
+                     recipient_type: "individual",
+                     to: cleanPhone,
+                     type: "template",
+                     template: {
+                       name: template.name.toLowerCase().replace(/[^a-z0-9_]/g, '_'),
+                       language: { code: "es" },
+                       components: [
+                         {
+                           type: "body",
+                           parameters: [{ type: "text", text: consent.email.split('@')[0] }]
+                         }
+                       ]
+                     }
+                   })
+                 });
+                 if (!waRes.ok) {
+                   const errData = await waRes.json();
+                   console.error(`WhatsApp campaign API error for ${cleanPhone}:`, errData);
+                 }
+               } else {
+                 console.log(`[WhatsApp Campaign Simulated] To: ${consent.email} | Template: ${template.name}`);
+               }
+             }
+
+             // Rate Limiting delay: sleep 200ms between requests
              await new Promise(resolve => setTimeout(resolve, 200));
-
-             // IF real API fails here, throw Error
-             // Example: throw new Error('API Rate Limit or Network Error');
-
              sentCount++;
            } catch(e) {
-             console.error(`Failed to send to ${consent.email}:`, e);
+             console.error(`Failed to send campaign to ${consent.email}:`, e);
              msgStatus = 'failed';
              failedCount++;
            }
