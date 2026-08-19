@@ -169,6 +169,29 @@ export default function AdminProducts() {
   const [tags, setTags] = useState<any[]>([]);
   const [vendors, setVendors] = useState<VendorOption[]>([]);
 
+  const [form, setForm] = useState({
+    title: '', slug: '', description: '', short_description: '',
+    base_price: '', compare_at_price: '', sku: '', stock: '10', status: 'published',
+    badge: '', is_featured: false, is_active: true, category_id: '', brand_id: '',
+    vendor_id: 'platform',
+    condition: '', condition_notes: '',
+    image_url: '', video_url: '',
+    card_details: {
+      sport: '', player_character: '', team: '', set_collection: '', year_season: '',
+      card_number: '', format: 'Single Card', is_rookie: false, is_autograph: false,
+      is_graded: false, grading_company: 'PSA', grade: '10', game: '', rarity: '', language: 'Español'
+    } as CardDetails,
+    // Many-to-many
+    categories: [] as string[],
+    tags: [] as string[],
+    brands: [] as string[],
+    gallery: [] as { url: string }[]
+  });
+
+  const [tagInput, setTagInput] = useState('');
+  const [newCatInput, setNewCatInput] = useState('');
+  const [newBrandInput, setNewBrandInput] = useState('');
+
   // Debounce search input (300ms)
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -258,13 +281,6 @@ export default function AdminProducts() {
     setBrands(brs || []);
     setTags(tgs || []);
     setVendors(vds || []);
-
-    console.log('[PRODUCT_DEBUG_BRANDS]', {
-      brandsCount: brs?.length,
-      ironStudios: brs?.filter(
-        b => b.name?.toLowerCase().includes('iron studios')
-      )
-    });
   }
 
   function openCreate() {
