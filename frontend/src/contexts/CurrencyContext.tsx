@@ -7,17 +7,20 @@ interface CurrencyContextProps {
   setSelectedCurrency: (currency: Currency) => void;
   exchangeRates: Record<Currency, number>;
   loading: boolean;
-  formatCurrencyPrice: (amountUYU: number) => string;
+  formatCurrencyPrice: (amountUYU: number, overrideCurrency?: Currency) => string;
   convertFromUYU: (amountUYU: number, currency: Currency) => number;
+  convertUSDToARS: (amountUSD: number) => number;
+  convertARSToUSD: (amountARS: number) => number;
+  getFxRateUsdToArs: () => number;
 }
 
 const CurrencyContext = createContext<CurrencyContextProps | undefined>(undefined);
 
 const FALLBACK_RATES: Record<Currency, number> = {
   UYU: 1,
-  USD: 1 / 39, // Manual fallback based on approximate recent rate
-  ARS: 25,     // Manual fallback based on approximate recent rate
-  BRL: 1 / 7,  // Manual fallback based on approximate recent rate
+  USD: 1 / 40,   // 1 USD = 40 UYU
+  ARS: 28.5,     // 1 UYU = 28.5 ARS (Implies ~1140 ARS per USD)
+  BRL: 1 / 7,
 };
 
 export function CurrencyProvider({ children }: { children: React.ReactNode }) {
@@ -49,31 +52,33 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // Fetch from free API
-    fetch('https://open.er-api.com/v6/latest/UYU')
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.rates) {
-          const liveRates: Record<Currency, number> = {
-            UYU: 1,
-            USD: data.rates.USD || FALLBACK_RATES.USD,
-            ARS: data.rates.ARS || FALLBACK_RATES.ARS,
-            BRL: data.rates.BRL || FALLBACK_RATES.BRL,
-          };
-          setExchangeRates(liveRates);
-          localStorage.setItem(CACHE_KEY, JSON.stringify(liveRates));
-          localStorage.setItem(CACHE_TS_KEY, Date.now().toString());
-        }
-      })
-      .catch((err) => {
-        if (import.meta.env.DEV) {
-          console.error('Exchange rate API unavailable, using fallback rates', err);
-        }
-        // Silently use fallback (which is already set in state)
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+    const timer = setTimeout(() => {
+      fetch('https://open.er-api.com/v6/latest/UYU')
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.rates) {
+            const liveRates: Record<Currency, number> = {
+              UYU: 1,
+              USD: data.rates.USD || FALLBACK_RATES.USD,
+              ARS: data.rates.ARS || FALLBACK_RATES.ARS,
+              BRL: data.rates.BRL || FALLBACK_RATES.BRL,
+            };
+            setExchangeRates(liveRates);
+            localStorage.setItem(CACHE_KEY, JSON.stringify(liveRates));
+            localStorage.setItem(CACHE_TS_KEY, Date.now().toString());
+          }
+        })
+        .catch((err) => {
+          if (import.meta.env.DEV) {
+            console.error('Exchange rate API unavailable, using fallback rates', err);
+          }
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }, 2000);
+
+    return () => clearTimeout(timer);
   }, []);
 
   const setSelectedCurrency = useCallback((currency: Currency) => {
@@ -82,28 +87,39 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const convertFromUYU = useCallback((amountUYU: number, currency: Currency) => {
-    return amountUYU * exchangeRates[currency];
+    return amountUYU * (exchangeRates[currency] || FALLBACK_RATES[currency]);
   }, [exchangeRates]);
 
-  const formatCurrencyPrice = useCallback((amountUYU: number) => {
-    const converted = convertFromUYU(amountUYU, selectedCurrency);
+  const getFxRateUsdToArs = useCallback(() => {
+    const usdRate = exchangeRates.USD || FALLBACK_RATES.USD;
+    const arsRate = exchangeRates.ARS || FALLBACK_RATES.ARS;
+    if (!usdRate || usdRate === 0) return 1140;
+    return Math.round(arsRate / usdRate);
+  }, [exchangeRates]);
+
+  const convertUSDToARS = useCallback((amountUSD: number) => {
+    return amountUSD * getFxRateUsdToArs();
+  }, [getFxRateUsdToArs]);
+
+  const convertARSToUSD = useCallback((amountARS: number) => {
+    const fxRate = getFxRateUsdToArs();
+    if (!fxRate || fxRate === 0) return 0;
+    return Number((amountARS / fxRate).toFixed(2));
+  }, [getFxRateUsdToArs]);
+
+  const formatCurrencyPrice = useCallback((amountUYU: number, overrideCurrency?: Currency) => {
+    const targetCurrency = overrideCurrency || selectedCurrency;
+    const converted = convertFromUYU(amountUYU, targetCurrency);
     
-    // Formatting specifics:
-    // UYU: $ 1.990
-    // USD: USD 49
-    // ARS: ARS 59.900
-    // BRL: BRL 279
-    
-    // We want to avoid long decimals and show the correct prefix.
     const formatter = new Intl.NumberFormat('es-UY', {
       style: 'decimal',
-      maximumFractionDigits: 0,
-      minimumFractionDigits: 0
+      maximumFractionDigits: targetCurrency === 'USD' ? 2 : 0,
+      minimumFractionDigits: targetCurrency === 'USD' ? 2 : 0
     });
     
     const formattedNumber = formatter.format(converted);
     
-    switch (selectedCurrency) {
+    switch (targetCurrency) {
       case 'UYU':
         return `$${'\u00A0'}${formattedNumber}`;
       case 'USD':
@@ -123,8 +139,11 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
     exchangeRates,
     loading,
     formatCurrencyPrice,
-    convertFromUYU
-  }), [selectedCurrency, setSelectedCurrency, exchangeRates, loading, formatCurrencyPrice, convertFromUYU]);
+    convertFromUYU,
+    convertUSDToARS,
+    convertARSToUSD,
+    getFxRateUsdToArs
+  }), [selectedCurrency, setSelectedCurrency, exchangeRates, loading, formatCurrencyPrice, convertFromUYU, convertUSDToARS, convertARSToUSD, getFxRateUsdToArs]);
 
   return (
     <CurrencyContext.Provider value={value}>

@@ -175,20 +175,25 @@ Deno.serve(async (req: Request) => {
     const finalTotalAmount = isTesting ? Math.max(amount, sumProductsAmount, 5.00) : amount;
     const currencyCode = order.currency?.toUpperCase() === "USD" ? 840 : 858;
 
-    // Helper function to extract numeric invoice number within 32-bit signed int limit
-    function extractNumericInvoiceNumber(orderNumber: string | null | undefined): number {
+    // Helper function to extract numeric invoice number within 32-bit signed int limit (< 2,147,483,647)
+    function resolveHandyInvoiceNumber(order: any): number {
+      // 1. If handy_invoice_number is explicitly stored on order
+      if (order.handy_invoice_number && Number(order.handy_invoice_number) > 0 && Number(order.handy_invoice_number) <= 2147483647) {
+        return Number(order.handy_invoice_number);
+      }
+
+      const orderNumber = order.order_number;
       if (!orderNumber) return 0;
       
-      // 1. If it matches COL-YYYYMMDD-XXXX format
-      const colMatch = orderNumber.match(/COL-(\d{4})(\d{2})(\d{2})-(\d{4})/i);
-      if (colMatch) {
-        const year = parseInt(colMatch[1], 10);
-        const month = colMatch[2];
-        const day = colMatch[3];
-        const seq = colMatch[4];
+      // 2. If it matches (COL|AR)-YYYYMMDD-XXXX format
+      const match = orderNumber.match(/(?:COL|AR)-(\d{4})(\d{2})(\d{2})-(\d{4})/i);
+      if (match) {
+        const year = parseInt(match[1], 10);
+        const month = match[2];
+        const day = match[3];
+        const seq = match[4];
         
-        // Using year offset from 2020 to ensure it fits in a 32-bit signed integer (max 2147483647)
-        // E.g., COL-20260707-0001 -> yearOffset 6 -> 607070001
+        // Year offset from 2020: E.g., AR-20260815-0001 -> 608150001 <= 2147483647
         const yearOffset = year - 2020;
         const val = Number(`${yearOffset}${month}${day}${seq}`);
         if (!isNaN(val) && val > 0 && val <= 2147483647) {
@@ -196,17 +201,24 @@ Deno.serve(async (req: Request) => {
         }
       }
       
-      // 2. Fallback: extract all digits
+      // 3. Fallback: extract all digits and truncate to safe 32-bit int
       const digits = orderNumber.replace(/\D/g, '');
+      if (digits.length > 8) {
+        // Take last 8 digits
+        const truncated = Number(digits.slice(-8));
+        if (!isNaN(truncated) && truncated > 0 && truncated <= 2147483647) {
+          return truncated;
+        }
+      }
       const val = Number(digits);
       if (!isNaN(val) && val > 0 && val <= 2147483647) {
         return val;
       }
       
-      return 0;
+      return 68000000 + Math.floor(Math.random() * 900000);
     }
 
-    const invoiceNumber = extractNumericInvoiceNumber(order.order_number);
+    const invoiceNumber = resolveHandyInvoiceNumber(order);
 
     console.log('[HANDY_INVOICE_TRACE]', {
       orderId,

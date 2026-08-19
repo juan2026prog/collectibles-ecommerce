@@ -9,9 +9,11 @@ import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { slugify, generateUniqueSlug } from '../../lib/slugUtils';
-import { CONDITION_OPTIONS, type StoreType, getConditionLabel } from '../../config/conditionConfig';
+import { CONDITION_OPTIONS, type StoreType, getConditionLabel, normalizeCondition } from '../../config/conditionConfig';
 import { CardDetailsFormSection } from './CardDetailsFormSection';
 import { type CardDetails, buildCategoryTreeOptions, isSportsCardCategory, isTCGCategory } from '../../config/tcgConfig';
+import { validateProductForPublication, type PublicationValidationError } from '../../lib/productPublicationValidator';
+import { mapDatabaseErrorToUserMessage } from '../../lib/databaseErrorMapper';
 
 interface InlineEditProps {
   value: string | number;
@@ -178,24 +180,84 @@ export default function VProducts() {
     can_request_licenses: false
   });
 
-  useEffect(() => { fetchProducts(); fetchMeta(); }, []);
+  const [validationErrors, setValidationErrors] = useState<PublicationValidationError[]>([]);
+  const [textDuplicateWarning, setTextDuplicateWarning] = useState<any>(null);
+
+  const getFieldError = (fieldName: string) => {
+    return validationErrors.find(e => e.field === fieldName)?.message;
+  };
+
+  const [totalProductsCount, setTotalProductsCount] = useState<number>(0);
+  const [debouncedSearch, setDebouncedSearch] = useState<string>(search);
+  const lastRequestId = useRef<number>(0);
+
+  // Debounce search input (300ms)
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [search]);
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchProducts();
+    }
+  }, [user?.id, debouncedSearch, filterCategory, filterBrand, currentPage, itemsPerPage, sortField, sortOrder]);
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchMeta();
+    }
+  }, [user?.id]);
 
   async function fetchProducts() {
+    if (!user?.id) return;
     setLoading(true);
-    const { data, error } = await supabase
-      .from('products')
-      .select('*, product_categories(categories(id, name)), brand:brands!products_brand_id_fkey(id, name), product_licenses(license:licenses(id, name)), images:product_images(id, url), variants:product_variants(id, inventory_count, sku)')
-      .eq('vendor_id', user?.id)
-      .order('created_at', { ascending: false });
+    const currentReqId = ++lastRequestId.current;
+    const pageSizeNum = itemsPerPage === 'Todos' ? 1000 : Number(itemsPerPage);
 
-    if (error) {
-      console.error('[VPRODUCTS_FETCH_ERROR]', error);
-      toast.error('Error al cargar productos del vendedor: ' + error.message);
-      setProducts([]);
-    } else {
-      setProducts(data || []);
+    try {
+      const { data, error } = await supabase.rpc('search_admin_products', {
+        p_search: debouncedSearch.trim() || null,
+        p_category_id: filterCategory || null,
+        p_brand_id: filterBrand || null,
+        p_vendor_id: user.id,
+        p_status: null,
+        p_page: currentPage,
+        p_page_size: pageSizeNum,
+        p_sort_field: sortField,
+        p_sort_order: sortOrder
+      });
+
+      if (currentReqId !== lastRequestId.current) return;
+
+      if (error) {
+        console.error('[VPRODUCTS_SEARCH_ERROR]', error);
+        toast.error('Error al cargar productos del vendedor: ' + error.message);
+        setProducts([]);
+        setTotalProductsCount(0);
+      } else if (data && data.length > 0) {
+        const total = Number(data[0].total_count || 0);
+        const items = data[0].products || [];
+        setTotalProductsCount(total);
+        setProducts(items);
+      } else {
+        setTotalProductsCount(0);
+        setProducts([]);
+      }
+    } catch (err: any) {
+      if (currentReqId === lastRequestId.current) {
+        console.error('[VPRODUCTS_FETCH_EXCEPTION]', err);
+        toast.error('Error inesperado al consultar productos del vendedor.');
+        setProducts([]);
+        setTotalProductsCount(0);
+      }
+    } finally {
+      if (currentReqId === lastRequestId.current) {
+        setLoading(false);
+      }
     }
-    setLoading(false);
   }
 
   async function fetchMeta() {
@@ -320,52 +382,99 @@ export default function VProducts() {
   }
 
   async function handleSave() {
-    try {
-      if (!form.title || !form.title.trim()) throw new Error("El título es obligatorio");
+    setValidationErrors([]);
+    setTextDuplicateWarning(null);
 
-      if (form.status === 'published') {
-        const errors: string[] = [];
+    // 1. Run central validation engine
+    const validation = validateProductForPublication({
+      form: {
+        title: form.title,
+        base_price: form.base_price,
+        compare_at_price: form.compare_at_price,
+        categories: form.categories,
+        category_id: form.category_id,
+        brands: form.brands,
+        brand_id: form.brand_id,
+        image_url: form.image_url,
+        stock: form.stock,
+        condition: form.condition,
+        vendor_id: user?.id
+      },
+      userRole: 'vendor',
+      storeType: vendorStoreType,
+      targetStatus: form.status as 'published' | 'draft' | 'archived',
+      brandsList: brands,
+      dbLicenses: licenses
+    });
 
-        // Condition Rule for Vintage and Mixed stores
-        if ((vendorStoreType === 'vintage' || vendorStoreType === 'mixed') && (!form.condition || !form.condition.trim())) {
-          throw new Error("Este producto necesita que indiques su Condition.");
-        }
+    if (!validation.isValid) {
+      setValidationErrors(validation.errors);
+      const firstField = validation.errors[0]?.field;
+      if (firstField) {
+        setTimeout(() => {
+          const element = document.getElementById(`field-${firstField}`) || document.querySelector(`[name="${firstField}"]`);
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            (element as HTMLElement).focus?.();
+          } else {
+            const banner = document.getElementById('validation-summary-banner');
+            banner?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 100);
+      }
+      return;
+    }
 
-        const selectedBrandId = form.brands[0] || form.brand_id;
-        const selectedBrandObj = brands.find(b => b.id === selectedBrandId);
-        const GENERIC_LIST = ['genérica', 'generica', 'generic', 'sin marca', 'no brand', 'n/a', 'na', 'desconocido', 'ninguna', '—', '-'];
-        
-        if (!selectedBrandId || !selectedBrandObj || GENERIC_LIST.includes(selectedBrandObj.name.toLowerCase().trim())) {
-          throw new Error("No podés publicar este producto todavía.\nSeleccioná una marca/fabricante válida del catálogo de Collectibles.");
-        }
-        if (!form.categories[0] && !form.category_id) errors.push("Falta categoría válida");
-        if ((parseFloat(form.base_price) || 0) <= 0) errors.push("Precio inválido (debe ser mayor a 0)");
-        if ((parseInt(form.stock) || 0) < 0) errors.push("Stock inválido (no puede ser negativo)");
-        if (!form.image_url) errors.push("Imágenes suficientes (se requiere al menos una imagen)");
+    // 2. Check Duplicates when Publishing (Requirement 8)
+    if (form.status === 'published') {
+      const selectedBrandId = form.brands[0] || form.brand_id || null;
+      const { data: dupData } = await supabase.rpc('check_duplicate_product', {
+        p_title: form.title,
+        p_brand_id: selectedBrandId,
+        p_sku: form.sku || null,
+        p_gtin: null,
+        p_asin: null
+      });
 
-        // Duplicate check
-        const { data: dupData } = await supabase.rpc('check_duplicate_product', {
-          p_title: form.title,
-          p_brand_id: selectedBrandId || null,
-          p_sku: form.sku || null,
-          p_gtin: null,
-          p_asin: null
-        });
+      if (dupData && dupData.length > 0) {
+        const otherDup = dupData.find((d: any) => d.matched_product_id !== editing?.id);
+        if (otherDup) {
+          // Strong match (GTIN, SKU, ML Item ID) -> Hard Blocker for Vendor
+          if (['sku', 'gtin', 'asin', 'ml_item_id'].includes(otherDup.match_type)) {
+            setValidationErrors([{
+              code: 'DUPLICATE_STRONG_MATCH',
+              field: 'title',
+              message: 'Ya existe un producto publicado con este mismo SKU o identificador comercial.',
+              severity: 'HARD_BLOCKER'
+            }]);
+            return;
+          }
+          
+          // Text similarity match (>=95%) -> Warning (Requirement 8)
+          if (otherDup.similarity_score >= 0.95) {
+            const { data: existingProd } = await supabase
+              .from('products')
+              .select('id, title, brand:brands(name), images:product_images(url)')
+              .eq('id', otherDup.matched_product_id)
+              .maybeSingle();
 
-        if (dupData && dupData.length > 0) {
-          const otherDup = dupData.find((d: any) => d.matched_product_id !== editing?.id && d.similarity_score >= 0.95);
-          if (otherDup) {
-            errors.push(`Conflicto de duplicado detectado (Similitud >= 95% con producto ID: ${otherDup.matched_product_id})`);
+            setTextDuplicateWarning({
+              id: otherDup.matched_product_id,
+              title: existingProd?.title || 'Producto existente',
+              brand_name: (existingProd as any)?.brand?.name || 'Marca no asignada',
+              image_url: (existingProd as any)?.images?.[0]?.url || ''
+            });
+            return;
           }
         }
-
-        if (errors.length > 0) {
-          throw new Error("Reglas de Publicación no cumplidas:\n- " + errors.join("\n- "));
-        }
       }
+    }
 
+    // 3. Save Product (Draft or Published)
+    try {
+      setLoading(true);
+      const normalizedCondition = normalizeCondition(form.condition);
       const slug = await generateUniqueSlug(form.title, editing?.id);
-
       const selectedBrandId = form.brands[0] || null;
 
       const currentMetadata = (editing as any)?.metadata || {};
@@ -374,35 +483,61 @@ export default function VProducts() {
         ...(vendorStoreType === 'tcg' ? { card_details: form.card_details } : {})
       };
 
+      const basePriceParsed = form.base_price !== '' && form.base_price !== null && form.base_price !== undefined ? parseFloat(String(form.base_price)) : null;
+
       const payload = {
-        title: form.title.trim(), slug, description: form.description, short_description: form.short_description,
-        base_price: parseFloat(form.base_price) || 0, compare_at_price: form.compare_at_price ? parseFloat(form.compare_at_price) : null,
-        status: form.status, badge: form.badge || null, is_featured: form.is_featured,
+        title: form.title.trim(),
+        slug,
+        description: form.description || null,
+        short_description: form.short_description || null,
+        base_price: basePriceParsed,
+        compare_at_price: form.compare_at_price ? parseFloat(String(form.compare_at_price)) : null,
+        status: form.status,
+        badge: form.badge || null,
+        is_featured: form.is_featured,
         is_active: form.is_active,
-        brand_id: selectedBrandId, category_id: form.categories[0] || null,
+        brand_id: selectedBrandId,
+        category_id: form.categories[0] || null,
         vendor_store_id: form.vendor_store_id || null,
-        condition: form.condition || null,
+        condition: normalizedCondition,
         condition_notes: form.condition_notes ? form.condition_notes.trim() : null,
         metadata: updatedMetadata
       };
 
-      console.log('[VENDOR_PRODUCTS_SAVE_VERSION]', 'TITLESLUG_FIXED_V2');
-      console.log('[PRODUCT_SAVE_PAYLOAD]', payload);
+      console.log('[VENDOR_PRODUCTS_SAVE_PAYLOAD]', payload);
 
       let productId = editing?.id;
-        if (editing) {
-          const { error: updProdErr } = await supabase.from('products').update(payload).eq('id', productId).select().single();
-          if (updProdErr) throw updProdErr;
-        } else {
-          const newPayload = { ...payload, vendor_id: user?.id };
-          const { data: newProd, error: insertError } = await supabase.from('products').insert(newPayload).select().single();
-          if (insertError) throw insertError;
-          productId = newProd.id;
-        }
+      let createdProductId: string | null = null;
+      const targetStatus = form.status;
+
+      if (editing) {
+        // Keep status as draft or existing status during initial field update if publishing for first time,
+        // ensuring DB triggers do not prematurely evaluate published guardrails before relations exist!
+        const initialStatus = editing.status === 'published' ? (targetStatus === 'published' ? 'published' : 'draft') : 'draft';
+        const initialPayload = { 
+          ...payload, 
+          status: initialStatus, 
+          metadata: { ...payload.metadata, image_url: form.image_url || null } 
+        };
+        const { error: updProdErr } = await supabase.from('products').update(initialPayload).eq('id', productId).select().single();
+        if (updProdErr) throw updProdErr;
+      } else {
+        // Transactional Staging Sequence: Insert as draft first to safely establish FK relations
+        const newPayload = { 
+          ...payload, 
+          status: 'draft', 
+          vendor_id: user?.id, 
+          metadata: { ...payload.metadata, image_url: form.image_url || null } 
+        };
+        const { data: newProd, error: insertError } = await supabase.from('products').insert(newPayload).select().single();
+        if (insertError) throw insertError;
+        productId = newProd.id;
+        createdProductId = newProd.id;
+      }
 
       if (!productId) return;
 
-      // �"��"��"� Media �"��"��"�
+      // Media
       await supabase.from('product_images').delete().eq('product_id', productId);
       const imagesPayload = [];
       if (form.image_url) imagesPayload.push({ product_id: productId, url: form.image_url, is_primary: true, sort_order: 0 });
@@ -412,25 +547,41 @@ export default function VProducts() {
         if (insImgErr) throw insImgErr;
       }
 
-      // 📦 Variants 📦
+      // Variants
       const cleanInputSku = form.sku?.trim();
       const skuVal = (cleanInputSku && /^[0-9]{8,14}$/.test(cleanInputSku)) ? cleanInputSku : null;
+      const stockParsed = form.stock !== '' ? parseInt(String(form.stock), 10) : 0;
+
       if (editing && editing.variants?.[0]?.id) {
-        const { error: varErr } = await supabase.from('product_variants').update({ sku: skuVal, inventory_count: parseInt(form.stock) || 0 }).eq('id', editing.variants[0].id);
+        const { data: updVar, error: varErr } = await supabase
+          .from('product_variants')
+          .update({ sku: skuVal, inventory_count: stockParsed })
+          .eq('id', editing.variants[0].id)
+          .select('is_active')
+          .single();
+
         if (varErr) throw varErr;
+
+        // Buy Box check (Requirement 10)
+        if (updVar && updVar.is_active === false && form.is_active === true) {
+          toast.info("Este producto ya tiene stock disponible directamente en Collectibles. Tu oferta quedó pausada temporalmente y se reactivará según las reglas del marketplace.");
+        }
       } else {
-        const { error: varErr } = await supabase.from('product_variants').insert({ product_id: productId, sku: skuVal, name: 'Standard', inventory_count: parseInt(form.stock) || 0 });
+        const { error: varErr } = await supabase.from('product_variants').insert({
+          product_id: productId,
+          sku: skuVal,
+          name: 'Standard',
+          inventory_count: stockParsed
+        });
         if (varErr) throw varErr;
       }
 
-      // 📦 Junctions 📦
-      const [delCats, delTags] = await Promise.all([
+      // Junctions
+      await Promise.all([
         supabase.from('product_categories').delete().eq('product_id', productId),
         supabase.from('product_tags').delete().eq('product_id', productId)
       ]);
-      if (delCats.error) throw delCats.error;
-      if (delTags.error) throw delTags.error;
-      
+
       if (form.categories.length > 0) {
         const { error: insCatErr } = await supabase.from('product_categories').upsert(
           form.categories.map(cid => ({ product_id: productId, category_id: cid })),
@@ -453,14 +604,35 @@ export default function VProducts() {
         }
       }
 
+      // Final Server-Side Validation & Status Update
+      if (targetStatus !== 'draft') {
+        const { error: finalStatusErr } = await supabase
+          .from('products')
+          .update({ status: targetStatus })
+          .eq('id', productId)
+          .select()
+          .single();
+        if (finalStatusErr) throw finalStatusErr;
+      }
+
       setShowForm(false);
       fetchProducts();
       fetchMeta();
-      toast.success(editing ? 'Producto actualizado' : 'Producto creado');
+      toast.success(editing ? 'Producto actualizado' : (targetStatus === 'published' ? 'Producto creado y publicado' : 'Producto guardado en borrador'));
     } catch (err: any) {
       console.error('[VProducts handleSave Runtime Error]', err);
       console.trace(err);
-      toast.error(`Error: ${err.message}`);
+      const userMessage = mapDatabaseErrorToUserMessage(err);
+
+      if (createdProductId && !editing) {
+        // Product was successfully inserted as Draft in Step 1. Preserve it so user work is not lost!
+        fetchProducts();
+        fetchMeta();
+        setShowForm(false);
+        toast.warning(`No pudimos finalizar la publicación. El producto quedó guardado como borrador para que puedas revisarlo.\n\nMotivo: ${userMessage}`);
+      } else {
+        toast.error(userMessage);
+      }
     }
   }
 
@@ -645,7 +817,9 @@ export default function VProducts() {
         badge: product.badge,
         is_featured: product.is_featured,
         brand_id: brandId,
-        category_id: catId
+        category_id: catId,
+        condition: normalizeCondition((product as any).condition),
+        condition_notes: (product as any).condition_notes?.trim() || null
       };
 
       const { data: newProd, error: insertError } = await supabase.from('products').insert(payload).select().single();
@@ -760,7 +934,8 @@ export default function VProducts() {
         // Generate dynamic unique slug
         const uniqueSlug = await generateUniqueSlug(p.title);
         const isVintageOrMixed = vendorStoreType === 'vintage' || vendorStoreType === 'mixed';
-        const importStatus = (isVintageOrMixed && !p.condition) ? 'draft' : 'published';
+        const normalizedCond = normalizeCondition(p.condition);
+        const importStatus = (isVintageOrMixed && !normalizedCond) ? 'draft' : 'published';
 
         // Insert Product
         const { data: newProd, error: prodErr } = await supabase
@@ -775,8 +950,8 @@ export default function VProducts() {
             is_active: true,
             category_id: categoryId,
             brand_id: brandId,
-            condition: p.condition || null,
-            condition_notes: p.condition_notes || null,
+            condition: normalizedCond,
+            condition_notes: p.condition_notes?.trim() || null,
             is_featured: false
           })
           .select()
@@ -907,8 +1082,21 @@ export default function VProducts() {
   const filteredProducts = useMemo(() => {
     const sLower = search.toLowerCase().trim();
     return products.filter(p => {
+      // Brand name resolution
+      const rawBrandName = (Array.isArray(p.brand) ? p.brand[0]?.name : p.brand?.name) ||
+        brands.find(b => b.id === (p.brand_id || p.brand?.id))?.name || '';
+      const brandName = rawBrandName.toLowerCase();
+
+      // Category name resolution
+      const rawCatName = (Array.isArray(p.product_categories) ? p.product_categories[0]?.categories?.name : null) ||
+        p.category?.name ||
+        categories.find(c => c.id === (p.category_id || p.category?.id))?.name || '';
+      const categoryName = rawCatName.toLowerCase();
+
       const matchesSearch = !sLower || 
         p.title.toLowerCase().includes(sLower) ||
+        brandName.includes(sLower) ||
+        categoryName.includes(sLower) ||
         p.ml_item_id?.toLowerCase().includes(sLower) ||
         (p.metadata?.gtin && String(p.metadata.gtin).toLowerCase().includes(sLower)) ||
         (p.metadata?.amazon_asin && String(p.metadata.amazon_asin).toLowerCase().includes(sLower)) ||
@@ -922,7 +1110,7 @@ export default function VProducts() {
       const matchesBrand = filterBrand === '' || p.brand?.id === filterBrand || p.brand_id === filterBrand;
       return matchesSearch && matchesCategory && matchesBrand;
     });
-  }, [products, search, filterCategory, filterBrand]);
+  }, [products, search, filterCategory, filterBrand, brands, categories]);
 
   const brandReviewCount = useMemo(() => {
     const GENERIC_LIST = ['genérica', 'generica', 'generic', 'sin marca', 'no brand', 'n/a', 'na', 'desconocido', 'ninguna', '—', '-'];
@@ -961,7 +1149,7 @@ export default function VProducts() {
                <h2 className="text-2xl font-black text-dark-900">Productos <span className="bg-blue-600 text-white text-[8px] px-1 py-0.5 rounded ml-2 relative -top-1">v2</span></h2>
                {!loading && (
                  <span className="bg-gray-100/80 border border-gray-200 text-gray-500 text-[10px] font-black uppercase px-2 py-1 rounded-md tracking-widest hidden md:inline-flex items-center gap-1">
-                   {products.length} {products.length === 1 ? 'Producto' : 'Productos'}
+                   {totalProductsCount} {totalProductsCount === 1 ? 'Producto' : 'Productos'}
                  </span>
                )}
             </div>
@@ -1260,10 +1448,10 @@ export default function VProducts() {
          </div>
          {itemsPerPage !== 'Todos' && (
             <div className="bg-white border-t px-6 py-3 flex items-center justify-between text-xs text-gray-500">
-               <span>Página {currentPage}</span>
+               <span>Página {currentPage} de {Math.max(1, Math.ceil(totalProductsCount / (typeof itemsPerPage === 'number' ? itemsPerPage : 50)))} ({totalProductsCount} {totalProductsCount === 1 ? 'producto' : 'productos'} en total)</span>
                <div className="flex items-center gap-2">
-                 <button disabled={currentPage <= 1} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50">Anterior</button>
-                 <button disabled={filteredProducts.length <= (currentPage * (typeof itemsPerPage === 'number' ? itemsPerPage : 0))} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50">Siguiente</button>
+                 <button disabled={currentPage <= 1 || loading} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50">Anterior</button>
+                 <button disabled={currentPage >= Math.ceil(totalProductsCount / (typeof itemsPerPage === 'number' ? itemsPerPage : 50)) || loading} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50">Siguiente</button>
                </div>
             </div>
          )}
@@ -1288,12 +1476,64 @@ export default function VProducts() {
 
               {/* Editor Layout */}
               <div className="flex-1 overflow-y-auto p-8">
-                 {(!form.brands[0] || (brands.find(b => b.id === form.brands[0]) && ['genérica', 'generica', 'generic', 'sin marca', 'no brand', 'n/a', 'na', 'desconocido', 'ninguna', '—', '-'].includes((brands.find(b => b.id === form.brands[0])?.name || '').toLowerCase().trim()))) && (
-                    <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-2xl flex items-center gap-3 text-red-800 text-xs font-bold shadow-sm">
-                       <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-                       <div>
-                         <p className="text-sm font-bold text-red-900">La marca actual no cumple con las reglas del catálogo.</p>
-                         <p className="font-normal text-red-700 mt-0.5">Debes seleccionar una marca válida aprobada en el panel lateral antes de publicar o guardar cambios.</p>
+                 {/* Resumen Superior de Errores de Publicación */}
+                 {validationErrors.length > 0 && (
+                    <div className="mb-6 p-4 bg-red-50 border-2 border-red-300 rounded-2xl shadow-sm animate-fade-in" id="validation-summary-banner">
+                       <div className="flex items-center gap-3 text-red-900 font-bold mb-2">
+                          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                          <span>Faltan {validationErrors.length} dato{validationErrors.length > 1 ? 's' : ''} para publicar este producto:</span>
+                       </div>
+                       <ul className="space-y-1.5 pl-8 list-disc text-xs text-red-700 font-semibold">
+                          {validationErrors.map((err, idx) => (
+                             <li key={idx} className="cursor-pointer hover:underline hover:text-red-900" onClick={() => {
+                                const element = document.getElementById(`field-${err.field}`) || document.querySelector(`[name="${err.field}"]`);
+                                element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                (element as HTMLElement)?.focus?.();
+                             }}>
+                                {err.message}
+                             </li>
+                          ))}
+                       </ul>
+                    </div>
+                 )}
+
+                 {/* Banner de Advertencia de Duplicado Textual */}
+                 {textDuplicateWarning && (
+                    <div className="mb-6 p-4 bg-amber-50 border-2 border-amber-300 rounded-2xl shadow-sm animate-fade-in">
+                       <div className="flex items-start gap-3">
+                          <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                          <div className="flex-1 text-xs">
+                             <h4 className="font-bold text-amber-900 text-sm mb-1">Parece que ya existe un producto muy similar</h4>
+                             <div className="flex items-center gap-3 bg-white p-2.5 rounded-lg border border-amber-200 my-2">
+                                {textDuplicateWarning.image_url && (
+                                   <img src={textDuplicateWarning.image_url} alt="" className="w-10 h-10 object-cover rounded border" />
+                                )}
+                                <div>
+                                   <p className="font-bold text-gray-900">{textDuplicateWarning.title}</p>
+                                   <p className="text-[11px] text-gray-500">Marca: {textDuplicateWarning.brand_name}</p>
+                                </div>
+                             </div>
+                             <p className="text-amber-800 font-semibold mb-3">Revisá el producto existente para evitar duplicados en el catálogo.</p>
+                             <div className="flex gap-2">
+                                <button
+                                   type="button"
+                                   onClick={() => setTextDuplicateWarning(null)}
+                                   className="px-3 py-1.5 bg-amber-600 text-white rounded text-xs font-bold hover:bg-amber-700"
+                                >
+                                   Continuar de todos modos
+                                </button>
+                                <button
+                                   type="button"
+                                   onClick={() => {
+                                      setShowForm(false);
+                                      setTextDuplicateWarning(null);
+                                   }}
+                                   className="px-3 py-1.5 bg-white border border-amber-300 text-amber-900 rounded text-xs font-bold hover:bg-amber-100"
+                                >
+                                   Volver a la lista
+                                </button>
+                             </div>
+                          </div>
                        </div>
                     </div>
                  )}
@@ -1302,12 +1542,23 @@ export default function VProducts() {
                     
                     {/* Main Content (Left) */}
                     <div className="lg:col-span-3 space-y-6">
-                       <div className="bg-white p-6 border shadow-sm space-y-4">
+                       <div className={`bg-white p-6 border shadow-sm space-y-4 rounded-xl transition-all ${getFieldError('title') ? 'border-red-400 ring-2 ring-red-100' : ''}`}>
                           <input 
+                            id="field-title"
+                            name="title"
                             placeholder="Introduce el título aquí" 
                             className="w-full text-2xl font-bold py-2 border-b-2 border-transparent focus:border-blue-500 outline-none transition-all placeholder:text-gray-300"
-                            value={form.title} onChange={e => setForm({...form, title: e.target.value})}
+                            value={form.title} onChange={e => {
+                              setForm({...form, title: e.target.value});
+                              if (validationErrors.some(e => e.field === 'title')) setValidationErrors(prev => prev.filter(e => e.field !== 'title'));
+                            }}
                           />
+                          {getFieldError('title') && (
+                            <p className="text-xs font-bold text-red-600 flex items-center gap-1.5 mt-1">
+                              <AlertCircle className="w-3.5 h-3.5" />
+                              {getFieldError('title')}
+                            </p>
+                          )}
                           <div className="flex items-center gap-2 text-xs text-gray-500 px-1">
                              <span className="font-bold">Enlace permanente:</span>
                              <span className="text-blue-500 underline">https://collectibles-ecommerce.com/p/</span>
@@ -1315,7 +1566,7 @@ export default function VProducts() {
                           </div>
                        </div>
 
-                       <div className="bg-white border shadow-sm">
+                       <div className="bg-white border shadow-sm rounded-xl">
                           <div className="px-4 py-2 border-b bg-gray-50/50 flex items-center justify-between">
                              <div className="flex items-center gap-2">
                                 <Pencil className="w-4 h-4 text-gray-400" />
@@ -1342,7 +1593,7 @@ export default function VProducts() {
                           </div>
                        </div>
 
-                       <div className="bg-white border shadow-sm">
+                       <div className="bg-white border shadow-sm rounded-xl">
                           <div className="px-4 py-2 border-b bg-gray-50/50 flex items-center gap-2">
                              <Pencil className="w-4 h-4 text-gray-400" />
                              <span className="text-sm font-bold text-gray-600">Precios e Inventario</span>
@@ -1350,7 +1601,16 @@ export default function VProducts() {
                           <div className="p-6 grid grid-cols-2 lg:grid-cols-4 gap-6">
                              <div>
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Precio ($)</label>
-                                <input type="number" className="w-full p-2.5 border rounded-lg text-sm bg-gray-50 focus:bg-white outline-none" value={form.base_price} onChange={e => setForm({...form, base_price: e.target.value})} />
+                                <input id="field-base_price" name="base_price" type="number" className={`w-full p-2.5 border rounded-lg text-sm bg-gray-50 focus:bg-white outline-none ${getFieldError('base_price') ? 'border-red-500 bg-red-50/20' : ''}`} value={form.base_price} onChange={e => {
+                                  setForm({...form, base_price: e.target.value});
+                                  if (validationErrors.some(err => err.field === 'base_price')) setValidationErrors(prev => prev.filter(err => err.field !== 'base_price'));
+                                }} />
+                                {getFieldError('base_price') && (
+                                  <p className="text-[11px] font-bold text-red-600 flex items-center gap-1 mt-1">
+                                    <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                                    {getFieldError('base_price')}
+                                  </p>
+                                )}
                              </div>
                              <div>
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Precio Rebajado</label>
@@ -1363,7 +1623,16 @@ export default function VProducts() {
                              </div>
                              <div>
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Stock</label>
-                                <input type="number" className="w-full p-2.5 border rounded-lg text-sm bg-gray-50 focus:bg-white outline-none font-bold text-blue-600" value={form.stock} onChange={e => setForm({...form, stock: e.target.value})} />
+                                <input id="field-stock" name="stock" type="number" className={`w-full p-2.5 border rounded-lg text-sm bg-gray-50 focus:bg-white outline-none font-bold text-blue-600 ${getFieldError('stock') ? 'border-red-500 bg-red-50/20' : ''}`} value={form.stock} onChange={e => {
+                                  setForm({...form, stock: e.target.value});
+                                  if (validationErrors.some(err => err.field === 'stock')) setValidationErrors(prev => prev.filter(err => err.field !== 'stock'));
+                                }} />
+                                {getFieldError('stock') && (
+                                  <p className="text-[11px] font-bold text-red-600 flex items-center gap-1 mt-1">
+                                    <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                                    {getFieldError('stock')}
+                                  </p>
+                                )}
                              </div>
                           </div>
 
@@ -1398,15 +1667,26 @@ export default function VProducts() {
                                        Condition *
                                     </label>
                                     <select
+                                       id="field-condition"
+                                       name="condition"
                                        value={form.condition}
-                                       onChange={e => setForm({...form, condition: e.target.value})}
-                                       className="w-full p-2.5 border rounded-lg text-sm bg-white font-bold text-gray-800 border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
+                                       onChange={e => {
+                                         setForm({...form, condition: e.target.value});
+                                         if (validationErrors.some(err => err.field === 'condition')) setValidationErrors(prev => prev.filter(err => err.field !== 'condition'));
+                                       }}
+                                       className={`w-full p-2.5 border rounded-lg text-sm bg-white font-bold text-gray-800 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none ${getFieldError('condition') ? 'border-red-500 bg-red-50/20' : 'border-gray-300'}`}
                                     >
                                        <option value="">[ Select condition... ▼ ]</option>
                                        {CONDITION_OPTIONS.map(c => (
                                           <option key={c.value} value={c.value}>{c.label}</option>
                                        ))}
                                     </select>
+                                    {getFieldError('condition') && (
+                                       <p className="text-[11px] font-bold text-red-600 flex items-center gap-1 mt-1">
+                                          <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                                          {getFieldError('condition')}
+                                       </p>
+                                    )}
                                     <p className="text-[10px] text-gray-400 mt-1">
                                        Para publicar en tiendas {vendorStoreType === 'vintage' ? 'Vintage' : 'Mixed'}, debes seleccionar el estado comercial exacto.
                                     </p>
@@ -1499,17 +1779,26 @@ export default function VProducts() {
                           </div>
                        </SidebarWidget>
 
-                       {/* WIDGET: CATEGORÍAS */}
-                       <SidebarWidget title="Categorías del producto">
-                          <div className="space-y-3">
-                             <div className="border rounded-md max-h-48 overflow-y-auto p-2 bg-gray-50/30">
-                                {categories.map(cat => (
-                                   <label key={cat.id} className="flex items-center gap-2 py-1 px-1 hover:bg-white rounded transition-colors cursor-pointer text-xs">
-                                      <input type="checkbox" checked={form.categories.includes(cat.id)} onChange={() => toggleCategory(cat.id)} className="rounded border-gray-300 text-blue-600" />
-                                      {cat.name}
-                                   </label>
-                                ))}
-                             </div>
+                        {/* WIDGET: CATEGORÍAS */}
+                        <SidebarWidget title="Categorías del producto *">
+                           <div className="space-y-3" id="field-categories">
+                              {getFieldError('categories') && (
+                                 <p className="text-xs font-bold text-red-600 flex items-center gap-1.5 p-2 bg-red-50 rounded border border-red-200">
+                                    <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                                    {getFieldError('categories')}
+                                 </p>
+                              )}
+                              <div className={`border rounded-md max-h-48 overflow-y-auto p-2 bg-gray-50/30 ${getFieldError('categories') ? 'border-red-400 ring-1 ring-red-200' : ''}`}>
+                                 {categories.map(cat => (
+                                    <label key={cat.id} className="flex items-center gap-2 py-1 px-1 hover:bg-white rounded transition-colors cursor-pointer text-xs">
+                                       <input type="checkbox" checked={form.categories.includes(cat.id)} onChange={() => {
+                                         toggleCategory(cat.id);
+                                         if (validationErrors.some(e => e.field === 'categories')) setValidationErrors(prev => prev.filter(e => e.field !== 'categories'));
+                                       }} className="rounded border-gray-300 text-blue-600" />
+                                       {cat.name}
+                                    </label>
+                                 ))}
+                              </div>
                                {vendorPermissions.can_request_categories ? (
                                  <div className="flex gap-2">
                                    <input 
@@ -1566,14 +1855,22 @@ export default function VProducts() {
 
                         {/* WIDGET: MARCA / FABRICANTE */}
                         <SidebarWidget title="MARCA / FABRICANTE *">
-                           <div className="space-y-3">
+                           <div className="space-y-3" id="field-brands">
+                              {getFieldError('brands') && (
+                                 <p className="text-xs font-bold text-red-600 flex items-center gap-1.5 p-2 bg-red-50 rounded border border-red-200">
+                                    <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                                    {getFieldError('brands')}
+                                 </p>
+                              )}
                               <select
+                                 id="select-brand"
                                  value={form.brands[0] || ''}
                                  onChange={e => {
                                     const val = e.target.value;
                                     setForm(prev => ({ ...prev, brand_id: val, brands: val ? [val] : [] }));
+                                    if (validationErrors.some(err => err.field === 'brands')) setValidationErrors(prev => prev.filter(err => err.field !== 'brands'));
                                  }}
-                                 className="w-full text-xs p-2 border rounded bg-white outline-none focus:border-blue-500 font-bold text-gray-800"
+                                 className={`w-full text-xs p-2 border rounded bg-white outline-none focus:border-blue-500 font-bold text-gray-800 ${getFieldError('brands') ? 'border-red-500 bg-red-50/20' : ''}`}
                               >
                                  <option value="">-- Seleccionar Marca Oficial --</option>
                                  {brands.map(b => (

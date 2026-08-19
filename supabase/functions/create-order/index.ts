@@ -1182,6 +1182,150 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Resolve country & destination
+    const targetCountry = (payload.shipping_address?.country || 'Uruguay').trim();
+    const isArgentinaOrder = targetCountry.toLowerCase() === 'argentina' || targetCountry.toLowerCase() === 'ar';
+
+    // SERVER-SIDE ZERO TRUST: Calculate Real Weight, Volumetric Weight, and Packaging Type directly from DB products
+    let totalRealWeightKg = 0;
+    let totalVolumetricWeightKg = 0;
+    let hasMissingWeight = false;
+    const missingSkus: string[] = [];
+    let isPackagingTypeExplicit = true;
+    let determinedServiceType: 'mbe_pak' | 'mbe_caja' | 'quote_required' = 'mbe_pak';
+    let isMultiItemUnconsolidatedCart = false;
+
+    // Count total item units in cart
+    let totalUnitCount = 0;
+    for (const item of verifiedItems) {
+      totalUnitCount += item.quantity;
+    }
+    if (verifiedItems.length > 1 || totalUnitCount > 1) {
+      // Multiple items in cart without explicit consolidated box logic requires custom quote for volume
+      isMultiItemUnconsolidatedCart = true;
+    }
+
+    for (const item of verifiedItems) {
+      // Fetch DB product directly to prevent any frontend payload tampering
+      const { data: dbProd } = await supabase
+        .from('products')
+        .select('weight_kg, dimensions, metadata')
+        .eq('id', item.product_id)
+        .maybeSingle();
+
+      const prodWeight = Number(dbProd?.weight_kg || 0);
+      if (!prodWeight || prodWeight <= 0) {
+        hasMissingWeight = true;
+        if (item.sku) missingSkus.push(item.sku);
+      }
+      totalRealWeightKg += prodWeight * item.quantity;
+
+      // Volumetric weight evaluation
+      const dim = dbProd?.dimensions || {};
+      const l = Number(dim.length || dim.l || 0);
+      const w = Number(dim.width || dim.w || 0);
+      const h = Number(dim.height || dim.h || 0);
+
+      if (l > 0 && w > 0 && h > 0) {
+        const itemVolumetric = (l * w * h) / 5000;
+        totalVolumetricWeightKg += itemVolumetric * item.quantity;
+      }
+
+      // Check explicit packaging type from DB product metadata or column
+      const pkgType = String(dbProd?.metadata?.packaging_type || dbProd?.metadata?.mbe_service_type || '').toLowerCase();
+      if (pkgType === 'mbe_caja' || pkgType === 'caja' || pkgType === 'box') {
+        determinedServiceType = 'mbe_caja';
+      } else if (pkgType === 'mbe_pak' || pkgType === 'pak') {
+        // Explicit PAK
+      } else {
+        // Packaging type cannot be determined with certainty from DB metadata
+        isPackagingTypeExplicit = false;
+      }
+    }
+
+    totalRealWeightKg = Number(totalRealWeightKg.toFixed(3));
+    totalVolumetricWeightKg = Number(totalVolumetricWeightKg.toFixed(3));
+
+    // Handle Argentina International Shipping & Quote Required Rules
+    let intlShippingCostUsd = 0;
+    let intlShippingCostArs = 0;
+    let arsPerUsdRate = 1140;
+    let shippingRuleApplied = '';
+    let isShippingQuoteRequired = false;
+
+    if (isArgentinaOrder) {
+      // Fetch live FX rates from open.er-api.com or DB
+      try {
+        const fxResp = await fetch('https://open.er-api.com/v6/latest/UYU');
+        const fxData = await fxResp.json();
+        if (fxData && fxData.rates && fxData.rates.USD && fxData.rates.ARS) {
+          arsPerUsdRate = Math.round(fxData.rates.ARS / fxData.rates.USD);
+        }
+      } catch (e) {
+        console.warn("[Create Order] Failed to fetch live FX rate, using fallback 1140 ARS/USD:", e);
+      }
+
+      // Rule 1: Missing Product Weight
+      if (hasMissingWeight) {
+        isShippingQuoteRequired = true;
+        determinedServiceType = 'quote_required';
+        shippingRuleApplied = `SHIPPING_QUOTE_REQUIRED (Falta peso en SKUs: ${missingSkus.join(', ')})`;
+      }
+      // Rule 2: Multi-item cart without consolidated box logic
+      else if (isMultiItemUnconsolidatedCart && totalRealWeightKg > 0.5) {
+        isShippingQuoteRequired = true;
+        determinedServiceType = 'quote_required';
+        shippingRuleApplied = `SHIPPING_QUOTE_REQUIRED (Carrito múltiple sin caja consolidada definida)`;
+      }
+      // Rule 3: Packaging Type Unknown
+      else if (!isPackagingTypeExplicit) {
+        isShippingQuoteRequired = true;
+        determinedServiceType = 'quote_required';
+        shippingRuleApplied = `SHIPPING_QUOTE_REQUIRED (Tipo de empaque PAK/Caja no determinado en producto DB)`;
+      }
+
+      const totalChargeableWeightKg = Number(Math.max(totalRealWeightKg, totalVolumetricWeightKg).toFixed(3));
+
+      // Rule 4: Chargeable Weight > 1.0 kg
+      if (!isShippingQuoteRequired && totalChargeableWeightKg > 1.0) {
+        isShippingQuoteRequired = true;
+        determinedServiceType = 'quote_required';
+        shippingRuleApplied = `SHIPPING_QUOTE_REQUIRED (Peso cobrable ${totalChargeableWeightKg} kg > 1.0 kg)`;
+      }
+
+      // Stop & Block payment if Quote Required
+      if (isShippingQuoteRequired) {
+        console.error(`[Create Order] Order requires quote: ${shippingRuleApplied}`);
+        throw new Error("Este pedido requiere una cotización de envío especial. No podemos calcular el envío automáticamente en este momento.");
+      }
+
+      // Resolve ONLY authorized confirmed rates (PAK <= 0.5kg $59, PAK <= 1.0kg $66, Caja <= 1.0kg $89)
+      if (determinedServiceType === 'mbe_pak') {
+        if (totalChargeableWeightKg <= 0.5) {
+          intlShippingCostUsd = 59.00;
+          shippingRuleApplied = 'MBE PAK <= 0.5kg (USD 59.00)';
+        } else if (totalChargeableWeightKg <= 1.0) {
+          intlShippingCostUsd = 66.00;
+          shippingRuleApplied = 'MBE PAK <= 1.0kg (USD 66.00)';
+        }
+      } else if (determinedServiceType === 'mbe_caja') {
+        if (totalChargeableWeightKg <= 1.0) {
+          intlShippingCostUsd = 89.00;
+          shippingRuleApplied = 'MBE Caja <= 1.0kg (USD 89.00)';
+        }
+      }
+
+      if (intlShippingCostUsd <= 0) {
+        isShippingQuoteRequired = true;
+        determinedServiceType = 'quote_required';
+        shippingRuleApplied = 'SHIPPING_QUOTE_REQUIRED (Tarifa no encontrada)';
+        throw new Error("Este pedido requiere una cotización de envío especial. No podemos calcular el envío automáticamente en este momento.");
+      }
+
+      intlShippingCostArs = Math.round(intlShippingCostUsd * arsPerUsdRate);
+      totalShippingCost = intlShippingCostUsd;
+    }
+
     const totalAmount = Math.max(subtotal - totalDiscounts + totalShippingCost, 0);
 
     const orderItems = [];
@@ -1235,7 +1379,6 @@ Deno.serve(async (req) => {
         throw new Error("El país de destino internacional debe ser Estados Unidos (US).");
       }
 
-      // Check if courier name matches any active courier in the DB for automatic pre-approval
       let isPreApproved = false;
       try {
         const { data: matchedCourier } = await supabase
@@ -1270,7 +1413,7 @@ Deno.serve(async (req) => {
 
     const orderShippingAddress = {
       ...payload.shipping_address,
-      shipping_method: payload.shipping_method,
+      shipping_method: isArgentinaOrder ? "mbe_international" : payload.shipping_method,
       bank_promo: bankPromoSummary,
       shipping_cost: totalShippingCost,
       discount_amount: discountAmount,
@@ -1280,14 +1423,18 @@ Deno.serve(async (req) => {
       dac_k_oficina_destino: payload.shipping_address.dac_k_oficina_destino || null,
       dac_office_name: payload.shipping_address.dac_office_name || null,
       dac_office_address: payload.shipping_address.dac_office_address || null,
-      shipping_provider: hasInternationalItems ? "international_courier_direct" : "dac",
+      shipping_provider: isArgentinaOrder ? "mbe" : (hasInternationalItems ? "international_courier_direct" : "dac"),
       ...(resolvedMiamiAddress || {})
     };
+
+    // Calculate display totals in ARS if Argentina
+    const subtotalArs = Math.round(subtotal * (arsPerUsdRate / 40));
+    const totalArs = Math.round((subtotal - totalDiscounts) * (arsPerUsdRate / 40)) + intlShippingCostArs;
 
     const { data: orderResult, error: rpcError } = await supabase.rpc("create_order_atomic", {
       p_customer_id: user?.id || null,
       p_total_amount: totalAmount,
-      p_currency: payload.currency,
+      p_currency: isArgentinaOrder ? "USD" : payload.currency,
       p_payment_method: payload.payment_method,
       p_customer_email: payload.customer_email,
       p_customer_phone: payload.customer_phone || null,
@@ -1302,6 +1449,21 @@ Deno.serve(async (req) => {
       p_email_opt_in: payload.email_opt_in,
       p_whatsapp_opt_in: payload.whatsapp_opt_in,
       p_logistics_consent: payload.logistics_consent || false,
+      p_display_currency: isArgentinaOrder ? "ARS" : (payload.currency || "UYU"),
+      p_display_subtotal: isArgentinaOrder ? subtotalArs : subtotal,
+      p_display_shipping: isArgentinaOrder ? intlShippingCostArs : totalShippingCost,
+      p_display_total: isArgentinaOrder ? totalArs : totalAmount,
+      p_fx_rate: isArgentinaOrder ? arsPerUsdRate : null,
+      p_fx_rate_source: isArgentinaOrder ? "open.er-api.com" : null,
+      p_shipping_weight_kg: totalRealWeightKg,
+      p_shipping_cost_ars: isArgentinaOrder ? intlShippingCostArs : 0,
+      p_shipping_cost_usd: isArgentinaOrder ? intlShippingCostUsd : 0,
+      p_mbe_service_type: isArgentinaOrder ? determinedServiceType : null,
+      p_shipping_weight_real_kg: isArgentinaOrder ? totalRealWeightKg : null,
+      p_shipping_weight_volumetric_kg: isArgentinaOrder ? totalVolumetricWeightKg : null,
+      p_shipping_weight_chargeable_kg: isArgentinaOrder ? totalRealWeightKg : null,
+      p_shipping_rule_applied: isArgentinaOrder ? shippingRuleApplied : null,
+      p_is_shipping_quote_required: isArgentinaOrder ? isShippingQuoteRequired : false
     });
 
     if (rpcError) {

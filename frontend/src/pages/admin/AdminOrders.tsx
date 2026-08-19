@@ -2192,6 +2192,64 @@ export default function AdminOrders() {
                           <span className="text-[9px] font-bold text-gray-400 block">Consentimiento de Privacidad</span>
                           <span className="font-bold text-emerald-600">Aceptado</span>
                         </div>
+                        {selectedOrder.handy_invoice_number && (
+                          <div>
+                            <span className="text-[9px] font-bold text-gray-400 block">Handy Invoice Number</span>
+                            <span className="font-mono font-bold text-indigo-700">{selectedOrder.handy_invoice_number}</span>
+                          </div>
+                        )}
+                        {selectedOrder.fx_rate && (
+                          <div>
+                            <span className="text-[9px] font-bold text-gray-400 block">Tipo de Cambio (FX)</span>
+                            <span className="font-mono font-bold text-gray-800">1 USD = ARS {selectedOrder.fx_rate}</span>
+                          </div>
+                        )}
+                        {selectedOrder.display_total && (
+                          <div>
+                            <span className="text-[9px] font-bold text-gray-400 block">Total Visual Cliente</span>
+                            <span className="font-bold text-gray-900">{selectedOrder.display_currency || 'ARS'} {selectedOrder.display_total}</span>
+                          </div>
+                        )}
+                        <div>
+                          <span className="text-[9px] font-bold text-gray-400 block">Total Cobrado (Handy USD)</span>
+                          <span className="font-bold text-indigo-900">USD {selectedOrder.total_amount}</span>
+                        </div>
+                        {selectedOrder.is_shipping_quote_required && (
+                          <div className="col-span-2 p-2 bg-amber-50 border border-amber-300 rounded text-amber-900 font-bold text-xs flex items-center justify-between">
+                            <span>⚠️ SHIPPING QUOTE REQUIRED</span>
+                            <span className="text-[10px] bg-amber-200 px-1.5 py-0.5 rounded">Cotización Especial</span>
+                          </div>
+                        )}
+                        <div>
+                          <span className="text-[9px] font-bold text-gray-400 block">Servicio MBE</span>
+                          <span className="font-bold text-indigo-800 uppercase">
+                            {selectedOrder.mbe_service_type === 'mbe_caja' ? 'MBE Caja' : (selectedOrder.mbe_service_type === 'mbe_pak' ? 'MBE PAK' : 'COTIZACIÓN REQUERIDA')}
+                          </span>
+                        </div>
+                        {selectedOrder.shipping_weight_real_kg && (
+                          <div>
+                            <span className="text-[9px] font-bold text-gray-400 block">Peso Real</span>
+                            <span className="font-mono text-gray-900">{selectedOrder.shipping_weight_real_kg} kg</span>
+                          </div>
+                        )}
+                        {selectedOrder.shipping_weight_volumetric_kg && (
+                          <div>
+                            <span className="text-[9px] font-bold text-gray-400 block">Peso Volumétrico</span>
+                            <span className="font-mono text-gray-900">{selectedOrder.shipping_weight_volumetric_kg} kg</span>
+                          </div>
+                        )}
+                        {selectedOrder.shipping_weight_chargeable_kg && (
+                          <div>
+                            <span className="text-[9px] font-bold text-gray-400 block">Peso Cobrable</span>
+                            <span className="font-mono font-bold text-indigo-900">{selectedOrder.shipping_weight_chargeable_kg} kg</span>
+                          </div>
+                        )}
+                        {selectedOrder.shipping_rule_applied && (
+                          <div className="col-span-2">
+                            <span className="text-[9px] font-bold text-gray-400 block">Regla de Envío Aplicada</span>
+                            <span className="font-mono text-[10px] text-gray-800 bg-gray-100 p-1 rounded block">{selectedOrder.shipping_rule_applied}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
 

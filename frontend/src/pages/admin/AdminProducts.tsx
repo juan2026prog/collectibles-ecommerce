@@ -9,9 +9,11 @@ import { getProductImage } from '../../lib/imageUtils';
 import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
 import { slugify, generateUniqueSlug } from '../../lib/slugUtils';
-import { getConditionLabel } from '../../config/conditionConfig';
+import { CONDITION_OPTIONS, getConditionLabel, normalizeCondition } from '../../config/conditionConfig';
 import { CardDetailsFormSection } from '../../components/vendor/CardDetailsFormSection';
 import { type CardDetails, buildCategoryTreeOptions, isSportsCardCategory, isTCGCategory } from '../../config/tcgConfig';
+import { validateProductForPublication, type PublicationValidationError } from '../../lib/productPublicationValidator';
+import { mapDatabaseErrorToUserMessage } from '../../lib/databaseErrorMapper';
 
 interface InlineEditProps {
   value: string | number;
@@ -140,6 +142,11 @@ export default function AdminProducts() {
 
   const [duplicateWarning, setDuplicateWarning] = useState<DuplicateCandidateInfo | null>(null);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<PublicationValidationError[]>([]);
+
+  const getFieldError = (fieldName: string) => {
+    return validationErrors.find(e => e.field === fieldName)?.message;
+  };
 
   const { toast } = useToast();
   const { confirm } = useConfirmModal();
@@ -153,34 +160,31 @@ export default function AdminProducts() {
   const [filterBrand, setFilterBrand] = useState<string>('');
   const [filterVendor, setFilterVendor] = useState<string>(searchParams.get('vendor') || 'all');
   
+  const [totalProductsCount, setTotalProductsCount] = useState<number>(0);
+  const [debouncedSearch, setDebouncedSearch] = useState<string>(search);
+  const lastRequestId = useRef<number>(0);
+
   const [categories, setCategories] = useState<any[]>([]);
   const [brands, setBrands] = useState<any[]>([]);
   const [tags, setTags] = useState<any[]>([]);
   const [vendors, setVendors] = useState<VendorOption[]>([]);
-  
-  const [form, setForm] = useState({
-    title: '', slug: '', description: '', short_description: '',
-    base_price: '', compare_at_price: '', sku: '', stock: '10', status: 'published',
-    badge: '', is_featured: false, is_active: true, category_id: '', brand_id: '',
-    vendor_id: 'platform',
-    image_url: '', video_url: '',
-    card_details: {
-      sport: '', player_character: '', team: '', set_collection: '', year_season: '',
-      card_number: '', format: 'Single Card', is_rookie: false, is_autograph: false,
-      is_graded: false, grading_company: 'PSA', grade: '10', game: '', rarity: '', language: 'Español'
-    } as CardDetails,
-    // Many-to-many
-    categories: [] as string[],
-    tags: [] as string[],
-    brands: [] as string[],
-    gallery: [] as { url: string }[]
-  });
 
-  const [tagInput, setTagInput] = useState('');
-  const [newCatInput, setNewCatInput] = useState('');
-  const [newBrandInput, setNewBrandInput] = useState('');
+  // Debounce search input (300ms)
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [search]);
 
-  useEffect(() => { fetchProducts(); fetchMeta(); }, []);
+  // Trigger server-side fetch when search, filters, or pagination change
+  useEffect(() => {
+    fetchProducts();
+  }, [debouncedSearch, filterCategory, filterBrand, filterVendor, currentPage, itemsPerPage, sortField, sortOrder]);
+
+  useEffect(() => {
+    fetchMeta();
+  }, []);
 
   const handleVendorFilterChange = (val: string) => {
     setFilterVendor(val);
@@ -196,26 +200,51 @@ export default function AdminProducts() {
 
   async function fetchProducts() {
     setLoading(true);
-    console.log('[PRODUCT_QUERY_HOTFIX_VERSION]', 'FK_EXPLICIT_V1');
-    const { data, error, count } = await supabase
-      .from('products')
-      .select('*, vendor:vendors(id, store_name, company_name), product_categories(categories(id, name)), brand:brands!products_brand_id_fkey(id, name), images:product_images(id, url), variants:product_variants(id, inventory_count, sku)', { count: 'exact' })
-      .order('created_at', { ascending: false });
+    const currentReqId = ++lastRequestId.current;
+    const pageSizeNum = itemsPerPage === 'Todos' ? 1000 : Number(itemsPerPage);
 
-    if (error) {
-      console.error('[ADMIN_PRODUCTS_QUERY ERROR]', {
-        code: error.code,
-        message: error.message,
-        details: error.details,
-        hint: error.hint
+    try {
+      const { data, error } = await supabase.rpc('search_admin_products', {
+        p_search: debouncedSearch.trim() || null,
+        p_category_id: filterCategory || null,
+        p_brand_id: filterBrand || null,
+        p_vendor_id: filterVendor === 'all' ? null : filterVendor,
+        p_status: null,
+        p_page: currentPage,
+        p_page_size: pageSizeNum,
+        p_sort_field: sortField,
+        p_sort_order: sortOrder
       });
-      toast.error('Error al cargar productos: ' + error.message);
-      setProducts([]);
-    } else {
-      console.log('[ADMIN_PRODUCTS_QUERY SUCCESS]', { dataLength: data?.length, count });
-      setProducts(data || []);
+
+      // Ignore response if a newer search request was initiated
+      if (currentReqId !== lastRequestId.current) return;
+
+      if (error) {
+        console.error('[ADMIN_PRODUCTS_SEARCH ERROR]', error);
+        toast.error('Error al cargar productos: ' + error.message);
+        setProducts([]);
+        setTotalProductsCount(0);
+      } else if (data && data.length > 0) {
+        const total = Number(data[0].total_count || 0);
+        const items = data[0].products || [];
+        setTotalProductsCount(total);
+        setProducts(items);
+      } else {
+        setTotalProductsCount(0);
+        setProducts([]);
+      }
+    } catch (err: any) {
+      if (currentReqId === lastRequestId.current) {
+        console.error('[ADMIN_PRODUCTS_FETCH_EXCEPTION]', err);
+        toast.error('Error inesperado al consultar catálogo.');
+        setProducts([]);
+        setTotalProductsCount(0);
+      }
+    } finally {
+      if (currentReqId === lastRequestId.current) {
+        setLoading(false);
+      }
     }
-    setLoading(false);
   }
 
   async function fetchMeta() {
@@ -229,12 +258,19 @@ export default function AdminProducts() {
     setBrands(brs || []);
     setTags(tgs || []);
     setVendors(vds || []);
+
+    console.log('[PRODUCT_DEBUG_BRANDS]', {
+      brandsCount: brs?.length,
+      ironStudios: brs?.filter(
+        b => b.name?.toLowerCase().includes('iron studios')
+      )
+    });
   }
 
   function openCreate() {
     setEditing(null);
     setForm({ 
-      title: '', slug: '', description: '', short_description: '', base_price: '', compare_at_price: '', sku: `${Date.now()}`, stock: '10', status: 'published', badge: '', is_featured: false, is_active: true, category_id: '', brand_id: '', vendor_id: 'platform', image_url: '', video_url: '', 
+      title: '', slug: '', description: '', short_description: '', base_price: '', compare_at_price: '', sku: `${Date.now()}`, stock: '10', status: 'published', badge: '', is_featured: false, is_active: true, category_id: '', brand_id: '', vendor_id: 'platform', condition: '', condition_notes: '', image_url: '', video_url: '', 
       card_details: {
         sport: '', player_character: '', team: '', set_collection: '', year_season: '',
         card_number: '', format: 'Single Card', is_rookie: false, is_autograph: false,
@@ -272,6 +308,8 @@ export default function AdminProducts() {
       category_id: product.category?.id || '', 
       brand_id: product.brand?.id || '',
       vendor_id: product.vendor_id || 'platform',
+      condition: (product as any).condition || '',
+      condition_notes: (product as any).condition_notes || '',
       image_url: product.images?.[0]?.url || '', 
       video_url: '',
       card_details: {
@@ -301,103 +339,140 @@ export default function AdminProducts() {
 
   async function handleSave(options?: { allowDuplicateOverride?: boolean }) {
     let createdProductId: string | null = null;
+    setValidationErrors([]);
     try {
-      console.group("[PRODUCT_SAVE_AUDIT]");
-      console.log("editing", editing);
-      console.log("form", form);
-      console.log("RAW PRICE", form.base_price);
-      console.log("RAW PRICE TYPE", typeof form.base_price);
-      console.log("PARSED PRICE", Number(form.base_price));
-      console.log("RAW BRAND", form.brand_id);
-      console.log("RAW CATEGORY", form.category_id);
-      console.log("CATEGORIES", form.categories);
-      console.log("STATUS", form.status);
-      console.groupEnd();
+      // 1. Run central validation engine
+      const validation = validateProductForPublication({
+        form: {
+          title: form.title,
+          base_price: form.base_price,
+          compare_at_price: form.compare_at_price,
+          categories: form.categories,
+          category_id: form.category_id,
+          brands: form.brands,
+          brand_id: form.brand_id,
+          image_url: form.image_url,
+          stock: form.stock,
+          condition: form.condition,
+          vendor_id: form.vendor_id === 'platform' ? null : form.vendor_id
+        },
+        userRole: 'admin',
+        storeType: 'standard',
+        targetStatus: form.status as 'published' | 'draft' | 'archived',
+        brandsList: brands
+      });
 
-      if (!form.title || !form.title.trim()) throw new Error("El título es obligatorio");
-
-      if (form.status === 'published') {
-        const errors = [];
-        if (!form.categories[0]) errors.push("Falta categoría válida");
-        if (!form.brands[0]) errors.push("Falta marca válida");
-        if ((parseFloat(form.base_price) || 0) <= 0) errors.push("Precio inválido (debe ser mayor a 0)");
-        if ((parseInt(form.stock) || 0) < 0) errors.push("Stock inválido (no puede ser negativo)");
-        if (!form.image_url) errors.push("Imágenes suficientes (se requiere al menos una imagen)");
-
-        if (errors.length > 0) {
-          throw new Error("Reglas de Publicación no cumplidas:\n- " + errors.join("\n- "));
-        }
-
-        // Duplicate check (Soft Warning for Admin Override)
-        if (!options?.allowDuplicateOverride) {
-          const { data: dupData } = await supabase.rpc('check_duplicate_product', {
-            p_title: form.title,
-            p_brand_id: form.brands[0] || null,
-            p_sku: form.sku || null,
-            p_gtin: null,
-            p_asin: null
-          });
-
-          if (dupData && dupData.length > 0) {
-            const otherDup = dupData.find((d: any) => d.matched_product_id !== editing?.id && d.similarity_score >= 0.95);
-            if (otherDup) {
-              // Fetch candidate product details for interactive modal
-              const { data: candidateProd } = await supabase
-                .from('products')
-                .select('id, title, vendor_id, vendor_store:vendor_stores(store_name), variants:product_variants(sku)')
-                .eq('id', otherDup.matched_product_id)
-                .maybeSingle();
-
-              const vendorName = (candidateProd as any)?.vendor_store?.store_name || (candidateProd?.vendor_id ? 'Vendedor Marketplace' : 'Collectibles.uy');
-              const candidateSku = (candidateProd as any)?.variants?.[0]?.sku || form.sku || 'N/A';
-
-              setDuplicateWarning({
-                matched_product_id: otherDup.matched_product_id,
-                similarity_score: otherDup.similarity_score,
-                match_type: otherDup.match_type,
-                title: candidateProd?.title || form.title,
-                vendor_name: vendorName,
-                sku: candidateSku
-              });
-              setShowDuplicateModal(true);
-              return; // STOP execution, open override modal
+      if (!validation.isValid) {
+        setValidationErrors(validation.errors);
+        const firstField = validation.errors[0]?.field;
+        if (firstField) {
+          setTimeout(() => {
+            const element = document.getElementById(`field-${firstField}`) || document.querySelector(`[name="${firstField}"]`);
+            if (element) {
+              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              (element as HTMLElement).focus?.();
+            } else {
+              const banner = document.getElementById('validation-summary-banner');
+              banner?.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
+          }, 100);
+        }
+        return;
+      }
+
+      // 2. Check Duplicates when Publishing (Admin Warning + Override Modal)
+      if (form.status === 'published' && !options?.allowDuplicateOverride) {
+        const { data: dupData } = await supabase.rpc('check_duplicate_product', {
+          p_title: form.title,
+          p_brand_id: form.brands[0] || null,
+          p_sku: form.sku || null,
+          p_gtin: null,
+          p_asin: null
+        });
+
+        if (dupData && dupData.length > 0) {
+          const otherDup = dupData.find((d: any) => d.matched_product_id !== editing?.id && d.similarity_score >= 0.95);
+          if (otherDup) {
+            const { data: candidateProd } = await supabase
+              .from('products')
+              .select('id, title, vendor_id, vendor_store:vendor_stores(store_name), variants:product_variants(sku)')
+              .eq('id', otherDup.matched_product_id)
+              .maybeSingle();
+
+            const vendorName = (candidateProd as any)?.vendor_store?.store_name || (candidateProd?.vendor_id ? 'Vendedor Marketplace' : 'Collectibles.uy');
+            const candidateSku = (candidateProd as any)?.variants?.[0]?.sku || form.sku || 'N/A';
+
+            setDuplicateWarning({
+              matched_product_id: otherDup.matched_product_id,
+              similarity_score: otherDup.similarity_score,
+              match_type: otherDup.match_type,
+              title: candidateProd?.title || form.title,
+              vendor_name: vendorName,
+              sku: candidateSku
+            });
+            setShowDuplicateModal(true);
+            return;
           }
         }
       }
 
-      const { data: { session } } = await supabase.auth.getSession();
-      const currentUserId = session?.user?.id;
-
       const slug = await generateUniqueSlug(form.title, editing?.id);
-
       const targetVendorId = form.vendor_id === 'platform' ? null : form.vendor_id;
 
       const currentMetadata = (editing as any)?.metadata || {};
       const selectedCatId = form.categories[0] || form.category_id;
       const isCardCategory = isSportsCardCategory(selectedCatId, categories) || isTCGCategory(selectedCatId, categories);
 
+      const normalizedCondition = normalizeCondition(form.condition);
+      const normalizedNotes = form.condition_notes?.trim() || null;
+      const basePriceParsed = form.base_price !== '' && form.base_price !== null && form.base_price !== undefined ? parseFloat(String(form.base_price)) : null;
+
       const payload: any = {
-        title: form.title.trim(), slug, description: form.description, short_description: form.short_description,
-        base_price: parseFloat(form.base_price) || 0, compare_at_price: form.compare_at_price ? parseFloat(form.compare_at_price) : null,
-        status: form.status, badge: form.badge || null, is_featured: form.is_featured, is_active: form.is_active,
-        brand_id: form.brands[0] || null, category_id: form.categories[0] || null,
+        title: form.title.trim(),
+        slug,
+        description: form.description || null,
+        short_description: form.short_description || null,
+        base_price: basePriceParsed,
+        compare_at_price: form.compare_at_price ? parseFloat(String(form.compare_at_price)) : null,
+        status: form.status,
+        badge: form.badge || null,
+        is_featured: form.is_featured,
+        is_active: form.is_active,
+        brand_id: form.brands[0] || null,
+        category_id: form.categories[0] || null,
         vendor_id: targetVendorId,
+        condition: normalizedCondition,
+        condition_notes: normalizedNotes,
         metadata: {
           ...currentMetadata,
           ...(isCardCategory ? { card_details: form.card_details } : {})
         }
       };
 
-      console.log('[ADMIN_PRODUCTS_SAVE_VERSION]', 'TITLESLUG_FIXED_V2');
-      console.log('[PRODUCT_SAVE_PAYLOAD]', payload);
+      console.log('[ADMIN_PRODUCTS_SAVE_PAYLOAD]', payload);
 
       let productId = editing?.id;
+      const targetStatus = form.status;
+
       if (editing) {
-        const { error: updProdErr } = await supabase.from('products').update(payload).eq('id', productId).select().single();
+        // Keep status as draft or existing status during initial field update if publishing for first time,
+        // ensuring DB triggers do not prematurely evaluate published guardrails before relations exist!
+        const initialStatus = editing.status === 'published' ? (targetStatus === 'published' ? 'published' : 'draft') : 'draft';
+        const initialPayload = { 
+          ...payload, 
+          status: initialStatus, 
+          metadata: { ...payload.metadata, image_url: form.image_url || null } 
+        };
+        const { error: updProdErr } = await supabase.from('products').update(initialPayload).eq('id', productId).select().single();
         if (updProdErr) throw updProdErr;
       } else {
-        const { data: newProd, error: insertError } = await supabase.from('products').insert(payload).select().single();
+        // Transactional Staging Sequence: Insert as draft first to safely establish FK relations
+        const initialPayload = { 
+          ...payload, 
+          status: 'draft', 
+          metadata: { ...payload.metadata, image_url: form.image_url || null } 
+        };
+        const { data: newProd, error: insertError } = await supabase.from('products').insert(initialPayload).select().single();
         if (insertError) throw insertError;
         productId = newProd.id;
         createdProductId = newProd.id;
@@ -464,6 +539,8 @@ export default function AdminProducts() {
             action_type: 'ignorado',
             details: `Admin override autorizó creación con similitud ${Math.round(duplicateWarning.similarity_score * 100)}% contra candidato ${duplicateWarning.matched_product_id}`
           };
+          const { data: { session } } = await supabase.auth.getSession();
+          const currentUserId = session?.user?.id;
           if (currentUserId) {
             auditPayload.admin_id = currentUserId;
           }
@@ -473,24 +550,39 @@ export default function AdminProducts() {
         }
       }
 
+      // Final Server-Side Validation & Status Update
+      if (targetStatus !== 'draft') {
+        const { error: finalStatusErr } = await supabase
+          .from('products')
+          .update({ status: targetStatus })
+          .eq('id', productId)
+          .select()
+          .single();
+        if (finalStatusErr) throw finalStatusErr;
+      }
+
       setShowDuplicateModal(false);
       setDuplicateWarning(null);
       setShowForm(false);
       fetchProducts();
       fetchMeta();
-      toast.success(editing ? 'Producto actualizado' : 'Producto creado');
+      toast.success(editing ? 'Producto actualizado' : (targetStatus === 'published' ? 'Producto creado y publicado' : 'Producto guardado en borrador'));
     } catch (err: any) {
-      if (createdProductId && !editing) {
-        try {
-          await supabase.from('products').delete().eq('id', createdProductId);
-          console.warn('[Emergency Cleanup] Rolled back orphaned product row:', createdProductId);
-        } catch (rollbackErr) {
-          console.error('[Emergency Rollback Failed]', rollbackErr);
-        }
-      }
       console.error('[AdminProducts handleSave Runtime Error]', err);
       console.trace(err);
-      toast.error(`Error: ${err.message}`);
+      const userMessage = mapDatabaseErrorToUserMessage(err);
+
+      if (createdProductId && !editing) {
+        // Product was successfully inserted as Draft in Step 1. Preserve it so user work is not lost!
+        fetchProducts();
+        fetchMeta();
+        setShowDuplicateModal(false);
+        setDuplicateWarning(null);
+        setShowForm(false);
+        toast.warning(`No pudimos finalizar la publicación. El producto quedó guardado como borrador para que puedas revisarlo.\n\nMotivo: ${userMessage}`);
+      } else {
+        toast.error(userMessage);
+      }
     }
   }
 
@@ -708,7 +800,9 @@ export default function AdminProducts() {
         is_featured: product.is_featured,
         brand_id: product.brand?.id || product.brand_id || null,
         category_id: product.category?.id || product.category_id || null,
-        vendor_id: product.vendor_id || null
+        vendor_id: product.vendor_id || null,
+        condition: normalizeCondition((product as any).condition),
+        condition_notes: (product as any).condition_notes?.trim() || null
       };
 
       const { data: newProd, error: insertError } = await supabase.from('products').insert(payload).select().single();
@@ -822,22 +916,24 @@ export default function AdminProducts() {
 
         // Generate dynamic unique slug
         const uniqueSlug = await generateUniqueSlug(p.title);
+        const isComplete = Boolean(p.base_price && p.base_price > 0 && categoryId && brandId && p.image_url);
+        const targetStatus = isComplete ? 'published' : 'draft';
 
-        // Insert Product
+        // Insert Product initially as Draft to safely establish FK relations
         const { data: newProd, error: prodErr } = await supabase
           .from('products')
           .insert({
             title: p.title.trim(),
             slug: uniqueSlug,
             description: p.description || null,
-            base_price: p.base_price,
+            base_price: p.base_price || null,
             compare_at_price: p.compare_at_price || null,
-            status: 'published',
+            status: 'draft',
             is_active: true,
             category_id: categoryId,
             brand_id: brandId,
-            condition: p.condition || null,
-            condition_notes: p.condition_notes || null,
+            condition: normalizeCondition(p.condition),
+            condition_notes: p.condition_notes?.trim() || null,
             is_featured: false
           })
           .select()
@@ -852,7 +948,10 @@ export default function AdminProducts() {
 
         // Insert category junction
         if (categoryId) {
-          await supabase.from('product_categories').insert({ product_id: productId, category_id: categoryId });
+          await supabase.from('product_categories').upsert(
+            { product_id: productId, category_id: categoryId },
+            { onConflict: 'product_id,category_id', ignoreDuplicates: true }
+          );
         }
 
         // Insert images if provided (supports multiple comma-separated URLs)
@@ -874,13 +973,28 @@ export default function AdminProducts() {
         }
 
         // Insert variant
-        const skuVal = p.sku?.trim() || `sku-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        const cleanInputSku = p.sku?.trim();
+        const skuVal = (cleanInputSku && cleanInputSku.length > 0) ? cleanInputSku : null;
+        const stockVal = p.stock !== undefined && p.stock !== null && !isNaN(Number(p.stock)) ? Math.max(0, parseInt(String(p.stock), 10)) : 0;
+
         await supabase.from('product_variants').insert({
           product_id: productId,
           sku: skuVal,
           name: 'Standard',
-          inventory_count: p.stock
+          inventory_count: stockVal
         });
+
+        // Final Server-Side Validation & Status Update
+        if (targetStatus === 'published') {
+          const { error: pubErr } = await supabase
+            .from('products')
+            .update({ status: 'published' })
+            .eq('id', productId);
+          
+          if (pubErr) {
+            console.warn(`Product "${p.title}" could not be published automatically, kept as draft:`, pubErr.message);
+          }
+        }
       }
 
       toast.success(`¡Se importaron ${docs.length} productos correctamente!`);
@@ -889,7 +1003,7 @@ export default function AdminProducts() {
       fetchMeta();
     } catch (err: any) {
       console.error("Bulk import failed:", err);
-      toast.error(`Error en la importación: ${err.message}`);
+      toast.error(`Error en la importación: ${mapDatabaseErrorToUserMessage(err)}`);
     } finally {
       setLoading(false);
     }
@@ -968,28 +1082,7 @@ export default function AdminProducts() {
 
   const addToGallery = (url: string) => setForm({ ...form, gallery: [...form.gallery, { url }] });
   const removeFromGallery = (idx: number) => setForm({ ...form, gallery: form.gallery.filter((_, i) => i !== idx) });
-
-  const filteredProducts = useMemo(() => {
-    return products.filter(p => {
-      const vendorName = p.vendor?.store_name || p.vendor?.company_name || '';
-      const skuVal = p.variants?.[0]?.sku || '';
-      const matchesSearch = p.title.toLowerCase().includes(search.toLowerCase()) ||
-        (skuVal && skuVal.toLowerCase().includes(search.toLowerCase())) ||
-        (vendorName && vendorName.toLowerCase().includes(search.toLowerCase()));
-      
-      const matchesCategory = filterCategory === '' || p.category_id === filterCategory || p.product_categories?.[0]?.categories?.id === filterCategory || p.category?.id === filterCategory;
-      const matchesBrand = filterBrand === '' || p.brand?.id === filterBrand || p.brand_id === filterBrand;
-      
-      let matchesVendor = true;
-      if (filterVendor === 'platform') {
-        matchesVendor = !p.vendor_id;
-      } else if (filterVendor && filterVendor !== 'all') {
-        matchesVendor = p.vendor_id === filterVendor;
-      }
-
-      return matchesSearch && matchesCategory && matchesBrand && matchesVendor;
-    });
-  }, [products, search, filterCategory, filterBrand, filterVendor]);
+  const maxPages = Math.max(1, Math.ceil(totalProductsCount / (typeof itemsPerPage === 'number' ? itemsPerPage : 50)));
 
   return (
     <div className="max-w-full">
@@ -1001,7 +1094,7 @@ export default function AdminProducts() {
                <h2 className="text-2xl font-black text-dark-900">Productos <span className="bg-blue-600 text-white text-[8px] px-1 py-0.5 rounded ml-2 relative -top-1">v2</span></h2>
                {!loading && (
                  <span className="bg-gray-100/80 border border-gray-200 text-gray-500 text-[10px] font-black uppercase px-2 py-1 rounded-md tracking-widest hidden md:inline-flex items-center gap-1">
-                   {filteredProducts.length} {filteredProducts.length === 1 ? 'Producto' : 'Productos'}
+                   {totalProductsCount} {totalProductsCount === 1 ? 'Producto' : 'Productos'}
                  </span>
                )}
             </div>
@@ -1013,15 +1106,13 @@ export default function AdminProducts() {
               <input 
                 type="checkbox" 
                 className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer" 
-                checked={filteredProducts.length > 0 && filteredProducts.slice(0, itemsPerPage === 'Todos' ? filteredProducts.length : itemsPerPage).every(p => selectedProducts.includes(p.id)) && selectedProducts.length !== filteredProducts.length}
+                checked={products.length > 0 && products.every(p => selectedProducts.includes(p.id))}
                 onChange={(e) => {
-                  const filtered = getSortedProducts(filteredProducts);
-                  const currentSubset = itemsPerPage === 'Todos' ? filtered : filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
                   if (e.target.checked) {
-                    const uniqueIds = Array.from(new Set([...selectedProducts, ...currentSubset.map((p: any) => p.id)]));
+                    const uniqueIds = Array.from(new Set([...selectedProducts, ...products.map((p: any) => p.id)]));
                     setSelectedProducts(uniqueIds);
                   } else {
-                    const currentIds = currentSubset.map((p: any) => p.id);
+                    const currentIds = products.map((p: any) => p.id);
                     setSelectedProducts(selectedProducts.filter(id => !currentIds.includes(id)));
                   }
                 }}
@@ -1035,13 +1126,13 @@ export default function AdminProducts() {
               <input 
                 type="checkbox" 
                 className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer" 
-                checked={filteredProducts.length > 0 && filteredProducts.length === selectedProducts.length}
+                checked={products.length > 0 && selectedProducts.length >= totalProductsCount}
                 onChange={(e) => {
-                  if (e.target.checked) setSelectedProducts(filteredProducts.map(p => p.id));
+                  if (e.target.checked) setSelectedProducts(products.map(p => p.id));
                   else setSelectedProducts([]);
                 }}
               />
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest group-hover:text-blue-600 transition-colors">Todos ({filteredProducts.length})</span>
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest group-hover:text-blue-600 transition-colors">Selección ({selectedProducts.length})</span>
             </label>
           </div>
         </div>
@@ -1056,7 +1147,7 @@ export default function AdminProducts() {
          <div className="p-4 border-b bg-gray-50/50 flex gap-4 items-center">
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input type="text" placeholder="Buscar productos..." value={search} onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
+              <input type="text" placeholder="Buscar productos por título, marca, SKU, categoría o vendedor..." value={search} onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
                 className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500" />
             </div>
             <div className="flex gap-4 items-center">
@@ -1077,28 +1168,32 @@ export default function AdminProducts() {
                     <option value="">Todas las marcas</option>
                     {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>
-                  <select className="border-gray-200 border rounded px-2 py-1 text-xs outline-none bg-white font-bold" value={filterVendor} onChange={e => handleVendorFilterChange(e.target.value)}>
+                  <select className="border-gray-200 border rounded px-2 py-1 text-xs outline-none bg-white" value={filterVendor} onChange={e => handleVendorFilterChange(e.target.value)}>
                     <option value="all">Todos los vendedores</option>
-                    <option value="platform">Collectibles</option>
-                    {vendors.map(v => <option key={v.id} value={v.id}>{v.store_name || v.company_name || v.id}</option>)}
+                    <option value="platform">Solo Collectibles</option>
+                    {vendors.map(v => <option key={v.id} value={v.id}>{v.store_name || v.company_name}</option>)}
                   </select>
                </div>
             </div>
          </div>
+
          {selectedProducts.length > 0 && (
-            <div className="bg-blue-50 border-b border-blue-100 px-6 py-2.5 flex gap-4 items-center animate-fade-in">
-               <span className="text-sm font-bold text-blue-800 tracking-tight">{selectedProducts.length} seleccionados</span>
-               <div className="flex gap-2">
-                 <select className="border-blue-200 border rounded text-xs p-1 text-blue-700 bg-white" onChange={(e) => { handleBulkUpdate('category_id', e.target.value); e.target.value = ''; }}>
-                   <option value="">Cambiar Categoría</option>
-                   {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                 </select>
-                 <select className="border-blue-200 border rounded text-xs p-1 text-blue-700 bg-white" onChange={(e) => { handleBulkUpdate('brand_id', e.target.value); e.target.value = ''; }}>
-                   <option value="">Cambiar Marca</option>
-                   {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                 </select>
-                 <button onClick={handleBulkPublish} className="btn-secondary py-1 text-xs px-4 text-green-700 bg-white border-green-200 hover:bg-green-50 shadow-sm">Publicar Todos</button>
-                 <button onClick={handleBulkDelete} className="btn-secondary py-1 text-xs px-4 text-red-600 bg-white border-red-200 hover:bg-red-50 shadow-sm">Eliminar Todos</button>
+            <div className="bg-blue-50 border-b border-blue-100 p-3 px-6 flex items-center justify-between animate-fade-in">
+               <span className="text-xs font-bold text-blue-900">{selectedProducts.length} productos seleccionados</span>
+               <div className="flex gap-2 items-center">
+                  <select onChange={(e) => { if (e.target.value) { handleBulkUpdate('status', e.target.value); e.target.value = ''; } }} className="bg-white border border-blue-200 text-xs rounded px-2 py-1 font-bold text-gray-700 outline-none">
+                     <option value="">Cambiar Estado...</option>
+                     <option value="published">Visible (Publicado)</option>
+                     <option value="draft">Borrador</option>
+                     <option value="archived">Archivado</option>
+                  </select>
+                  <select onChange={(e) => { if (e.target.value) { handleBulkUpdate('category_id', e.target.value); e.target.value = ''; } }} className="bg-white border border-blue-200 text-xs rounded px-2 py-1 font-bold text-gray-700 outline-none">
+                     <option value="">Cambiar Categoría...</option>
+                     {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  <button onClick={() => handleBulkDelete()} className="btn-danger text-xs px-3 py-1 flex items-center gap-1">
+                     <Trash2 className="w-3.5 h-3.5" /> Eliminar seleccionados
+                  </button>
                </div>
             </div>
          )}
@@ -1107,24 +1202,22 @@ export default function AdminProducts() {
                <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
                  <tr className="text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">
                    <th className="px-6 py-4 w-12">
-                     {(() => {
-                        const filtered = getSortedProducts(filteredProducts);
-                        const currentSubset = itemsPerPage === 'Todos' ? filtered : filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-                        return (
-                          <input 
-                            type="checkbox" 
-                            className="rounded border-gray-300" 
-                            checked={selectedProducts.length > 0 && currentSubset.every(p => selectedProducts.includes(p.id))}
-                            onChange={(e) => {
-                              if (e.target.checked) setSelectedProducts(currentSubset.map((p: any) => p.id));
-                              else setSelectedProducts([]);
-                            }}
-                          />
-                        );
-                     })()}
+                     <input 
+                       type="checkbox" 
+                       className="rounded border-gray-300" 
+                       checked={products.length > 0 && products.every(p => selectedProducts.includes(p.id))}
+                       onChange={(e) => {
+                         if (e.target.checked) setSelectedProducts(products.map((p: any) => p.id));
+                         else setSelectedProducts([]);
+                       }}
+                     />
                    </th>
-                   <th className="px-6 py-4">Producto</th>
-                   <th className="px-6 py-4">Precio</th>
+                   <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('title')}>
+                     Producto {sortField === 'title' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+                   </th>
+                   <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('base_price')}>
+                     Precio {sortField === 'base_price' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+                   </th>
                    <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('category')}>
                      Categoría {sortField === 'category' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
                    </th>
@@ -1138,7 +1231,7 @@ export default function AdminProducts() {
                      Stock {sortField === 'stock' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
                    </th>
                     <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('is_active')}>
-                      Visible (ON/OFF) {sortField === 'is_active' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+                      Visible {sortField === 'is_active' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
                     </th>
                     <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('status')}>
                       Estado {sortField === 'status' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
@@ -1151,187 +1244,187 @@ export default function AdminProducts() {
                </thead>
                <tbody className="divide-y divide-gray-100">
                  {loading ? (
-                    <tr><td colSpan={10} className="px-6 py-12 text-center text-gray-400 animate-pulse">Cargando catálogo...</td></tr>
-                 ) : (() => {
-                    const filtered = getSortedProducts(filteredProducts);
-                    const currentSubset = itemsPerPage === 'Todos' ? filtered : filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-                    return currentSubset.map((p: any) => {
-                    const primaryCat = p.product_categories?.[0]?.categories;
-                    return (
-                    <tr key={p.id} className="hover:bg-blue-50/20 group transition-all" title="Haz clic en cualquier campo para editarlo en línea">
-                      <td className="px-6 py-4">
-                        <input 
-                          type="checkbox" 
-                          className="rounded border-gray-300" 
-                          checked={selectedProducts.includes(p.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) setSelectedProducts([...selectedProducts, p.id]);
-                            else setSelectedProducts(selectedProducts.filter(id => id !== p.id));
-                          }}
-                          onClick={e => e.stopPropagation()} 
-                        />
-                      </td>
-                      <td className="px-6 py-4 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'title'}); setInlineValue(p.title); }}>
-                         <div className="flex items-center gap-4">
-                            <img src={getProductImage(p)} alt="" className="w-12 h-12 rounded-lg object-cover border border-gray-100 shadow-sm" />
-                            <div>
-                               {inlineEdit?.id === p.id && inlineEdit.field === 'title' ? (
-                                  <input autoFocus type="text" className="w-48 p-1 border rounded text-xs font-bold text-dark-900" 
-                                    value={inlineValue} onChange={e => setInlineValue(e.target.value)}
-                                    onBlur={() => handleInlineUpdate(p.id, 'title', inlineValue)}
-                                    onKeyDown={e => e.key === 'Enter' && handleInlineUpdate(p.id, 'title', inlineValue)}
-                                    onClick={e => e.stopPropagation()} />
-                               ) : (
-                                  <p className="font-bold text-dark-900 group-hover:text-blue-600 transition-colors">{p.title}</p>
-                               )}
-                               <div className="flex gap-1 items-center mt-0.5">
-                                  <span className="text-[9px] font-mono text-gray-400 uppercase">{p.variants?.[0]?.sku || '-'}</span>
-                                  {p.ml_item_id && <div className="w-6 h-3 bg-yellow-400 rounded-sm text-[8px] flex items-center justify-center font-bold text-blue-900 ml-1">ML</div>}
-                               </div>
-                            </div>
-                         </div>
-                      </td>
-                      <td className="px-6 py-4 font-black text-dark-800 text-sm whitespace-nowrap cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'base_price'}); setInlineValue(p.base_price); }}>
-                        {inlineEdit?.id === p.id && inlineEdit.field === 'base_price' ? (
-                          <input autoFocus type="number" className="w-24 p-1 border rounded text-xs font-bold" value={inlineValue} onChange={e => setInlineValue(e.target.value)} onBlur={() => handleInlineUpdate(p.id, 'base_price', inlineValue)} onKeyDown={e => e.key === 'Enter' && handleInlineUpdate(p.id, 'base_price', inlineValue)} onClick={e => e.stopPropagation()} />
-                        ) : (
-                          <span>UYU {p.base_price.toLocaleString()}</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-xs font-bold text-gray-500 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'category_id'}); setInlineValue(primaryCat?.id || ''); }}>
-                        {inlineEdit?.id === p.id && inlineEdit.field === 'category_id' ? (
-                          <select 
-                            autoFocus
-                            className="bg-white border rounded text-[10px] p-1 font-bold outline-none"
-                            value={inlineValue || ''}
-                            onChange={e => { setInlineValue(e.target.value); handleInlineUpdate(p.id, 'category_id', e.target.value); }}
-                            onBlur={() => setInlineEdit(null)}
-                            onClick={e => e.stopPropagation()}
-                          >
-                            <option value="">- Sin Categoría -</option>
-                            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                          </select>
-                        ) : (
-                          primaryCat?.name || '-'
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-xs font-bold text-gray-500 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'brand_id'}); setInlineValue(p.brand?.id || ''); }}>
-                        {inlineEdit?.id === p.id && inlineEdit.field === 'brand_id' ? (
-                          <select 
-                            autoFocus
-                            className="bg-white border rounded text-[10px] p-1 font-bold outline-none"
-                            value={inlineValue || ''}
-                            onChange={e => { setInlineValue(e.target.value); handleInlineUpdate(p.id, 'brand_id', e.target.value); }}
-                            onBlur={() => setInlineEdit(null)}
-                            onClick={e => e.stopPropagation()}
-                          >
-                            <option value="">- Sin Marca -</option>
-                            {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                          </select>
-                        ) : (
-                          p.brand?.name || '-'
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {p.vendor_id ? (
-                          <span 
-                            className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-200"
-                            title={`Producto vendido por ${p.vendor?.store_name || p.vendor?.company_name || 'Vendor'}`}
-                          >
-                            {p.vendor?.store_name || p.vendor?.company_name || 'Vendor Marketplace'}
-                          </span>
-                        ) : (
-                          <span 
-                            className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-100"
-                            title="Producto propio de Collectibles"
-                          >
-                            COLLECTIBLES
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'stock'}); setInlineValue(p.variants?.[0]?.inventory_count || 0); }}>
-                         {inlineEdit?.id === p.id && inlineEdit.field === 'stock' ? (
-                            <input autoFocus type="number" className="w-16 p-1 border rounded text-xs font-bold text-center" value={inlineValue} onChange={e => setInlineValue(e.target.value)} onBlur={() => handleInlineUpdate(p.id, 'stock', inlineValue)} onKeyDown={e => e.key === 'Enter' && handleInlineUpdate(p.id, 'stock', inlineValue)} onClick={e => e.stopPropagation()} />
-                         ) : (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tight text-blue-700 bg-blue-50 border border-blue-100">
-                               {p.variants?.[0]?.inventory_count || 0} u.
-                            </span>
-                         )}
-                      </td>
-                      <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
-                        <button
-                          onClick={async () => {
-                            const newActive = p.is_active !== false ? false : true;
-                            try {
-                              const { error } = await supabase
-                                .from('products')
-                                .update({ is_active: newActive })
-                                .eq('id', p.id);
-                              if (error) throw error;
-                              setProducts(prev => prev.map(prod => prod.id === p.id ? { ...prod, is_active: newActive } : prod));
-                              toast.success(newActive ? 'Producto visible en la tienda' : 'Producto oculto en la tienda');
-                            } catch (err: any) {
-                              toast.error(`Error al cambiar estado: ${err.message}`);
-                            }
-                          }}
-                          className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${p.is_active !== false ? 'bg-green-500' : 'bg-gray-300'}`}
-                        >
-                          <span
-                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${p.is_active !== false ? 'translate-x-5' : 'translate-x-0'}`}
+                    <tr><td colSpan={11} className="px-6 py-12 text-center text-gray-400 animate-pulse">Cargando catálogo...</td></tr>
+                 ) : products.length === 0 ? (
+                    <tr><td colSpan={11} className="px-6 py-12 text-center text-gray-400 font-bold">0 PRODUCTOS ENCONTRADOS</td></tr>
+                 ) : (
+                    products.map((p: any) => {
+                      const primaryCat = p.product_categories?.[0]?.categories;
+                      return (
+                      <tr key={p.id} className="hover:bg-blue-50/20 group transition-all" title="Haz clic en cualquier campo para editarlo en línea">
+                        <td className="px-6 py-4">
+                          <input 
+                            type="checkbox" 
+                            className="rounded border-gray-300" 
+                            checked={selectedProducts.includes(p.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) setSelectedProducts([...selectedProducts, p.id]);
+                              else setSelectedProducts(selectedProducts.filter(id => id !== p.id));
+                            }}
+                            onClick={e => e.stopPropagation()} 
                           />
-                        </button>
-                      </td>
-                      <td className="px-6 py-4 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'status'}); setInlineValue(p.status); }}>
-                        {inlineEdit?.id === p.id && inlineEdit.field === 'status' ? (
-                           <select autoFocus className="bg-white border rounded text-[10px] p-1 font-bold outline-none" value={inlineValue} onChange={e => { setInlineValue(e.target.value); handleInlineUpdate(p.id, 'status', e.target.value); }} onBlur={() => setInlineEdit(null)} onClick={e => e.stopPropagation()}>
-                             <option value="published">Visible</option>
-                             <option value="draft">Borrador</option>
-                             <option value="archived">Archivado</option>
-                           </select>
-                        ) : (
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${p.status === 'published' ? 'text-green-700 bg-green-50' : 'text-gray-500 bg-gray-100'}`}>
-                             {p.status === 'published' ? 'Visible' : 'Oculto'}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-xs font-bold text-gray-700 whitespace-nowrap">
-                         {p.condition ? (
-                           <span className="px-2 py-1 rounded bg-gray-100 border border-gray-200 text-gray-800 font-semibold">
-                             {getConditionLabel(p.condition)}
-                           </span>
-                         ) : (
-                           <span className="text-gray-300 font-mono">—</span>
-                         )}
-                      </td>
-                      <td className="px-6 py-4 text-right text-xs font-medium text-gray-400">
-                        <div className="flex justify-end gap-3 items-center mb-1">
-                          <button onClick={(e) => { e.stopPropagation(); openEdit(p); }} className="text-blue-500 hover:underline text-xs font-bold">Detalles</button>
-                          <button onClick={(e) => handleDuplicate(p, e)} className="text-gray-500 hover:text-blue-600 transition-colors" title="Duplicar producto">
-                             <Copy className="w-4 h-4" />
+                        </td>
+                        <td className="px-6 py-4 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'title'}); setInlineValue(p.title); }}>
+                           <div className="flex items-center gap-4">
+                              <img src={getProductImage(p)} alt="" className="w-12 h-12 rounded-lg object-cover border border-gray-100 shadow-sm" />
+                              <div>
+                                 {inlineEdit?.id === p.id && inlineEdit.field === 'title' ? (
+                                    <input autoFocus type="text" className="w-48 p-1 border rounded text-xs font-bold text-dark-900" 
+                                      value={inlineValue} onChange={e => setInlineValue(e.target.value)}
+                                      onBlur={() => handleInlineUpdate(p.id, 'title', inlineValue)}
+                                      onKeyDown={e => e.key === 'Enter' && handleInlineUpdate(p.id, 'title', inlineValue)}
+                                      onClick={e => e.stopPropagation()} />
+                                 ) : (
+                                    <p className="font-bold text-dark-900 group-hover:text-blue-600 transition-colors">{p.title}</p>
+                                 )}
+                                 <div className="flex gap-1 items-center mt-0.5">
+                                    <span className="text-[9px] font-mono text-gray-400 uppercase">{p.variants?.[0]?.sku || '-'}</span>
+                                    {p.ml_item_id && <div className="w-6 h-3 bg-yellow-400 rounded-sm text-[8px] flex items-center justify-center font-bold text-blue-900 ml-1">ML</div>}
+                                 </div>
+                              </div>
+                           </div>
+                        </td>
+                        <td className="px-6 py-4 font-black text-dark-800 text-sm whitespace-nowrap cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'base_price'}); setInlineValue(p.base_price); }}>
+                          {inlineEdit?.id === p.id && inlineEdit.field === 'base_price' ? (
+                            <input autoFocus type="number" className="w-24 p-1 border rounded text-xs font-bold" value={inlineValue} onChange={e => setInlineValue(e.target.value)} onBlur={() => handleInlineUpdate(p.id, 'base_price', inlineValue)} onKeyDown={e => e.key === 'Enter' && handleInlineUpdate(p.id, 'base_price', inlineValue)} onClick={e => e.stopPropagation()} />
+                          ) : (
+                            <span>UYU {(p.base_price || 0).toLocaleString()}</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-xs font-bold text-gray-500 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'category_id'}); setInlineValue(primaryCat?.id || ''); }}>
+                          {inlineEdit?.id === p.id && inlineEdit.field === 'category_id' ? (
+                            <select 
+                              autoFocus
+                              className="bg-white border rounded text-[10px] p-1 font-bold outline-none"
+                              value={inlineValue || ''}
+                              onChange={e => { setInlineValue(e.target.value); handleInlineUpdate(p.id, 'category_id', e.target.value); }}
+                              onBlur={() => setInlineEdit(null)}
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <option value="">- Sin Categoría -</option>
+                              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                          ) : (
+                            primaryCat?.name || '-'
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-xs font-bold text-gray-500 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'brand_id'}); setInlineValue(p.brand?.id || ''); }}>
+                          {inlineEdit?.id === p.id && inlineEdit.field === 'brand_id' ? (
+                            <select 
+                              autoFocus
+                              className="bg-white border rounded text-[10px] p-1 font-bold outline-none"
+                              value={inlineValue || ''}
+                              onChange={e => { setInlineValue(e.target.value); handleInlineUpdate(p.id, 'brand_id', e.target.value); }}
+                              onBlur={() => setInlineEdit(null)}
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <option value="">- Sin Marca -</option>
+                              {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                            </select>
+                          ) : (
+                            p.brand?.name || '-'
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {p.vendor_id ? (
+                            <span 
+                              className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-200"
+                              title={`Producto vendido por ${p.vendor?.store_name || p.vendor?.company_name || 'Vendor'}`}
+                            >
+                              {p.vendor?.store_name || p.vendor?.company_name || 'Vendor Marketplace'}
+                            </span>
+                          ) : (
+                            <span 
+                              className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-100"
+                              title="Producto propio de Collectibles"
+                            >
+                              COLLECTIBLES
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'stock'}); setInlineValue(p.variants?.[0]?.inventory_count || 0); }}>
+                           {inlineEdit?.id === p.id && inlineEdit.field === 'stock' ? (
+                              <input autoFocus type="number" className="w-16 p-1 border rounded text-xs font-bold text-center" value={inlineValue} onChange={e => setInlineValue(e.target.value)} onBlur={() => handleInlineUpdate(p.id, 'stock', inlineValue)} onKeyDown={e => e.key === 'Enter' && handleInlineUpdate(p.id, 'stock', inlineValue)} onClick={e => e.stopPropagation()} />
+                           ) : (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tight text-blue-700 bg-blue-50 border border-blue-100">
+                                 {p.variants?.[0]?.inventory_count || 0} u.
+                              </span>
+                           )}
+                        </td>
+                        <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
+                          <button
+                            onClick={async () => {
+                              const newActive = p.is_active !== false ? false : true;
+                              try {
+                                const { error } = await supabase
+                                  .from('products')
+                                  .update({ is_active: newActive })
+                                  .eq('id', p.id);
+                                if (error) throw error;
+                                setProducts(prev => prev.map(prod => prod.id === p.id ? { ...prod, is_active: newActive } : prod));
+                                toast.success(newActive ? 'Producto visible en la tienda' : 'Producto oculto en la tienda');
+                              } catch (err: any) {
+                                toast.error(`Error al cambiar estado: ${err.message}`);
+                              }
+                            }}
+                            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${p.is_active !== false ? 'bg-green-500' : 'bg-gray-300'}`}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${p.is_active !== false ? 'translate-x-5' : 'translate-x-0'}`}
+                            />
                           </button>
-                          <button onClick={(e) => { e.stopPropagation(); handleDelete(p); }} className="text-red-400 hover:text-red-600 transition-colors" title="Eliminar producto">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                        {new Date(p.created_at).toLocaleDateString()}
-                      </td>
-                    </tr>
-                 );
-                 });
-                 })()}
-               </tbody>
-            </table>
-         </div>
-         {itemsPerPage !== 'Todos' && (
-            <div className="bg-white border-t px-6 py-3 flex items-center justify-between text-xs text-gray-500">
-               <span>Página {currentPage}</span>
-               <div className="flex items-center gap-2">
-                 <button disabled={currentPage <= 1} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50">Anterior</button>
-                 <button disabled={filteredProducts.length <= (currentPage * (typeof itemsPerPage === 'number' ? itemsPerPage : 0))} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50">Siguiente</button>
-               </div>
-            </div>
-         )}
-      </div>
+                        </td>
+                        <td className="px-6 py-4 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'status'}); setInlineValue(p.status); }}>
+                          {inlineEdit?.id === p.id && inlineEdit.field === 'status' ? (
+                             <select autoFocus className="bg-white border rounded text-[10px] p-1 font-bold outline-none" value={inlineValue} onChange={e => { setInlineValue(e.target.value); handleInlineUpdate(p.id, 'status', e.target.value); }} onBlur={() => setInlineEdit(null)} onClick={e => e.stopPropagation()}>
+                               <option value="published">Visible</option>
+                               <option value="draft">Borrador</option>
+                               <option value="archived">Archivado</option>
+                             </select>
+                          ) : (
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${p.status === 'published' ? 'text-green-700 bg-green-50' : 'text-gray-500 bg-gray-100'}`}>
+                               {p.status === 'published' ? 'Visible' : 'Oculto'}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-xs font-bold text-gray-700 whitespace-nowrap">
+                           {p.condition ? (
+                             <span className="px-2 py-1 rounded bg-gray-100 border border-gray-200 text-gray-800 font-semibold">
+                               {getConditionLabel(p.condition)}
+                             </span>
+                           ) : (
+                             <span className="text-gray-300 font-mono">—</span>
+                           )}
+                        </td>
+                        <td className="px-6 py-4 text-right text-xs font-medium text-gray-400">
+                          <div className="flex justify-end gap-3 items-center mb-1">
+                            <button onClick={(e) => { e.stopPropagation(); openEdit(p); }} className="text-blue-500 hover:underline text-xs font-bold">Detalles</button>
+                            <button onClick={(e) => handleDuplicate(p, e)} className="text-gray-500 hover:text-blue-600 transition-colors" title="Duplicar producto">
+                               <Copy className="w-4 h-4" />
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); handleDelete(p); }} className="text-red-400 hover:text-red-600 transition-colors" title="Eliminar producto">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                          {new Date(p.created_at).toLocaleDateString()}
+                        </td>
+                      </tr>
+                   );
+                   })
+                 )}
+                </tbody>
+             </table>
+          </div>
+          {itemsPerPage !== 'Todos' && (
+             <div className="bg-white border-t px-6 py-3 flex items-center justify-between text-xs text-gray-500">
+                <span>Página {currentPage} de {maxPages} ({totalProductsCount} {totalProductsCount === 1 ? 'producto' : 'productos'} en total)</span>
+                <div className="flex items-center gap-2">
+                  <button disabled={currentPage <= 1 || loading} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50">Anterior</button>
+                  <button disabled={currentPage >= maxPages || loading} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50">Siguiente</button>
+                </div>
+             </div>
+          )}
+       </div>
 
       {/* 🚀 MODERN PRODUCT EDITOR (WORDPRESS INSPIRED) 🚀 */}
       {showForm && (
@@ -1352,16 +1445,48 @@ export default function AdminProducts() {
 
               {/* Editor Layout */}
               <div className="flex-1 overflow-y-auto p-8">
+                 {/* Resumen Superior de Errores de Publicación */}
+                 {validationErrors.length > 0 && (
+                    <div className="mb-6 p-4 bg-red-50 border-2 border-red-300 rounded-2xl shadow-sm animate-fade-in" id="validation-summary-banner">
+                       <div className="flex items-center gap-3 text-red-900 font-bold mb-2">
+                          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                          <span>Faltan {validationErrors.length} dato{validationErrors.length > 1 ? 's' : ''} para publicar este producto:</span>
+                       </div>
+                       <ul className="space-y-1.5 pl-8 list-disc text-xs text-red-700 font-semibold">
+                          {validationErrors.map((err, idx) => (
+                             <li key={idx} className="cursor-pointer hover:underline hover:text-red-900" onClick={() => {
+                                const element = document.getElementById(`field-${err.field}`) || document.querySelector(`[name="${err.field}"]`);
+                                element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                (element as HTMLElement)?.focus?.();
+                             }}>
+                                {err.message}
+                             </li>
+                          ))}
+                       </ul>
+                    </div>
+                 )}
+
                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
                     
                     {/* Main Content (Left) */}
                     <div className="lg:col-span-3 space-y-6">
-                       <div className="bg-white p-6 border shadow-sm space-y-4">
+                       <div className={`bg-white p-6 border shadow-sm space-y-4 rounded-xl transition-all ${getFieldError('title') ? 'border-red-400 ring-2 ring-red-100' : ''}`}>
                           <input 
+                            id="field-title"
+                            name="title"
                             placeholder="Introduce el título aquí" 
                             className="w-full text-2xl font-bold py-2 border-b-2 border-transparent focus:border-blue-500 outline-none transition-all placeholder:text-gray-300"
-                            value={form.title} onChange={e => setForm({...form, title: e.target.value})}
+                            value={form.title} onChange={e => {
+                              setForm({...form, title: e.target.value});
+                              if (validationErrors.some(err => err.field === 'title')) setValidationErrors(prev => prev.filter(err => err.field !== 'title'));
+                            }}
                           />
+                          {getFieldError('title') && (
+                            <p className="text-xs font-bold text-red-600 flex items-center gap-1.5 mt-1">
+                              <AlertCircle className="w-3.5 h-3.5" />
+                              {getFieldError('title')}
+                            </p>
+                          )}
                           <div className="flex items-center gap-2 text-xs text-gray-500 px-1">
                              <span className="font-bold">Enlace permanente:</span>
                              <span className="text-blue-500 underline">https://collectibles-ecommerce.com/p/</span>
@@ -1369,7 +1494,7 @@ export default function AdminProducts() {
                           </div>
                        </div>
 
-                       <div className="bg-white border shadow-sm">
+                       <div className="bg-white border shadow-sm rounded-xl">
                           <div className="px-4 py-2 border-b bg-gray-50/50 flex items-center justify-between">
                              <div className="flex items-center gap-2">
                                 <Pencil className="w-4 h-4 text-gray-400" />
@@ -1396,7 +1521,7 @@ export default function AdminProducts() {
                           </div>
                        </div>
 
-                       <div className="bg-white border shadow-sm">
+                       <div className="bg-white border shadow-sm rounded-xl">
                           <div className="px-4 py-2 border-b bg-gray-50/50 flex items-center gap-2">
                              <Pencil className="w-4 h-4 text-gray-400" />
                              <span className="text-sm font-bold text-gray-600">Precios e Inventario</span>
@@ -1404,7 +1529,16 @@ export default function AdminProducts() {
                           <div className="p-6 grid grid-cols-2 lg:grid-cols-4 gap-6">
                              <div>
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Precio ($)</label>
-                                <input type="number" className="w-full p-2.5 border rounded-lg text-sm bg-gray-50 focus:bg-white outline-none" value={form.base_price} onChange={e => setForm({...form, base_price: e.target.value})} />
+                                <input id="field-base_price" name="base_price" type="number" className={`w-full p-2.5 border rounded-lg text-sm bg-gray-50 focus:bg-white outline-none ${getFieldError('base_price') ? 'border-red-500 bg-red-50/20' : ''}`} value={form.base_price} onChange={e => {
+                                  setForm({...form, base_price: e.target.value});
+                                  if (validationErrors.some(err => err.field === 'base_price')) setValidationErrors(prev => prev.filter(err => err.field !== 'base_price'));
+                                }} />
+                                {getFieldError('base_price') && (
+                                  <p className="text-[11px] font-bold text-red-600 flex items-center gap-1 mt-1">
+                                    <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                                    {getFieldError('base_price')}
+                                  </p>
+                                )}
                              </div>
                              <div>
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Precio Rebajado</label>
@@ -1416,7 +1550,16 @@ export default function AdminProducts() {
                              </div>
                              <div>
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Stock</label>
-                                <input type="number" className="w-full p-2.5 border rounded-lg text-sm bg-gray-50 focus:bg-white outline-none font-bold text-blue-600" value={form.stock} onChange={e => setForm({...form, stock: e.target.value})} />
+                                <input id="field-stock" name="stock" type="number" className={`w-full p-2.5 border rounded-lg text-sm bg-gray-50 focus:bg-white outline-none font-bold text-blue-600 ${getFieldError('stock') ? 'border-red-500 bg-red-50/20' : ''}`} value={form.stock} onChange={e => {
+                                  setForm({...form, stock: e.target.value});
+                                  if (validationErrors.some(err => err.field === 'stock')) setValidationErrors(prev => prev.filter(err => err.field !== 'stock'));
+                                }} />
+                                {getFieldError('stock') && (
+                                  <p className="text-[11px] font-bold text-red-600 flex items-center gap-1 mt-1">
+                                    <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                                    {getFieldError('stock')}
+                                  </p>
+                                )}
                              </div>
                           </div>
                        </div>
@@ -1502,12 +1645,21 @@ export default function AdminProducts() {
                        </SidebarWidget>
 
                        {/* WIDGET: CATEGORÍAS */}
-                       <SidebarWidget title="Categorías del producto">
-                          <div className="space-y-3">
-                             <div className="border rounded-md max-h-48 overflow-y-auto p-2 bg-gray-50/30">
+                       <SidebarWidget title="Categorías del producto *">
+                          <div className="space-y-3" id="field-categories">
+                             {getFieldError('categories') && (
+                                <p className="text-xs font-bold text-red-600 flex items-center gap-1.5 p-2 bg-red-50 rounded border border-red-200">
+                                   <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                                   {getFieldError('categories')}
+                                </p>
+                             )}
+                             <div className={`border rounded-md max-h-48 overflow-y-auto p-2 bg-gray-50/30 ${getFieldError('categories') ? 'border-red-400 ring-1 ring-red-200' : ''}`}>
                                 {categories.map(cat => (
                                    <label key={cat.id} className="flex items-center gap-2 py-1 px-1 hover:bg-white rounded transition-colors cursor-pointer text-xs">
-                                      <input type="checkbox" checked={form.categories.includes(cat.id)} onChange={() => toggleCategory(cat.id)} className="rounded border-gray-300 text-blue-600" />
+                                      <input type="checkbox" checked={form.categories.includes(cat.id)} onChange={() => {
+                                        toggleCategory(cat.id);
+                                        if (validationErrors.some(err => err.field === 'categories')) setValidationErrors(prev => prev.filter(err => err.field !== 'categories'));
+                                      }} className="rounded border-gray-300 text-blue-600" />
                                       {cat.name}
                                    </label>
                                 ))}
@@ -1543,12 +1695,21 @@ export default function AdminProducts() {
                        </SidebarWidget>
 
                        {/* WIDGET: MARCAS */}
-                       <SidebarWidget title="Marcas (Brands)">
-                          <div className="space-y-3">
-                             <div className="border rounded-md max-h-48 overflow-y-auto p-2 bg-gray-50/30">
+                       <SidebarWidget title="Marcas (Brands) *">
+                          <div className="space-y-3" id="field-brands">
+                             {getFieldError('brands') && (
+                                <p className="text-xs font-bold text-red-600 flex items-center gap-1.5 p-2 bg-red-50 rounded border border-red-200">
+                                   <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                                   {getFieldError('brands')}
+                                </p>
+                             )}
+                             <div className={`border rounded-md max-h-48 overflow-y-auto p-2 bg-gray-50/30 ${getFieldError('brands') ? 'border-red-400 ring-1 ring-red-200' : ''}`}>
                                 {brands.map(b => (
                                    <label key={b.id} className="flex items-center gap-2 py-1 px-1 hover:bg-white rounded transition-colors cursor-pointer text-xs">
-                                      <input type="checkbox" checked={form.brands.includes(b.id)} onChange={() => toggleBrand(b.id)} className="rounded border-gray-300 text-blue-600" />
+                                      <input type="checkbox" checked={form.brands.includes(b.id)} onChange={() => {
+                                        toggleBrand(b.id);
+                                        if (validationErrors.some(err => err.field === 'brands')) setValidationErrors(prev => prev.filter(err => err.field !== 'brands'));
+                                      }} className="rounded border-gray-300 text-blue-600" />
                                       {b.name}
                                    </label>
                                 ))}

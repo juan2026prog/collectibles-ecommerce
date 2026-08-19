@@ -155,16 +155,105 @@ export default function Checkout() {
     street_number: '',
     consent: false,
   });
-  const [internationalShippingRate, setInternationalShippingRate] = useState<number>(1500);
+  // Weight & Volume calculations for Argentina MBE Shipping
+  const mbeShippingDetails = useMemo(() => {
+    let realWeightKg = 0;
+    let volumetricWeightKg = 0;
+    let missingData = false;
+    const missingSkus: string[] = [];
+    let isPackagingExplicit = true;
+    let serviceType: 'mbe_pak' | 'mbe_caja' | 'quote_required' = 'mbe_pak';
 
-  // Switch to USD for Argentina if setting is active
-  useEffect(() => {
-    if (form.country === 'Argentina' && settings['international_usd_mode'] === 'true') {
-      if (selectedCurrency !== 'USD') {
-        setSelectedCurrency('USD');
+    const totalUnits = items.reduce((sum, i) => sum + i.quantity, 0);
+    const isMultiItemUnconsolidatedCart = items.length > 1 || totalUnits > 1;
+
+    items.forEach(item => {
+      const weight = Number(item.product?.weight_kg || item.product?.weight || (item as any).weight || 0);
+      if (!weight || weight <= 0) {
+        missingData = true;
+        if (item.sku) missingSkus.push(item.sku);
+      }
+      realWeightKg += weight * item.quantity;
+
+      const dim = (item.product as any)?.dimensions || (item as any).dimensions || {};
+      const l = Number(dim.length || dim.l || 0);
+      const w = Number(dim.width || dim.w || 0);
+      const h = Number(dim.height || dim.h || 0);
+
+      if (l > 0 && w > 0 && h > 0) {
+        volumetricWeightKg += ((l * w * h) / 5000) * item.quantity;
+      }
+
+      const pkgType = String((item.product as any)?.packaging_type || (item as any).packaging_type || (item.product as any)?.metadata?.packaging_type || (item.product as any)?.metadata?.mbe_service_type || '').toLowerCase();
+      if (pkgType === 'mbe_caja' || pkgType === 'caja' || pkgType === 'box') {
+        serviceType = 'mbe_caja';
+      } else if (pkgType === 'mbe_pak' || pkgType === 'pak') {
+        // Explicit PAK
+      } else {
+        isPackagingExplicit = false;
+      }
+    });
+
+    realWeightKg = Number(realWeightKg.toFixed(3));
+    volumetricWeightKg = Number(volumetricWeightKg.toFixed(3));
+    const chargeableWeightKg = Number(Math.max(realWeightKg, volumetricWeightKg).toFixed(3));
+
+    let rateUsd = 0;
+    let isQuoteRequired = false;
+    let quoteReason = '';
+
+    if (missingData) {
+      isQuoteRequired = true;
+      serviceType = 'quote_required';
+      quoteReason = `Falta peso o dimensiones en productos del carrito${missingSkus.length > 0 ? ` (SKUs: ${missingSkus.join(', ')})` : ''}.`;
+    } else if (isMultiItemUnconsolidatedCart && realWeightKg > 0.5) {
+      isQuoteRequired = true;
+      serviceType = 'quote_required';
+      quoteReason = `El carrito contiene múltiples productos sin empaque de caja consolidado definido.`;
+    } else if (!isPackagingExplicit) {
+      isQuoteRequired = true;
+      serviceType = 'quote_required';
+      quoteReason = `No se puede determinar el tipo de empaque (PAK o Caja) con certeza para este producto.`;
+    } else if (chargeableWeightKg > 1.0) {
+      isQuoteRequired = true;
+      serviceType = 'quote_required';
+      quoteReason = `El peso del pedido (${chargeableWeightKg} kg) supera el límite automático de 1,0 kg.`;
+    } else {
+      if (serviceType === 'mbe_pak') {
+        if (chargeableWeightKg <= 0.5) {
+          rateUsd = 59.00;
+        } else if (chargeableWeightKg <= 1.0) {
+          rateUsd = 66.00;
+        }
+      } else if (serviceType === 'mbe_caja') {
+        if (chargeableWeightKg <= 1.0) {
+          rateUsd = 89.00;
+        }
       }
     }
-  }, [form.country, settings, selectedCurrency]);
+
+    const rateArs = convertUSDToARS(rateUsd);
+
+    return {
+      realWeightKg,
+      volumetricWeightKg,
+      chargeableWeightKg,
+      serviceType,
+      rateUsd,
+      rateArs,
+      isQuoteRequired,
+      quoteReason
+    };
+  }, [items, convertUSDToARS]);
+
+  // Switch to ARS for Argentina by default
+  useEffect(() => {
+    if (form.country === 'Argentina') {
+      if (selectedCurrency !== 'ARS') {
+        setSelectedCurrency('ARS');
+      }
+    }
+  }, [form.country, selectedCurrency, setSelectedCurrency]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [checkoutError, setCheckoutError] = useState('');
   const initiateCheckoutTrackedRef = useRef(false);
@@ -468,11 +557,15 @@ export default function Checkout() {
     }> = [];
 
     if (form.country === 'Argentina') {
+      const serviceName = mbeShippingDetails.serviceType === 'mbe_caja' ? 'MBE Caja' : 'MBE PAK';
       return [{
         id: 'manual',
-        name: 'Envío Internacional (MBE)',
-        available: true,
-        cost: internationalShippingRate,
+        name: mbeShippingDetails.isQuoteRequired 
+          ? `Envío Internacional MBE (${mbeShippingDetails.chargeableWeightKg} kg - Cotización Requerida)`
+          : `Envío Internacional ${serviceName} (${mbeShippingDetails.chargeableWeightKg} kg)`,
+        available: !mbeShippingDetails.isQuoteRequired,
+        cost: mbeShippingDetails.rateArs,
+        reason: mbeShippingDetails.isQuoteRequired ? mbeShippingDetails.quoteReason : undefined,
         show: true
       }];
     }
@@ -1043,8 +1136,14 @@ export default function Checkout() {
 
   useEffect(() => {
     if (form.country === 'Argentina') {
-      const isFreeShipping = total >= freeShippingThreshold;
-      const rate = isFreeShipping ? 0 : internationalShippingRate;
+      if (mbeShippingDetails.isQuoteRequired) {
+        setDacShippingCost(null);
+        setDacCalculationStatus('error');
+        setDacShippingError(mbeShippingDetails.quoteReason);
+        setVendorShippingCosts({});
+        return;
+      }
+      const rate = mbeShippingDetails.rateArs;
       let totalCost = 0;
       const costsByVendor: Record<string, number> = {};
       uniqueStoreKeys.forEach(key => {
@@ -3998,42 +4097,55 @@ export default function Checkout() {
                     )}
 
                     <div className="space-y-3">
-                      {mercadopagoEnabled && cartPaymentRules.allowedProviders.includes('mercadopago') && (
-                        <PaymentMethodCard
-                          id="mercadopago"
-                          title="Mercado Pago"
-                          description="Pagá de forma segura con tarjetas de crédito, débito o dinero en cuenta."
-                          badge="RECOMENDADO"
-                          isSelected={paymentMethod === 'mercadopago'}
-                          onSelect={() => setPaymentMethod('mercadopago')}
-                        />
-                      )}
-                      {dlocalgoEnabled && cartPaymentRules.allowedProviders.includes('dlocalgo') && (
-                        <PaymentMethodCard
-                          id="dlocalgo"
-                          title="Tarjetas y Redes de Cobranza (dLocal)"
-                          description="OCA, Visa, Mastercard, Diners, Lider, Abitab y Redpagos."
-                          isSelected={paymentMethod === 'dlocalgo'}
-                          onSelect={() => setPaymentMethod('dlocalgo')}
-                        />
-                      )}
-                      {paypalEnabled && cartPaymentRules.allowedProviders.includes('paypal') && (
-                        <PaymentMethodCard
-                          id="paypal"
-                          title="PayPal"
-                          description="Pago internacional rápido y seguro en USD."
-                          isSelected={paymentMethod === 'paypal'}
-                          onSelect={() => setPaymentMethod('paypal')}
-                        />
-                      )}
-                      {handyEnabled && cartPaymentRules.allowedProviders.includes('handy') && (
+                      {form.country === 'Argentina' ? (
                         <PaymentMethodCard
                           id="handy"
-                          title="Handy Pago Directo"
-                          description="Pago con tarjetas locales y redes de cobranza."
+                          title="Handy — Tarjetas Internacionales (Visa / Mastercard)"
+                          description="Cobro en USD para tarjetas emitidas en Argentina. Acepta crédito y débito Visa y Mastercard."
+                          badge="HABILITADO PARA ARGENTINA"
                           isSelected={paymentMethod === 'handy'}
                           onSelect={() => setPaymentMethod('handy')}
                         />
+                      ) : (
+                        <>
+                          {mercadopagoEnabled && cartPaymentRules.allowedProviders.includes('mercadopago') && (
+                            <PaymentMethodCard
+                              id="mercadopago"
+                              title="Mercado Pago"
+                              description="Pagá de forma segura con tarjetas de crédito, débito o dinero en cuenta."
+                              badge="RECOMENDADO"
+                              isSelected={paymentMethod === 'mercadopago'}
+                              onSelect={() => setPaymentMethod('mercadopago')}
+                            />
+                          )}
+                          {dlocalgoEnabled && cartPaymentRules.allowedProviders.includes('dlocalgo') && (
+                            <PaymentMethodCard
+                              id="dlocalgo"
+                              title="Tarjetas y Redes de Cobranza (dLocal)"
+                              description="OCA, Visa, Mastercard, Diners, Lider, Abitab y Redpagos."
+                              isSelected={paymentMethod === 'dlocalgo'}
+                              onSelect={() => setPaymentMethod('dlocalgo')}
+                            />
+                          )}
+                          {paypalEnabled && cartPaymentRules.allowedProviders.includes('paypal') && (
+                            <PaymentMethodCard
+                              id="paypal"
+                              title="PayPal"
+                              description="Pago internacional rápido y seguro en USD."
+                              isSelected={paymentMethod === 'paypal'}
+                              onSelect={() => setPaymentMethod('paypal')}
+                            />
+                          )}
+                          {handyEnabled && cartPaymentRules.allowedProviders.includes('handy') && (
+                            <PaymentMethodCard
+                              id="handy"
+                              title="Handy Pago Directo"
+                              description="Pago con tarjetas locales y redes de cobranza."
+                              isSelected={paymentMethod === 'handy'}
+                              onSelect={() => setPaymentMethod('handy')}
+                            />
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
@@ -4466,12 +4578,51 @@ export default function Checkout() {
                     <p className="text-[11px] text-orange-400 font-semibold mt-2">• Debes aceptar los Términos y Condiciones para continuar al pago.</p>
                   )}
 
+                  {form.country === 'Argentina' && (
+                    mbeShippingDetails.isQuoteRequired ? (
+                      <div className="mt-4 p-4 bg-orange-950/80 border border-orange-500/40 rounded-xl space-y-2 text-xs text-orange-200">
+                        <div className="flex items-center gap-2 font-bold text-orange-300 text-sm">
+                          <AlertCircle className="w-5 h-5 text-orange-400 shrink-0" />
+                          <span>Cotización de Envío Especial Requerida</span>
+                        </div>
+                        <p className="leading-relaxed">
+                          Este pedido requiere una cotización de envío especial. No podemos calcular el envío automáticamente en este momento.
+                        </p>
+                        {mbeShippingDetails.quoteReason && (
+                          <p className="text-[11px] text-orange-300 font-mono bg-black/40 p-2.5 rounded-lg border border-white/5">
+                            • {mbeShippingDetails.quoteReason}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="mt-4 p-4 bg-indigo-950/70 border border-indigo-500/30 rounded-xl space-y-3 text-xs text-indigo-200">
+                        <div className="flex justify-between items-center text-sm font-bold text-white border-b border-indigo-500/20 pb-2">
+                          <span>Cobro final en tarjeta:</span>
+                          <span className="text-indigo-400 text-lg font-black">
+                            USD {convertARSToUSD(grandTotal).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-indigo-300">
+                          <span>Tipo de cambio de referencia:</span>
+                          <span className="font-mono font-bold">1 USD = ARS {getFxRateUsdToArs()}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-300 leading-relaxed bg-black/30 p-2.5 rounded-lg border border-white/5">
+                          💳 <strong>Cobro internacional en USD:</strong> El cobro de tu tarjeta Visa o Mastercard se realizará en dólares estadounidenses (USD {convertARSToUSD(grandTotal).toFixed(2)}). El banco emisor en Argentina aplicará su tipo de cambio oficial, impuestos, percepciones o cargos de tarjeta internacional.
+                        </p>
+                      </div>
+                    )
+                  )}
+
                   <button
                     type="submit"
-                    disabled={isSubmitting || isPaymentBlocked() || !termsAccepted || ((selectedShippingMethod === 'dac' || selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') && dacShippingLoading)}
-                    className={`btn-primary w-full mt-4 py-3.5 text-base ${(isSubmitting || isPaymentBlocked() || !termsAccepted || ((selectedShippingMethod === 'dac' || selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') && dacShippingLoading)) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    disabled={isSubmitting || isPaymentBlocked() || !termsAccepted || (form.country === 'Argentina' && mbeShippingDetails.isQuoteRequired) || ((selectedShippingMethod === 'dac' || selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') && dacShippingLoading)}
+                    className={`btn-primary w-full mt-4 py-3.5 text-base ${(isSubmitting || isPaymentBlocked() || !termsAccepted || (form.country === 'Argentina' && mbeShippingDetails.isQuoteRequired) || ((selectedShippingMethod === 'dac' || selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') && dacShippingLoading)) ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    {isSubmitting ? 'Procesando...' : 'Finalizar compra'}
+                    {isSubmitting 
+                      ? 'Procesando...' 
+                      : (form.country === 'Argentina' 
+                          ? (mbeShippingDetails.isQuoteRequired ? 'Cotización de envío requerida' : `Pagar con Handy (USD ${convertARSToUSD(grandTotal).toFixed(2)})`) 
+                          : 'Finalizar compra')}
                   </button>
 
                   {/* Blocking reason alerts */}

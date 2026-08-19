@@ -1,4 +1,6 @@
 import * as XLSX from 'xlsx';
+import { normalizeCondition } from '../config/conditionConfig';
+
 
 export interface ParsedProduct {
   title: string;
@@ -124,9 +126,9 @@ export async function parseProductsFile(file: File): Promise<ParsedProduct[]> {
           const license_name = (findValue(processedRow, ['license_name', 'license', 'licencia', 'franquicia', 'franchise', 'propiedad', 'universo']) || '').toString().trim();
 
           // Resolve Condition
-          const rawCondition = (findValue(processedRow, ['condition', 'estado', 'condición', 'product_condition']) || '').toString().trim().toLowerCase();
-          const VALID_CONDITIONS = ['new_sealed', 'new_open_box', 'used_complete', 'used_incomplete', 'loose_complete', 'loose_incomplete'];
-          const condition = VALID_CONDITIONS.includes(rawCondition) ? rawCondition : undefined;
+          const rawCondVal = findValue(processedRow, ['condition', 'estado', 'condición', 'product_condition']);
+          const condition = normalizeCondition(rawCondVal !== undefined && rawCondVal !== null ? String(rawCondVal) : null) || undefined;
+
 
           // Resolve Condition Notes
           const condition_notes = (findValue(processedRow, ['condition_notes', 'notas_estado', 'condition notes', 'observaciones_estado']) || '').toString().trim() || undefined;

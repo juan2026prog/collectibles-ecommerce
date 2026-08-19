@@ -68,9 +68,24 @@ export default function ProductDetail() {
   const cart = useCartContext();
   const internationalCart = useInternationalCartContext();
   const { user } = useAuth();
-  const { formatCurrencyPrice } = useCurrency();
+  const { formatCurrencyPrice, selectedCurrency } = useCurrency();
   const { promotions } = usePromotions();
   const { toggleWishlist, isInWishlist } = useWishlistContext();
+
+  const isArgentinaEligible = (() => {
+    if (!product) return false;
+    const prodWeight = Number(product.weight_kg || 0);
+    if (!prodWeight || prodWeight <= 0 || prodWeight > 1.0) return false;
+    const pkgType = String(product.metadata?.packaging_type || product.metadata?.mbe_service_type || '').toLowerCase();
+    if (!['mbe_pak', 'mbe_caja', 'pak', 'caja'].includes(pkgType)) return false;
+    if (product.dimensions) {
+      const l = Number(product.dimensions.length || product.dimensions.l || 0);
+      const w = Number(product.dimensions.width || product.dimensions.w || 0);
+      const h = Number(product.dimensions.height || product.dimensions.h || 0);
+      if (l > 0 && w > 0 && h > 0 && ((l * w * h) / 5000) > 1.0) return false;
+    }
+    return true;
+  })();
   
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -205,7 +220,7 @@ export default function ProductDetail() {
       : [{ url: product.image_url || FALLBACK_IMAGE }];
 
   const currentImgObj = images[selectedImage] || images[0];
-  const displayImage = resolveImage(currentImgObj?.url || product.image_url);
+  const displayImage = resolveImage(currentImgObj?.url || product.image_url, 'detail');
 
   const stock = selectedVariant ? (selectedVariant.stock ?? product.stock) : product.stock;
 
@@ -337,6 +352,8 @@ export default function ProductDetail() {
               src={displayImage}
               alt={product.title}
               referrerPolicy="no-referrer"
+              fetchPriority="high"
+              loading="eager"
               {...getImageProps(`w-full h-full max-h-[580px] object-contain mix-blend-multiply transition-all duration-500 ease-out ${isHovering ? 'scale-105' : 'scale-100'}`)}
             />
             
@@ -458,6 +475,18 @@ export default function ProductDetail() {
                 <span className="text-xs font-bold px-3 py-1 rounded-full border border-purple-500/30 bg-purple-500/10 text-purple-300">
                   🏷️ {getConditionLabel(product.condition)}
                 </span>
+              )}
+
+              {selectedCurrency === 'ARS' && (
+                isArgentinaEligible ? (
+                  <span className="text-xs font-bold px-3 py-1 rounded-full border border-sky-500/30 bg-sky-500/10 text-sky-300 flex items-center gap-1.5">
+                    🇦🇷 Envío a Argentina disponible
+                  </span>
+                ) : (
+                  <span className="text-xs font-bold px-3 py-1 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300 flex items-center gap-1.5">
+                    🇦🇷 Consultar envío a Argentina
+                  </span>
+                )
               )}
             </div>
           </div>

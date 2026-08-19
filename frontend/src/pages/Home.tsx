@@ -315,28 +315,22 @@ export default function Home() {
   ];
 
   useEffect(() => {
-    import('../lib/supabase').then(({ supabase }) => {
-      supabase.from('public_site_config').select('value').eq('key', 'appearance_home_layout_json').maybeSingle()
-        .then(({ data }) => {
-          if (data?.value) {
-            try {
-              const parsed = JSON.parse(data.value);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                // Backward compat: rename 'mundial' → 'campaign'
-                const migrated = parsed.map((b: any) => b.id === 'mundial' ? { ...b, id: 'campaign' } : b);
-                // Merge any new blocks not in saved data
-                const savedIds = new Set(migrated.map((b: any) => b.id));
-                const missing = DEFAULT_BLOCK_IDS.filter(id => !savedIds.has(id)).map(id => ({
-                  id,
-                  visible: id === 'trending' || id === 'campaign' ? false : true
-                }));
-                setLayoutBlocks([...migrated, ...missing]);
-              }
-            } catch {}
-          }
-        });
-    });
-  }, []);
+    const jsonVal = settings['appearance_home_layout_json'];
+    if (jsonVal) {
+      try {
+        const parsed = JSON.parse(jsonVal);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const migrated = parsed.map((b: any) => b.id === 'mundial' ? { ...b, id: 'campaign' } : b);
+          const savedIds = new Set(migrated.map((b: any) => b.id));
+          const missing = DEFAULT_BLOCK_IDS.filter(id => !savedIds.has(id)).map(id => ({
+            id,
+            visible: id === 'trending' || id === 'campaign' ? false : true
+          }));
+          setLayoutBlocks([...migrated, ...missing]);
+        }
+      } catch {}
+    }
+  }, [settings['appearance_home_layout_json']]);
 
   /* ━━━ Parse CMS module configs from settings ━━━ */
   const miniBanners = useMemo(() =>

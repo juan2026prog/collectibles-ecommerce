@@ -417,11 +417,35 @@ export function useProductBuyBox(productId: string | undefined) {
   return { buyBox, loading };
 }
 
-// ═══ Global Caches for Site-wide Hooks ═══
-let _categoriesCache: any[] | null = null;
+// ═══ Global Caches for Site-wide Hooks (10-min TTL) ═══
+const CACHE_TTL_MS = 10 * 60 * 1000;
+
+function readSessionCache(key: string): { data: any[]; isStale: boolean } | null {
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const data = Array.isArray(parsed) ? parsed : parsed.data;
+    const ts = parsed.ts || 0;
+    const isStale = Date.now() - ts > CACHE_TTL_MS;
+    return { data: Array.isArray(data) ? data : [], isStale };
+  } catch {
+    return null;
+  }
+}
+
+function writeSessionCache(key: string, data: any[]) {
+  try {
+    sessionStorage.setItem(key, JSON.stringify({ ts: Date.now(), data }));
+  } catch {}
+}
+
+const _initialCategories = readSessionCache('app_categories_cache');
+let _categoriesCache: any[] | null = _initialCategories?.data || null;
 let _categoriesPromise: Promise<any[]> | null = null;
 
-let _brandsCache: any[] | null = null;
+const _initialBrands = readSessionCache('app_brands_cache');
+let _brandsCache: any[] | null = _initialBrands?.data || null;
 let _brandsPromise: Promise<any[]> | null = null;
 
 // ═══ useCategories ═══
@@ -430,23 +454,26 @@ export function useCategories() {
   const [loading, setLoading] = useState(!_categoriesCache);
 
   useEffect(() => {
+    const cacheObj = readSessionCache('app_categories_cache');
+    const hasValidCache = cacheObj && !cacheObj.isStale;
+
     if (_categoriesCache) {
       setCategories(_categoriesCache);
       setLoading(false);
     }
 
-    if (!_categoriesPromise) {
+    if (!hasValidCache && !_categoriesPromise) {
       _categoriesPromise = supabase
-        .from('categories_with_published_counts')
-        .select('*')
+        .from('categories')
+        .select('id, name, slug, parent_id, sort_order, status, is_active, metadata, image_url')
         .eq('is_active', true)
         .eq('status', 'approved')
-        .gt('published_products_count', 0)
         .order('sort_order')
         .order('name')
         .then(({ data, error }) => {
           if (!error && data) {
             _categoriesCache = data;
+            writeSessionCache('app_categories_cache', data);
           } else {
             console.error('[useCategories] fetch error:', error);
           }
@@ -459,10 +486,12 @@ export function useCategories() {
         });
     }
 
-    _categoriesPromise.then(cats => {
-      setCategories(cats);
-      setLoading(false);
-    });
+    if (_categoriesPromise) {
+      _categoriesPromise.then(cats => {
+        setCategories(cats);
+        setLoading(false);
+      });
+    }
   }, []);
 
   return { categories, loading };
@@ -474,12 +503,15 @@ export function useBrands() {
   const [loading, setLoading] = useState(!_brandsCache);
 
   useEffect(() => {
+    const cacheObj = readSessionCache('app_brands_cache');
+    const hasValidCache = cacheObj && !cacheObj.isStale;
+
     if (_brandsCache) {
       setBrands(_brandsCache);
       setLoading(false);
     }
 
-    if (!_brandsPromise) {
+    if (!hasValidCache && !_brandsPromise) {
       _brandsPromise = supabase
         .from('brands')
         .select('*')
@@ -490,6 +522,7 @@ export function useBrands() {
         .then(({ data, error }) => {
           if (!error && data) {
             _brandsCache = data;
+            writeSessionCache('app_brands_cache', data);
           } else {
             console.error('[useBrands] fetch error:', error);
           }
@@ -502,10 +535,12 @@ export function useBrands() {
         });
     }
 
-    _brandsPromise.then(b => {
-      setBrands(b);
-      setLoading(false);
-    });
+    if (_brandsPromise) {
+      _brandsPromise.then(b => {
+        setBrands(b);
+        setLoading(false);
+      });
+    }
   }, []);
 
   return { brands, loading };
@@ -694,17 +729,10 @@ export function useProductGroups() {
       const { data } = await supabase
         .from('product_groups')
         .select(`
-          id, name, slug, description, type, rules_json, show_on_home, badge_image_url, badge_storage_path, badge_alt_text, badge_updated_at,
+          id, name, slug, type, show_on_home, badge_image_url, badge_storage_path, badge_alt_text, badge_updated_at,
           product_group_items (
-            product:products (
-              id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id,
-              category:categories(id, name, slug),
-              brand:brands!products_brand_id_fkey(id, name, slug),
-              images:product_images(id, url, alt_text, sort_order, is_primary),
-              variants:product_variants(id, sku, legacy_sku, name, price_adjustment, inventory_count),
-              product_tags:product_tags(tag_id),
-              vendor:vendors(id, store_name, slug, logo_url)
-            )
+            group_id,
+            product_id
           )
         `)
         .eq('is_active', true)

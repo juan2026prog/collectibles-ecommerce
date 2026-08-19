@@ -23,6 +23,36 @@ export const CONDITION_OPTIONS: ConditionOption[] = [
   { value: 'loose_incomplete', label: 'Loose / Incomplete', category: 'Loose' },
 ];
 
+export const VALID_PRODUCT_CONDITIONS: readonly ProductCondition[] = [
+  'new_sealed',
+  'new_open_box',
+  'used_complete',
+  'used_incomplete',
+  'loose_complete',
+  'loose_incomplete',
+];
+
+
+export function isValidCondition(val: any): val is ProductCondition {
+  return typeof val === 'string' && (VALID_PRODUCT_CONDITIONS as readonly string[]).includes(val);
+}
+
+/**
+ * Normalizes any condition value.
+ * Converts '', undefined, null, whitespace or invalid strings to null.
+ * Returns valid ProductCondition or null. Never returns empty string ''.
+ */
+export function normalizeCondition(val?: string | null): ProductCondition | null {
+  if (!val || typeof val !== 'string') return null;
+  const trimmed = val.trim();
+  if (!trimmed) return null;
+  if (isValidCondition(trimmed)) {
+    return trimmed;
+  }
+  return null;
+}
+
+
 export const STORE_TYPE_OPTIONS: { value: StoreType; label: string; desc: string }[] = [
   { 
     value: 'standard', 

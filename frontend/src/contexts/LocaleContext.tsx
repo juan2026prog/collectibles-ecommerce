@@ -258,7 +258,7 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const CACHE_KEY = 'exchange_rates_cache';
-    const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+    const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
     const cached = localStorage.getItem(CACHE_KEY);
     if (cached) {
@@ -271,24 +271,28 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
       } catch {}
     }
 
-    // Free API — no key needed, base = USD, we need UYU base
-    fetch('https://api.exchangerate.host/latest?base=UYU&symbols=USD,ARS')
-      .then(r => r.json())
-      .then(json => {
-        if (json?.rates) {
-          const liveRates: Record<Currency, number> = {
-            UYU: 1,
-            USD: json.rates.USD || FALLBACK_RATES.USD,
-            ARS: json.rates.ARS || FALLBACK_RATES.ARS,
-          };
-          setRates(liveRates);
-          localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: liveRates }));
-        }
-      })
-      .catch(() => {
-        // API unavailable — keep fallback rates silently
-        if (import.meta.env.DEV) console.log('Exchange rate API unavailable, using fallback rates');
-      });
+    // Defer API fetch until after page load/paint
+    const timer = setTimeout(() => {
+      fetch('https://open.er-api.com/v6/latest/UYU')
+        .then(r => r.json())
+        .then(json => {
+          if (json?.rates) {
+            const liveRates: Record<Currency, number> = {
+              UYU: 1,
+              USD: json.rates.USD || FALLBACK_RATES.USD,
+              ARS: json.rates.ARS || FALLBACK_RATES.ARS,
+            };
+            setRates(liveRates);
+            localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: liveRates }));
+          }
+        })
+        .catch(() => {
+          // API unavailable — keep fallback rates silently
+          if (import.meta.env.DEV) console.log('Exchange rate API unavailable, using fallback rates');
+        });
+    }, 2000);
+
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {

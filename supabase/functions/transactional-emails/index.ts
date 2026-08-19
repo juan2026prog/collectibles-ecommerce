@@ -123,21 +123,36 @@ serve(async (req: Request) => {
       if ((record.status === 'paid' || record.status === 'confirmed') && 
           (type === 'INSERT' || (old_record?.status !== 'paid' && old_record?.status !== 'confirmed'))) {
          const customerEmail = record.customer_email || 'noreply@collectibles.com';
-         const subject = `¡Confirmación de tu Orden #${record.id.slice(0, 8).toUpperCase()}!`;
+         const orderNum = record.order_number || `COL-${record.id.slice(0, 8).toUpperCase()}`;
+         const isArgentina = (record.shipping_address?.country || '').toLowerCase().trim() === 'argentina' || (record.shipping_address?.country || '').toLowerCase().trim() === 'ar';
+         const subject = `¡Confirmación de tu Orden #${orderNum}!`;
+         
+         const displayAmount = isArgentina && record.display_total 
+           ? `${record.display_currency || 'ARS'} ${record.display_total}` 
+           : `$${record.total_amount} ${record.currency || 'UYU'}`;
+
+         const handyNotice = isArgentina ? `
+           <div style="margin-top: 15px; padding: 12px; background: #eef2ff; border-left: 4px solid #4f46e5; border-radius: 4px;">
+             <p style="margin: 0; font-size: 13px; color: #3730a3;"><strong>💳 Cobro en tarjeta de crédito/débito:</strong></p>
+             <p style="margin: 4px 0 0 0; font-size: 12px; color: #4338ca;">Tu pago fue procesado en dólares estadounidenses por un importe de <strong>USD ${record.total_amount}</strong> (Tipo de cambio congelado: 1 USD = ARS ${record.fx_rate || 1140}). El banco emisor en Argentina aplicará su tipo de cambio oficial e impuestos de tarjeta internacional.</p>
+           </div>
+         ` : '';
+
          const html = `
-           <div style="font-family: Arial, sans-serif; padding: 20px; background: #fafafa;">
-             <h2 style="color: #111;">¡Gracias por tu compra!</h2>
-             <p>Hemos recibido tu orden y ya comenzamos a prepararla.</p>
-             <p><strong>Total:</strong> $${record.total_amount} ${record.currency || 'UYU'}</p>
-             <p><strong>Estado:</strong> Confirmada ✅</p>
-             <p>Te avisaremos apenas tu orden sea despachada.</p>
-             <p>Saludos,<br />El Equipo.</p>
+           <div style="font-family: Arial, sans-serif; padding: 20px; background: #fafafa; border-radius: 8px;">
+             <h2 style="color: #111;">¡Gracias por tu compra en Collectibles.uy!</h2>
+             <p>Hemos recibido tu orden <strong>#${orderNum}</strong> y ya comenzamos a prepararla para su envío.</p>
+             <p><strong>Total de la compra:</strong> ${displayAmount}</p>
+             <p><strong>Estado del Pago:</strong> Aprobado ✅</p>
+             ${handyNotice}
+             <p style="margin-top: 200px; font-size: 12px; color: #666;">Te avisaremos por correo apenas tu orden sea despachada a la logística de Mail Boxes Etc. (MBE).</p>
+             <p>Saludos,<br />El Equipo de Collectibles.uy</p>
            </div>
          `;
          await sendEmailAndLog(customerEmail, subject, html, 'order_confirmation', record.customer_id);
 
          if (record.customer_phone) {
-            await sendWhatsAppMessage(record.customer_phone, `✨ ¡Gracias por tu compra!\n\nTu orden #${record.id.slice(0,8).toUpperCase()} por $${record.total_amount} está confirmada ✅.`);
+            await sendWhatsAppMessage(record.customer_phone, `✨ ¡Gracias por tu compra!\n\nTu orden #${orderNum} por ${displayAmount} está confirmada y en preparación ✅.`);
          }
       } 
       
