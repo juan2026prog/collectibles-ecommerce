@@ -18,7 +18,7 @@ export default defineConfig({
             if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) return 'vendor-react';
             if (id.includes('@supabase')) return 'vendor-supabase';
             if (id.includes('lucide-react')) return 'vendor-icons';
-            if (id.includes('xlsx')) return 'vendor-excel';
+            if (id.includes('xlsx') || id.includes('exceljs')) return 'vendor-excel';
             return 'vendor-libs';
           }
           if (id.includes('/src/pages/admin/') || id.includes('/src/components/admin/') || id.includes('/src/layouts/AdminLayout')) return 'admin-chunk';

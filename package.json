@@ -1,7 +1,4 @@
 {
-  "name": "collectibles-ecommerce",
-  "private": true,
-  "type": "module",
   "scripts": {
     "analytics:diagnose-sales": "npx tsx scripts/analytics/diagnose-sales.ts"
   },
