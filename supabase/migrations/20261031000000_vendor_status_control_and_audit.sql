@@ -34,7 +34,7 @@ CREATE POLICY "Admins can view and manage all vendor status audit logs"
   USING (
     EXISTS (
       SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid() AND (profiles.role = 'admin' OR profiles.is_admin = true)
+      WHERE profiles.id = auth.uid() AND profiles.is_admin = true
     )
   );
 
@@ -52,7 +52,7 @@ BEGIN
   IF auth.uid() IS NOT NULL THEN
     IF NOT EXISTS (
       SELECT 1 FROM public.profiles
-      WHERE id = auth.uid() AND (role = 'admin' OR is_admin = true)
+      WHERE id = auth.uid() AND is_admin = true
     ) THEN
       -- Reset status and ships_to_argentina to previous values if modified by vendor
       IF OLD.status IS DISTINCT FROM NEW.status THEN

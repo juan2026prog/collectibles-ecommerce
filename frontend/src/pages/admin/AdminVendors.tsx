@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Store, CheckCircle, XCircle, Clock, AlertTriangle, Search, ChevronLeft, ChevronRight, MailPlus, Award, Trash2, CreditCard } from 'lucide-react';
+import { Store, CheckCircle, XCircle, Clock, AlertTriangle, Search, ChevronLeft, ChevronRight, MailPlus, Award, Trash2, CreditCard, Loader2 } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
 
 export default function AdminVendors() {
   const [vendors, setVendors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [updatingArgentinaVendorId, setUpdatingArgentinaVendorId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   
   // Pagination
@@ -115,6 +116,7 @@ export default function AdminVendors() {
       const metricsMap = new Map((metricsRes.data || []).map((m: any) => [m.vendor_id, m]));
       const vendorsWithMetrics = (vendorsRes.data || []).map((v: any) => ({
         ...v,
+        ships_to_argentina: !!(v.ships_to_argentina ?? v.shipping_settings?.ships_to_argentina),
         metrics: metricsMap.get(v.id) || {
           confirmed_gmv: 0,
           pending_gmv: 0,
@@ -165,13 +167,17 @@ export default function AdminVendors() {
 
       // Log audit trail
       const { data: userData } = await supabase.auth.getUser();
-      await supabase.from('vendor_status_audit_logs').insert({
-        vendor_id: vendor.id,
-        previous_status: prevStatus,
-        new_status: newStatus,
-        changed_by: userData.user?.id || null,
-        reason: reason || null
-      }).catch(logErr => console.error("Error writing audit log:", logErr));
+      try {
+        await supabase.from('vendor_status_audit_logs').insert({
+          vendor_id: vendor.id,
+          previous_status: prevStatus,
+          new_status: newStatus,
+          changed_by: userData.user?.id || null,
+          reason: reason || null
+        });
+      } catch (logErr) {
+        console.error("Error writing audit log:", logErr);
+      }
 
       setVendors(current =>
         current.map(v => v.id === vendor.id ? { ...v, status: newStatus } : v)
@@ -189,33 +195,68 @@ export default function AdminVendors() {
       toast.error('Collectibles siempre realiza envíos a Argentina y no puede desactivarse.');
       return;
     }
-    const nextVal = !vendor.ships_to_argentina;
+
+    if (updatingArgentinaVendorId === vendor.id) return;
+
+    const currentOptIn = !!(vendor.ships_to_argentina ?? vendor.shipping_settings?.ships_to_argentina);
+    const nextVal = !currentOptIn;
+
+    setUpdatingArgentinaVendorId(vendor.id);
+
     try {
       const currentSettings = vendor.shipping_settings && typeof vendor.shipping_settings === 'object' ? { ...vendor.shipping_settings } : {};
       currentSettings.ships_to_argentina = nextVal;
 
-      // Update shipping_settings JSONB first (guaranteed 200 OK across all schema cache states)
-      const { error } = await supabase
-        .from('vendors')
-        .update({ shipping_settings: currentSettings })
-        .eq('id', vendor.id);
+      let confirmedValue = nextVal;
+      let confirmedSettings = currentSettings;
 
-      if (error) throw error;
-
-      // Silently sync column if supported by schema cache
-      await supabase
+      // Official pattern: await query builder without .catch()
+      const { data, error } = await supabase
         .from('vendors')
-        .update({ ships_to_argentina: nextVal })
+        .update({
+          ships_to_argentina: nextVal,
+          shipping_settings: currentSettings
+        })
         .eq('id', vendor.id)
-        .catch(() => {});
+        .select('id, ships_to_argentina, shipping_settings')
+        .single();
+
+      if (error) {
+        // Fallback for PostgREST schema cache latency
+        const fallbackRes = await supabase
+          .from('vendors')
+          .update({ shipping_settings: currentSettings })
+          .eq('id', vendor.id)
+          .select('id, ships_to_argentina, shipping_settings')
+          .single();
+
+        if (fallbackRes.error) {
+          throw fallbackRes.error;
+        }
+
+        if (fallbackRes.data) {
+          confirmedValue = fallbackRes.data.ships_to_argentina ?? (fallbackRes.data.shipping_settings as any)?.ships_to_argentina ?? nextVal;
+          confirmedSettings = fallbackRes.data.shipping_settings || currentSettings;
+        }
+      } else if (data) {
+        confirmedValue = data.ships_to_argentina ?? (data.shipping_settings as any)?.ships_to_argentina ?? nextVal;
+        confirmedSettings = data.shipping_settings || currentSettings;
+      }
 
       setVendors(current =>
-        current.map(v => v.id === vendor.id ? { ...v, ships_to_argentina: nextVal, shipping_settings: currentSettings } : v)
+        current.map(v => v.id === vendor.id ? {
+          ...v,
+          ships_to_argentina: confirmedValue,
+          shipping_settings: confirmedSettings
+        } : v)
       );
-      toast.success(`Envíos a Argentina para "${vendor.store_name}" ${nextVal ? 'habilitados' : 'deshabilitados'}.`);
+
+      toast.success(`Envíos a Argentina para "${vendor.store_name}" ${confirmedValue ? 'habilitados' : 'deshabilitados'}.`);
     } catch (err: any) {
       console.error('Error updating vendor Argentina opt-in:', err);
-      toast.error('Error al actualizar opt-in de Argentina: ' + err.message);
+      toast.error('No se pudo actualizar la configuración de envíos a Argentina.');
+    } finally {
+      setUpdatingArgentinaVendorId(null);
     }
   }
 
@@ -616,11 +657,20 @@ export default function AdminVendors() {
                           </span>
                         ) : v.status !== 'active' ? (
                           <span className="text-xs font-bold text-slate-400" title="Vendor inactivo o suspendido — Envíos a Argentina no disponibles">—</span>
+                        ) : updatingArgentinaVendorId === v.id ? (
+                          <button
+                            type="button"
+                            disabled
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-75"
+                          >
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Guardando...</span>
+                          </button>
                         ) : v.ships_to_argentina ? (
                           <button
                             type="button"
                             onClick={() => toggleVendorArgentinaOptIn(v)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 hover:bg-emerald-200 transition-colors"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 hover:bg-emerald-200 transition-colors cursor-pointer"
                             title="Hacer clic para cambiar preferencia de envíos a Argentina"
                           >
                             Sí
@@ -629,7 +679,7 @@ export default function AdminVendors() {
                           <button
                             type="button"
                             onClick={() => toggleVendorArgentinaOptIn(v)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 transition-colors"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 transition-colors cursor-pointer"
                             title="Hacer clic para cambiar preferencia de envíos a Argentina"
                           >
                             No

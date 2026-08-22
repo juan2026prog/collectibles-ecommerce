@@ -906,8 +906,9 @@ export default function AdminOrders() {
       });
       
       const data = await res.json();
-      // Also mark as blocked locally in DB if column exists (optional fallback handled here too)
-      await supabase.from('profiles').update({ is_blocked: true }).eq('id', selectedOrder.customer.id).catch(() => {});
+      try {
+        await supabase.from('profiles').update({ is_blocked: true }).eq('id', selectedOrder.customer.id);
+      } catch (e) {}
 
       if (!res.ok) throw new Error(data.error || "Error al bloquear usuario");
       

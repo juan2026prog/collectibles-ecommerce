@@ -346,11 +346,12 @@ export default function VShipping() {
       if (error) throw error;
 
       // Silently sync column if supported
-      await supabase
-        .from('vendors')
-        .update({ ships_to_argentina: shipsToArgentina })
-        .eq('id', user.id)
-        .catch(() => {});
+      try {
+        await supabase
+          .from('vendors')
+          .update({ ships_to_argentina: shipsToArgentina })
+          .eq('id', user.id);
+      } catch (e) {}
 
       toast.success('Configuración de Collectibles Envíos guardada correctamente');
     } catch (err: any) {
