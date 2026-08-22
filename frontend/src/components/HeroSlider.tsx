@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useImageProtection } from '../hooks/useImageProtection';
+import { trackClarityEvent } from '../lib/analyticsTracker';
 
 interface Banner {
   id: string;
@@ -128,7 +129,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
   if (loading) {
     // Render a stable dark cinematic background container of exactly the same size without any fake text/buttons
     return (
-      <section className="relative h-[80vh] md:h-screen w-full bg-[#05070f] overflow-hidden">
+      <section className="relative h-[380px] sm:h-[420px] md:h-screen w-full bg-[#05070f] overflow-hidden">
         <div className="absolute inset-0 bg-[#05070f]" />
         <div className="absolute -right-40 -top-40 w-[800px] h-[800px] bg-[#f00856]/[.05] blur-[180px] rounded-full pointer-events-none" />
         <div className="absolute inset-0 opacity-[0.025] pointer-events-none" style={{
@@ -142,7 +143,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
   // Fallback if no banners are present
   if (activeBanners.length === 0) {
     return (
-      <section className="relative h-[80vh] md:h-screen w-full bg-[#05070f] flex items-center justify-center overflow-hidden">
+      <section className="relative h-[380px] sm:h-[420px] md:h-screen w-full bg-[#05070f] flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0 bg-[#05070f]" />
         <div className="absolute -right-40 -top-40 w-[800px] h-[800px] bg-[#f00856]/[.05] blur-[180px] rounded-full pointer-events-none" />
         <div className="max-w-[1500px] mx-auto px-6 w-full relative z-10 text-center flex flex-col items-center">
@@ -167,7 +168,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
 
   return (
     <section 
-      className="relative h-[80vh] md:h-screen w-full bg-[#05070f] overflow-hidden select-none"
+      className="relative h-[380px] sm:h-[420px] md:h-screen w-full bg-[#05070f] overflow-hidden select-none"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -303,6 +304,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
                   {banner.button_text && (
                     <Link 
                       to={banner.link_url || '/shop'} 
+                      onClick={() => trackClarityEvent('home_hero_click')}
                       className="btn-primary px-8 py-4 sm:px-10 sm:py-5 text-sm sm:text-base rounded-full group inline-flex items-center"
                     >
                       {banner.button_text} 

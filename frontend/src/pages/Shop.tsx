@@ -1,6 +1,6 @@
 import { Link, useSearchParams, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { ChevronRight, ChevronLeft, SlidersHorizontal, X, Search, Store, ExternalLink } from 'lucide-react';
+import { ChevronRight, ChevronLeft, SlidersHorizontal, X, Search, Store, ExternalLink, Loader2 } from 'lucide-react';
 import { useProducts, useCategories, useBrands, useFilterMappings, useProductGroupMetadata, useBrandFacets } from '../hooks/useData';
 import { usePromotions, getApplicablePromotions } from '../hooks/usePromotions';
 import { useCartContext } from '../contexts/CartContext';
@@ -181,6 +181,48 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   });
 
   const totalPages = Math.ceil(count / limit);
+
+  // Accumulated products for mobile "Cargar más"
+  const [accumulatedProducts, setAccumulatedProducts] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (page === 0) {
+      setAccumulatedProducts(products || []);
+    } else if (products && products.length > 0) {
+      setAccumulatedProducts(prev => {
+        const existingIds = new Set(prev.map(p => p.id));
+        const newItems = products.filter(p => !existingIds.has(p.id));
+        return [...prev, ...newItems];
+      });
+    }
+  }, [products, page]);
+
+  // Scroll & State restoration on back navigation
+  useEffect(() => {
+    const savedStateStr = sessionStorage.getItem('collectibles_shop_session');
+    if (savedStateStr) {
+      try {
+        const savedState = JSON.parse(savedStateStr);
+        if (savedState.url === location.pathname + location.search && savedState.scrollY) {
+          setTimeout(() => {
+            window.scrollTo(0, savedState.scrollY);
+          }, 150);
+        }
+      } catch {}
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      sessionStorage.setItem('collectibles_shop_session', JSON.stringify({
+        url: location.pathname + location.search,
+        scrollY: window.scrollY,
+        page
+      }));
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [location.pathname, location.search, page]);
 
   // Redirect to /shop if categorySlug is present but not found in categories list (meaning it's empty or inactive)
   useEffect(() => {
@@ -805,7 +847,10 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
             <option value="name" className="bg-[#0e1525] text-white">A-Z</option>
           </select>
           <button
-            onClick={() => setMobileFilters(true)}
+            onClick={() => {
+              trackClarityEvent('filter_open');
+              setMobileFilters(true);
+            }}
             className="flex items-center gap-2 bg-[#f00856] text-white rounded-full px-5 py-2.5 text-xs font-black uppercase tracking-wider shadow-lg shadow-[#f00856]/30"
           >
             <SlidersHorizontal className="w-4 h-4" />
@@ -833,7 +878,10 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
             </div>
             <div className="p-6 border-t border-white/10">
               <button
-                onClick={() => setMobileFilters(false)}
+                onClick={() => {
+                  trackClarityEvent('filter_apply');
+                  setMobileFilters(false);
+                }}
                 className="btn-primary w-full rounded-full py-4 text-sm font-black uppercase"
               >
                 Ver {count} resultados
@@ -945,7 +993,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
             </div>
           </div>
 
-          {loading ? (
+          {loading && page === 0 ? (
             <div className={`grid gap-x-6 gap-y-12 grid-cols-2 ${
               gridCols === 3 ? 'md:grid-cols-3' :
               gridCols === 4 ? 'md:grid-cols-3 lg:grid-cols-4' :
@@ -953,7 +1001,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
             }`}>
               {[...Array(gridCols * 2)].map((_, i) => <ProductSkeleton key={i} />)}
             </div>
-          ) : products.length === 0 ? (
+          ) : products.length === 0 && accumulatedProducts.length === 0 ? (
             <div className="glass rounded-[2rem] p-20 text-center">
               <Search className="w-12 h-12 text-slate-700 mx-auto mb-4" />
               {categorySlug && brandSlug ? (
@@ -981,36 +1029,89 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
               )}
             </div>
           ) : (
-            <div className={`grid gap-x-6 gap-y-12 grid-cols-2 ${
-              gridCols === 3 ? 'md:grid-cols-3' :
-              gridCols === 4 ? 'md:grid-cols-3 lg:grid-cols-4' :
-              'md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
-            }`}>
-              {products.map(p => {
-                const applicablePromos = getApplicablePromotions({
-                  product_id: p.id,
-                  category_id: p.category_id,
-                  brand_id: p.brand_id,
-                  vendor_id: p.vendor_id,
-                  tag_ids: p.product_tags?.map((pt: any) => pt.tag_id) || []
-                }, promotions);
-                
-                return (
-                  <ProductGridCard 
-                    key={p.id} 
-                    product={p} 
-                    onAddToCart={handleAddToCart} 
-                    formatPrice={formatCurrencyPrice} 
-                    applicablePromos={applicablePromos} 
-                  />
-                );
-              })}
-            </div>
+            <>
+              {/* DESKTOP GRID (Paginated page view) */}
+              <div className={`hidden lg:grid gap-x-6 gap-y-12 ${
+                gridCols === 3 ? 'grid-cols-3' :
+                gridCols === 4 ? 'grid-cols-4' :
+                'grid-cols-5'
+              }`}>
+                {products.map(p => {
+                  const applicablePromos = getApplicablePromotions({
+                    product_id: p.id,
+                    category_id: p.category_id,
+                    brand_id: p.brand_id,
+                    vendor_id: p.vendor_id,
+                    tag_ids: p.product_tags?.map((pt: any) => pt.tag_id) || []
+                  }, promotions);
+                  
+                  return (
+                    <ProductGridCard 
+                      key={p.id} 
+                      product={p} 
+                      onAddToCart={handleAddToCart} 
+                      formatPrice={formatCurrencyPrice} 
+                      applicablePromos={applicablePromos} 
+                    />
+                  );
+                })}
+              </div>
+
+              {/* MOBILE GRID (Accumulated Cargar Más view) */}
+              <div className="grid lg:hidden grid-cols-2 gap-3 sm:gap-6">
+                {(accumulatedProducts.length > 0 ? accumulatedProducts : products).map(p => {
+                  const applicablePromos = getApplicablePromotions({
+                    product_id: p.id,
+                    category_id: p.category_id,
+                    brand_id: p.brand_id,
+                    vendor_id: p.vendor_id,
+                    tag_ids: p.product_tags?.map((pt: any) => pt.tag_id) || []
+                  }, promotions);
+                  
+                  return (
+                    <ProductGridCard 
+                      key={`mob-${p.id}`} 
+                      product={p} 
+                      onAddToCart={handleAddToCart} 
+                      formatPrice={formatCurrencyPrice} 
+                      applicablePromos={applicablePromos} 
+                    />
+                  );
+                })}
+              </div>
+            </>
           )}
 
-          {/* PAGINATION */}
+          {/* MOBILE "CARGAR MÁS" BUTTON (< 768px / < lg) */}
+          <div className="lg:hidden mt-12 flex flex-col items-center">
+            {page + 1 < totalPages ? (
+              <button
+                onClick={() => {
+                  trackClarityEvent('load_more');
+                  setPage(prev => prev + 1);
+                }}
+                disabled={loading}
+                className="btn-primary w-full max-w-xs py-3.5 rounded-full text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-[#f00856]/20 disabled:opacity-50"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>Cargando productos...</span>
+                  </>
+                ) : (
+                  <span>CARGAR MÁS PRODUCTOS</span>
+                )}
+              </button>
+            ) : count > 0 ? (
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider text-center">
+                Has visto todos los {count} productos
+              </p>
+            ) : null}
+          </div>
+
+          {/* DESKTOP NUMERIC PAGINATION (>= lg) */}
           {totalPages > 1 && (
-            <div className="mt-16 flex items-center justify-center gap-2">
+            <div className="hidden lg:flex mt-16 items-center justify-center gap-2">
               <button
                 disabled={page === 0}
                 onClick={() => setPage(page - 1)}

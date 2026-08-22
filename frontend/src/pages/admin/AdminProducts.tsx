@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { Plus, Pencil, Trash2, Search, Eye, X, Upload, Save, AlertCircle, Check, Loader2, ImageIcon, ChevronUp, ChevronDown, Trash, Copy, AlertTriangle, ExternalLink, CheckCircle2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Eye, X, Upload, Save, AlertCircle, Check, Loader2, ImageIcon, ChevronUp, ChevronDown, Trash, Copy, AlertTriangle, ExternalLink, CheckCircle2, Truck } from 'lucide-react';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
 import ImportModal from '../../components/admin/ImportModal';
 import type { ParsedProduct } from '../../lib/bulkImportUtils';
@@ -14,6 +14,14 @@ import { CardDetailsFormSection } from '../../components/vendor/CardDetailsFormS
 import { type CardDetails, buildCategoryTreeOptions, isSportsCardCategory, isTCGCategory } from '../../config/tcgConfig';
 import { validateProductForPublication, type PublicationValidationError } from '../../lib/productPublicationValidator';
 import { mapDatabaseErrorToUserMessage } from '../../lib/databaseErrorMapper';
+import {
+  sanitizeMbePackagingType,
+  isValidMbePackagingType,
+  getMbePackagingLabel,
+  mergeMbePackagingType,
+  calculateArgentinaShippingStatus,
+  type MbePackagingType
+} from '../../lib/mbeLogisticsUtils';
 
 interface InlineEditProps {
   value: string | number;
@@ -159,6 +167,12 @@ export default function AdminProducts() {
   const [filterCategory, setFilterCategory] = useState<string>('');
   const [filterBrand, setFilterBrand] = useState<string>('');
   const [filterVendor, setFilterVendor] = useState<string>(searchParams.get('vendor') || 'all');
+  const [filterMbe, setFilterMbe] = useState<string>(''); // '', 'mbe_pak', 'mbe_caja', 'unclassified'
+  const [filterArgentina, setFilterArgentina] = useState<string>(''); // '', 'auto', 'quote'
+
+  const [bulkMbeModalOpen, setBulkMbeModalOpen] = useState(false);
+  const [targetBulkMbeType, setTargetBulkMbeType] = useState<MbePackagingType>(null);
+  const [bulkUpdatingMbe, setBulkUpdatingMbe] = useState(false);
   
   const [totalProductsCount, setTotalProductsCount] = useState<number>(0);
   const [debouncedSearch, setDebouncedSearch] = useState<string>(search);
@@ -176,6 +190,11 @@ export default function AdminProducts() {
     vendor_id: 'platform',
     condition: '', condition_notes: '',
     image_url: '', video_url: '',
+    weight_kg: '',
+    dimensions_length: '',
+    dimensions_width: '',
+    dimensions_height: '',
+    mbe_packaging_type: '' as string,
     card_details: {
       sport: '', player_character: '', team: '', set_collection: '', year_season: '',
       card_number: '', format: 'Single Card', is_rookie: false, is_autograph: false,
@@ -287,6 +306,11 @@ export default function AdminProducts() {
     setEditing(null);
     setForm({ 
       title: '', slug: '', description: '', short_description: '', base_price: '', compare_at_price: '', sku: `${Date.now()}`, stock: '10', status: 'published', badge: '', is_featured: false, is_active: true, category_id: '', brand_id: '', vendor_id: 'platform', condition: '', condition_notes: '', image_url: '', video_url: '', 
+      weight_kg: '',
+      dimensions_length: '',
+      dimensions_width: '',
+      dimensions_height: '',
+      mbe_packaging_type: '',
       card_details: {
         sport: '', player_character: '', team: '', set_collection: '', year_season: '',
         card_number: '', format: 'Single Card', is_rookie: false, is_autograph: false,
@@ -307,6 +331,11 @@ export default function AdminProducts() {
     ]);
 
     const existingCardDetails = (product as any).metadata?.card_details || {};
+    const existingPkg = sanitizeMbePackagingType((product as any).metadata?.packaging_type || (product as any).metadata?.mbe_service_type) || '';
+    const weightVal = (product as any).weight_kg !== null && (product as any).weight_kg !== undefined ? String((product as any).weight_kg) : '';
+    const dimLen = (product as any).dimensions?.length ?? (product as any).dimensions?.l ?? '';
+    const dimWid = (product as any).dimensions?.width ?? (product as any).dimensions?.w ?? '';
+    const dimHei = (product as any).dimensions?.height ?? (product as any).dimensions?.h ?? '';
 
     setForm({
       title: product.title, 
@@ -328,6 +357,11 @@ export default function AdminProducts() {
       condition_notes: (product as any).condition_notes || '',
       image_url: product.images?.[0]?.url || '', 
       video_url: '',
+      weight_kg: weightVal,
+      dimensions_length: dimLen !== '' ? String(dimLen) : '',
+      dimensions_width: dimWid !== '' ? String(dimWid) : '',
+      dimensions_height: dimHei !== '' ? String(dimHei) : '',
+      mbe_packaging_type: existingPkg,
       card_details: {
         sport: existingCardDetails.sport || '',
         player_character: existingCardDetails.player_character || '',
@@ -439,9 +473,26 @@ export default function AdminProducts() {
       const selectedCatId = form.categories[0] || form.category_id;
       const isCardCategory = isSportsCardCategory(selectedCatId, categories) || isTCGCategory(selectedCatId, categories);
 
-      const normalizedCondition = normalizeCondition(form.condition);
-      const normalizedNotes = form.condition_notes?.trim() || null;
-      const basePriceParsed = form.base_price !== '' && form.base_price !== null && form.base_price !== undefined ? parseFloat(String(form.base_price)) : null;
+      // Server-side validation rule 21: Reject invalid arbitrary strings
+      if (!isValidMbePackagingType(form.mbe_packaging_type)) {
+        toast.error('Tipo de packaging MBE inválido.');
+        return;
+      }
+
+      const weightParsed = form.weight_kg !== '' && form.weight_kg !== null && form.weight_kg !== undefined ? parseFloat(String(form.weight_kg)) : null;
+
+      let dimensionsParsed: any = null;
+      const dimL = parseFloat(String(form.dimensions_length || 0));
+      const dimW = parseFloat(String(form.dimensions_width || 0));
+      const dimH = parseFloat(String(form.dimensions_height || 0));
+      if (dimL > 0 && dimW > 0 && dimH > 0) {
+        dimensionsParsed = { length: dimL, width: dimW, height: dimH };
+      }
+
+      const mergedMeta = mergeMbePackagingType(currentMetadata, form.mbe_packaging_type);
+      if (isCardCategory) {
+        mergedMeta.card_details = form.card_details;
+      }
 
       const payload: any = {
         title: form.title.trim(),
@@ -459,10 +510,9 @@ export default function AdminProducts() {
         vendor_id: targetVendorId,
         condition: normalizedCondition,
         condition_notes: normalizedNotes,
-        metadata: {
-          ...currentMetadata,
-          ...(isCardCategory ? { card_details: form.card_details } : {})
-        }
+        weight_kg: weightParsed,
+        dimensions: dimensionsParsed,
+        metadata: mergedMeta
       };
 
       console.log('[ADMIN_PRODUCTS_SAVE_PAYLOAD]', payload);
@@ -1096,6 +1146,73 @@ export default function AdminProducts() {
     } catch (err: any) { toast.error(err.message); }
   };
 
+  const handleConfirmBulkMbeUpdate = async () => {
+    if (selectedProducts.length === 0) return;
+    setBulkUpdatingMbe(true);
+    try {
+      if (!isValidMbePackagingType(targetBulkMbeType)) {
+        toast.error('Tipo de packaging MBE no válido');
+        setBulkMbeModalOpen(false);
+        return;
+      }
+
+      const { data: existingProds, error: fetchErr } = await supabase
+        .from('products')
+        .select('id, metadata')
+        .in('id', selectedProducts);
+
+      if (fetchErr) throw fetchErr;
+
+      for (const prod of existingProds || []) {
+        const mergedMeta = mergeMbePackagingType(prod.metadata, targetBulkMbeType);
+        const { error: updErr } = await supabase
+          .from('products')
+          .update({ metadata: mergedMeta })
+          .eq('id', prod.id);
+
+        if (updErr) {
+          console.error(`Error updating MBE packaging for product ${prod.id}:`, updErr);
+        }
+      }
+
+      toast.success(`Se actualizó la clasificación MBE en ${selectedProducts.length} productos.`);
+      setSelectedProducts([]);
+      setBulkMbeModalOpen(false);
+      fetchProducts();
+    } catch (err: any) {
+      console.error('[Bulk MBE Update Error]', err);
+      toast.error(`Error al actualizar masivamente MBE: ${err.message}`);
+    } finally {
+      setBulkUpdatingMbe(false);
+    }
+  };
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((p: any) => {
+      // MBE filter
+      if (filterMbe === 'mbe_pak') {
+        if (sanitizeMbePackagingType(p.metadata?.packaging_type || p.metadata?.mbe_service_type) !== 'mbe_pak') return false;
+      } else if (filterMbe === 'mbe_caja') {
+        if (sanitizeMbePackagingType(p.metadata?.packaging_type || p.metadata?.mbe_service_type) !== 'mbe_caja') return false;
+      } else if (filterMbe === 'unclassified') {
+        if (sanitizeMbePackagingType(p.metadata?.packaging_type || p.metadata?.mbe_service_type) !== null) return false;
+      }
+
+      // Argentina status filter
+      if (filterArgentina) {
+        const arStatus = calculateArgentinaShippingStatus(p);
+        if (filterArgentina === 'auto' && !arStatus.isEligible) return false;
+        if (filterArgentina === 'quote' && arStatus.isEligible) return false;
+      }
+
+      return true;
+    });
+  }, [products, filterMbe, filterArgentina]);
+
+  const unclassifiedMbeCount = useMemo(() => {
+    return products.filter((p: any) => !sanitizeMbePackagingType(p.metadata?.packaging_type || p.metadata?.mbe_service_type)).length;
+  }, [products]);
+
   const addToGallery = (url: string) => setForm({ ...form, gallery: [...form.gallery, { url }] });
   const removeFromGallery = (idx: number) => setForm({ ...form, gallery: form.gallery.filter((_, i) => i !== idx) });
   const maxPages = Math.max(1, Math.ceil(totalProductsCount / (typeof itemsPerPage === 'number' ? itemsPerPage : 50)));
@@ -1175,7 +1292,7 @@ export default function AdminProducts() {
                      <option value="Todos">Todos</option>
                   </select>
                </div>
-               <div className="flex gap-2 text-xs font-bold text-gray-500">
+               <div className="flex gap-2 text-xs font-bold text-gray-500 flex-wrap items-center">
                   <select className="border-gray-200 border rounded px-2 py-1 text-xs outline-none bg-white" value={filterCategory} onChange={e => { setFilterCategory(e.target.value); setCurrentPage(1); }}>
                     <option value="">Todas las categorías</option>
                     {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -1189,6 +1306,20 @@ export default function AdminProducts() {
                     <option value="platform">Solo Collectibles</option>
                     {vendors.map(v => <option key={v.id} value={v.id}>{v.store_name || v.company_name}</option>)}
                   </select>
+                  <select className="border-gray-200 border rounded px-2 py-1 text-xs outline-none bg-white font-bold text-slate-700" value={filterMbe} onChange={e => { setFilterMbe(e.target.value); setCurrentPage(1); }}>
+                    <option value="">Tipo MBE: Todos</option>
+                    <option value="mbe_pak">MBE PAK</option>
+                    <option value="mbe_caja">MBE Caja</option>
+                    <option value="unclassified">Sin definir</option>
+                  </select>
+                  <select className="border-gray-200 border rounded px-2 py-1 text-xs outline-none bg-white font-bold text-slate-700" value={filterArgentina} onChange={e => { setFilterArgentina(e.target.value); setCurrentPage(1); }}>
+                    <option value="">Estado AR: Todos</option>
+                    <option value="auto">Envío automático</option>
+                    <option value="quote">Requiere cotización</option>
+                  </select>
+                  <span className="bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-black uppercase px-2 py-1 rounded-md tracking-wider flex items-center gap-1" title="Productos sin tipo de empaque MBE asignado">
+                    Sin packaging MBE: {unclassifiedMbeCount}
+                  </span>
                </div>
             </div>
          </div>
@@ -1206,6 +1337,23 @@ export default function AdminProducts() {
                   <select onChange={(e) => { if (e.target.value) { handleBulkUpdate('category_id', e.target.value); e.target.value = ''; } }} className="bg-white border border-blue-200 text-xs rounded px-2 py-1 font-bold text-gray-700 outline-none">
                      <option value="">Cambiar Categoría...</option>
                      {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  <select
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        if (e.target.value === 'mbe_pak') setTargetBulkMbeType('mbe_pak');
+                        else if (e.target.value === 'mbe_caja') setTargetBulkMbeType('mbe_caja');
+                        else if (e.target.value === 'mbe_none') setTargetBulkMbeType(null);
+                        setBulkMbeModalOpen(true);
+                        e.target.value = '';
+                      }
+                    }}
+                    className="bg-white border border-blue-200 text-xs rounded px-2 py-1 font-bold text-gray-700 outline-none"
+                  >
+                     <option value="">Asignar MBE...</option>
+                     <option value="mbe_pak">MBE PAK</option>
+                     <option value="mbe_caja">MBE Caja</option>
+                     <option value="mbe_none">Quitar clasificación MBE</option>
                   </select>
                   <button onClick={() => handleBulkDelete()} className="btn-danger text-xs px-3 py-1 flex items-center gap-1">
                      <Trash2 className="w-3.5 h-3.5" /> Eliminar seleccionados
@@ -1246,12 +1394,14 @@ export default function AdminProducts() {
                    <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('stock')}>
                      Stock {sortField === 'stock' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
                    </th>
-                    <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('is_active')}>
-                      Visible {sortField === 'is_active' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
-                    </th>
-                    <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('status')}>
-                      Estado {sortField === 'status' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
-                    </th>
+                   <th className="px-4 py-4">MBE</th>
+                   <th className="px-4 py-4">Argentina</th>
+                   <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('is_active')}>
+                     Visible {sortField === 'is_active' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+                   </th>
+                   <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('status')}>
+                     Estado {sortField === 'status' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+                   </th>
                    <th className="px-6 py-4">Condition</th>
                    <th className="px-6 py-4 text-right cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('created_at')}>
                      Fecha {sortField === 'created_at' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
@@ -1260,11 +1410,11 @@ export default function AdminProducts() {
                </thead>
                <tbody className="divide-y divide-gray-100">
                  {loading ? (
-                    <tr><td colSpan={11} className="px-6 py-12 text-center text-gray-400 animate-pulse">Cargando catálogo...</td></tr>
-                 ) : products.length === 0 ? (
-                    <tr><td colSpan={11} className="px-6 py-12 text-center text-gray-400 font-bold">0 PRODUCTOS ENCONTRADOS</td></tr>
+                    <tr><td colSpan={13} className="px-6 py-12 text-center text-gray-400 animate-pulse">Cargando catálogo...</td></tr>
+                 ) : filteredProducts.length === 0 ? (
+                    <tr><td colSpan={13} className="px-6 py-12 text-center text-gray-400 font-bold">0 PRODUCTOS ENCONTRADOS</td></tr>
                  ) : (
-                    products.map((p: any) => {
+                    filteredProducts.map((p: any) => {
                       const primaryCat = p.product_categories?.[0]?.categories;
                       return (
                       <tr key={p.id} className="hover:bg-blue-50/20 group transition-all" title="Haz clic en cualquier campo para editarlo en línea">
@@ -1366,6 +1516,37 @@ export default function AdminProducts() {
                                  {p.variants?.[0]?.inventory_count || 0} u.
                               </span>
                            )}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          {(() => {
+                            const pkg = sanitizeMbePackagingType(p.metadata?.packaging_type || p.metadata?.mbe_service_type);
+                            if (pkg === 'mbe_pak') {
+                              return <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-sky-800 bg-sky-100 border border-sky-200">PAK</span>;
+                            }
+                            if (pkg === 'mbe_caja') {
+                              return <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-purple-800 bg-purple-100 border border-purple-200">CAJA</span>;
+                            }
+                            return <span className="px-2 py-0.5 rounded text-[10px] font-bold text-gray-400 bg-gray-100 border border-gray-200">Sin definir</span>;
+                          })()}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          {(() => {
+                            const arStatus = calculateArgentinaShippingStatus(p);
+                            if (arStatus.isEligible) {
+                              return (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black text-emerald-800 bg-emerald-100 border border-emerald-200" title="Envío automático a Argentina disponible">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                                  Auto (AR)
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-200" title={arStatus.reason || 'Requiere cotización manual'}>
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-600" />
+                                Cotización (AR)
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
                           <button
@@ -1857,12 +2038,51 @@ export default function AdminProducts() {
               >
                 Cancelar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📦 CONFIRMACIÓN DE CAMBIO MASIVO MBE 📦 */}
+      {bulkMbeModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-6">
+            <div className="flex items-center gap-3 text-blue-600">
+              <div className="p-3 bg-blue-50 rounded-xl">
+                <Truck className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-gray-900">Asignar Clasificación MBE</h3>
+                <p className="text-xs text-gray-500">Edición masiva de {selectedProducts.length} productos seleccionados</p>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 border rounded-xl p-4 text-xs space-y-2">
+              <p className="text-gray-700 font-medium">
+                Vas a asignar <strong>{getMbePackagingLabel(targetBulkMbeType)}</strong> a <strong>{selectedProducts.length}</strong> productos seleccionados.
+              </p>
+              <p className="text-gray-500 italic">
+                Esta acción actualizará exclusivamente el tipo de paquete en la metadata (<code className="bg-gray-200 px-1 py-0.5 rounded text-[10px]">{'metadata.packaging_type'}</code>) conservando intactos el peso, dimensiones, precios, stock e imágenes.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => handleSave({ allowDuplicateOverride: true })}
-                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs flex-1 flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30 transition-all"
+                disabled={bulkUpdatingMbe}
+                onClick={() => setBulkMbeModalOpen(false)}
+                className="px-4 py-2 text-xs font-bold text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
               >
-                <CheckCircle2 className="w-4 h-4" /> Crear de Todas Formas
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={bulkUpdatingMbe}
+                onClick={handleConfirmBulkMbeUpdate}
+                className="px-5 py-2 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-md shadow-blue-200 transition-all flex items-center gap-2"
+              >
+                {bulkUpdatingMbe && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                Confirmar
               </button>
             </div>
           </div>

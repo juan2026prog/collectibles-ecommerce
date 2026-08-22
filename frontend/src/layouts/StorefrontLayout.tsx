@@ -28,6 +28,7 @@ import { ImageProtectionGlobalListener } from '../hooks/useImageProtection';
 import React from 'react';
 
 import { trackContact, trackFindLocation, generateMetaEventId } from '../lib/meta/metaPixel';
+import { trackClarityEvent } from '../lib/analyticsTracker';
 
 // NAV_LINKS and MEGA_MENU are built dynamically inside the component
 // using t() for translations and useCategories() for live DB data.
@@ -456,6 +457,32 @@ export default function StorefrontLayout() {
           </div>
         </div>
       </header>
+
+      {/* ═══ MOBILE HOME SEARCH BAR VISIBLE ═══ */}
+      {isHome && (
+        <div className="lg:hidden bg-[#05070f] border-b border-white/10 px-4 py-2.5 sticky top-20 z-[95]">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const input = (e.currentTarget.querySelector('input') as HTMLInputElement)?.value?.trim();
+              if (input) {
+                trackClarityEvent('home_search');
+                navigate(`/shop?q=${encodeURIComponent(input)}`);
+              }
+            }}
+            className="relative flex items-center w-full"
+          >
+            <Search className="absolute left-4 w-4 h-4 text-[#f00856] pointer-events-none" />
+            <input
+              type="text"
+              placeholder="🔍 Buscar Funko, Pokémon, Marvel, Hot Wheels..."
+              defaultValue={searchQuery}
+              className="w-full bg-white/5 border border-white/15 rounded-full pl-11 pr-4 py-2.5 text-xs font-semibold text-white placeholder-slate-400 focus:border-[#f00856] focus:ring-1 focus:ring-[#f00856] transition-all outline-none"
+            />
+          </form>
+        </div>
+      )}
+
       {/* MOBILE MENU DRAWER */}
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-[200] xl:hidden">

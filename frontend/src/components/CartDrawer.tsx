@@ -136,7 +136,8 @@ export default function CartDrawer() {
       items: mapCartItemsToGA4(items)
     });
 
-    // Clarity event: checkout_started (Phase 6)
+    // Clarity event: checkout_started & begin_checkout
+    trackClarityEvent('begin_checkout');
     trackClarityEvent('checkout_started');
 
     setIsDrawerOpen(false);

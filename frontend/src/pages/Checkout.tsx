@@ -157,6 +157,73 @@ export default function Checkout() {
   });
   // Weight & Volume calculations for Argentina MBE Shipping
   const mbeShippingDetails = useMemo(() => {
+    // Priority 0: Check if any product belongs to an inactive or suspended vendor
+    let inactiveVendorItem: any = null;
+    items.forEach(item => {
+      const prod = item.product || item;
+      const vendorId = (prod as any)?.vendor_id || (prod as any)?.vendor?.id;
+      const isCollectibles = !vendorId || vendorId === 'platform';
+      if (!isCollectibles) {
+        const vendorObj = (prod as any)?.vendor;
+        const status = vendorObj?.status;
+        if (status && status !== 'active') {
+          if (!inactiveVendorItem) inactiveVendorItem = item;
+        }
+      }
+    });
+
+    if (inactiveVendorItem) {
+      const vendorName = (inactiveVendorItem.product?.vendor as any)?.store_name || (inactiveVendorItem as any)?.vendor?.store_name || 'Vendedor Marketplace';
+      const prodTitle = inactiveVendorItem.product?.title || inactiveVendorItem.title || 'Producto';
+      const statusStr = (inactiveVendorItem.product?.vendor as any)?.status === 'suspended' ? 'suspendido' : 'inactivo';
+      return {
+        realWeightKg: 0,
+        volumetricWeightKg: 0,
+        chargeableWeightKg: 0,
+        serviceType: 'quote_required' as const,
+        rateUsd: 0,
+        rateArs: 0,
+        isQuoteRequired: true,
+        isVendorInactive: true,
+        disabledVendorName: vendorName,
+        disabledProductTitle: prodTitle,
+        quoteReason: `El producto "${prodTitle}" pertenece al vendedor "${vendorName}" que se encuentra temporalmente ${statusStr}.`
+      };
+    }
+
+    // Priority 1: Check if any product belongs to an external vendor that has ships_to_argentina = false
+    let disabledVendorItem: any = null;
+    items.forEach(item => {
+      const prod = item.product || item;
+      const vendorId = (prod as any)?.vendor_id || (prod as any)?.vendor?.id;
+      const isCollectibles = !vendorId || vendorId === 'platform';
+      if (!isCollectibles) {
+        const vendorObj = (prod as any)?.vendor;
+        const shipsOpt = vendorObj?.ships_to_argentina ?? vendorObj?.shipping_settings?.ships_to_argentina;
+        if (shipsOpt === false) {
+          if (!disabledVendorItem) disabledVendorItem = item;
+        }
+      }
+    });
+
+    if (disabledVendorItem) {
+      const vendorName = (disabledVendorItem.product?.vendor as any)?.store_name || (disabledVendorItem as any)?.vendor?.store_name || 'Vendedor Marketplace';
+      const prodTitle = disabledVendorItem.product?.title || disabledVendorItem.title || 'Producto';
+      return {
+        realWeightKg: 0,
+        volumetricWeightKg: 0,
+        chargeableWeightKg: 0,
+        serviceType: 'quote_required' as const,
+        rateUsd: 0,
+        rateArs: 0,
+        isQuoteRequired: true,
+        isVendorDisabled: true,
+        disabledVendorName: vendorName,
+        disabledProductTitle: prodTitle,
+        quoteReason: `El producto "${prodTitle}" es vendido por "${vendorName}" que actualmente no realiza envíos a Argentina.`
+      };
+    }
+
     let realWeightKg = 0;
     let volumetricWeightKg = 0;
     let missingData = false;

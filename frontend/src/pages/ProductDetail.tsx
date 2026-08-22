@@ -23,6 +23,7 @@ import AdminTechnicalPanel from '../components/AdminTechnicalPanel';
 import { calculateUruboxEstimate, getEstimatedWeightKg } from '../lib/urubox';
 import { isValidInternalSku } from '../lib/skuUtils';
 import { ProductGridCard } from '../components/ProductGridCard';
+import { calculateArgentinaShippingStatus } from '../lib/mbeLogisticsUtils';
 import { useImageProtection } from '../hooks/useImageProtection';
 import { getConditionLabel } from '../config/conditionConfig';
 
@@ -72,20 +73,7 @@ export default function ProductDetail() {
   const { promotions } = usePromotions();
   const { toggleWishlist, isInWishlist } = useWishlistContext();
 
-  const isArgentinaEligible = (() => {
-    if (!product) return false;
-    const prodWeight = Number(product.weight_kg || 0);
-    if (!prodWeight || prodWeight <= 0 || prodWeight > 1.0) return false;
-    const pkgType = String(product.metadata?.packaging_type || product.metadata?.mbe_service_type || '').toLowerCase();
-    if (!['mbe_pak', 'mbe_caja', 'pak', 'caja'].includes(pkgType)) return false;
-    if (product.dimensions) {
-      const l = Number(product.dimensions.length || product.dimensions.l || 0);
-      const w = Number(product.dimensions.width || product.dimensions.w || 0);
-      const h = Number(product.dimensions.height || product.dimensions.h || 0);
-      if (l > 0 && w > 0 && h > 0 && ((l * w * h) / 5000) > 1.0) return false;
-    }
-    return true;
-  })();
+  const arShippingStatus = calculateArgentinaShippingStatus(product || {});
   
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -478,12 +466,16 @@ export default function ProductDetail() {
               )}
 
               {selectedCurrency === 'ARS' && (
-                isArgentinaEligible ? (
+                arShippingStatus.reasonCode === 'VENDOR_ARGENTINA_DISABLED' ? (
+                  <span className="text-xs font-bold px-3 py-1 rounded-full border border-slate-700 bg-slate-800 text-slate-400 flex items-center gap-1.5" title="Este vendedor no realiza envíos a Argentina">
+                    Este vendedor no realiza envíos a Argentina
+                  </span>
+                ) : arShippingStatus.isEligible ? (
                   <span className="text-xs font-bold px-3 py-1 rounded-full border border-sky-500/30 bg-sky-500/10 text-sky-300 flex items-center gap-1.5">
                     🇦🇷 Envío a Argentina disponible
                   </span>
                 ) : (
-                  <span className="text-xs font-bold px-3 py-1 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300 flex items-center gap-1.5">
+                  <span className="text-xs font-bold px-3 py-1 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300 flex items-center gap-1.5" title={arShippingStatus.reason}>
                     🇦🇷 Consultar envío a Argentina
                   </span>
                 )
@@ -516,6 +508,18 @@ export default function ProductDetail() {
 
           {/* 2. BOTONES DE COMPRA (Requirement 2) */}
           <div className="space-y-3 pt-3 border-t border-white/10">
+            {(() => {
+              const isVendorActive = !product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined;
+              if (!isVendorActive) {
+                return (
+                  <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-200 text-xs font-bold flex items-center gap-2">
+                    <span>⚠️ Este vendedor se encuentra temporalmente inactivo o suspendido. Los productos no están disponibles para la compra.</span>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
             {/* QUANTITY SELECTOR */}
             <div className="flex items-center justify-between">
               <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Cantidad</span>
@@ -523,7 +527,7 @@ export default function ProductDetail() {
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
                   className="w-11 h-full flex items-center justify-center hover:bg-white/10 transition-colors text-slate-300 hover:text-white"
-                  disabled={quantity <= 1}
+                  disabled={quantity <= 1 || (!product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined ? false : true)}
                 >
                   <Minus className="w-4 h-4" />
                 </button>
@@ -531,7 +535,7 @@ export default function ProductDetail() {
                 <button
                   onClick={() => setQuantity(Math.min(stock, quantity + 1))}
                   className="w-11 h-full flex items-center justify-center hover:bg-white/10 transition-colors text-slate-300 hover:text-white"
-                  disabled={quantity >= stock}
+                  disabled={quantity >= stock || (!product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined ? false : true)}
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -542,22 +546,22 @@ export default function ProductDetail() {
             <button
               id="main-buy-now"
               onClick={() => addToCart(undefined, true)}
-              disabled={stock <= 0}
+              disabled={stock <= 0 || (!product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined ? false : true)}
               className={`w-full py-4 sm:py-4.5 rounded-2xl flex items-center justify-center gap-2.5 text-base uppercase tracking-widest font-black transition-all bg-[#f00856] text-white shadow-xl shadow-[#f00856]/30 hover:bg-[#d00749] hover:shadow-[#f00856]/50 hover:-translate-y-0.5 cursor-pointer ${
-                stock <= 0 ? 'opacity-50 cursor-not-allowed bg-slate-800 shadow-none' : ''
+                stock <= 0 || (!product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined ? false : true) ? 'opacity-50 cursor-not-allowed bg-slate-800 shadow-none' : ''
               }`}
             >
               <Zap className="w-5 h-5" />
-              {stock <= 0 ? 'Sin Stock' : 'Comprar ahora'}
+              {(!product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined ? true : false) === false ? 'Vendedor inactivo' : stock <= 0 ? 'Sin Stock' : 'Comprar ahora'}
             </button>
 
             {/* BOTÓN AGREGAR AL CARRITO (CTA SECUNDARIO) */}
             <button
               id="main-add-to-cart"
               onClick={() => addToCart()}
-              disabled={stock <= 0}
+              disabled={stock <= 0 || (!product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined ? false : true)}
               className={`w-full py-3.5 rounded-2xl flex items-center justify-center gap-2 text-xs uppercase tracking-widest font-bold transition-all border border-white/20 text-white bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/40 cursor-pointer ${
-                stock <= 0 ? 'opacity-50 cursor-not-allowed border-white/5' : ''
+                stock <= 0 || (!product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined ? false : true) ? 'opacity-50 cursor-not-allowed border-white/5' : ''
               } ${addedToCart ? 'bg-green-500/20 border-green-500 text-green-400' : ''}`}
             >
               <ShoppingCart className="w-4 h-4" />

@@ -1,4 +1,5 @@
-import { Star, ShoppingCart, Heart } from 'lucide-react';
+import { useState } from 'react';
+import { Star, ShoppingCart, Heart, Check, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ProductBadge } from './ProductBadge';
 import { getProductImage } from '../lib/imageUtils';
@@ -6,7 +7,7 @@ import { evaluateItemDiscountDetailed } from '../hooks/usePromotions';
 import { useWishlistContext } from '../contexts/WishlistContext';
 import { useAdminMode } from '../contexts/AdminModeContext';
 import { useLocale } from '../contexts/LocaleContext';
-import { trackGA4Event } from '../lib/analyticsTracker';
+import { trackGA4Event, trackClarityEvent } from '../lib/analyticsTracker';
 import { getProductGroupBadge, getAllProductGroupBadges } from '../hooks/useData';
 import { useImageProtection } from '../hooks/useImageProtection';
 import { getConditionBadgeInfo } from '../config/conditionConfig';
@@ -27,10 +28,13 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
   const { isAdminMode } = useAdminMode();
   const { language } = useLocale();
   const { getImageProps, handleDragStart } = useImageProtection({ isProduct: true });
+  const [addState, setAddState] = useState<'idle' | 'loading' | 'added'>('idle');
+
   const img = getProductImage(product);
   const finalPrice = Number(product.base_price || 0) + Number(product.variants?.[0]?.price_adjustment || 0);
 
   const handleCardClick = () => {
+    trackClarityEvent('product_card_click');
     trackGA4Event('select_item', {
       item_list_id: 'product_catalog_grid',
       item_list_name: 'Product Catalog Grid',
@@ -43,6 +47,26 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
         quantity: 1
       }]
     });
+  };
+
+  const handleAddCartAction = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (addState !== 'idle') return;
+
+    setAddState('loading');
+    trackClarityEvent('add_to_cart_click');
+
+    try {
+      onAddToCart(product);
+      trackClarityEvent('add_to_cart_success');
+      setAddState('added');
+      setTimeout(() => {
+        setAddState('idle');
+      }, 2000);
+    } catch (err) {
+      setAddState('idle');
+    }
   };
   
   let promoDiscount = 0;
@@ -68,19 +92,17 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
   const isCollectibles = !product.vendor_id;
 
   return (
-    <article className={`grid-card group relative ${
+    <article className={`grid-card group relative p-3 bg-[#0a0f1d]/40 border rounded-[16px] transition-all duration-200 hover:border-[#f00856]/40 ${
       isCollectibles 
-        ? 'p-3 bg-[#0a0f1d]/60 border border-[#ff0f6d] shadow-[0_0_10px_rgba(255,15,109,0.1)] hover:shadow-[0_0_18px_rgba(255,15,109,0.25)] rounded-[20px] transition-all duration-200' 
-        : ''
+        ? 'border-[#ff0f6d]/30 shadow-[0_0_8px_rgba(255,15,109,0.08)]' 
+        : 'border-white/5'
     }`}>
       {/* 1. IMAGEN */}
       <div className="relative">
         <Link 
           to={`/p/${product.slug}`} 
           onClick={handleCardClick}
-          className={`flex bg-white w-full aspect-square overflow-hidden p-6 items-center justify-center border border-white/5 group-hover:border-[#f00856]/20 transition-colors ${
-            isCollectibles ? 'rounded-[14px]' : 'rounded-sm'
-          }`}
+          className="flex bg-white w-full aspect-square overflow-hidden p-5 items-center justify-center border border-white/5 rounded-xl group-hover:border-[#f00856]/20 transition-colors"
         >
           <img
             src={img}
@@ -92,15 +114,16 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
           />
         </Link>
 
-        {/* Wishlist Button */}
+        {/* Wishlist Button (Min 44x44px touch hit area) */}
         <button
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
             toggleWishlist(product);
           }}
-          className="absolute top-2 left-2 w-8 h-8 flex items-center justify-center rounded-full bg-[#05070f]/50 backdrop-blur-md border border-white/10 hover:bg-[#05070f]/80 transition-all z-30 group"
+          className="absolute top-1 left-1 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-[#05070f]/60 backdrop-blur-md border border-white/10 hover:bg-[#05070f]/80 transition-all z-30 group"
           title={isInWishlist(product.id) ? "Quitar de favoritos" : "Agregar a favoritos"}
+          aria-label={isInWishlist(product.id) ? "Quitar de favoritos" : "Agregar a favoritos"}
         >
           <Heart className={`w-4 h-4 transition-colors ${isInWishlist(product.id) ? 'fill-[#f00856] text-[#f00856]' : 'text-white/70 group-hover:text-white'}`} />
         </button>
@@ -161,18 +184,35 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
            );
         })()}
 
-        {/* CTA COMPACTO */}
+        {/* CTA AGREGAR AL CARRITO CON FEEDBACK INMEDIATO (Min 44x44px touch area) */}
         <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onAddToCart(product);
-          }}
-          className="absolute bottom-3 right-3 w-9 h-9 md:w-11 md:h-11 bg-[#f00856] text-white flex items-center justify-center rounded-full shadow-lg z-30 
-                     opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all transform md:translate-y-2 md:group-hover:translate-y-0 active:scale-90"
+          onClick={handleAddCartAction}
+          disabled={addState !== 'idle'}
+          className={`absolute bottom-2 right-2 min-w-[44px] min-h-[44px] px-3 bg-[#f00856] text-white flex items-center justify-center gap-1.5 rounded-full shadow-lg z-30 
+                     transition-all transform active:scale-95 disabled:opacity-90 ${
+                       addState === 'added' ? 'bg-emerald-600' : ''
+                     }`}
           title="Agregar al carrito"
+          aria-label="Agregar al carrito"
         >
-          <ShoppingCart className="w-5 h-5" />
+          {addState === 'idle' && (
+            <>
+              <ShoppingCart className="w-4 h-4" />
+              <span className="hidden sm:inline text-[10px] font-black uppercase">Agregar</span>
+            </>
+          )}
+          {addState === 'loading' && (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin text-white" />
+              <span className="text-[10px] font-black uppercase">Cargando...</span>
+            </>
+          )}
+          {addState === 'added' && (
+            <>
+              <Check className="w-4 h-4 text-white" />
+              <span className="text-[10px] font-black uppercase">✓ Agregado</span>
+            </>
+          )}
         </button>
 
         {/* Admin Mode Badge */}
@@ -184,8 +224,8 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
       </div>
 
       {/* 2. INFORMACIÓN */}
-      <div className="pt-3">
-        <div className="flex items-center gap-1 text-[11px] text-yellow-400 mb-1">
+      <div className="pt-2.5">
+        <div className="flex items-center gap-1 text-[10px] text-yellow-400 mb-1">
           <div className="flex">
             {[...Array(5)].map((_, i) => (
                <Star key={i} className={`w-3 h-3 ${i < Math.round(product.rating || 5) ? 'fill-yellow-400 text-yellow-400' : 'fill-transparent text-slate-600'}`} />
@@ -195,55 +235,26 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
         </div>
         
         {product.source_provider === 'zinc' && (
-          <div className="text-[10px] text-blue-400 font-bold uppercase mb-1">Vendido en Amazon</div>
+          <div className="text-[9px] text-blue-400 font-bold uppercase mb-0.5">Vendido en Amazon</div>
         )}
 
-        {isCollectibles ? (
-          <div className="flex items-center p-2.5 rounded-xl border border-[#ff0f6d] bg-[#121829] shadow-[0_0_8px_rgba(255,15,109,0.08)] group-hover:shadow-[0_0_12px_rgba(255,15,109,0.18)] transition-all duration-200 mb-2 mt-1">
-            <div className="flex items-center gap-2">
-              {/* Shield Star Logo */}
-              <div className="relative flex items-center justify-center w-8 h-8 rounded-lg bg-[#ff0f6d] text-white shrink-0">
-                <svg className="w-5 h-5 fill-white text-white" viewBox="0 0 24 24">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="#ff0f6d" stroke="#ff0f6d" strokeWidth="2" />
-                  <polygon points="12,7.5 13.5,10.5 17,11 14.5,13.5 15,17 12,15.2 9,17 9.5,13.5 7,11 10.5,10.5" fill="#ffffff" />
-                </svg>
-              </div>
-              {/* Text */}
-              <div className="flex flex-col">
-                <span className="text-[8px] font-black text-[#ff0f6d] uppercase tracking-wider leading-none">VENDIDO POR</span>
-                <span className="text-[11px] font-black text-white uppercase tracking-tight leading-tight mt-0.5">COLLECTIBLES</span>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="text-[10px] text-[#f00856] font-black uppercase tracking-wider mb-1 flex items-center flex-wrap gap-1">
-            <span>Vendido por: {product.vendor_id ? (product.vendor_store?.display_name || product.vendor_store?.store_name || product.vendor_store?.name || product.vendor?.company_name || product.vendor?.store_name || 'Vendedor') : 'Collectibles.uy'}</span>
-            {(() => {
-              if (!product.vendor_id || !product.vendor_store) return null;
-              if (
-                product.vendor_store.is_official &&
-                product.vendor_store.status === 'active' &&
-                product.vendor_store.approved_by &&
-                product.vendor_store.approved_at
-              ) {
-                return (
-                  <span className="text-[8px] px-1 font-semibold leading-none uppercase rounded bg-red-500 text-white border border-red-400">
-                    {language === 'en' ? 'Official Store' : 'TIENDA OFICIAL'}
-                  </span>
-                );
-              }
-              return null;
-            })()}
-          </div>
-        )}
+        {/* COMPACT VENDOR LINE (Replaces heavy box) */}
+        <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-1 flex items-center flex-wrap gap-1 leading-tight">
+          <span>Vendido por <strong className="text-white">{isCollectibles ? 'Collectibles' : (product.vendor_store?.display_name || product.vendor_store?.store_name || product.vendor_store?.name || product.vendor?.company_name || product.vendor?.store_name || 'Vendedor')}</strong></span>
+          {!isCollectibles && product.vendor_store?.is_official && (
+            <span className="text-[8px] px-1 font-semibold leading-none uppercase rounded bg-red-500 text-white border border-red-400">
+              {language === 'en' ? 'Official Store' : 'TIENDA OFICIAL'}
+            </span>
+          )}
+        </div>
         
         <Link to={`/p/${product.slug}`} onClick={handleCardClick}>
-          <h3 className="text-xs md:text-sm font-bold leading-tight line-clamp-2 min-h-[34px] text-white hover:text-[#f00856] transition-colors">
+          <h3 className="text-xs md:text-sm font-bold leading-snug line-clamp-2 min-h-[32px] text-white hover:text-[#f00856] transition-colors">
             {product.title}
           </h3>
         </Link>
         
-        <div className="mt-2 flex flex-wrap items-baseline gap-2">
+        <div className="mt-1.5 flex flex-wrap items-baseline gap-1.5">
           <span className="text-[#f00856] font-black text-base md:text-lg leading-none">
             {formatPrice(displayPrice)}
           </span>

@@ -71,7 +71,9 @@ export default function VShipping() {
     dispatch_days: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'],
     preparation_days: 0
   });
+  const [shipsToArgentina, setShipsToArgentina] = useState(false);
   const [globalProviders, setGlobalProviders] = useState<any[]>([]);
+  const [vendorObj, setVendorObj] = useState<any>(null);
   const [dacOffices, setDacOffices] = useState<any[]>([]);
 
   // 2. Direcciones de Despacho (Remitente)
@@ -101,7 +103,6 @@ export default function VShipping() {
   const [mlNickname, setMlNickname] = useState('');
 
   // 4. Vendor settings preview states
-  const [vendorObj, setVendorObj] = useState<any>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
 
   // 5. Distrilogic BYOC connection state
@@ -147,7 +148,7 @@ export default function VShipping() {
       const [vendorRes, addrRes, mlRes, provRes, distrilogicRes, dacRes, soyDeliveryRes] = await Promise.all([
         supabase
           .from('vendors')
-          .select('store_name, logo_url, slug, contact_phone, pickup_address, shipping_settings')
+          .select('store_name, logo_url, slug, contact_phone, pickup_address, shipping_settings, ships_to_argentina')
           .eq('id', user.id)
           .single()
           .then(res => ({ success: true, data: res.data, error: res.error }))
@@ -239,6 +240,8 @@ export default function VShipping() {
       // Process vendor result
       if (vendorRes.success && vendorRes.data) {
         setVendorObj(vendorRes.data);
+        const optIn = !!(vendorRes.data.ships_to_argentina ?? (vendorRes.data.shipping_settings as any)?.ships_to_argentina);
+        setShipsToArgentina(optIn);
         if (vendorRes.data.shipping_settings) {
           const s = vendorRes.data.shipping_settings as any;
           const defaultAddr = loadedAddresses.find((a: any) => a.is_default);
@@ -325,6 +328,7 @@ export default function VShipping() {
     try {
       const finalShippingData = {
         ...shippingData,
+        ships_to_argentina: shipsToArgentina,
         soydelivery: { active: isSoyDeliveryAvailable ? shippingData.soydelivery.active : false },
         free_shipping: {
           active: shippingData.free_shipping.active,
@@ -334,7 +338,10 @@ export default function VShipping() {
 
       const { error } = await supabase
         .from('vendors')
-        .update({ shipping_settings: finalShippingData })
+        .update({
+          ships_to_argentina: shipsToArgentina,
+          shipping_settings: finalShippingData
+        })
         .eq('id', user.id);
       if (error) throw error;
       toast.success('Configuración de Collectibles Envíos guardada correctamente');
@@ -587,6 +594,49 @@ export default function VShipping() {
             <Truck className="w-4 h-4 text-slate-600" />
             A. Métodos administrados por Collectibles
           </h4>
+
+          {/* 🇦🇷 SECCIÓN DE ENVÍOS INTERNACIONALES — ARGENTINA 🇦🇷 */}
+          <div className="p-5 border border-sky-200 rounded-xl bg-sky-50/40 space-y-3 mb-4">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🇦🇷</span>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-900">Envíos Internacionales — Argentina (MBE)</h4>
+                  <p className="text-xs text-slate-600">Preferencia de venta y despacho internacional a compradores en Argentina</p>
+                </div>
+              </div>
+              {vendorObj?.slug === 'collectibles' || vendorObj?.store_name?.toLowerCase().includes('collectibles') ? (
+                <span className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-black rounded-full border border-blue-200">
+                  Argentina: Siempre Habilitado para Collectibles
+                </span>
+              ) : (
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    className="sr-only peer"
+                    checked={shipsToArgentina}
+                    onChange={(e) => setShipsToArgentina(e.target.checked)}
+                  />
+                  <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  <span className="ml-3 text-xs font-bold text-slate-800">
+                    {shipsToArgentina ? 'Vender y enviar a Argentina: SÍ' : 'Vender y enviar a Argentina: NO'}
+                  </span>
+                </label>
+              )}
+            </div>
+
+            <div className="p-3 bg-white rounded-lg border border-sky-100 text-xs text-slate-700">
+              {shipsToArgentina || (vendorObj?.slug === 'collectibles' || vendorObj?.store_name?.toLowerCase().includes('collectibles')) ? (
+                <p className="text-emerald-700 font-medium">
+                  ✓ Al activar esta opción, tus productos podrán ofrecerse a compradores en Argentina siempre que tengan peso, dimensiones y tipo de empaque MBE configurados correctamente.
+                </p>
+              ) : (
+                <p className="text-amber-700 font-medium">
+                  ⚠️ Tus productos no estarán disponibles para envío a Argentina. Compradores argentinos verán el aviso "Este vendedor no realiza envíos a Argentina".
+                </p>
+              )}
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             

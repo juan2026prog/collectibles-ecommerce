@@ -136,25 +136,75 @@ export default function AdminVendors() {
     setLoading(false);
   }
 
-  async function updateVendorStatus(vendorId: string, status: string) {
-    const actionText = status === 'active' ? 'reactivar' : 'suspender';
-    if (!(await confirm(`¿Estás seguro de que deseas ${actionText} a este vendedor?`))) return;
+  async function updateVendorStatus(vendor: any, newStatus: 'active' | 'inactive' | 'suspended', reasonInput?: string) {
+    const isCollectibles = vendor.slug === 'collectibles' || vendor.store_name?.toLowerCase().includes('collectibles');
+    if (isCollectibles && newStatus !== 'active') {
+      toast.error('Collectibles es la cuenta oficial de la plataforma y no puede ser deshabilitada o suspendida.');
+      return;
+    }
+
+    if (vendor.status === newStatus) return;
+
+    let reason = reasonInput;
+    if (newStatus === 'suspended' && !reason) {
+      reason = window.prompt(`Ingrese el motivo de la suspensión para el vendedor "${vendor.store_name}":`) || '';
+      if (!reason.trim()) {
+        toast.error('Debe ingresar un motivo para suspender a un vendedor.');
+        return;
+      }
+    }
 
     try {
+      const prevStatus = vendor.status || 'pending';
       const { error } = await supabase
         .from('vendors')
-        .update({ status })
-        .eq('id', vendorId);
+        .update({ status: newStatus })
+        .eq('id', vendor.id);
 
       if (error) throw error;
-      
+
+      // Log audit trail
+      const { data: userData } = await supabase.auth.getUser();
+      await supabase.from('vendor_status_audit_logs').insert({
+        vendor_id: vendor.id,
+        previous_status: prevStatus,
+        new_status: newStatus,
+        changed_by: userData.user?.id || null,
+        reason: reason || null
+      }).catch(logErr => console.error("Error writing audit log:", logErr));
+
       setVendors(current =>
-        current.map(v => v.id === vendorId ? { ...v, status } : v)
+        current.map(v => v.id === vendor.id ? { ...v, status: newStatus } : v)
       );
-      toast.success(status === 'active' ? 'Vendedor reactivado con éxito' : 'Vendedor suspendido con éxito');
+      toast.success(`Vendedor "${vendor.store_name}" actualizado a ${newStatus === 'active' ? 'Activo' : newStatus === 'suspended' ? 'Suspendido' : 'Inactivo'}`);
     } catch (err: any) {
       console.error('Error updating vendor status:', err);
       toast.error('Error al actualizar el estado del vendor: ' + err.message);
+    }
+  }
+
+  async function toggleVendorArgentinaOptIn(vendor: any) {
+    const isCollectibles = vendor.slug === 'collectibles' || vendor.store_name?.toLowerCase().includes('collectibles');
+    if (isCollectibles) {
+      toast.error('Collectibles siempre realiza envíos a Argentina y no puede desactivarse.');
+      return;
+    }
+    const nextVal = !vendor.ships_to_argentina;
+    try {
+      const { error } = await supabase
+        .from('vendors')
+        .update({ ships_to_argentina: nextVal })
+        .eq('id', vendor.id);
+
+      if (error) throw error;
+
+      setVendors(current =>
+        current.map(v => v.id === vendor.id ? { ...v, ships_to_argentina: nextVal } : v)
+      );
+      toast.success(`Envíos a Argentina para "${vendor.store_name}" ${nextVal ? 'habilitados' : 'deshabilitados'}.`);
+    } catch (err: any) {
+      console.error('Error updating vendor Argentina opt-in:', err);
+      toast.error('Error al actualizar opt-in de Argentina: ' + err.message);
     }
   }
 
@@ -442,15 +492,16 @@ export default function AdminVendors() {
                 <th className="p-4 font-bold text-[10px] uppercase tracking-wider">GMV Confirmado</th>
                 <th className="p-4 font-bold text-[10px] uppercase tracking-wider text-center">Productos</th>
                 <th className="p-4 font-bold text-[10px] uppercase tracking-wider text-center">Mercado Libre</th>
+                <th className="p-4 font-bold text-[10px] uppercase tracking-wider text-center">Argentina</th>
                 <th className="p-4 font-bold text-[10px] uppercase tracking-wider">Fecha Alta</th>
                 <th className="p-4 font-bold text-[10px] uppercase tracking-wider text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr><td colSpan={11} className="p-8 text-center text-gray-500 animate-pulse">Cargando...</td></tr>
+                <tr><td colSpan={12} className="p-8 text-center text-gray-500 animate-pulse">Cargando...</td></tr>
               ) : vendors.length === 0 ? (
-                <tr><td colSpan={11} className="p-8 text-center text-gray-500">No se encontraron vendors.</td></tr>
+                <tr><td colSpan={12} className="p-8 text-center text-gray-500">No se encontraron vendors.</td></tr>
               ) : (
                 vendors.map(v => {
                   const storeNames = v.vendor_stores?.map((s: any) => s.store_name).join(', ') || 'Ninguna';
@@ -483,11 +534,25 @@ export default function AdminVendors() {
 
                       {/* Estado */}
                       <td className="p-4">
-                        <span className={`inline-flex px-2 py-1 rounded-full text-xs font-bold ${
-                          v.status === 'active' ? 'bg-teal-100 text-teal-800' : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {v.status === 'active' ? 'Activo' : 'Suspendido'}
-                        </span>
+                        {v.slug === 'collectibles' || v.store_name?.toLowerCase().includes('collectibles') ? (
+                          <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-black uppercase bg-teal-100 text-teal-800 border border-teal-200" title="Collectibles es la cuenta oficial de la plataforma">
+                            Activo
+                          </span>
+                        ) : (
+                          <select
+                            value={v.status || 'active'}
+                            onChange={(e) => updateVendorStatus(v, e.target.value as any)}
+                            className={`text-xs font-bold px-2.5 py-1 rounded-full border cursor-pointer ${
+                              v.status === 'active' ? 'bg-teal-50 text-teal-800 border-teal-200' :
+                              v.status === 'suspended' ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                              'bg-slate-100 text-slate-700 border-slate-200'
+                            }`}
+                          >
+                            <option value="active">Activo</option>
+                            <option value="inactive">Inactivo</option>
+                            <option value="suspended">Suspendido</option>
+                          </select>
+                        )}
                       </td>
 
                       {/* KYC */}
@@ -530,6 +595,35 @@ export default function AdminVendors() {
                         }`}>
                           {mlConnected ? 'Sí' : 'No'}
                         </span>
+                      </td>
+
+                      {/* Argentina Opt-In */}
+                      <td className="p-4 text-center">
+                        {v.slug === 'collectibles' || v.store_name?.toLowerCase().includes('collectibles') ? (
+                          <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-black uppercase bg-blue-100 text-blue-800 border border-blue-200" title="Collectibles siempre realiza envíos a Argentina">
+                            Collectibles — Siempre
+                          </span>
+                        ) : v.status !== 'active' ? (
+                          <span className="text-xs font-bold text-slate-400" title="Vendor inactivo o suspendido — Envíos a Argentina no disponibles">—</span>
+                        ) : v.ships_to_argentina ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleVendorArgentinaOptIn(v)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 hover:bg-emerald-200 transition-colors"
+                            title="Hacer clic para cambiar preferencia de envíos a Argentina"
+                          >
+                            Sí
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => toggleVendorArgentinaOptIn(v)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 transition-colors"
+                            title="Hacer clic para cambiar preferencia de envíos a Argentina"
+                          >
+                            No
+                          </button>
+                        )}
                       </td>
 
                       {/* Fecha de alta */}

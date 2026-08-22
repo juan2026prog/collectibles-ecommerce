@@ -238,7 +238,7 @@ Deno.serve(async (req) => {
     // 3. Consulta segura y correcta a la tabla real 'products' (columna 'base_price')
     const { data: products, error: productError } = await supabase
       .from("products")
-      .select("id, title, base_price, category_id, brand_id, vendor_id, vendor_store_id, vendors(store_name, promotions_opt_in), product_tags(tag_id)")
+      .select("id, title, base_price, category_id, brand_id, vendor_id, vendor_store_id, vendors(store_name, promotions_opt_in, ships_to_argentina, shipping_settings), product_tags(tag_id)")
       .in("id", productIds);
 
     if (productError) {
@@ -1209,9 +1209,69 @@ Deno.serve(async (req) => {
       // Fetch DB product directly to prevent any frontend payload tampering
       const { data: dbProd } = await supabase
         .from('products')
-        .select('weight_kg, dimensions, metadata')
+        .select('title, vendor_id, weight_kg, dimensions, metadata, vendors(id, store_name, status, ships_to_argentina, shipping_settings)')
         .eq('id', item.product_id)
         .maybeSingle();
+
+      const vendorId = dbProd?.vendor_id;
+      const isCollectibles = !vendorId || vendorId === 'platform';
+
+      // PRIORITY 1: Vendor Operational Status Check (active vs inactive/suspended)
+      let vendorStatus = 'active';
+      if (!isCollectibles) {
+        const vendorObj: any = dbProd?.vendors;
+        vendorStatus = vendorObj?.status || 'active';
+      }
+
+      if (vendorStatus !== 'active') {
+        const vendorStoreName = (dbProd?.vendors as any)?.store_name || 'Vendedor Marketplace';
+        console.log(`[VENDOR_DISABLED] Order blocked. Vendor "${vendorStoreName}" (ID: ${vendorId}) is ${vendorStatus}.`);
+        return new Response(JSON.stringify({
+          success: false,
+          error: `El producto "${dbProd?.title || item.title}" pertenece al vendedor "${vendorStoreName}" que se encuentra temporalmente ${vendorStatus === 'suspended' ? 'suspendido' : 'inactivo'}.`,
+          details: {
+            reason: "VENDOR_DISABLED",
+            status: vendorStatus,
+            message: `El vendedor "${vendorStoreName}" está ${vendorStatus}.`,
+            product_title: dbProd?.title || item.title,
+            vendor_name: vendorStoreName
+          }
+        }), {
+          status: 400,
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
+        });
+      }
+
+      // PRIORITY 2: Argentina Opt-In Check (If Argentina Order)
+      if (isArgentinaOrder) {
+        let vendorShipsToArgentina = false;
+        if (isCollectibles) {
+          // Rule 1 & 6: Collectibles products are ALWAYS enabled for Argentina (Override)
+          vendorShipsToArgentina = true;
+        } else {
+          const vendorObj: any = dbProd?.vendors;
+          const optInVal = vendorObj?.ships_to_argentina ?? vendorObj?.shipping_settings?.ships_to_argentina;
+          vendorShipsToArgentina = !!optInVal;
+        }
+
+        if (!vendorShipsToArgentina) {
+          const vendorStoreName = (dbProd?.vendors as any)?.store_name || 'Vendedor Marketplace';
+          console.log(`[VENDOR_ARGENTINA_DISABLED] Order blocked. Vendor "${vendorStoreName}" (ID: ${vendorId}) does not ship to Argentina.`);
+          return new Response(JSON.stringify({
+            success: false,
+            error: `El producto "${dbProd?.title || item.title}" es vendido por "${vendorStoreName}" que actualmente no realiza envíos a Argentina.`,
+            details: {
+              reason: "VENDOR_ARGENTINA_DISABLED",
+              message: `El vendedor "${vendorStoreName}" no realiza envíos a Argentina.`,
+              product_title: dbProd?.title || item.title,
+              vendor_name: vendorStoreName
+            }
+          }), {
+            status: 400,
+            headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
+          });
+        }
+      }
 
       const prodWeight = Number(dbProd?.weight_kg || 0);
       if (!prodWeight || prodWeight <= 0) {
