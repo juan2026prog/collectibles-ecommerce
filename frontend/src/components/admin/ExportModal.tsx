@@ -1,3 +1,4 @@
+// Official Collectibles Export Modal v2.1 (Decoupled & Single-Toggle Fixed)
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { Download, X, FileSpreadsheet, FileCode, CheckSquare, Square, RefreshCw, Layers, Filter, Search } from 'lucide-react';
 import { getMasterFields } from '../../lib/productFieldRegistry';
