@@ -1,4 +1,4 @@
-import ExcelJS from 'exceljs';
+import * as XLSX from 'xlsx';
 import { getMasterFields } from './productFieldRegistry';
 import type { ProductFieldDefinition } from './productFieldRegistry';
 import { getConditionLabel } from '../config/conditionConfig';
