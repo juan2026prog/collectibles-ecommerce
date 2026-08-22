@@ -28,6 +28,19 @@ const INITIAL_ZONES = {
   ] }
 };
 
+function getSlaStatus(shipment: any): { label: string; color: string; breached: boolean } {
+  if (!shipment) return { label: 'N/A', color: 'bg-gray-100 text-gray-600', breached: false };
+  if (shipment.shipping_status === 'delivered') {
+    return { label: 'Entregado', color: 'bg-emerald-100 text-emerald-800 border border-emerald-200', breached: false };
+  }
+  const hoursDiff = (Date.now() - new Date(shipment.created_at).getTime()) / (1000 * 60 * 60);
+  const isBreached = (!shipment.tracking_code || shipment.tracking_code === 'PENDIENTE') && hoursDiff > 4;
+  if (isBreached) {
+    return { label: `Demorado (${Math.floor(hoursDiff)}h)`, color: 'bg-rose-100 text-rose-800 font-bold border border-rose-200', breached: true };
+  }
+  return { label: 'A tiempo', color: 'bg-blue-100 text-blue-800 border border-blue-200', breached: false };
+}
+
 export default function AdminLogistics() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'soydelivery' | 'dac' | 'general' | 'ues' | 'control-tower'>('dashboard');
 
