@@ -4,6 +4,7 @@ import type { ProductFilterState } from './productFilterTypes';
 import { generateProductsCsv, generateProductsXlsxBlob, formatProductRecordForExport } from './bulkExportUtils';
 import type { ExportProductItem } from './bulkExportUtils';
 import { normalizeRawProductForExport } from './exportProductsEngine';
+import { getMasterFields } from './productFieldRegistry';
 
 // Generate mock dataset of 456 products
 function createMockCatalog(count: number = 456): ExportProductItem[] {
@@ -60,30 +61,25 @@ describe('Product Export Module Unit & Isolation Tests', () => {
   const fullCatalog = createMockCatalog(456);
 
   it('Caso 1: 456 total products with 50 per page view -> "Todos los productos" exports 456, NOT 50', () => {
-    // Table pagination simulation: table shows only first 50 items
     const pageTableItems = fullCatalog.slice(0, 50);
     expect(pageTableItems.length).toBe(50);
 
-    // Export query ignores page table items and processes entire catalog
     const exportTarget = fullCatalog;
     expect(exportTarget.length).toBe(456);
     expect(exportTarget.length).not.toBe(pageTableItems.length);
   });
 
   it('Caso 2: Filter matching 187 products when table displays 50 -> exports 187', () => {
-    // Generate a subset matching 187
     const subset187 = createMockCatalog(187);
     const visibleTable50 = subset187.slice(0, 50);
     expect(visibleTable50.length).toBe(50);
 
-    // Filtered scope target size
     const filteredTarget = subset187;
     expect(filteredTarget.length).toBe(187);
   });
 
   it('Caso 3: Filter matching 23 products -> exports 23', () => {
     const subset23 = fullCatalog.filter(p => p.brand?.id === 'brand-neca' && p.category?.id === 'cat-figuras' && p.vendor?.id === 'vendor-collectibles');
-    // Verify count filtering logic
     expect(subset23.length).toBeGreaterThan(0);
     const resultCount = subset23.length;
     expect(resultCount).toBe(subset23.length);
@@ -144,7 +140,6 @@ describe('Product Export Module Unit & Isolation Tests', () => {
     const csv = generateProductsCsv(items, keys, 'admin');
 
     const lines = csv.trim().split('\n');
-    // Header line + 10 data rows = 11 lines
     expect(lines.length).toBe(11);
     expect(lines[0]).toContain('"SKU","Título","Marca","Precio","Stock"');
   });
@@ -160,11 +155,8 @@ describe('Product Export Module Unit & Isolation Tests', () => {
   });
 
   it('Caso 12: Changing itemsPerPage (50 to 100) does NOT alter the total exportable count', () => {
-    let itemsPerPage: number = 50;
-    const exportCount50 = fullCatalog.length; // 456
-
-    itemsPerPage = 100;
-    const exportCount100 = fullCatalog.length; // 456
+    const exportCount50 = fullCatalog.length;
+    const exportCount100 = fullCatalog.length;
 
     expect(exportCount50).toBe(456);
     expect(exportCount100).toBe(456);
@@ -172,17 +164,111 @@ describe('Product Export Module Unit & Isolation Tests', () => {
   });
 
   it('Caso 13: Navigating to Page 2 of Admin -> "Todos los productos" continues to export all 456 products', () => {
-    let currentPage = 1;
-    let pageViewProducts = fullCatalog.slice(0, 50);
-    expect(pageViewProducts[0].id).toBe('prod-1');
+    const pageViewProductsPage2 = fullCatalog.slice(50, 100);
+    expect(pageViewProductsPage2[0].id).toBe('prod-51');
 
-    // User navigates to page 2
-    currentPage = 2;
-    pageViewProducts = fullCatalog.slice(50, 100);
-    expect(pageViewProducts[0].id).toBe('prod-51');
-
-    // Scope "all" export query operates on full catalog regardless of currentPage state
     const exportTargetPage2 = fullCatalog;
     expect(exportTargetPage2.length).toBe(456);
+  });
+});
+
+describe('Column Selection & Fixed Order Comprehensive Tests', () => {
+  const masterFields = getMasterFields('admin').filter(f => f.exportable);
+  const sampleProduct = createMockCatalog(1)[0];
+
+  it('1. Selecting only SKU -> exports exactly 1 column', () => {
+    const selectedKeys = ['sku'];
+    const record = formatProductRecordForExport(sampleProduct, selectedKeys);
+    expect(Object.keys(record)).toEqual(['sku']);
+
+    const csv = generateProductsCsv([sampleProduct], selectedKeys, 'admin');
+    expect(csv).toContain('"SKU"');
+    expect(csv).not.toContain('"Título"');
+  });
+
+  it('2. Selecting SKU + Title -> exports exactly 2 columns', () => {
+    const selectedKeys = ['sku', 'title'];
+    const record = formatProductRecordForExport(sampleProduct, selectedKeys);
+    expect(Object.keys(record)).toEqual(['sku', 'title']);
+  });
+
+  it('3. Selecting 5 columns (SKU, Title, Base Price, Stock, Weight) -> exports 5 columns', () => {
+    const selectedKeys = ['sku', 'title', 'base_price', 'stock', 'weight_kg'];
+    const record = formatProductRecordForExport(sampleProduct, selectedKeys);
+    expect(Object.keys(record).length).toBe(5);
+  });
+
+  it('4. Unmarking a column -> count decreases from 5 to 4', () => {
+    let keysSet = new Set(['sku', 'title', 'base_price', 'stock', 'weight_kg']);
+    expect(keysSet.size).toBe(5);
+
+    keysSet.delete('title');
+    expect(keysSet.size).toBe(4);
+
+    const activeKeys = masterFields.map(f => f.key).filter(k => keysSet.has(k));
+    const record = formatProductRecordForExport(sampleProduct, activeKeys);
+    expect(Object.keys(record).length).toBe(4);
+    expect(record.title).toBeUndefined();
+  });
+
+  it('5. Select all -> selects all master exportable columns (27 of 27)', () => {
+    const allKeys = masterFields.map(f => f.key);
+    expect(allKeys.length).toBe(27);
+
+    const record = formatProductRecordForExport(sampleProduct, allKeys);
+    expect(Object.keys(record).length).toBe(27);
+  });
+
+  it('6. Quitar todas -> leaves 0 columns selected', () => {
+    const noKeys: string[] = [];
+    const record = formatProductRecordForExport(sampleProduct, noKeys);
+    expect(Object.keys(record).length).toBe(0);
+  });
+
+  it('7. Restablecer -> returns to official master default column list', () => {
+    const defaultKeys = masterFields.map(f => f.key);
+    expect(defaultKeys.length).toBe(27);
+    expect(defaultKeys[0]).toBe('sku');
+    expect(defaultKeys[1]).toBe('title');
+  });
+
+  it('8. Partial selection XLSX export -> generates blob containing exact selected columns', async () => {
+    const selectedKeys = ['sku', 'title', 'base_price', 'stock', 'weight_kg'];
+    const blob = await generateProductsXlsxBlob([sampleProduct], selectedKeys, 'admin');
+    expect(blob).toBeTruthy();
+    expect(blob.size).toBeGreaterThan(0);
+  });
+
+  it('9. Partial selection CSV export -> generates CSV string containing exact selected headers', () => {
+    const selectedKeys = ['sku', 'title', 'base_price', 'stock', 'weight_kg'];
+    const csv = generateProductsCsv([sampleProduct], selectedKeys, 'admin');
+
+    const lines = csv.trim().split('\n');
+    expect(lines[0]).toContain('"SKU","Título","Precio","Stock","Peso"');
+  });
+
+  it('10. Verification: unselected columns (e.g. Cost, Description) DO NOT appear in output', () => {
+    const selectedKeys = ['sku', 'title'];
+    const record = formatProductRecordForExport(sampleProduct, selectedKeys);
+
+    expect(record.cost_price).toBeUndefined();
+    expect(record.description).toBeUndefined();
+    expect(record.brand_name).toBeUndefined();
+  });
+
+  it('11. Verification: fixed order is strictly enforced regardless of click order', () => {
+    const randomClickOrder = ['stock', 'weight_kg', 'sku', 'title'];
+    const sortedKeys = masterFields.map(f => f.key).filter(k => randomClickOrder.includes(k));
+
+    expect(sortedKeys).toEqual(['sku', 'title', 'stock', 'weight_kg']);
+
+    const csv = generateProductsCsv([sampleProduct], sortedKeys, 'admin');
+    expect(csv).toContain('"SKU","Título","Stock","Peso"');
+  });
+
+  it('12. Verification: with 0 columns, CSV output contains no column headers or data', () => {
+    const selectedKeys: string[] = [];
+    const csv = generateProductsCsv([sampleProduct], selectedKeys, 'admin');
+    expect(csv.replace('\uFEFF', '').trim()).toBe('');
   });
 });

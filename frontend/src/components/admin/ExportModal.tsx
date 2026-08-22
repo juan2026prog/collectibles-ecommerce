@@ -126,8 +126,13 @@ export default function ExportModal({
 
   const toggleKey = (key: string) => {
     setSelectedKeys(prev => {
-      const updated = prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key];
-      return masterFields.map(f => f.key).filter(k => updated.includes(k));
+      const set = new Set(prev);
+      if (set.has(key)) {
+        set.delete(key);
+      } else {
+        set.add(key);
+      }
+      return masterFields.map(f => f.key).filter(k => set.has(k));
     });
   };
 
@@ -440,7 +445,7 @@ export default function ExportModal({
                 return (
                   <label
                     key={field.key}
-                    onClick={() => !exporting && toggleKey(field.key)}
+                    htmlFor={`col-check-${field.key}`}
                     className={`flex items-center gap-2.5 p-2.5 rounded-xl border cursor-pointer select-none transition-all text-xs font-semibold ${
                       isSelected
                         ? 'border-emerald-400 bg-white text-slate-800 shadow-sm'
@@ -448,11 +453,12 @@ export default function ExportModal({
                     }`}
                   >
                     <input
+                      id={`col-check-${field.key}`}
                       type="checkbox"
                       checked={isSelected}
                       disabled={exporting}
-                      onChange={() => {}}
-                      className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 shrink-0 pointer-events-none"
+                      onChange={() => !exporting && toggleKey(field.key)}
+                      className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 shrink-0 cursor-pointer"
                     />
                     <span className="truncate">{field.label}</span>
                   </label>
@@ -465,6 +471,13 @@ export default function ExportModal({
           {!isCalculatingCount && scopeCount === 0 && (
             <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-800 text-xs font-semibold flex items-center gap-2">
               <span className="font-bold">Nota:</span> No hay productos que coincidan con los criterios seleccionados.
+            </div>
+          )}
+
+          {/* Warning banner when columns are 0 */}
+          {selectedKeys.length === 0 && (
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-800 text-xs font-semibold flex items-center gap-2">
+              <span className="font-bold">Nota:</span> Seleccioná al menos una columna para exportar.
             </div>
           )}
 

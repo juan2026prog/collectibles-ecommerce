@@ -40,10 +40,37 @@ test.describe('Admin Product Export Module E2E', () => {
       await csvFormatButton.click();
     }
 
-    // 7. Verify Action Button displays GENERAR Y DESCARGAR with total count
+    // 7. Test Column Checkboxes: Quitar todas, select individual columns
+    const removeAllBtn = page.locator('button', { hasText: 'Quitar todas' });
+    await expect(removeAllBtn).toBeVisible();
+    await removeAllBtn.click();
+
+    // Counter should show 0 columns selected
+    await expect(page.locator('text=0 de')).toBeVisible();
+
+    // Button should be disabled with 0 columns
     const generateButton = page.locator('button', { hasText: 'GENERAR Y DESCARGAR' }).first();
-    await expect(generateButton).toBeVisible();
+    await expect(generateButton).toBeDisabled();
+
+    // Click individual column label/checkbox (SKU)
+    const skuLabel = page.locator('label', { hasText: 'SKU' }).first();
+    await skuLabel.click();
+
+    // Counter should update to 1 de
+    await expect(page.locator('text=1 de')).toBeVisible();
     await expect(generateButton).toBeEnabled();
+
+    // Click Título label
+    const titleLabel = page.locator('label', { hasText: 'Título' }).first();
+    await titleLabel.click();
+
+    // Counter should update to 2 de
+    await expect(page.locator('text=2 de')).toBeVisible();
+
+    // Click "Seleccionar todas"
+    const selectAllBtn = page.locator('button', { hasText: 'Seleccionar todas' });
+    await selectAllBtn.click();
+    await expect(page.locator('text=27 de 27')).toBeVisible();
 
     // 8. Trigger Download event and verify event promise
     const downloadPromise = page.waitForEvent('download', { timeout: 5000 }).catch(() => null);
