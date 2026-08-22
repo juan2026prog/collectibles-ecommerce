@@ -2020,10 +2020,18 @@ export default function VProducts() {
       {showExport && (
         <ExportModal
           onClose={() => setShowExport(false)}
-          allProducts={products}
-          filteredProducts={products}
+          initialFilters={{
+            search: search || '',
+            categoryId: filterCategory || '',
+            brandId: filterBrand || '',
+            vendorId: vendor?.id || 'all',
+            mbeType: '',
+            argentinaStatus: '',
+            status: ''
+          }}
           selectedProductIds={selectedProducts}
           userRole="vendor"
+          vendorId={vendor?.id || null}
         />
       )}
 

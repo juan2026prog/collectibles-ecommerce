@@ -6,6 +6,7 @@ import { MediaPickerModal } from '../../components/MediaPickerModal';
 import ImportModal from '../../components/admin/ImportModal';
 import ExportModal from '../../components/admin/ExportModal';
 import type { ParsedProduct } from '../../lib/bulkImportUtils';
+import type { ProductFilterState } from '../../lib/productFilterTypes';
 import { getProductImage } from '../../lib/imageUtils';
 import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
@@ -1271,10 +1272,28 @@ export default function AdminProducts() {
             </label>
           </div>
         </div>
-        <div className="flex gap-3">
-          <button onClick={() => setShowExport(true)} className="btn-secondary px-4 py-2 text-sm gap-2 border-slate-300 text-slate-700 hover:bg-slate-50"><Download className="w-4 h-4 text-emerald-600" /> Exportar</button>
-          <button onClick={() => setShowImport(true)} className="btn-secondary px-4 py-2 text-sm gap-2 border-slate-300 text-slate-700 hover:bg-slate-50"><Upload className="w-4 h-4 text-blue-600" /> Importar</button>
-          <button onClick={openCreate} className="btn-primary gap-2 bg-blue-600 hover:bg-blue-700 border-blue-600"><Plus className="w-5 h-5" /> Añadir nuevo</button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setShowExport(true)}
+            className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm flex items-center gap-2 transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+          >
+            <Download className="w-4 h-4 text-emerald-600" /> Exportar
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowImport(true)}
+            className="bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm flex items-center gap-2 transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+          >
+            <Upload className="w-4 h-4 text-blue-600" /> Importar
+          </button>
+          <button
+            type="button"
+            onClick={openCreate}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs sm:text-sm flex items-center gap-2 transition-all shadow-lg shadow-blue-600/20 cursor-pointer"
+          >
+            <Plus className="w-5 h-5" /> Añadir nuevo
+          </button>
         </div>
       </div>
 
@@ -2008,8 +2027,15 @@ export default function AdminProducts() {
       {showExport && (
         <ExportModal
           onClose={() => setShowExport(false)}
-          allProducts={products}
-          filteredProducts={products}
+          initialFilters={{
+            search,
+            categoryId: filterCategory,
+            brandId: filterBrand,
+            vendorId: filterVendor,
+            mbeType: filterMbe,
+            argentinaStatus: filterArgentina,
+            status: ''
+          }}
           selectedProductIds={selectedProducts}
           userRole="admin"
         />

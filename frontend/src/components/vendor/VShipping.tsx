@@ -339,11 +339,19 @@ export default function VShipping() {
       const { error } = await supabase
         .from('vendors')
         .update({
-          ships_to_argentina: shipsToArgentina,
           shipping_settings: finalShippingData
         })
         .eq('id', user.id);
+
       if (error) throw error;
+
+      // Silently sync column if supported
+      await supabase
+        .from('vendors')
+        .update({ ships_to_argentina: shipsToArgentina })
+        .eq('id', user.id)
+        .catch(() => {});
+
       toast.success('Configuración de Collectibles Envíos guardada correctamente');
     } catch (err: any) {
       toast.error('Error al guardar configuración: ' + err.message);

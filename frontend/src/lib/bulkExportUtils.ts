@@ -70,7 +70,7 @@ export function formatProductRecordForExport(
   // Format gallery images
   let galleryStr = '';
   if (Array.isArray(item.gallery)) {
-    galleryStr = item.gallery.map(g => typeof g === 'string' ? g : g.url).filter(Boolean).join(' | ');
+    galleryStr = item.gallery.map(g => typeof g === 'string' ? g : (g as any).url).filter(Boolean).join(' | ');
   } else if (item.metadata?.gallery) {
     galleryStr = Array.isArray(item.metadata.gallery) ? item.metadata.gallery.join(' | ') : String(item.metadata.gallery);
   }
@@ -170,22 +170,6 @@ export function formatProductRecordForExport(
   });
 
   return record;
-}
-
-/**
- * Escapes a single cell value for CSV output.
- */
-function escapeCsvCell(value: string): string {
-  if (value === null || value === undefined) return '""';
-  const str = String(value);
-  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
-  };
-
-  selectedKeys.forEach(k => {
-    row[k] = getVal(k);
-  });
-
-  return row;
 }
 
 /**

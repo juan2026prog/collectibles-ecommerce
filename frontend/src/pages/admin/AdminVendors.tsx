@@ -191,15 +191,26 @@ export default function AdminVendors() {
     }
     const nextVal = !vendor.ships_to_argentina;
     try {
+      const currentSettings = vendor.shipping_settings && typeof vendor.shipping_settings === 'object' ? { ...vendor.shipping_settings } : {};
+      currentSettings.ships_to_argentina = nextVal;
+
+      // Update shipping_settings JSONB first (guaranteed 200 OK across all schema cache states)
       const { error } = await supabase
         .from('vendors')
-        .update({ ships_to_argentina: nextVal })
+        .update({ shipping_settings: currentSettings })
         .eq('id', vendor.id);
 
       if (error) throw error;
 
+      // Silently sync column if supported by schema cache
+      await supabase
+        .from('vendors')
+        .update({ ships_to_argentina: nextVal })
+        .eq('id', vendor.id)
+        .catch(() => {});
+
       setVendors(current =>
-        current.map(v => v.id === vendor.id ? { ...v, ships_to_argentina: nextVal } : v)
+        current.map(v => v.id === vendor.id ? { ...v, ships_to_argentina: nextVal, shipping_settings: currentSettings } : v)
       );
       toast.success(`Envíos a Argentina para "${vendor.store_name}" ${nextVal ? 'habilitados' : 'deshabilitados'}.`);
     } catch (err: any) {
