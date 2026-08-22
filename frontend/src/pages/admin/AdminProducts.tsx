@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { Plus, Pencil, Trash2, Search, Eye, X, Upload, Save, AlertCircle, Check, Loader2, ImageIcon, ChevronUp, ChevronDown, Trash, Copy, AlertTriangle, ExternalLink, CheckCircle2, Truck } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Eye, X, Upload, Download, Save, AlertCircle, Check, Loader2, ImageIcon, ChevronUp, ChevronDown, Trash, Copy, AlertTriangle, ExternalLink, CheckCircle2, Truck } from 'lucide-react';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
 import ImportModal from '../../components/admin/ImportModal';
+import ExportModal from '../../components/admin/ExportModal';
 import type { ParsedProduct } from '../../lib/bulkImportUtils';
 import { getProductImage } from '../../lib/imageUtils';
 import { useToast } from '../../components/admin/Toast';
@@ -142,6 +143,7 @@ export default function AdminProducts() {
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showExport, setShowExport] = useState(false);
   const [showMediaPicker, setShowMediaPicker] = useState<false | 'featured' | 'gallery'>(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [loadingAI, setLoadingAI] = useState(false);
@@ -1270,7 +1272,8 @@ export default function AdminProducts() {
           </div>
         </div>
         <div className="flex gap-3">
-          <button onClick={() => setShowImport(true)} className="btn-secondary px-4 py-2 text-sm gap-2"><Upload className="w-4 h-4" /> Importar</button>
+          <button onClick={() => setShowExport(true)} className="btn-secondary px-4 py-2 text-sm gap-2 border-slate-300 text-slate-700 hover:bg-slate-50"><Download className="w-4 h-4 text-emerald-600" /> Exportar</button>
+          <button onClick={() => setShowImport(true)} className="btn-secondary px-4 py-2 text-sm gap-2 border-slate-300 text-slate-700 hover:bg-slate-50"><Upload className="w-4 h-4 text-blue-600" /> Importar</button>
           <button onClick={openCreate} className="btn-primary gap-2 bg-blue-600 hover:bg-blue-700 border-blue-600"><Plus className="w-5 h-5" /> Añadir nuevo</button>
         </div>
       </div>
@@ -1992,7 +1995,24 @@ export default function AdminProducts() {
       />
 
       {showImport && (
-        <ImportModal onClose={() => setShowImport(false)} onConfirm={handleImportConfirm} />
+        <ImportModal
+          onClose={() => setShowImport(false)}
+          onSuccess={() => {
+            fetchProducts();
+            fetchMeta();
+          }}
+          userRole="admin"
+        />
+      )}
+
+      {showExport && (
+        <ExportModal
+          onClose={() => setShowExport(false)}
+          allProducts={products}
+          filteredProducts={products}
+          selectedProductIds={selectedProducts}
+          userRole="admin"
+        />
       )}
 
       {/* ⚠️ ADMIN DUPLICATE OVERRIDE MODAL ⚠️ */}

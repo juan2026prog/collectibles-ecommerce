@@ -626,9 +626,13 @@ export default function VShipping() {
             </div>
 
             <div className="p-3 bg-white rounded-lg border border-sky-100 text-xs text-slate-700">
-              {shipsToArgentina || (vendorObj?.slug === 'collectibles' || vendorObj?.store_name?.toLowerCase().includes('collectibles')) ? (
+              {vendorObj?.status && vendorObj.status !== 'active' ? (
+                <p className="text-amber-700 font-bold">
+                  ⚠️ Tu cuenta no se encuentra activa actualmente (Estado: {vendorObj.status === 'suspended' ? 'Suspendido' : 'Inactivo'}). Esta configuración tendrá efecto cuando Collectibles reactive tu cuenta.
+                </p>
+              ) : shipsToArgentina || (vendorObj?.slug === 'collectibles' || vendorObj?.store_name?.toLowerCase().includes('collectibles')) ? (
                 <p className="text-emerald-700 font-medium">
-                  ✓ Al activar esta opción, tus productos podrán ofrecerse a compradores en Argentina siempre que tengan peso, dimensiones y tipo de empaque MBE configurados correctamente.
+                  ✓ Al activar esta opción, tus productos podrán venderse a compradores de Argentina siempre que cumplan los requisitos logísticos de peso, dimensiones y tipo de empaque.
                 </p>
               ) : (
                 <p className="text-amber-700 font-medium">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Truck, MapPin, Save, QrCode, FileText, CheckCircle2, ChevronRight, X, Edit2, Check,
   ToggleLeft, ToggleRight, Settings, Info, AlertCircle, RefreshCw, Calculator, Plus, Trash2,
@@ -826,6 +826,85 @@ Intentos Cola: ${qItem?.attempts || 0}
       setIsSaving(false);
     }
   }
+
+  const filteredShipments = useMemo(() => {
+    return adminShipments.filter(s => {
+      // 1. Card Filter
+      if (selectedCardFilter === 'delivered_today') {
+        if (s.shipping_status !== 'delivered') return false;
+        const delDate = s.delivered_at ? new Date(s.delivered_at) : new Date(s.created_at);
+        if (delDate.toDateString() !== new Date().toDateString()) return false;
+      } else if (selectedCardFilter === 'retry_needed') {
+        const qItem = adminQueue.find(q => q.shipment_id === s.id);
+        if (!qItem || qItem.status !== 'retrying') return false;
+      } else if (selectedCardFilter === 'pending_label') {
+        if (s.shipping_status !== 'created' || s.shipping_label_url) return false;
+      } else if (selectedCardFilter === 'manual') {
+        if (!['manual', 'pickup'].includes(s.provider_key)) return false;
+      }
+
+      // 2. Search text filter
+      if (filterSearch.trim()) {
+        const searchLower = filterSearch.trim().toLowerCase();
+        const orderId = (s.order_id || '').toLowerCase();
+        const suborderNum = (s.suborder?.suborder_number || '').toLowerCase();
+        const ref = (s.internal_reference || '').toLowerCase();
+        const tracking = (s.tracking_code || '').toLowerCase();
+        const vendor = (s.suborder?.vendor_store_name || 'collectibles').toLowerCase();
+        const courier = (s.provider_key || '').toLowerCase();
+        const itemsText = (s.suborder?.order_items || []).map((i: any) => i.products?.title || '').join(' ').toLowerCase();
+
+        const match = orderId.includes(searchLower) ||
+          suborderNum.includes(searchLower) ||
+          ref.includes(searchLower) ||
+          tracking.includes(searchLower) ||
+          vendor.includes(searchLower) ||
+          courier.includes(searchLower) ||
+          itemsText.includes(searchLower);
+
+        if (!match) return false;
+      }
+
+      // 3. Courier filter
+      if (filterCourier !== 'all') {
+        if ((s.provider_key || '').toLowerCase() !== filterCourier.toLowerCase()) return false;
+      }
+
+      // 4. Vendor filter
+      if (filterVendor !== 'all') {
+        const vName = s.suborder?.vendor_store_name || 'Collectibles';
+        if (vName !== filterVendor) return false;
+      }
+
+      // 5. Status filter
+      if (filterStatus !== 'all') {
+        if (s.shipping_status !== filterStatus) return false;
+      }
+
+      // 6. SLA filter
+      if (filterSla !== 'all') {
+        const hasGuide = !!s.guide_created_at;
+        const createdMs = new Date(s.created_at).getTime();
+        const isBreached = !hasGuide && (Date.now() - createdMs > 4 * 3600000);
+        if (filterSla === 'delayed' && !isBreached) return false;
+        if (filterSla === 'ok' && isBreached) return false;
+      }
+
+      // 7. Date Range filter
+      if (filterDateRange !== 'all') {
+        const createdDate = new Date(s.created_at);
+        const now = new Date();
+        if (filterDateRange === 'today') {
+          if (createdDate.toDateString() !== now.toDateString()) return false;
+        } else if (filterDateRange === 'week') {
+          const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 3600000);
+          if (createdDate < sevenDaysAgo) return false;
+        }
+      }
+
+      return true;
+    });
+  }, [adminShipments, adminQueue, selectedCardFilter, filterSearch, filterCourier, filterVendor, filterStatus, filterSla, filterDateRange]);
 
   return (
     <div className="max-w-5xl space-y-8 pb-12">
