@@ -8,24 +8,38 @@ export interface CatalogMetadata {
   categories: { id: string; name: string; parent_id: string | null }[];
   licenses: { id: string; name: string }[];
   vendors: { id: string; store_name: string }[];
+  tags: { id: string; name: string }[];
+  badges: string[];
 }
+
+export const OFFICIAL_SYSTEM_BADGES = [
+  'NEW',
+  'PRE-ORDER',
+  'SALE',
+  'EXCLUSIVE COLLECTIBLES',
+  'NOVEDAD',
+  'RESERVA'
+];
 
 /**
  * Fetches current active catalog metadata from Supabase.
  */
 export async function fetchCatalogMetadataForTemplate(): Promise<CatalogMetadata> {
-  const [{ data: brands }, { data: categories }, { data: licenses }, { data: vendors }] = await Promise.all([
+  const [{ data: brands }, { data: categories }, { data: licenses }, { data: vendors }, { data: tags }] = await Promise.all([
     supabase.from('brands').select('id, name').order('name'),
     supabase.from('categories').select('id, name, parent_id').order('name'),
     supabase.from('licenses').select('id, name').eq('is_active', true).order('name'),
-    supabase.from('vendors').select('id, store_name').order('store_name')
+    supabase.from('vendors').select('id, store_name').order('store_name'),
+    supabase.from('tags').select('id, name').order('name')
   ]);
 
   return {
     brands: brands || [],
     categories: categories || [],
     licenses: licenses || [],
-    vendors: vendors || []
+    vendors: vendors || [],
+    tags: tags || [],
+    badges: OFFICIAL_SYSTEM_BADGES
   };
 }
 
@@ -66,6 +80,8 @@ export async function generateXlsxImportTemplate(
   const vendorNames = metadata.vendors.map(v => v.store_name);
   const conditions = CONDITION_OPTIONS.map(c => c.value);
   const statuses = ['published', 'draft', 'archived'];
+  const badges = metadata.badges && metadata.badges.length > 0 ? metadata.badges : OFFICIAL_SYSTEM_BADGES;
+  const tagNames = metadata.tags ? metadata.tags.map(t => t.name) : [];
 
   const maxListRows = Math.max(
     mbeTypes.length,
@@ -77,10 +93,24 @@ export async function generateXlsxImportTemplate(
     vendorNames.length,
     conditions.length,
     statuses.length,
+    badges.length,
+    tagNames.length,
     1
   );
 
-  const listsHeaders = ['TIPO_MBE', 'ESTADO_AR', 'MARCAS', 'CATEGORIAS', 'SUBCATEGORIAS', 'LICENCIAS', 'VENDEDORES', 'CONDICIONES', 'ESTADOS'];
+  const listsHeaders = [
+    'TIPO_MBE',
+    'ESTADO_AR',
+    'MARCAS',
+    'CATEGORIAS',
+    'SUBCATEGORIAS',
+    'LICENCIAS',
+    'VENDEDORES',
+    'CONDICIONES',
+    'ESTADOS',
+    'COCARDAS',
+    'ETIQUETAS'
+  ];
   const listsRows: string[][] = [];
 
   for (let r = 0; r < maxListRows; r++) {
@@ -93,7 +123,9 @@ export async function generateXlsxImportTemplate(
       licenseNames[r] || '',
       vendorNames[r] || '',
       conditions[r] || '',
-      statuses[r] || ''
+      statuses[r] || '',
+      badges[r] || '',
+      tagNames[r] || ''
     ]);
   }
 
