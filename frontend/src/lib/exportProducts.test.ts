@@ -402,6 +402,10 @@ describe('Product Export & Import System Audit', () => {
     expect(xlsxHeaders).toContain('Descripción');
     expect(xlsxHeaders).toContain('Descripción corta');
     expect(xlsxHeaders).toContain('Contenido');
+    expect(xlsxHeaders).toContain('Destacado');
+    expect(xlsxHeaders).toContain('Título SEO');
+    expect(xlsxHeaders).toContain('Descripción SEO');
+    expect(xlsxHeaders).toContain('URL del Video');
     expect(xlsxHeaders).toContain('Imagen principal');
     expect(xlsxHeaders).toContain('Imágenes adicionales');
     expect(xlsxHeaders).toContain('Fecha creación');
@@ -415,6 +419,13 @@ describe('Product Export & Import System Audit', () => {
 
     expect(csvHeaders.length).toBe(expectedLength);
     expect(csvHeaders).toEqual(expectedLabels);
+    expect(csvHeaders).toContain('Slug / URL Friendly');
+    expect(csvHeaders).toContain('URL del producto');
+    expect(csvHeaders).toContain('Contenido');
+    expect(csvHeaders).toContain('Destacado');
+    expect(csvHeaders).toContain('Título SEO');
+    expect(csvHeaders).toContain('Descripción SEO');
+    expect(csvHeaders).toContain('URL del Video');
   });
 
   it('18. Forensic Deduplication Test: Product dataset has 100% ID uniqueness', () => {

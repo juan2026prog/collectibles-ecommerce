@@ -638,7 +638,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
   },
   {
     key: 'video_url',
-    label: 'URL de video',
+    label: 'URL del Video',
     description: 'Enlace a YouTube o MP4 promocional del producto.',
     order: 33,
     type: 'url',
