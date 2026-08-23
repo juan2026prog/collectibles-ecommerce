@@ -5,7 +5,7 @@ import { generateProductsCsv, generateProductsXlsxBlob, formatProductRecordForEx
 import type { ExportProductItem } from './bulkExportUtils';
 import { normalizeRawProductForExport } from './exportProductsEngine';
 import { getMasterFields } from './productFieldRegistry';
-import { generateXlsxImportTemplate } from './bulkTemplateGenerator';
+import { generateXlsxImportTemplate, sanitizeExcelDefinedName } from './bulkTemplateGenerator';
 import { parseAndPreviewImportFile } from './bulkImportEngine';
 import * as XLSX from 'xlsx';
 
@@ -288,9 +288,6 @@ describe('Product Export & Import System Audit', () => {
 
     expect(preview.rows.length).toBe(1);
     const row = preview.rows[0];
-    if (row.errors.length > 0) {
-      console.log('Test 13 errors:', row.errors);
-    }
     expect(row.operation).toBe('update');
     // Verify dbPayload for UPDATE row omits weight_kg so existing DB weight 0.450 is NEVER erased
     expect(row.dbPayload.weight_kg).toBeUndefined();
@@ -329,6 +326,24 @@ describe('Product Export & Import System Audit', () => {
     const record = formatProductRecordForExport(sampleProduct, vendorKeys, 'vendor');
     expect(record.cost_price).toBeUndefined();
     expect(record.vendor_store_name).toBeUndefined();
+  });
+
+  it('16. Collision Test: Category labels that normalize to identical strings generate unique, non-colliding Defined Names', () => {
+    const tracker = new Set<string>();
+    
+    // Test case 1: "A/B" vs "A-B" with stable ID suffixes
+    const name1 = sanitizeExcelDefinedName("A/B", "cat-001", tracker);
+    const name2 = sanitizeExcelDefinedName("A-B", "cat-002", tracker);
+    expect(name1).not.toEqual(name2);
+    expect(name1).toMatch(/^CAT_A_B_/);
+    expect(name2).toMatch(/^CAT_A_B_/);
+
+    // Test case 2: "Pokémon" vs "Pokemon" without idSuffix
+    const name3 = sanitizeExcelDefinedName("Pokémon", undefined, tracker);
+    const name4 = sanitizeExcelDefinedName("Pokemon", undefined, tracker);
+    expect(name3).not.toEqual(name4);
+    expect(name3).toBe('CAT_POKEMON');
+    expect(name4).toBe('CAT_POKEMON_1');
   });
 
 });

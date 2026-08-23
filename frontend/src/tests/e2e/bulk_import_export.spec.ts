@@ -105,4 +105,40 @@ test.describe('Bulk Product Import / Export System E2E Tests', () => {
     await page.waitForTimeout(500);
   });
 
+  test('6. Real Import Upload Valid File Preview', async ({ page }) => {
+    const importBtn = page.getByRole('button', { name: /Importar/i });
+    await importBtn.click();
+
+    const validCsvContent = 'SKU,Título,Precio,Stock\nSKU-E2E-TEST1,Producto Playwright Test,1990,5';
+    
+    // Upload valid CSV file buffer directly into input
+    await page.setInputFiles('input[type="file"]', {
+      name: 'valid_import.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(validCsvContent, 'utf-8')
+    });
+
+    // Verify preview screen statistics and SKU row
+    await expect(page.getByText('Filas Leídas', { exact: false })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('SKU-E2E-TEST1')).toBeVisible();
+  });
+
+  test('7. Real Import Upload Invalid File Error Rejection', async ({ page }) => {
+    const importBtn = page.getByRole('button', { name: /Importar/i });
+    await importBtn.click();
+
+    const invalidCsvContent = 'SKU,Título,Precio,Stock,Tipo MBE\nSKU-E2E-ERR,Producto Error,100,5,PRUEBA123';
+
+    // Upload invalid CSV file buffer
+    await page.setInputFiles('input[type="file"]', {
+      name: 'invalid_mbe.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(invalidCsvContent, 'utf-8')
+    });
+
+    // Verify error detection in preview
+    await expect(page.getByText('no es un Tipo MBE válido', { exact: false })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Rechazadas', { exact: false })).toBeVisible();
+  });
+
 });

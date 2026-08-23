@@ -24,9 +24,15 @@ export const OFFICIAL_SYSTEM_BADGES = [
 /**
  * Sanitizes a category name into a 100% valid, collision-free Excel Defined Name.
  * Handles spaces, diacritics (tildes, ñ), slashes, ampersands, and numeric prefixes.
+ * Guarantees mathematical uniqueness via stable ID suffix and collision tracking set.
  */
-export function sanitizeExcelDefinedName(rawName: string): string {
+export function sanitizeExcelDefinedName(
+  rawName: string,
+  idSuffix?: string,
+  existingSet?: Set<string>
+): string {
   if (!rawName) return 'CAT_UNKNOWN';
+  
   const ascii = rawName
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -34,7 +40,29 @@ export function sanitizeExcelDefinedName(rawName: string): string {
     .replace(/_+/g, '_')
     .replace(/^_+|_+$/g, '');
 
-  return `CAT_${ascii}`.toUpperCase();
+  let baseName = `CAT_${ascii}`.toUpperCase();
+
+  // Attach clean ID suffix if provided
+  if (idSuffix) {
+    const cleanSuffix = idSuffix.replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase();
+    if (cleanSuffix) {
+      baseName = `${baseName}_${cleanSuffix}`;
+    }
+  }
+
+  // Deduplicate against existing Defined Names set
+  if (existingSet) {
+    let candidate = baseName;
+    let counter = 1;
+    while (existingSet.has(candidate)) {
+      candidate = `${baseName}_${counter}`;
+      counter++;
+    }
+    existingSet.add(candidate);
+    return candidate;
+  }
+
+  return baseName;
 }
 
 /**
@@ -260,11 +288,13 @@ export async function generateXlsxImportTemplate(
     { Name: 'CATEGORIAS', Ref: 'Listas!$D$2:$D$' + (mainCatNames.length + 1) }
   ];
 
+  const definedNameTracker = new Set<string>(['CATEGORIAS']);
+
   // Add Defined Name for each parent category using sanitizeExcelDefinedName
   mainCategories.forEach(parent => {
     const children = subcatByParent[parent.name] || [];
     if (children.length > 0) {
-      const definedName = sanitizeExcelDefinedName(parent.name);
+      const definedName = sanitizeExcelDefinedName(parent.name, parent.id, definedNameTracker);
       definedNames.push({
         Name: definedName,
         Ref: 'Listas!$E$2:$E$' + (allSubcatNames.length + 1)
