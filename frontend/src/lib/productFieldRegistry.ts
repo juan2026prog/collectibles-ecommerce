@@ -44,6 +44,7 @@ export interface ProductFieldDefinition {
 }
 
 export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
+  // --- IDENTIFICACIÓN ---
   {
     key: 'sku',
     label: 'SKU',
@@ -79,10 +80,44 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     exportResolver: p => p.title || ''
   },
   {
+    key: 'slug',
+    label: 'Slug',
+    description: 'Identificador amigable para URL (ej: figura-batman-legacy). Se genera automáticamente si se deja vacío.',
+    order: 3,
+    type: 'text',
+    exportable: true,
+    importable: true,
+    requiredForCreate: false,
+    requiredForPublish: false,
+    adminOnly: false,
+    nullable: true,
+    blankBehavior: 'ignore',
+    example: 'figura-batman-legacy',
+    synonyms: ['slug', 'url_slug', 'handle', 'permalink'],
+    exportResolver: p => p.slug || ''
+  },
+  {
+    key: 'product_url',
+    label: 'URL del producto',
+    description: 'URL pública completa del producto en Collectibles.uy (Campo calculado de solo lectura).',
+    order: 4,
+    type: 'url',
+    exportable: true,
+    importable: false,
+    adminOnly: false,
+    nullable: true,
+    blankBehavior: 'ignore',
+    example: 'https://collectibles.uy/p/figura-batman-legacy',
+    synonyms: ['product_url', 'url_producto', 'link', 'enlace'],
+    exportResolver: p => p.slug ? `https://collectibles.uy/p/${p.slug}` : ''
+  },
+
+  // --- CONTENIDO ---
+  {
     key: 'description',
     label: 'Descripción',
-    description: 'Descripción detallada en formato texto o HTML del producto.',
-    order: 3,
+    description: 'Descripción principal en texto plano del producto.',
+    order: 5,
     type: 'text',
     exportable: true,
     importable: true,
@@ -98,8 +133,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
   {
     key: 'short_description',
     label: 'Descripción corta',
-    description: 'Resumen conciso del producto para vistas rápidas.',
-    order: 4,
+    description: 'Resumen conciso del producto para tarjetas y listados.',
+    order: 6,
     type: 'text',
     exportable: true,
     importable: true,
@@ -108,35 +143,34 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     adminOnly: false,
     nullable: true,
     blankBehavior: 'ignore',
-    example: 'Edición exclusiva para coleccionistas.',
+    example: 'Edición limitada con 20 puntos de articulación.',
     synonyms: ['short_description', 'descripción corta', 'descripcion corta', 'resumen'],
     exportResolver: p => p.short_description || ''
   },
   {
-    key: 'brand_name',
-    label: 'Marca',
-    description: 'Nombre del fabricante o marca real del producto. Seleccionable desde lista vigente.',
-    order: 5,
-    type: 'relation',
+    key: 'content',
+    label: 'Contenido',
+    description: 'Contenido completo o especificaciones en formato texto/HTML. Se preserva el formato estructurado.',
+    order: 7,
+    type: 'text',
     exportable: true,
     importable: true,
     requiredForCreate: false,
-    requiredForPublish: true,
+    requiredForPublish: false,
     adminOnly: false,
     nullable: true,
     blankBehavior: 'ignore',
-    relationSource: 'brands',
-    relationValueField: 'id',
-    relationLabelField: 'name',
-    example: 'Hasbro',
-    synonyms: ['brand', 'brand_name', 'marca', 'fabricante', 'manufacturer'],
-    exportResolver: p => p.brand?.name || p.metadata?.brand_name || ''
+    example: '<p>Incluye 3 cabezas intercambiables y base de exhibición.</p>',
+    synonyms: ['content', 'contenido', 'body', 'body_html', 'long_description', 'detalles'],
+    exportResolver: p => p.content || p.metadata?.content || p.metadata?.description_html || ''
   },
+
+  // --- CLASIFICACIÓN ---
   {
     key: 'category_name',
     label: 'Categoría',
-    description: 'Categoría principal del catálogo.',
-    order: 6,
+    description: 'Nombre de la categoría principal del producto.',
+    order: 8,
     type: 'relation',
     exportable: true,
     importable: true,
@@ -149,14 +183,14 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     relationValueField: 'id',
     relationLabelField: 'name',
     example: 'Figuras de Acción',
-    synonyms: ['category', 'category_name', 'categoría', 'categoria', 'rubro', 'grupo'],
+    synonyms: ['category', 'category_name', 'categoría', 'categoria', 'rubro'],
     exportResolver: p => p.category?.name || p.metadata?.category_name || ''
   },
   {
     key: 'subcategory_name',
     label: 'Subcategoría',
-    description: 'Subcategoría vinculada a la Categoría seleccionada.',
-    order: 7,
+    description: 'Nombre de la subcategoría dependiente de la categoría principal.',
+    order: 9,
     type: 'relation',
     exportable: true,
     importable: true,
@@ -174,10 +208,30 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     exportResolver: p => p.subcategory?.name || p.metadata?.subcategory_name || ''
   },
   {
+    key: 'brand_name',
+    label: 'Marca',
+    description: 'Marca o fabricante del producto.',
+    order: 10,
+    type: 'relation',
+    exportable: true,
+    importable: true,
+    requiredForCreate: false,
+    requiredForPublish: true,
+    adminOnly: false,
+    nullable: true,
+    blankBehavior: 'ignore',
+    relationSource: 'brands',
+    relationValueField: 'id',
+    relationLabelField: 'name',
+    example: 'Hasbro',
+    synonyms: ['brand', 'brand_name', 'marca', 'fabricante', 'linea'],
+    exportResolver: p => p.brand?.name || p.metadata?.brand_name || ''
+  },
+  {
     key: 'license_name',
     label: 'Licencia',
-    description: 'Franquicia o propiedad intelectual asociada al producto (ej. Marvel, DC Comics, Star Wars).',
-    order: 8,
+    description: 'Franquicia o licencia oficial del producto.',
+    order: 11,
     type: 'relation',
     exportable: true,
     importable: true,
@@ -190,31 +244,33 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     relationValueField: 'id',
     relationLabelField: 'name',
     example: 'DC Comics',
-    synonyms: ['license', 'license_name', 'licencia', 'franquicia', 'franchise', 'propiedad'],
+    synonyms: ['license', 'license_name', 'licencia', 'franquicia'],
     exportResolver: p => p.license?.name || p.metadata?.license_name || ''
   },
+
+  // --- COMERCIAL ---
   {
     key: 'base_price',
     label: 'Precio',
-    description: 'Precio de venta al público en pesos uruguayos (UYU). Debe ser mayor a 0 para publicar.',
-    order: 9,
+    description: 'Precio de venta al público en la moneda local (UYU).',
+    order: 12,
     type: 'decimal',
     exportable: true,
     importable: true,
-    requiredForCreate: false,
+    requiredForCreate: true,
     requiredForPublish: true,
     adminOnly: false,
     nullable: false,
     blankBehavior: 'ignore',
     example: '2990.00',
-    synonyms: ['base_price', 'precio', 'price', 'precio base', 'precio de venta', 'unit price'],
+    synonyms: ['base_price', 'precio', 'price', 'pvp', 'monto'],
     exportResolver: p => p.base_price !== undefined && p.base_price !== null ? Number(p.base_price).toFixed(2) : '0.00'
   },
   {
     key: 'compare_at_price',
-    label: 'Precio anterior',
-    description: 'Precio anterior o de lista (precio tachado) para destacar descuento cuando compare_at_price > base_price.',
-    order: 10,
+    label: 'Precio oferta',
+    description: 'Precio anterior o tachado para mostrar descuentos visuales.',
+    order: 13,
     type: 'decimal',
     exportable: true,
     importable: true,
@@ -222,16 +278,16 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     requiredForPublish: false,
     adminOnly: false,
     nullable: true,
-    blankBehavior: 'ignore',
+    blankBehavior: 'erase',
     example: '3500.00',
-    synonyms: ['compare_at_price', 'precio_comparacion', 'precio anterior', 'precio oferta', 'precio lista'],
+    synonyms: ['compare_at_price', 'precio oferta', 'precio tachado', 'precio anterior', 'original_price'],
     exportResolver: p => p.compare_at_price !== undefined && p.compare_at_price !== null ? Number(p.compare_at_price).toFixed(2) : ''
   },
   {
     key: 'cost_price',
     label: 'Costo',
-    description: 'Costo interno de adquisición. Campo administrativo confidencial.',
-    order: 11,
+    description: 'Costo de adquisición del producto (Visible únicamente para Administradores).',
+    order: 14,
     type: 'decimal',
     exportable: true,
     importable: true,
@@ -239,33 +295,33 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     requiredForPublish: false,
     adminOnly: true,
     nullable: true,
-    blankBehavior: 'ignore',
+    blankBehavior: 'erase',
     example: '1800.00',
-    synonyms: ['cost_price', 'costo', 'cost', 'precio_costo', 'costo unitario'],
-    exportResolver: p => p.cost_price !== undefined && p.cost_price !== null ? Number(p.cost_price).toFixed(2) : (p.metadata?.cost_price ? Number(p.metadata.cost_price).toFixed(2) : '')
+    synonyms: ['cost_price', 'costo', 'cost', 'precio_costo'],
+    exportResolver: p => p.cost_price !== undefined && p.cost_price !== null ? Number(p.cost_price).toFixed(2) : ''
   },
   {
     key: 'stock',
     label: 'Stock',
-    description: 'Unidades disponibles en inventario. Número entero no negativo.',
-    order: 12,
+    description: 'Cantidad de unidades disponibles en inventario.',
+    order: 15,
     type: 'number',
     exportable: true,
     importable: true,
-    requiredForCreate: false,
+    requiredForCreate: true,
     requiredForPublish: true,
     adminOnly: false,
     nullable: false,
     blankBehavior: 'ignore',
     example: '15',
-    synonyms: ['stock', 'cantidad', 'inventario', 'qty', 'quantity', 'unidades'],
-    exportResolver: p => p.stock !== undefined && p.stock !== null ? String(p.stock) : (p.variants?.[0]?.inventory_count !== undefined ? String(p.variants[0].inventory_count) : '0')
+    synonyms: ['stock', 'cantidad', 'inventory', 'unidades', 'disponible'],
+    exportResolver: p => p.stock !== undefined && p.stock !== null ? String(p.stock) : '0'
   },
   {
-    key: 'condition',
-    label: 'Condición',
-    description: 'Estado físico del producto (New / Sealed, Open Box, Loose, etc.).',
-    order: 13,
+    key: 'is_featured',
+    label: 'Destacado',
+    description: 'Indica si el producto se destaca en la tienda principal (Sí / No).',
+    order: 16,
     type: 'enum',
     exportable: true,
     importable: true,
@@ -274,17 +330,22 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     adminOnly: false,
     nullable: true,
     blankBehavior: 'ignore',
-    allowedValues: CONDITION_OPTIONS.map(c => ({ value: c.value, label: `${c.value} (${c.label})` })),
-    example: 'new_sealed',
-    synonyms: ['condition', 'condición', 'product_condition', 'estado_fisico'],
-    exportResolver: p => p.condition || ''
+    allowedValues: [
+      { value: 'true', label: 'Sí' },
+      { value: 'false', label: 'No' }
+    ],
+    example: 'No',
+    synonyms: ['is_featured', 'destacado', 'featured'],
+    exportResolver: p => p.is_featured ? 'Sí' : 'No'
   },
+
+  // --- CONDICIÓN ---
   {
-    key: 'condition_notes',
-    label: 'Notas de condición',
-    description: 'Detalles específicos del estado o empaque (ej. caja golpeada, incompleto).',
-    order: 14,
-    type: 'text',
+    key: 'condition',
+    label: 'Condición',
+    description: 'Estado del producto (ej: Nuevo Sellado, Usado Impecable).',
+    order: 17,
+    type: 'enum',
     exportable: true,
     importable: true,
     requiredForCreate: false,
@@ -292,15 +353,35 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     adminOnly: false,
     nullable: true,
     blankBehavior: 'ignore',
-    example: 'Caja en excelente estado 9/10 sin abrir.',
-    synonyms: ['condition_notes', 'notas_estado', 'observaciones_estado', 'detalles_condicion'],
-    exportResolver: p => p.condition_notes || p.metadata?.condition_notes || ''
+    allowedValues: CONDITION_OPTIONS.map(c => ({ value: c.value, label: `${c.label} (${c.value})` })),
+    example: 'Nuevo Sellado (new_sealed)',
+    synonyms: ['condition', 'condición', 'condicion', 'estado_producto'],
+    exportResolver: p => getConditionLabel(p.condition)
   },
+  {
+    key: 'condition_notes',
+    label: 'Notas de condición',
+    description: 'Observaciones o detalles sobre el estado específico de la pieza o caja.',
+    order: 18,
+    type: 'text',
+    exportable: true,
+    importable: true,
+    requiredForCreate: false,
+    requiredForPublish: false,
+    adminOnly: false,
+    nullable: true,
+    blankBehavior: 'erase',
+    example: 'Caja con ligero desgaste en esquina superior derecha.',
+    synonyms: ['condition_notes', 'notas de condición', 'notas de condicion', 'detalles_condicion'],
+    exportResolver: p => p.condition_notes || ''
+  },
+
+  // --- IDENTIFICADORES ---
   {
     key: 'ean_upc',
     label: 'EAN / UPC',
-    description: 'Código de barras oficial (GTIN / EAN / UPC).',
-    order: 15,
+    description: 'Código de barras universal EAN-13, UPC o GTIN del fabricante.',
+    order: 19,
     type: 'text',
     exportable: true,
     importable: true,
@@ -310,14 +391,16 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     nullable: true,
     blankBehavior: 'ignore',
     example: '5010993792054',
-    synonyms: ['ean_upc', 'gtin', 'upc', 'ean', 'codigo_barras', 'barcode'],
-    exportResolver: p => p.ean_upc || p.metadata?.ean_upc || p.metadata?.gtin || ''
+    synonyms: ['ean_upc', 'ean', 'upc', 'gtin', 'codigo_barras', 'barcode'],
+    exportResolver: p => p.ean_upc || p.metadata?.gtin || p.metadata?.ean_upc || ''
   },
+
+  // --- LOGÍSTICA ---
   {
     key: 'weight_kg',
-    label: 'Peso',
-    description: 'Peso del paquete en kilogramos (kg). Ejemplo: 0.450',
-    order: 16,
+    label: 'Peso (kg)',
+    description: 'Peso físico del producto empaquetado en kilogramos.',
+    order: 20,
     type: 'decimal',
     exportable: true,
     importable: true,
@@ -326,15 +409,15 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     adminOnly: false,
     nullable: true,
     blankBehavior: 'ignore',
-    example: '0.450',
-    synonyms: ['weight_kg', 'peso', 'weight', 'peso_kg', 'peso (kg)'],
-    exportResolver: p => p.weight_kg !== undefined && p.weight_kg !== null ? String(p.weight_kg) : ''
+    example: '0.45',
+    synonyms: ['weight_kg', 'peso', 'weight', 'peso_kg'],
+    exportResolver: p => p.weight_kg !== undefined && p.weight_kg !== null ? Number(p.weight_kg).toFixed(3) : ''
   },
   {
     key: 'dimensions_length',
-    label: 'Largo',
-    description: 'Largo del empaque en centímetros (cm).',
-    order: 17,
+    label: 'Largo (cm)',
+    description: 'Largo del paquete en centímetros.',
+    order: 21,
     type: 'decimal',
     exportable: true,
     importable: true,
@@ -345,13 +428,13 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     blankBehavior: 'ignore',
     example: '25.0',
     synonyms: ['dimensions_length', 'largo', 'length', 'largo_cm'],
-    exportResolver: p => p.dimensions_length !== null && p.dimensions_length !== undefined ? String(p.dimensions_length) : ''
+    exportResolver: p => p.dimensions_length !== undefined && p.dimensions_length !== null ? Number(p.dimensions_length).toFixed(1) : ''
   },
   {
     key: 'dimensions_width',
-    label: 'Ancho',
-    description: 'Ancho del empaque en centímetros (cm).',
-    order: 18,
+    label: 'Ancho (cm)',
+    description: 'Ancho del paquete en centímetros.',
+    order: 22,
     type: 'decimal',
     exportable: true,
     importable: true,
@@ -362,13 +445,13 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     blankBehavior: 'ignore',
     example: '15.0',
     synonyms: ['dimensions_width', 'ancho', 'width', 'ancho_cm'],
-    exportResolver: p => p.dimensions_width !== null && p.dimensions_width !== undefined ? String(p.dimensions_width) : ''
+    exportResolver: p => p.dimensions_width !== undefined && p.dimensions_width !== null ? Number(p.dimensions_width).toFixed(1) : ''
   },
   {
     key: 'dimensions_height',
-    label: 'Alto',
-    description: 'Alto del empaque en centímetros (cm).',
-    order: 19,
+    label: 'Alto (cm)',
+    description: 'Alto del paquete en centímetros.',
+    order: 23,
     type: 'decimal',
     exportable: true,
     importable: true,
@@ -379,13 +462,13 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     blankBehavior: 'ignore',
     example: '10.0',
     synonyms: ['dimensions_height', 'alto', 'height', 'alto_cm'],
-    exportResolver: p => p.dimensions_height !== null && p.dimensions_height !== undefined ? String(p.dimensions_height) : ''
+    exportResolver: p => p.dimensions_height !== undefined && p.dimensions_height !== null ? Number(p.dimensions_height).toFixed(1) : ''
   },
   {
     key: 'mbe_packaging_type',
     label: 'Tipo MBE',
-    description: 'Tipo de paquete/empaque MBE asignado (MBE PAK, MBE Caja o Sin definir).',
-    order: 20,
+    description: 'Tipo de empaque para logística MBE (MBE PAK, MBE Caja o Sin definir).',
+    order: 24,
     type: 'enum',
     exportable: true,
     importable: true,
@@ -397,26 +480,20 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     allowedValues: [
       { value: 'mbe_pak', label: 'MBE PAK' },
       { value: 'mbe_caja', label: 'MBE Caja' },
-      { value: 'none', label: 'Sin definir' }
+      { value: 'unclassified', label: 'Sin definir' }
     ],
     example: 'MBE PAK',
-    synonyms: ['mbe_packaging_type', 'tipo mbe', 'tipo_mbe', 'mbe_type', 'mbe_service_type', 'packaging_type', 'empaque_mbe', 'mbe'],
-    exportResolver: p => {
-      const val = p.metadata?.packaging_type || p.metadata?.mbe_service_type || p.mbe_packaging_type;
-      if (!val || val === 'none') return '';
-      return getMbePackagingLabel(val);
-    }
+    synonyms: ['mbe_packaging_type', 'tipo mbe', 'mbe_type', 'empaque mbe', 'mbe_packaging'],
+    exportResolver: p => getMbePackagingLabel(p.metadata?.packaging_type || p.metadata?.mbe_service_type)
   },
   {
     key: 'argentina_shipping_status',
     label: 'Estado AR',
-    description: 'Estado de logística e idoneidad para envío a Argentina (Envío automático o Requiere cotización).',
-    order: 21,
+    description: 'Estado de elegibilidad para envíos a Argentina (Calculado automáticamente).',
+    order: 25,
     type: 'enum',
     exportable: true,
-    importable: true,
-    requiredForCreate: false,
-    requiredForPublish: false,
+    importable: false,
     adminOnly: false,
     nullable: false,
     blankBehavior: 'ignore',
@@ -425,14 +502,19 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
       { value: 'quote', label: 'Requiere cotización' }
     ],
     example: 'Envío automático',
-    synonyms: ['argentina_shipping_status', 'estado ar', 'estado_ar', 'ar_status', 'argentina_status', 'envio_ar', 'envio_argentina'],
-    exportResolver: p => calculateArgentinaShippingStatus(p).isEligible ? 'Envío automático' : 'Requiere cotización'
+    synonyms: ['argentina_shipping_status', 'estado ar', 'argentina_status', 'envio_argentina'],
+    exportResolver: p => {
+      const status = calculateArgentinaShippingStatus(p);
+      return status.isEligible ? 'Envío automático' : 'Requiere cotización';
+    }
   },
+
+  // --- MARKETPLACE & SEO ---
   {
     key: 'vendor_store_name',
     label: 'Vendedor',
-    description: 'Nombre comercial de la tienda o vendedor propietario. Campo restringido a administradores.',
-    order: 22,
+    description: 'Vendedor o tienda responsable del producto (Visible únicamente para Administradores).',
+    order: 26,
     type: 'relation',
     exportable: true,
     importable: true,
@@ -445,31 +527,14 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     relationValueField: 'id',
     relationLabelField: 'store_name',
     example: 'Collectibles Oficial',
-    synonyms: ['vendor_store_name', 'vendedor', 'vendor', 'tienda', 'store'],
-    exportResolver: p => p.vendor?.store_name || p.metadata?.vendor_name || 'Collectibles Oficial'
+    synonyms: ['vendor', 'vendor_store_name', 'vendedor', 'tienda', 'seller'],
+    exportResolver: p => p.vendor?.store_name || p.vendor?.company_name || 'Collectibles Oficial'
   },
   {
-    key: 'tags',
-    label: 'Etiquetas',
-    description: 'Etiquetas separadas por la barra vertical | o comas.',
-    order: 23,
-    type: 'array',
-    exportable: true,
-    importable: true,
-    requiredForCreate: false,
-    requiredForPublish: false,
-    adminOnly: false,
-    nullable: true,
-    blankBehavior: 'ignore',
-    example: 'Edición Limitada | Exclusivo | Vintage',
-    synonyms: ['tags', 'etiquetas', 'tags_list'],
-    exportResolver: p => Array.isArray(p.tags) ? p.tags.map((t: any) => typeof t === 'string' ? t : t.name).filter(Boolean).join(' | ') : (p.metadata?.tags ? (Array.isArray(p.metadata.tags) ? p.metadata.tags.join(' | ') : String(p.metadata.tags)) : '')
-  },
-  {
-    key: 'badge',
-    label: 'Cocarda',
-    description: 'Texto promocional o distintivo en la tarjeta del producto (ej: Novedad, Destacado).',
-    order: 24,
+    key: 'seo_title',
+    label: 'Título SEO',
+    description: 'Título optimizado para motores de búsqueda (Google).',
+    order: 27,
     type: 'text',
     exportable: true,
     importable: true,
@@ -477,38 +542,71 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     requiredForPublish: false,
     adminOnly: false,
     nullable: true,
-    blankBehavior: 'ignore',
-    example: 'Novedad',
-    synonyms: ['badge', 'cocarda', 'distintivo', 'insignia'],
-    exportResolver: p => p.badge || p.metadata?.badge || ''
+    blankBehavior: 'erase',
+    example: 'Comprar Figura Batman Legacy 6 Pulgadas | Collectibles Uruguay',
+    synonyms: ['seo_title', 'meta_title', 'título seo', 'titulo seo'],
+    exportResolver: p => p.seo_title || p.meta_title || ''
   },
   {
-    key: 'status',
-    label: 'Estado',
-    description: 'Estado de publicación (published = publicado/activo, draft = borrador, archived = archivado/inactivo).',
-    order: 25,
-    type: 'enum',
+    key: 'seo_description',
+    label: 'Descripción SEO',
+    description: 'Meta descripción para los resultados de búsqueda de Google.',
+    order: 28,
+    type: 'text',
     exportable: true,
     importable: true,
     requiredForCreate: false,
     requiredForPublish: false,
     adminOnly: false,
-    nullable: false,
-    blankBehavior: 'ignore',
-    allowedValues: [
-      { value: 'published', label: 'published (Publicado / Activo)' },
-      { value: 'draft', label: 'draft (Borrador)' },
-      { value: 'archived', label: 'archived (Archivado / Inactivo)' }
-    ],
-    example: 'published',
-    synonyms: ['status', 'estado', 'estado_publicacion'],
-    exportResolver: p => p.status || 'draft'
+    nullable: true,
+    blankBehavior: 'erase',
+    example: 'Figura coleccionable original de Batman Legacy. Envíos a todo Uruguay y Argentina.',
+    synonyms: ['seo_description', 'meta_description', 'descripción seo', 'descripcion seo'],
+    exportResolver: p => p.seo_description || p.meta_description || ''
   },
+
+  // --- ORGANIZACIÓN ---
+  {
+    key: 'tags',
+    label: 'Etiquetas',
+    description: 'Etiquetas organizativas separadas por comas.',
+    order: 29,
+    type: 'array',
+    exportable: true,
+    importable: true,
+    requiredForCreate: false,
+    requiredForPublish: false,
+    adminOnly: false,
+    nullable: true,
+    blankBehavior: 'erase',
+    example: 'Batman, DC, Coleccionable, Exclusivo',
+    synonyms: ['tags', 'etiquetas', 'keywords', 'tags_array'],
+    exportResolver: p => Array.isArray(p.tags) ? p.tags.join(', ') : (p.tags || '')
+  },
+  {
+    key: 'badge',
+    label: 'Cocarda',
+    description: 'Insignia o etiqueta promocional (ej: NUEVO, OFERTA, PREORDER).',
+    order: 30,
+    type: 'text',
+    exportable: true,
+    importable: true,
+    requiredForCreate: false,
+    requiredForPublish: false,
+    adminOnly: false,
+    nullable: true,
+    blankBehavior: 'erase',
+    example: 'NUEVO',
+    synonyms: ['badge', 'cocarda', 'insignia', 'etiqueta_promocional', 'tag_badge'],
+    exportResolver: p => p.badge || p.metadata?.badge || ''
+  },
+
+  // --- MULTIMEDIA ---
   {
     key: 'image_url',
     label: 'Imagen principal',
     description: 'URL pública directa de la imagen principal del producto.',
-    order: 26,
+    order: 31,
     type: 'url',
     exportable: true,
     importable: true,
@@ -525,7 +623,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     key: 'additional_images',
     label: 'Imágenes adicionales',
     description: 'URLs adicionales separadas por la barra vertical | o comas.',
-    order: 27,
+    order: 32,
     type: 'array',
     exportable: true,
     importable: true,
@@ -533,16 +631,57 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     requiredForPublish: false,
     adminOnly: false,
     nullable: true,
-    blankBehavior: 'ignore',
+    blankBehavior: 'erase',
     example: 'https://collectibles.uy/images/batman-2.jpg | https://collectibles.uy/images/batman-3.jpg',
     synonyms: ['additional_images', 'imagenes_adicionales', 'galeria', 'gallery_urls', 'fotos_secundarias'],
     exportResolver: p => Array.isArray(p.gallery) ? p.gallery.map((g: any) => typeof g === 'string' ? g : g.url).filter(Boolean).join(' | ') : ''
   },
   {
+    key: 'video_url',
+    label: 'URL de video',
+    description: 'Enlace a YouTube o MP4 promocional del producto.',
+    order: 33,
+    type: 'url',
+    exportable: true,
+    importable: true,
+    requiredForCreate: false,
+    requiredForPublish: false,
+    adminOnly: false,
+    nullable: true,
+    blankBehavior: 'erase',
+    example: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    synonyms: ['video_url', 'video_id', 'youtube_url', 'url de video'],
+    exportResolver: p => p.video_url || p.metadata?.video_url || (p.metadata?.video_id ? `https://www.youtube.com/watch?v=${p.metadata.video_id}` : '')
+  },
+
+  // --- SISTEMA ---
+  {
+    key: 'status',
+    label: 'Estado',
+    description: 'Estado de publicación en la plataforma (published, draft, archived).',
+    order: 34,
+    type: 'enum',
+    exportable: true,
+    importable: true,
+    requiredForCreate: false,
+    requiredForPublish: true,
+    adminOnly: false,
+    nullable: false,
+    blankBehavior: 'ignore',
+    allowedValues: [
+      { value: 'published', label: 'published (Publicado)' },
+      { value: 'draft', label: 'draft (Borrador)' },
+      { value: 'archived', label: 'archived (Archivado / Inactivo)' }
+    ],
+    example: 'published',
+    synonyms: ['status', 'estado', 'estado_publicacion'],
+    exportResolver: p => p.status || 'draft'
+  },
+  {
     key: 'created_at',
     label: 'Fecha creación',
     description: 'Fecha de registro original del producto en el sistema (Solo lectura en exportaciones).',
-    order: 28,
+    order: 35,
     type: 'date',
     exportable: true,
     importable: false,
@@ -557,7 +696,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     key: 'updated_at',
     label: 'Última actualización',
     description: 'Fecha de última modificación registrada (Solo lectura en exportaciones).',
-    order: 29,
+    order: 36,
     type: 'date',
     exportable: true,
     importable: false,

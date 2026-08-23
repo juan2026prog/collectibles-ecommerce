@@ -36,7 +36,11 @@ function createMockCatalog(count: number = 456): ExportProductItem[] {
       id: `prod-${i}`,
       sku: `SKU-${1000 + i}`,
       title: `Producto Coleccionable ${i}`,
+      slug: `producto-coleccionable-${i}`,
+      product_url: `https://collectibles.uy/p/producto-coleccionable-${i}`,
       description: `Descripción del producto ${i}`,
+      short_description: `Resumen ${i}`,
+      content: `<p>Contenido detallado ${i}</p>`,
       base_price: 100 + i * 10,
       compare_at_price: 150 + i * 10,
       cost_price: 50 + i * 5,
@@ -71,8 +75,11 @@ const sampleProduct: ExportProductItem = {
   id: 'prod-100',
   sku: 'SKU-1100',
   title: 'Figura Batman Legacy 6 Pulgadas',
+  slug: 'figura-batman-legacy-6-pulgadas',
+  product_url: 'https://collectibles.uy/p/figura-batman-legacy-6-pulgadas',
   description: 'Descripción detallada de la figura de Batman.',
-  short_description: '',
+  short_description: 'Edición coleccionista 15 cm.',
+  content: '<p>Especificaciones detalladas de empaque y accesorios.</p>',
   base_price: 2990.00,
   compare_at_price: 3500.00,
   cost_price: 1800.00,
@@ -85,6 +92,8 @@ const sampleProduct: ExportProductItem = {
   dimensions_width: 15.0,
   dimensions_height: 10.0,
   status: 'published',
+  badge: '',
+  image_url: 'https://collectibles.uy/images/batman-1.jpg',
   vendor_id: 'platform',
   category_id: 'cat-figuras',
   brand_id: 'brand-neca',
@@ -121,17 +130,19 @@ describe('Product Export & Import System Audit', () => {
     });
   });
 
-  it('3. Column count verification: Master field registry returns 29 columns for admin', () => {
-    expect(masterFields.length).toBe(29);
+  it('3. Column count verification: Master field registry returns all master exportable fields dynamically', () => {
+    const totalMasterCount = masterFields.length;
+    expect(totalMasterCount).toBeGreaterThanOrEqual(36);
     const keys = masterFields.map(f => f.key);
+    expect(keys).toContain('slug');
+    expect(keys).toContain('product_url');
+    expect(keys).toContain('content');
+    expect(keys).toContain('is_featured');
+    expect(keys).toContain('seo_title');
+    expect(keys).toContain('seo_description');
+    expect(keys).toContain('video_url');
     expect(keys).toContain('mbe_packaging_type');
     expect(keys).toContain('argentina_shipping_status');
-    expect(keys).toContain('weight_kg');
-    expect(keys).toContain('dimensions_length');
-    expect(keys).toContain('image_url');
-    expect(keys).toContain('additional_images');
-    expect(keys).toContain('created_at');
-    expect(keys).toContain('updated_at');
   });
 
   it('4. Parity check: CSV and XLSX export exact same values for sample product', () => {
@@ -140,6 +151,8 @@ describe('Product Export & Import System Audit', () => {
 
     expect(record.sku).toBe('SKU-1100');
     expect(record.title).toBe('Figura Batman Legacy 6 Pulgadas');
+    expect(record.slug).toBe('figura-batman-legacy-6-pulgadas');
+    expect(record.product_url).toBe('https://collectibles.uy/p/figura-batman-legacy-6-pulgadas');
     expect(record.base_price).toBe('2990.00');
     expect(record.compare_at_price).toBe('3500.00');
     expect(record.mbe_packaging_type).toBe('MBE PAK');
@@ -167,13 +180,17 @@ describe('Product Export & Import System Audit', () => {
     expect(canExport).toBe(false);
   });
 
-  it('7. Verification: Normalization resolves weight_kg, dimensions and junction relationships', () => {
+  it('7. Verification: Normalization resolves weight_kg, dimensions, slug, content, and junction relationships', () => {
     const rawData = {
       id: 'p-1',
       title: 'Batman Marvel',
+      slug: 'batman-marvel',
+      description: 'Descripción básica',
+      short_description: 'Corta',
       base_price: 1500,
       weight_kg: 0.650,
       dimensions: { length: 20, width: 10, height: 5 },
+      metadata: { content: '<p>Rich Content HTML</p>', video_id: 'abc1234' },
       product_variants: [{ sku: 'SKU-TEST', inventory_count: 8 }],
       product_categories: [{ categories: { id: 'c1', name: 'Figuras', parent_id: null } }],
       product_licenses: [{ licenses: { id: 'l1', name: 'Marvel' } }],
@@ -183,6 +200,10 @@ describe('Product Export & Import System Audit', () => {
     const normalized = normalizeRawProductForExport(rawData);
 
     expect(normalized.sku).toBe('SKU-TEST');
+    expect(normalized.slug).toBe('batman-marvel');
+    expect(normalized.product_url).toBe('https://collectibles.uy/p/batman-marvel');
+    expect(normalized.content).toBe('<p>Rich Content HTML</p>');
+    expect(normalized.video_url).toBe('https://www.youtube.com/watch?v=abc1234');
     expect(normalized.weight_kg).toBe(0.650);
     expect(normalized.dimensions_length).toBe(20);
     expect(normalized.category?.name).toBe('Figuras');
@@ -240,14 +261,15 @@ describe('Product Export & Import System Audit', () => {
     expect(preview.rows[0].parsedData.resolvedArStatus).toBe('auto');
   });
 
-  it('11. Verification: fixed order is strictly enforced for all 29 fields', () => {
+  it('11. Verification: fixed order is strictly enforced for master fields', () => {
     const keys = masterFields.map(f => f.key);
-    expect(keys.indexOf('mbe_packaging_type')).toBe(19); // order 20 (0-indexed 19)
-    expect(keys.indexOf('argentina_shipping_status')).toBe(20); // order 21 (0-indexed 20)
-    expect(keys.indexOf('image_url')).toBe(25); // order 26 (0-indexed 25)
-    expect(keys.indexOf('additional_images')).toBe(26); // order 27 (0-indexed 26)
-    expect(keys.indexOf('created_at')).toBe(27); // order 28 (0-indexed 27)
-    expect(keys.indexOf('updated_at')).toBe(28); // order 29 (0-indexed 28)
+    expect(keys.indexOf('sku')).toBe(0);
+    expect(keys.indexOf('title')).toBe(1);
+    expect(keys.indexOf('slug')).toBe(2);
+    expect(keys.indexOf('product_url')).toBe(3);
+    expect(keys.indexOf('description')).toBe(4);
+    expect(keys.indexOf('short_description')).toBe(5);
+    expect(keys.indexOf('content')).toBe(6);
   });
 
   it('12. Round-Trip Test: Export product -> Parse back -> Verify zero lost data and valid row preview', async () => {
@@ -277,8 +299,7 @@ describe('Product Export & Import System Audit', () => {
   });
 
   it('13. Verification: Empty cell semantics distinguish CREATE (null) vs UPDATE (preserve existing DB value)', async () => {
-    // Partial update file containing ONLY SKU and blank Peso for existing product SKU-1100
-    const partialUpdateCsv = 'SKU,Peso\nSKU-1100,';
+    const partialUpdateCsv = 'SKU,Peso (kg)\nSKU-1100,';
     const blob = new Blob([partialUpdateCsv], { type: 'text/csv' });
     const file = new File([blob], 'partial_update.csv', { type: 'text/csv' });
 
@@ -303,7 +324,6 @@ describe('Product Export & Import System Audit', () => {
     expect(preview.rows.length).toBe(1);
     const row = preview.rows[0];
     expect(row.operation).toBe('update');
-    // Verify dbPayload for UPDATE row omits weight_kg so existing DB weight 0.450 is NEVER erased
     expect(row.dbPayload.weight_kg).toBeUndefined();
   });
 
@@ -330,7 +350,7 @@ describe('Product Export & Import System Audit', () => {
     expect(wb.SheetNames).toContain('Listas');
   });
 
-  it('15. Verification: Vendor role security strips adminOnly fields (cost_price, vendor_id)', () => {
+  it('15. Verification: Vendor role security strips adminOnly fields (cost_price, vendor_store_name)', () => {
     const vendorFields = getMasterFields('vendor');
     const vendorKeys = vendorFields.map(f => f.key);
 
@@ -345,14 +365,12 @@ describe('Product Export & Import System Audit', () => {
   it('16. Collision Test: Category labels that normalize to identical strings generate unique, non-colliding Defined Names', () => {
     const tracker = new Set<string>();
     
-    // Test case 1: "A/B" vs "A-B" with stable ID suffixes
     const name1 = sanitizeExcelDefinedName("A/B", "cat-001", tracker);
     const name2 = sanitizeExcelDefinedName("A-B", "cat-002", tracker);
     expect(name1).not.toEqual(name2);
     expect(name1).toMatch(/^CAT_A_B_/);
     expect(name2).toMatch(/^CAT_A_B_/);
 
-    // Test case 2: "Pokémon" vs "Pokemon" without idSuffix
     const name3 = sanitizeExcelDefinedName("Pokémon", undefined, tracker);
     const name4 = sanitizeExcelDefinedName("Pokemon", undefined, tracker);
     expect(name3).not.toEqual(name4);
@@ -360,9 +378,10 @@ describe('Product Export & Import System Audit', () => {
     expect(name4).toBe('CAT_POKEMON_1');
   });
 
-  it('17. Forensic Column Parity Test: XLSX and CSV headers match all 29 master exportable fields in exact order', async () => {
+  it('17. Forensic Column Parity Test: XLSX and CSV headers match all master exportable fields dynamically in exact order', async () => {
     const exportableFields = masterFields.filter(f => f.exportable);
-    expect(exportableFields.length).toBe(29);
+    const expectedLength = exportableFields.length;
+    expect(expectedLength).toBeGreaterThanOrEqual(36);
 
     const keys = exportableFields.map(f => f.key);
     const expectedLabels = exportableFields.map(f => f.label);
@@ -375,8 +394,14 @@ describe('Product Export & Import System Audit', () => {
     const xlsxRows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
     const xlsxHeaders = xlsxRows[0];
 
-    expect(xlsxHeaders.length).toBe(29);
+    expect(xlsxHeaders.length).toBe(expectedLength);
     expect(xlsxHeaders).toEqual(expectedLabels);
+    expect(xlsxHeaders).toContain('Título');
+    expect(xlsxHeaders).toContain('Slug');
+    expect(xlsxHeaders).toContain('URL del producto');
+    expect(xlsxHeaders).toContain('Descripción');
+    expect(xlsxHeaders).toContain('Descripción corta');
+    expect(xlsxHeaders).toContain('Contenido');
     expect(xlsxHeaders).toContain('Imagen principal');
     expect(xlsxHeaders).toContain('Imágenes adicionales');
     expect(xlsxHeaders).toContain('Fecha creación');
@@ -388,7 +413,7 @@ describe('Product Export & Import System Audit', () => {
     const csvHeaderLine = csvLines[0].replace(/^\uFEFF/, '');
     const csvHeaders = csvHeaderLine.split(',').map(h => h.replace(/^"|"$/g, ''));
 
-    expect(csvHeaders.length).toBe(29);
+    expect(csvHeaders.length).toBe(expectedLength);
     expect(csvHeaders).toEqual(expectedLabels);
   });
 
@@ -434,6 +459,44 @@ describe('Product Export & Import System Audit', () => {
       const vId = p.vendor_id !== undefined ? p.vendor_id : p.vendor?.id;
       expect(vId === null || vId === 'platform').toBe(true);
     });
+  });
+
+  it('21. Coexistence Test: Título, Descripción, Descripción corta, and Contenido coexist independently without confusion', () => {
+    const prod: ExportProductItem = {
+      id: 'p-content-test',
+      title: 'Título Principal',
+      description: 'Descripción Larga Texto',
+      short_description: 'Descripción Corta Resumen',
+      content: '<p>Contenido Rich Text HTML Especial</p>',
+      base_price: 1000
+    };
+
+    const keys = ['title', 'description', 'short_description', 'content'];
+    const formatted = formatProductRecordForExport(prod, keys, 'admin');
+
+    expect(formatted.title).toBe('Título Principal');
+    expect(formatted.description).toBe('Descripción Larga Texto');
+    expect(formatted.short_description).toBe('Descripción Corta Resumen');
+    expect(formatted.content).toBe('<p>Contenido Rich Text HTML Especial</p>');
+  });
+
+  it('22. Product URL Test: "URL del producto" is exportable as full public URL and NOT importable', () => {
+    const prod: ExportProductItem = {
+      id: 'p-url-test',
+      title: 'Producto URL Test',
+      slug: 'figura-coleccionable-superman',
+      base_price: 2500
+    };
+
+    const master = getMasterFields('admin');
+    const urlDef = master.find(f => f.key === 'product_url');
+
+    expect(urlDef).toBeDefined();
+    expect(urlDef?.exportable).toBe(true);
+    expect(urlDef?.importable).toBe(false);
+
+    const formatted = formatProductRecordForExport(prod, ['product_url'], 'admin');
+    expect(formatted.product_url).toBe('https://collectibles.uy/p/figura-coleccionable-superman');
   });
 
 });

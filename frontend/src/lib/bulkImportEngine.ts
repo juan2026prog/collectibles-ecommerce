@@ -445,6 +445,25 @@ export async function parseAndPreviewImportFile(
     if (rowValuesByKey.condition_notes !== undefined) dbPayload.condition_notes = rowValuesByKey.condition_notes;
     if (parsedWeight !== undefined) dbPayload.weight_kg = parsedWeight;
 
+    if (rowValuesByKey.slug !== undefined) dbPayload.slug = rowValuesByKey.slug;
+    if (rowValuesByKey.is_featured !== undefined) {
+      const featVal = String(rowValuesByKey.is_featured).trim().toLowerCase();
+      dbPayload.is_featured = featVal === 'true' || featVal === 'sí' || featVal === 'si' || featVal === '1';
+    }
+    if (rowValuesByKey.seo_title !== undefined) {
+      dbPayload.seo_title = rowValuesByKey.seo_title;
+      dbPayload.meta_title = rowValuesByKey.seo_title;
+    }
+    if (rowValuesByKey.seo_description !== undefined) {
+      dbPayload.seo_description = rowValuesByKey.seo_description;
+      dbPayload.meta_description = rowValuesByKey.seo_description;
+    }
+    if (rowValuesByKey.content !== undefined || rowValuesByKey.video_url !== undefined) {
+      dbPayload.metadata = dbPayload.metadata || {};
+      if (rowValuesByKey.content !== undefined) dbPayload.metadata.content = rowValuesByKey.content;
+      if (rowValuesByKey.video_url !== undefined) dbPayload.metadata.video_url = rowValuesByKey.video_url;
+    }
+
     // Dimensions in metadata
     if (parsedLength !== undefined || parsedWidth !== undefined || parsedHeight !== undefined) {
       dbPayload.dimensions = {
@@ -519,7 +538,8 @@ export async function executeBulkImport(
           condition_notes: row.dbPayload.condition_notes || null,
           dimensions: row.dbPayload.dimensions || null,
           image_url: row.parsedData.image_url || null,
-          subcategory_id: row.resolvedSubcategoryId || null
+          subcategory_id: row.resolvedSubcategoryId || null,
+          ...(row.dbPayload.metadata || {})
         };
 
         if (row.parsedData.resolvedMbeType !== undefined) {
@@ -591,7 +611,7 @@ export async function executeBulkImport(
         const updatePayload: any = { ...row.dbPayload, updated_at: new Date().toISOString() };
 
         // Handle metadata fields partial update
-        if (row.parsedData.resolvedMbeType !== undefined || row.parsedData.resolvedArStatus !== undefined) {
+        if (row.parsedData.resolvedMbeType !== undefined || row.parsedData.resolvedArStatus !== undefined || row.dbPayload.metadata !== undefined) {
           // Fetch existing metadata to merge safely
           const { data: currentProd } = await supabase
             .from('products')
@@ -600,6 +620,10 @@ export async function executeBulkImport(
             .single();
 
           let mergedMeta = currentProd?.metadata && typeof currentProd.metadata === 'object' ? { ...currentProd.metadata } : {};
+
+          if (row.dbPayload.metadata) {
+            mergedMeta = { ...mergedMeta, ...row.dbPayload.metadata };
+          }
 
           if (row.parsedData.resolvedMbeType !== undefined) {
             mergedMeta = mergeMbePackagingType(mergedMeta, row.parsedData.resolvedMbeType);

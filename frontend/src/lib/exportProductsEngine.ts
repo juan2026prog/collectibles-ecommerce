@@ -68,16 +68,23 @@ export function normalizeRawProductForExport(item: any): ExportProductItem {
   const dimWid = item.dimensions_width ?? item.dimensions?.width ?? item.dimensions?.w ?? item.metadata?.dimensions?.width ?? item.metadata?.dimensions?.w ?? '';
   const dimHei = item.dimensions_height ?? item.dimensions?.height ?? item.dimensions?.h ?? item.metadata?.dimensions?.height ?? item.metadata?.dimensions?.h ?? '';
 
+  const contentVal = item.content || item.metadata?.content || item.metadata?.description_html || item.metadata?.body || null;
+  const videoVal = item.video_url || item.metadata?.video_url || (item.metadata?.video_id ? `https://www.youtube.com/watch?v=${item.metadata.video_id}` : null);
+
   return {
     id: item.id,
     sku: String(skuVal),
     title: item.title || '',
+    slug: item.slug || null,
+    product_url: item.slug ? `https://collectibles.uy/p/${item.slug}` : null,
     description: item.description || null,
     short_description: item.short_description || null,
+    content: contentVal,
     base_price: Number(item.base_price || 0),
     compare_at_price: item.compare_at_price !== undefined && item.compare_at_price !== null ? Number(item.compare_at_price) : null,
     cost_price: item.cost_price !== undefined && item.cost_price !== null ? Number(item.cost_price) : (item.metadata?.cost_price ? Number(item.metadata.cost_price) : null),
     stock: Number(stockVal),
+    is_featured: item.is_featured !== undefined && item.is_featured !== null ? Boolean(item.is_featured) : false,
     condition: item.condition || item.metadata?.condition || null,
     condition_notes: item.condition_notes || item.metadata?.condition_notes || null,
     ean_upc: item.ean_upc || item.metadata?.ean_upc || item.metadata?.gtin || null,
@@ -88,6 +95,9 @@ export function normalizeRawProductForExport(item: any): ExportProductItem {
     status: item.status || 'draft',
     badge: item.badge || item.metadata?.badge || null,
     image_url: primaryImg,
+    video_url: videoVal,
+    seo_title: item.seo_title || item.meta_title || null,
+    seo_description: item.seo_description || item.meta_description || null,
     created_at: item.created_at,
     updated_at: item.updated_at,
     vendor_id: item.vendor_id || vendorObj?.id || null,
@@ -127,11 +137,16 @@ export async function enrichRawProducts(items: any[]): Promise<any[]> {
         base_price,
         compare_at_price,
         status,
+        is_featured,
         badge,
         weight_kg,
         dimensions,
         condition,
         condition_notes,
+        seo_title,
+        seo_description,
+        meta_title,
+        meta_description,
         metadata,
         created_at,
         updated_at,
@@ -195,11 +210,16 @@ export async function fetchExportProductsData(
           base_price,
           compare_at_price,
           status,
+          is_featured,
           badge,
           weight_kg,
           dimensions,
           condition,
           condition_notes,
+          seo_title,
+          seo_description,
+          meta_title,
+          meta_description,
           metadata,
           created_at,
           updated_at,
@@ -254,7 +274,7 @@ export async function fetchExportProductsData(
     let query = supabase
       .from('products')
       .select(`
-        id, title, slug, description, short_description, base_price, compare_at_price, status, badge, weight_kg, dimensions, condition, condition_notes, metadata, created_at, updated_at, vendor_id, category_id, brand_id,
+        id, title, slug, description, short_description, base_price, compare_at_price, status, is_featured, badge, weight_kg, dimensions, condition, condition_notes, seo_title, seo_description, meta_title, meta_description, metadata, created_at, updated_at, vendor_id, category_id, brand_id,
         brand:brands!products_brand_id_fkey(id, name),
         category:categories(id, name, parent_id),
         vendor:vendors(id, store_name, company_name),

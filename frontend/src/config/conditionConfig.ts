@@ -49,6 +49,14 @@ export function normalizeCondition(val?: string | null): ProductCondition | null
   if (isValidCondition(trimmed)) {
     return trimmed;
   }
+  const normLower = trimmed.toLowerCase();
+  const found = CONDITION_OPTIONS.find(opt => 
+    opt.value.toLowerCase() === normLower ||
+    opt.label.toLowerCase() === normLower ||
+    `${opt.label} (${opt.value})`.toLowerCase() === normLower ||
+    normLower.includes(opt.value.toLowerCase())
+  );
+  if (found) return found.value;
   return null;
 }
 

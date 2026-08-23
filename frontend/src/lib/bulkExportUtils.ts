@@ -1,19 +1,20 @@
 import * as XLSX from 'xlsx';
 import { getMasterFields } from './productFieldRegistry';
-import type { ProductFieldDefinition } from './productFieldRegistry';
-import { getConditionLabel } from '../config/conditionConfig';
-import { getMbePackagingLabel, calculateArgentinaShippingStatus } from './mbeLogisticsUtils';
 
 export interface ExportProductItem {
   id?: string;
   sku?: string | null;
   title: string;
+  slug?: string | null;
+  product_url?: string | null;
   description?: string | null;
   short_description?: string | null;
+  content?: string | null;
   base_price: number;
   compare_at_price?: number | null;
   cost_price?: number | null;
   stock?: number;
+  is_featured?: boolean | null;
   condition?: string | null;
   condition_notes?: string | null;
   ean_upc?: string | null;
@@ -26,10 +27,17 @@ export interface ExportProductItem {
   status?: string;
   badge?: string | null;
   image_url?: string | null;
+  additional_images?: string | null;
+  video_url?: string | null;
+  seo_title?: string | null;
+  seo_description?: string | null;
   created_at?: string;
   updated_at?: string;
   
-  // Relations
+  // Relations & Internal IDs
+  vendor_id?: string | null;
+  category_id?: string | null;
+  brand_id?: string | null;
   brand?: { id?: string; name?: string } | null;
   category?: { id?: string; name?: string; parent_id?: string | null } | null;
   subcategory?: { id?: string; name?: string } | null;
@@ -49,10 +57,11 @@ export interface ExportProductItem {
  */
 export function formatProductRecordForExport(
   item: ExportProductItem,
-  selectedKeys: string[]
+  selectedKeys: string[],
+  userRole: 'admin' | 'vendor' = 'admin'
 ): Record<string, string> {
   const record: Record<string, string> = {};
-  const masterFields = getMasterFields('admin');
+  const masterFields = getMasterFields(userRole);
   const fieldMap = new Map(masterFields.map(f => [f.key, f]));
 
   selectedKeys.forEach(key => {
@@ -87,7 +96,7 @@ export function generateProductsCsv(
 
   const headerRow = activeFields.map(f => escapeCsv(f.label)).join(',');
   const dataRows = products.map(prod => {
-    const formatted = formatProductRecordForExport(prod, activeFields.map(f => f.key));
+    const formatted = formatProductRecordForExport(prod, activeFields.map(f => f.key), userRole);
     return activeFields.map(f => escapeCsv(formatted[f.key] || '')).join(',');
   });
 
@@ -100,57 +109,74 @@ export function generateProductsCsv(
 export async function generateProductsXlsxBlob(
   products: ExportProductItem[],
   selectedKeys: string[],
-  userRole: 'admin' | 'vendor' = 'admin'
+  userRole: 'admin' | 'vendor' = 'admin',
+  sheetName: string = 'Productos'
 ): Promise<Blob> {
   const masterFields = getMasterFields(userRole);
   const activeFields = masterFields.filter(f => selectedKeys.includes(f.key));
 
   const headers = activeFields.map(f => f.label);
-  const dataRows = products.map(prod => {
-    const formatted = formatProductRecordForExport(prod, activeFields.map(f => f.key));
+  const rows = products.map(prod => {
+    const formatted = formatProductRecordForExport(prod, activeFields.map(f => f.key), userRole);
     return activeFields.map(f => formatted[f.key] || '');
   });
 
-  const worksheet = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Productos');
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
 
-  const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-  return new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  // Apply column width auto-formatting
+  const colWidths = headers.map((h, i) => {
+    let maxLen = h.length;
+    for (let r = 0; r < Math.min(rows.length, 50); r++) {
+      const cellVal = String(rows[r][i] || '');
+      if (cellVal.length > maxLen) maxLen = cellVal.length;
+    }
+    return { wch: Math.min(Math.max(maxLen + 3, 12), 60) };
+  });
+
+  ws['!cols'] = colWidths;
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+  const arrayBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  return new Blob([arrayBuffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  });
 }
 
 /**
- * Downloads exported file directly in browser.
+ * Helper to trigger browser download of CSV or XLSX product file.
  */
 export async function triggerProductsDownload(
   products: ExportProductItem[],
   selectedKeys: string[],
-  format: 'csv' | 'xlsx',
+  format: 'xlsx' | 'csv',
   userRole: 'admin' | 'vendor' = 'admin',
   filenamePrefix: string = 'Productos_Collectibles'
-) {
-  const dateStr = new Date().toISOString().split('T')[0];
+): Promise<void> {
+  const timestamp = new Date().toISOString().split('T')[0];
+  const filename = `${filenamePrefix}_${timestamp}.${format}`;
 
   if (format === 'csv') {
     const csvContent = generateProductsCsv(products, selectedKeys, userRole);
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${filenamePrefix}_${dateStr}.csv`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+    URL.revokeObjectURL(url);
   } else {
     const blob = await generateProductsXlsxBlob(products, selectedKeys, userRole);
-    const url = window.URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${filenamePrefix}_${dateStr}.xlsx`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+    URL.revokeObjectURL(url);
   }
 }

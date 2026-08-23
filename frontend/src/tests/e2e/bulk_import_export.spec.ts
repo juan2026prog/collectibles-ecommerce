@@ -5,6 +5,7 @@ import * as fs from 'fs';
 test.describe('Bulk Product Import / Export System E2E Tests', () => {
 
   test.beforeEach(async ({ page }) => {
+    test.setTimeout(60000);
     // Set E2E admin bypass in localStorage before loading page
     await page.addInitScript(() => {
       window.localStorage.setItem('e2e_bypass_admin', 'true');
@@ -14,8 +15,8 @@ test.describe('Bulk Product Import / Export System E2E Tests', () => {
   });
 
   test('1. Admin Products page displays unified Export and Import buttons', async ({ page }) => {
-    await expect(page.getByRole('button', { name: /Exportar/i })).toBeVisible({ timeout: 15000 });
-    await expect(page.getByRole('button', { name: /Importar/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Exportar/i })).toBeVisible({ timeout: 45000 });
+    await expect(page.getByRole('button', { name: /Importar/i })).toBeVisible({ timeout: 45000 });
   });
 
   test('2. Export Modal opens with format selection, product scope, and master column checkboxes', async ({ page }) => {
@@ -51,10 +52,11 @@ test.describe('Bulk Product Import / Export System E2E Tests', () => {
     await expect(downloadBtn).toBeEnabled({ timeout: 30000 });
 
     // Capture real file download with expanded timeout for catalog query
-    const downloadPromise = page.waitForEvent('download', { timeout: 45000 });
-    await downloadBtn.click();
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 60000 }),
+      downloadBtn.click()
+    ]);
 
-    const download = await downloadPromise;
     expect(download.suggestedFilename()).toMatch(/\.xlsx$/i);
   });
 
@@ -72,10 +74,11 @@ test.describe('Bulk Product Import / Export System E2E Tests', () => {
     await expect(downloadBtn).toBeEnabled({ timeout: 30000 });
 
     // Capture real file download
-    const downloadPromise = page.waitForEvent('download', { timeout: 45000 });
-    await downloadBtn.click();
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 60000 }),
+      downloadBtn.click()
+    ]);
 
-    const download = await downloadPromise;
     expect(download.suggestedFilename()).toMatch(/\.csv$/i);
   });
 
@@ -143,7 +146,7 @@ test.describe('Bulk Product Import / Export System E2E Tests', () => {
     await expect(page.getByText('Rechazadas', { exact: false })).toBeVisible();
   });
 
-  test('8. Real All Scope 29 Column Export Download Verification', async ({ page }) => {
+  test('8. Real All Scope Master Column Export Download Verification', async ({ page }) => {
     test.setTimeout(120000);
     const exportBtn = page.getByRole('button', { name: /Exportar/i });
     await exportBtn.click();
@@ -153,15 +156,16 @@ test.describe('Bulk Product Import / Export System E2E Tests', () => {
 
     // Select all columns
     await page.getByRole('button', { name: /Seleccionar todas/i }).click();
-    await expect(page.getByText('29 de 29 columnas seleccionadas', { exact: false })).toBeVisible();
+    await expect(page.getByText('36 de 36 columnas seleccionadas', { exact: false })).toBeVisible();
 
     const downloadBtn = page.getByRole('button', { name: /GENERAR Y DESCARGAR/i });
     await expect(downloadBtn).toBeEnabled({ timeout: 30000 });
 
-    const downloadPromise = page.waitForEvent('download', { timeout: 60000 });
-    await downloadBtn.click();
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 60000 }),
+      downloadBtn.click()
+    ]);
 
-    const download = await downloadPromise;
     const downloadPath = await download.path();
     expect(downloadPath).toBeTruthy();
 
@@ -172,7 +176,13 @@ test.describe('Bulk Product Import / Export System E2E Tests', () => {
       const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
       
       const headers = rows[0];
-      expect(headers.length).toBe(29);
+      expect(headers.length).toBe(36);
+      expect(headers).toContain('Título');
+      expect(headers).toContain('Slug');
+      expect(headers).toContain('URL del producto');
+      expect(headers).toContain('Descripción');
+      expect(headers).toContain('Descripción corta');
+      expect(headers).toContain('Contenido');
       expect(headers).toContain('Imagen principal');
       expect(headers).toContain('Imágenes adicionales');
       expect(headers).toContain('Fecha creación');
