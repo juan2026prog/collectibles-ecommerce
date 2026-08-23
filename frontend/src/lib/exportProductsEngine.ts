@@ -237,14 +237,6 @@ export async function fetchExportProductsData(
     statusFilter = filters.status;
   }
 
-  // Determine effective vendor filter
-  let effectiveVendorId: string | null = null;
-  if (userRole === 'vendor' && vendorId) {
-    effectiveVendorId = vendorId;
-  } else if (filters.vendorId && filters.vendorId !== 'all') {
-    effectiveVendorId = filters.vendorId === 'platform' ? null : filters.vendorId;
-  }
-
   const isScopeAll = scope === 'all';
   const searchArg = isScopeAll ? null : (filters.search?.trim() || null);
   const categoryArg = isScopeAll ? null : (filters.categoryId || null);
@@ -273,7 +265,18 @@ export async function fetchExportProductsData(
       .range(offset, offset + directBatchSize - 1);
 
     if (statusFilter) query = query.eq('status', statusFilter);
-    if (effectiveVendorId) query = query.eq('vendor_id', effectiveVendorId);
+    
+    // Vendor filtering: platform = Collectibles (vendor_id IS NULL) vs specific vendor UUID vs vendorRole
+    if (userRole === 'vendor' && vendorId) {
+      query = query.eq('vendor_id', vendorId);
+    } else if (filters.vendorId && filters.vendorId !== 'all') {
+      if (filters.vendorId === 'platform') {
+        query = query.is('vendor_id', null);
+      } else {
+        query = query.eq('vendor_id', filters.vendorId);
+      }
+    }
+
     if (categoryArg) query = query.eq('category_id', categoryArg);
     if (brandArg) query = query.eq('brand_id', brandArg);
     if (searchArg) query = query.ilike('title', `%${searchArg}%`);
@@ -350,20 +353,24 @@ export async function fetchExportProductsCount(options: FetchExportOptions): Pro
       statusFilter = filters.status;
     }
 
-    let effectiveVendorId: string | null = null;
-    if (userRole === 'vendor' && vendorId) {
-      effectiveVendorId = vendorId;
-    } else if (filters.vendorId && filters.vendorId !== 'all') {
-      effectiveVendorId = filters.vendorId === 'platform' ? null : filters.vendorId;
-    }
-
     const isScopeAll = scope === 'all';
     const searchArg = isScopeAll ? null : (filters.search?.trim() || null);
     const categoryArg = isScopeAll ? null : (filters.categoryId || null);
     const brandArg = isScopeAll ? null : (filters.brandId || null);
 
     if (statusFilter) query = query.eq('status', statusFilter);
-    if (effectiveVendorId) query = query.eq('vendor_id', effectiveVendorId);
+    
+    // Vendor filtering: platform = Collectibles (vendor_id IS NULL) vs specific vendor UUID vs vendorRole
+    if (userRole === 'vendor' && vendorId) {
+      query = query.eq('vendor_id', vendorId);
+    } else if (filters.vendorId && filters.vendorId !== 'all') {
+      if (filters.vendorId === 'platform') {
+        query = query.is('vendor_id', null);
+      } else {
+        query = query.eq('vendor_id', filters.vendorId);
+      }
+    }
+
     if (categoryArg) query = query.eq('category_id', categoryArg);
     if (brandArg) query = query.eq('brand_id', brandArg);
     if (searchArg) query = query.ilike('title', `%${searchArg}%`);

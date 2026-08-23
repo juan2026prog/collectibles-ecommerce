@@ -249,17 +249,41 @@ export default function AdminProducts() {
     const pageSizeNum = itemsPerPage === 'Todos' ? 1000 : Number(itemsPerPage);
 
     try {
-      const { data, error } = await supabase.rpc('search_admin_products', {
-        p_search: debouncedSearch.trim() || null,
-        p_category_id: filterCategory || null,
-        p_brand_id: filterBrand || null,
-        p_vendor_id: filterVendor === 'all' ? null : filterVendor,
-        p_status: null,
-        p_page: currentPage,
-        p_page_size: pageSizeNum,
-        p_sort_field: sortField,
-        p_sort_order: sortOrder
-      });
+      let query = supabase
+        .from('products')
+        .select(`
+          id, title, slug, description, short_description, base_price, compare_at_price, status, is_active, badge, is_featured, vendor_id, metadata, created_at,
+          category:categories(id, name),
+          brand:brands!products_brand_id_fkey(id, name),
+          vendor:vendors(id, store_name, company_name),
+          images:product_images(id, url, is_primary, sort_order),
+          variants:product_variants(id, sku, inventory_count)
+        `, { count: 'exact' });
+
+      if (debouncedSearch.trim()) {
+        const q = debouncedSearch.trim();
+        query = query.ilike('title', `%${q}%`);
+      }
+      if (filterCategory) query = query.eq('category_id', filterCategory);
+      if (filterBrand) query = query.eq('brand_id', filterBrand);
+
+      if (filterVendor && filterVendor !== 'all') {
+        if (filterVendor === 'platform') {
+          query = query.is('vendor_id', null);
+        } else {
+          query = query.eq('vendor_id', filterVendor);
+        }
+      }
+
+      query = query.order(sortField || 'created_at', { ascending: sortOrder === 'asc' });
+
+      if (itemsPerPage !== 'Todos') {
+        const from = (currentPage - 1) * pageSizeNum;
+        const to = from + pageSizeNum - 1;
+        query = query.range(from, to);
+      }
+
+      const { data, count, error } = await query;
 
       // Ignore response if a newer search request was initiated
       if (currentReqId !== lastRequestId.current) return;
@@ -269,14 +293,9 @@ export default function AdminProducts() {
         toast.error('Error al cargar productos: ' + error.message);
         setProducts([]);
         setTotalProductsCount(0);
-      } else if (data && data.length > 0) {
-        const total = Number(data[0].total_count || 0);
-        const items = data[0].products || [];
-        setTotalProductsCount(total);
-        setProducts(items);
       } else {
-        setTotalProductsCount(0);
-        setProducts([]);
+        setTotalProductsCount(count || 0);
+        setProducts((data as any[]) || []);
       }
     } catch (err: any) {
       if (currentReqId === lastRequestId.current) {

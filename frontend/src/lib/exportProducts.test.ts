@@ -420,4 +420,20 @@ describe('Product Export & Import System Audit', () => {
     expect(ids.length - uniqueIds.size).toBe(0);
   });
 
+  it('20. Collectibles Vendor Filter Test: Vendor = platform (Collectibles) correctly filters items where vendor_id is null/platform', () => {
+    const catalog = createMockCatalog(456);
+    const filters: ProductFilterState = {
+      ...createDefaultProductFilters(),
+      vendorId: 'platform'
+    };
+
+    const matching = catalog.filter(p => matchesProductFilters(p, filters));
+    expect(matching.length).toBeGreaterThan(0);
+
+    matching.forEach(p => {
+      const vId = p.vendor_id !== undefined ? p.vendor_id : p.vendor?.id;
+      expect(vId === null || vId === 'platform').toBe(true);
+    });
+  });
+
 });
