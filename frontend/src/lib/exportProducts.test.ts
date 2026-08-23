@@ -42,8 +42,11 @@ function createMockCatalog(count: number = 456): ExportProductItem[] {
       compare_at_price: 150 + i * 10,
       cost_price: 50 + i * 5,
       stock: i % 5 === 0 ? 0 : i * 2,
-      condition: i % 2 === 0 ? 'new_sealed' : 'open_box',
+      condition: i % 2 === 0 ? 'new_sealed' : 'new_open_box',
       weight_kg: 0.5 + (i % 3) * 0.2,
+      dimensions_length: 25.0,
+      dimensions_width: 15.0,
+      dimensions_height: 10.0,
       status: i % 10 === 0 ? 'draft' : 'published',
       category: cat,
       brand: brand,
@@ -204,6 +207,8 @@ describe('Column Selection & Fixed Order Comprehensive Tests (29 Master Fields)'
 
     const record = formatProductRecordForExport(sampleProduct, allKeys);
     expect(Object.keys(record).length).toBe(29);
+    expect(record.weight_kg).toBe('0.7');
+    expect(record.dimensions_length).toBe('25');
   });
 
   it('5. Export CSV with Tipo MBE and Estado AR -> contains human readable labels', () => {
@@ -294,5 +299,34 @@ describe('Column Selection & Fixed Order Comprehensive Tests (29 Master Fields)'
     const keys = masterFields.map(f => f.key);
     expect(keys.indexOf('mbe_packaging_type')).toBe(19); // order 20 (0-indexed 19)
     expect(keys.indexOf('argentina_shipping_status')).toBe(20); // order 21 (0-indexed 20)
+  });
+
+  it('12. Round-Trip Test: Export product -> Parse back -> Verify zero lost data and valid row preview', async () => {
+    const originalProd = {
+      ...sampleProduct,
+      image_url: 'https://collectibles.uy/images/batman-1.jpg'
+    };
+    const allKeys = masterFields.map(f => f.key);
+    const csvContent = generateProductsCsv([originalProd], allKeys, 'admin');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const file = new File([blob], 'roundtrip_export.csv', { type: 'text/csv' });
+
+    const preview = await parseAndPreviewImportFile(file, 'admin', null, {
+      brands: [{ id: 'brand-neca', name: 'NECA' }],
+      categories: [{ id: 'cat-figuras', name: 'Figuras de Acción', parent_id: null }],
+      licenses: [],
+      vendors: [{ id: 'vendor-collectibles', store_name: 'Collectibles Oficial' }]
+    });
+
+    expect(preview.rows.length).toBe(1);
+    const parsedRow = preview.rows[0];
+    if (parsedRow.errors.length > 0) {
+      console.log('RoundTrip errors:', parsedRow.errors);
+    }
+    expect(parsedRow.sku).toBe(originalProd.sku);
+    expect(parsedRow.title).toBe(originalProd.title);
+    expect(parsedRow.parsedData.base_price).toBe(originalProd.base_price);
+    expect(parsedRow.errors.length).toBe(0);
   });
 });

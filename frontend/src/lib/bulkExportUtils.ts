@@ -45,137 +45,22 @@ export interface ExportProductItem {
 
 /**
  * Normalizes a product record into a flat key-value dictionary using master keys.
- * Replaces UUIDs with human-readable names for all relations.
+ * Replaces UUIDs with human-readable names for all relations using central exportResolvers.
  */
 export function formatProductRecordForExport(
   item: ExportProductItem,
   selectedKeys: string[]
 ): Record<string, string> {
   const record: Record<string, string> = {};
-
-  // Resolve subcategory if present in item or metadata
-  const subcatName = item.subcategory?.name || item.metadata?.subcategory_name || '';
-  // Resolve license if present
-  const licenseName = item.license?.name || item.metadata?.license_name || '';
-  // Resolve SKU from variants if necessary
-  const skuVal = item.sku || (item.variants && item.variants[0]?.sku) || '';
-  // Resolve stock from variants if necessary
-  const stockVal = item.stock !== undefined ? item.stock : (item.variants && item.variants[0]?.inventory_count !== undefined ? item.variants[0].inventory_count : 0);
-
-  // Format tags
-  let tagsStr = '';
-  if (Array.isArray(item.tags)) {
-    tagsStr = item.tags.map(t => typeof t === 'string' ? t : t.name).filter(Boolean).join(', ');
-  } else if (item.metadata?.tags) {
-    tagsStr = Array.isArray(item.metadata.tags) ? item.metadata.tags.join(', ') : String(item.metadata.tags);
-  }
-
-  // Format gallery images
-  let galleryStr = '';
-  if (Array.isArray(item.gallery)) {
-    galleryStr = item.gallery.map(g => typeof g === 'string' ? g : (g as any).url).filter(Boolean).join(' | ');
-  } else if (item.metadata?.gallery) {
-    galleryStr = Array.isArray(item.metadata.gallery) ? item.metadata.gallery.join(' | ') : String(item.metadata.gallery);
-  }
-
-  // Extract dimensions
-  const dimLen = item.dimensions_length ?? item.metadata?.dimensions?.length ?? item.metadata?.dimensions?.l ?? '';
-  const dimWid = item.dimensions_width ?? item.metadata?.dimensions?.width ?? item.metadata?.dimensions?.w ?? '';
-  const dimHei = item.dimensions_height ?? item.metadata?.dimensions?.height ?? item.metadata?.dimensions?.h ?? '';
+  const masterFields = getMasterFields('admin');
+  const fieldMap = new Map(masterFields.map(f => [f.key, f]));
 
   selectedKeys.forEach(key => {
-    switch (key) {
-      case 'sku':
-        record[key] = String(skuVal || '');
-        break;
-      case 'title':
-        record[key] = item.title || '';
-        break;
-      case 'description':
-        record[key] = item.description || '';
-        break;
-      case 'short_description':
-        record[key] = item.short_description || '';
-        break;
-      case 'brand_name':
-        record[key] = item.brand?.name || item.metadata?.brand_name || '';
-        break;
-      case 'category_name':
-        record[key] = item.category?.name || item.metadata?.category_name || '';
-        break;
-      case 'subcategory_name':
-        record[key] = subcatName;
-        break;
-      case 'license_name':
-        record[key] = licenseName;
-        break;
-      case 'base_price':
-        record[key] = item.base_price !== undefined && item.base_price !== null ? item.base_price.toFixed(2) : '0.00';
-        break;
-      case 'compare_at_price':
-        record[key] = item.compare_at_price !== undefined && item.compare_at_price !== null ? item.compare_at_price.toFixed(2) : '';
-        break;
-      case 'cost_price':
-        record[key] = item.cost_price !== undefined && item.cost_price !== null ? item.cost_price.toFixed(2) : '';
-        break;
-      case 'stock':
-        record[key] = String(stockVal ?? 0);
-        break;
-      case 'condition':
-        record[key] = item.condition || '';
-        break;
-      case 'condition_notes':
-        record[key] = item.condition_notes || item.metadata?.condition_notes || '';
-        break;
-      case 'ean_upc':
-        record[key] = item.ean_upc || item.metadata?.ean_upc || item.metadata?.gtin || '';
-        break;
-      case 'weight_kg':
-        record[key] = item.weight_kg !== undefined && item.weight_kg !== null ? String(item.weight_kg) : '';
-        break;
-      case 'dimensions_length':
-        record[key] = String(dimLen);
-        break;
-      case 'dimensions_width':
-        record[key] = String(dimWid);
-        break;
-      case 'dimensions_height':
-        record[key] = String(dimHei);
-        break;
-      case 'mbe_packaging_type':
-        record[key] = getMbePackagingLabel(item.metadata?.packaging_type || item.metadata?.mbe_service_type || (item as any).mbe_packaging_type);
-        break;
-      case 'argentina_shipping_status':
-        const arStatus = calculateArgentinaShippingStatus(item);
-        record[key] = arStatus.isEligible ? 'Envío automático' : 'Requiere cotización';
-        break;
-      case 'vendor_store_name':
-        record[key] = item.vendor?.store_name || item.vendor?.company_name || item.metadata?.vendor_name || 'Collectibles Oficial';
-        break;
-      case 'tags':
-        record[key] = tagsStr;
-        break;
-      case 'badge':
-        record[key] = item.badge || item.metadata?.badge || '';
-        break;
-      case 'status':
-        record[key] = item.status || 'draft';
-        break;
-      case 'image_url':
-        record[key] = item.image_url || item.metadata?.image_url || '';
-        break;
-      case 'additional_images':
-        record[key] = galleryStr;
-        break;
-      case 'created_at':
-        record[key] = item.created_at ? new Date(item.created_at).toISOString().split('T')[0] : '';
-        break;
-      case 'updated_at':
-        record[key] = item.updated_at ? new Date(item.updated_at).toISOString().split('T')[0] : '';
-        break;
-      default:
-        record[key] = (item as any)[key] !== undefined ? String((item as any)[key]) : '';
-        break;
+    const fDef = fieldMap.get(key);
+    if (fDef && fDef.exportResolver) {
+      record[key] = fDef.exportResolver(item);
+    } else {
+      record[key] = (item as any)[key] !== undefined && (item as any)[key] !== null ? String((item as any)[key]) : '';
     }
   });
 

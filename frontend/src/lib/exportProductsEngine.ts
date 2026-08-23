@@ -25,7 +25,7 @@ export function normalizeRawProductForExport(item: any): ExportProductItem {
   const images = item.images || item.product_images || [];
   const primaryImg = images.find((i: any) => i.is_primary)?.url || images[0]?.url || item.image_url || item.metadata?.image_url || '';
 
-  const skuVal = item.sku || primaryVar.sku || item.metadata?.sku || '';
+  const skuVal = item.sku || primaryVar.sku || item.metadata?.gtin || item.metadata?.sku || '';
   const stockVal = item.stock !== undefined 
     ? item.stock 
     : (primaryVar.inventory_count !== undefined ? primaryVar.inventory_count : 0);
@@ -43,19 +43,29 @@ export function normalizeRawProductForExport(item: any): ExportProductItem {
 
   const vendorObj = item.vendor || (item.vendor_stores ? {
     id: item.vendor_id,
-    store_name: item.vendor_stores.store_name,
+    store_name: item.vendor_stores.store_name || item.vendor_stores.company_name,
     company_name: item.vendor_stores.company_name
   } : null);
 
-  const subcatName = item.subcategory?.name || item.metadata?.subcategory_name || '';
+  // Subcategory resolution from junction table product_categories or metadata
+  const subcatFromJunction = item.product_categories?.map((pc: any) => pc.categories).find((c: any) => c?.parent_id);
+  const subcatName = item.subcategory?.name || subcatFromJunction?.name || item.metadata?.subcategory_name || '';
   const subcategoryObj = item.subcategory || (subcatName ? { name: subcatName } : null);
 
-  const licenseName = item.license?.name || item.metadata?.license_name || '';
+  // License resolution from junction table product_licenses or metadata
+  const licFromJunction = item.product_licenses?.[0]?.licenses;
+  const licenseName = item.license?.name || licFromJunction?.name || item.metadata?.license_name || '';
   const licenseObj = item.license || (licenseName ? { name: licenseName } : null);
 
-  const dimLen = item.dimensions_length ?? item.dimensions?.length ?? item.dimensions?.l ?? item.metadata?.dimensions?.length ?? '';
-  const dimWid = item.dimensions_width ?? item.dimensions?.width ?? item.dimensions?.w ?? item.metadata?.dimensions?.width ?? '';
-  const dimHei = item.dimensions_height ?? item.dimensions?.height ?? item.dimensions?.h ?? item.metadata?.dimensions?.height ?? '';
+  // Tags resolution from junction table product_tags or metadata
+  const tagsFromJunction = item.product_tags?.map((pt: any) => pt.tags?.name).filter(Boolean);
+  const tagsArr = (tagsFromJunction && tagsFromJunction.length > 0) 
+    ? tagsFromJunction 
+    : (Array.isArray(item.metadata?.tags) ? item.metadata.tags : (item.tags || []));
+
+  const dimLen = item.dimensions_length ?? item.dimensions?.length ?? item.dimensions?.l ?? item.metadata?.dimensions?.length ?? item.metadata?.dimensions?.l ?? '';
+  const dimWid = item.dimensions_width ?? item.dimensions?.width ?? item.dimensions?.w ?? item.metadata?.dimensions?.width ?? item.metadata?.dimensions?.w ?? '';
+  const dimHei = item.dimensions_height ?? item.dimensions?.height ?? item.dimensions?.h ?? item.metadata?.dimensions?.height ?? item.metadata?.dimensions?.h ?? '';
 
   return {
     id: item.id,
@@ -70,12 +80,12 @@ export function normalizeRawProductForExport(item: any): ExportProductItem {
     condition: item.condition || item.metadata?.condition || null,
     condition_notes: item.condition_notes || item.metadata?.condition_notes || null,
     ean_upc: item.ean_upc || item.metadata?.ean_upc || item.metadata?.gtin || null,
-    weight_kg: item.weight_kg !== undefined && item.weight_kg !== null ? Number(item.weight_kg) : null,
+    weight_kg: item.weight_kg !== undefined && item.weight_kg !== null ? Number(item.weight_kg) : (item.metadata?.weight_kg ? Number(item.metadata.weight_kg) : null),
     dimensions_length: dimLen !== '' ? Number(dimLen) : null,
     dimensions_width: dimWid !== '' ? Number(dimWid) : null,
     dimensions_height: dimHei !== '' ? Number(dimHei) : null,
     status: item.status || 'draft',
-    badge: item.badge || null,
+    badge: item.badge || item.metadata?.badge || null,
     image_url: primaryImg,
     created_at: item.created_at,
     updated_at: item.updated_at,
@@ -84,11 +94,66 @@ export function normalizeRawProductForExport(item: any): ExportProductItem {
     subcategory: subcategoryObj,
     license: licenseObj,
     vendor: vendorObj,
-    tags: item.tags || item.product_tags || item.metadata?.tags || null,
+    tags: tagsArr,
     gallery: item.gallery || images.slice(1).map((img: any) => img.url) || null,
     metadata: item.metadata || {},
     variants: variants
   };
+}
+
+/**
+ * Helper to enrich raw products with full DB relations in chunks of 100.
+ */
+export async function enrichRawProducts(items: any[]): Promise<any[]> {
+  if (!items || items.length === 0) return [];
+  const productIds = items.map(p => p.id).filter(Boolean);
+  const enrichedMap = new Map<string, any>();
+
+  const chunkSize = 100;
+  for (let i = 0; i < productIds.length; i += chunkSize) {
+    const chunk = productIds.slice(i, i + chunkSize);
+    const { data: dbData, error } = await supabase
+      .from('products')
+      .select(`
+        id,
+        title,
+        slug,
+        description,
+        short_description,
+        base_price,
+        compare_at_price,
+        status,
+        badge,
+        weight_kg,
+        dimensions,
+        condition,
+        condition_notes,
+        metadata,
+        created_at,
+        updated_at,
+        vendor_id,
+        category_id,
+        brand_id,
+        brand:brands!products_brand_id_fkey(id, name),
+        category:categories(id, name, parent_id),
+        vendor:vendors(id, store_name, company_name),
+        variants:product_variants(id, sku, inventory_count),
+        images:product_images(id, url, is_primary, sort_order),
+        product_categories(categories(id, name, parent_id)),
+        product_licenses(licenses(id, name)),
+        product_tags(tags(id, name))
+      `)
+      .in('id', chunk);
+
+    if (!error && dbData) {
+      dbData.forEach(p => enrichedMap.set(p.id, p));
+    }
+  }
+
+  return items.map(raw => {
+    const enriched = enrichedMap.get(raw.id);
+    return enriched ? { ...raw, ...enriched } : raw;
+  });
 }
 
 /**
@@ -114,12 +179,33 @@ export async function fetchExportProductsData(
       const { data, error } = await supabase
         .from('products')
         .select(`
-          *,
-          brand:brands(id, name),
+          id,
+          title,
+          slug,
+          description,
+          short_description,
+          base_price,
+          compare_at_price,
+          status,
+          badge,
+          weight_kg,
+          dimensions,
+          condition,
+          condition_notes,
+          metadata,
+          created_at,
+          updated_at,
+          vendor_id,
+          category_id,
+          brand_id,
+          brand:brands!products_brand_id_fkey(id, name),
           category:categories(id, name, parent_id),
-          vendor:vendor_stores!products_vendor_id_fkey(id, store_name, company_name),
+          vendor:vendors(id, store_name, company_name),
           variants:product_variants(id, sku, inventory_count),
-          images:product_images(id, url, is_primary, sort_order)
+          images:product_images(id, url, is_primary, sort_order),
+          product_categories(categories(id, name, parent_id)),
+          product_licenses(licenses(id, name)),
+          product_tags(tags(id, name))
         `)
         .in('id', chunk);
 
@@ -209,8 +295,17 @@ export async function fetchExportProductsData(
     }
   }
 
+  onProgress?.(
+    rawProductsAccumulator.length,
+    totalCount,
+    'Enriqueciendo datos relacionales del catálogo...'
+  );
+
+  // Enrich raw products with full DB fields (weight, dimensions, licenses, subcategories, tags)
+  const enrichedProducts = await enrichRawProducts(rawProductsAccumulator);
+
   // Normalize raw items
-  let normalized = rawProductsAccumulator.map(normalizeRawProductForExport);
+  let normalized = enrichedProducts.map(normalizeRawProductForExport);
 
   // Apply secondary scope & client-side filters (MBE, Argentina status, out_of_stock, etc.)
   if (scope === 'out_of_stock') {

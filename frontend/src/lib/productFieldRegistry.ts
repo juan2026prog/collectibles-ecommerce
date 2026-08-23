@@ -1,5 +1,5 @@
 import { CONDITION_OPTIONS, getConditionLabel } from '../config/conditionConfig';
-import { getMbePackagingLabel } from './mbeLogisticsUtils';
+import { getMbePackagingLabel, calculateArgentinaShippingStatus } from './mbeLogisticsUtils';
 
 export type FieldDataType = 
   | 'text' 
@@ -36,6 +36,8 @@ export interface ProductFieldDefinition {
   example: string;
   
   synonyms?: string[];
+  
+  exportResolver?: (product: any) => string;
 }
 
 export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
@@ -51,7 +53,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     requiredForPublish: false,
     adminOnly: false,
     example: 'HAS-G2054',
-    synonyms: ['sku', 'codigo', 'código', 'referencia', 'item_code']
+    synonyms: ['sku', 'codigo', 'código', 'referencia', 'item_code'],
+    exportResolver: p => p.sku || p.variants?.[0]?.sku || p.metadata?.sku || ''
   },
   {
     key: 'title',
@@ -65,7 +68,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     requiredForPublish: true,
     adminOnly: false,
     example: 'Figura Batman Legacy 6 Pulgadas Edición Coleccionista',
-    synonyms: ['title', 'título', 'titulo', 'nombre', 'producto', 'name', 'articulo', 'artículo']
+    synonyms: ['title', 'título', 'titulo', 'nombre', 'producto', 'name', 'articulo', 'artículo'],
+    exportResolver: p => p.title || ''
   },
   {
     key: 'description',
@@ -79,7 +83,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     requiredForPublish: false,
     adminOnly: false,
     example: 'Figura articulada de 15 cm con accesorios intercambiables.',
-    synonyms: ['description', 'descripción', 'descripcion', 'detalle', 'observaciones']
+    synonyms: ['description', 'descripción', 'descripcion', 'detalle', 'observaciones'],
+    exportResolver: p => p.description || ''
   },
   {
     key: 'short_description',
@@ -93,7 +98,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     requiredForPublish: false,
     adminOnly: false,
     example: 'Edición exclusiva para coleccionistas.',
-    synonyms: ['short_description', 'descripción corta', 'descripcion corta', 'resumen']
+    synonyms: ['short_description', 'descripción corta', 'descripcion corta', 'resumen'],
+    exportResolver: p => p.short_description || ''
   },
   {
     key: 'brand_name',
@@ -110,7 +116,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     relationValueField: 'id',
     relationLabelField: 'name',
     example: 'Hasbro',
-    synonyms: ['brand', 'brand_name', 'marca', 'fabricante', 'manufacturer']
+    synonyms: ['brand', 'brand_name', 'marca', 'fabricante', 'manufacturer'],
+    exportResolver: p => p.brand?.name || p.metadata?.brand_name || ''
   },
   {
     key: 'category_name',
@@ -127,7 +134,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     relationValueField: 'id',
     relationLabelField: 'name',
     example: 'Figuras de Acción',
-    synonyms: ['category', 'category_name', 'categoría', 'categoria', 'rubro', 'grupo']
+    synonyms: ['category', 'category_name', 'categoría', 'categoria', 'rubro', 'grupo'],
+    exportResolver: p => p.category?.name || p.metadata?.category_name || ''
   },
   {
     key: 'subcategory_name',
@@ -145,7 +153,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     relationLabelField: 'name',
     dependsOn: 'category_name',
     example: '6 Pulgadas',
-    synonyms: ['subcategory', 'subcategory_name', 'subcategoría', 'subcategoria', 'subrubro']
+    synonyms: ['subcategory', 'subcategory_name', 'subcategoría', 'subcategoria', 'subrubro'],
+    exportResolver: p => p.subcategory?.name || p.metadata?.subcategory_name || ''
   },
   {
     key: 'license_name',
@@ -162,7 +171,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     relationValueField: 'id',
     relationLabelField: 'name',
     example: 'DC Comics',
-    synonyms: ['license', 'license_name', 'licencia', 'franquicia', 'franchise', 'propiedad']
+    synonyms: ['license', 'license_name', 'licencia', 'franquicia', 'franchise', 'propiedad'],
+    exportResolver: p => p.license?.name || p.metadata?.license_name || ''
   },
   {
     key: 'base_price',
@@ -176,7 +186,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     requiredForPublish: true,
     adminOnly: false,
     example: '2990.00',
-    synonyms: ['base_price', 'precio', 'price', 'precio base', 'precio de venta', 'unit price']
+    synonyms: ['base_price', 'precio', 'price', 'precio base', 'precio de venta', 'unit price'],
+    exportResolver: p => p.base_price !== undefined && p.base_price !== null ? Number(p.base_price).toFixed(2) : '0.00'
   },
   {
     key: 'compare_at_price',
@@ -190,7 +201,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     requiredForPublish: false,
     adminOnly: false,
     example: '3500.00',
-    synonyms: ['compare_at_price', 'precio_comparacion', 'precio anterior', 'precio oferta', 'precio lista']
+    synonyms: ['compare_at_price', 'precio_comparacion', 'precio anterior', 'precio oferta', 'precio lista'],
+    exportResolver: p => p.compare_at_price !== undefined && p.compare_at_price !== null ? Number(p.compare_at_price).toFixed(2) : ''
   },
   {
     key: 'cost_price',
@@ -204,7 +216,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     requiredForPublish: false,
     adminOnly: true,
     example: '1800.00',
-    synonyms: ['cost_price', 'costo', 'cost', 'precio_costo', 'costo unitario']
+    synonyms: ['cost_price', 'costo', 'cost', 'precio_costo', 'costo unitario'],
+    exportResolver: p => p.cost_price !== undefined && p.cost_price !== null ? Number(p.cost_price).toFixed(2) : (p.metadata?.cost_price ? Number(p.metadata.cost_price).toFixed(2) : '')
   },
   {
     key: 'stock',
@@ -218,7 +231,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     requiredForPublish: true,
     adminOnly: false,
     example: '15',
-    synonyms: ['stock', 'cantidad', 'inventario', 'qty', 'quantity', 'unidades']
+    synonyms: ['stock', 'cantidad', 'inventario', 'qty', 'quantity', 'unidades'],
+    exportResolver: p => String(p.stock ?? p.variants?.[0]?.inventory_count ?? 0)
   },
   {
     key: 'condition',
@@ -233,7 +247,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     adminOnly: false,
     allowedValues: CONDITION_OPTIONS.map(c => ({ value: c.value, label: `${c.value} (${c.label})` })),
     example: 'new_sealed',
-    synonyms: ['condition', 'estado', 'condición', 'product_condition', 'estado_fisico']
+    synonyms: ['condition', 'condición', 'product_condition', 'estado_fisico'],
+    exportResolver: p => p.condition || ''
   },
   {
     key: 'condition_notes',
@@ -247,7 +262,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     requiredForPublish: false,
     adminOnly: false,
     example: 'Caja en excelente estado 9/10 sin abrir.',
-    synonyms: ['condition_notes', 'notas_estado', 'observaciones_estado', 'detalles_condicion']
+    synonyms: ['condition_notes', 'notas_estado', 'observaciones_estado', 'detalles_condicion'],
+    exportResolver: p => p.condition_notes || p.metadata?.condition_notes || ''
   },
   {
     key: 'ean_upc',
@@ -261,7 +277,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     requiredForPublish: false,
     adminOnly: false,
     example: '5010993792054',
-    synonyms: ['ean_upc', 'gtin', 'upc', 'ean', 'codigo_barras', 'barcode']
+    synonyms: ['ean_upc', 'gtin', 'upc', 'ean', 'codigo_barras', 'barcode'],
+    exportResolver: p => p.ean_upc || p.metadata?.ean_upc || p.metadata?.gtin || ''
   },
   {
     key: 'weight_kg',
@@ -275,7 +292,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     requiredForPublish: false,
     adminOnly: false,
     example: '0.450',
-    synonyms: ['weight_kg', 'peso', 'weight', 'peso_kg', 'peso (kg)']
+    synonyms: ['weight_kg', 'peso', 'weight', 'peso_kg', 'peso (kg)'],
+    exportResolver: p => p.weight_kg !== undefined && p.weight_kg !== null ? String(p.weight_kg) : ''
   },
   {
     key: 'dimensions_length',
@@ -289,7 +307,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     requiredForPublish: false,
     adminOnly: false,
     example: '25.0',
-    synonyms: ['dimensions_length', 'largo', 'length', 'largo_cm']
+    synonyms: ['dimensions_length', 'largo', 'length', 'largo_cm'],
+    exportResolver: p => p.dimensions_length !== null && p.dimensions_length !== undefined ? String(p.dimensions_length) : ''
   },
   {
     key: 'dimensions_width',
@@ -303,7 +322,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     requiredForPublish: false,
     adminOnly: false,
     example: '15.0',
-    synonyms: ['dimensions_width', 'ancho', 'width', 'ancho_cm']
+    synonyms: ['dimensions_width', 'ancho', 'width', 'ancho_cm'],
+    exportResolver: p => p.dimensions_width !== null && p.dimensions_width !== undefined ? String(p.dimensions_width) : ''
   },
   {
     key: 'dimensions_height',
@@ -317,7 +337,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     requiredForPublish: false,
     adminOnly: false,
     example: '10.0',
-    synonyms: ['dimensions_height', 'alto', 'height', 'alto_cm']
+    synonyms: ['dimensions_height', 'alto', 'height', 'alto_cm'],
+    exportResolver: p => p.dimensions_height !== null && p.dimensions_height !== undefined ? String(p.dimensions_height) : ''
   },
   {
     key: 'mbe_packaging_type',
@@ -336,7 +357,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
       { value: 'none', label: 'Sin definir' }
     ],
     example: 'MBE PAK',
-    synonyms: ['mbe_packaging_type', 'tipo mbe', 'tipo_mbe', 'mbe_type', 'mbe_service_type', 'packaging_type', 'empaque_mbe', 'mbe']
+    synonyms: ['mbe_packaging_type', 'tipo mbe', 'tipo_mbe', 'mbe_type', 'mbe_service_type', 'packaging_type', 'empaque_mbe', 'mbe'],
+    exportResolver: p => getMbePackagingLabel(p.metadata?.packaging_type || p.metadata?.mbe_service_type || p.mbe_packaging_type)
   },
   {
     key: 'argentina_shipping_status',
@@ -354,7 +376,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
       { value: 'quote', label: 'Requiere cotización' }
     ],
     example: 'Envío automático',
-    synonyms: ['argentina_shipping_status', 'estado ar', 'estado_ar', 'ar_status', 'argentina_status', 'envio_ar', 'envio_argentina']
+    synonyms: ['argentina_shipping_status', 'estado ar', 'estado_ar', 'ar_status', 'argentina_status', 'envio_ar', 'envio_argentina'],
+    exportResolver: p => calculateArgentinaShippingStatus(p).isEligible ? 'Envío automático' : 'Requiere cotización'
   },
   {
     key: 'vendor_store_name',
@@ -371,12 +394,13 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     relationValueField: 'id',
     relationLabelField: 'store_name',
     example: 'Collectibles Oficial',
-    synonyms: ['vendor_store_name', 'vendedor', 'vendor', 'tienda', 'store']
+    synonyms: ['vendor_store_name', 'vendedor', 'vendor', 'tienda', 'store'],
+    exportResolver: p => p.vendor?.store_name || p.metadata?.vendor_name || 'Collectibles Oficial'
   },
   {
     key: 'tags',
     label: 'Etiquetas',
-    description: 'Etiquetas separadas por comas (ej: Edición Limitada, Vintage).',
+    description: 'Etiquetas separadas por la barra vertical | o comas.',
     order: 23,
     type: 'array',
     exportable: true,
@@ -384,8 +408,9 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     requiredForCreate: false,
     requiredForPublish: false,
     adminOnly: false,
-    example: 'Edición Limitada, Exclusivo, Vintage',
-    synonyms: ['tags', 'etiquetas', 'tags_list']
+    example: 'Edición Limitada | Exclusivo | Vintage',
+    synonyms: ['tags', 'etiquetas', 'tags_list'],
+    exportResolver: p => Array.isArray(p.tags) ? p.tags.map((t: any) => typeof t === 'string' ? t : t.name).join(' | ') : (p.metadata?.tags ? (Array.isArray(p.metadata.tags) ? p.metadata.tags.join(' | ') : String(p.metadata.tags)) : '')
   },
   {
     key: 'badge',
@@ -399,7 +424,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     requiredForPublish: false,
     adminOnly: false,
     example: 'Novedad',
-    synonyms: ['badge', 'cocarda', 'distintivo', 'insignia']
+    synonyms: ['badge', 'cocarda', 'distintivo', 'insignia'],
+    exportResolver: p => p.badge || p.metadata?.badge || ''
   },
   {
     key: 'status',
@@ -418,7 +444,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
       { value: 'archived', label: 'archived (Archivado / Inactivo)' }
     ],
     example: 'published',
-    synonyms: ['status', 'estado', 'estado_publicacion']
+    synonyms: ['status', 'estado', 'estado_publicacion'],
+    exportResolver: p => p.status || 'draft'
   },
   {
     key: 'image_url',
@@ -432,7 +459,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     requiredForPublish: true,
     adminOnly: false,
     example: 'https://collectibles.uy/images/batman-1.jpg',
-    synonyms: ['image_url', 'imagen_principal', 'foto', 'image', 'url_imagen', 'img']
+    synonyms: ['image_url', 'imagen_principal', 'foto', 'image', 'url_imagen', 'img'],
+    exportResolver: p => p.image_url || p.metadata?.image_url || ''
   },
   {
     key: 'additional_images',
@@ -446,7 +474,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     requiredForPublish: false,
     adminOnly: false,
     example: 'https://collectibles.uy/images/batman-2.jpg | https://collectibles.uy/images/batman-3.jpg',
-    synonyms: ['additional_images', 'imagenes_adicionales', 'galeria', 'gallery_urls', 'fotos_secundarias']
+    synonyms: ['additional_images', 'imagenes_adicionales', 'galeria', 'gallery_urls', 'fotos_secundarias'],
+    exportResolver: p => Array.isArray(p.gallery) ? p.gallery.map((g: any) => typeof g === 'string' ? g : g.url).join(' | ') : ''
   },
   {
     key: 'created_at',
@@ -458,7 +487,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     importable: false,
     adminOnly: false,
     example: '2026-08-20',
-    synonyms: ['created_at', 'fecha_creacion', 'creado']
+    synonyms: ['created_at', 'fecha_creacion', 'creado'],
+    exportResolver: p => p.created_at ? new Date(p.created_at).toISOString().split('T')[0] : ''
   },
   {
     key: 'updated_at',
@@ -470,7 +500,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     importable: false,
     adminOnly: false,
     example: '2026-08-22',
-    synonyms: ['updated_at', 'ultima_actualizacion', 'modificado']
+    synonyms: ['updated_at', 'ultima_actualizacion', 'modificado'],
+    exportResolver: p => p.updated_at ? new Date(p.updated_at).toISOString().split('T')[0] : ''
   }
 ];
 
@@ -489,9 +520,16 @@ export function getMasterFields(userRole: 'admin' | 'vendor' = 'admin'): Product
  */
 export function findFieldDefinition(header: string): ProductFieldDefinition | undefined {
   const norm = header.trim().toLowerCase();
-  return PRODUCT_MASTER_FIELDS.find(f => 
+  
+  // 1. Exact key or label match first
+  const exact = PRODUCT_MASTER_FIELDS.find(f => 
     f.key.toLowerCase() === norm ||
-    f.label.toLowerCase() === norm ||
-    (f.synonyms && f.synonyms.some(syn => syn.toLowerCase() === norm))
+    f.label.toLowerCase() === norm
+  );
+  if (exact) return exact;
+
+  // 2. Synonym match fallback
+  return PRODUCT_MASTER_FIELDS.find(f => 
+    f.synonyms && f.synonyms.some(syn => syn.toLowerCase() === norm)
   );
 }
