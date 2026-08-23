@@ -212,8 +212,8 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
   },
   {
     key: 'compare_at_price',
-    label: 'Precio oferta',
-    description: 'Precio anterior o de lista para mostrar descuento actualmente activo en la tienda.',
+    label: 'Precio anterior',
+    description: 'Precio anterior o de lista (precio tachado) para destacar descuento cuando compare_at_price > base_price.',
     order: 10,
     type: 'decimal',
     exportable: true,

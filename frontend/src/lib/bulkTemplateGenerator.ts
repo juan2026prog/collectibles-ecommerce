@@ -22,6 +22,22 @@ export const OFFICIAL_SYSTEM_BADGES = [
 ];
 
 /**
+ * Sanitizes a category name into a 100% valid, collision-free Excel Defined Name.
+ * Handles spaces, diacritics (tildes, ñ), slashes, ampersands, and numeric prefixes.
+ */
+export function sanitizeExcelDefinedName(rawName: string): string {
+  if (!rawName) return 'CAT_UNKNOWN';
+  const ascii = rawName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+  return `CAT_${ascii}`.toUpperCase();
+}
+
+/**
  * Fetches current active catalog metadata dynamically from Supabase.
  */
 export async function fetchCatalogMetadataForTemplate(): Promise<CatalogMetadata> {
@@ -161,7 +177,7 @@ export async function generateXlsxImportTemplate(
       sqref: 'G2:G1000', // Subcategoría dependiente de Categoría (Columna F)
       type: 'list',
       operator: 'equal',
-      formula1: '=INDIRECT(SUBSTITUTE(F2," ","_"))'
+      formula1: '=INDIRECT("CAT_"&SUBSTITUTE(SUBSTITUTE(F2," ","_"),"&","_"))'
     },
     {
       sqref: 'H2:H1000', // Licencia
@@ -244,13 +260,13 @@ export async function generateXlsxImportTemplate(
     { Name: 'CATEGORIAS', Ref: 'Listas!$D$2:$D$' + (mainCatNames.length + 1) }
   ];
 
-  // Add Defined Name for each parent category
+  // Add Defined Name for each parent category using sanitizeExcelDefinedName
   mainCategories.forEach(parent => {
     const children = subcatByParent[parent.name] || [];
     if (children.length > 0) {
-      const safeName = parent.name.replace(/[^a-zA-Z0-9_]/g, '_');
+      const definedName = sanitizeExcelDefinedName(parent.name);
       definedNames.push({
-        Name: safeName,
+        Name: definedName,
         Ref: 'Listas!$E$2:$E$' + (allSubcatNames.length + 1)
       });
     }

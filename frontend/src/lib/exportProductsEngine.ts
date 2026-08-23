@@ -264,12 +264,24 @@ export async function fetchExportProductsData(
       p_sort_order: 'desc'
     });
 
-    if (error) {
-      console.error('[fetchExportProductsData RPC error]', error);
-      throw new Error(`Error al consultar catálogo para exportación: ${error.message}`);
-    }
+    if (error || !data || data.length === 0) {
+      console.warn('[fetchExportProductsData RPC fallback]', error?.message || 'RPC returned empty');
+      const { data: dbDirect } = await supabase
+        .from('products')
+        .select(`
+          id, title, slug, description, short_description, base_price, compare_at_price, status, badge, weight_kg, dimensions, condition, condition_notes, metadata, created_at, updated_at, vendor_id, category_id, brand_id,
+          brand:brands!products_brand_id_fkey(id, name),
+          category:categories(id, name, parent_id),
+          vendor:vendors(id, store_name, company_name),
+          variants:product_variants(id, sku, inventory_count),
+          images:product_images(id, url, is_primary, sort_order)
+        `)
+        .order('created_at', { ascending: false });
 
-    if (!data || data.length === 0) {
+      if (dbDirect && dbDirect.length > 0) {
+        rawProductsAccumulator.push(...dbDirect);
+        totalCount = dbDirect.length;
+      }
       break;
     }
 

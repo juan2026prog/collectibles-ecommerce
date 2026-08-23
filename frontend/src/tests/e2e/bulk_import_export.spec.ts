@@ -11,12 +11,12 @@ test.describe('Bulk Product Import / Export System E2E Tests', () => {
     await page.goto('/admin/products');
   });
 
-  test('Admin Products page displays unified Export and Import buttons', async ({ page }) => {
+  test('1. Admin Products page displays unified Export and Import buttons', async ({ page }) => {
     await expect(page.getByRole('button', { name: /Exportar/i })).toBeVisible({ timeout: 15000 });
     await expect(page.getByRole('button', { name: /Importar/i })).toBeVisible();
   });
 
-  test('Export Modal opens with format selection, product scope, and master column checkboxes', async ({ page }) => {
+  test('2. Export Modal opens with format selection, product scope, and master column checkboxes', async ({ page }) => {
     const exportBtn = page.getByRole('button', { name: /Exportar/i });
     await exportBtn.click();
 
@@ -39,7 +39,45 @@ test.describe('Bulk Product Import / Export System E2E Tests', () => {
     await expect(page.getByText('Exportación Masiva de Productos')).not.toBeVisible();
   });
 
-  test('Import Modal opens with upload dropzone, template download, and web guide button', async ({ page }) => {
+  test('3. Real XLSX Export Download with Column Selection', async ({ page }) => {
+    test.setTimeout(90000);
+    const exportBtn = page.getByRole('button', { name: /Exportar/i });
+    await exportBtn.click();
+
+    // Wait for product count calculation to finish and enable download button
+    const downloadBtn = page.getByRole('button', { name: /GENERAR Y DESCARGAR/i });
+    await expect(downloadBtn).toBeEnabled({ timeout: 30000 });
+
+    // Capture real file download with expanded timeout for catalog query
+    const downloadPromise = page.waitForEvent('download', { timeout: 45000 });
+    await downloadBtn.click();
+
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(/\.xlsx$/i);
+  });
+
+  test('4. Real CSV Export Download with Column Selection', async ({ page }) => {
+    test.setTimeout(90000);
+    const exportBtn = page.getByRole('button', { name: /Exportar/i });
+    await exportBtn.click();
+
+    // Select CSV format button
+    const csvBtn = page.getByRole('button', { name: /CSV \(UTF-8\)/i });
+    await csvBtn.click();
+
+    // Wait for product count calculation to finish and enable download button
+    const downloadBtn = page.getByRole('button', { name: /GENERAR Y DESCARGAR/i });
+    await expect(downloadBtn).toBeEnabled({ timeout: 30000 });
+
+    // Capture real file download
+    const downloadPromise = page.waitForEvent('download', { timeout: 45000 });
+    await downloadBtn.click();
+
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(/\.csv$/i);
+  });
+
+  test('5. Import Modal opens with dropzone, template download, and web guide', async ({ page }) => {
     const importBtn = page.getByRole('button', { name: /Importar/i });
     await importBtn.click();
 
