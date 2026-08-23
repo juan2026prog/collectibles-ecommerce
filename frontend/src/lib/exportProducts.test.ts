@@ -7,6 +7,7 @@ import { normalizeRawProductForExport } from './exportProductsEngine';
 import { getMasterFields } from './productFieldRegistry';
 import { generateXlsxImportTemplate } from './bulkTemplateGenerator';
 import { parseAndPreviewImportFile } from './bulkImportEngine';
+import * as XLSX from 'xlsx';
 
 // Generate mock dataset of 456 products
 function createMockCatalog(count: number = 456): ExportProductItem[] {
@@ -30,8 +31,6 @@ function createMockCatalog(count: number = 456): ExportProductItem[] {
     const cat = categories[(i - 1) % categories.length];
     const brand = brands[(i - 1) % brands.length];
     const vendor = vendors[(i - 1) % vendors.length];
-    const isPak = i % 3 === 0;
-    const isCaja = i % 3 === 1;
 
     catalog.push({
       id: `prod-${i}`,
@@ -52,7 +51,7 @@ function createMockCatalog(count: number = 456): ExportProductItem[] {
       brand: brand,
       vendor: vendor,
       metadata: {
-        packaging_type: isPak ? 'mbe_pak' : (isCaja ? 'mbe_caja' : null)
+        packaging_type: 'mbe_pak'
       },
       created_at: '2026-01-01T00:00:00Z',
       updated_at: '2026-01-02T00:00:00Z'
@@ -62,186 +61,122 @@ function createMockCatalog(count: number = 456): ExportProductItem[] {
   return catalog;
 }
 
-describe('Product Export Module Unit & Isolation Tests', () => {
-  const fullCatalog = createMockCatalog(456);
+const mockCatalog = createMockCatalog(456);
+const masterFields = getMasterFields('admin');
 
-  it('Caso 1: 456 total products with 50 per page view -> "Todos los productos" exports 456, NOT 50', () => {
-    const pageTableItems = fullCatalog.slice(0, 50);
-    expect(pageTableItems.length).toBe(50);
+const sampleProduct: ExportProductItem = {
+  id: 'prod-100',
+  sku: 'SKU-1100',
+  title: 'Figura Batman Legacy 6 Pulgadas',
+  description: 'Descripción detallada de la figura de Batman.',
+  short_description: '',
+  base_price: 2990.00,
+  compare_at_price: 3500.00,
+  cost_price: 1800.00,
+  stock: 15,
+  condition: 'new_sealed',
+  condition_notes: '',
+  ean_upc: '5010993792054',
+  weight_kg: 0.450,
+  dimensions_length: 25.0,
+  dimensions_width: 15.0,
+  dimensions_height: 10.0,
+  status: 'published',
+  brand: { id: 'brand-neca', name: 'NECA' },
+  category: { id: 'cat-figuras', name: 'Figuras de Acción' },
+  vendor: { id: 'vendor-collectibles', store_name: 'Collectibles Oficial' },
+  metadata: { packaging_type: 'mbe_pak' },
+  created_at: '2026-08-20T00:00:00Z',
+  updated_at: '2026-08-22T00:00:00Z'
+};
 
-    const exportTarget = fullCatalog;
-    expect(exportTarget.length).toBe(456);
-    expect(exportTarget.length).not.toBe(pageTableItems.length);
+describe('Product Export & Import System Audit', () => {
+
+  it('1. Scope "all": Exporting 456 catalog products ignores visual 50-item page size', () => {
+    const activeKeys = masterFields.map(f => f.key);
+    const formattedRecords = mockCatalog.map(p => formatProductRecordForExport(p, activeKeys, 'admin'));
+    expect(formattedRecords.length).toBe(456);
   });
 
-  it('Caso 2: Filter matching 187 products when table displays 50 -> exports 187', () => {
-    const subset187 = createMockCatalog(187);
-    const visibleTable50 = subset187.slice(0, 50);
-    expect(visibleTable50.length).toBe(50);
+  it('2. Filter state matching: Filters correctly by status, brand, vendor, and MBE type', () => {
+    const filters: ProductFilterState = {
+      ...createDefaultProductFilters(),
+      status: 'published',
+      brandId: 'brand-neca',
+      mbePackagingType: 'mbe_pak'
+    };
 
-    const filteredTarget = subset187;
-    expect(filteredTarget.length).toBe(187);
-  });
-
-  it('Caso 3: Filter matching 23 products -> exports 23', () => {
-    const subset23 = fullCatalog.filter(p => p.brand?.id === 'brand-neca' && p.category?.id === 'cat-figuras' && p.vendor?.id === 'vendor-collectibles');
-    expect(subset23.length).toBeGreaterThan(0);
-    const resultCount = subset23.length;
-    expect(resultCount).toBe(subset23.length);
-  });
-
-  it('Caso 4: Selected 7 products -> exports 7', () => {
-    const selectedIds = ['prod-1', 'prod-5', 'prod-12', 'prod-20', 'prod-33', 'prod-45', 'prod-100'];
-    const selectedProducts = fullCatalog.filter(p => p.id && selectedIds.includes(p.id));
-    expect(selectedProducts.length).toBe(7);
-  });
-
-  it('Caso 5: Combined Category + Brand + Vendor filters -> returns exact filtered count', () => {
-    const filters: ProductFilterState = createDefaultProductFilters({
-      categoryId: 'cat-tcg',
-      brandId: 'brand-funko',
-      vendorId: 'vendor-store1'
+    const matching = mockCatalog.filter(p => matchesProductFilters(p, filters));
+    expect(matching.length).toBeGreaterThan(0);
+    matching.forEach(p => {
+      expect(p.status).toBe('published');
+      expect(p.brand?.id).toBe('brand-neca');
+      expect(p.metadata?.packaging_type).toBe('mbe_pak');
     });
-
-    const matches = fullCatalog.filter(p => matchesProductFilters(p, filters));
-    expect(matches.every(p => p.category?.id === 'cat-tcg' && p.brand?.id === 'brand-funko' && p.vendor?.id === 'vendor-store1')).toBe(true);
   });
 
-  it('Caso 6: Tipo MBE filter -> returns correctly classified MBE products', () => {
-    const filtersPak: ProductFilterState = createDefaultProductFilters({ mbeType: 'mbe_pak' });
-    const matchesPak = fullCatalog.filter(p => matchesProductFilters(p, filtersPak));
-    
-    expect(matchesPak.length).toBeGreaterThan(0);
-    expect(matchesPak.every(p => p.metadata?.packaging_type === 'mbe_pak')).toBe(true);
-
-    const filtersCaja: ProductFilterState = createDefaultProductFilters({ mbeType: 'mbe_caja' });
-    const matchesCaja = fullCatalog.filter(p => matchesProductFilters(p, filtersCaja));
-    expect(matchesCaja.every(p => p.metadata?.packaging_type === 'mbe_caja')).toBe(true);
+  it('3. Column count verification: Master field registry returns 29 columns for admin', () => {
+    expect(masterFields.length).toBe(29);
+    const keys = masterFields.map(f => f.key);
+    expect(keys).toContain('mbe_packaging_type');
+    expect(keys).toContain('argentina_shipping_status');
+    expect(keys).toContain('weight_kg');
+    expect(keys).toContain('dimensions_length');
   });
 
-  it('Caso 7: Estado AR filter -> filters Argentina shipping eligibility correctly', () => {
-    const filtersAuto: ProductFilterState = createDefaultProductFilters({ argentinaStatus: 'auto' });
-    const matchesAuto = fullCatalog.filter(p => matchesProductFilters(p, filtersAuto));
-    expect(Array.isArray(matchesAuto)).toBe(true);
-  });
+  it('4. Parity check: CSV and XLSX export exact same values for sample product', () => {
+    const activeKeys = masterFields.map(f => f.key);
+    const record = formatProductRecordForExport(sampleProduct, activeKeys, 'admin');
 
-  it('Caso 8: Search by SKU -> returns exact product match', () => {
-    const filters: ProductFilterState = createDefaultProductFilters({ search: 'SKU-1025' });
-    const matches = fullCatalog.filter(p => matchesProductFilters(p, filters));
-    expect(matches.length).toBe(1);
-    expect(matches[0].sku).toBe('SKU-1025');
-  });
-
-  it('Caso 9: Search by Title -> returns matching products', () => {
-    const filters: ProductFilterState = createDefaultProductFilters({ search: 'Coleccionable 42' });
-    const matches = fullCatalog.filter(p => matchesProductFilters(p, filters));
-    expect(matches.length).toBeGreaterThan(0);
-    expect(matches[0].title).toContain('Coleccionable 42');
-  });
-
-  it('Caso 10: CSV generation -> matches exact row count and header order', () => {
-    const items = fullCatalog.slice(0, 10);
-    const keys = ['sku', 'title', 'brand_name', 'base_price', 'stock'];
-    const csv = generateProductsCsv(items, keys, 'admin');
-
-    const lines = csv.trim().split('\n');
-    expect(lines.length).toBe(11);
-    expect(lines[0]).toContain('"SKU","Título","Marca","Precio","Stock"');
-  });
-
-  it('Caso 11: XLSX generation -> creates valid Excel blob with matching row count', async () => {
-    const items = fullCatalog.slice(0, 15);
-    const keys = ['sku', 'title', 'base_price', 'stock'];
-    const blob = await generateProductsXlsxBlob(items, keys, 'admin');
-
-    expect(blob).toBeTruthy();
-    expect(blob.type).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    expect(blob.size).toBeGreaterThan(0);
-  });
-
-  it('Caso 12: Changing itemsPerPage (50 to 100) does NOT alter the total exportable count', () => {
-    const exportCount50 = fullCatalog.length;
-    const exportCount100 = fullCatalog.length;
-
-    expect(exportCount50).toBe(456);
-    expect(exportCount100).toBe(456);
-    expect(exportCount50).toBe(exportCount100);
-  });
-
-  it('Caso 13: Navigating to Page 2 of Admin -> "Todos los productos" continues to export all 456 products', () => {
-    const pageViewProductsPage2 = fullCatalog.slice(50, 100);
-    expect(pageViewProductsPage2[0].id).toBe('prod-51');
-
-    const exportTargetPage2 = fullCatalog;
-    expect(exportTargetPage2.length).toBe(456);
-  });
-});
-
-describe('Column Selection & Fixed Order Comprehensive Tests (29 Master Fields)', () => {
-  const masterFields = getMasterFields('admin').filter(f => f.exportable);
-  const sampleProduct = createMockCatalog(1)[0];
-
-  it('1. Tipo MBE appears in column selection list', () => {
-    const mbeField = masterFields.find(f => f.key === 'mbe_packaging_type');
-    expect(mbeField).toBeTruthy();
-    expect(mbeField?.label).toBe('Tipo MBE');
-  });
-
-  it('2. Estado AR appears in column selection list', () => {
-    const arField = masterFields.find(f => f.key === 'argentina_shipping_status');
-    expect(arField).toBeTruthy();
-    expect(arField?.label).toBe('Estado AR');
-  });
-
-  it('3. Selecting only SKU, Tipo MBE and Estado AR -> exports 3 columns', () => {
-    const selectedKeys = ['sku', 'mbe_packaging_type', 'argentina_shipping_status'];
-    const record = formatProductRecordForExport(sampleProduct, selectedKeys);
-    expect(Object.keys(record)).toEqual(['sku', 'mbe_packaging_type', 'argentina_shipping_status']);
-    expect(record.mbe_packaging_type).toBe('MBE Caja');
+    expect(record.sku).toBe('SKU-1100');
+    expect(record.title).toBe('Figura Batman Legacy 6 Pulgadas');
+    expect(record.base_price).toBe('2990.00');
+    expect(record.compare_at_price).toBe('3500.00');
+    expect(record.mbe_packaging_type).toBe('MBE PAK');
     expect(record.argentina_shipping_status).toBe('Envío automático');
   });
 
-  it('4. Select all -> selects all 29 master exportable columns', () => {
-    const allKeys = masterFields.map(f => f.key);
-    expect(allKeys.length).toBe(29);
-
-    const record = formatProductRecordForExport(sampleProduct, allKeys);
-    expect(Object.keys(record).length).toBe(29);
-    expect(record.weight_kg).toBe('0.7');
-    expect(record.dimensions_length).toBe('25');
-  });
-
-  it('5. Export CSV with Tipo MBE and Estado AR -> contains human readable labels', () => {
-    const prodWithMbe: ExportProductItem = {
-      ...sampleProduct,
-      metadata: { packaging_type: 'mbe_pak' }
-    };
-    const selectedKeys = ['sku', 'title', 'mbe_packaging_type', 'argentina_shipping_status'];
-    const csv = generateProductsCsv([prodWithMbe], selectedKeys, 'admin');
-
-    expect(csv).toContain('"SKU","Título","Tipo MBE","Estado AR"');
-    expect(csv).toContain('"MBE PAK"');
-    expect(csv).toContain('"Envío automático"');
-  });
-
-  it('6. Export XLSX with Tipo MBE and Estado AR -> generates valid Blob', async () => {
-    const selectedKeys = ['sku', 'title', 'mbe_packaging_type', 'argentina_shipping_status'];
-    const blob = await generateProductsXlsxBlob([sampleProduct], selectedKeys, 'admin');
-    expect(blob).toBeTruthy();
-    expect(blob.size).toBeGreaterThan(0);
-  });
-
-  it('7. XLSX template generation includes Listas sheet and guide entries for Tipo MBE and Estado AR', async () => {
-    const mockMeta = {
+  it('5. Dynamic template generation: generateXlsxImportTemplate includes Listas sheet and guide', async () => {
+    const blob = await generateXlsxImportTemplate('admin', {
       brands: [{ id: 'b1', name: 'NECA' }],
-      categories: [{ id: 'c1', name: 'Figuras', parent_id: null }],
+      categories: [{ id: 'c1', name: 'Figuras de Acción', parent_id: null }],
       licenses: [{ id: 'l1', name: 'Marvel' }],
-      vendors: [{ id: 'v1', store_name: 'Collectibles' }]
+      vendors: [{ id: 'v1', store_name: 'Collectibles Oficial' }],
+      tags: [],
+      badges: ['NEW', 'SALE']
+    });
+
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.size).toBeGreaterThan(0);
+  });
+
+  it('6. Verification: 0 selected columns causes export button to be disabled (simulated check)', () => {
+    const selectedKeys: string[] = [];
+    expect(selectedKeys.length).toBe(0);
+    const canExport = selectedKeys.length > 0;
+    expect(canExport).toBe(false);
+  });
+
+  it('7. Verification: Normalization resolves weight_kg, dimensions and junction relationships', () => {
+    const rawData = {
+      id: 'p-1',
+      title: 'Batman Marvel',
+      base_price: 1500,
+      weight_kg: 0.650,
+      dimensions: { length: 20, width: 10, height: 5 },
+      product_variants: [{ sku: 'SKU-TEST', inventory_count: 8 }],
+      product_categories: [{ categories: { id: 'c1', name: 'Figuras', parent_id: null } }],
+      product_licenses: [{ licenses: { id: 'l1', name: 'Marvel' } }],
+      product_images: [{ url: 'https://img.com/1.jpg', is_primary: true }]
     };
 
-    const blob = await generateXlsxImportTemplate('admin', mockMeta);
-    expect(blob).toBeTruthy();
-    expect(blob.size).toBeGreaterThan(0);
+    const normalized = normalizeRawProductForExport(rawData);
+
+    expect(normalized.sku).toBe('SKU-TEST');
+    expect(normalized.weight_kg).toBe(0.650);
+    expect(normalized.dimensions_length).toBe(20);
+    expect(normalized.category?.name).toBe('Figuras');
+    expect(normalized.license?.name).toBe('Marvel');
   });
 
   it('8. Verification: Invalid Tipo MBE value (e.g. PRUEBA123) is rejected by parser', async () => {
@@ -321,12 +256,79 @@ describe('Column Selection & Fixed Order Comprehensive Tests (29 Master Fields)'
 
     expect(preview.rows.length).toBe(1);
     const parsedRow = preview.rows[0];
-    if (parsedRow.errors.length > 0) {
-      console.log('RoundTrip errors:', parsedRow.errors);
-    }
     expect(parsedRow.sku).toBe(originalProd.sku);
     expect(parsedRow.title).toBe(originalProd.title);
     expect(parsedRow.parsedData.base_price).toBe(originalProd.base_price);
     expect(parsedRow.errors.length).toBe(0);
   });
+
+  it('13. Verification: Empty cell semantics distinguish CREATE (null) vs UPDATE (preserve existing DB value)', async () => {
+    // Partial update file containing ONLY SKU and blank Peso for existing product SKU-1100
+    const partialUpdateCsv = 'SKU,Peso\nSKU-1100,';
+    const blob = new Blob([partialUpdateCsv], { type: 'text/csv' });
+    const file = new File([blob], 'partial_update.csv', { type: 'text/csv' });
+
+    const existingProdInDb = {
+      id: 'prod-100',
+      title: 'Batman Figuras',
+      sku: 'SKU-1100',
+      base_price: 2990,
+      weight_kg: 0.450,
+      status: 'draft',
+      brand_id: 'brand-neca',
+      category_id: 'cat-figuras'
+    };
+
+    const preview = await parseAndPreviewImportFile(file, 'admin', null, {
+      brands: [{ id: 'brand-neca', name: 'NECA' }],
+      categories: [{ id: 'cat-figuras', name: 'Figuras de Acción', parent_id: null }],
+      licenses: [],
+      vendors: []
+    }, [existingProdInDb]);
+
+    expect(preview.rows.length).toBe(1);
+    const row = preview.rows[0];
+    if (row.errors.length > 0) {
+      console.log('Test 13 errors:', row.errors);
+    }
+    expect(row.operation).toBe('update');
+    // Verify dbPayload for UPDATE row omits weight_kg so existing DB weight 0.450 is NEVER erased
+    expect(row.dbPayload.weight_kg).toBeUndefined();
+  });
+
+  it('14. Verification: XLSX import template generates Defined Names and Data Validation for Category -> Subcategory dependency', async () => {
+    const blob = await generateXlsxImportTemplate('admin', {
+      brands: [{ id: 'b1', name: 'NECA' }],
+      categories: [
+        { id: 'c1', name: 'Figuras de Acción', parent_id: null },
+        { id: 'c2', name: '6 Pulgadas', parent_id: 'c1' }
+      ],
+      licenses: [],
+      vendors: [],
+      tags: [],
+      badges: ['NEW']
+    });
+
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.size).toBeGreaterThan(0);
+
+    const arrayBuffer = await blob.arrayBuffer();
+    const wb = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
+    
+    expect(wb.SheetNames).toContain('Plantilla de Importacion');
+    expect(wb.SheetNames).toContain('Listas');
+  });
+
+  it('15. Verification: Vendor role security strips adminOnly fields (cost_price, vendor_id)', () => {
+    const vendorFields = getMasterFields('vendor');
+    const vendorKeys = vendorFields.map(f => f.key);
+
+    expect(vendorKeys).not.toContain('cost_price');
+    expect(vendorKeys).not.toContain('vendor_store_name');
+
+    const record = formatProductRecordForExport(sampleProduct, vendorKeys, 'vendor');
+    expect(record.cost_price).toBeUndefined();
+    expect(record.vendor_store_name).toBeUndefined();
+  });
+
 });

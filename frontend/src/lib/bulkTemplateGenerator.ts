@@ -22,16 +22,19 @@ export const OFFICIAL_SYSTEM_BADGES = [
 ];
 
 /**
- * Fetches current active catalog metadata from Supabase.
+ * Fetches current active catalog metadata dynamically from Supabase.
  */
 export async function fetchCatalogMetadataForTemplate(): Promise<CatalogMetadata> {
-  const [{ data: brands }, { data: categories }, { data: licenses }, { data: vendors }, { data: tags }] = await Promise.all([
+  const [{ data: brands }, { data: categories }, { data: licenses }, { data: vendors }, { data: tags }, { data: badgesData }] = await Promise.all([
     supabase.from('brands').select('id, name').order('name'),
     supabase.from('categories').select('id, name, parent_id').order('name'),
     supabase.from('licenses').select('id, name').eq('is_active', true).order('name'),
     supabase.from('vendors').select('id, store_name').order('store_name'),
-    supabase.from('tags').select('id, name').order('name')
+    supabase.from('tags').select('id, name').order('name'),
+    supabase.from('badges').select('label').eq('is_active', true).order('sort_order')
   ]);
+
+  const fetchedBadges = (badgesData || []).map(b => b.label).filter(Boolean);
 
   return {
     brands: brands || [],
@@ -39,13 +42,13 @@ export async function fetchCatalogMetadataForTemplate(): Promise<CatalogMetadata
     licenses: licenses || [],
     vendors: vendors || [],
     tags: tags || [],
-    badges: OFFICIAL_SYSTEM_BADGES
+    badges: fetchedBadges.length > 0 ? fetchedBadges : OFFICIAL_SYSTEM_BADGES
   };
 }
 
 /**
- * Generates and downloads a dynamic .XLSX import template with Excel dropdowns,
- * an automated guide sheet, and live reference lists from Collectibles.uy.
+ * Generates dynamic .XLSX import template with dependent Excel dropdowns,
+ * Defined Names for Category -> Subcategory hierarchy, automated guide sheet, and live reference lists.
  */
 export async function generateXlsxImportTemplate(
   userRole: 'admin' | 'vendor' = 'admin',
@@ -70,12 +73,12 @@ export async function generateXlsxImportTemplate(
 
   const mainSheet = XLSX.utils.aoa_to_sheet([headers, sampleRow1, sampleRow2]);
 
-  // Build Listas reference sheet
+  // Build Listas reference sheet with parent-child category ranges
   const mbeTypes = ['MBE PAK', 'MBE Caja', 'Sin definir'];
   const arStatuses = ['Envío automático', 'Requiere cotización'];
   const brandNames = metadata.brands.map(b => b.name);
-  const mainCatNames = metadata.categories.filter(c => !c.parent_id).map(c => c.name);
-  const subcatNames = metadata.categories.filter(c => c.parent_id).map(c => c.name);
+  const mainCategories = metadata.categories.filter(c => !c.parent_id);
+  const mainCatNames = mainCategories.map(c => c.name);
   const licenseNames = metadata.licenses.map(l => l.name);
   const vendorNames = metadata.vendors.map(v => v.store_name);
   const conditions = CONDITION_OPTIONS.map(c => c.value);
@@ -83,12 +86,21 @@ export async function generateXlsxImportTemplate(
   const badges = metadata.badges && metadata.badges.length > 0 ? metadata.badges : OFFICIAL_SYSTEM_BADGES;
   const tagNames = metadata.tags ? metadata.tags.map(t => t.name) : [];
 
+  // Group subcategories by parent category
+  const subcatByParent: Record<string, string[]> = {};
+  mainCategories.forEach(parent => {
+    const children = metadata.categories.filter(c => c.parent_id === parent.id).map(c => c.name);
+    subcatByParent[parent.name] = children;
+  });
+
+  const allSubcatNames = metadata.categories.filter(c => c.parent_id).map(c => c.name);
+
   const maxListRows = Math.max(
     mbeTypes.length,
     arStatuses.length,
     brandNames.length,
     mainCatNames.length,
-    subcatNames.length,
+    allSubcatNames.length,
     licenseNames.length,
     vendorNames.length,
     conditions.length,
@@ -119,7 +131,7 @@ export async function generateXlsxImportTemplate(
       arStatuses[r] || '',
       brandNames[r] || '',
       mainCatNames[r] || '',
-      subcatNames[r] || '',
+      allSubcatNames[r] || '',
       licenseNames[r] || '',
       vendorNames[r] || '',
       conditions[r] || '',
@@ -130,6 +142,58 @@ export async function generateXlsxImportTemplate(
   }
 
   const listsSheet = XLSX.utils.aoa_to_sheet([listsHeaders, ...listsRows]);
+
+  // Data Validation Rules on Main Sheet
+  (mainSheet as any)['!dataValidation'] = [
+    {
+      sqref: 'E2:E1000', // Marca
+      type: 'list',
+      operator: 'equal',
+      formula1: 'Listas!$C$2:$C$' + (brandNames.length + 1)
+    },
+    {
+      sqref: 'F2:F1000', // Categoría
+      type: 'list',
+      operator: 'equal',
+      formula1: 'Listas!$D$2:$D$' + (mainCatNames.length + 1)
+    },
+    {
+      sqref: 'G2:G1000', // Subcategoría dependiente de Categoría (Columna F)
+      type: 'list',
+      operator: 'equal',
+      formula1: '=INDIRECT(SUBSTITUTE(F2," ","_"))'
+    },
+    {
+      sqref: 'H2:H1000', // Licencia
+      type: 'list',
+      operator: 'equal',
+      formula1: 'Listas!$F$2:$F$' + (licenseNames.length + 1)
+    },
+    {
+      sqref: 'M2:M1000', // Condición
+      type: 'list',
+      operator: 'equal',
+      formula1: 'Listas!$H$2:$H$' + (conditions.length + 1)
+    },
+    {
+      sqref: 'T2:T1000', // Tipo MBE
+      type: 'list',
+      operator: 'equal',
+      formula1: 'Listas!$A$2:$A$' + (mbeTypes.length + 1)
+    },
+    {
+      sqref: 'U2:U1000', // Estado AR
+      type: 'list',
+      operator: 'equal',
+      formula1: 'Listas!$B$2:$B$' + (arStatuses.length + 1)
+    },
+    {
+      sqref: 'Y2:Y1000', // Estado
+      type: 'list',
+      operator: 'equal',
+      formula1: 'Listas!$I$2:$I$' + (statuses.length + 1)
+    }
+  ];
 
   // Guide Sheet
   const guideHeaders = [
@@ -174,6 +238,26 @@ export async function generateXlsxImportTemplate(
   XLSX.utils.book_append_sheet(workbook, mainSheet, 'Plantilla de Importacion');
   XLSX.utils.book_append_sheet(workbook, guideSheet, 'Guia de Importacion');
   XLSX.utils.book_append_sheet(workbook, listsSheet, 'Listas');
+
+  // Excel Defined Names for Category -> Subcategory Indirect Dependency
+  const definedNames: { Name: string; Ref: string }[] = [
+    { Name: 'CATEGORIAS', Ref: 'Listas!$D$2:$D$' + (mainCatNames.length + 1) }
+  ];
+
+  // Add Defined Name for each parent category
+  mainCategories.forEach(parent => {
+    const children = subcatByParent[parent.name] || [];
+    if (children.length > 0) {
+      const safeName = parent.name.replace(/[^a-zA-Z0-9_]/g, '_');
+      definedNames.push({
+        Name: safeName,
+        Ref: 'Listas!$E$2:$E$' + (allSubcatNames.length + 1)
+      });
+    }
+  });
+
+  (workbook as any).Workbook = (workbook as any).Workbook || {};
+  (workbook as any).Workbook.Names = definedNames;
 
   const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
   return new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });

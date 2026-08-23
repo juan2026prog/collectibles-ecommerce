@@ -119,7 +119,8 @@ export async function parseAndPreviewImportFile(
   file: File,
   userRole: 'admin' | 'vendor' = 'admin',
   currentVendorId: string | null = null,
-  providedMetadata?: CatalogMetadata
+  providedMetadata?: CatalogMetadata,
+  providedExistingProducts?: any[]
 ): Promise<ImportPreviewResult> {
   const { rawRows, headersFound } = await readRawFileRows(file);
   const metadata = providedMetadata || (await fetchCatalogMetadataForTemplate());
@@ -159,7 +160,13 @@ export async function parseAndPreviewImportFile(
     .filter(Boolean);
 
   const existingProductsMap = new Map<string, any>();
-  if (skusInFile.length > 0) {
+
+  if (providedExistingProducts && providedExistingProducts.length > 0) {
+    providedExistingProducts.forEach(p => {
+      const pSku = p.sku || p.variants?.[0]?.sku;
+      if (pSku) existingProductsMap.set(pSku, p);
+    });
+  } else if (skusInFile.length > 0) {
     const { data: dbProducts } = await supabase
       .from('products')
       .select('id, title, base_price, status, vendor_id, weight_kg, dimensions, metadata, variants:product_variants(sku, inventory_count)')
@@ -172,7 +179,7 @@ export async function parseAndPreviewImportFile(
 
     if (dbProducts) {
       dbProducts.forEach(p => {
-        const sku = p.variants?.[0]?.sku;
+        const sku = p.variants?.[0]?.sku || p.sku;
         if (sku) {
           existingProductsMap.set(sku, p);
         }
@@ -323,7 +330,7 @@ export async function parseAndPreviewImportFile(
 
     // Validate Numbers & Strings
     let parsedPrice: number | undefined;
-    if (rowValuesByKey.base_price !== undefined) {
+    if (rowValuesByKey.base_price !== undefined && String(rowValuesByKey.base_price).trim() !== '') {
       parsedPrice = parseFloat(String(rowValuesByKey.base_price).replace(/[^0-9.]/g, ''));
       if (isNaN(parsedPrice) || parsedPrice < 0) {
         rowErrors.push('El precio debe ser un número positivo.');
@@ -331,7 +338,7 @@ export async function parseAndPreviewImportFile(
     }
 
     let parsedStock: number | undefined;
-    if (rowValuesByKey.stock !== undefined) {
+    if (rowValuesByKey.stock !== undefined && String(rowValuesByKey.stock).trim() !== '') {
       parsedStock = parseInt(String(rowValuesByKey.stock), 10);
       if (isNaN(parsedStock) || parsedStock < 0) {
         rowErrors.push('El stock no puede ser un número negativo.');
@@ -339,7 +346,7 @@ export async function parseAndPreviewImportFile(
     }
 
     let parsedWeight: number | undefined;
-    if (rowValuesByKey.weight_kg !== undefined) {
+    if (rowValuesByKey.weight_kg !== undefined && String(rowValuesByKey.weight_kg).trim() !== '') {
       parsedWeight = parseFloat(String(rowValuesByKey.weight_kg).replace(/[^0-9.]/g, ''));
       if (isNaN(parsedWeight) || parsedWeight < 0) {
         rowErrors.push('El peso debe ser un número positivo (ej: 0.450).');
@@ -347,17 +354,17 @@ export async function parseAndPreviewImportFile(
     }
 
     let parsedLength: number | undefined;
-    if (rowValuesByKey.dimensions_length !== undefined) {
+    if (rowValuesByKey.dimensions_length !== undefined && String(rowValuesByKey.dimensions_length).trim() !== '') {
       parsedLength = parseFloat(String(rowValuesByKey.dimensions_length).replace(/[^0-9.]/g, ''));
     }
 
     let parsedWidth: number | undefined;
-    if (rowValuesByKey.dimensions_width !== undefined) {
+    if (rowValuesByKey.dimensions_width !== undefined && String(rowValuesByKey.dimensions_width).trim() !== '') {
       parsedWidth = parseFloat(String(rowValuesByKey.dimensions_width).replace(/[^0-9.]/g, ''));
     }
 
     let parsedHeight: number | undefined;
-    if (rowValuesByKey.dimensions_height !== undefined) {
+    if (rowValuesByKey.dimensions_height !== undefined && String(rowValuesByKey.dimensions_height).trim() !== '') {
       parsedHeight = parseFloat(String(rowValuesByKey.dimensions_height).replace(/[^0-9.]/g, ''));
     }
 
