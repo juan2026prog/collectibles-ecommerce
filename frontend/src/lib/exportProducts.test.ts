@@ -122,6 +122,10 @@ describe('Product Export & Import System Audit', () => {
     expect(keys).toContain('argentina_shipping_status');
     expect(keys).toContain('weight_kg');
     expect(keys).toContain('dimensions_length');
+    expect(keys).toContain('image_url');
+    expect(keys).toContain('additional_images');
+    expect(keys).toContain('created_at');
+    expect(keys).toContain('updated_at');
   });
 
   it('4. Parity check: CSV and XLSX export exact same values for sample product', () => {
@@ -234,6 +238,10 @@ describe('Product Export & Import System Audit', () => {
     const keys = masterFields.map(f => f.key);
     expect(keys.indexOf('mbe_packaging_type')).toBe(19); // order 20 (0-indexed 19)
     expect(keys.indexOf('argentina_shipping_status')).toBe(20); // order 21 (0-indexed 20)
+    expect(keys.indexOf('image_url')).toBe(25); // order 26 (0-indexed 25)
+    expect(keys.indexOf('additional_images')).toBe(26); // order 27 (0-indexed 26)
+    expect(keys.indexOf('created_at')).toBe(27); // order 28 (0-indexed 27)
+    expect(keys.indexOf('updated_at')).toBe(28); // order 29 (0-indexed 28)
   });
 
   it('12. Round-Trip Test: Export product -> Parse back -> Verify zero lost data and valid row preview', async () => {
@@ -344,6 +352,48 @@ describe('Product Export & Import System Audit', () => {
     expect(name3).not.toEqual(name4);
     expect(name3).toBe('CAT_POKEMON');
     expect(name4).toBe('CAT_POKEMON_1');
+  });
+
+  it('17. Forensic Column Parity Test: XLSX and CSV headers match all 29 master exportable fields in exact order', async () => {
+    const exportableFields = masterFields.filter(f => f.exportable);
+    expect(exportableFields.length).toBe(29);
+
+    const keys = exportableFields.map(f => f.key);
+    const expectedLabels = exportableFields.map(f => f.label);
+
+    // Generate XLSX
+    const xlsxBlob = await generateProductsXlsxBlob([sampleProduct], keys, 'admin');
+    const arrayBuffer = await xlsxBlob.arrayBuffer();
+    const wb = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
+    const sheet = wb.Sheets['Productos'];
+    const xlsxRows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+    const xlsxHeaders = xlsxRows[0];
+
+    expect(xlsxHeaders.length).toBe(29);
+    expect(xlsxHeaders).toEqual(expectedLabels);
+    expect(xlsxHeaders).toContain('Imagen principal');
+    expect(xlsxHeaders).toContain('Imágenes adicionales');
+    expect(xlsxHeaders).toContain('Fecha creación');
+    expect(xlsxHeaders).toContain('Última actualización');
+
+    // Generate CSV
+    const csvContent = generateProductsCsv([sampleProduct], keys, 'admin');
+    const csvLines = csvContent.split('\n');
+    const csvHeaderLine = csvLines[0].replace(/^\uFEFF/, '');
+    const csvHeaders = csvHeaderLine.split(',').map(h => h.replace(/^"|"$/g, ''));
+
+    expect(csvHeaders.length).toBe(29);
+    expect(csvHeaders).toEqual(expectedLabels);
+  });
+
+  it('18. Forensic Deduplication Test: Product dataset has 100% ID uniqueness', () => {
+    const catalog = createMockCatalog(456);
+    const ids = catalog.map(p => p.id!);
+    const uniqueIds = new Set(ids);
+
+    expect(catalog.length).toBe(456);
+    expect(uniqueIds.size).toBe(456);
+    expect(catalog.length - uniqueIds.size).toBe(0);
   });
 
 });

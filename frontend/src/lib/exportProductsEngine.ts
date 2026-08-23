@@ -157,7 +157,8 @@ export async function enrichRawProducts(items: any[]): Promise<any[]> {
 }
 
 /**
- * Executes a batch fetch from Supabase to retrieve products matching the scope and filters.
+ * Executes a batched, deduplicated fetch from Supabase to retrieve products matching scope and filters.
+ * Guarantees that 1 product ID = 1 export row.
  */
 export async function fetchExportProductsData(
   options: FetchExportOptions,
@@ -170,12 +171,13 @@ export async function fetchExportProductsData(
     if (!selectedIds || selectedIds.length === 0) return [];
     onProgress?.(0, selectedIds.length, 'Cargando productos seleccionados...');
     
-    // Fetch selected products by IDs in chunks of 100 to avoid query string length limits
+    // Deduplicate selected IDs
+    const uniqueSelectedIds = Array.from(new Set(selectedIds));
     const chunkSize = 100;
     const allSelectedItems: any[] = [];
 
-    for (let i = 0; i < selectedIds.length; i += chunkSize) {
-      const chunk = selectedIds.slice(i, i + chunkSize);
+    for (let i = 0; i < uniqueSelectedIds.length; i += chunkSize) {
+      const chunk = uniqueSelectedIds.slice(i, i + chunkSize);
       const { data, error } = await supabase
         .from('products')
         .select(`
@@ -215,7 +217,7 @@ export async function fetchExportProductsData(
       }
 
       if (data) allSelectedItems.push(...data);
-      onProgress?.(allSelectedItems.length, selectedIds.length, `Cargando productos seleccionados (${allSelectedItems.length}/${selectedIds.length})...`);
+      onProgress?.(allSelectedItems.length, uniqueSelectedIds.length, `Cargando productos seleccionados (${allSelectedItems.length}/${uniqueSelectedIds.length})...`);
     }
 
     return allSelectedItems.map(normalizeRawProductForExport);
@@ -242,31 +244,16 @@ export async function fetchExportProductsData(
   const categoryArg = isScopeAll ? null : (filters.categoryId || null);
   const brandArg = isScopeAll ? null : (filters.brandId || null);
 
-  // Fetch all matching products in batches of 500 via RPC search_admin_products
-  const batchSize = 500;
-  let page = 1;
-  let hasMore = true;
-  let totalCount = 0;
-  const rawProductsAccumulator: any[] = [];
-
+  const rawProductsMap = new Map<string, any>();
   onProgress?.(0, 0, 'Consultando catálogo en Supabase...');
 
-  while (hasMore) {
-    const { data, error } = await supabase.rpc('search_admin_products', {
-      p_search: searchArg,
-      p_category_id: categoryArg,
-      p_brand_id: brandArg,
-      p_vendor_id: effectiveVendorId,
-      p_status: statusFilter,
-      p_page: page,
-      p_page_size: batchSize,
-      p_sort_field: 'created_at',
-      p_sort_order: 'desc'
-    });
-
-    if (error || !data || data.length === 0) {
-      console.warn('[fetchExportProductsData RPC fallback]', error?.message || 'RPC returned empty');
-      const { data: dbDirect } = await supabase
+  // If fetching ALL products without search/category/brand filters, query products table directly with deterministic ordering
+  if (isScopeAll && !searchArg && !categoryArg && !brandArg) {
+    let offset = 0;
+    const directBatchSize = 1000;
+    
+    while (true) {
+      let query = supabase
         .from('products')
         .select(`
           id, title, slug, description, short_description, base_price, compare_at_price, status, badge, weight_kg, dimensions, condition, condition_notes, metadata, created_at, updated_at, vendor_id, category_id, brand_id,
@@ -276,40 +263,78 @@ export async function fetchExportProductsData(
           variants:product_variants(id, sku, inventory_count),
           images:product_images(id, url, is_primary, sort_order)
         `)
-        .order('created_at', { ascending: false });
+        .order('id', { ascending: true })
+        .range(offset, offset + directBatchSize - 1);
 
-      if (dbDirect && dbDirect.length > 0) {
-        rawProductsAccumulator.push(...dbDirect);
-        totalCount = dbDirect.length;
+      if (statusFilter) query = query.eq('status', statusFilter);
+      if (effectiveVendorId) query = query.eq('vendor_id', effectiveVendorId);
+
+      const { data: dbDirect, error: dbDirectErr } = await query;
+      if (dbDirectErr || !dbDirect || dbDirect.length === 0) break;
+
+      dbDirect.forEach(p => {
+        if (p.id) rawProductsMap.set(p.id, p);
+      });
+
+      onProgress?.(
+        rawProductsMap.size,
+        rawProductsMap.size,
+        `Obteniendo catálogo completo (${rawProductsMap.size})...`
+      );
+
+      if (dbDirect.length < directBatchSize) break;
+      offset += directBatchSize;
+    }
+  } else {
+    // For filtered queries, use search_admin_products RPC with Map deduplication
+    const batchSize = 500;
+    let page = 1;
+    let hasMore = true;
+    let totalCount = 0;
+
+    while (hasMore) {
+      const { data, error } = await supabase.rpc('search_admin_products', {
+        p_search: searchArg,
+        p_category_id: categoryArg,
+        p_brand_id: brandArg,
+        p_vendor_id: effectiveVendorId,
+        p_status: statusFilter,
+        p_page: page,
+        p_page_size: batchSize,
+        p_sort_field: 'created_at',
+        p_sort_order: 'desc'
+      });
+
+      if (error || !data || data.length === 0) break;
+
+      totalCount = Number(data[0].total_count || 0);
+      const batchItems = data[0].products || [];
+
+      if (batchItems.length === 0) break;
+
+      batchItems.forEach((p: any) => {
+        if (p.id) rawProductsMap.set(p.id, p);
+      });
+
+      onProgress?.(
+        rawProductsMap.size,
+        totalCount,
+        `Obteniendo productos (${Math.min(rawProductsMap.size, totalCount)} de ${totalCount})...`
+      );
+
+      if (batchItems.length < batchSize || page * batchSize >= totalCount) {
+        hasMore = false;
+      } else {
+        page++;
       }
-      break;
-    }
-
-    totalCount = Number(data[0].total_count || 0);
-    const batchItems = data[0].products || [];
-
-    if (batchItems.length === 0) {
-      break;
-    }
-
-    rawProductsAccumulator.push(...batchItems);
-
-    onProgress?.(
-      rawProductsAccumulator.length,
-      totalCount,
-      `Obteniendo productos (${Math.min(rawProductsAccumulator.length, totalCount)} de ${totalCount})...`
-    );
-
-    if (rawProductsAccumulator.length >= totalCount || batchItems.length < batchSize) {
-      hasMore = false;
-    } else {
-      page++;
     }
   }
 
+  const rawProductsAccumulator = Array.from(rawProductsMap.values());
+
   onProgress?.(
     rawProductsAccumulator.length,
-    totalCount,
+    rawProductsAccumulator.length,
     'Enriqueciendo datos relacionales del catálogo...'
   );
 
@@ -326,7 +351,17 @@ export async function fetchExportProductsData(
     normalized = normalized.filter(p => matchesProductFilters(p, filters));
   }
 
-  return normalized;
+  // Deduplicate normalized products by ID
+  const seenIds = new Set<string>();
+  const finalDeduplicatedProducts: ExportProductItem[] = [];
+  for (const prod of normalized) {
+    if (prod.id && !seenIds.has(prod.id)) {
+      seenIds.add(prod.id);
+      finalDeduplicatedProducts.push(prod);
+    }
+  }
+
+  return finalDeduplicatedProducts;
 }
 
 /**

@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import * as XLSX from 'xlsx';
+import * as fs from 'fs';
 
 test.describe('Bulk Product Import / Export System E2E Tests', () => {
 
@@ -139,6 +141,46 @@ test.describe('Bulk Product Import / Export System E2E Tests', () => {
     // Verify error detection in preview
     await expect(page.getByText('no es un Tipo MBE válido', { exact: false })).toBeVisible({ timeout: 10000 });
     await expect(page.getByText('Rechazadas', { exact: false })).toBeVisible();
+  });
+
+  test('8. Real All Scope 29 Column Export Download Verification', async ({ page }) => {
+    test.setTimeout(120000);
+    const exportBtn = page.getByRole('button', { name: /Exportar/i });
+    await exportBtn.click();
+
+    // Select "Todos los productos del catálogo"
+    await page.getByLabel('Todos los productos del catálogo').check();
+
+    // Select all columns
+    await page.getByRole('button', { name: /Seleccionar todas/i }).click();
+    await expect(page.getByText('29 de 29 columnas seleccionadas', { exact: false })).toBeVisible();
+
+    const downloadBtn = page.getByRole('button', { name: /GENERAR Y DESCARGAR/i });
+    await expect(downloadBtn).toBeEnabled({ timeout: 30000 });
+
+    const downloadPromise = page.waitForEvent('download', { timeout: 60000 });
+    await downloadBtn.click();
+
+    const download = await downloadPromise;
+    const downloadPath = await download.path();
+    expect(downloadPath).toBeTruthy();
+
+    if (downloadPath) {
+      const fileBuffer = fs.readFileSync(downloadPath);
+      const wb = XLSX.read(fileBuffer, { type: 'buffer' });
+      const sheet = wb.Sheets['Productos'];
+      const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+      
+      const headers = rows[0];
+      expect(headers.length).toBe(29);
+      expect(headers).toContain('Imagen principal');
+      expect(headers).toContain('Imágenes adicionales');
+      expect(headers).toContain('Fecha creación');
+      expect(headers).toContain('Última actualización');
+
+      // Verify product data row count matches expected database count 1563
+      expect(rows.length - 1).toBe(1563);
+    }
   });
 
 });

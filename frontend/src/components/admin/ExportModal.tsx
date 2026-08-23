@@ -1,4 +1,4 @@
-// Official Collectibles Export Modal v2.1 (Decoupled & Single-Toggle Fixed)
+// Official Collectibles Export Modal v2.2 (Strict Integrity & 29 Column Certified)
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { Download, X, FileSpreadsheet, FileCode, CheckSquare, Square, RefreshCw, Layers, Filter, Search } from 'lucide-react';
 import { getMasterFields } from '../../lib/productFieldRegistry';
@@ -31,7 +31,7 @@ export default function ExportModal({
 }: ExportModalProps) {
   const masterFields = useMemo(() => getMasterFields(userRole).filter(f => f.exportable), [userRole]);
 
-  // Master field default keys ordered by `order`
+  // Master field default keys ordered strictly by `order`
   const defaultKeys = useMemo(() => {
     return masterFields.map(f => f.key);
   }, [masterFields]);
@@ -187,6 +187,18 @@ export default function ExportModal({
         return;
       }
 
+      // Mandatory Integrity Validation (Requirement 15 & 42)
+      const expectedCount = scopeCount;
+      const actualCount = productsToExport.length;
+      const uniqueIdCount = new Set(productsToExport.map(p => p.id)).size;
+
+      if (scope === 'all' && (actualCount !== expectedCount || uniqueIdCount !== actualCount)) {
+        console.error(`[Export Integrity Failure] Expected: ${expectedCount}, Actual: ${actualCount}, Unique IDs: ${uniqueIdCount}`);
+        alert(`No se pudo validar la integridad de la exportación.\nEsperados: ${expectedCount} | Obtenidos: ${actualCount} | Únicos: ${uniqueIdCount}`);
+        setExporting(false);
+        return;
+      }
+
       setProgressMsg(format === 'xlsx' ? 'Generando archivo Excel (.xlsx)...' : 'Generando archivo CSV (UTF-8)...');
 
       await new Promise(r => setTimeout(r, 100));
@@ -238,100 +250,126 @@ export default function ExportModal({
           {/* Formato y Alcance Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             
-            {/* Formato selector */}
+            {/* 1. Formato de Archivo */}
             <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl space-y-3">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">1. Formato de Archivo</label>
-              <div className="grid grid-cols-2 gap-3">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> 1. Formato de Archivo
+              </h3>
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   disabled={exporting}
                   onClick={() => setFormat('xlsx')}
-                  className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all cursor-pointer ${
+                  className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all text-xs font-bold ${
                     format === 'xlsx'
-                      ? 'border-emerald-500 bg-emerald-50/40 text-emerald-800 font-bold shadow-sm'
-                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100 font-medium'
+                      ? 'border-emerald-500 bg-emerald-50/80 text-emerald-900 shadow-sm'
+                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
                   }`}
                 >
-                  <FileSpreadsheet className="w-6 h-6 text-emerald-600" />
-                  <span className="text-xs">Excel (.XLSX)</span>
+                  <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
+                  Excel (.XLSX)
+                  <span className="text-[10px] font-normal text-slate-500">Con formato y guía</span>
                 </button>
+
                 <button
                   type="button"
                   disabled={exporting}
                   onClick={() => setFormat('csv')}
-                  className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all cursor-pointer ${
+                  className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all text-xs font-bold ${
                     format === 'csv'
-                      ? 'border-blue-500 bg-blue-50/40 text-blue-800 font-bold shadow-sm'
-                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100 font-medium'
+                      ? 'border-emerald-500 bg-emerald-50/80 text-emerald-900 shadow-sm'
+                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
                   }`}
                 >
-                  <FileCode className="w-6 h-6 text-blue-600" />
-                  <span className="text-xs">CSV (UTF-8)</span>
+                  <FileCode className="w-5 h-5 text-blue-600" />
+                  CSV (UTF-8)
+                  <span className="text-[10px] font-normal text-slate-500">Texto plano estándar</span>
                 </button>
               </div>
             </div>
 
-            {/* Scope selector */}
+            {/* 2. Productos a Exportar */}
             <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl space-y-3">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">2. Productos a Exportar</label>
-              <select
-                value={scope}
-                disabled={exporting}
-                onChange={(e: any) => setScope(e.target.value as ExportScope)}
-                className="w-full text-sm font-semibold border border-slate-200 rounded-xl p-3 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none cursor-pointer"
-              >
-                <option value="all">Todos los productos ({isCalculatingCount && allCount === 0 ? '...' : allCount})</option>
-                <option value="filtered">Resultados filtrados ({isCalculatingCount ? '...' : filteredCount})</option>
-                <option value="selected" disabled={selectedProductIds.length === 0}>
-                  Productos seleccionados ({selectedProductIds.length})
-                </option>
-                <option value="published">Sólo Publicados / Activos</option>
-                <option value="draft">Sólo Borradores</option>
-                <option value="archived">Sólo Archivados / Inactivos</option>
-                <option value="out_of_stock">Sólo Agotados (Stock 0)</option>
-              </select>
-              
-              <div className="text-xs text-slate-600 font-medium flex items-center justify-between pt-1">
-                <span className="flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-emerald-600" />
-                  Se exportarán <strong>{isCalculatingCount ? '...' : scopeCount}</strong> productos en total.
-                </span>
-                {isCalculatingCount && (
-                  <RefreshCw className="w-3.5 h-3.5 text-slate-400 animate-spin" />
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                <Layers className="w-4 h-4 text-emerald-600" /> 2. Productos a Exportar
+              </h3>
+              <div className="space-y-2">
+                <label className={`flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition-all ${
+                  scope === 'all' ? 'border-emerald-500 bg-white shadow-sm' : 'border-slate-200 bg-slate-100/50 hover:bg-slate-100'
+                }`}>
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                    <input
+                      type="radio"
+                      name="exportScope"
+                      checked={scope === 'all'}
+                      onChange={() => setScope('all')}
+                      className="text-emerald-600 focus:ring-emerald-500"
+                    />
+                    Todos los productos del catálogo
+                  </div>
+                  <span className="text-xs font-black text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
+                    {isCalculatingCount ? '...' : allCount}
+                  </span>
+                </label>
+
+                <label className={`flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition-all ${
+                  scope === 'filtered' ? 'border-emerald-500 bg-white shadow-sm' : 'border-slate-200 bg-slate-100/50 hover:bg-slate-100'
+                }`}>
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                    <input
+                      type="radio"
+                      name="exportScope"
+                      checked={scope === 'filtered'}
+                      onChange={() => setScope('filtered')}
+                      className="text-emerald-600 focus:ring-emerald-500"
+                    />
+                    Productos filtrados actualmente
+                  </div>
+                  <span className="text-xs font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
+                    {isCalculatingCount ? '...' : filteredCount}
+                  </span>
+                </label>
+
+                {hasInitialSelected && (
+                  <label className={`flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition-all ${
+                    scope === 'selected' ? 'border-emerald-500 bg-white shadow-sm' : 'border-slate-200 bg-slate-100/50 hover:bg-slate-100'
+                  }`}>
+                    <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                      <input
+                        type="radio"
+                        name="exportScope"
+                        checked={scope === 'selected'}
+                        onChange={() => setScope('selected')}
+                        className="text-emerald-600 focus:ring-emerald-500"
+                      />
+                      Productos seleccionados ({selectedProductIds.length})
+                    </div>
+                    <span className="text-xs font-black text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
+                      {selectedProductIds.length}
+                    </span>
+                  </label>
                 )}
               </div>
             </div>
 
           </div>
 
-          {/* Filtros de Exportación */}
-          <div className="bg-slate-50/80 border border-slate-200 p-4 rounded-2xl space-y-3">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                <Filter className="w-3.5 h-3.5 text-emerald-600" /> Filtros de Exportación
-              </label>
+          {/* Filtros Modal Section */}
+          <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                <Filter className="w-4 h-4 text-emerald-600" /> Filtros Activos de Exportación
+              </h3>
               <button
                 type="button"
                 onClick={() => setExportFilters(createDefaultProductFilters())}
-                className="text-[11px] font-bold text-slate-500 hover:text-slate-800 underline cursor-pointer"
+                className="text-[11px] font-bold text-slate-500 hover:text-slate-800 underline"
               >
                 Limpiar filtros
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {/* Search query */}
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Buscar (Título, SKU)..."
-                  value={exportFilters.search}
-                  onChange={(e) => handleFilterChange('search', e.target.value)}
-                  className="w-full text-xs pl-9 pr-3 py-2 border border-slate-200 rounded-xl bg-white focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
               {/* Categoría */}
               <select
                 value={exportFilters.categoryId}
