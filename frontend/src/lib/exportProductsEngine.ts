@@ -15,7 +15,7 @@ export interface FetchExportOptions {
 
 /**
  * Normalizes a raw product object from DB query or RPC into a clean ExportProductItem.
- * Preserves product.id internally throughout the pipeline.
+ * Preserves product.id, vendor_id, category_id, brand_id internally throughout the pipeline.
  */
 export function normalizeRawProductForExport(item: any): ExportProductItem {
   if (!item) return { id: 'unknown', title: 'Desconocido', base_price: 0 };
@@ -90,6 +90,9 @@ export function normalizeRawProductForExport(item: any): ExportProductItem {
     image_url: primaryImg,
     created_at: item.created_at,
     updated_at: item.updated_at,
+    vendor_id: item.vendor_id || vendorObj?.id || null,
+    category_id: item.category_id || categoryObj?.id || null,
+    brand_id: item.brand_id || brandObj?.id || null,
     brand: brandObj,
     category: categoryObj,
     subcategory: subcategoryObj,

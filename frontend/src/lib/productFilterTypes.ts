@@ -47,24 +47,25 @@ export function matchesProductFilters(item: any, filters: ProductFilterState): b
 
   // Category filter
   if (filters.categoryId) {
-    const catId = item.category?.id || item.category_id;
+    const catId = item.category_id || item.category?.id;
     if (catId !== filters.categoryId) return false;
   }
 
   // Brand filter
   if (filters.brandId) {
-    const brId = item.brand?.id || item.brand_id;
+    const brId = item.brand_id || item.brand?.id;
     if (brId !== filters.brandId) return false;
   }
 
   // Vendor filter
   if (filters.vendorId && filters.vendorId !== 'all') {
+    const itemVendorId = item.vendor_id !== undefined ? item.vendor_id : item.vendor?.id;
     if (filters.vendorId === 'platform') {
-      if (item.vendor_id !== null && item.vendor_id !== undefined && item.vendor_id !== 'platform') {
+      if (itemVendorId !== null && itemVendorId !== undefined && itemVendorId !== 'platform') {
         return false;
       }
     } else {
-      if (item.vendor_id !== filters.vendorId) return false;
+      if (itemVendorId !== filters.vendorId) return false;
     }
   }
 

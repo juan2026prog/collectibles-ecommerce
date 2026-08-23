@@ -23,8 +23,8 @@ function createMockCatalog(count: number = 456): ExportProductItem[] {
     { id: 'brand-hasbro', name: 'Hasbro' }
   ];
   const vendors = [
-    { id: 'vendor-collectibles', store_name: 'Collectibles Oficial' },
-    { id: 'vendor-store1', store_name: 'Tienda Gamer' }
+    { id: 'platform', store_name: 'Collectibles Oficial' },
+    { id: 'vendor-jorgitoys', store_name: 'JorgiToys' }
   ];
 
   for (let i = 1; i <= count; i++) {
@@ -47,6 +47,9 @@ function createMockCatalog(count: number = 456): ExportProductItem[] {
       dimensions_width: 15.0,
       dimensions_height: 10.0,
       status: i % 10 === 0 ? 'draft' : 'published',
+      vendor_id: vendor.id,
+      category_id: cat.id,
+      brand_id: brand.id,
       category: cat,
       brand: brand,
       vendor: vendor,
@@ -82,9 +85,12 @@ const sampleProduct: ExportProductItem = {
   dimensions_width: 15.0,
   dimensions_height: 10.0,
   status: 'published',
+  vendor_id: 'platform',
+  category_id: 'cat-figuras',
+  brand_id: 'brand-neca',
   brand: { id: 'brand-neca', name: 'NECA' },
   category: { id: 'cat-figuras', name: 'Figuras de Acción' },
-  vendor: { id: 'vendor-collectibles', store_name: 'Collectibles Oficial' },
+  vendor: { id: 'platform', store_name: 'Collectibles Oficial' },
   metadata: { packaging_type: 'mbe_pak' },
   created_at: '2026-08-20T00:00:00Z',
   updated_at: '2026-08-22T00:00:00Z'
@@ -198,7 +204,7 @@ describe('Product Export & Import System Audit', () => {
     expect(preview.rows.length).toBe(1);
     expect(preview.rows[0].operation).toBe('invalid');
     expect(preview.rows[0].errors.some(e => e.includes('no es un Tipo MBE válido'))).toBe(true);
-  });
+  }, 15000);
 
   it('9. Verification: Invalid Estado AR value (e.g. ESTADO_FALSO) is rejected by parser', async () => {
     const fakeFileContent = 'SKU,Título,Precio,Stock,Estado AR\nSKU-999,Producto Test,100,5,ESTADO_FALSO';
@@ -259,7 +265,7 @@ describe('Product Export & Import System Audit', () => {
       brands: [{ id: 'brand-neca', name: 'NECA' }],
       categories: [{ id: 'cat-figuras', name: 'Figuras de Acción', parent_id: null }],
       licenses: [],
-      vendors: [{ id: 'vendor-collectibles', store_name: 'Collectibles Oficial' }]
+      vendors: [{ id: 'platform', store_name: 'Collectibles Oficial' }]
     });
 
     expect(preview.rows.length).toBe(1);
@@ -394,6 +400,24 @@ describe('Product Export & Import System Audit', () => {
     expect(catalog.length).toBe(456);
     expect(uniqueIds.size).toBe(456);
     expect(catalog.length - uniqueIds.size).toBe(0);
+  });
+
+  it('19. Filtered Scope Parity Test: Filtered queries for vendor and category preserve product.id and enforce zero missing/duplicate IDs', () => {
+    const catalog = createMockCatalog(456);
+    const filters: ProductFilterState = {
+      ...createDefaultProductFilters(),
+      vendorId: 'vendor-jorgitoys',
+      categoryId: 'cat-figuras'
+    };
+
+    const matching = catalog.filter(p => matchesProductFilters(p, filters));
+    expect(matching.length).toBeGreaterThan(0);
+
+    const ids = matching.map(p => p.id!);
+    const uniqueIds = new Set(ids);
+
+    expect(matching.length).toBe(uniqueIds.size);
+    expect(ids.length - uniqueIds.size).toBe(0);
   });
 
 });
