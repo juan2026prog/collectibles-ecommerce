@@ -1,4 +1,4 @@
-// Official Collectibles Export Modal v2.2 (Strict Integrity & 29 Column Certified)
+// Official Collectibles Export Modal v2.3 (Strict Integrity & 29 Column Certified)
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { Download, X, FileSpreadsheet, FileCode, CheckSquare, Square, RefreshCw, Layers, Filter, Search } from 'lucide-react';
 import { getMasterFields } from '../../lib/productFieldRegistry';
@@ -39,9 +39,9 @@ export default function ExportModal({
   const [selectedKeys, setSelectedKeys] = useState<string[]>(defaultKeys);
   const [format, setFormat] = useState<'xlsx' | 'csv'>('xlsx');
   
-  // Scope state
+  // Scope state (Defaults to 'all' catalog products when no checkboxes pre-selected)
   const hasInitialSelected = selectedProductIds.length > 0;
-  const [scope, setScope] = useState<ExportScope>(hasInitialSelected ? 'selected' : 'filtered');
+  const [scope, setScope] = useState<ExportScope>(hasInitialSelected ? 'selected' : 'all');
 
   // Filters state (isolated copy for modal)
   const [exportFilters, setExportFilters] = useState<ProductFilterState>(() => 
@@ -187,12 +187,12 @@ export default function ExportModal({
         return;
       }
 
-      // Mandatory Integrity Validation (Requirement 15 & 42)
+      // Mandatory Integrity Validation (Strict User Requirement)
       const expectedCount = scopeCount;
       const actualCount = productsToExport.length;
       const uniqueIdCount = new Set(productsToExport.map(p => p.id)).size;
 
-      if (scope === 'all' && (actualCount !== expectedCount || uniqueIdCount !== actualCount)) {
+      if (actualCount !== expectedCount || uniqueIdCount !== actualCount) {
         console.error(`[Export Integrity Failure] Expected: ${expectedCount}, Actual: ${actualCount}, Unique IDs: ${uniqueIdCount}`);
         alert(`No se pudo validar la integridad de la exportación.\nEsperados: ${expectedCount} | Obtenidos: ${actualCount} | Únicos: ${uniqueIdCount}`);
         setExporting(false);

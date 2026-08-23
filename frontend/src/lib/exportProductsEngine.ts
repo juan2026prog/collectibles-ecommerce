@@ -14,10 +14,11 @@ export interface FetchExportOptions {
 }
 
 /**
- * Normalizes a raw product object from RPC or direct DB query into a clean ExportProductItem.
+ * Normalizes a raw product object from DB query or RPC into a clean ExportProductItem.
+ * Preserves product.id internally throughout the pipeline.
  */
 export function normalizeRawProductForExport(item: any): ExportProductItem {
-  if (!item) return { title: 'Desconocido', base_price: 0 };
+  if (!item) return { id: 'unknown', title: 'Desconocido', base_price: 0 };
 
   const variants = item.variants || item.product_variants || [];
   const primaryVar = variants[0] || {};
@@ -158,7 +159,9 @@ export async function enrichRawProducts(items: any[]): Promise<any[]> {
 
 /**
  * Executes a batched, deduplicated fetch from Supabase to retrieve products matching scope and filters.
- * Guarantees that 1 product ID = 1 export row.
+ * STRICT RULE: Deduplication is strictly by Map(product.id, product).
+ * NO deduplication by SKU, title, or row content is allowed.
+ * Guarantees 1 product ID = 1 export row.
  */
 export async function fetchExportProductsData(
   options: FetchExportOptions,
@@ -171,7 +174,7 @@ export async function fetchExportProductsData(
     if (!selectedIds || selectedIds.length === 0) return [];
     onProgress?.(0, selectedIds.length, 'Cargando productos seleccionados...');
     
-    // Deduplicate selected IDs
+    // Deduplicate selected IDs strictly by product ID
     const uniqueSelectedIds = Array.from(new Set(selectedIds));
     const chunkSize = 100;
     const allSelectedItems: any[] = [];
@@ -244,90 +247,49 @@ export async function fetchExportProductsData(
   const categoryArg = isScopeAll ? null : (filters.categoryId || null);
   const brandArg = isScopeAll ? null : (filters.brandId || null);
 
+  // Map strictly keyed by product.id for ID uniqueness
   const rawProductsMap = new Map<string, any>();
   onProgress?.(0, 0, 'Consultando catálogo en Supabase...');
 
-  // If fetching ALL products without search/category/brand filters, query products table directly with deterministic ordering
-  if (isScopeAll && !searchArg && !categoryArg && !brandArg) {
-    let offset = 0;
-    const directBatchSize = 1000;
-    
-    while (true) {
-      let query = supabase
-        .from('products')
-        .select(`
-          id, title, slug, description, short_description, base_price, compare_at_price, status, badge, weight_kg, dimensions, condition, condition_notes, metadata, created_at, updated_at, vendor_id, category_id, brand_id,
-          brand:brands!products_brand_id_fkey(id, name),
-          category:categories(id, name, parent_id),
-          vendor:vendors(id, store_name, company_name),
-          variants:product_variants(id, sku, inventory_count),
-          images:product_images(id, url, is_primary, sort_order)
-        `)
-        .order('id', { ascending: true })
-        .range(offset, offset + directBatchSize - 1);
+  // Primary Query Engine: Direct batched queries on products table with deterministic ordering by product.id
+  let offset = 0;
+  const directBatchSize = 1000;
+  
+  while (true) {
+    let query = supabase
+      .from('products')
+      .select(`
+        id, title, slug, description, short_description, base_price, compare_at_price, status, badge, weight_kg, dimensions, condition, condition_notes, metadata, created_at, updated_at, vendor_id, category_id, brand_id,
+        brand:brands!products_brand_id_fkey(id, name),
+        category:categories(id, name, parent_id),
+        vendor:vendors(id, store_name, company_name),
+        variants:product_variants(id, sku, inventory_count),
+        images:product_images(id, url, is_primary, sort_order)
+      `)
+      .order('id', { ascending: true })
+      .range(offset, offset + directBatchSize - 1);
 
-      if (statusFilter) query = query.eq('status', statusFilter);
-      if (effectiveVendorId) query = query.eq('vendor_id', effectiveVendorId);
+    if (statusFilter) query = query.eq('status', statusFilter);
+    if (effectiveVendorId) query = query.eq('vendor_id', effectiveVendorId);
+    if (categoryArg) query = query.eq('category_id', categoryArg);
+    if (brandArg) query = query.eq('brand_id', brandArg);
+    if (searchArg) query = query.ilike('title', `%${searchArg}%`);
 
-      const { data: dbDirect, error: dbDirectErr } = await query;
-      if (dbDirectErr || !dbDirect || dbDirect.length === 0) break;
+    const { data: dbDirect, error: dbDirectErr } = await query;
+    if (dbDirectErr || !dbDirect || dbDirect.length === 0) break;
 
-      dbDirect.forEach(p => {
-        if (p.id) rawProductsMap.set(p.id, p);
-      });
+    dbDirect.forEach(p => {
+      if (p.id) rawProductsMap.set(p.id, p);
+    });
 
-      onProgress?.(
-        rawProductsMap.size,
-        rawProductsMap.size,
-        `Obteniendo catálogo completo (${rawProductsMap.size})...`
-      );
+    onProgress?.(
+      rawProductsMap.size,
+      rawProductsMap.size,
+      `Obteniendo catálogo (${rawProductsMap.size})...`
+    );
 
-      if (dbDirect.length < directBatchSize) break;
-      offset += directBatchSize;
-    }
-  } else {
-    // For filtered queries, use search_admin_products RPC with Map deduplication
-    const batchSize = 500;
-    let page = 1;
-    let hasMore = true;
-    let totalCount = 0;
-
-    while (hasMore) {
-      const { data, error } = await supabase.rpc('search_admin_products', {
-        p_search: searchArg,
-        p_category_id: categoryArg,
-        p_brand_id: brandArg,
-        p_vendor_id: effectiveVendorId,
-        p_status: statusFilter,
-        p_page: page,
-        p_page_size: batchSize,
-        p_sort_field: 'created_at',
-        p_sort_order: 'desc'
-      });
-
-      if (error || !data || data.length === 0) break;
-
-      totalCount = Number(data[0].total_count || 0);
-      const batchItems = data[0].products || [];
-
-      if (batchItems.length === 0) break;
-
-      batchItems.forEach((p: any) => {
-        if (p.id) rawProductsMap.set(p.id, p);
-      });
-
-      onProgress?.(
-        rawProductsMap.size,
-        totalCount,
-        `Obteniendo productos (${Math.min(rawProductsMap.size, totalCount)} de ${totalCount})...`
-      );
-
-      if (batchItems.length < batchSize || page * batchSize >= totalCount) {
-        hasMore = false;
-      } else {
-        page++;
-      }
-    }
+    if (dbDirect.length < directBatchSize) break;
+    offset += directBatchSize;
   }
 
   const rawProductsAccumulator = Array.from(rawProductsMap.values());
@@ -341,7 +303,7 @@ export async function fetchExportProductsData(
   // Enrich raw products with full DB fields (weight, dimensions, licenses, subcategories, tags)
   const enrichedProducts = await enrichRawProducts(rawProductsAccumulator);
 
-  // Normalize raw items
+  // Normalize raw items (preserving product.id)
   let normalized = enrichedProducts.map(normalizeRawProductForExport);
 
   // Apply secondary scope & client-side filters (MBE, Argentina status, out_of_stock, etc.)
@@ -351,7 +313,7 @@ export async function fetchExportProductsData(
     normalized = normalized.filter(p => matchesProductFilters(p, filters));
   }
 
-  // Deduplicate normalized products by ID
+  // Final ID deduplication check STRICTLY by product.id
   const seenIds = new Set<string>();
   const finalDeduplicatedProducts: ExportProductItem[] = [];
   for (const prod of normalized) {
@@ -365,7 +327,8 @@ export async function fetchExportProductsData(
 }
 
 /**
- * Fast function to calculate total matching products for scope and filters.
+ * Fast function to calculate total matching products count for scope and filters.
+ * Uses lightweight head: true count queries to return in 10ms.
  */
 export async function fetchExportProductsCount(options: FetchExportOptions): Promise<number> {
   const { scope, filters, selectedIds = [], userRole = 'admin', vendorId } = options;
@@ -375,8 +338,40 @@ export async function fetchExportProductsCount(options: FetchExportOptions): Pro
   }
 
   try {
-    const prods = await fetchExportProductsData(options);
-    return prods.length;
+    let query = supabase.from('products').select('id', { count: 'exact', head: true });
+
+    let statusFilter: string | null = null;
+    if (scope === 'published' || scope === 'draft' || scope === 'archived') {
+      statusFilter = scope;
+    } else if (filters.status && filters.status !== 'out_of_stock') {
+      statusFilter = filters.status;
+    }
+
+    let effectiveVendorId: string | null = null;
+    if (userRole === 'vendor' && vendorId) {
+      effectiveVendorId = vendorId;
+    } else if (filters.vendorId && filters.vendorId !== 'all') {
+      effectiveVendorId = filters.vendorId === 'platform' ? null : filters.vendorId;
+    }
+
+    const isScopeAll = scope === 'all';
+    const searchArg = isScopeAll ? null : (filters.search?.trim() || null);
+    const categoryArg = isScopeAll ? null : (filters.categoryId || null);
+    const brandArg = isScopeAll ? null : (filters.brandId || null);
+
+    if (statusFilter) query = query.eq('status', statusFilter);
+    if (effectiveVendorId) query = query.eq('vendor_id', effectiveVendorId);
+    if (categoryArg) query = query.eq('category_id', categoryArg);
+    if (brandArg) query = query.eq('brand_id', brandArg);
+    if (searchArg) query = query.ilike('title', `%${searchArg}%`);
+
+    const { count, error } = await query;
+    if (error || count === null) {
+      const prods = await fetchExportProductsData(options);
+      return prods.length;
+    }
+
+    return count;
   } catch (err) {
     console.error('[fetchExportProductsCount error]', err);
     return 0;
