@@ -397,7 +397,7 @@ describe('Product Export & Import System Audit', () => {
     expect(xlsxHeaders.length).toBe(expectedLength);
     expect(xlsxHeaders).toEqual(expectedLabels);
     expect(xlsxHeaders).toContain('Título');
-    expect(xlsxHeaders).toContain('Slug');
+    expect(xlsxHeaders).toContain('Slug / URL Friendly');
     expect(xlsxHeaders).toContain('URL del producto');
     expect(xlsxHeaders).toContain('Descripción');
     expect(xlsxHeaders).toContain('Descripción corta');

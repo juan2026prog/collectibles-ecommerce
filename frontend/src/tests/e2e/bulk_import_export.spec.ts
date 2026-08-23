@@ -178,11 +178,13 @@ test.describe('Bulk Product Import / Export System E2E Tests', () => {
       const headers = rows[0];
       expect(headers.length).toBe(36);
       expect(headers).toContain('Título');
-      expect(headers).toContain('Slug');
+      expect(headers).toContain('Slug / URL Friendly');
       expect(headers).toContain('URL del producto');
       expect(headers).toContain('Descripción');
       expect(headers).toContain('Descripción corta');
       expect(headers).toContain('Contenido');
+      expect(headers).toContain('Precio anterior');
+      expect(headers).toContain('Estado AR');
       expect(headers).toContain('Imagen principal');
       expect(headers).toContain('Imágenes adicionales');
       expect(headers).toContain('Fecha creación');

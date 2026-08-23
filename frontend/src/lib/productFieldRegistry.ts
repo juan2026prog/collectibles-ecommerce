@@ -81,7 +81,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
   },
   {
     key: 'slug',
-    label: 'Slug',
+    label: 'Slug / URL Friendly',
     description: 'Identificador amigable para URL (ej: figura-batman-legacy). Se genera automáticamente si se deja vacío.',
     order: 3,
     type: 'text',
@@ -268,7 +268,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
   },
   {
     key: 'compare_at_price',
-    label: 'Precio oferta',
+    label: 'Precio anterior',
     description: 'Precio anterior o tachado para mostrar descuentos visuales.',
     order: 13,
     type: 'decimal',
@@ -280,7 +280,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     nullable: true,
     blankBehavior: 'erase',
     example: '3500.00',
-    synonyms: ['compare_at_price', 'precio oferta', 'precio tachado', 'precio anterior', 'original_price'],
+    synonyms: ['compare_at_price', 'precio anterior', 'precio oferta', 'precio tachado', 'precio comparacion', 'original_price'],
     exportResolver: p => p.compare_at_price !== undefined && p.compare_at_price !== null ? Number(p.compare_at_price).toFixed(2) : ''
   },
   {
