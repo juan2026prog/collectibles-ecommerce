@@ -7,6 +7,7 @@ import type { PublicationValidationError } from './productPublicationValidator';
 import { normalizeCondition } from '../config/conditionConfig';
 import { fetchCatalogMetadataForTemplate } from './bulkTemplateGenerator';
 import type { CatalogMetadata } from './bulkTemplateGenerator';
+import { sanitizeMbePackagingType, mergeMbePackagingType, resolveMbePackagingTypeInput, resolveArgentinaShippingStatusInput } from './mbeLogisticsUtils';
 
 export interface ParsedImportRow {
   rowIndex: number;
@@ -78,7 +79,7 @@ export async function readRawFileRows(file: File): Promise<{ rawRows: Record<str
   }
 
   const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-  let firstSheetName = workbook.SheetNames.find(s => s === 'Productos') || workbook.SheetNames[0];
+  let firstSheetName = workbook.SheetNames.find(s => s === 'Productos' || s === 'Plantilla de Importacion') || workbook.SheetNames[0];
   const sheet = workbook.Sheets[firstSheetName];
   if (!sheet) {
     return { rawRows: [], headersFound: [] };
@@ -296,6 +297,30 @@ export async function parseAndPreviewImportFile(
       resolvedVendorId = currentVendorId;
     }
 
+    // Validate Tipo MBE
+    let parsedMbeType: string | null | undefined;
+    if (rowValuesByKey.mbe_packaging_type !== undefined) {
+      const rawMbe = String(rowValuesByKey.mbe_packaging_type).trim();
+      const resolved = resolveMbePackagingTypeInput(rawMbe);
+      if (resolved === undefined) {
+        rowErrors.push(`Fila ${rowIndex}: "${rawMbe}" no es un Tipo MBE válido.`);
+      } else {
+        parsedMbeType = resolved;
+      }
+    }
+
+    // Validate Estado AR
+    let parsedArStatus: string | null | undefined;
+    if (rowValuesByKey.argentina_shipping_status !== undefined) {
+      const rawAr = String(rowValuesByKey.argentina_shipping_status).trim();
+      const resolved = resolveArgentinaShippingStatusInput(rawAr);
+      if (resolved === undefined) {
+        rowErrors.push(`Fila ${rowIndex}: "${rawAr}" no es un Estado AR válido.`);
+      } else {
+        parsedArStatus = resolved;
+      }
+    }
+
     // Validate Numbers & Strings
     let parsedPrice: number | undefined;
     if (rowValuesByKey.base_price !== undefined) {
@@ -429,7 +454,11 @@ export async function parseAndPreviewImportFile(
       title: title || (existingProduct?.title || `Fila ${rowIndex}`),
       operation,
       existingProductId: existingProduct?.id,
-      parsedData: rowValuesByKey,
+      parsedData: {
+        ...rowValuesByKey,
+        resolvedMbeType: parsedMbeType,
+        resolvedArStatus: parsedArStatus
+      },
       dbPayload,
       resolvedBrandId,
       resolvedCategoryId,
@@ -476,6 +505,23 @@ export async function executeBulkImport(
     try {
       if (row.operation === 'create') {
         const slug = generateSlug(row.title);
+        
+        // Build metadata
+        let initialMeta: any = {
+          condition: row.dbPayload.condition || null,
+          condition_notes: row.dbPayload.condition_notes || null,
+          dimensions: row.dbPayload.dimensions || null,
+          image_url: row.parsedData.image_url || null,
+          subcategory_id: row.resolvedSubcategoryId || null
+        };
+
+        if (row.parsedData.resolvedMbeType !== undefined) {
+          initialMeta = mergeMbePackagingType(initialMeta, row.parsedData.resolvedMbeType);
+        }
+        if (row.parsedData.resolvedArStatus !== undefined && row.parsedData.resolvedArStatus) {
+          initialMeta.argentina_status = row.parsedData.resolvedArStatus;
+        }
+
         const productInsertPayload: any = {
           title: row.title,
           slug,
@@ -489,13 +535,7 @@ export async function executeBulkImport(
           vendor_id: userRole === 'vendor' ? currentVendorId : row.resolvedVendorId,
           badge: row.dbPayload.badge || null,
           weight_kg: row.dbPayload.weight_kg || null,
-          metadata: {
-            condition: row.dbPayload.condition || null,
-            condition_notes: row.dbPayload.condition_notes || null,
-            dimensions: row.dbPayload.dimensions || null,
-            image_url: row.parsedData.image_url || null,
-            subcategory_id: row.resolvedSubcategoryId || null
-          }
+          metadata: initialMeta
         };
 
         const { data: newProd, error: createErr } = await supabase
@@ -540,8 +580,33 @@ export async function executeBulkImport(
         createdCount++;
         successCount++;
       } else if (row.operation === 'update' && row.existingProductId) {
-        // PARTIAL UPDATE: Only update fields present in row.dbPayload
+        // PARTIAL UPDATE: Only update fields present in row.dbPayload or metadata
         const updatePayload: any = { ...row.dbPayload, updated_at: new Date().toISOString() };
+
+        // Handle metadata fields partial update
+        if (row.parsedData.resolvedMbeType !== undefined || row.parsedData.resolvedArStatus !== undefined) {
+          // Fetch existing metadata to merge safely
+          const { data: currentProd } = await supabase
+            .from('products')
+            .select('metadata')
+            .eq('id', row.existingProductId)
+            .single();
+
+          let mergedMeta = currentProd?.metadata && typeof currentProd.metadata === 'object' ? { ...currentProd.metadata } : {};
+
+          if (row.parsedData.resolvedMbeType !== undefined) {
+            mergedMeta = mergeMbePackagingType(mergedMeta, row.parsedData.resolvedMbeType);
+          }
+          if (row.parsedData.resolvedArStatus !== undefined) {
+            if (row.parsedData.resolvedArStatus) {
+              mergedMeta.argentina_status = row.parsedData.resolvedArStatus;
+            } else {
+              delete mergedMeta.argentina_status;
+            }
+          }
+
+          updatePayload.metadata = mergedMeta;
+        }
 
         const { error: updateErr } = await supabase
           .from('products')

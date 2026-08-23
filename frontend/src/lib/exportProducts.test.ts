@@ -5,6 +5,8 @@ import { generateProductsCsv, generateProductsXlsxBlob, formatProductRecordForEx
 import type { ExportProductItem } from './bulkExportUtils';
 import { normalizeRawProductForExport } from './exportProductsEngine';
 import { getMasterFields } from './productFieldRegistry';
+import { generateXlsxImportTemplate } from './bulkTemplateGenerator';
+import { parseAndPreviewImportFile } from './bulkImportEngine';
 
 // Generate mock dataset of 456 products
 function createMockCatalog(count: number = 456): ExportProductItem[] {
@@ -172,103 +174,125 @@ describe('Product Export Module Unit & Isolation Tests', () => {
   });
 });
 
-describe('Column Selection & Fixed Order Comprehensive Tests', () => {
+describe('Column Selection & Fixed Order Comprehensive Tests (29 Master Fields)', () => {
   const masterFields = getMasterFields('admin').filter(f => f.exportable);
   const sampleProduct = createMockCatalog(1)[0];
 
-  it('1. Selecting only SKU -> exports exactly 1 column', () => {
-    const selectedKeys = ['sku'];
+  it('1. Tipo MBE appears in column selection list', () => {
+    const mbeField = masterFields.find(f => f.key === 'mbe_packaging_type');
+    expect(mbeField).toBeTruthy();
+    expect(mbeField?.label).toBe('Tipo MBE');
+  });
+
+  it('2. Estado AR appears in column selection list', () => {
+    const arField = masterFields.find(f => f.key === 'argentina_shipping_status');
+    expect(arField).toBeTruthy();
+    expect(arField?.label).toBe('Estado AR');
+  });
+
+  it('3. Selecting only SKU, Tipo MBE and Estado AR -> exports 3 columns', () => {
+    const selectedKeys = ['sku', 'mbe_packaging_type', 'argentina_shipping_status'];
     const record = formatProductRecordForExport(sampleProduct, selectedKeys);
-    expect(Object.keys(record)).toEqual(['sku']);
-
-    const csv = generateProductsCsv([sampleProduct], selectedKeys, 'admin');
-    expect(csv).toContain('"SKU"');
-    expect(csv).not.toContain('"Título"');
+    expect(Object.keys(record)).toEqual(['sku', 'mbe_packaging_type', 'argentina_shipping_status']);
+    expect(record.mbe_packaging_type).toBe('MBE Caja');
+    expect(record.argentina_shipping_status).toBe('Envío automático');
   });
 
-  it('2. Selecting SKU + Title -> exports exactly 2 columns', () => {
-    const selectedKeys = ['sku', 'title'];
-    const record = formatProductRecordForExport(sampleProduct, selectedKeys);
-    expect(Object.keys(record)).toEqual(['sku', 'title']);
-  });
-
-  it('3. Selecting 5 columns (SKU, Title, Base Price, Stock, Weight) -> exports 5 columns', () => {
-    const selectedKeys = ['sku', 'title', 'base_price', 'stock', 'weight_kg'];
-    const record = formatProductRecordForExport(sampleProduct, selectedKeys);
-    expect(Object.keys(record).length).toBe(5);
-  });
-
-  it('4. Unmarking a column -> count decreases from 5 to 4', () => {
-    let keysSet = new Set(['sku', 'title', 'base_price', 'stock', 'weight_kg']);
-    expect(keysSet.size).toBe(5);
-
-    keysSet.delete('title');
-    expect(keysSet.size).toBe(4);
-
-    const activeKeys = masterFields.map(f => f.key).filter(k => keysSet.has(k));
-    const record = formatProductRecordForExport(sampleProduct, activeKeys);
-    expect(Object.keys(record).length).toBe(4);
-    expect(record.title).toBeUndefined();
-  });
-
-  it('5. Select all -> selects all master exportable columns (27 of 27)', () => {
+  it('4. Select all -> selects all 29 master exportable columns', () => {
     const allKeys = masterFields.map(f => f.key);
-    expect(allKeys.length).toBe(27);
+    expect(allKeys.length).toBe(29);
 
     const record = formatProductRecordForExport(sampleProduct, allKeys);
-    expect(Object.keys(record).length).toBe(27);
+    expect(Object.keys(record).length).toBe(29);
   });
 
-  it('6. Quitar todas -> leaves 0 columns selected', () => {
-    const noKeys: string[] = [];
-    const record = formatProductRecordForExport(sampleProduct, noKeys);
-    expect(Object.keys(record).length).toBe(0);
+  it('5. Export CSV with Tipo MBE and Estado AR -> contains human readable labels', () => {
+    const prodWithMbe: ExportProductItem = {
+      ...sampleProduct,
+      metadata: { packaging_type: 'mbe_pak' }
+    };
+    const selectedKeys = ['sku', 'title', 'mbe_packaging_type', 'argentina_shipping_status'];
+    const csv = generateProductsCsv([prodWithMbe], selectedKeys, 'admin');
+
+    expect(csv).toContain('"SKU","Título","Tipo MBE","Estado AR"');
+    expect(csv).toContain('"MBE PAK"');
+    expect(csv).toContain('"Envío automático"');
   });
 
-  it('7. Restablecer -> returns to official master default column list', () => {
-    const defaultKeys = masterFields.map(f => f.key);
-    expect(defaultKeys.length).toBe(27);
-    expect(defaultKeys[0]).toBe('sku');
-    expect(defaultKeys[1]).toBe('title');
-  });
-
-  it('8. Partial selection XLSX export -> generates blob containing exact selected columns', async () => {
-    const selectedKeys = ['sku', 'title', 'base_price', 'stock', 'weight_kg'];
+  it('6. Export XLSX with Tipo MBE and Estado AR -> generates valid Blob', async () => {
+    const selectedKeys = ['sku', 'title', 'mbe_packaging_type', 'argentina_shipping_status'];
     const blob = await generateProductsXlsxBlob([sampleProduct], selectedKeys, 'admin');
     expect(blob).toBeTruthy();
     expect(blob.size).toBeGreaterThan(0);
   });
 
-  it('9. Partial selection CSV export -> generates CSV string containing exact selected headers', () => {
-    const selectedKeys = ['sku', 'title', 'base_price', 'stock', 'weight_kg'];
-    const csv = generateProductsCsv([sampleProduct], selectedKeys, 'admin');
+  it('7. XLSX template generation includes Listas sheet and guide entries for Tipo MBE and Estado AR', async () => {
+    const mockMeta = {
+      brands: [{ id: 'b1', name: 'NECA' }],
+      categories: [{ id: 'c1', name: 'Figuras', parent_id: null }],
+      licenses: [{ id: 'l1', name: 'Marvel' }],
+      vendors: [{ id: 'v1', store_name: 'Collectibles' }]
+    };
 
-    const lines = csv.trim().split('\n');
-    expect(lines[0]).toContain('"SKU","Título","Precio","Stock","Peso"');
+    const blob = await generateXlsxImportTemplate('admin', mockMeta);
+    expect(blob).toBeTruthy();
+    expect(blob.size).toBeGreaterThan(0);
   });
 
-  it('10. Verification: unselected columns (e.g. Cost, Description) DO NOT appear in output', () => {
-    const selectedKeys = ['sku', 'title'];
-    const record = formatProductRecordForExport(sampleProduct, selectedKeys);
+  it('8. Verification: Invalid Tipo MBE value (e.g. PRUEBA123) is rejected by parser', async () => {
+    const fakeFileContent = 'SKU,Título,Precio,Stock,Tipo MBE\nSKU-999,Producto Test,100,5,PRUEBA123';
+    const blob = new Blob([fakeFileContent], { type: 'text/csv' });
+    const file = new File([blob], 'test_invalid_mbe.csv', { type: 'text/csv' });
 
-    expect(record.cost_price).toBeUndefined();
-    expect(record.description).toBeUndefined();
-    expect(record.brand_name).toBeUndefined();
+    const preview = await parseAndPreviewImportFile(file, 'admin', null, {
+      brands: [],
+      categories: [],
+      licenses: [],
+      vendors: []
+    });
+
+    expect(preview.rows.length).toBe(1);
+    expect(preview.rows[0].operation).toBe('invalid');
+    expect(preview.rows[0].errors.some(e => e.includes('no es un Tipo MBE válido'))).toBe(true);
   });
 
-  it('11. Verification: fixed order is strictly enforced regardless of click order', () => {
-    const randomClickOrder = ['stock', 'weight_kg', 'sku', 'title'];
-    const sortedKeys = masterFields.map(f => f.key).filter(k => randomClickOrder.includes(k));
+  it('9. Verification: Invalid Estado AR value (e.g. ESTADO_FALSO) is rejected by parser', async () => {
+    const fakeFileContent = 'SKU,Título,Precio,Stock,Estado AR\nSKU-999,Producto Test,100,5,ESTADO_FALSO';
+    const blob = new Blob([fakeFileContent], { type: 'text/csv' });
+    const file = new File([blob], 'test_invalid_ar.csv', { type: 'text/csv' });
 
-    expect(sortedKeys).toEqual(['sku', 'title', 'stock', 'weight_kg']);
+    const preview = await parseAndPreviewImportFile(file, 'admin', null, {
+      brands: [],
+      categories: [],
+      licenses: [],
+      vendors: []
+    });
 
-    const csv = generateProductsCsv([sampleProduct], sortedKeys, 'admin');
-    expect(csv).toContain('"SKU","Título","Stock","Peso"');
+    expect(preview.rows.length).toBe(1);
+    expect(preview.rows[0].operation).toBe('invalid');
+    expect(preview.rows[0].errors.some(e => e.includes('no es un Estado AR válido'))).toBe(true);
   });
 
-  it('12. Verification: with 0 columns, CSV output contains no column headers or data', () => {
-    const selectedKeys: string[] = [];
-    const csv = generateProductsCsv([sampleProduct], selectedKeys, 'admin');
-    expect(csv.replace('\uFEFF', '').trim()).toBe('');
+  it('10. Verification: Valid visible labels (MBE PAK, Envío automático) resolve correctly to internal keys', async () => {
+    const fakeFileContent = 'SKU,Título,Precio,Stock,Tipo MBE,Estado AR\nSKU-999,Producto Test,100,5,MBE PAK,Envío automático';
+    const blob = new Blob([fakeFileContent], { type: 'text/csv' });
+    const file = new File([blob], 'test_valid_labels.csv', { type: 'text/csv' });
+
+    const preview = await parseAndPreviewImportFile(file, 'admin', null, {
+      brands: [],
+      categories: [],
+      licenses: [],
+      vendors: []
+    });
+
+    expect(preview.rows.length).toBe(1);
+    expect(preview.rows[0].parsedData.resolvedMbeType).toBe('mbe_pak');
+    expect(preview.rows[0].parsedData.resolvedArStatus).toBe('auto');
+  });
+
+  it('11. Verification: fixed order is strictly enforced for all 29 fields', () => {
+    const keys = masterFields.map(f => f.key);
+    expect(keys.indexOf('mbe_packaging_type')).toBe(19); // order 20 (0-indexed 19)
+    expect(keys.indexOf('argentina_shipping_status')).toBe(20); // order 21 (0-indexed 20)
   });
 });

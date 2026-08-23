@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import { getMasterFields } from './productFieldRegistry';
 import type { ProductFieldDefinition } from './productFieldRegistry';
 import { getConditionLabel } from '../config/conditionConfig';
+import { getMbePackagingLabel, calculateArgentinaShippingStatus } from './mbeLogisticsUtils';
 
 export interface ExportProductItem {
   id?: string;
@@ -20,6 +21,8 @@ export interface ExportProductItem {
   dimensions_length?: number | null;
   dimensions_width?: number | null;
   dimensions_height?: number | null;
+  mbe_packaging_type?: string | null;
+  argentina_shipping_status?: string | null;
   status?: string;
   badge?: string | null;
   image_url?: string | null;
@@ -31,7 +34,7 @@ export interface ExportProductItem {
   category?: { id?: string; name?: string; parent_id?: string | null } | null;
   subcategory?: { id?: string; name?: string } | null;
   license?: { id?: string; name?: string } | null;
-  vendor?: { id?: string; store_name?: string; company_name?: string } | null;
+  vendor?: { id?: string; store_name?: string; company_name?: string; status?: string | null; ships_to_argentina?: boolean | null } | null;
   tags?: { id?: string; name?: string }[] | string[] | null;
   gallery?: { url: string }[] | string[] | null;
   
@@ -138,6 +141,13 @@ export function formatProductRecordForExport(
         break;
       case 'dimensions_height':
         record[key] = String(dimHei);
+        break;
+      case 'mbe_packaging_type':
+        record[key] = getMbePackagingLabel(item.metadata?.packaging_type || item.metadata?.mbe_service_type || (item as any).mbe_packaging_type);
+        break;
+      case 'argentina_shipping_status':
+        const arStatus = calculateArgentinaShippingStatus(item);
+        record[key] = arStatus.isEligible ? 'Envío automático' : 'Requiere cotización';
         break;
       case 'vendor_store_name':
         record[key] = item.vendor?.store_name || item.vendor?.company_name || item.metadata?.vendor_name || 'Collectibles Oficial';

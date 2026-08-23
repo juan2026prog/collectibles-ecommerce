@@ -41,10 +41,53 @@ export async function generateXlsxImportTemplate(
   const importableFields = masterFields.filter(f => f.key !== 'id');
 
   const headers = importableFields.map(f => f.label);
-  const sampleRow1 = importableFields.map(f => f.example || '');
-  const sampleRow2 = importableFields.map(f => f.key === 'title' ? 'Ejemplo Producto 2' : (f.example || ''));
+  const sampleRow1 = importableFields.map(f => {
+    if (f.key === 'mbe_packaging_type') return 'MBE PAK';
+    if (f.key === 'argentina_shipping_status') return 'Envío automático';
+    return f.example || '';
+  });
+  const sampleRow2 = importableFields.map(f => {
+    if (f.key === 'title') return 'Ejemplo Producto 2';
+    if (f.key === 'mbe_packaging_type') return 'MBE Caja';
+    if (f.key === 'argentina_shipping_status') return 'Requiere cotización';
+    return f.example || '';
+  });
 
   const mainSheet = XLSX.utils.aoa_to_sheet([headers, sampleRow1, sampleRow2]);
+
+  // Build Listas reference sheet
+  const mbeTypes = ['MBE PAK', 'MBE Caja', 'Sin definir'];
+  const arStatuses = ['Envío automático', 'Requiere cotización'];
+  const brandNames = metadata.brands.map(b => b.name);
+  const catNames = metadata.categories.map(c => c.name);
+  const licenseNames = metadata.licenses.map(l => l.name);
+  const vendorNames = metadata.vendors.map(v => v.store_name);
+
+  const maxListRows = Math.max(
+    mbeTypes.length,
+    arStatuses.length,
+    brandNames.length,
+    catNames.length,
+    licenseNames.length,
+    vendorNames.length,
+    1
+  );
+
+  const listsHeaders = ['TIPO_MBE', 'ESTADO_AR', 'MARCAS', 'CATEGORIAS', 'LICENCIAS', 'VENDEDORES'];
+  const listsRows: string[][] = [];
+
+  for (let r = 0; r < maxListRows; r++) {
+    listsRows.push([
+      mbeTypes[r] || '',
+      arStatuses[r] || '',
+      brandNames[r] || '',
+      catNames[r] || '',
+      licenseNames[r] || '',
+      vendorNames[r] || ''
+    ]);
+  }
+
+  const listsSheet = XLSX.utils.aoa_to_sheet([listsHeaders, ...listsRows]);
 
   // Guide Sheet
   const guideHeaders = [
@@ -57,8 +100,12 @@ export async function generateXlsxImportTemplate(
   ];
   const guideRows = importableFields.map(field => {
     let allowedDesc = 'Texto libre';
-    if (field.type === 'enum' && field.allowedValues) {
-      allowedDesc = field.allowedValues.map(v => v.value).join(', ');
+    if (field.key === 'mbe_packaging_type') {
+      allowedDesc = 'Desplegable: MBE PAK, MBE Caja, Sin definir';
+    } else if (field.key === 'argentina_shipping_status') {
+      allowedDesc = 'Desplegable: Envío automático, Requiere cotización';
+    } else if (field.type === 'enum' && field.allowedValues) {
+      allowedDesc = field.allowedValues.map(v => v.label || v.value).join(', ');
     } else if (field.type === 'relation') {
       allowedDesc = `Desplegable con ${field.label} vigentes en la plataforma`;
     } else if (field.type === 'decimal' || field.type === 'number') {
@@ -84,6 +131,7 @@ export async function generateXlsxImportTemplate(
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, mainSheet, 'Plantilla de Importacion');
   XLSX.utils.book_append_sheet(workbook, guideSheet, 'Guia de Importacion');
+  XLSX.utils.book_append_sheet(workbook, listsSheet, 'Listas');
 
   const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
   return new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });

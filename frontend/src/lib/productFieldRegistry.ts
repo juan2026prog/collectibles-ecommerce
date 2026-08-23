@@ -1,4 +1,5 @@
 import { CONDITION_OPTIONS, getConditionLabel } from '../config/conditionConfig';
+import { getMbePackagingLabel } from './mbeLogisticsUtils';
 
 export type FieldDataType = 
   | 'text' 
@@ -237,7 +238,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
   {
     key: 'condition_notes',
     label: 'Notas de condición',
-    description: 'Detalles específicos del estado o empaque (ej. caja golpeada, imcompleto).',
+    description: 'Detalles específicos del estado o empaque (ej. caja golpeada, incompleto).',
     order: 14,
     type: 'text',
     exportable: true,
@@ -319,10 +320,47 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     synonyms: ['dimensions_height', 'alto', 'height', 'alto_cm']
   },
   {
+    key: 'mbe_packaging_type',
+    label: 'Tipo MBE',
+    description: 'Tipo de paquete/empaque MBE asignado (MBE PAK, MBE Caja o Sin definir).',
+    order: 20,
+    type: 'enum',
+    exportable: true,
+    importable: true,
+    requiredForCreate: false,
+    requiredForPublish: false,
+    adminOnly: false,
+    allowedValues: [
+      { value: 'mbe_pak', label: 'MBE PAK' },
+      { value: 'mbe_caja', label: 'MBE Caja' },
+      { value: 'none', label: 'Sin definir' }
+    ],
+    example: 'MBE PAK',
+    synonyms: ['mbe_packaging_type', 'tipo mbe', 'tipo_mbe', 'mbe_type', 'mbe_service_type', 'packaging_type', 'empaque_mbe', 'mbe']
+  },
+  {
+    key: 'argentina_shipping_status',
+    label: 'Estado AR',
+    description: 'Estado de logística e idoneidad para envío a Argentina (Envío automático o Requiere cotización).',
+    order: 21,
+    type: 'enum',
+    exportable: true,
+    importable: true,
+    requiredForCreate: false,
+    requiredForPublish: false,
+    adminOnly: false,
+    allowedValues: [
+      { value: 'auto', label: 'Envío automático' },
+      { value: 'quote', label: 'Requiere cotización' }
+    ],
+    example: 'Envío automático',
+    synonyms: ['argentina_shipping_status', 'estado ar', 'estado_ar', 'ar_status', 'argentina_status', 'envio_ar', 'envio_argentina']
+  },
+  {
     key: 'vendor_store_name',
     label: 'Vendedor',
     description: 'Nombre comercial de la tienda o vendedor propietario. Campo restringido a administradores.',
-    order: 20,
+    order: 22,
     type: 'relation',
     exportable: true,
     importable: true,
@@ -339,7 +377,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     key: 'tags',
     label: 'Etiquetas',
     description: 'Etiquetas separadas por comas (ej: Edición Limitada, Vintage).',
-    order: 21,
+    order: 23,
     type: 'array',
     exportable: true,
     importable: true,
@@ -353,7 +391,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     key: 'badge',
     label: 'Cocarda',
     description: 'Texto promocional o distintivo en la tarjeta del producto (ej: Novedad, Destacado).',
-    order: 22,
+    order: 24,
     type: 'text',
     exportable: true,
     importable: true,
@@ -367,7 +405,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     key: 'status',
     label: 'Estado',
     description: 'Estado de publicación (published = publicado/activo, draft = borrador, archived = archivado/inactivo).',
-    order: 23,
+    order: 25,
     type: 'enum',
     exportable: true,
     importable: true,
@@ -386,7 +424,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     key: 'image_url',
     label: 'Imagen principal',
     description: 'URL pública directa de la imagen principal del producto.',
-    order: 24,
+    order: 26,
     type: 'url',
     exportable: true,
     importable: true,
@@ -400,7 +438,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     key: 'additional_images',
     label: 'Imágenes adicionales',
     description: 'URLs adicionales separadas por la barra vertical | o comas.',
-    order: 25,
+    order: 27,
     type: 'array',
     exportable: true,
     importable: true,
@@ -414,7 +452,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     key: 'created_at',
     label: 'Fecha creación',
     description: 'Fecha de registro original del producto en el sistema (Solo lectura en exportaciones).',
-    order: 26,
+    order: 28,
     type: 'date',
     exportable: true,
     importable: false,
@@ -426,7 +464,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     key: 'updated_at',
     label: 'Última actualización',
     description: 'Fecha de última modificación registrada (Solo lectura en exportaciones).',
-    order: 27,
+    order: 29,
     type: 'date',
     exportable: true,
     importable: false,

@@ -15,15 +15,48 @@ export interface ArgentinaShippingStatus {
 /**
  * Sanitizes and validates input for MBE packaging_type
  * Returns 'mbe_pak', 'mbe_caja', or null.
- * Throws or returns null for invalid values (e.g. 'gratis').
  */
 export function sanitizeMbePackagingType(val: any): MbePackagingType {
   if (!val || typeof val !== 'string') return null;
-  const normalized = val.trim().toLowerCase();
-  if (['mbe_pak', 'pak'].includes(normalized)) return 'mbe_pak';
-  if (['mbe_caja', 'caja', 'box'].includes(normalized)) return 'mbe_caja';
-  if (['none', 'null', 'sin_definir', ''].includes(normalized)) return null;
+  const normalized = val.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (normalized.includes('pak')) return 'mbe_pak';
+  if (normalized.includes('caja') || normalized.includes('box')) return 'mbe_caja';
+  if (['none', 'null', 'sin_definir', 'sin definir', ''].includes(normalized)) return null;
   return null;
+}
+
+/**
+ * Resolves imported string value into internal MbePackagingType key ('mbe_pak' | 'mbe_caja' | null)
+ * Returns undefined if the value is invalid.
+ */
+export function resolveMbePackagingTypeInput(val: any): 'mbe_pak' | 'mbe_caja' | null | undefined {
+  if (val === null || val === undefined || val === '') return null;
+  if (typeof val !== 'string') return undefined;
+  const norm = val.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (norm.includes('pak')) return 'mbe_pak';
+  if (norm.includes('caja') || norm.includes('box')) return 'mbe_caja';
+  if (['sin definir', 'none', 'null', 'sin_especificar', ''].includes(norm)) return null;
+  return undefined; // Invalid
+}
+
+/**
+ * Resolves imported string value into internal Argentina Shipping Status key ('auto' | 'quote' | null)
+ * Returns undefined if the value is invalid.
+ */
+export function resolveArgentinaShippingStatusInput(val: any): 'auto' | 'quote' | null | undefined {
+  if (val === null || val === undefined || val === '') return null;
+  if (typeof val !== 'string') return undefined;
+  const norm = val.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (norm.includes('auto') || norm.includes('eligible') || norm.includes('disponible') || norm.includes('automatico')) {
+    return 'auto';
+  }
+  if (norm.includes('quote') || norm.includes('cotiza') || norm.includes('cotizacion')) {
+    return 'quote';
+  }
+  if (['none', 'null', 'sin_definir', 'sin definir', ''].includes(norm)) {
+    return null;
+  }
+  return undefined; // Invalid
 }
 
 /**
@@ -32,8 +65,7 @@ export function sanitizeMbePackagingType(val: any): MbePackagingType {
 export function isValidMbePackagingType(val: any): boolean {
   if (val === null || val === undefined || val === '') return true;
   if (typeof val !== 'string') return false;
-  const normalized = val.trim().toLowerCase();
-  return ['mbe_pak', 'pak', 'mbe_caja', 'caja', 'box', 'none', 'null', 'sin_definir'].includes(normalized);
+  return resolveMbePackagingTypeInput(val) !== undefined;
 }
 
 /**
@@ -65,11 +97,6 @@ export function mergeMbePackagingType(existingMetadata: any, packagingType: any)
 
 /**
  * Calculates Argentina automatic shipping eligibility based on DB product & vendor data.
- * Priority hierarchy:
- * 1. Collectibles products (vendor_id null or 'platform') are ALWAYS active and enabled for Argentina.
- * 2. Vendor Operational Status: if status !== 'active', return VENDOR_DISABLED immediately.
- * 3. External vendor opt-in: ships_to_argentina === true. If false, return VENDOR_ARGENTINA_DISABLED.
- * 4. Logistics checks: real weight, explicit packaging, and volumetric weight.
  */
 export function calculateArgentinaShippingStatus(
   product: {
@@ -103,7 +130,6 @@ export function calculateArgentinaShippingStatus(
   // Priority 2: External vendor Argentina Opt-in check
   let vendorEnabled = false;
   if (isCollectibles) {
-    // Collectibles products are ALWAYS enabled for Argentina (Override)
     vendorEnabled = true;
   } else {
     const shipsOpt = vendorSettings?.ships_to_argentina ?? product.vendor?.ships_to_argentina ?? product.vendor?.shipping_settings?.ships_to_argentina;
@@ -120,7 +146,7 @@ export function calculateArgentinaShippingStatus(
     };
   }
 
-  // Priority 3: Logistics requirements (weight, packaging, dimensions, rates)
+  // Priority 3: Logistics requirements
   const weight = Number(product.weight_kg || 0);
   if (!weight || weight <= 0) {
     return {
