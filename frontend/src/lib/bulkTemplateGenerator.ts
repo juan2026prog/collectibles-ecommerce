@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { getMasterFields } from './productFieldRegistry';
 import { supabase } from '../lib/supabase';
+import { CONDITION_OPTIONS } from '../config/conditionConfig';
 
 export interface CatalogMetadata {
   brands: { id: string; name: string }[];
@@ -38,7 +39,7 @@ export async function generateXlsxImportTemplate(
 ): Promise<Blob> {
   const metadata = existingMetadata || (await fetchCatalogMetadataForTemplate());
   const masterFields = getMasterFields(userRole);
-  const importableFields = masterFields.filter(f => f.key !== 'id');
+  const importableFields = masterFields.filter(f => f.importable && f.key !== 'id');
 
   const headers = importableFields.map(f => f.label);
   const sampleRow1 = importableFields.map(f => {
@@ -59,21 +60,27 @@ export async function generateXlsxImportTemplate(
   const mbeTypes = ['MBE PAK', 'MBE Caja', 'Sin definir'];
   const arStatuses = ['Envío automático', 'Requiere cotización'];
   const brandNames = metadata.brands.map(b => b.name);
-  const catNames = metadata.categories.map(c => c.name);
+  const mainCatNames = metadata.categories.filter(c => !c.parent_id).map(c => c.name);
+  const subcatNames = metadata.categories.filter(c => c.parent_id).map(c => c.name);
   const licenseNames = metadata.licenses.map(l => l.name);
   const vendorNames = metadata.vendors.map(v => v.store_name);
+  const conditions = CONDITION_OPTIONS.map(c => c.value);
+  const statuses = ['published', 'draft', 'archived'];
 
   const maxListRows = Math.max(
     mbeTypes.length,
     arStatuses.length,
     brandNames.length,
-    catNames.length,
+    mainCatNames.length,
+    subcatNames.length,
     licenseNames.length,
     vendorNames.length,
+    conditions.length,
+    statuses.length,
     1
   );
 
-  const listsHeaders = ['TIPO_MBE', 'ESTADO_AR', 'MARCAS', 'CATEGORIAS', 'LICENCIAS', 'VENDEDORES'];
+  const listsHeaders = ['TIPO_MBE', 'ESTADO_AR', 'MARCAS', 'CATEGORIAS', 'SUBCATEGORIAS', 'LICENCIAS', 'VENDEDORES', 'CONDICIONES', 'ESTADOS'];
   const listsRows: string[][] = [];
 
   for (let r = 0; r < maxListRows; r++) {
@@ -81,9 +88,12 @@ export async function generateXlsxImportTemplate(
       mbeTypes[r] || '',
       arStatuses[r] || '',
       brandNames[r] || '',
-      catNames[r] || '',
+      mainCatNames[r] || '',
+      subcatNames[r] || '',
       licenseNames[r] || '',
-      vendorNames[r] || ''
+      vendorNames[r] || '',
+      conditions[r] || '',
+      statuses[r] || ''
     ]);
   }
 
