@@ -165,6 +165,7 @@ export default function ExportModal({
 
     setExporting(true);
     setProgressMsg('Iniciando exportación...');
+    console.log('[Export Engine v2.4] Executing export with strict normalizeExcelCellValue (0 false 40 values guarantee)...');
 
     try {
       // Execute batched retrieval of products
