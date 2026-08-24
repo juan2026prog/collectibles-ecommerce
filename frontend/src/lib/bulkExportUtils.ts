@@ -103,44 +103,26 @@ export function generateProductsCsv(
   return '\uFEFF' + [headerRow, ...dataRows].join('\n');
 }
 
+import type { CatalogMetadata } from './bulkTemplateGenerator';
+import { buildDynamicXlsxWorkbook } from './excelValidationEngine';
+
 /**
- * Generates formatted XLSX blob using XLSX.
+ * Generates formatted XLSX blob with native Excel Data Validations and Defined Names.
  */
 export async function generateProductsXlsxBlob(
   products: ExportProductItem[],
   selectedKeys: string[],
   userRole: 'admin' | 'vendor' = 'admin',
-  sheetName: string = 'Productos'
+  sheetName: string = 'Productos',
+  metadata?: CatalogMetadata
 ): Promise<Blob> {
-  const masterFields = getMasterFields(userRole);
-  const activeFields = masterFields.filter(f => selectedKeys.includes(f.key));
-
-  const headers = activeFields.map(f => f.label);
-  const rows = products.map(prod => {
-    const formatted = formatProductRecordForExport(prod, activeFields.map(f => f.key), userRole);
-    return activeFields.map(f => formatted[f.key] || '');
-  });
-
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-
-  // Apply column width auto-formatting
-  const colWidths = headers.map((h, i) => {
-    let maxLen = h.length;
-    for (let r = 0; r < Math.min(rows.length, 50); r++) {
-      const cellVal = String(rows[r][i] || '');
-      if (cellVal.length > maxLen) maxLen = cellVal.length;
-    }
-    return { wch: Math.min(Math.max(maxLen + 3, 12), 60) };
-  });
-
-  ws['!cols'] = colWidths;
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, sheetName);
-
-  const arrayBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-  return new Blob([arrayBuffer], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  return buildDynamicXlsxWorkbook({
+    userRole,
+    mode: 'export',
+    products,
+    selectedKeys,
+    sheetName,
+    metadata
   });
 }
 

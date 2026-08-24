@@ -12,6 +12,25 @@ export type FieldDataType =
   | 'url' 
   | 'date';
 
+export type ControlledSourceType =
+  | 'brands'
+  | 'categories'
+  | 'subcategories'
+  | 'licenses'
+  | 'vendors'
+  | 'badges'
+  | 'tags'
+  | 'conditions'
+  | 'mbe_packaging'
+  | 'destacado'
+  | 'status';
+
+export interface ControlledValidationSource {
+  type: 'list' | 'dependent-list';
+  source: ControlledSourceType;
+  dependsOnKey?: string;
+}
+
 export interface ProductFieldDefinition {
   key: string;
   label: string;
@@ -33,6 +52,8 @@ export interface ProductFieldDefinition {
   relationValueField?: string;
   relationLabelField?: string;
   dependsOn?: string;
+
+  controlledValidation?: ControlledValidationSource;
   
   allowedValues?: { value: string; label: string }[];
   example: string;
@@ -182,6 +203,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     relationSource: 'categories',
     relationValueField: 'id',
     relationLabelField: 'name',
+    controlledValidation: { type: 'list', source: 'categories' },
     example: 'Figuras de Acción',
     synonyms: ['category', 'category_name', 'categoría', 'categoria', 'rubro'],
     exportResolver: p => p.category?.name || p.metadata?.category_name || ''
@@ -203,6 +225,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     relationValueField: 'id',
     relationLabelField: 'name',
     dependsOn: 'category_name',
+    controlledValidation: { type: 'dependent-list', source: 'subcategories', dependsOnKey: 'category_name' },
     example: '6 Pulgadas',
     synonyms: ['subcategory', 'subcategory_name', 'subcategoría', 'subcategoria', 'subrubro'],
     exportResolver: p => p.subcategory?.name || p.metadata?.subcategory_name || ''
@@ -223,6 +246,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     relationSource: 'brands',
     relationValueField: 'id',
     relationLabelField: 'name',
+    controlledValidation: { type: 'list', source: 'brands' },
     example: 'Hasbro',
     synonyms: ['brand', 'brand_name', 'marca', 'fabricante', 'linea'],
     exportResolver: p => p.brand?.name || p.metadata?.brand_name || ''
@@ -243,6 +267,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     relationSource: 'licenses',
     relationValueField: 'id',
     relationLabelField: 'name',
+    controlledValidation: { type: 'list', source: 'licenses' },
     example: 'DC Comics',
     synonyms: ['license', 'license_name', 'licencia', 'franquicia'],
     exportResolver: p => p.license?.name || p.metadata?.license_name || ''
@@ -334,6 +359,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
       { value: 'true', label: 'Sí' },
       { value: 'false', label: 'No' }
     ],
+    controlledValidation: { type: 'list', source: 'destacado' },
     example: 'No',
     synonyms: ['is_featured', 'destacado', 'featured'],
     exportResolver: p => p.is_featured ? 'Sí' : 'No'
@@ -354,6 +380,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     nullable: true,
     blankBehavior: 'ignore',
     allowedValues: CONDITION_OPTIONS.map(c => ({ value: c.value, label: `${c.label} (${c.value})` })),
+    controlledValidation: { type: 'list', source: 'conditions' },
     example: 'Nuevo Sellado (new_sealed)',
     synonyms: ['condition', 'condición', 'condicion', 'estado_producto'],
     exportResolver: p => getConditionLabel(p.condition)
@@ -482,6 +509,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
       { value: 'mbe_caja', label: 'MBE Caja' },
       { value: 'unclassified', label: 'Sin definir' }
     ],
+    controlledValidation: { type: 'list', source: 'mbe_packaging' },
     example: 'MBE PAK',
     synonyms: ['mbe_packaging_type', 'tipo mbe', 'mbe_type', 'empaque mbe', 'mbe_packaging'],
     exportResolver: p => getMbePackagingLabel(p.metadata?.packaging_type || p.metadata?.mbe_service_type)
@@ -526,6 +554,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     relationSource: 'vendors',
     relationValueField: 'id',
     relationLabelField: 'store_name',
+    controlledValidation: { type: 'list', source: 'vendors' },
     example: 'Collectibles Oficial',
     synonyms: ['vendor', 'vendor_store_name', 'vendedor', 'tienda', 'seller'],
     exportResolver: p => p.vendor?.store_name || p.vendor?.company_name || 'Collectibles Oficial'
@@ -579,6 +608,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     adminOnly: false,
     nullable: true,
     blankBehavior: 'erase',
+    controlledValidation: { type: 'list', source: 'tags' },
     example: 'Batman, DC, Coleccionable, Exclusivo',
     synonyms: ['tags', 'etiquetas', 'keywords', 'tags_array'],
     exportResolver: p => Array.isArray(p.tags) ? p.tags.join(', ') : (p.tags || '')
@@ -596,6 +626,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     adminOnly: false,
     nullable: true,
     blankBehavior: 'erase',
+    controlledValidation: { type: 'list', source: 'badges' },
     example: 'NUEVO',
     synonyms: ['badge', 'cocarda', 'insignia', 'etiqueta_promocional', 'tag_badge'],
     exportResolver: p => p.badge || p.metadata?.badge || ''
@@ -673,6 +704,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
       { value: 'draft', label: 'draft (Borrador)' },
       { value: 'archived', label: 'archived (Archivado / Inactivo)' }
     ],
+    controlledValidation: { type: 'list', source: 'status' },
     example: 'published',
     synonyms: ['status', 'estado', 'estado_publicacion'],
     exportResolver: p => p.status || 'draft'

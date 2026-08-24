@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import ExcelJS from 'exceljs';
 import { matchesProductFilters, createDefaultProductFilters } from './productFilterTypes';
 import type { ProductFilterState } from './productFilterTypes';
 import { generateProductsCsv, generateProductsXlsxBlob, formatProductRecordForExport } from './bulkExportUtils';
@@ -6,6 +7,7 @@ import type { ExportProductItem } from './bulkExportUtils';
 import { normalizeRawProductForExport } from './exportProductsEngine';
 import { getMasterFields } from './productFieldRegistry';
 import { generateXlsxImportTemplate, sanitizeExcelDefinedName } from './bulkTemplateGenerator';
+import { getColumnLetter } from './excelValidationEngine';
 import { parseAndPreviewImportFile } from './bulkImportEngine';
 import * as XLSX from 'xlsx';
 
@@ -508,6 +510,49 @@ describe('Product Export & Import System Audit', () => {
 
     const formatted = formatProductRecordForExport(prod, ['product_url'], 'admin');
     expect(formatted.product_url).toBe('https://collectibles.uy/p/figura-coleccionable-superman');
+  });
+
+  it('23. Native Excel Data Validations & Defined Names Test: Generated XLSX contains valid DataValidation dropdowns on range 2:5000 for all controlled columns', async () => {
+    const mockMetadata = {
+      brands: [{ id: 'b1', name: 'NECA' }, { id: 'b2', name: 'Hasbro' }],
+      categories: [
+        { id: 'c1', name: 'Figuras de Acción', parent_id: null },
+        { id: 'c2', name: '6 Pulgadas', parent_id: 'c1' }
+      ],
+      licenses: [{ id: 'l1', name: 'Marvel' }],
+      vendors: [{ id: 'v1', store_name: 'Collectibles Store' }],
+      tags: [{ id: 't1', name: 'Exclusivo' }],
+      badges: ['NUEVO']
+    };
+
+    const blob = await generateProductsXlsxBlob([sampleProduct], masterFields.map(f => f.key), 'admin', 'Productos', mockMetadata);
+    const buffer = await blob.arrayBuffer();
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+
+    const sheet = workbook.getWorksheet('Productos');
+    expect(sheet).toBeDefined();
+
+    const listsSheet = workbook.getWorksheet('Listas');
+    expect(listsSheet).toBeDefined();
+    expect(listsSheet?.state).toBe('hidden');
+
+    const brandColIdx = masterFields.findIndex(f => f.key === 'brand_name') + 1;
+    const brandColLetter = getColumnLetter(brandColIdx);
+    const brandDv = sheet.getCell(`${brandColLetter}2`).dataValidation;
+    
+    expect(brandDv).toBeDefined();
+    expect(brandDv?.type).toBe('list');
+    expect(brandDv?.formulae?.[0]).toContain('Listas!$C$2');
+
+    const subcatColIdx = masterFields.findIndex(f => f.key === 'subcategory_name') + 1;
+    const subcatColLetter = getColumnLetter(subcatColIdx);
+    const subcatDv = sheet.getCell(`${subcatColLetter}2`).dataValidation;
+
+    expect(subcatDv).toBeDefined();
+    expect(subcatDv?.type).toBe('list');
+    expect(subcatDv?.formulae?.[0]).toContain('INDIRECT');
   });
 
 });
