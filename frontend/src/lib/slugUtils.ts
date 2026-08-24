@@ -23,18 +23,54 @@ export function slugify(text: string): string {
 }
 
 /**
- * Generates a guaranteed unique product slug by checking the Supabase database.
- * If a collision occurs with another product, automatically appends a suffix
- * (e.g., base-slug-2, base-slug-3, or base-slug-a8f4) to ensure uniqueness
- * without ever throwing an exception.
+ * Checks whether a proposed public product slug contains prohibited external marketplace references
+ * such as Mercado Libre IDs, permalinks, or prefixes (e.g. mercadolibre-MLU123456).
  */
-export async function generateUniqueSlug(title: string, currentProductId?: string): Promise<string> {
-  const baseSlug = slugify(title);
+export function isProhibitedSlug(slug: string): boolean {
+  if (!slug) return false;
+  const s = slug.toLowerCase().trim();
+
+  // Explicit prohibited keywords
+  if (s.includes('mercadolibre') || s.includes('mercado-libre')) return true;
+
+  // Mercado Libre item ID pattern matches (e.g., MLU12345678, MLU-123456, ml-u-12345)
+  if (/^ml[uamb]\d+/i.test(s) || /ml[uamb]\d{6,}/i.test(s) || /^ml[uamb]-\d+/i.test(s)) return true;
+
+  return false;
+}
+
+/**
+ * Given a title and an optional raw slug, produces a clean public slug.
+ * If rawSlug is prohibited or empty, regenerates a clean slug directly from title.
+ */
+export function cleanOrSanitizeSlug(title: string, rawSlug?: string): { slug: string; wasCleaned: boolean } {
+  const normalizedRaw = rawSlug ? slugify(rawSlug) : '';
+
+  if (normalizedRaw && !isProhibitedSlug(normalizedRaw)) {
+    return { slug: normalizedRaw, wasCleaned: false };
+  }
+
+  const cleanFromTitle = slugify(title || 'producto');
+  return { slug: cleanFromTitle, wasCleaned: true };
+}
+
+/**
+ * Generates a guaranteed unique public product slug by checking the Supabase database.
+ * If a collision occurs with another product, automatically appends a suffix
+ * (e.g., base-slug-2, base-slug-3, base-slug-4) without ever using ML IDs.
+ */
+export async function generateUniqueSlug(title: string, currentProductId?: string, rawSlugInput?: string): Promise<string> {
+  const { slug: baseSlug } = cleanOrSanitizeSlug(title, rawSlugInput);
   let candidateSlug = baseSlug;
   let counter = 1;
   let isUnique = false;
 
   while (!isUnique) {
+    // Safety check: if candidate accidentally is prohibited, fallback to title slugify
+    if (isProhibitedSlug(candidateSlug)) {
+      candidateSlug = slugify(title || 'producto');
+    }
+
     let query = supabase
       .from('products')
       .select('id')
@@ -49,14 +85,14 @@ export async function generateUniqueSlug(title: string, currentProductId?: strin
     if (error && error.code !== 'PGRST116') {
       console.warn('[slugUtils] Error checking slug uniqueness, appending safety suffix:', error);
       const fallbackSuffix = Math.random().toString(36).substring(2, 6);
-      return `${baseSlug}-${fallbackSuffix}`;
+      return `${candidateSlug}-${fallbackSuffix}`;
     }
 
     if (!data) {
       isUnique = true;
     } else {
       counter++;
-      if (counter <= 20) {
+      if (counter <= 50) {
         candidateSlug = `${baseSlug}-${counter}`;
       } else {
         const randomSuffix = Math.random().toString(36).substring(2, 6);

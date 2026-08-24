@@ -36,11 +36,29 @@ export default async function handler(req, res) {
     };
 
     if ((type === 'p' || type === 'producto') && slug) {
-      const { data: product } = await supabase
+      let { data: product } = await supabase
         .from('products')
         .select(`id, title, seo_title, description, seo_description, short_description, base_price, compare_at_price, product_images(url, is_primary), brand:brands(name), category:categories(name)`)
         .eq('slug', slug)
-        .single();
+        .maybeSingle();
+
+      if (!product) {
+        const { data: redirect } = await supabase
+          .from('product_slug_redirects')
+          .select('new_slug')
+          .eq('old_slug', slug)
+          .maybeSingle();
+
+        if (redirect && redirect.new_slug) {
+          urlCanonical = `https://collectibles.uy/p/${redirect.new_slug}`;
+          const { data: redirectedProduct } = await supabase
+            .from('products')
+            .select(`id, title, seo_title, description, seo_description, short_description, base_price, compare_at_price, product_images(url, is_primary), brand:brands(name), category:categories(name)`)
+            .eq('slug', redirect.new_slug)
+            .maybeSingle();
+          product = redirectedProduct;
+        }
+      }
 
       if (product) {
         title = product.seo_title || `${product.title} | Collectibles Uruguay`;

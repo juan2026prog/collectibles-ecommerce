@@ -335,6 +335,37 @@ export function useProduct(slug: string | undefined) {
         if (data) {
           setProduct(data);
         } else {
+          // Check 301 redirects table for legacy/migrated slugs
+          const { data: redirect } = await supabase
+            .from('product_slug_redirects')
+            .select('new_slug, product_id')
+            .eq('old_slug', slug)
+            .maybeSingle();
+
+          if (redirect?.new_slug) {
+            const { data: redirectedProduct } = await supabase
+              .from('products')
+              .select(`
+                *,
+                category:categories(id, name, slug),
+                brand:brands!products_brand_id_fkey(id, name, slug),
+                images:product_images(id, url, alt_text, sort_order, is_primary),
+                variants:product_variants(id, sku, legacy_sku, name, price_adjustment, inventory_count),
+                product_tags:product_tags(tag_id),
+                vendor:vendors(id, store_name, slug, logo_url, promotions_opt_in, company_name, shipping_settings),
+                vendor_store:vendor_stores(id, store_name, slug, logo_url, status, is_official, approved_by, approved_at, vendor_store_badge_assignments(status, approved_by, approved_at, vendor_store_badges(*))),
+                reviews:reviews(id, rating, title, body, created_at),
+                product_group_items(group_id, group:product_groups(id, name, slug, badge_image_url, badge_storage_path, badge_alt_text, badge_updated_at, is_active, sort_order))
+              `)
+              .eq('slug', redirect.new_slug)
+              .maybeSingle();
+
+            if (redirectedProduct) {
+              setProduct({ ...redirectedProduct, _redirectSlug: redirect.new_slug });
+              return;
+            }
+          }
+
           // Fallback for international products (slug is UUID)
           const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(slug);
           if (isUUID) {
@@ -378,7 +409,7 @@ export function useProduct(slug: string | undefined) {
     fetch();
   }, [slug]);
 
-  return { product, loading };
+  return { product, redirectSlug: product?._redirectSlug, loading };
 }
 
 // --------------------------------------------------------------------------------

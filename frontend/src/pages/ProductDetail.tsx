@@ -62,7 +62,13 @@ export default function ProductDetail() {
   const viewTrackedRef = useRef('');
   const { settings } = useSiteSettings();
   const { slug } = useParams<{ slug: string }>();
-  const { product, loading: productLoading } = useProduct(slug || '');
+  const { product, redirectSlug, loading: productLoading } = useProduct(slug || '');
+
+  useEffect(() => {
+    if (redirectSlug && redirectSlug !== slug) {
+      navigate(`/p/${redirectSlug}`, { replace: true });
+    }
+  }, [redirectSlug, slug, navigate]);
   const { getImageProps, handleDragStart } = useImageProtection({ isProduct: true });
   const groupBadge = getProductGroupBadge(product);
   const { buyBox } = useProductBuyBox(product?.id);

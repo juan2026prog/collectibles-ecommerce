@@ -8,6 +8,7 @@ import { normalizeCondition } from '../config/conditionConfig';
 import { fetchCatalogMetadataForTemplate } from './bulkTemplateGenerator';
 import type { CatalogMetadata } from './bulkTemplateGenerator';
 import { sanitizeMbePackagingType, mergeMbePackagingType, resolveMbePackagingTypeInput, resolveArgentinaShippingStatusInput } from './mbeLogisticsUtils';
+import { slugify, isProhibitedSlug } from './slugUtils';
 
 export interface ParsedImportRow {
   rowIndex: number;
@@ -445,7 +446,18 @@ export async function parseAndPreviewImportFile(
     if (rowValuesByKey.condition_notes !== undefined) dbPayload.condition_notes = rowValuesByKey.condition_notes;
     if (parsedWeight !== undefined) dbPayload.weight_kg = parsedWeight;
 
-    if (rowValuesByKey.slug !== undefined) dbPayload.slug = rowValuesByKey.slug;
+    if (rowValuesByKey.slug !== undefined) {
+      const rawSlug = String(rowValuesByKey.slug).trim();
+      if (isProhibitedSlug(rawSlug)) {
+        warnings.push({
+          fieldKey: 'slug',
+          message: `Slug prohibido de Mercado Libre '${rawSlug}' detectado. Se regeneró automáticamente un slug limpio desde el título.`
+        });
+        dbPayload.slug = slugify(row.title);
+      } else {
+        dbPayload.slug = slugify(rawSlug);
+      }
+    }
     if (rowValuesByKey.is_featured !== undefined) {
       const featVal = String(rowValuesByKey.is_featured).trim().toLowerCase();
       dbPayload.is_featured = featVal === 'true' || featVal === 'sí' || featVal === 'si' || featVal === '1';
