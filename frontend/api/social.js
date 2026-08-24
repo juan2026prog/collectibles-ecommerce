@@ -50,13 +50,8 @@ export default async function handler(req, res) {
           .maybeSingle();
 
         if (redirect && redirect.new_slug) {
-          urlCanonical = `https://collectibles.uy/p/${redirect.new_slug}`;
-          const { data: redirectedProduct } = await supabase
-            .from('products')
-            .select(`id, title, seo_title, description, seo_description, short_description, base_price, compare_at_price, product_images(url, is_primary), brand:brands(name), category:categories(name)`)
-            .eq('slug', redirect.new_slug)
-            .maybeSingle();
-          product = redirectedProduct;
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          return res.redirect(301, `/p/${redirect.new_slug}`);
         }
       }
 
