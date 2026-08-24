@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import ExcelJS from 'exceljs';
 import { matchesProductFilters, createDefaultProductFilters } from './productFilterTypes';
 import type { ProductFilterState } from './productFilterTypes';
-import { generateProductsCsv, generateProductsXlsxBlob, formatProductRecordForExport } from './bulkExportUtils';
+import { generateProductsCsv, generateProductsXlsxBlob, formatProductRecordForExport, normalizeExcelCellValue } from './bulkExportUtils';
 import type { ExportProductItem } from './bulkExportUtils';
 import { normalizeRawProductForExport } from './exportProductsEngine';
 import { getMasterFields } from './productFieldRegistry';
@@ -553,6 +553,117 @@ describe('Product Export & Import System Audit', () => {
     expect(subcatDv).toBeDefined();
     expect(subcatDv?.type).toBe('list');
     expect(subcatDv?.formulae?.[0]).toContain('INDIRECT');
+  });
+
+  it('24. Unit Test for normalizeExcelCellValue: Converts null/undefined to empty string while preserving 0 and false', () => {
+    expect(normalizeExcelCellValue(null)).toBe('');
+
+    expect(normalizeExcelCellValue(null)).toBe('');
+    expect(normalizeExcelCellValue(undefined)).toBe('');
+    expect(normalizeExcelCellValue('null')).toBe('');
+    expect(normalizeExcelCellValue('undefined')).toBe('');
+    expect(normalizeExcelCellValue('N/A')).toBe('');
+    expect(normalizeExcelCellValue('  ')).toBe('');
+
+    // Numeric 0 must be preserved
+    expect(normalizeExcelCellValue(0)).toBe('0');
+    expect(normalizeExcelCellValue('0')).toBe('0');
+    expect(normalizeExcelCellValue('0.00')).toBe('0.00');
+
+    // Boolean false must be preserved as "No"
+    expect(normalizeExcelCellValue(false)).toBe('No');
+    expect(normalizeExcelCellValue(true)).toBe('Sí');
+
+    // Valid strings must be preserved
+    expect(normalizeExcelCellValue('Batman')).toBe('Batman');
+  });
+
+  it('25. Forensic Regression Test: Null/empty cells in exported XLSX must remain BLANK (never numeric 40), while 0 and false are strictly preserved', async () => {
+    const nullProduct: ExportProductItem = {
+      id: 'test-null-id',
+      title: 'Null Export Test Product',
+      base_price: 1500,
+      short_description: null,
+      description: null,
+      content: null,
+      subcategory_name: null,
+      license_name: null,
+      compare_at_price: null,
+      cost_price: null,
+      condition_notes: null,
+      tags: null,
+      badge: null,
+      video_url: null,
+      weight_kg: null,
+      stock: 0,
+      is_featured: false
+    };
+
+    const mockMetadata = {
+      brands: [{ id: 'b1', name: 'NECA' }],
+      categories: [{ id: 'c1', name: 'Figuras', parent_id: null }],
+      licenses: [],
+      vendors: [{ id: 'v1', store_name: 'Collectibles Store' }],
+      tags: [],
+      badges: ['NUEVO']
+    };
+
+    const blob = await generateProductsXlsxBlob([nullProduct], masterFields.map(f => f.key), 'admin', 'Productos', mockMetadata);
+    const buffer = await blob.arrayBuffer();
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+
+    const sheet = workbook.getWorksheet('Productos');
+    expect(sheet).toBeDefined();
+
+    const headerRow = sheet!.getRow(1);
+    const colIndexMap: Record<string, number> = {};
+    headerRow.eachCell((cell, colNumber) => {
+      const fieldDef = masterFields.find(f => f.label === String(cell.value));
+      if (fieldDef) {
+        colIndexMap[fieldDef.key] = colNumber;
+      }
+    });
+
+    const row2 = sheet!.getRow(2);
+
+    // Verify NULL fields are blank (not '40')
+    const shortDescCell = row2.getCell(colIndexMap['short_description']);
+    expect(shortDescCell.value === null || shortDescCell.value === '').toBe(true);
+    expect(String(shortDescCell.value)).not.toBe('40');
+
+    const compareAtCell = row2.getCell(colIndexMap['compare_at_price']);
+    expect(compareAtCell.value === null || compareAtCell.value === '').toBe(true);
+    expect(String(compareAtCell.value)).not.toBe('40');
+
+    const weightCell = row2.getCell(colIndexMap['weight_kg']);
+    expect(weightCell.value === null || weightCell.value === '').toBe(true);
+    expect(String(weightCell.value)).not.toBe('40');
+
+    const costCell = row2.getCell(colIndexMap['cost_price']);
+    expect(costCell.value === null || costCell.value === '').toBe(true);
+    expect(String(costCell.value)).not.toBe('40');
+
+    // Verify 0 and false are PRESERVED
+    const stockCell = row2.getCell(colIndexMap['stock']);
+    expect(String(stockCell.value)).toBe('0');
+
+    const featuredCell = row2.getCell(colIndexMap['is_featured']);
+    expect(String(featuredCell.value)).toBe('No');
+
+    // Audit entire worksheet for false '40' values on null source fields
+    let countFalse40 = 0;
+    sheet!.eachRow((row, rowIdx) => {
+      if (rowIdx === 1) return;
+      row.eachCell((cell) => {
+        if (String(cell.value) === '40') {
+          countFalse40++;
+        }
+      });
+    });
+
+    expect(countFalse40).toBe(0);
   });
 
 });

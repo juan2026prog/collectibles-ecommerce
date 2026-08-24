@@ -52,6 +52,36 @@ export interface ExportProductItem {
 }
 
 /**
+ * Central normalizer for Excel and CSV cell values.
+ * Converts null, undefined, whitespace-only, and string placeholders ("null", "undefined", "N/A") to empty string "".
+ * Strictly preserves numeric 0 (stock, price, weight), boolean false, valid dates, and strings.
+ */
+export function normalizeExcelCellValue(val: any): string {
+  if (val === null || val === undefined) {
+    return '';
+  }
+  if (typeof val === 'number') {
+    if (isNaN(val)) return '';
+    return String(val);
+  }
+  if (typeof val === 'boolean') {
+    return val ? 'Sí' : 'No';
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (trimmed === '' || trimmed.toLowerCase() === 'null' || trimmed.toLowerCase() === 'undefined' || trimmed.toUpperCase() === 'N/A') {
+      return '';
+    }
+    return val;
+  }
+  if (Array.isArray(val)) {
+    if (val.length === 0) return '';
+    return val.map(v => typeof v === 'string' ? v : JSON.stringify(v)).join(', ');
+  }
+  return String(val);
+}
+
+/**
  * Normalizes a product record into a flat key-value dictionary using master keys.
  * Replaces UUIDs with human-readable names for all relations using central exportResolvers.
  */
@@ -67,9 +97,11 @@ export function formatProductRecordForExport(
   selectedKeys.forEach(key => {
     const fDef = fieldMap.get(key);
     if (fDef && fDef.exportResolver) {
-      record[key] = fDef.exportResolver(item);
+      const rawRes = fDef.exportResolver(item);
+      record[key] = normalizeExcelCellValue(rawRes);
     } else {
-      record[key] = (item as any)[key] !== undefined && (item as any)[key] !== null ? String((item as any)[key]) : '';
+      const rawVal = (item as any)[key];
+      record[key] = normalizeExcelCellValue(rawVal);
     }
   });
 

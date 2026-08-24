@@ -4,7 +4,7 @@ import type { ProductFieldDefinition } from './productFieldRegistry';
 import { fetchCatalogMetadataForTemplate, sanitizeExcelDefinedName, OFFICIAL_SYSTEM_BADGES } from './bulkTemplateGenerator';
 import type { CatalogMetadata } from './bulkTemplateGenerator';
 import { CONDITION_OPTIONS, getConditionLabel } from '../config/conditionConfig';
-import { formatProductRecordForExport } from './bulkExportUtils';
+import { formatProductRecordForExport, normalizeExcelCellValue } from './bulkExportUtils';
 import type { ExportProductItem } from './bulkExportUtils';
 
 export interface BuildExcelOptions {
@@ -90,7 +90,10 @@ export async function buildDynamicXlsxWorkbook(options: BuildExcelOptions): Prom
   } else {
     products.forEach(prod => {
       const formatted = formatProductRecordForExport(prod, activeFields.map(f => f.key), userRole);
-      const rowValues = activeFields.map(f => formatted[f.key] || '');
+      const rowValues = activeFields.map(f => {
+        const val = formatted[f.key];
+        return normalizeExcelCellValue(val);
+      });
       mainSheet.addRow(rowValues);
     });
   }
@@ -139,7 +142,10 @@ export async function buildDynamicXlsxWorkbook(options: BuildExcelOptions): Prom
 
   const maxBaseRows = Math.max(...baseListCols.map(c => c.data.length), 1);
   for (let r = 0; r < maxBaseRows; r++) {
-    const rowValues = baseListCols.map(c => c.data[r] || '');
+    const rowValues = baseListCols.map(c => {
+      const item = c.data[r];
+      return item !== undefined && item !== null ? String(item) : '';
+    });
     listsSheet.addRow(rowValues);
   }
 
