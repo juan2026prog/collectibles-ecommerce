@@ -135,12 +135,15 @@ function chunkArray<T>(items: T[], chunkSize = 100): T[][] {
 /**
  * Parses and validates an uploaded import file against Collectibles.uy database.
  */
+export type ImportMode = 'upsert' | 'update_only' | 'create_only';
+
 export async function parseAndPreviewImportFile(
   file: File,
   userRole: 'admin' | 'vendor' = 'admin',
   currentVendorId: string | null = null,
   providedMetadata?: CatalogMetadata,
-  providedExistingProducts?: any[]
+  providedExistingProducts?: any[],
+  importMode: ImportMode = 'update_only'
 ): Promise<ImportPreviewResult> {
   const { rawRows, headersFound } = await readRawFileRows(file);
   const metadata = providedMetadata || (await fetchCatalogMetadataForTemplate());
@@ -212,10 +215,10 @@ export async function parseAndPreviewImportFile(
         const { data: dbProducts } = await supabase
           .from('products')
           .select(`
-            id, title, slug, description, short_description, base_price, compare_at_price, cost_price, status, vendor_id, weight_kg, dimensions, metadata, brand_id, category_id, badge, condition, condition_notes, is_featured, seo_title, seo_description, meta_title, meta_description,
-            brand:brands(id, name),
-            category:categories(id, name),
-            license:licenses(id, name),
+            id, title, slug, description, short_description, base_price, compare_at_price, status, vendor_id, weight_kg, dimensions, metadata, brand_id, category_id, badge, condition, condition_notes, is_featured, seo_title, seo_description, meta_title, meta_description,
+            brand:brands!products_brand_id_fkey(id, name),
+            category:categories!products_category_id_fkey(id, name),
+            license:licenses!products_suggested_license_id_fkey(id, name),
             variants:product_variants(id, sku, inventory_count)
           `)
           .in('id', chunk);
@@ -244,10 +247,10 @@ export async function parseAndPreviewImportFile(
             const { data: dbProducts } = await supabase
               .from('products')
               .select(`
-                id, title, slug, description, short_description, base_price, compare_at_price, cost_price, status, vendor_id, weight_kg, dimensions, metadata, brand_id, category_id, badge, condition, condition_notes, is_featured, seo_title, seo_description, meta_title, meta_description,
-                brand:brands(id, name),
-                category:categories(id, name),
-                license:licenses(id, name),
+                id, title, slug, description, short_description, base_price, compare_at_price, status, vendor_id, weight_kg, dimensions, metadata, brand_id, category_id, badge, condition, condition_notes, is_featured, seo_title, seo_description, meta_title, meta_description,
+                brand:brands!products_brand_id_fkey(id, name),
+                category:categories!products_category_id_fkey(id, name),
+                license:licenses!products_suggested_license_id_fkey(id, name),
                 variants:product_variants(id, sku, inventory_count)
               `)
               .in('id', idsToFetch);
@@ -270,10 +273,10 @@ export async function parseAndPreviewImportFile(
         const { data: dbProducts } = await supabase
           .from('products')
           .select(`
-            id, title, slug, description, short_description, base_price, compare_at_price, cost_price, status, vendor_id, weight_kg, dimensions, metadata, brand_id, category_id, badge, condition, condition_notes, is_featured, seo_title, seo_description, meta_title, meta_description,
-            brand:brands(id, name),
-            category:categories(id, name),
-            license:licenses(id, name),
+            id, title, slug, description, short_description, base_price, compare_at_price, status, vendor_id, weight_kg, dimensions, metadata, brand_id, category_id, badge, condition, condition_notes, is_featured, seo_title, seo_description, meta_title, meta_description,
+            brand:brands!products_brand_id_fkey(id, name),
+            category:categories!products_category_id_fkey(id, name),
+            license:licenses!products_suggested_license_id_fkey(id, name),
             variants:product_variants(id, sku, inventory_count)
           `)
           .in('slug', chunk);
@@ -365,7 +368,22 @@ export async function parseAndPreviewImportFile(
       }
     }
 
-    let operation: 'create' | 'update' | 'unchanged' | 'invalid' = existingProduct ? 'update' : 'create';
+    let operation: 'create' | 'update' | 'unchanged' | 'invalid';
+    if (existingProduct) {
+      if (importMode === 'create_only') {
+        rowErrors.push('El producto ya existe en la base de datos (Modo Solo Crear Nuevos).');
+        operation = 'invalid';
+      } else {
+        operation = 'update';
+      }
+    } else {
+      if (importMode === 'update_only') {
+        rowErrors.push('Producto no encontrado en la base de datos para actualización (Modo Solo Actualizar).');
+        operation = 'invalid';
+      } else {
+        operation = 'create';
+      }
+    }
 
     // Security Check: Non-admin Vendors can only update their OWN products
     if (userRole === 'vendor' && existingProduct) {

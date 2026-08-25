@@ -28,16 +28,17 @@ export default function ImportModal({
 
   const [preview, setPreview] = useState<ImportPreviewResult | null>(null);
   const [executionResult, setExecutionResult] = useState<ImportExecutionResult | null>(null);
+  const [importMode, setImportMode] = useState<ImportMode>('update_only');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const processFile = async (selectedFile: File) => {
+  const processFile = async (selectedFile: File, mode: ImportMode = importMode) => {
     if (!selectedFile) return;
     setFile(selectedFile);
     setError(null);
     setParsing(true);
     try {
-      const result = await parseAndPreviewImportFile(selectedFile, userRole, currentVendorId);
+      const result = await parseAndPreviewImportFile(selectedFile, userRole, currentVendorId, undefined, undefined, mode);
       if (result.rows.length === 0) {
         setError('No se encontraron filas válidas en el archivo subido.');
       } else {
@@ -47,6 +48,13 @@ export default function ImportModal({
       setError('Error al procesar el archivo: ' + (err.message || String(err)));
     } finally {
       setParsing(false);
+    }
+  };
+
+  const handleModeChange = (newMode: ImportMode) => {
+    setImportMode(newMode);
+    if (file) {
+      processFile(file, newMode);
     }
   };
 
@@ -194,6 +202,34 @@ export default function ImportModal({
           {preview && !executionResult && (
             <div className="space-y-5">
               
+              {/* Import Mode Selector */}
+              <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="font-bold text-slate-700">Modo de Operación:</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleModeChange('update_only')}
+                    className={`px-3 py-1.5 rounded-xl font-bold transition-all ${importMode === 'update_only' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
+                  >
+                    Solo Actualizar Existentes (Seguro)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleModeChange('upsert')}
+                    className={`px-3 py-1.5 rounded-xl font-bold transition-all ${importMode === 'upsert' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
+                  >
+                    Crear y Actualizar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleModeChange('create_only')}
+                    className={`px-3 py-1.5 rounded-xl font-bold transition-all ${importMode === 'create_only' ? 'bg-amber-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
+                  >
+                    Solo Crear Nuevos
+                  </button>
+                </div>
+              </div>
+
               {/* Summary Stats Cards */}
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
                 <div className="bg-slate-50 border border-slate-200 p-3 rounded-2xl">
