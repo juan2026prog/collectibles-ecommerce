@@ -19,6 +19,7 @@ const clarityErrorHandler = (event: any) => {
 
 window.addEventListener('error', clarityErrorHandler, true);
 window.addEventListener('unhandledrejection', clarityErrorHandler, true);
+(window as any).__BUILD_SHA__ = 'v2.4-clean-888af33';
 
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'

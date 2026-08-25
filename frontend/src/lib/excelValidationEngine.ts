@@ -144,7 +144,7 @@ export async function buildDynamicXlsxWorkbook(options: BuildExcelOptions): Prom
   for (let r = 0; r < maxBaseRows; r++) {
     const rowValues = baseListCols.map(c => {
       const item = c.data[r];
-      return item !== undefined && item !== null ? String(item) : '';
+      return item !== undefined && item !== null && String(item).trim() !== '' ? String(item) : null;
     });
     listsSheet.addRow(rowValues);
   }

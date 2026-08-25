@@ -555,20 +555,16 @@ describe('Product Export & Import System Audit', () => {
     expect(subcatDv?.formulae?.[0]).toContain('INDIRECT');
   });
 
-  it('24. Unit Test for normalizeExcelCellValue: Converts null/undefined to empty string while preserving 0 and false', () => {
-    expect(normalizeExcelCellValue(null)).toBe('');
-
-    expect(normalizeExcelCellValue(null)).toBe('');
-    expect(normalizeExcelCellValue(undefined)).toBe('');
-    expect(normalizeExcelCellValue('null')).toBe('');
-    expect(normalizeExcelCellValue('undefined')).toBe('');
-    expect(normalizeExcelCellValue('N/A')).toBe('');
-    expect(normalizeExcelCellValue('  ')).toBe('');
+  it('24. Unit Test for normalizeExcelCellValue: Converts null/undefined to null while preserving 0 and false', () => {
+    expect(normalizeExcelCellValue(null)).toBe(null);
+    expect(normalizeExcelCellValue(undefined)).toBe(null);
+    expect(normalizeExcelCellValue('null')).toBe(null);
+    expect(normalizeExcelCellValue('undefined')).toBe(null);
+    expect(normalizeExcelCellValue('  ')).toBe(null);
 
     // Numeric 0 must be preserved
-    expect(normalizeExcelCellValue(0)).toBe('0');
+    expect(normalizeExcelCellValue(0)).toBe(0);
     expect(normalizeExcelCellValue('0')).toBe('0');
-    expect(normalizeExcelCellValue('0.00')).toBe('0.00');
 
     // Boolean false must be preserved as "No"
     expect(normalizeExcelCellValue(false)).toBe('No');

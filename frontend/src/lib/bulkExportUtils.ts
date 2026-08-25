@@ -56,26 +56,26 @@ export interface ExportProductItem {
  * Converts null, undefined, whitespace-only, and string placeholders ("null", "undefined", "N/A") to empty string "".
  * Strictly preserves numeric 0 (stock, price, weight), boolean false, valid dates, and strings.
  */
-export function normalizeExcelCellValue(val: any): string {
+export function normalizeExcelCellValue(val: any): string | number | boolean | null {
   if (val === null || val === undefined) {
-    return '';
+    return null;
   }
   if (typeof val === 'number') {
-    if (isNaN(val)) return '';
-    return String(val);
+    if (isNaN(val)) return null;
+    return val;
   }
   if (typeof val === 'boolean') {
     return val ? 'Sí' : 'No';
   }
   if (typeof val === 'string') {
     const trimmed = val.trim();
-    if (trimmed === '' || trimmed.toLowerCase() === 'null' || trimmed.toLowerCase() === 'undefined' || trimmed.toUpperCase() === 'N/A') {
-      return '';
+    if (trimmed === '' || trimmed.toLowerCase() === 'null' || trimmed.toLowerCase() === 'undefined') {
+      return null;
     }
     return val;
   }
   if (Array.isArray(val)) {
-    if (val.length === 0) return '';
+    if (val.length === 0) return null;
     return val.map(v => typeof v === 'string' ? v : JSON.stringify(v)).join(', ');
   }
   return String(val);
