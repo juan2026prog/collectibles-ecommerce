@@ -265,19 +265,22 @@ describe('Product Export & Import System Audit', () => {
 
   it('11. Verification: fixed order is strictly enforced for master fields', () => {
     const keys = masterFields.map(f => f.key);
-    expect(keys.indexOf('sku')).toBe(0);
-    expect(keys.indexOf('title')).toBe(1);
-    expect(keys.indexOf('slug')).toBe(2);
-    expect(keys.indexOf('product_url')).toBe(3);
-    expect(keys.indexOf('description')).toBe(4);
-    expect(keys.indexOf('short_description')).toBe(5);
-    expect(keys.indexOf('content')).toBe(6);
+    expect(keys.indexOf('_product_id')).toBe(0);
+    expect(keys.indexOf('sku')).toBe(1);
+    expect(keys.indexOf('title')).toBe(2);
+    expect(keys.indexOf('slug')).toBe(3);
+    expect(keys.indexOf('product_url')).toBe(4);
+    expect(keys.indexOf('description')).toBe(5);
+    expect(keys.indexOf('short_description')).toBe(6);
+    expect(keys.indexOf('content')).toBe(7);
   });
 
   it('12. Round-Trip Test: Export product -> Parse back -> Verify zero lost data and valid row preview', async () => {
     const originalProd = {
       ...sampleProduct,
-      image_url: 'https://collectibles.uy/images/batman-1.jpg'
+      image_url: 'https://collectibles.uy/images/batman-1.jpg',
+      brand_name: 'NECA',
+      category_name: 'Figuras de Acción'
     };
     const allKeys = masterFields.map(f => f.key);
     const csvContent = generateProductsCsv([originalProd], allKeys, 'admin');
@@ -290,7 +293,7 @@ describe('Product Export & Import System Audit', () => {
       categories: [{ id: 'cat-figuras', name: 'Figuras de Acción', parent_id: null }],
       licenses: [],
       vendors: [{ id: 'platform', store_name: 'Collectibles Oficial' }]
-    });
+    }, [originalProd]);
 
     expect(preview.rows.length).toBe(1);
     const parsedRow = preview.rows[0];
@@ -313,7 +316,8 @@ describe('Product Export & Import System Audit', () => {
       weight_kg: 0.450,
       status: 'draft',
       brand_id: 'brand-neca',
-      category_id: 'cat-figuras'
+      category_id: 'cat-figuras',
+      variants: [{ id: 'v1', sku: 'SKU-1100', inventory_count: 10 }]
     };
 
     const preview = await parseAndPreviewImportFile(file, 'admin', null, {
@@ -325,7 +329,7 @@ describe('Product Export & Import System Audit', () => {
 
     expect(preview.rows.length).toBe(1);
     const row = preview.rows[0];
-    expect(row.operation).toBe('update');
+    expect(row.operation).toBe('unchanged');
     expect(row.dbPayload.weight_kg).toBeUndefined();
   });
 

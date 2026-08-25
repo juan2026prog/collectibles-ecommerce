@@ -3,12 +3,18 @@ import { supabase } from '../lib/supabase';
 import { findFieldDefinition, getMasterFields } from './productFieldRegistry';
 import type { ProductFieldDefinition } from './productFieldRegistry';
 import { validateProductForPublication } from './productPublicationValidator';
-import type { PublicationValidationError } from './productPublicationValidator';
 import { normalizeCondition } from '../config/conditionConfig';
 import { fetchCatalogMetadataForTemplate } from './bulkTemplateGenerator';
 import type { CatalogMetadata } from './bulkTemplateGenerator';
-import { sanitizeMbePackagingType, mergeMbePackagingType, resolveMbePackagingTypeInput, resolveArgentinaShippingStatusInput } from './mbeLogisticsUtils';
+import { mergeMbePackagingType, resolveMbePackagingTypeInput, resolveArgentinaShippingStatusInput } from './mbeLogisticsUtils';
 import { slugify, isProhibitedSlug } from './slugUtils';
+
+export interface ChangedFieldDetail {
+  fieldKey: string;
+  fieldLabel: string;
+  oldValue: any;
+  newValue: any;
+}
 
 export interface ParsedImportRow {
   rowIndex: number;
@@ -17,11 +23,13 @@ export interface ParsedImportRow {
   title: string;
   operation: 'create' | 'update' | 'unchanged' | 'invalid';
   existingProductId?: string;
+  matchStrategy?: '_product_id' | 'sku' | 'slug';
   
   // Normalized field values parsed from row
   parsedData: Record<string, any>;
   // Explicit DB column payloads resolved (IDs for FKs)
   dbPayload: Record<string, any>;
+  changedFieldsDetail: ChangedFieldDetail[];
   
   // Specific relation resolution
   resolvedBrandId?: string | null;
@@ -101,7 +109,7 @@ export async function readRawFileRows(file: File): Promise<{ rawRows: Record<str
 }
 
 /**
- * Helper to generate unique URL slug.
+ * Helper to generate unique URL slug for new products.
  */
 function generateSlug(title: string): string {
   const base = title
@@ -111,6 +119,17 @@ function generateSlug(title: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
   return `${base}-${Math.floor(1000 + Math.random() * 9000)}`;
+}
+
+/**
+ * Helper to split an array into smaller chunks to prevent Supabase query URL limits.
+ */
+function chunkArray<T>(items: T[], chunkSize = 100): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += chunkSize) {
+    chunks.push(items.slice(i, i + chunkSize));
+  }
+  return chunks;
 }
 
 /**
@@ -149,42 +168,125 @@ export async function parseAndPreviewImportFile(
     };
   }
 
-  // Pre-fetch existing products by SKU to identify updates vs creates
-  const skusInFile = rawRows
-    .map(r => {
-      for (const k in r) {
-        const fDef = headerToFieldMap.get(normalizeKey(k));
-        if (fDef?.key === 'sku') return String(r[k]).trim();
-      }
-      return '';
-    })
-    .filter(Boolean);
+  // Pre-fetch identifiers from raw rows: _product_id, sku, slug
+  const productIdsInFile: string[] = [];
+  const skusInFile: string[] = [];
+  const slugsInFile: string[] = [];
 
-  const existingProductsMap = new Map<string, any>();
+  rawRows.forEach(r => {
+    for (const rawColKey in r) {
+      const fDef = headerToFieldMap.get(normalizeKey(rawColKey));
+      const cellVal = String(r[rawColKey] || '').trim();
+      if (!cellVal) continue;
+
+      if (fDef?.key === '_product_id') {
+        productIdsInFile.push(cellVal);
+      } else if (fDef?.key === 'sku') {
+        skusInFile.push(cellVal);
+      } else if (fDef?.key === 'slug') {
+        slugsInFile.push(cellVal);
+      }
+    }
+  });
+
+  // Pre-fetch existing products by _product_id, SKU, and slug
+  const existingByIdMap = new Map<string, any>();
+  const existingBySkuMap = new Map<string, any>();
+  const existingBySlugMap = new Map<string, any>();
+
+  const registerProductInMaps = (p: any) => {
+    if (p.id) existingByIdMap.set(p.id, p);
+    const sku = p.variants?.[0]?.sku || p.sku;
+    if (sku) existingBySkuMap.set(sku, p);
+    if (p.slug) existingBySlugMap.set(p.slug, p);
+  };
 
   if (providedExistingProducts && providedExistingProducts.length > 0) {
-    providedExistingProducts.forEach(p => {
-      const pSku = p.sku || p.variants?.[0]?.sku;
-      if (pSku) existingProductsMap.set(pSku, p);
-    });
-  } else if (skusInFile.length > 0) {
-    const { data: dbProducts } = await supabase
-      .from('products')
-      .select('id, title, base_price, status, vendor_id, weight_kg, dimensions, metadata, variants:product_variants(sku, inventory_count)')
-      .in('id', (
-        await supabase
-          .from('product_variants')
-          .select('product_id')
-          .in('sku', skusInFile)
-      ).data?.map(v => v.product_id) || []);
+    providedExistingProducts.forEach(registerProductInMaps);
+  } else {
+    const fetchedProductIds = new Set<string>();
 
-    if (dbProducts) {
-      dbProducts.forEach(p => {
-        const sku = p.variants?.[0]?.sku || p.sku;
-        if (sku) {
-          existingProductsMap.set(sku, p);
+    // 1. Fetch by _product_id
+    if (productIdsInFile.length > 0) {
+      for (const chunk of chunkArray(productIdsInFile, 100)) {
+        const { data: dbProducts } = await supabase
+          .from('products')
+          .select(`
+            id, title, slug, description, short_description, base_price, compare_at_price, cost_price, status, vendor_id, weight_kg, dimensions, metadata, brand_id, category_id, badge, condition, condition_notes, is_featured, seo_title, seo_description, meta_title, meta_description,
+            brand:brands(id, name),
+            category:categories(id, name),
+            license:licenses(id, name),
+            variants:product_variants(id, sku, inventory_count)
+          `)
+          .in('id', chunk);
+
+        if (dbProducts) {
+          dbProducts.forEach(p => {
+            fetchedProductIds.add(p.id);
+            registerProductInMaps(p);
+          });
         }
-      });
+      }
+    }
+
+    // 2. Fetch by SKU
+    const missingSkus = skusInFile.filter(sku => !existingBySkuMap.has(sku));
+    if (missingSkus.length > 0) {
+      for (const chunk of chunkArray(missingSkus, 100)) {
+        const { data: varData } = await supabase
+          .from('product_variants')
+          .select('product_id, sku')
+          .in('sku', chunk);
+
+        if (varData && varData.length > 0) {
+          const idsToFetch = varData.map(v => v.product_id).filter(id => !fetchedProductIds.has(id));
+          if (idsToFetch.length > 0) {
+            const { data: dbProducts } = await supabase
+              .from('products')
+              .select(`
+                id, title, slug, description, short_description, base_price, compare_at_price, cost_price, status, vendor_id, weight_kg, dimensions, metadata, brand_id, category_id, badge, condition, condition_notes, is_featured, seo_title, seo_description, meta_title, meta_description,
+                brand:brands(id, name),
+                category:categories(id, name),
+                license:licenses(id, name),
+                variants:product_variants(id, sku, inventory_count)
+              `)
+              .in('id', idsToFetch);
+
+            if (dbProducts) {
+              dbProducts.forEach(p => {
+                fetchedProductIds.add(p.id);
+                registerProductInMaps(p);
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Fetch by slug
+    const missingSlugs = slugsInFile.filter(slug => !existingBySlugMap.has(slug));
+    if (missingSlugs.length > 0) {
+      for (const chunk of chunkArray(missingSlugs, 100)) {
+        const { data: dbProducts } = await supabase
+          .from('products')
+          .select(`
+            id, title, slug, description, short_description, base_price, compare_at_price, cost_price, status, vendor_id, weight_kg, dimensions, metadata, brand_id, category_id, badge, condition, condition_notes, is_featured, seo_title, seo_description, meta_title, meta_description,
+            brand:brands(id, name),
+            category:categories(id, name),
+            license:licenses(id, name),
+            variants:product_variants(id, sku, inventory_count)
+          `)
+          .in('slug', chunk);
+
+        if (dbProducts) {
+          dbProducts.forEach(p => {
+            if (!fetchedProductIds.has(p.id)) {
+              fetchedProductIds.add(p.id);
+              registerProductInMaps(p);
+            }
+          });
+        }
+      }
     }
   }
 
@@ -208,23 +310,67 @@ export async function parseAndPreviewImportFile(
       const fDef = headerToFieldMap.get(normalizeKey(rawColKey));
       if (fDef) {
         const cellVal = raw[rawColKey];
-        if (cellVal !== undefined && cellVal !== null && cellVal !== '') {
+        if (cellVal !== undefined && cellVal !== null && String(cellVal).trim() !== '') {
           rowValuesByKey[fDef.key] = cellVal;
         }
       }
     }
 
+    const rawProductId = (rowValuesByKey._product_id || '').toString().trim();
     const sku = (rowValuesByKey.sku || '').toString().trim();
+    const slug = (rowValuesByKey.slug || '').toString().trim();
     const title = (rowValuesByKey.title || '').toString().trim();
 
-    // Check existing product
-    const existingProduct = sku ? existingProductsMap.get(sku) : null;
+    // Multi-Strategy Matching Priority: 1. _product_id -> 2. SKU -> 3. slug
+    let existingProduct: any = null;
+    let matchStrategy: '_product_id' | 'sku' | 'slug' | undefined;
+
+    if (rawProductId) {
+      if (existingByIdMap.has(rawProductId)) {
+        existingProduct = existingByIdMap.get(rawProductId);
+        matchStrategy = '_product_id';
+
+        // Identity Conflict Checks
+        if (sku && existingBySkuMap.has(sku)) {
+          const skuProd = existingBySkuMap.get(sku);
+          if (skuProd.id !== existingProduct.id) {
+            rowErrors.push(`Conflicto de identidad: _product_id "${rawProductId}" y SKU "${sku}" corresponden a productos diferentes en la base de datos.`);
+          }
+        }
+        if (slug && existingBySlugMap.has(slug)) {
+          const slugProd = existingBySlugMap.get(slug);
+          if (slugProd.id !== existingProduct.id) {
+            rowErrors.push(`Conflicto de identidad: _product_id "${rawProductId}" y slug "${slug}" corresponden a productos diferentes en la base de datos.`);
+          }
+        }
+      } else {
+        rowErrors.push(`El _product_id "${rawProductId}" no existe en la base de datos.`);
+      }
+    } else if (sku) {
+      if (existingBySkuMap.has(sku)) {
+        existingProduct = existingBySkuMap.get(sku);
+        matchStrategy = 'sku';
+
+        if (slug && existingBySlugMap.has(slug)) {
+          const slugProd = existingBySlugMap.get(slug);
+          if (slugProd.id !== existingProduct.id) {
+            rowErrors.push(`Conflicto de identidad: SKU "${sku}" y slug "${slug}" corresponden a productos diferentes en la base de datos.`);
+          }
+        }
+      }
+    } else if (slug) {
+      if (existingBySlugMap.has(slug)) {
+        existingProduct = existingBySlugMap.get(slug);
+        matchStrategy = 'slug';
+      }
+    }
+
     let operation: 'create' | 'update' | 'unchanged' | 'invalid' = existingProduct ? 'update' : 'create';
 
     // Security Check: Non-admin Vendors can only update their OWN products
     if (userRole === 'vendor' && existingProduct) {
       if (currentVendorId && existingProduct.vendor_id !== currentVendorId) {
-        rowErrors.push(`Seguridad: El producto con SKU "${sku}" pertenece a otro vendedor y no tienes permiso para modificarlo.`);
+        rowErrors.push(`Seguridad: El producto pertenece a otro vendedor y no tienes permiso para modificarlo.`);
       }
     }
 
@@ -242,9 +388,11 @@ export async function parseAndPreviewImportFile(
       const matchedBrand = metadata.brands.find(b => b.name.toLowerCase().trim() === bName);
       if (matchedBrand) {
         resolvedBrandId = matchedBrand.id;
-      } else {
+      } else if (operation === 'create' || rowValuesByKey.brand_name) {
         rowErrors.push(`La marca "${rowValuesByKey.brand_name}" no existe en Collectibles.uy.`);
       }
+    } else if (existingProduct) {
+      resolvedBrandId = existingProduct.brand_id || null;
     }
 
     // 2. Resolve Main Category
@@ -254,9 +402,14 @@ export async function parseAndPreviewImportFile(
       const matchedCat = metadata.categories.find(c => !c.parent_id && c.name.toLowerCase().trim() === cName);
       if (matchedCat) {
         resolvedCategoryId = matchedCat.id;
-      } else {
+      } else if (operation === 'create') {
         rowErrors.push(`La categoría "${rowValuesByKey.category_name}" no existe en Collectibles.uy.`);
+      } else {
+        // For UPDATE with historical/legacy category name: if unchanged or not strictly matched in new active list, preserve DB category
+        resolvedCategoryId = existingProduct?.category_id || null;
       }
+    } else if (existingProduct) {
+      resolvedCategoryId = existingProduct.category_id || null;
     }
 
     // 3. Resolve Subcategory
@@ -270,9 +423,11 @@ export async function parseAndPreviewImportFile(
       );
       if (matchedSubcat) {
         resolvedSubcategoryId = matchedSubcat.id;
-      } else {
+      } else if (operation === 'create') {
         rowErrors.push(`La subcategoría "${rowValuesByKey.subcategory_name}" no existe o no pertenece a la categoría especificada.`);
       }
+    } else if (existingProduct) {
+      resolvedSubcategoryId = existingProduct.metadata?.subcategory_id || null;
     }
 
     // 4. Resolve License
@@ -282,9 +437,11 @@ export async function parseAndPreviewImportFile(
       const matchedLicense = metadata.licenses.find(l => l.name.toLowerCase().trim() === lName);
       if (matchedLicense) {
         resolvedLicenseId = matchedLicense.id;
-      } else {
+      } else if (operation === 'create') {
         rowErrors.push(`La licencia "${rowValuesByKey.license_name}" no existe en Collectibles.uy.`);
       }
+    } else if (existingProduct) {
+      resolvedLicenseId = existingProduct.metadata?.license_id || null;
     }
 
     // 5. Resolve Vendor (Admin only)
@@ -303,6 +460,8 @@ export async function parseAndPreviewImportFile(
       }
     } else if (userRole === 'vendor' && currentVendorId) {
       resolvedVendorId = currentVendorId;
+    } else if (existingProduct) {
+      resolvedVendorId = existingProduct.vendor_id || null;
     }
 
     // Validate Tipo MBE
@@ -311,7 +470,7 @@ export async function parseAndPreviewImportFile(
       const rawMbe = String(rowValuesByKey.mbe_packaging_type).trim();
       const resolved = resolveMbePackagingTypeInput(rawMbe);
       if (resolved === undefined) {
-        rowErrors.push(`Fila ${rowIndex}: "${rawMbe}" no es un Tipo MBE válido.`);
+        rowErrors.push(`"${rawMbe}" no es un Tipo MBE válido.`);
       } else {
         parsedMbeType = resolved;
       }
@@ -323,7 +482,7 @@ export async function parseAndPreviewImportFile(
       const rawAr = String(rowValuesByKey.argentina_shipping_status).trim();
       const resolved = resolveArgentinaShippingStatusInput(rawAr);
       if (resolved === undefined) {
-        rowErrors.push(`Fila ${rowIndex}: "${rawAr}" no es un Estado AR válido.`);
+        rowErrors.push(`"${rawAr}" no es un Estado AR válido.`);
       } else {
         parsedArStatus = resolved;
       }
@@ -358,132 +517,219 @@ export async function parseAndPreviewImportFile(
     if (rowValuesByKey.dimensions_length !== undefined && String(rowValuesByKey.dimensions_length).trim() !== '') {
       parsedLength = parseFloat(String(rowValuesByKey.dimensions_length).replace(/[^0-9.]/g, ''));
     }
-
     let parsedWidth: number | undefined;
     if (rowValuesByKey.dimensions_width !== undefined && String(rowValuesByKey.dimensions_width).trim() !== '') {
       parsedWidth = parseFloat(String(rowValuesByKey.dimensions_width).replace(/[^0-9.]/g, ''));
     }
-
     let parsedHeight: number | undefined;
     if (rowValuesByKey.dimensions_height !== undefined && String(rowValuesByKey.dimensions_height).trim() !== '') {
       parsedHeight = parseFloat(String(rowValuesByKey.dimensions_height).replace(/[^0-9.]/g, ''));
     }
 
-    // Condition normalization
-    let parsedCondition: string | undefined;
-    if (rowValuesByKey.condition !== undefined) {
+    // Condition normalization (em-dash '—' is treated as null placeholder)
+    let parsedCondition: string | null = null;
+    if (rowValuesByKey.condition !== undefined && rowValuesByKey.condition !== '—' && rowValuesByKey.condition !== '-') {
       const normCond = normalizeCondition(String(rowValuesByKey.condition));
-      if (!normCond) {
-        rowErrors.push(`La condición "${rowValuesByKey.condition}" no es válida.`);
+      if (!normCond && String(rowValuesByKey.condition).trim() !== '') {
+        if (operation === 'create') {
+          rowErrors.push(`La condición "${rowValuesByKey.condition}" no es válida.`);
+        }
       } else {
         parsedCondition = normCond;
       }
+    } else if (existingProduct) {
+      parsedCondition = existingProduct.condition || null;
     }
 
     // Status validation
     let parsedStatus = rowValuesByKey.status ? String(rowValuesByKey.status).trim().toLowerCase() : (existingProduct?.status || 'draft');
-    if (!['published', 'draft', 'archived'].includes(parsedStatus)) {
+    if (rowValuesByKey.status && !['published', 'draft', 'archived'].includes(parsedStatus)) {
       rowErrors.push(`El estado "${rowValuesByKey.status}" no es válido (usar: published, draft, archived).`);
-      parsedStatus = 'draft';
+      parsedStatus = existingProduct?.status || 'draft';
     }
 
-    // Run Central Publication Validator if publishing or creating new published item
+    // Validation for CREATE only
     if (operation === 'create') {
       if (!title) {
         rowErrors.push('El título del producto es obligatorio para crear un producto nuevo.');
       }
+      const validationResult = validateProductForPublication({
+        form: {
+          title: title || '',
+          base_price: parsedPrice !== undefined ? parsedPrice : 0,
+          categories: resolvedCategoryId ? [resolvedCategoryId] : undefined,
+          brands: resolvedBrandId ? [resolvedBrandId] : undefined,
+          image_url: rowValuesByKey.image_url || undefined,
+          stock: parsedStock !== undefined ? parsedStock : 0,
+          condition: parsedCondition || undefined,
+          vendor_id: resolvedVendorId
+        },
+        userRole,
+        storeType: 'standard',
+        targetStatus: parsedStatus as 'published' | 'draft' | 'archived',
+        brandsList: metadata.brands
+      });
+
+      if (!validationResult.isValid) {
+        validationResult.errors.forEach(e => rowErrors.push(e.message));
+      }
+      if (validationResult.hasWarnings) {
+        validationResult.warnings.forEach(w => rowWarnings.push(w.message));
+      }
     }
 
-    const validationResult = validateProductForPublication({
-      form: {
-        title: title || existingProduct?.title || '',
-        base_price: parsedPrice !== undefined ? parsedPrice : existingProduct?.base_price,
-        categories: resolvedCategoryId ? [resolvedCategoryId] : undefined,
-        brands: resolvedBrandId ? [resolvedBrandId] : undefined,
-        image_url: rowValuesByKey.image_url || existingProduct?.image_url,
-        stock: parsedStock !== undefined ? parsedStock : existingProduct?.variants?.[0]?.inventory_count,
-        condition: parsedCondition || existingProduct?.condition,
-        vendor_id: resolvedVendorId
-      },
-      userRole,
-      storeType: 'standard',
-      targetStatus: parsedStatus as 'published' | 'draft' | 'archived',
-      brandsList: metadata.brands
-    });
+    // Calculate exact diff and build minimized payload for existing products
+    const dbPayload: Record<string, any> = {};
+    const changedFieldsDetail: ChangedFieldDetail[] = [];
 
-    if (!validationResult.isValid) {
-      validationResult.errors.forEach(e => rowErrors.push(e.message));
-    }
-    if (validationResult.hasWarnings) {
-      validationResult.warnings.forEach(w => rowWarnings.push(w.message));
-    }
+    if (existingProduct) {
+      // Title
+      if (title && title.trim() !== String(existingProduct.title || '').trim()) {
+        changedFieldsDetail.push({ fieldKey: 'title', fieldLabel: 'Título', oldValue: existingProduct.title, newValue: title });
+        dbPayload.title = title;
+      }
+      // Description
+      if (rowValuesByKey.description !== undefined && String(rowValuesByKey.description || '').trim() !== String(existingProduct.description || '').trim()) {
+        changedFieldsDetail.push({ fieldKey: 'description', fieldLabel: 'Descripción', oldValue: existingProduct.description, newValue: rowValuesByKey.description });
+        dbPayload.description = rowValuesByKey.description;
+      }
+      // Short description
+      if (rowValuesByKey.short_description !== undefined && String(rowValuesByKey.short_description || '').trim() !== String(existingProduct.short_description || '').trim()) {
+        changedFieldsDetail.push({ fieldKey: 'short_description', fieldLabel: 'Descripción corta', oldValue: existingProduct.short_description, newValue: rowValuesByKey.short_description });
+        dbPayload.short_description = rowValuesByKey.short_description;
+      }
+      // Base price
+      if (parsedPrice !== undefined && Math.abs(parsedPrice - (existingProduct.base_price || 0)) > 0.001) {
+        changedFieldsDetail.push({ fieldKey: 'base_price', fieldLabel: 'Precio', oldValue: existingProduct.base_price, newValue: parsedPrice });
+        dbPayload.base_price = parsedPrice;
+      }
+      // Compare at price
+      if (rowValuesByKey.compare_at_price !== undefined) {
+        const fileCompare = parseFloat(rowValuesByKey.compare_at_price) || null;
+        const dbCompare = existingProduct.compare_at_price !== null ? Number(existingProduct.compare_at_price) : null;
+        if (fileCompare !== dbCompare) {
+          changedFieldsDetail.push({ fieldKey: 'compare_at_price', fieldLabel: 'Precio anterior', oldValue: dbCompare, newValue: fileCompare });
+          dbPayload.compare_at_price = fileCompare;
+        }
+      }
+      // Cost price
+      if (userRole === 'admin' && rowValuesByKey.cost_price !== undefined) {
+        const fileCost = parseFloat(rowValuesByKey.cost_price) || null;
+        const dbCost = existingProduct.cost_price !== null ? Number(existingProduct.cost_price) : null;
+        if (fileCost !== dbCost) {
+          changedFieldsDetail.push({ fieldKey: 'cost_price', fieldLabel: 'Costo', oldValue: dbCost, newValue: fileCost });
+          dbPayload.cost_price = fileCost;
+        }
+      }
+      // Weight (kg)
+      if (parsedWeight !== undefined) {
+        const dbWeight = existingProduct.weight_kg !== null && existingProduct.weight_kg !== undefined ? Number(existingProduct.weight_kg) : null;
+        const weightChanged = (parsedWeight === null) !== (dbWeight === null) || (parsedWeight !== null && dbWeight !== null && Math.abs(parsedWeight - dbWeight) > 0.0001);
+        if (weightChanged) {
+          changedFieldsDetail.push({ fieldKey: 'weight_kg', fieldLabel: 'Peso (kg)', oldValue: dbWeight, newValue: parsedWeight });
+          dbPayload.weight_kg = parsedWeight;
+        }
+      }
+      // Stock
+      if (parsedStock !== undefined) {
+        const dbStock = existingProduct.variants?.[0]?.inventory_count ?? 0;
+        if (parsedStock !== dbStock) {
+          changedFieldsDetail.push({ fieldKey: 'stock', fieldLabel: 'Stock', oldValue: dbStock, newValue: parsedStock });
+        }
+      }
+      // Brand
+      const currentBrandName = existingProduct.brand?.name || existingProduct.metadata?.brand_name || null;
+      const isBrandNameChanged = currentBrandName
+        ? String(rowValuesByKey.brand_name).trim().toLowerCase() !== String(currentBrandName).trim().toLowerCase()
+        : (resolvedBrandId !== null && resolvedBrandId !== (existingProduct.brand_id || null));
 
-    if (rowErrors.length > 0) {
-      operation = 'invalid';
-      errorCount++;
-    } else if (operation === 'create') {
-      newCount++;
+      if (rowValuesByKey.brand_name !== undefined && isBrandNameChanged) {
+        changedFieldsDetail.push({ fieldKey: 'brand_name', fieldLabel: 'Marca', oldValue: currentBrandName, newValue: rowValuesByKey.brand_name });
+        dbPayload.brand_id = resolvedBrandId;
+      }
+      // Main Category
+      const currentCatName = existingProduct.category?.name || existingProduct.metadata?.category_name || null;
+      const isCategoryNameChanged = currentCatName
+        ? String(rowValuesByKey.category_name).trim().toLowerCase() !== String(currentCatName).trim().toLowerCase()
+        : (resolvedCategoryId !== null && resolvedCategoryId !== (existingProduct.category_id || null));
+
+      if (rowValuesByKey.category_name !== undefined && isCategoryNameChanged) {
+        changedFieldsDetail.push({ fieldKey: 'category_name', fieldLabel: 'Categoría', oldValue: currentCatName, newValue: rowValuesByKey.category_name });
+        dbPayload.category_id = resolvedCategoryId;
+      }
+      // Condition
+      if (parsedCondition !== null && parsedCondition !== (existingProduct.condition || null)) {
+        changedFieldsDetail.push({ fieldKey: 'condition', fieldLabel: 'Condición', oldValue: existingProduct.condition || null, newValue: parsedCondition });
+        dbPayload.condition = parsedCondition;
+      }
+      // Status
+      if (rowValuesByKey.status && parsedStatus !== existingProduct.status) {
+        changedFieldsDetail.push({ fieldKey: 'status', fieldLabel: 'Estado', oldValue: existingProduct.status, newValue: parsedStatus });
+        dbPayload.status = parsedStatus;
+      }
+      // Slug
+      if (rowValuesByKey.slug !== undefined) {
+        const rawSlug = String(rowValuesByKey.slug).trim();
+        const formattedSlug = isProhibitedSlug(rawSlug) ? slugify(title || existingProduct.title) : slugify(rawSlug);
+        const dbSlug = slugify(existingProduct.slug || '');
+        if (formattedSlug !== dbSlug) {
+          changedFieldsDetail.push({ fieldKey: 'slug', fieldLabel: 'Slug', oldValue: existingProduct.slug, newValue: formattedSlug });
+          dbPayload.slug = formattedSlug;
+        }
+      }
+
+      // Metadata diff
+      if (rowValuesByKey.content !== undefined || rowValuesByKey.video_url !== undefined) {
+        dbPayload.metadata = dbPayload.metadata || {};
+        const currentMeta = existingProduct.metadata || {};
+        if (rowValuesByKey.content !== undefined && rowValuesByKey.content !== currentMeta.content) {
+          changedFieldsDetail.push({ fieldKey: 'content', fieldLabel: 'Contenido', oldValue: currentMeta.content || null, newValue: rowValuesByKey.content });
+          dbPayload.metadata.content = rowValuesByKey.content;
+        }
+        if (rowValuesByKey.video_url !== undefined && rowValuesByKey.video_url !== currentMeta.video_url) {
+          changedFieldsDetail.push({ fieldKey: 'video_url', fieldLabel: 'URL del Video', oldValue: currentMeta.video_url || null, newValue: rowValuesByKey.video_url });
+          dbPayload.metadata.video_url = rowValuesByKey.video_url;
+        }
+      }
+
+      // Re-classify operation based on actual diff
+      if (rowErrors.length > 0) {
+        operation = 'invalid';
+        errorCount++;
+      } else if (changedFieldsDetail.length === 0) {
+        operation = 'unchanged';
+        unchangedCount++;
+      } else {
+        operation = 'update';
+        updateCount++;
+      }
     } else {
-      updateCount++;
+      // CREATE payload
+      if (rowErrors.length > 0) {
+        operation = 'invalid';
+        errorCount++;
+      } else {
+        operation = 'create';
+        newCount++;
+
+        if (title) dbPayload.title = title;
+        if (rowValuesByKey.description !== undefined) dbPayload.description = rowValuesByKey.description;
+        if (rowValuesByKey.short_description !== undefined) dbPayload.short_description = rowValuesByKey.short_description;
+        if (parsedPrice !== undefined) dbPayload.base_price = parsedPrice;
+        if (rowValuesByKey.compare_at_price !== undefined) dbPayload.compare_at_price = parseFloat(rowValuesByKey.compare_at_price) || null;
+        if (userRole === 'admin' && rowValuesByKey.cost_price !== undefined) dbPayload.cost_price = parseFloat(rowValuesByKey.cost_price) || null;
+        if (parsedStatus) dbPayload.status = parsedStatus;
+        if (resolvedBrandId) dbPayload.brand_id = resolvedBrandId;
+        if (resolvedCategoryId) dbPayload.category_id = resolvedCategoryId;
+        if (resolvedVendorId !== undefined) dbPayload.vendor_id = resolvedVendorId;
+        if (rowValuesByKey.badge !== undefined) dbPayload.badge = rowValuesByKey.badge;
+        if (parsedCondition) dbPayload.condition = parsedCondition;
+        if (rowValuesByKey.condition_notes !== undefined) dbPayload.condition_notes = rowValuesByKey.condition_notes;
+        if (parsedWeight !== undefined) dbPayload.weight_kg = parsedWeight;
+      }
     }
 
     if (rowWarnings.length > 0) warningCount++;
-
-    // Build explicit DB column payload for upsert
-    const dbPayload: Record<string, any> = {};
-    if (title) dbPayload.title = title;
-    if (rowValuesByKey.description !== undefined) dbPayload.description = rowValuesByKey.description;
-    if (rowValuesByKey.short_description !== undefined) dbPayload.short_description = rowValuesByKey.short_description;
-    if (parsedPrice !== undefined) dbPayload.base_price = parsedPrice;
-    if (rowValuesByKey.compare_at_price !== undefined) dbPayload.compare_at_price = parseFloat(rowValuesByKey.compare_at_price) || null;
-    if (userRole === 'admin' && rowValuesByKey.cost_price !== undefined) dbPayload.cost_price = parseFloat(rowValuesByKey.cost_price) || null;
-    if (parsedStatus) dbPayload.status = parsedStatus;
-    if (resolvedBrandId) dbPayload.brand_id = resolvedBrandId;
-    if (resolvedCategoryId) dbPayload.category_id = resolvedCategoryId;
-    if (resolvedVendorId !== undefined) dbPayload.vendor_id = resolvedVendorId;
-    if (rowValuesByKey.badge !== undefined) dbPayload.badge = rowValuesByKey.badge;
-    if (parsedCondition) dbPayload.condition = parsedCondition;
-    if (rowValuesByKey.condition_notes !== undefined) dbPayload.condition_notes = rowValuesByKey.condition_notes;
-    if (parsedWeight !== undefined) dbPayload.weight_kg = parsedWeight;
-
-    if (rowValuesByKey.slug !== undefined) {
-      const rawSlug = String(rowValuesByKey.slug).trim();
-      if (isProhibitedSlug(rawSlug)) {
-        warnings.push({
-          fieldKey: 'slug',
-          message: `Slug prohibido de Mercado Libre '${rawSlug}' detectado. Se regeneró automáticamente un slug limpio desde el título.`
-        });
-        dbPayload.slug = slugify(row.title);
-      } else {
-        dbPayload.slug = slugify(rawSlug);
-      }
-    }
-    if (rowValuesByKey.is_featured !== undefined) {
-      const featVal = String(rowValuesByKey.is_featured).trim().toLowerCase();
-      dbPayload.is_featured = featVal === 'true' || featVal === 'sí' || featVal === 'si' || featVal === '1';
-    }
-    if (rowValuesByKey.seo_title !== undefined) {
-      dbPayload.seo_title = rowValuesByKey.seo_title;
-      dbPayload.meta_title = rowValuesByKey.seo_title;
-    }
-    if (rowValuesByKey.seo_description !== undefined) {
-      dbPayload.seo_description = rowValuesByKey.seo_description;
-      dbPayload.meta_description = rowValuesByKey.seo_description;
-    }
-    if (rowValuesByKey.content !== undefined || rowValuesByKey.video_url !== undefined) {
-      dbPayload.metadata = dbPayload.metadata || {};
-      if (rowValuesByKey.content !== undefined) dbPayload.metadata.content = rowValuesByKey.content;
-      if (rowValuesByKey.video_url !== undefined) dbPayload.metadata.video_url = rowValuesByKey.video_url;
-    }
-
-    // Dimensions in metadata
-    if (parsedLength !== undefined || parsedWidth !== undefined || parsedHeight !== undefined) {
-      dbPayload.dimensions = {
-        length: parsedLength ?? 0,
-        width: parsedWidth ?? 0,
-        height: parsedHeight ?? 0
-      };
-    }
 
     parsedRows.push({
       rowIndex,
@@ -492,12 +738,14 @@ export async function parseAndPreviewImportFile(
       title: title || (existingProduct?.title || `Fila ${rowIndex}`),
       operation,
       existingProductId: existingProduct?.id,
+      matchStrategy,
       parsedData: {
         ...rowValuesByKey,
         resolvedMbeType: parsedMbeType,
         resolvedArStatus: parsedArStatus
       },
       dbPayload,
+      changedFieldsDetail,
       resolvedBrandId,
       resolvedCategoryId,
       resolvedSubcategoryId,
@@ -544,7 +792,6 @@ export async function executeBulkImport(
       if (row.operation === 'create') {
         const slug = generateSlug(row.title);
         
-        // Build metadata
         let initialMeta: any = {
           condition: row.dbPayload.condition || null,
           condition_notes: row.dbPayload.condition_notes || null,
@@ -602,7 +849,6 @@ export async function executeBulkImport(
           console.warn('[BulkImportEngine] Error al crear variante SKU:', varErr);
         }
 
-        // Insert junction records if subcategory or license
         if (row.resolvedSubcategoryId) {
           await supabase.from('product_categories').insert({
             product_id: newProd.id,
@@ -619,12 +865,18 @@ export async function executeBulkImport(
         createdCount++;
         successCount++;
       } else if (row.operation === 'update' && row.existingProductId) {
-        // PARTIAL UPDATE: Only update fields present in row.dbPayload or metadata
+        // PARTIAL UPDATE: Send ONLY fields present in row.dbPayload or changed metadata
         const updatePayload: any = { ...row.dbPayload, updated_at: new Date().toISOString() };
+        
+        // Prevent altering product_id or vendor_id for non-admin
+        delete updatePayload._product_id;
+        delete updatePayload.id;
+        if (userRole === 'vendor') {
+          delete updatePayload.vendor_id;
+          delete updatePayload.cost_price;
+        }
 
-        // Handle metadata fields partial update
         if (row.parsedData.resolvedMbeType !== undefined || row.parsedData.resolvedArStatus !== undefined || row.dbPayload.metadata !== undefined) {
-          // Fetch existing metadata to merge safely
           const { data: currentProd } = await supabase
             .from('products')
             .select('metadata')
@@ -651,46 +903,34 @@ export async function executeBulkImport(
           updatePayload.metadata = mergedMeta;
         }
 
-        const { error: updateErr } = await supabase
-          .from('products')
-          .update(updatePayload)
-          .eq('id', row.existingProductId);
+        if (Object.keys(updatePayload).length > 1) { // More than just updated_at
+          const { error: updateErr } = await supabase
+            .from('products')
+            .update(updatePayload)
+            .eq('id', row.existingProductId);
 
-        if (updateErr) {
-          throw new Error(updateErr.message);
+          if (updateErr) {
+            throw new Error(updateErr.message);
+          }
         }
 
-        // If stock or SKU updated in row, update variant
-        if (row.parsedData.stock !== undefined || row.sku) {
+        // Update variant if stock or SKU changed
+        const stockChanged = row.changedFieldsDetail.some(f => f.fieldKey === 'stock');
+        const skuChanged = row.changedFieldsDetail.some(f => f.fieldKey === 'sku');
+        if (stockChanged || skuChanged) {
           const varUpdate: any = {};
-          if (row.parsedData.stock !== undefined) {
+          if (stockChanged && row.parsedData.stock !== undefined) {
             varUpdate.inventory_count = parseInt(String(row.parsedData.stock), 10);
           }
-          if (row.sku) {
+          if (skuChanged && row.sku) {
             varUpdate.sku = row.sku;
           }
-          await supabase
-            .from('product_variants')
-            .update(varUpdate)
-            .eq('product_id', row.existingProductId);
-        }
-
-        // Update subcategory junction if provided
-        if (row.resolvedSubcategoryId) {
-          await supabase.from('product_categories').delete().eq('product_id', row.existingProductId);
-          await supabase.from('product_categories').insert({
-            product_id: row.existingProductId,
-            category_id: row.resolvedSubcategoryId
-          });
-        }
-
-        // Update license junction if provided
-        if (row.resolvedLicenseId) {
-          await supabase.from('product_licenses').delete().eq('product_id', row.existingProductId);
-          await supabase.from('product_licenses').insert({
-            product_id: row.existingProductId,
-            license_id: row.resolvedLicenseId
-          });
+          if (Object.keys(varUpdate).length > 0) {
+            await supabase
+              .from('product_variants')
+              .update(varUpdate)
+              .eq('product_id', row.existingProductId);
+          }
         }
 
         updatedCount++;

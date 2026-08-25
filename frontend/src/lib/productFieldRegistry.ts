@@ -65,7 +65,25 @@ export interface ProductFieldDefinition {
 }
 
 export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
-  // --- IDENTIFICACIÓN ---
+  // --- IDENTIFICACIÓN TÉCNICA ---
+  {
+    key: '_product_id',
+    label: '_product_id',
+    description: 'Identificador técnico UUID interno del producto (Solo lectura para round-trip e importaciones exactas).',
+    order: 0,
+    type: 'text',
+    exportable: true,
+    importable: true,
+    requiredForCreate: false,
+    requiredForPublish: false,
+    adminOnly: true,
+    nullable: true,
+    blankBehavior: 'ignore',
+    example: '00055f0d-645e-43f3-b533-35681cd65c81',
+    synonyms: ['_product_id', 'product_id', 'id_producto', 'id_tecnico', 'id'],
+    exportResolver: p => p.id || ''
+  },
+  // --- IDENTIFICACIÓN COMERCIAL ---
   {
     key: 'sku',
     label: 'SKU',

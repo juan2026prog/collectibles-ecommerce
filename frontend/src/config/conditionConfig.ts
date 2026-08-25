@@ -45,7 +45,7 @@ export function isValidCondition(val: any): val is ProductCondition {
 export function normalizeCondition(val?: string | null): ProductCondition | null {
   if (!val || typeof val !== 'string') return null;
   const trimmed = val.trim();
-  if (!trimmed) return null;
+  if (!trimmed || trimmed === '—' || trimmed === '-') return null;
   if (isValidCondition(trimmed)) {
     return trimmed;
   }
@@ -60,6 +60,11 @@ export function normalizeCondition(val?: string | null): ProductCondition | null
   return null;
 }
 
+export function getConditionLabel(value?: string | null): string {
+  if (!value || value === '—' || value === '-') return '';
+  const found = CONDITION_OPTIONS.find(c => c.value === value);
+  return found ? found.label : value;
+}
 
 export const STORE_TYPE_OPTIONS: { value: StoreType; label: string; desc: string }[] = [
   { 
@@ -83,12 +88,6 @@ export const STORE_TYPE_OPTIONS: { value: StoreType; label: string; desc: string
     desc: 'Tienda especializada en TCG, Trading Cards / Sports Cards y Board Games.' 
   },
 ];
-
-export function getConditionLabel(value?: string | null): string {
-  if (!value) return '—';
-  const found = CONDITION_OPTIONS.find(c => c.value === value);
-  return found ? found.label : value;
-}
 
 export function getStoreTypeLabel(value?: string | null): string {
   switch (value) {
