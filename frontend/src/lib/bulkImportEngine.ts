@@ -171,10 +171,11 @@ export async function parseAndPreviewImportFile(
     };
   }
 
-  // Pre-fetch identifiers from raw rows: _product_id, sku, slug
+  // Pre-fetch identifiers from raw rows: _product_id, sku, slug, ean_upc
   const productIdsInFile: string[] = [];
   const skusInFile: string[] = [];
   const slugsInFile: string[] = [];
+  const eansInFile: string[] = [];
 
   rawRows.forEach(r => {
     for (const rawColKey in r) {
@@ -188,6 +189,8 @@ export async function parseAndPreviewImportFile(
         skusInFile.push(cellVal);
       } else if (fDef?.key === 'slug') {
         slugsInFile.push(cellVal);
+      } else if (fDef?.key === 'ean_upc') {
+        eansInFile.push(cellVal);
       }
     }
   });
@@ -220,7 +223,6 @@ export async function parseAndPreviewImportFile(
             id, title, slug, description, short_description, base_price, compare_at_price, status, vendor_id, weight_kg, dimensions, metadata, brand_id, category_id, badge, condition, condition_notes, is_featured, seo_title, seo_description, meta_title, meta_description,
             brand:brands!products_brand_id_fkey(id, name),
             category:categories!products_category_id_fkey(id, name),
-            license:licenses!products_suggested_license_id_fkey(id, name),
             variants:product_variants(id, sku, inventory_count)
           `)
           .in('id', chunk);
@@ -278,7 +280,6 @@ export async function parseAndPreviewImportFile(
             id, title, slug, description, short_description, base_price, compare_at_price, status, vendor_id, weight_kg, dimensions, metadata, brand_id, category_id, badge, condition, condition_notes, is_featured, seo_title, seo_description, meta_title, meta_description,
             brand:brands!products_brand_id_fkey(id, name),
             category:categories!products_category_id_fkey(id, name),
-            license:licenses!products_suggested_license_id_fkey(id, name),
             variants:product_variants(id, sku, inventory_count)
           `)
           .in('slug', chunk);
@@ -318,7 +319,6 @@ export async function parseAndPreviewImportFile(
                 id, title, slug, description, short_description, base_price, compare_at_price, status, vendor_id, weight_kg, dimensions, metadata, brand_id, category_id, badge, condition, condition_notes, is_featured, seo_title, seo_description, meta_title, meta_description,
                 brand:brands!products_brand_id_fkey(id, name),
                 category:categories!products_category_id_fkey(id, name),
-                license:licenses!products_suggested_license_id_fkey(id, name),
                 variants:product_variants(id, sku, inventory_count)
               `)
               .in('id', idsToFetch);
@@ -335,17 +335,6 @@ export async function parseAndPreviewImportFile(
     }
 
     // 5. Fetch by EAN / UPC
-    const eansInFile: string[] = [];
-    rawRows.forEach(r => {
-      for (const rawColKey in r) {
-        const fDef = headerToFieldMap.get(normalizeKey(rawColKey));
-        const cellVal = String(r[rawColKey] || '').trim();
-        if (cellVal && fDef?.key === 'ean_upc') {
-          eansInFile.push(cellVal);
-        }
-      }
-    });
-
     if (eansInFile.length > 0) {
       for (const chunk of chunkArray(eansInFile, 100)) {
         const { data: varData } = await supabase
@@ -362,7 +351,6 @@ export async function parseAndPreviewImportFile(
                 id, title, slug, description, short_description, base_price, compare_at_price, status, vendor_id, weight_kg, dimensions, metadata, brand_id, category_id, badge, condition, condition_notes, is_featured, seo_title, seo_description, meta_title, meta_description,
                 brand:brands!products_brand_id_fkey(id, name),
                 category:categories!products_category_id_fkey(id, name),
-                license:licenses!products_suggested_license_id_fkey(id, name),
                 variants:product_variants(id, sku, inventory_count)
               `)
               .in('id', idsToFetch);
@@ -379,6 +367,28 @@ export async function parseAndPreviewImportFile(
             const p = existingByIdMap.get(v.product_id);
             if (p) existingByEanMap.set(v.sku, p);
           });
+        }
+
+        // Also query products by metadata->gtin
+        for (const eanVal of chunk) {
+          const { data: pData } = await supabase
+            .from('products')
+            .select(`
+              id, title, slug, description, short_description, base_price, compare_at_price, status, vendor_id, weight_kg, dimensions, metadata, brand_id, category_id, badge, condition, condition_notes, is_featured, seo_title, seo_description, meta_title, meta_description,
+              brand:brands!products_brand_id_fkey(id, name),
+              category:categories!products_category_id_fkey(id, name),
+              variants:product_variants(id, sku, inventory_count)
+            `)
+            .filter('metadata->>gtin', 'eq', eanVal);
+
+          if (pData && pData.length === 1) {
+            const p = pData[0];
+            if (!fetchedProductIds.has(p.id)) {
+              fetchedProductIds.add(p.id);
+              registerProductInMaps(p);
+            }
+            existingByEanMap.set(eanVal, p);
+          }
         }
       }
     }
