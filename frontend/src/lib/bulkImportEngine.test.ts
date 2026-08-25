@@ -260,4 +260,23 @@ describe('Bulk Import Engine & Round-Trip Architectural Tests', () => {
     expect(preview.summary.errorCount).toBe(0);
     expect(preview.rows[0].operation).toBe('unchanged');
   });
+
+  it('7. Accounting Invariant Test: READ === CREATE + UPDATE + UNCHANGED + ERROR is strictly preserved', async () => {
+    const blob = await generateProductsXlsxBlob(
+      mockDbProducts,
+      masterFields.map(f => f.key),
+      'admin',
+      'Productos',
+      mockMetadata
+    );
+
+    const file = new File([blob], 'Accounting.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+
+    const preview = await parseAndPreviewImportFile(file, 'admin', null, mockMetadata, mockDbProducts);
+
+    const sum = preview.summary.newCount + preview.summary.updateCount + preview.summary.unchangedCount + preview.summary.errorCount;
+    expect(preview.summary.totalRows).toBe(sum);
+  });
 });

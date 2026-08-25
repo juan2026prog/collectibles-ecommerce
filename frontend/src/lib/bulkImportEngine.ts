@@ -192,10 +192,12 @@ export async function parseAndPreviewImportFile(
     }
   });
 
-  // Pre-fetch existing products by _product_id, SKU, and slug
+  // Pre-fetch existing products by _product_id, SKU, slug, redirect, and EAN
   const existingByIdMap = new Map<string, any>();
   const existingBySkuMap = new Map<string, any>();
   const existingBySlugMap = new Map<string, any>();
+  const existingRedirectsMap = new Map<string, string>(); // old_slug -> product_id
+  const existingByEanMap = new Map<string, any>();
 
   const registerProductInMaps = (p: any) => {
     if (p.id) existingByIdMap.set(p.id, p);
@@ -291,6 +293,95 @@ export async function parseAndPreviewImportFile(
         }
       }
     }
+
+    // 4. Fetch by Historical Slug Redirect (product_slug_redirects)
+    if (slugsInFile.length > 0) {
+      for (const chunk of chunkArray(slugsInFile, 100)) {
+        const { data: redirects } = await supabase
+          .from('product_slug_redirects')
+          .select('old_slug, product_id')
+          .in('old_slug', chunk);
+
+        if (redirects && redirects.length > 0) {
+          const idsToFetch: string[] = [];
+          redirects.forEach(r => {
+            existingRedirectsMap.set(r.old_slug, r.product_id);
+            if (!fetchedProductIds.has(r.product_id)) {
+              idsToFetch.push(r.product_id);
+            }
+          });
+
+          if (idsToFetch.length > 0) {
+            const { data: dbProducts } = await supabase
+              .from('products')
+              .select(`
+                id, title, slug, description, short_description, base_price, compare_at_price, status, vendor_id, weight_kg, dimensions, metadata, brand_id, category_id, badge, condition, condition_notes, is_featured, seo_title, seo_description, meta_title, meta_description,
+                brand:brands!products_brand_id_fkey(id, name),
+                category:categories!products_category_id_fkey(id, name),
+                license:licenses!products_suggested_license_id_fkey(id, name),
+                variants:product_variants(id, sku, inventory_count)
+              `)
+              .in('id', idsToFetch);
+
+            if (dbProducts) {
+              dbProducts.forEach(p => {
+                fetchedProductIds.add(p.id);
+                registerProductInMaps(p);
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // 5. Fetch by EAN / UPC
+    const eansInFile: string[] = [];
+    rawRows.forEach(r => {
+      for (const rawColKey in r) {
+        const fDef = headerToFieldMap.get(normalizeKey(rawColKey));
+        const cellVal = String(r[rawColKey] || '').trim();
+        if (cellVal && fDef?.key === 'ean_upc') {
+          eansInFile.push(cellVal);
+        }
+      }
+    });
+
+    if (eansInFile.length > 0) {
+      for (const chunk of chunkArray(eansInFile, 100)) {
+        const { data: varData } = await supabase
+          .from('product_variants')
+          .select('product_id, sku')
+          .in('sku', chunk);
+
+        if (varData && varData.length > 0) {
+          const idsToFetch = varData.map(v => v.product_id).filter(id => !fetchedProductIds.has(id));
+          if (idsToFetch.length > 0) {
+            const { data: dbProducts } = await supabase
+              .from('products')
+              .select(`
+                id, title, slug, description, short_description, base_price, compare_at_price, status, vendor_id, weight_kg, dimensions, metadata, brand_id, category_id, badge, condition, condition_notes, is_featured, seo_title, seo_description, meta_title, meta_description,
+                brand:brands!products_brand_id_fkey(id, name),
+                category:categories!products_category_id_fkey(id, name),
+                license:licenses!products_suggested_license_id_fkey(id, name),
+                variants:product_variants(id, sku, inventory_count)
+              `)
+              .in('id', idsToFetch);
+
+            if (dbProducts) {
+              dbProducts.forEach(p => {
+                fetchedProductIds.add(p.id);
+                registerProductInMaps(p);
+              });
+            }
+          }
+
+          varData.forEach(v => {
+            const p = existingByIdMap.get(v.product_id);
+            if (p) existingByEanMap.set(v.sku, p);
+          });
+        }
+      }
+    }
   }
 
   const parsedRows: ParsedImportRow[] = [];
@@ -322,9 +413,10 @@ export async function parseAndPreviewImportFile(
     const rawProductId = (rowValuesByKey._product_id || '').toString().trim();
     const sku = (rowValuesByKey.sku || '').toString().trim();
     const slug = (rowValuesByKey.slug || '').toString().trim();
+    const ean = (rowValuesByKey.ean_upc || '').toString().trim();
     const title = (rowValuesByKey.title || '').toString().trim();
 
-    // Multi-Strategy Matching Priority: 1. _product_id -> 2. SKU -> 3. slug
+    // Multi-Strategy Matching Priority: 1. _product_id -> 2. SKU -> 3. slug -> 4. historical_slug (redirect) -> 5. ean_upc
     let existingProduct: any = null;
     let matchStrategy: '_product_id' | 'sku' | 'slug' | undefined;
 
@@ -361,10 +453,23 @@ export async function parseAndPreviewImportFile(
           }
         }
       }
-    } else if (slug) {
+    }
+
+    if (!existingProduct && slug) {
       if (existingBySlugMap.has(slug)) {
         existingProduct = existingBySlugMap.get(slug);
         matchStrategy = 'slug';
+      } else if (existingRedirectsMap.has(slug)) {
+        const redirectedId = existingRedirectsMap.get(slug)!;
+        existingProduct = existingByIdMap.get(redirectedId);
+        matchStrategy = 'slug';
+      }
+    }
+
+    if (!existingProduct && ean) {
+      if (existingByEanMap.has(ean)) {
+        existingProduct = existingByEanMap.get(ean);
+        matchStrategy = 'sku';
       }
     }
 
