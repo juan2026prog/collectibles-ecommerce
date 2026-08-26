@@ -72,7 +72,7 @@ export function matchesProductFilters(item: any, filters: ProductFilterState): b
   // Status filter
   if (filters.status) {
     if (filters.status === 'out_of_stock') {
-      const stock = item.stock !== undefined ? item.stock : (item.variants?.[0]?.inventory_count ?? 0);
+      const stock = getCanonicalProductStock(item);
       if (stock > 0) return false;
     } else {
       if ((item.status || 'draft') !== filters.status) return false;

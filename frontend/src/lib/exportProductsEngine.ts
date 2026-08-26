@@ -3,6 +3,8 @@ import type { ProductFilterState } from './productFilterTypes';
 import { matchesProductFilters } from './productFilterTypes';
 import type { ExportProductItem } from './bulkExportUtils';
 
+import { getCanonicalProductStock } from './canonicalStock';
+
 export type ExportScope = 'all' | 'filtered' | 'selected' | 'published' | 'draft' | 'archived' | 'out_of_stock';
 
 export interface FetchExportOptions {
@@ -27,9 +29,7 @@ export function normalizeRawProductForExport(item: any): ExportProductItem {
   const primaryImg = images.find((i: any) => i.is_primary)?.url || images[0]?.url || item.image_url || item.metadata?.image_url || '';
 
   const skuVal = item.sku || primaryVar.sku || item.metadata?.gtin || item.metadata?.sku || '';
-  const stockVal = item.stock !== undefined 
-    ? item.stock 
-    : (primaryVar.inventory_count !== undefined ? primaryVar.inventory_count : 0);
+  const stockVal = getCanonicalProductStock(item);
 
   const categoryObj = item.category || (item.product_categories?.[0]?.categories ? {
     id: item.product_categories[0].categories.id,

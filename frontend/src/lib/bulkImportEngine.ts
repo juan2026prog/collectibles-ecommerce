@@ -8,6 +8,7 @@ import { fetchCatalogMetadataForTemplate } from './bulkTemplateGenerator';
 import type { CatalogMetadata } from './bulkTemplateGenerator';
 import { mergeMbePackagingType, resolveMbePackagingTypeInput, resolveArgentinaShippingStatusInput } from './mbeLogisticsUtils';
 import { slugify, isProhibitedSlug } from './slugUtils';
+import { getCanonicalProductStock } from './canonicalStock';
 
 export interface ChangedFieldDetail {
   fieldKey: string;
@@ -800,7 +801,7 @@ export async function parseAndPreviewImportFile(
       }
       // Stock
       if (parsedStock !== undefined) {
-        const dbStock = existingProduct.variants?.[0]?.inventory_count ?? 0;
+        const dbStock = getCanonicalProductStock(existingProduct);
         if (parsedStock !== dbStock) {
           changedFieldsDetail.push({ fieldKey: 'stock', fieldLabel: 'Stock', oldValue: dbStock, newValue: parsedStock });
         }

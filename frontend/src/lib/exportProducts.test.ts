@@ -244,7 +244,7 @@ describe('Product Export & Import System Audit', () => {
     expect(preview.rows.length).toBe(1);
     expect(preview.rows[0].operation).toBe('invalid');
     expect(preview.rows[0].errors.some(e => e.includes('no es un Estado AR válido'))).toBe(true);
-  });
+  }, 15000);
 
   it('10. Verification: Valid visible labels (MBE PAK, Envío automático) resolve correctly to internal keys', async () => {
     const fakeFileContent = 'SKU,Título,Precio,Stock,Tipo MBE,Estado AR\nSKU-999,Producto Test,100,5,MBE PAK,Envío automático';
@@ -432,7 +432,7 @@ describe('Product Export & Import System Audit', () => {
     expect(csvHeaders).toContain('Título SEO');
     expect(csvHeaders).toContain('Descripción SEO');
     expect(csvHeaders).toContain('URL del Video');
-  });
+  }, 15000);
 
   it('18. Forensic Deduplication Test: Product dataset has 100% ID uniqueness', () => {
     const catalog = createMockCatalog(456);

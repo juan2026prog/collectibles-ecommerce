@@ -1,5 +1,6 @@
 import { CONDITION_OPTIONS, getConditionLabel } from '../config/conditionConfig';
 import { getMbePackagingLabel, calculateArgentinaShippingStatus } from './mbeLogisticsUtils';
+import { getCanonicalProductStock } from './canonicalStock';
 
 export type FieldDataType = 
   | 'text' 
@@ -358,7 +359,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     blankBehavior: 'ignore',
     example: '15',
     synonyms: ['stock', 'cantidad', 'inventory', 'unidades', 'disponible'],
-    exportResolver: p => p.stock !== undefined && p.stock !== null ? String(p.stock) : '0'
+    exportResolver: p => String(getCanonicalProductStock(p))
   },
   {
     key: 'is_featured',
