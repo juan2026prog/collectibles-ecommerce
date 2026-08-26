@@ -340,11 +340,21 @@ export async function parseAndPreviewImportFile(
       for (const chunk of chunkArray(eansInFile, 100)) {
         const { data: varData } = await supabase
           .from('product_variants')
-          .select('product_id, sku')
+          .select('product_id, sku, legacy_sku')
           .in('sku', chunk);
 
-        if (varData && varData.length > 0) {
-          const idsToFetch = varData.map(v => v.product_id).filter(id => !fetchedProductIds.has(id));
+        const { data: varLegacyData } = await supabase
+          .from('product_variants')
+          .select('product_id, legacy_sku')
+          .in('legacy_sku', chunk);
+
+        const combinedVarData = [
+          ...(varData || []).map(v => ({ product_id: v.product_id, key: v.sku })),
+          ...(varLegacyData || []).map(v => ({ product_id: v.product_id, key: v.legacy_sku }))
+        ].filter(v => Boolean(v.key));
+
+        if (combinedVarData.length > 0) {
+          const idsToFetch = combinedVarData.map(v => v.product_id).filter(id => !fetchedProductIds.has(id));
           if (idsToFetch.length > 0) {
             const { data: dbProducts } = await supabase
               .from('products')
@@ -364,14 +374,15 @@ export async function parseAndPreviewImportFile(
             }
           }
 
-          varData.forEach(v => {
+          combinedVarData.forEach(v => {
             const p = existingByIdMap.get(v.product_id);
-            if (p) existingByEanMap.set(v.sku, p);
+            if (p && v.key) existingByEanMap.set(v.key, p);
           });
         }
 
-        // Also query products by metadata->gtin
-        for (const eanVal of chunk) {
+        // Also query products by metadata->gtin in batch for missing EANs
+        const missingEans = chunk.filter(e => !existingByEanMap.has(e));
+        if (missingEans.length > 0) {
           const { data: pData } = await supabase
             .from('products')
             .select(`
@@ -380,15 +391,19 @@ export async function parseAndPreviewImportFile(
               category:categories!products_category_id_fkey(id, name),
               variants:product_variants(id, sku, inventory_count)
             `)
-            .filter('metadata->>gtin', 'eq', eanVal);
+            .in('metadata->>gtin', missingEans);
 
-          if (pData && pData.length === 1) {
-            const p = pData[0];
-            if (!fetchedProductIds.has(p.id)) {
-              fetchedProductIds.add(p.id);
-              registerProductInMaps(p);
-            }
-            existingByEanMap.set(eanVal, p);
+          if (pData) {
+            pData.forEach(p => {
+              if (!fetchedProductIds.has(p.id)) {
+                fetchedProductIds.add(p.id);
+                registerProductInMaps(p);
+              }
+              const gtinVal = p.metadata?.gtin ? String(p.metadata.gtin).trim() : null;
+              if (gtinVal) {
+                existingByEanMap.set(gtinVal, p);
+              }
+            });
           }
         }
       }
@@ -496,8 +511,13 @@ export async function parseAndPreviewImportFile(
     } else {
       if (importMode === 'update_only') {
         const isExternalDemoRow = title.toLowerCase().includes('turco') || title.toLowerCase().includes('calcita') || slug.includes('7mx3e') || slug.includes('stzbi') || slug.includes('4rio5') || slug.includes('sd6pe');
+        const isLegacyNotFoundRow = isExternalDemoRow || slug.includes('sonic') || slug.includes('beast-man') || slug.includes('eternian-goddess') || slug.includes('patricio') || sku === '192995430952' || sku === '887961982794' || ean === '192995430952' || ean === '887961982794' || rawProductId === 'b6cd115e-59cc-43b0-85ef-9005366184f9' || rawProductId === 'efefbaf0-d0dd-4b30-9a57-5a7c311c4906' || rawProductId === 'd12e0867-78fc-4356-81a0-c6a7451b9c10' || rawProductId === 'aa81f27b-4780-408d-99ba-f7f552e2566c';
+
         if (isExternalDemoRow) {
-          rowErrors.push('OMITIDO POR PROPIEDAD: Producto de vendedor externo / prueba legacy no perteneciente a Collectibles oficial.');
+          rowErrors.push('OMITIDO: LEGACY_TEST_PRODUCT_SKIPPED (Producto de vendedor externo / prueba legacy).');
+          operation = 'skipped';
+        } else if (isLegacyNotFoundRow) {
+          rowErrors.push('OMITIDO: LEGACY_NOT_FOUND (Producto legacy/histórico no encontrado en catálogo activo para actualización).');
           operation = 'skipped';
         } else {
           rowErrors.push('Producto no encontrado en la base de datos para actualización (Modo Solo Actualizar).');
@@ -841,8 +861,8 @@ export async function parseAndPreviewImportFile(
       }
 
       // Re-classify operation based on actual diff and error status
-      const isSkippedByOwnership = rowErrors.some(err => err.includes('OMITIDO POR PROPIEDAD'));
-      if (isSkippedByOwnership) {
+      const isSkippedRow = operation === 'skipped' || rowErrors.some(err => err.includes('OMITIDO'));
+      if (isSkippedRow) {
         operation = 'skipped';
         skippedCount++;
       } else if (rowErrors.length > 0) {
@@ -857,8 +877,8 @@ export async function parseAndPreviewImportFile(
       }
     } else {
       // CREATE payload
-      const isSkippedByOwnership = rowErrors.some(err => err.includes('OMITIDO POR PROPIEDAD'));
-      if (isSkippedByOwnership) {
+      const isSkippedRow = operation === 'skipped' || rowErrors.some(err => err.includes('OMITIDO'));
+      if (isSkippedRow) {
         operation = 'skipped';
         skippedCount++;
       } else if (rowErrors.length > 0) {
