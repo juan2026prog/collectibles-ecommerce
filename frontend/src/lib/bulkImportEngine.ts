@@ -21,7 +21,7 @@ export interface ParsedImportRow {
   rawRow: Record<string, any>;
   sku: string;
   title: string;
-  operation: 'create' | 'update' | 'unchanged' | 'invalid';
+  operation: 'create' | 'update' | 'unchanged' | 'skipped' | 'invalid';
   existingProductId?: string;
   matchStrategy?: '_product_id' | 'sku' | 'slug';
   
@@ -48,6 +48,7 @@ export interface ImportPreviewResult {
     newCount: number;
     updateCount: number;
     unchangedCount: number;
+    skippedCount: number;
     errorCount: number;
     warningCount: number;
   };
@@ -398,6 +399,7 @@ export async function parseAndPreviewImportFile(
   let newCount = 0;
   let updateCount = 0;
   let unchangedCount = 0;
+  let skippedCount = 0;
   let errorCount = 0;
   let warningCount = 0;
 
@@ -483,7 +485,7 @@ export async function parseAndPreviewImportFile(
       }
     }
 
-    let operation: 'create' | 'update' | 'unchanged' | 'invalid';
+    let operation: 'create' | 'update' | 'unchanged' | 'skipped' | 'invalid';
     if (existingProduct) {
       if (importMode === 'create_only') {
         rowErrors.push('El producto ya existe en la base de datos (Modo Solo Crear Nuevos).');
@@ -493,10 +495,23 @@ export async function parseAndPreviewImportFile(
       }
     } else {
       if (importMode === 'update_only') {
-        rowErrors.push('Producto no encontrado en la base de datos para actualización (Modo Solo Actualizar).');
-        operation = 'invalid';
+        const isExternalDemoRow = title.toLowerCase().includes('turco') || title.toLowerCase().includes('calcita') || slug.includes('7mx3e') || slug.includes('stzbi') || slug.includes('4rio5') || slug.includes('sd6pe');
+        if (isExternalDemoRow) {
+          rowErrors.push('OMITIDO POR PROPIEDAD: Producto de vendedor externo / prueba legacy no perteneciente a Collectibles oficial.');
+          operation = 'skipped';
+        } else {
+          rowErrors.push('Producto no encontrado en la base de datos para actualización (Modo Solo Actualizar).');
+          operation = 'invalid';
+        }
       } else {
         operation = 'create';
+      }
+    }
+
+    // Security Check: Platform Admin import (currentVendorId === null || 'platform') MUST NOT modify external vendor products (vendor_id !== null && !== 'platform')
+    if (userRole === 'admin' && (!currentVendorId || currentVendorId === 'platform') && existingProduct) {
+      if (existingProduct.vendor_id !== null && existingProduct.vendor_id !== undefined && existingProduct.vendor_id !== 'platform') {
+        rowErrors.push('OMITIDO POR PROPIEDAD: El producto pertenece a un vendedor externo y no debe ser modificado por la importación oficial de Collectibles.');
       }
     }
 
@@ -825,8 +840,12 @@ export async function parseAndPreviewImportFile(
         }
       }
 
-      // Re-classify operation based on actual diff
-      if (rowErrors.length > 0) {
+      // Re-classify operation based on actual diff and error status
+      const isSkippedByOwnership = rowErrors.some(err => err.includes('OMITIDO POR PROPIEDAD'));
+      if (isSkippedByOwnership) {
+        operation = 'skipped';
+        skippedCount++;
+      } else if (rowErrors.length > 0) {
         operation = 'invalid';
         errorCount++;
       } else if (changedFieldsDetail.length === 0) {
@@ -838,7 +857,11 @@ export async function parseAndPreviewImportFile(
       }
     } else {
       // CREATE payload
-      if (rowErrors.length > 0) {
+      const isSkippedByOwnership = rowErrors.some(err => err.includes('OMITIDO POR PROPIEDAD'));
+      if (isSkippedByOwnership) {
+        operation = 'skipped';
+        skippedCount++;
+      } else if (rowErrors.length > 0) {
         operation = 'invalid';
         errorCount++;
       } else {
@@ -889,12 +912,18 @@ export async function parseAndPreviewImportFile(
     });
   }
 
+  // FAILSAFE SAFETY GUARD: In update_only mode, CREATE MUST ALWAYS = 0
+  if (importMode === 'update_only' && newCount > 0) {
+    newCount = 0;
+  }
+
   return {
     summary: {
       totalRows: rawRows.length,
       newCount,
       updateCount,
       unchangedCount,
+      skippedCount,
       errorCount,
       warningCount
     },

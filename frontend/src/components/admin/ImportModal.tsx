@@ -231,7 +231,7 @@ export default function ImportModal({
               </div>
 
               {/* Summary Stats Cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-6 gap-2.5">
                 <div className="bg-slate-50 border border-slate-200 p-3 rounded-2xl">
                   <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Filas Leídas</div>
                   <div className="text-xl font-black text-slate-800 mt-0.5">{preview.summary.totalRows}</div>
@@ -247,6 +247,10 @@ export default function ImportModal({
                 <div className="bg-amber-50/80 border border-amber-200 p-3 rounded-2xl">
                   <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">Sin Cambios</div>
                   <div className="text-xl font-black text-amber-700 mt-0.5">{preview.summary.unchangedCount}</div>
+                </div>
+                <div className="bg-purple-50/80 border border-purple-200 p-3 rounded-2xl">
+                  <div className="text-[10px] font-bold text-purple-700 uppercase tracking-wider">Omitidos</div>
+                  <div className="text-xl font-black text-purple-700 mt-0.5">{preview.summary.skippedCount || 0}</div>
                 </div>
                 <div className="bg-red-50/80 border border-red-200 p-3 rounded-2xl">
                   <div className="text-[10px] font-bold text-red-700 uppercase tracking-wider">Con Errores</div>
