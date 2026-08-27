@@ -1,7 +1,8 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Download, UploadCloud, X, FileText, CheckCircle2, AlertTriangle, RefreshCw, BookOpen, FileCheck2 } from 'lucide-react';
 import { parseAndPreviewImportFile, executeBulkImport } from '../../lib/bulkImportEngine';
-import type { ImportPreviewResult, ImportExecutionResult, ParsedImportRow } from '../../lib/bulkImportEngine';
+import type { ImportPreviewResult, ImportExecutionResult, ImportMode } from '../../lib/bulkImportEngine';
 import { downloadXlsxImportTemplate } from '../../lib/bulkTemplateGenerator';
 import ImportGuideModal from './ImportGuideModal';
 
@@ -31,6 +32,31 @@ export default function ImportModal({
   const [importMode, setImportMode] = useState<ImportMode>('update_only');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, []);
+
+  const actionableRows = useMemo(() => {
+    if (!preview || !preview.rows) return [];
+    return preview.rows.filter(r => {
+      if (r.operation === 'invalid' || (r.errors && r.errors.length > 0)) return false;
+      if (importMode === 'update_only') return r.operation === 'update';
+      if (importMode === 'create_only') return r.operation === 'create';
+      return r.operation === 'create' || r.operation === 'update';
+    });
+  }, [preview, importMode]);
+
+  const confirmButtonText = useMemo(() => {
+    const count = actionableRows.length;
+    if (count === 0) return 'NO HAY CAMBIOS PARA IMPORTAR';
+    if (count === 1) return 'CONFIRMAR E IMPORTAR 1 PRODUCTO';
+    return `CONFIRMAR E IMPORTAR ${count} PRODUCTOS`;
+  }, [actionableRows]);
 
   const processFile = async (selectedFile: File, mode: ImportMode = importMode) => {
     if (!selectedFile) return;
@@ -81,7 +107,7 @@ export default function ImportModal({
   };
 
   const handleExecuteImport = async () => {
-    if (!preview) return;
+    if (!preview || actionableRows.length === 0) return;
     setImporting(true);
     try {
       const result = await executeBulkImport(preview.rows, userRole, currentVendorId);
@@ -126,12 +152,12 @@ export default function ImportModal({
     return true;
   }) : [];
 
-  return (
+  return createPortal(
     <>
       {showGuide && <ImportGuideModal onClose={() => setShowGuide(false)} userRole={userRole} />}
       
-      <div className="fixed inset-0 bg-slate-950/75 z-40 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed inset-0 m-auto w-full max-w-4xl h-[88vh] bg-white z-50 rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-slide-up border border-slate-100">
+      <div className="fixed inset-0 bg-slate-950/75 z-[950] backdrop-blur-sm animate-fade-in" onClick={onClose} />
+      <div className="fixed inset-0 m-auto w-full max-w-4xl h-[88vh] bg-white z-[1000] rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-slide-up border border-slate-100">
         
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
@@ -141,12 +167,18 @@ export default function ImportModal({
           </div>
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => setShowGuide(true)}
               className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-xl hover:bg-blue-100 flex items-center gap-1.5 transition-colors"
             >
               <BookOpen className="w-3.5 h-3.5" /> Guía de Importación
             </button>
-            <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-full transition-colors">
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-full transition-colors"
+              aria-label="Cerrar Importación Masiva"
+            >
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -262,18 +294,21 @@ export default function ImportModal({
               <div className="flex items-center justify-between bg-slate-100/80 p-1.5 rounded-xl text-xs font-bold">
                 <div className="flex items-center gap-1">
                   <button
+                    type="button"
                     onClick={() => setFilterMode('all')}
                     className={`px-3 py-1.5 rounded-lg transition-all ${filterMode === 'all' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-800'}`}
                   >
                     Todas ({preview.rows.length})
                   </button>
                   <button
+                    type="button"
                     onClick={() => setFilterMode('valid')}
                     className={`px-3 py-1.5 rounded-lg transition-all ${filterMode === 'valid' ? 'bg-white shadow text-emerald-700' : 'text-slate-500 hover:text-slate-800'}`}
                   >
                     Válidas ({preview.rows.filter(r => r.operation !== 'invalid').length})
                   </button>
                   <button
+                    type="button"
                     onClick={() => setFilterMode('invalid')}
                     className={`px-3 py-1.5 rounded-lg transition-all ${filterMode === 'invalid' ? 'bg-white shadow text-red-700' : 'text-slate-500 hover:text-slate-800'}`}
                   >
@@ -282,6 +317,7 @@ export default function ImportModal({
                 </div>
                 {preview.summary.errorCount > 0 && (
                   <button
+                    type="button"
                     onClick={downloadErrorReport}
                     className="text-red-700 hover:text-red-800 underline px-2 font-semibold flex items-center gap-1"
                   >
@@ -393,6 +429,7 @@ export default function ImportModal({
               {executionResult.rejectedCount > 0 && (
                 <div className="pt-2">
                   <button
+                    type="button"
                     onClick={downloadErrorReport}
                     className="btn-secondary text-xs px-4 py-2 font-bold text-red-700 bg-red-50 border border-red-200 rounded-xl hover:bg-red-100 flex items-center gap-2 mx-auto"
                   >
@@ -410,15 +447,17 @@ export default function ImportModal({
           {preview && !executionResult ? (
             <>
               <button
+                type="button"
                 onClick={() => setPreview(null)}
                 className="btn-secondary rounded-xl text-xs py-2.5 px-4 border border-slate-200 hover:bg-slate-100 transition-colors font-bold text-slate-600"
               >
                 Cancelar y Subir Otro Archivo
               </button>
               <button
+                type="button"
                 onClick={handleExecuteImport}
-                disabled={importing || preview.summary.newCount + preview.summary.updateCount === 0}
-                className="btn-primary rounded-xl text-xs py-2.5 px-6 font-bold flex items-center gap-2 shadow-lg shadow-primary-500/20 disabled:opacity-50"
+                disabled={importing || actionableRows.length === 0}
+                className="btn-primary rounded-xl text-xs py-2.5 px-6 font-bold flex items-center gap-2 shadow-lg shadow-primary-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {importing ? (
                   <>
@@ -426,7 +465,7 @@ export default function ImportModal({
                   </>
                 ) : (
                   <>
-                    <UploadCloud className="w-4 h-4" /> Confirmar e Importar {preview.summary.newCount + preview.summary.updateCount} Productos Válidos
+                    <UploadCloud className="w-4 h-4" /> {confirmButtonText}
                   </>
                 )}
               </button>
@@ -434,6 +473,7 @@ export default function ImportModal({
           ) : executionResult ? (
             <div className="w-full flex justify-end">
               <button
+                type="button"
                 onClick={onClose}
                 className="btn-primary rounded-xl text-xs py-2.5 px-6 font-bold shadow-lg shadow-primary-500/20"
               >
@@ -443,6 +483,7 @@ export default function ImportModal({
           ) : (
             <div className="w-full flex justify-end">
               <button
+                type="button"
                 onClick={onClose}
                 className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-xl"
               >
@@ -453,6 +494,7 @@ export default function ImportModal({
         </div>
 
       </div>
-    </>
+    < />,
+    document.body
   );
 }

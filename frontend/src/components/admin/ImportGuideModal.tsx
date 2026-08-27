@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, BookOpen, Download, AlertTriangle, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { getMasterFields } from '../../lib/productFieldRegistry';
 import { downloadXlsxImportTemplate } from '../../lib/bulkTemplateGenerator';
@@ -11,10 +12,18 @@ export interface ImportGuideModalProps {
 export default function ImportGuideModal({ onClose, userRole = 'admin' }: ImportGuideModalProps) {
   const fields = useMemo(() => getMasterFields(userRole).filter(f => f.importable), [userRole]);
 
-  return (
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, []);
+
+  return createPortal(
     <>
-      <div className="fixed inset-0 bg-slate-950/75 z-40 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed inset-0 m-auto w-full max-w-5xl h-[88vh] bg-white z-50 rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-slide-up border border-slate-100">
+      <div className="fixed inset-0 bg-slate-950/80 z-[1050] backdrop-blur-sm animate-fade-in" onClick={onClose} />
+      <div className="fixed inset-0 m-auto w-full max-w-5xl h-[88vh] bg-white z-[1100] rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-slide-up border border-slate-100">
         
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
@@ -29,12 +38,18 @@ export default function ImportGuideModal({ onClose, userRole = 'admin' }: Import
           </div>
           <div className="flex items-center gap-3">
             <button
+              type="button"
               onClick={() => downloadXlsxImportTemplate(userRole)}
               className="btn-secondary text-xs px-3.5 py-2 font-bold flex items-center gap-2 border border-slate-200 rounded-xl hover:bg-slate-50 shadow-sm"
             >
               <Download className="w-4 h-4 text-emerald-600" /> Descargar Plantilla XLSX
             </button>
-            <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-full transition-colors">
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-full transition-colors"
+              aria-label="Cerrar Guía de Importación"
+            >
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -131,6 +146,7 @@ export default function ImportGuideModal({ onClose, userRole = 'admin' }: Import
         {/* Footer */}
         <div className="p-4 px-6 border-t border-slate-100 bg-slate-50/50 flex justify-end">
           <button
+            type="button"
             onClick={onClose}
             className="btn-primary rounded-xl text-xs py-2.5 px-6 font-bold"
           >
@@ -139,6 +155,7 @@ export default function ImportGuideModal({ onClose, userRole = 'admin' }: Import
         </div>
 
       </div>
-    </>
+    </>,
+    document.body
   );
 }
