@@ -752,6 +752,24 @@ export async function parseAndPreviewImportFile(
     const changedFieldsDetail: ChangedFieldDetail[] = [];
 
     if (existingProduct) {
+      // SKU (Variant SKU)
+      const dbSku = (existingProduct.sku || existingProduct.variants?.[0]?.sku || existingProduct.product_variants?.[0]?.sku || '').trim();
+      const incomingSku = sku ? String(sku).trim() : '';
+
+      if (incomingSku !== '' && incomingSku !== dbSku) {
+        const skuOwner = existingBySkuMap.get(incomingSku);
+        if (skuOwner && skuOwner.id !== existingProduct.id) {
+          rowErrors.push(`El SKU "${incomingSku}" ya pertenece a otro producto en la base de datos ("${skuOwner.title}").`);
+        } else {
+          changedFieldsDetail.push({
+            fieldKey: 'sku',
+            fieldLabel: 'SKU',
+            oldValue: dbSku || 'vacío',
+            newValue: incomingSku
+          });
+        }
+      }
+
       // Title
       if (title && title.trim() !== String(existingProduct.title || '').trim()) {
         changedFieldsDetail.push({ fieldKey: 'title', fieldLabel: 'Título', oldValue: existingProduct.title, newValue: title });
@@ -908,10 +926,13 @@ export async function parseAndPreviewImportFile(
 
     if (rowWarnings.length > 0) warningCount++;
 
+    const canonicalDbSku = (existingProduct?.sku || existingProduct?.variants?.[0]?.sku || existingProduct?.product_variants?.[0]?.sku || '').trim();
+    const displaySku = sku ? String(sku).trim() : (canonicalDbSku || `SKU-${rowIndex}`);
+
     parsedRows.push({
       rowIndex,
       rawRow: raw,
-      sku: sku || `SKU-${rowIndex}`,
+      sku: displaySku,
       title: title || (existingProduct?.title || `Fila ${rowIndex}`),
       operation,
       existingProductId: existingProduct?.id,
