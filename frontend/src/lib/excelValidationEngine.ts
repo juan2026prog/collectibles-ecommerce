@@ -94,7 +94,17 @@ export async function buildDynamicXlsxWorkbook(options: BuildExcelOptions): Prom
         const val = formatted[f.key];
         return normalizeExcelCellValue(val);
       });
-      mainSheet.addRow(rowValues);
+      const addedRow = mainSheet.addRow(rowValues);
+
+      activeFields.forEach((f, idx) => {
+        if (f.key === '_product_id' || f.key === 'id' || f.key === 'sku' || f.key === 'gtin') {
+          const cell = addedRow.getCell(idx + 1);
+          if (cell.value !== null && cell.value !== undefined) {
+            cell.value = String(cell.value);
+            cell.numFmt = '@';
+          }
+        }
+      });
     });
   }
 
@@ -307,11 +317,20 @@ export async function buildDynamicXlsxWorkbook(options: BuildExcelOptions): Prom
     });
   }
 
-  // 7. Auto Widths for Main Sheet Columns
+  // 7. Auto Widths, Column Hiding & Formatting for Main Sheet Columns
   mainSheet.columns.forEach((col, i) => {
     const f = activeFields[i];
-    const labelLen = f ? f.label.length : 15;
+    if (!f) return;
+    const labelLen = f.label.length;
     col.width = Math.min(Math.max(labelLen + 4, 14), 50);
+
+    if (f.key === '_product_id' || f.key === 'id') {
+      col.hidden = true;
+    }
+
+    if (f.key === '_product_id' || f.key === 'id' || f.key === 'sku' || f.key === 'gtin') {
+      col.numFmt = '@';
+    }
   });
 
   // Write Excel file to buffer and Blob
