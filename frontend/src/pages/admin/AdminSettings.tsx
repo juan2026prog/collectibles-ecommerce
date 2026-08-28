@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Save, ToggleLeft, ToggleRight, Settings, Store, Truck, Palette, LayoutTemplate, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, FileText, Share2, Link as LinkIcon, ImageIcon, CreditCard, ShieldCheck, Sparkles, Brain, Zap, Search as SearchIcon, Tag, Menu, Bell, RefreshCw } from 'lucide-react';
+import { Save, ToggleLeft, ToggleRight, Settings, Store, Truck, Palette, LayoutTemplate, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, FileText, Share2, Link as LinkIcon, ImageIcon, CreditCard, ShieldCheck, Sparkles, Brain, Zap, Search as SearchIcon, Tag, Menu, Bell, RefreshCw, Info } from 'lucide-react';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
 import { useToast } from '../../components/admin/Toast';
 import { updateCachedSetting } from '../../hooks/useSiteSettings';
