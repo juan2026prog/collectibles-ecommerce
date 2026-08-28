@@ -7,7 +7,8 @@ import VMercadoLibre from './VMercadoLibre';
 import VShipping from './VShipping';
 import VKyc from './VKyc';
 import VTermsSettings from './VTermsSettings';
-import { User, CreditCard, Truck, Link2, FileText, Save, UploadCloud, Bell, AlertCircle, CheckCircle2, RefreshCw, ToggleLeft, ToggleRight, ShieldCheck } from 'lucide-react';
+import { User, CreditCard, Truck, Link2, FileText, Save, UploadCloud, Bell, AlertCircle, CheckCircle2, RefreshCw, ToggleLeft, ToggleRight, ShieldCheck, Smartphone, Mail, MessageSquare, BellRing } from 'lucide-react';
+import { requestAndRegisterDevice, unregisterDevice, getBrowserPermission, getUserDevices, type DeviceSubscriptionRecord } from '../../lib/pushNotifications';
 
 import { normalizeSettingsTab } from '../../config/vendorNavigation';
 import { getStoreTypeLabel, type StoreType } from '../../config/conditionConfig';
@@ -78,27 +79,55 @@ export default function VSettings() {
   const [logs, setLogs] = useState<any[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [sendingTest, setSendingTest] = useState(false);
+  const [userDevices, setUserDevices] = useState<DeviceSubscriptionRecord[]>([]);
+  const [registeringPush, setRegisteringPush] = useState(false);
+
+  const loadDevices = async () => {
+    if (!user) return;
+    const devs = await getUserDevices(user.id);
+    setUserDevices(devs);
+  };
+
+  const handleRegisterDevice = async () => {
+    if (!user) return;
+    setRegisteringPush(true);
+    try {
+      const res = await requestAndRegisterDevice(user.id, user.id);
+      if (res.success) {
+        toast.success('¡Notificaciones Push activadas correctamente en este dispositivo!');
+        await loadDevices();
+      } else {
+        toast.error(res.error || 'No se pudieron activar las notificaciones Push');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Error al solicitar permiso Push');
+    } finally {
+      setRegisteringPush(false);
+    }
+  };
+
+  const handleUnregisterDevice = async () => {
+    if (!user) return;
+    try {
+      await unregisterDevice(user.id);
+      toast.success('Dispositivo desactivado');
+      await loadDevices();
+    } catch (err: any) {
+      toast.error('Error al desactivar dispositivo');
+    }
+  };
 
   const handleSendTestNotification = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (!user) return;
 
-    // Validate numbers first
-    const numbers = notificationSettings.whatsapp_numbers || [];
-    const activeNumbers = numbers.filter(n => n.number.trim() !== '' && n.enabled);
-    if (activeNumbers.length === 0) {
-      toast.error('Debes tener al menos un número de celular activo y guardado para enviar la prueba.');
-      return;
-    }
-
     setSendingTest(true);
     try {
       const { data, error } = await supabase.functions.invoke('send-whatsapp-notification', {
         body: {
           event_type: 'test_notification',
-          vendor_id: user.id,
-          whatsapp_numbers: activeNumbers
+          vendor_id: user.id
         }
       });
       if (error) throw error;
@@ -113,6 +142,7 @@ export default function VSettings() {
 
   const loadNotificationSettings = async () => {
     if (!user) return;
+    loadDevices();
     try {
       const { data, error } = await supabase
         .from('vendor_notification_settings')
@@ -706,19 +736,122 @@ export default function VSettings() {
           <div className="space-y-8">
             <div>
               <div className="flex items-center gap-2 mb-4 border-b border-gray-100 pb-2">
-                <h3 className="text-lg font-bold text-gray-900">WhatsApp Comercial</h3>
-                {(() => {
-                  const badge = getWhatsAppStateBadge();
-                  return <span className={badge.className}>{badge.label}</span>;
-                })()}
+                <h3 className="text-lg font-bold text-gray-900">Notificaciones</h3>
               </div>
-              <p className="text-sm text-gray-500 mb-6">Recibí avisos importantes de tu tienda directamente por WhatsApp.</p>
+              <p className="text-sm text-gray-500 mb-6">Configurá cómo querés recibir los avisos operativos de tu tienda.</p>
+
+              {/* CANALES DISPONIBLES */}
+              <div className="mb-8">
+                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Canales Disponibles</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Push Channel */}
+                  <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-start justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600 mt-0.5">
+                        <BellRing className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <span className="text-sm font-bold text-gray-900 block">Push Notifications</span>
+                        <span className={`inline-block mt-1 px-2 py-0.5 text-[10px] font-bold rounded-full ${userDevices.length > 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-gray-100 text-gray-600 border border-gray-200'}`}>
+                          {userDevices.length > 0 ? 'Activo en tu dispositivo' : 'No activo'}
+                        </span>
+                        <p className="text-xs text-gray-500 mt-1">Avisos instantáneos directamente en tu navegador o móvil.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* WhatsApp Channel */}
+                  <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-start justify-between opacity-80">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600 mt-0.5">
+                        <MessageSquare className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <span className="text-sm font-bold text-gray-900 block">WhatsApp</span>
+                        <span className="inline-block mt-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-50 text-amber-700 border border-amber-100">
+                          No disponible / No conectado
+                        </span>
+                        <p className="text-xs text-gray-500 mt-1">Avisos por celular (disponible al configurar proveedor Meta).</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Email Channel */}
+                  <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-start justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 bg-blue-50 rounded-lg text-blue-600 mt-0.5">
+                        <Mail className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <span className="text-sm font-bold text-gray-900 block">Email</span>
+                        <span className="inline-block mt-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+                          Activo
+                        </span>
+                        <p className="text-xs text-gray-500 mt-1">Correos transaccionales a tu email de contacto.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SMS Channel */}
+                  <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-start justify-between opacity-60">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 bg-gray-100 rounded-lg text-gray-500 mt-0.5">
+                        <Smartphone className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <span className="text-sm font-bold text-gray-900 block">SMS</span>
+                        <span className="inline-block mt-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-gray-100 text-gray-600 border border-gray-200">
+                          Desactivado
+                        </span>
+                        <p className="text-xs text-gray-500 mt-1">Canal de SMS preparado para futuras integraciones.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Push Device Management Card */}
+              <div className="bg-gradient-to-r from-indigo-50/50 to-purple-50/50 p-5 rounded-xl border border-indigo-100 mb-8 shadow-sm">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                      <BellRing className="w-4 h-4 text-indigo-600" />
+                      Notificaciones Push en este dispositivo
+                    </h4>
+                    <p className="text-xs text-gray-600 mt-1 font-medium">
+                      {userDevices.length > 0 
+                        ? `Notificaciones activadas en ${userDevices.length} dispositivo(s) registrado(s).` 
+                        : 'Recibí alertas instantáneas de ventas en tu navegador sin instalar aplicaciones.'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleRegisterDevice}
+                      disabled={registeringPush}
+                      className="text-xs bg-indigo-600 text-white font-bold px-4 py-2 rounded-lg hover:bg-indigo-700 transition-all shadow-sm active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                      <BellRing className="w-3.5 h-3.5" />
+                      {registeringPush ? 'Activando...' : 'Activar notificaciones en este dispositivo'}
+                    </button>
+                    {userDevices.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleUnregisterDevice}
+                        className="text-xs bg-white text-gray-700 border border-gray-300 font-bold px-3 py-2 rounded-lg hover:bg-gray-50 transition-all active:scale-95"
+                      >
+                        Desactivar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
 
               {/* Toggle General */}
               <div className="flex items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-200/50 mb-6 shadow-sm">
                 <div>
                   <span className="text-sm font-bold text-gray-900">Activar servicio de notificaciones</span>
-                  <p className="text-xs text-gray-500 mt-0.5 font-medium">Habilita o deshabilita los envíos de WhatsApp globalmente.</p>
+                  <p className="text-xs text-gray-500 mt-0.5 font-medium">Habilita o deshabilita la recepción de avisos para tu tienda.</p>
                 </div>
                 <button 
                   onClick={() => setNotificationSettings(p => ({ ...p, is_active: !p.is_active }))}
@@ -732,13 +865,14 @@ export default function VSettings() {
                 </button>
               </div>
 
-              {/* 3 WhatsApp Numbers Inputs */}
-              <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Números de Destino (Máx 3)</h4>
+              {/* 3 Recipients (Dueño, Depósito, Administración) */}
+              <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Destinatarios de Notificaciones (Dueño, Depósito, Admin)</h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 {(() => {
                   const padded = [...(notificationSettings.whatsapp_numbers || [])];
+                  const defaultLabels = ['Dueño', 'Depósito', 'Administración'];
                   while (padded.length < 3) {
-                    padded.push({ label: `Número ${padded.length + 1}`, number: '', enabled: false });
+                    padded.push({ label: defaultLabels[padded.length] || `Destinatario ${padded.length + 1}`, number: '', enabled: false });
                   }
                   return padded.slice(0, 3).map((n, i) => (
                     <div key={i} className="bg-white p-4 rounded-xl border border-gray-200 space-y-3 relative shadow-sm hover:border-gray-300 transition-colors">
@@ -748,7 +882,7 @@ export default function VSettings() {
                           value={n.label}
                           onChange={(e) => updateNumberAtIndex(i, 'label', e.target.value)}
                           className="text-xs font-bold text-gray-800 uppercase tracking-wider bg-transparent border-none focus:outline-none w-2/3"
-                          placeholder={`Destinatario ${i+1}`}
+                          placeholder={defaultLabels[i] || `Destinatario ${i+1}`}
                         />
                         <label className="flex items-center cursor-pointer">
                           <input 
@@ -804,7 +938,7 @@ export default function VSettings() {
                               disabled={sendingTest}
                               className="text-[10px] bg-black text-white hover:bg-gray-800 px-2.5 py-1 rounded font-bold transition-all disabled:opacity-50 select-none active:scale-95 ml-2"
                             >
-                              {sendingTest ? 'Enviando...' : 'Enviar prueba'}
+                              {sendingTest ? 'Enviando...' : 'Probar notificaciones'}
                             </button>
                           )}
                         </div>
@@ -820,7 +954,7 @@ export default function VSettings() {
                 <div className="flex justify-between items-center mb-6">
                   <div>
                     <h4 className="text-lg font-bold text-gray-900">Historial de Notificaciones</h4>
-                    <p className="text-xs text-gray-500 mt-1">Registro de envíos realizados para tu tienda.</p>
+                    <p className="text-xs text-gray-500 mt-1">Registro multicanal de avisos enviados para tu tienda.</p>
                   </div>
                   <button 
                     onClick={loadLogs}
@@ -843,6 +977,7 @@ export default function VSettings() {
                         <thead>
                           <tr className="bg-gray-50 text-[10px] font-bold text-gray-500 uppercase tracking-widest border-b border-gray-200">
                             <th className="px-6 py-3">Fecha</th>
+                            <th className="px-6 py-3">Canal</th>
                             <th className="px-6 py-3">Evento</th>
                             <th className="px-6 py-3">Destinatario</th>
                             <th className="px-6 py-3">Estado</th>
@@ -851,36 +986,64 @@ export default function VSettings() {
                         </thead>
                         <tbody className="divide-y divide-gray-100 text-xs">
                           {logs.map((log) => {
-                            const statusColors: Record<string, string> = {
-                              'sent': 'bg-emerald-50 text-emerald-700 border-emerald-100',
-                              'queued': 'bg-blue-50 text-blue-700 border-blue-100',
-                              'failed': 'bg-rose-50 text-rose-700 border-rose-100'
+                            const statusBadges: Record<string, { label: string; style: string }> = {
+                              'sent': { label: 'Entregado', style: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+                              'delivered': { label: 'Entregado', style: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+                              'queued': { label: 'Pendiente', style: 'bg-blue-50 text-blue-700 border-blue-100' },
+                              'failed': { label: 'Falló', style: 'bg-rose-50 text-rose-700 border-rose-100' },
+                              'expired': { label: 'Expirado', style: 'bg-gray-100 text-gray-600 border-gray-200' },
+                              'provider_unavailable': { label: 'No disponible', style: 'bg-amber-50 text-amber-800 border-amber-200' }
                             };
+
+                            const channelIcons: Record<string, { label: string; icon: any; color: string }> = {
+                              'push': { label: 'Push', icon: BellRing, color: 'text-indigo-600' },
+                              'whatsapp': { label: 'WhatsApp', icon: MessageSquare, color: 'text-emerald-600' },
+                              'email': { label: 'Email', icon: Mail, color: 'text-blue-600' },
+                              'sms': { label: 'SMS', icon: Smartphone, color: 'text-gray-500' }
+                            };
+
                             const eventLabels: Record<string, string> = {
                               'order_paid': 'Nueva venta / Pago recibido',
                               'payout_paid': 'Liquidación pagada',
                               'low_stock': 'Stock bajo',
                               'shipment_created': 'Pedido enviado',
-                              'shipment_delivered': 'Pedido entregado'
+                              'shipment_delivered': 'Pedido entregado',
+                              'test_notification': 'Notificación de prueba'
                             };
+
+                            const currentChannel = channelIcons[log.channel || 'whatsapp'] || channelIcons.whatsapp;
+                            const ChannelIcon = currentChannel.icon;
+
+                            const badge = statusBadges[log.status] || { label: log.status, style: 'bg-gray-50 text-gray-600 border-gray-100' };
+
+                            const friendlyError = log.error_message === 'pending provider connection' || log.error_message?.includes('WHATSAPP_TOKEN') 
+                              ? 'Proveedor no conectado' 
+                              : (log.error_message || '-');
+
                             return (
                               <tr key={log.id} className="hover:bg-gray-50/50">
                                 <td className="px-6 py-3 text-gray-500 font-mono">
                                   {new Date(log.created_at).toLocaleString()}
                                 </td>
+                                <td className="px-6 py-3">
+                                  <span className="flex items-center gap-1.5 font-bold text-gray-800">
+                                    <ChannelIcon className={`w-3.5 h-3.5 ${currentChannel.color}`} />
+                                    {currentChannel.label}
+                                  </span>
+                                </td>
                                 <td className="px-6 py-3 font-bold text-gray-800">
                                   {eventLabels[log.event_type] || log.event_type}
                                 </td>
                                 <td className="px-6 py-3 font-mono text-gray-600">
-                                  {log.recipient_number_masked}
+                                  {log.recipient_number_masked || '-'}
                                 </td>
                                 <td className="px-6 py-3">
-                                  <span className={`px-2 py-0.5 border rounded-full text-[10px] font-bold uppercase ${statusColors[log.status] || 'bg-gray-50 text-gray-600 border-gray-100'}`}>
-                                    {log.status}
+                                  <span className={`px-2 py-0.5 border rounded-full text-[10px] font-bold uppercase ${badge.style}`}>
+                                    {badge.label}
                                   </span>
                                 </td>
-                                <td className="px-6 py-3 text-gray-500 max-w-xs truncate" title={log.error_message || ''}>
-                                  {log.error_message || '-'}
+                                <td className="px-6 py-3 text-gray-500 max-w-xs truncate" title={friendlyError}>
+                                  {friendlyError}
                                 </td>
                               </tr>
                             );

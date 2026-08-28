@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Save, ToggleLeft, ToggleRight, Settings, Store, Truck, Palette, LayoutTemplate, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, FileText, Share2, Link as LinkIcon, ImageIcon, CreditCard, ShieldCheck, Sparkles, Brain, Zap, Search as SearchIcon, Tag, Menu, Bell, RefreshCw, Info } from 'lucide-react';
+import { Save, ToggleLeft, ToggleRight, Settings, Store, Truck, Palette, LayoutTemplate, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, FileText, Share2, Link as LinkIcon, ImageIcon, CreditCard, ShieldCheck, Sparkles, Brain, Zap, Search as SearchIcon, Tag, Menu, Bell, RefreshCw, Info, Smartphone, Mail, MessageSquare, BellRing, CheckCircle2, AlertCircle as AlertCircleIcon } from 'lucide-react';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
 import { useToast } from '../../components/admin/Toast';
 import { updateCachedSetting } from '../../hooks/useSiteSettings';
+import { requestAndRegisterDevice, unregisterDevice, getBrowserPermission, getDeviceName } from '../../lib/pushNotifications';
 
 type HandyProviderRecord = {
   id?: string;
@@ -681,7 +682,7 @@ export default function AdminSettings() {
           { key: 'shipping', label: 'Envios', icon: Truck },
           { key: 'social', label: 'Redes Sociales', icon: Share2 },
           { key: 'ai', label: 'Asistencia IA', icon: Sparkles },
-          { key: 'notifications', label: 'Notificaciones WhatsApp', icon: Bell },
+          { key: 'notifications', label: 'Notificaciones', icon: Bell },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key as any)}
             className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-bold transition-colors whitespace-nowrap ${
@@ -1769,16 +1770,16 @@ export default function AdminSettings() {
         </div>
       )}
 
-      {/* NOTIFICACIONES WHATSAPP TAB */}
+      {/* CENTRO DE NOTIFICACIONES MULTICANAL TAB */}
       {currentTab === 'notifications' && (
         <div className="space-y-8 max-w-4xl">
           <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6 shadow-sm">
             <div className="flex justify-between items-center border-b pb-4">
               <div>
                 <h3 className="font-bold text-lg text-gray-950 flex items-center gap-2">
-                  <Bell className="w-5 h-5 text-indigo-600" /> WhatsApp Comercial Interno
+                  <Bell className="w-5 h-5 text-indigo-600" /> Centro de Notificaciones
                 </h3>
-                <p className="text-sm text-gray-500 mt-1 font-medium">Configurá las notificaciones operativas de WhatsApp para la administración de Collectibles.</p>
+                <p className="text-sm text-gray-500 mt-1 font-medium">Configura cómo recibe el equipo de Collectibles los avisos operativos del marketplace.</p>
               </div>
               <button 
                 onClick={saveAdminNotifications}
@@ -1793,7 +1794,7 @@ export default function AdminSettings() {
             <div className="flex items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-200/50">
               <div>
                 <span className="text-sm font-bold text-gray-900">Activar servicio de avisos internos</span>
-                <p className="text-xs text-gray-500 mt-0.5 font-medium">Habilita o deshabilita los envíos de WhatsApp para el equipo administrativo.</p>
+                <p className="text-xs text-gray-500 mt-0.5 font-medium">Habilita o deshabilita los envíos de notificaciones para el equipo administrativo.</p>
               </div>
               <button 
                 onClick={() => setAdminNotifications(p => ({ ...p, is_active: !p.is_active }))}
@@ -1807,18 +1808,74 @@ export default function AdminSettings() {
               </button>
             </div>
 
-            {/* Info Banner on Provider Status */}
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
-              <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-              <div className="text-xs text-amber-800 space-y-1">
-                <span className="font-bold block text-amber-900">Estado de Conexión: Registro en Cola (Queued)</span>
-                <p>El sistema está detectando y encolando correctamente el 100% de las ventas en el historial inferior para el número <strong>+59896889596</strong>.</p>
-                <p>Para la entrega en vivo al celular por WhatsApp, se requiere configurar las credenciales de Meta WhatsApp Cloud API (<code className="font-mono bg-amber-100 px-1.5 py-0.5 rounded">WHATSAPP_TOKEN</code> y <code className="font-mono bg-amber-100 px-1.5 py-0.5 rounded">WHATSAPP_PHONE_ID</code>) en Supabase.</p>
+            {/* CANALES DISPONIBLES */}
+            <div>
+              <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Canales Disponibles</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-start justify-between">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600 mt-0.5">
+                      <BellRing className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="text-sm font-bold text-gray-900 block">Push Notifications</span>
+                      <span className="inline-block mt-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+                        Configurado / Activo
+                      </span>
+                      <p className="text-xs text-gray-500 mt-1">Alertas instantáneas en navegadores y PWA.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-start justify-between opacity-80">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600 mt-0.5">
+                      <MessageSquare className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="text-sm font-bold text-gray-900 block">WhatsApp</span>
+                      <span className="inline-block mt-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-50 text-amber-700 border border-amber-100">
+                        No conectado
+                      </span>
+                      <p className="text-xs text-gray-500 mt-1">Requiere credenciales del proveedor Meta Cloud API.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-start justify-between">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-blue-50 rounded-lg text-blue-600 mt-0.5">
+                      <Mail className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="text-sm font-bold text-gray-900 block">Email</span>
+                      <span className="inline-block mt-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+                        Configurado
+                      </span>
+                      <p className="text-xs text-gray-500 mt-1">Envíos transaccionales mediante Resend.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-start justify-between opacity-60">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-gray-100 rounded-lg text-gray-500 mt-0.5">
+                      <Smartphone className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="text-sm font-bold text-gray-900 block">SMS</span>
+                      <span className="inline-block mt-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-gray-100 text-gray-600 border border-gray-200">
+                        No configurado / Próximamente
+                      </span>
+                      <p className="text-xs text-gray-500 mt-1">Integración preparada para futuro proveedor SMS.</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* 3 WhatsApp Numbers */}
-            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-6 mb-3">Números de Destino Internos (Máx 3)</h4>
+            {/* 3 WhatsApp / Internal Numbers */}
+            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-6 mb-3">Destinatarios Internos (Máx 3)</h4>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {(() => {
                 const padded = [...(adminNotifications.whatsapp_numbers || [])];
@@ -1900,8 +1957,8 @@ export default function AdminSettings() {
           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
             <div className="flex justify-between items-center mb-6">
               <div>
-                <h4 className="text-lg font-bold text-gray-900">Historial Global de Notificaciones (WhatsApp)</h4>
-                <p className="text-xs text-gray-500 mt-1 font-medium">Monitoreo en tiempo real de todos los mensajes encolados y enviados.</p>
+                <h4 className="text-lg font-bold text-gray-900">Historial Global de Notificaciones</h4>
+                <p className="text-xs text-gray-500 mt-1 font-medium">Monitoreo multicanal en tiempo real de todos los avisos encolados y enviados.</p>
               </div>
               <button 
                 onClick={fetchWhatsappLogs}
@@ -1924,31 +1981,60 @@ export default function AdminSettings() {
                     <thead>
                       <tr className="bg-gray-50 text-[10px] font-bold text-gray-500 uppercase tracking-widest border-b border-gray-200">
                         <th className="px-6 py-3">Fecha</th>
+                        <th className="px-6 py-3">Canal</th>
                         <th className="px-6 py-3">Ámbito</th>
                         <th className="px-6 py-3">Evento</th>
-                        <th className="px-6 py-3">Celular Enmascarado</th>
+                        <th className="px-6 py-3">Destinatario</th>
                         <th className="px-6 py-3">Estado</th>
-                        <th className="px-6 py-3">Error / Detalle</th>
+                        <th className="px-6 py-3">Detalle</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-xs text-gray-700">
                       {whatsappLogs.map((log) => {
-                        const statusColors: Record<string, string> = {
-                          'sent': 'bg-emerald-50 text-emerald-700 border-emerald-100',
-                          'queued': 'bg-blue-50 text-blue-700 border-blue-100',
-                          'failed': 'bg-rose-50 text-rose-700 border-rose-100'
+                        const statusBadges: Record<string, { label: string; style: string }> = {
+                          'sent': { label: 'Entregado', style: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+                          'delivered': { label: 'Entregado', style: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+                          'queued': { label: 'Pendiente', style: 'bg-blue-50 text-blue-700 border-blue-100' },
+                          'failed': { label: 'Falló', style: 'bg-rose-50 text-rose-700 border-rose-100' },
+                          'expired': { label: 'Expirado', style: 'bg-gray-100 text-gray-600 border-gray-200' },
+                          'provider_unavailable': { label: 'No disponible', style: 'bg-amber-50 text-amber-800 border-amber-200' }
                         };
+
+                        const channelIcons: Record<string, { label: string; icon: any; color: string }> = {
+                          'push': { label: 'Push', icon: BellRing, color: 'text-indigo-600' },
+                          'whatsapp': { label: 'WhatsApp', icon: MessageSquare, color: 'text-emerald-600' },
+                          'email': { label: 'Email', icon: Mail, color: 'text-blue-600' },
+                          'sms': { label: 'SMS', icon: Smartphone, color: 'text-gray-500' }
+                        };
+
                         const eventLabels: Record<string, string> = {
                           'order_paid': 'Nueva venta / Pago aprobado',
                           'payout_paid': 'Liquidación pagada',
                           'low_stock': 'Stock bajo',
                           'shipment_created': 'Pedido enviado',
-                          'shipment_delivered': 'Pedido entregado'
+                          'shipment_delivered': 'Pedido entregado',
+                          'test_notification': 'Notificación de prueba'
                         };
+
+                        const currentChannel = channelIcons[log.channel || 'whatsapp'] || channelIcons.whatsapp;
+                        const ChannelIcon = currentChannel.icon;
+
+                        const badge = statusBadges[log.status] || { label: log.status, style: 'bg-gray-50 text-gray-600 border-gray-100' };
+
+                        const friendlyError = log.error_message === 'pending provider connection' || log.error_message?.includes('WHATSAPP_TOKEN') 
+                          ? 'Proveedor no conectado' 
+                          : (log.error_message || '-');
+
                         return (
                           <tr key={log.id} className="hover:bg-gray-50/50">
                             <td className="px-6 py-3 text-gray-500 font-mono">
                               {new Date(log.created_at).toLocaleString()}
+                            </td>
+                            <td className="px-6 py-3">
+                              <span className="flex items-center gap-1.5 font-bold text-gray-800">
+                                <ChannelIcon className={`w-3.5 h-3.5 ${currentChannel.color}`} />
+                                {currentChannel.label}
+                              </span>
                             </td>
                             <td className="px-6 py-3">
                               <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${log.scope === 'admin' ? 'bg-indigo-100 text-indigo-800' : 'bg-amber-100 text-amber-800'}`}>
@@ -1959,15 +2045,15 @@ export default function AdminSettings() {
                               {eventLabels[log.event_type] || log.event_type}
                             </td>
                             <td className="px-6 py-3 font-mono">
-                              {log.recipient_number_masked}
+                              {log.recipient_number_masked || '-'}
                             </td>
                             <td className="px-6 py-3">
-                              <span className={`px-2 py-0.5 border rounded-full text-[10px] font-bold uppercase ${statusColors[log.status] || 'bg-gray-50 text-gray-600 border-gray-100'}`}>
-                                {log.status}
+                              <span className={`px-2 py-0.5 border rounded-full text-[10px] font-bold uppercase ${badge.style}`}>
+                                {badge.label}
                               </span>
                             </td>
-                            <td className="px-6 py-3 text-gray-500 max-w-xs truncate" title={log.error_message || ''}>
-                              {log.error_message || '-'}
+                            <td className="px-6 py-3 text-gray-500 max-w-xs truncate" title={friendlyError}>
+                              {friendlyError}
                             </td>
                           </tr>
                         );
