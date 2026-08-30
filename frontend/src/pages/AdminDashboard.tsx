@@ -111,19 +111,19 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto animate-fade-in space-y-6 md:space-y-8 min-w-0">
+    <div className="max-w-7xl mx-auto animate-fade-in space-y-5 md:space-y-8 min-w-0">
       {/* MOBILE & DESKTOP OPERATIONAL SUMMARY CARD: OPERACIÓN DE HOY */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 text-white rounded-2xl p-4 sm:p-6 shadow-xl border border-slate-800 space-y-4">
+      <div className="bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-xl border border-slate-800 space-y-3.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-            <h2 className="font-black text-sm sm:text-base uppercase tracking-wider text-white">
+            <h2 className="font-black text-xs sm:text-sm uppercase tracking-wider text-white">
               Operación de Hoy
             </h2>
           </div>
           <Link
             to="/admin/orders"
-            className="text-xs font-black text-emerald-400 hover:underline flex items-center gap-1"
+            className="text-xs font-black text-emerald-400 hover:underline flex items-center gap-1 min-h-[44px]"
           >
             Ver Operación <ChevronRight className="w-4 h-4" />
           </Link>
