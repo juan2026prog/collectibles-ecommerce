@@ -467,6 +467,44 @@ serve(async (req: Request) => {
       }
     };
 
+    // Helper: Resolve Active Email Recipients for Admin or Vendor from DB
+    const getActiveEmailRecipients = async (scope: 'admin' | 'vendor', vendorId?: string | null): Promise<{ name: string; email: string }[]> => {
+      try {
+        if (scope === 'vendor' && vendorId) {
+          const { data } = await supabaseAdmin
+            .from('vendor_notification_settings')
+            .select('email_recipients')
+            .eq('vendor_id', vendorId)
+            .maybeSingle();
+
+          const raw = data?.email_recipients || [];
+          const active = raw.filter((r: any) => r.active && r.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(r.email).trim()));
+          if (active.length > 0) {
+            return active.map((r: any) => ({ name: r.name || 'Vendedor', email: String(r.email).trim() }));
+          }
+        } else {
+          const { data } = await supabaseAdmin
+            .from('admin_notification_settings')
+            .select('email_recipients')
+            .maybeSingle();
+
+          const raw = data?.email_recipients || [];
+          const active = raw.filter((r: any) => r.active && r.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(r.email).trim()));
+          if (active.length > 0) {
+            return active.map((r: any) => ({ name: r.name || 'Admin', email: String(r.email).trim() }));
+          }
+        }
+      } catch (err) {
+        console.error('[Notification Dispatcher] Error loading email recipients:', err);
+      }
+
+      // Fallback: If no email_recipients configured, use authenticated user email
+      if (authUser?.email) {
+        return [{ name: 'Usuario Autenticado', email: authUser.email }];
+      }
+      return [];
+    };
+
     // Provider D: SMS (Stub / Inactivo)
     const dispatchSmsProvider = async (
       phone: string,
@@ -638,25 +676,42 @@ serve(async (req: Request) => {
       const testKey = `test:${testChannel}:${targetUserId || 'test'}:${Date.now()}`;
 
       if (testChannel === 'email') {
-        const recipientEmail = (token === supabaseServiceKey) ? (body.email || authUser?.email) : authUser?.email;
+        const scope: 'admin' | 'vendor' = body_vendor_id ? 'vendor' : 'admin';
+        const activeRecipients = await getActiveEmailRecipients(scope, body_vendor_id || null);
 
-        if (!recipientEmail) {
-          console.error("[Notification Dispatcher] Email test failed: No authenticated user email.");
-          return new Response(JSON.stringify({ error: 'No authenticated email available' }), { status: 422, headers: corsHeaders });
+        if (activeRecipients.length === 0) {
+          console.error("[Notification Dispatcher] Email test failed: No active email recipients found.");
+          return new Response(JSON.stringify({ status: 'no_active_recipients', error: 'No hay destinatarios Email configurados.' }), { status: 422, headers: corsHeaders });
         }
 
+        const vendorTag = body_vendor_id ? ' (Vendedor)' : '';
         const subject = body.subject || "Prueba de notificaciones — Collectibles";
-        const emailMessage = body.body || "Esta es una notificación de prueba. El canal Email está funcionando correctamente. ✅";
+        const emailMessage = body.body || `Esta es una notificación de prueba. El canal Email está funcionando correctamente.${vendorTag} ✅`;
         const htmlBody = `<div style="font-family: sans-serif; padding: 20px; color: #333;"><h2 style="color: #6366f1;">Collectibles Store</h2><p>${emailMessage}</p></div>`;
 
-        const result = await dispatchEmailProvider(recipientEmail, subject, htmlBody, testKey, body_vendor_id ? 'vendor' : 'admin', body_vendor_id || null);
+        let successCount = 0;
+        let lastError: string | null = null;
+        let lastStatus = 200;
 
-        if (result.success) {
-          return new Response(JSON.stringify({ success: true, message: 'Email de prueba enviado exitosamente', message_id: result.provider_message_id }), { status: 200, headers: corsHeaders });
-        } else if (result.status === 503) {
+        for (let i = 0; i < activeRecipients.length; i++) {
+          const r = activeRecipients[i];
+          const recipientKey = `${testKey}:${r.email}:${i}`;
+          const result = await dispatchEmailProvider(r.email, subject, htmlBody, recipientKey, scope, body_vendor_id || null);
+
+          if (result.success) {
+            successCount++;
+          } else {
+            lastError = result.error || 'Error al entregar correo';
+            lastStatus = result.status;
+          }
+        }
+
+        if (successCount > 0) {
+          return new Response(JSON.stringify({ success: true, count: successCount, total: activeRecipients.length, message: `Email de prueba enviado a ${successCount} destinatario(s) activo(s)` }), { status: 200, headers: corsHeaders });
+        } else if (lastStatus === 503) {
           return new Response(JSON.stringify({ status: 'provider_unavailable', error: 'Falta RESEND_API_KEY en Supabase Secrets' }), { status: 503, headers: corsHeaders });
         } else {
-          return new Response(JSON.stringify({ status: 'failed', error: result.error || 'Error al entregar correo vía Resend API' }), { status: result.status || 500, headers: corsHeaders });
+          return new Response(JSON.stringify({ status: 'failed', error: lastError || 'Error al entregar correo vía Resend API' }), { status: lastStatus || 500, headers: corsHeaders });
         }
       } else {
         // Direct test Push strictly to auth.uid() derived from authenticated user JWT

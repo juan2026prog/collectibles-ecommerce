@@ -8,6 +8,7 @@ import VShipping from './VShipping';
 import VKyc from './VKyc';
 import VTermsSettings from './VTermsSettings';
 import { User, CreditCard, Truck, Link2, FileText, Save, UploadCloud, Bell, AlertCircle, CheckCircle2, RefreshCw, ToggleLeft, ToggleRight, ShieldCheck, Smartphone, Mail, MessageSquare, BellRing } from 'lucide-react';
+import { EmailRecipientsConfig, type EmailRecipient } from '../common/EmailRecipientsConfig';
 import {
   requestAndRegisterPush,
   unregisterCurrentDevice,
@@ -75,6 +76,7 @@ export default function VSettings() {
   const [notificationSettings, setNotificationSettings] = useState({
     id: '',
     whatsapp_numbers: [] as { label: string; number: string; enabled: boolean }[],
+    email_recipients: [] as EmailRecipient[],
     notify_new_sale: false,
     notify_payment_received: false,
     notify_order_shipped: false,
@@ -140,7 +142,7 @@ export default function VSettings() {
 
     setSendingTest(true);
     try {
-      const { data, error } = await supabase.functions.invoke('send-whatsapp-notification', {
+      const { data, error } = await supabase.functions.invoke('notification-dispatcher', {
         body: {
           event_type: 'test_notification',
           vendor_id: user.id,
@@ -182,10 +184,12 @@ export default function VSettings() {
         const status = (error as any)?.status;
         const msg = error.message || '';
 
-        if (status === 503 || msg.includes('provider_unavailable') || msg.includes('503')) {
+        if (status === 422 && (msg.includes('No hay destinatarios Email') || msg.includes('no_active_recipients'))) {
+          toast.error('No hay destinatarios Email configurados.');
+        } else if (status === 503 || msg.includes('provider_unavailable') || msg.includes('503')) {
           toast.error('El servicio de Email no está disponible');
         } else if (status === 422 || msg.includes('authenticated email') || msg.includes('422')) {
-          toast.error('No hay un email asociado a esta cuenta');
+          toast.error('No hay destinatarios Email configurados.');
         } else if (status === 401 || msg.includes('Unauthorized') || msg.includes('401')) {
           toast.error('Sesión no autenticada');
         } else {
@@ -194,12 +198,18 @@ export default function VSettings() {
         return;
       }
 
+      if (data?.status === 'no_active_recipients') {
+        toast.error('No hay destinatarios Email configurados.');
+        return;
+      }
+
       if (data?.status === 'provider_unavailable') {
         toast.error('El servicio de Email no está disponible');
         return;
       }
 
-      toast.success(`Correo de prueba enviado a ${user.email}`);
+      const count = data?.count || 1;
+      toast.success(`Correo de prueba enviado a ${count} destinatario(s) activo(s)`);
       try {
         await loadLogs();
       } catch (logErr) {
@@ -232,6 +242,7 @@ export default function VSettings() {
         setNotificationSettings({
           id: data.id,
           whatsapp_numbers: paddedNumbers.slice(0, 3),
+          email_recipients: data.email_recipients || [],
           notify_new_sale: !!data.notify_new_sale,
           notify_payment_received: !!data.notify_payment_received,
           notify_order_shipped: !!data.notify_order_shipped,
@@ -240,14 +251,19 @@ export default function VSettings() {
           notify_test: !!data.notify_test,
           is_active: !!data.is_active
         });
+      } else {
         const defaultPhone = formData.contact_phone || '';
         const isDefaultPhoneValid = defaultPhone.startsWith('+598') && defaultPhone.length >= 11;
+        const defaultEmail = formData.contact_email || user.email || '';
         setNotificationSettings({
           id: '',
           whatsapp_numbers: [
             { label: 'Dueño', number: defaultPhone, enabled: isDefaultPhoneValid },
             { label: 'Depósito', number: '', enabled: false },
             { label: 'Administración', number: '', enabled: false }
+          ],
+          email_recipients: [
+            { id: 'v-def-1', name: 'Dueño', email: defaultEmail, active: !!defaultEmail }
           ],
           notify_new_sale: true,
           notify_payment_received: true,
@@ -357,9 +373,21 @@ export default function VSettings() {
           throw new Error(`No se permiten números duplicados: ${duplicates.join(', ')}`);
         }
 
+        // Email Recipients Validation (Max 3, format check if active)
+        const emails = notificationSettings.email_recipients || [];
+        if (emails.length > 3) {
+          throw new Error('Solo se permiten hasta 3 destinatarios de Email.');
+        }
+        for (const r of emails) {
+          if (r.active && (!r.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.email.trim()))) {
+            throw new Error(`El destinatario "${r.name || 'Email'}" está activo pero no tiene un correo electrónico válido.`);
+          }
+        }
+
         const payload = {
           vendor_id: user.id,
           whatsapp_numbers: numbers,
+          email_recipients: emails,
           notify_new_sale: notificationSettings.notify_new_sale,
           notify_payment_received: notificationSettings.notify_payment_received,
           notify_order_shipped: notificationSettings.notify_order_shipped,
@@ -1035,6 +1063,15 @@ export default function VSettings() {
                     </div>
                   ));
                 })()}
+              </div>
+
+              {/* Email Recipients Block (Max 3) */}
+              <div className="mb-8">
+                <EmailRecipientsConfig
+                  scope="vendor"
+                  recipients={notificationSettings.email_recipients}
+                  onChange={(recs) => setNotificationSettings(p => ({ ...p, email_recipients: recs }))}
+                />
               </div>
 
               {/* Notification Toggles */}

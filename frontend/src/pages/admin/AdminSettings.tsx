@@ -4,6 +4,7 @@ import { Save, ToggleLeft, ToggleRight, Settings, Store, Truck, Palette, LayoutT
 import { MediaPickerModal } from '../../components/MediaPickerModal';
 import { useToast } from '../../components/admin/Toast';
 import { useAuth } from '../../contexts/AuthContext';
+import { EmailRecipientsConfig, type EmailRecipient } from '../../components/common/EmailRecipientsConfig';
 import {
   requestAndRegisterPush,
   unregisterCurrentDevice,
@@ -553,10 +554,12 @@ export default function AdminSettings() {
         const status = (error as any)?.status;
         const msg = error.message || '';
 
-        if (status === 503 || msg.includes('provider_unavailable') || msg.includes('503')) {
+        if (status === 422 && (msg.includes('No hay destinatarios Email') || msg.includes('no_active_recipients'))) {
+          toast.error('No hay destinatarios Email configurados.');
+        } else if (status === 503 || msg.includes('provider_unavailable') || msg.includes('503')) {
           toast.error('El servicio de Email no está disponible');
         } else if (status === 422 || msg.includes('authenticated email') || msg.includes('422')) {
-          toast.error('No hay un email asociado a esta cuenta');
+          toast.error('No hay destinatarios Email configurados.');
         } else if (status === 401 || msg.includes('Unauthorized') || msg.includes('401')) {
           toast.error('Sesión no autenticada');
         } else {
@@ -565,12 +568,18 @@ export default function AdminSettings() {
         return;
       }
 
+      if (data?.status === 'no_active_recipients') {
+        toast.error('No hay destinatarios Email configurados.');
+        return;
+      }
+
       if (data?.status === 'provider_unavailable') {
         toast.error('El servicio de Email no está disponible');
         return;
       }
 
-      toast.success(`Correo de prueba enviado a ${user.email}`);
+      const count = data?.count || 1;
+      toast.success(`Correo de prueba enviado a ${count} destinatario(s) activo(s)`);
       try {
         await fetchNotificationLogs();
       } catch (logErr) {
@@ -586,6 +595,7 @@ export default function AdminSettings() {
   const [adminNotifications, setAdminNotifications] = useState({
     id: '',
     whatsapp_numbers: [] as { label: string; number: string; enabled: boolean }[],
+    email_recipients: [] as EmailRecipient[],
     notify_own_sales: false,
     notify_vendor_sales: false,
     notify_payment_received: false,
@@ -610,9 +620,11 @@ export default function AdminSettings() {
         while (paddedNumbers.length < 3) {
           paddedNumbers.push({ label: `Admin ${paddedNumbers.length + 1}`, number: '', enabled: false });
         }
+        const dbEmailRecipients = data.email_recipients || [];
         setAdminNotifications({
           id: data.id,
           whatsapp_numbers: paddedNumbers.slice(0, 3),
+          email_recipients: dbEmailRecipients,
           notify_own_sales: !!data.notify_own_sales,
           notify_vendor_sales: !!data.notify_vendor_sales,
           notify_payment_received: !!data.notify_payment_received,
@@ -674,8 +686,20 @@ export default function AdminSettings() {
         throw new Error(`No se permiten números duplicados: ${duplicates.join(', ')}`);
       }
 
+      // Email Recipients Validation (Max 3, format check if active)
+      const emails = adminNotifications.email_recipients || [];
+      if (emails.length > 3) {
+        throw new Error('Solo se permiten hasta 3 destinatarios de Email.');
+      }
+      for (const r of emails) {
+        if (r.active && (!r.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.email.trim()))) {
+          throw new Error(`El destinatario "${r.name || 'Email'}" está activo pero no tiene un correo electrónico válido.`);
+        }
+      }
+
       const payload = {
         whatsapp_numbers: numbers,
+        email_recipients: emails,
         notify_own_sales: adminNotifications.notify_own_sales,
         notify_vendor_sales: adminNotifications.notify_vendor_sales,
         notify_payment_received: adminNotifications.notify_payment_received,
@@ -2180,6 +2204,15 @@ export default function AdminSettings() {
                   );
                 });
               })()}
+            </div>
+
+            {/* Email Recipients Block (Max 3) */}
+            <div className="mt-6">
+              <EmailRecipientsConfig
+                scope="admin"
+                recipients={adminNotifications.email_recipients}
+                onChange={(recs) => setAdminNotifications(p => ({ ...p, email_recipients: recs }))}
+              />
             </div>
 
             {/* Config Toggles */}

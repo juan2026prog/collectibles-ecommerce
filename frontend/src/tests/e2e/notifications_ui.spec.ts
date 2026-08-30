@@ -129,6 +129,18 @@ test.describe('Notification UI E2E Verification', () => {
     await expect(emailTestBtn).toBeVisible();
   });
 
+  test('Email Recipients Config expands and renders recipient inputs in Admin', async ({ page }) => {
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await page.goto('/admin/settings?tab=notifications');
+
+    await expect(page.locator('text=DESTINATARIOS EMAIL')).toBeVisible({ timeout: 15000 });
+    const configBtn = page.locator('button:has-text("Configurar")').first();
+    await expect(configBtn).toBeVisible();
+
+    await configBtn.click();
+    await expect(page.locator('button:has-text("Cerrar configuración")')).toBeVisible();
+  });
+
   test('Vendor Settings Notifications Tab renders Push Activation & Email Test buttons', async ({ page }) => {
     await page.setViewportSize({ width: 1366, height: 768 });
     await page.goto('/vendor?tab=settings&sub=notifications');
@@ -143,6 +155,9 @@ test.describe('Notification UI E2E Verification', () => {
     const activateBtn = page.locator('button:has-text("Activar notificaciones en este dispositivo")');
     await expect(activateBtn).toBeVisible();
 
+    // Verify DESTINATARIOS EMAIL block
+    await expect(page.locator('text=DESTINATARIOS EMAIL')).toBeVisible();
+
     // Verify "Enviar prueba por Email" button exists
     const emailTestBtn = page.locator('button:has-text("Enviar prueba por Email")');
     await expect(emailTestBtn).toBeVisible();
@@ -154,7 +169,7 @@ test.describe('Notification UI E2E Verification', () => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({ success: true, message: 'Email de prueba enviado exitosamente' })
+          body: JSON.stringify({ success: true, count: 1, message: 'Email de prueba enviado exitosamente' })
         });
       } else {
         await route.continue();
