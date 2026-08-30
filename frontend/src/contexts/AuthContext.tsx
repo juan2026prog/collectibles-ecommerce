@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useMemo, useCallback, useRef, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { loginOneSignalUser, logoutOneSignalUser } from '../lib/pushNotifications';
 
 interface Profile {
   id: string;
@@ -42,12 +43,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
+        loginOneSignalUser(session.user.id);
         // Only fetch profile if user changed or profile was not fetched yet
         if (fetchedUserIdRef.current !== session.user.id || event === 'USER_UPDATED') {
           fetchedUserIdRef.current = session.user.id;
           fetchProfile(session.user.id);
         }
       } else {
+        logoutOneSignalUser();
         fetchedUserIdRef.current = null;
         setProfile(null);
         setLoading(false);
@@ -115,6 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOutFn = useCallback(async () => {
+    await logoutOneSignalUser();
     await supabase.auth.signOut();
     setProfile(null);
   }, []);

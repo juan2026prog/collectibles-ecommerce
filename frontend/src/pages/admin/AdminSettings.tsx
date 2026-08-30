@@ -3,8 +3,15 @@ import { supabase } from '../../lib/supabase';
 import { Save, ToggleLeft, ToggleRight, Settings, Store, Truck, Palette, LayoutTemplate, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, FileText, Share2, Link as LinkIcon, ImageIcon, CreditCard, ShieldCheck, Sparkles, Brain, Zap, Search as SearchIcon, Tag, Menu, Bell, RefreshCw, Info, Smartphone, Mail, MessageSquare, BellRing, CheckCircle2, AlertCircle as AlertCircleIcon } from 'lucide-react';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
 import { useToast } from '../../components/admin/Toast';
-import { updateCachedSetting } from '../../hooks/useSiteSettings';
-import { requestAndRegisterDevice, unregisterDevice, getBrowserPermission, getDeviceName } from '../../lib/pushNotifications';
+import { useAuth } from '../../contexts/AuthContext';
+import {
+  requestAndRegisterPush,
+  unregisterCurrentDevice,
+  getPushStatus,
+  getUserDevices,
+  type PushStatusInfo,
+  type DeviceSubscriptionRecord
+} from '../../lib/pushNotifications';
 
 type HandyProviderRecord = {
   id?: string;
@@ -444,6 +451,108 @@ export default function AdminSettings() {
   const [loading, setLoading] = useState(true);
   const [showMediaPicker, setShowMediaPicker] = useState<false | 'logo'>(false);
   const { toast } = useToast();
+  const { user } = useAuth();
+
+  const [registeringPush, setRegisteringPush] = useState(false);
+  const [sendingTest, setSendingTest] = useState(false);
+  const [userDevices, setUserDevices] = useState<DeviceSubscriptionRecord[]>([]);
+  const [pushStatus, setPushStatus] = useState<PushStatusInfo>({
+    state: 'default',
+    isIOSNonStandalone: false,
+    subscriptionId: null,
+    optedIn: false,
+    appIdConfigured: true,
+  });
+
+  const loadPushState = async () => {
+    if (!user) return;
+    const devs = await getUserDevices(user.id);
+    setUserDevices(devs);
+    const status = await getPushStatus();
+    setPushStatus(status);
+  };
+
+  useEffect(() => {
+    if (user && currentTab === 'notifications') {
+      loadPushState();
+    }
+  }, [user, currentTab]);
+
+  const handleRegisterDevice = async () => {
+    if (!user) return;
+    setRegisteringPush(true);
+    try {
+      const res = await requestAndRegisterPush(user.id, null); // vendor_id = null for Admin
+      if (res.success) {
+        toast.success('¡Notificaciones Push activadas correctamente en este dispositivo!');
+      } else {
+        toast.error(res.error || 'No se pudieron activar las notificaciones Push');
+      }
+      await loadPushState();
+    } catch (err: any) {
+      toast.error(err.message || 'Error al solicitar permiso Push');
+    } finally {
+      setRegisteringPush(false);
+    }
+  };
+
+  const handleUnregisterDevice = async () => {
+    if (!user) return;
+    try {
+      await unregisterCurrentDevice(user.id);
+      toast.success('Notificaciones desactivadas únicamente en este dispositivo');
+      await loadPushState();
+    } catch (err: any) {
+      toast.error('Error al desactivar este dispositivo');
+    }
+  };
+
+  const handleSendTestNotification = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!user) return;
+
+    setSendingTest(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('notification-dispatcher', {
+        body: {
+          event_type: 'test_notification',
+        }
+      });
+      if (error) throw error;
+      toast.success('Notificación de prueba enviada');
+      loadWhatsappLogs();
+    } catch (err: any) {
+      toast.error(err.message || 'Error al enviar la notificación de prueba');
+    } finally {
+      setSendingTest(false);
+    }
+  };
+
+  const [sendingTestEmail, setSendingTestEmail] = useState(false);
+
+  const handleSendTestEmail = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!user) return;
+
+    setSendingTestEmail(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('notification-dispatcher', {
+        body: {
+          event_type: 'test_notification',
+          channel: 'email'
+        }
+      });
+      if (error) throw error;
+      toast.success(`Correo de prueba enviado a ${user.email}`);
+      loadWhatsappLogs();
+    } catch (err: any) {
+      toast.error(err.message || 'Error al enviar el correo de prueba');
+    } finally {
+      setSendingTestEmail(false);
+    }
+  };
 
   const [adminNotifications, setAdminNotifications] = useState({
     id: '',
@@ -1808,6 +1917,114 @@ export default function AdminSettings() {
               </button>
             </div>
 
+            {/* PUSH DEVICE MANAGEMENT CARD */}
+            <div className="bg-gradient-to-r from-indigo-50/50 to-purple-50/50 p-5 rounded-xl border border-indigo-100 mb-6 shadow-sm">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <BellRing className="w-4 h-4 text-indigo-600" />
+                    <h4 className="text-sm font-bold text-gray-900">Notificaciones Push en este dispositivo</h4>
+                    
+                    {pushStatus.state === 'granted' && (
+                      <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        Activas en este dispositivo
+                      </span>
+                    )}
+                    {pushStatus.state === 'default' && (
+                      <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                        Notificaciones disponibles (Permiso pendiente)
+                      </span>
+                    )}
+                    {pushStatus.state === 'denied' && (
+                      <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-red-100 text-red-800 border border-red-200">
+                        Bloqueadas por navegador
+                      </span>
+                    )}
+                    {pushStatus.state === 'not_supported' && (
+                      <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-gray-100 text-gray-700 border border-gray-200">
+                        Navegador no compatible
+                      </span>
+                    )}
+                    {pushStatus.state === 'unconfigured' && (
+                      <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-gray-100 text-gray-700 border border-gray-200">
+                        OneSignal no configurado
+                      </span>
+                    )}
+                    {pushStatus.state === 'error' && (
+                      <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-red-100 text-red-800 border border-red-200">
+                        Error de registro
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-gray-600 mt-1 font-medium">
+                    {pushStatus.state === 'granted' && (
+                      userDevices.length > 0 
+                        ? `Alertas push activas en tu navegador actual (${userDevices.length} dispositivo(s) vinculado(s)).` 
+                        : 'Notificaciones push activas en este navegador.'
+                    )}
+                    {pushStatus.state === 'default' && 'Permite recibir alertas instantáneas en tu navegador al pulsar el botón de activación.'}
+                    {pushStatus.state === 'denied' && 'Las notificaciones están bloqueadas en este navegador. Permitilas desde la configuración del sitio en tu navegador.'}
+                    {pushStatus.state === 'not_supported' && (
+                      pushStatus.isIOSNonStandalone 
+                        ? 'En iOS (iPhone/iPad) se requiere agregar Collectibles a la pantalla de inicio (PWA) para recibir notificaciones Push.' 
+                        : 'Este navegador/dispositivo no admite notificaciones Push.'
+                    )}
+                    {pushStatus.state === 'unconfigured' && 'OneSignal App ID no está configurado.'}
+                    {pushStatus.state === 'error' && 'No pudimos inicializar las notificaciones. Reintenta o revisa la configuración.'}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {pushStatus.state === 'granted' ? (
+                    <button
+                      type="button"
+                      onClick={handleUnregisterDevice}
+                      className="text-xs bg-white text-red-600 border border-red-200 font-bold px-3 py-2 rounded-lg hover:bg-red-50 transition-all active:scale-95 shadow-sm"
+                    >
+                      Desactivar este dispositivo
+                    </button>
+                  ) : (
+                    (pushStatus.state === 'default' || pushStatus.state === 'error') && (
+                      <button
+                        type="button"
+                        onClick={handleRegisterDevice}
+                        disabled={registeringPush}
+                        className="text-xs bg-indigo-600 text-white font-bold px-4 py-2 rounded-lg hover:bg-indigo-700 transition-all shadow-sm active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+                      >
+                        <BellRing className="w-3.5 h-3.5" />
+                        {registeringPush ? 'Activando...' : 'Activar notificaciones en este dispositivo'}
+                      </button>
+                    )
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* PRUEBA DE NOTIFICACIONES */}
+            <div className="bg-white p-5 rounded-xl border border-gray-200 mb-6 shadow-sm">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-500" />
+                    Prueba de Notificaciones
+                  </h4>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Envía una notificación Push de prueba exclusivamente a tu usuario autenticado (auth.uid()).
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSendTestNotification}
+                  disabled={sendingTest || pushStatus.state !== 'granted'}
+                  className="text-xs bg-emerald-600 text-white font-bold px-4 py-2 rounded-lg hover:bg-emerald-700 transition-all shadow-sm active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${sendingTest ? 'animate-spin' : ''}`} />
+                  {sendingTest ? 'Enviando...' : 'Enviar prueba'}
+                </button>
+              </div>
+            </div>
+
             {/* CANALES DISPONIBLES */}
             <div>
               <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Canales Disponibles</h4>
@@ -1819,8 +2036,8 @@ export default function AdminSettings() {
                     </div>
                     <div>
                       <span className="text-sm font-bold text-gray-900 block">Push Notifications</span>
-                      <span className="inline-block mt-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
-                        Configurado / Activo
+                      <span className={`inline-block mt-1 px-2 py-0.5 text-[10px] font-bold rounded-full ${pushStatus.state === 'granted' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
+                        {pushStatus.state === 'granted' ? 'Configurado / Activo en dispositivo' : 'Configurado / Permiso pendiente'}
                       </span>
                       <p className="text-xs text-gray-500 mt-1">Alertas instantáneas en navegadores y PWA.</p>
                     </div>
@@ -1850,11 +2067,20 @@ export default function AdminSettings() {
                     <div>
                       <span className="text-sm font-bold text-gray-900 block">Email</span>
                       <span className="inline-block mt-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
-                        Configurado
+                        Proveedor: Configurado
                       </span>
                       <p className="text-xs text-gray-500 mt-1">Envíos transaccionales mediante Resend.</p>
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={handleSendTestEmail}
+                    disabled={sendingTestEmail}
+                    className="text-xs bg-blue-50 text-blue-700 border border-blue-200 font-bold px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1 mt-0.5"
+                  >
+                    <Mail className={`w-3.5 h-3.5 ${sendingTestEmail ? 'animate-spin' : ''}`} />
+                    {sendingTestEmail ? 'Enviando...' : 'Enviar prueba por Email'}
+                  </button>
                 </div>
 
                 <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-start justify-between opacity-60">

@@ -8,7 +8,14 @@ import VShipping from './VShipping';
 import VKyc from './VKyc';
 import VTermsSettings from './VTermsSettings';
 import { User, CreditCard, Truck, Link2, FileText, Save, UploadCloud, Bell, AlertCircle, CheckCircle2, RefreshCw, ToggleLeft, ToggleRight, ShieldCheck, Smartphone, Mail, MessageSquare, BellRing } from 'lucide-react';
-import { requestAndRegisterDevice, unregisterDevice, getBrowserPermission, getUserDevices, type DeviceSubscriptionRecord } from '../../lib/pushNotifications';
+import {
+  requestAndRegisterPush,
+  unregisterCurrentDevice,
+  getPushStatus,
+  getUserDevices,
+  type PushStatusInfo,
+  type DeviceSubscriptionRecord
+} from '../../lib/pushNotifications';
 
 import { normalizeSettingsTab } from '../../config/vendorNavigation';
 import { getStoreTypeLabel, type StoreType } from '../../config/conditionConfig';
@@ -81,24 +88,33 @@ export default function VSettings() {
   const [sendingTest, setSendingTest] = useState(false);
   const [userDevices, setUserDevices] = useState<DeviceSubscriptionRecord[]>([]);
   const [registeringPush, setRegisteringPush] = useState(false);
+  const [pushStatus, setPushStatus] = useState<PushStatusInfo>({
+    state: 'default',
+    isIOSNonStandalone: false,
+    subscriptionId: null,
+    optedIn: false,
+    appIdConfigured: true,
+  });
 
   const loadDevices = async () => {
     if (!user) return;
     const devs = await getUserDevices(user.id);
     setUserDevices(devs);
+    const status = await getPushStatus();
+    setPushStatus(status);
   };
 
   const handleRegisterDevice = async () => {
     if (!user) return;
     setRegisteringPush(true);
     try {
-      const res = await requestAndRegisterDevice(user.id, user.id);
+      const res = await requestAndRegisterPush(user.id, user.id);
       if (res.success) {
         toast.success('¡Notificaciones Push activadas correctamente en este dispositivo!');
-        await loadDevices();
       } else {
         toast.error(res.error || 'No se pudieron activar las notificaciones Push');
       }
+      await loadDevices();
     } catch (err: any) {
       toast.error(err.message || 'Error al solicitar permiso Push');
     } finally {
@@ -109,11 +125,11 @@ export default function VSettings() {
   const handleUnregisterDevice = async () => {
     if (!user) return;
     try {
-      await unregisterDevice(user.id);
-      toast.success('Dispositivo desactivado');
+      await unregisterCurrentDevice(user.id);
+      toast.success('Notificaciones desactivadas únicamente en este dispositivo');
       await loadDevices();
     } catch (err: any) {
-      toast.error('Error al desactivar dispositivo');
+      toast.error('Error al desactivar este dispositivo');
     }
   };
 
@@ -127,7 +143,8 @@ export default function VSettings() {
       const { data, error } = await supabase.functions.invoke('send-whatsapp-notification', {
         body: {
           event_type: 'test_notification',
-          vendor_id: user.id
+          vendor_id: user.id,
+          user_ids: [user.id]
         }
       });
       if (error) throw error;
@@ -137,6 +154,32 @@ export default function VSettings() {
       toast.error(err.message || 'Error al enviar la notificación de prueba');
     } finally {
       setSendingTest(false);
+    }
+  };
+
+  const [sendingTestEmail, setSendingTestEmail] = useState(false);
+
+  const handleSendTestEmail = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!user) return;
+
+    setSendingTestEmail(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('notification-dispatcher', {
+        body: {
+          event_type: 'test_notification',
+          channel: 'email',
+          vendor_id: user.id
+        }
+      });
+      if (error) throw error;
+      toast.success(`Correo de prueba enviado a ${user.email}`);
+      loadLogs();
+    } catch (err: any) {
+      toast.error(err.message || 'Error al enviar el correo de prueba');
+    } finally {
+      setSendingTestEmail(false);
     }
   };
 
@@ -785,11 +828,20 @@ export default function VSettings() {
                       <div>
                         <span className="text-sm font-bold text-gray-900 block">Email</span>
                         <span className="inline-block mt-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
-                          Activo
+                          Proveedor: Configurado
                         </span>
                         <p className="text-xs text-gray-500 mt-1">Correos transaccionales a tu email de contacto.</p>
                       </div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={handleSendTestEmail}
+                      disabled={sendingTestEmail}
+                      className="text-xs bg-blue-50 text-blue-700 border border-blue-200 font-bold px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1 mt-0.5"
+                    >
+                      <Mail className={`w-3.5 h-3.5 ${sendingTestEmail ? 'animate-spin' : ''}`} />
+                      {sendingTestEmail ? 'Enviando...' : 'Enviar prueba por Email'}
+                    </button>
                   </div>
 
                   {/* SMS Channel */}
@@ -814,34 +866,81 @@ export default function VSettings() {
               <div className="bg-gradient-to-r from-indigo-50/50 to-purple-50/50 p-5 rounded-xl border border-indigo-100 mb-8 shadow-sm">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div>
-                    <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                    <div className="flex items-center gap-2">
                       <BellRing className="w-4 h-4 text-indigo-600" />
-                      Notificaciones Push en este dispositivo
-                    </h4>
+                      <h4 className="text-sm font-bold text-gray-900">Notificaciones Push en este dispositivo</h4>
+                      
+                      {pushStatus.state === 'granted' && (
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          Activas en este dispositivo
+                        </span>
+                      )}
+                      {pushStatus.state === 'default' && (
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                          Permiso pendiente
+                        </span>
+                      )}
+                      {pushStatus.state === 'denied' && (
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-red-100 text-red-800 border border-red-200">
+                          Bloqueadas por navegador
+                        </span>
+                      )}
+                      {pushStatus.state === 'not_supported' && (
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-gray-100 text-gray-700 border border-gray-200">
+                          Navegador no compatible
+                        </span>
+                      )}
+                      {pushStatus.state === 'unconfigured' && (
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-gray-100 text-gray-700 border border-gray-200">
+                          OneSignal no configurado
+                        </span>
+                      )}
+                      {pushStatus.state === 'error' && (
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-red-100 text-red-800 border border-red-200">
+                          Error de registro
+                        </span>
+                      )}
+                    </div>
+
                     <p className="text-xs text-gray-600 mt-1 font-medium">
-                      {userDevices.length > 0 
-                        ? `Notificaciones activadas en ${userDevices.length} dispositivo(s) registrado(s).` 
-                        : 'Recibí alertas instantáneas de ventas en tu navegador sin instalar aplicaciones.'}
+                      {pushStatus.state === 'granted' && (
+                        userDevices.length > 0 
+                          ? `Alertas push activas en tu navegador actual (${userDevices.length} dispositivo(s) vinculado(s)).` 
+                          : 'Notificaciones push activas en este navegador.'
+                      )}
+                      {pushStatus.state === 'default' && 'Recibí alertas instantáneas de ventas en tu navegador sin instalar aplicaciones.'}
+                      {pushStatus.state === 'denied' && 'Las notificaciones fueron bloqueadas en la configuración de tu navegador. Debes desbloquearlas en los permisos del sitio.'}
+                      {pushStatus.state === 'not_supported' && (
+                        pushStatus.isIOSNonStandalone 
+                          ? 'En iOS (iPhone/iPad) se requiere agregar Collectibles a la pantalla de inicio (PWA) para recibir notificaciones Push.' 
+                          : 'Tu navegador o dispositivo actual no admite notificaciones Push web.'
+                      )}
+                      {pushStatus.state === 'unconfigured' && 'OneSignal App ID no está configurado.'}
+                      {pushStatus.state === 'error' && 'No se pudo conectar con el servicio OneSignal. Reintenta o revisa la configuración del navegador.'}
                     </p>
                   </div>
+
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={handleRegisterDevice}
-                      disabled={registeringPush}
-                      className="text-xs bg-indigo-600 text-white font-bold px-4 py-2 rounded-lg hover:bg-indigo-700 transition-all shadow-sm active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
-                    >
-                      <BellRing className="w-3.5 h-3.5" />
-                      {registeringPush ? 'Activando...' : 'Activar notificaciones en este dispositivo'}
-                    </button>
-                    {userDevices.length > 0 && (
+                    {pushStatus.state === 'granted' ? (
                       <button
                         type="button"
                         onClick={handleUnregisterDevice}
-                        className="text-xs bg-white text-gray-700 border border-gray-300 font-bold px-3 py-2 rounded-lg hover:bg-gray-50 transition-all active:scale-95"
+                        className="text-xs bg-white text-red-600 border border-red-200 font-bold px-3 py-2 rounded-lg hover:bg-red-50 transition-all active:scale-95 shadow-sm"
                       >
-                        Desactivar
+                        Desactivar este dispositivo
                       </button>
+                    ) : (
+                      (pushStatus.state === 'default' || pushStatus.state === 'error') && (
+                        <button
+                          type="button"
+                          onClick={handleRegisterDevice}
+                          disabled={registeringPush}
+                          className="text-xs bg-indigo-600 text-white font-bold px-4 py-2 rounded-lg hover:bg-indigo-700 transition-all shadow-sm active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+                        >
+                          <BellRing className="w-3.5 h-3.5" />
+                          {registeringPush ? 'Activando...' : 'Activar notificaciones en este dispositivo'}
+                        </button>
+                      )
                     )}
                   </div>
                 </div>

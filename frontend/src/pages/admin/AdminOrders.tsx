@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { Eye, ChevronDown, Package, Truck, PhoneCall, X, Save, Ban, AlertTriangle, UserX, Gift, RefreshCw, FileText, Clock, Settings, Mail, MapPin, CreditCard, CheckCircle, XCircle, ShieldAlert } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
@@ -791,6 +791,9 @@ export default function AdminOrders() {
   }
 
 
+  const [searchParams] = useSearchParams();
+  const targetOrderId = searchParams.get('order_id') || searchParams.get('id');
+
   async function fetchOrders() {
     setLoading(true);
     let query = supabase.from('orders').select('*, customer:profiles(email, first_name, last_name)').order('created_at', { ascending: false });
@@ -802,7 +805,16 @@ export default function AdminOrders() {
       query = query.not('ml_order_id', 'is', null);
     }
     const { data } = await query;
-    setOrders(data || []);
+    const loadedOrders = data || [];
+    setOrders(loadedOrders);
+
+    if (targetOrderId && loadedOrders.length > 0) {
+      const match = loadedOrders.find((o: any) => o.id === targetOrderId || o.id.startsWith(targetOrderId));
+      if (match) {
+        setSelectedOrder(match);
+      }
+    }
+
     setLoading(false);
   }
 
