@@ -81,91 +81,91 @@ export default function AdminLayout() {
               key={item.name}
               to={item.path}
               onClick={() => closeOnClick && setMobileDrawerOpen(false)}
-              className={`flex items-center px-3 py-2 rounded-lg text-[15px] font-semibold transition-colors min-h-[44px] ${
-                isActive ? 'bg-primary-600 text-white shadow-md' : 'hover:bg-dark-800 hover:text-white text-gray-300'
+              className={`flex items-center px-3.5 py-2 rounded-xl text-sm font-medium transition-colors min-h-[44px] ${
+                isActive ? 'bg-[#f00856] text-white font-semibold shadow-sm' : 'hover:bg-dark-800 hover:text-white text-gray-300'
               }`}
             >
-              <Icon className={`mr-3 h-[19px] w-[19px] shrink-0 ${isActive ? 'text-white' : 'text-gray-400'}`} />
+              <Icon className={`mr-2.5 h-[18px] w-[18px] shrink-0 ${isActive ? 'text-white' : 'text-gray-400'}`} />
               <span className="truncate">{item.name}</span>
             </Link>
           );
         })}
 
         {/* Internacional */}
-        <div className="pt-4 pb-2">
-          <p className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">Internacional</p>
+        <div className="pt-3 pb-1">
+          <p className="px-3.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">Internacional</p>
           <Link
             to="/admin/internacional/amazon"
             onClick={() => closeOnClick && setMobileDrawerOpen(false)}
-            className="flex items-center px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors"
+            className="flex items-center px-3.5 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-xl transition-colors min-h-[44px]"
           >
-            <Download className="mr-3 h-4 w-4" /> Importador Amazon
+            <Download className="mr-2.5 h-[18px] w-[18px] shrink-0" /> Importador Amazon
           </Link>
           <Link
             to="/admin/internacional/productos"
             onClick={() => closeOnClick && setMobileDrawerOpen(false)}
-            className="flex items-center px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors"
+            className="flex items-center px-3.5 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-xl transition-colors min-h-[44px]"
           >
-            <Globe className="mr-3 h-4 w-4" /> Productos Internacionales
+            <Globe className="mr-2.5 h-[18px] w-[18px] shrink-0" /> Productos Internacionales
           </Link>
           <Link
             to="/admin/internacional/sync"
             onClick={() => closeOnClick && setMobileDrawerOpen(false)}
-            className="flex items-center px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors"
+            className="flex items-center px-3.5 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-xl transition-colors min-h-[44px]"
           >
-            <RefreshCw className="mr-3 h-4 w-4" /> Sincronización
+            <RefreshCw className="mr-2.5 h-[18px] w-[18px] shrink-0" /> Sincronización
           </Link>
         </div>
 
         {/* Otros Portales */}
-        <div className="pt-4 pb-2">
-          <p className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">Otros Portales</p>
+        <div className="pt-3 pb-1">
+          <p className="px-3.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">Otros Portales</p>
           {profile?.is_vendor && (
             <Link
               to="/vendor"
               onClick={() => closeOnClick && setMobileDrawerOpen(false)}
-              className="flex items-center px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors"
+              className="flex items-center px-3.5 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-xl transition-colors min-h-[44px]"
             >
-              <Store className="mr-3 h-4 w-4" /> Vendor Dashboard
+              <Store className="mr-2.5 h-[18px] w-[18px] shrink-0" /> Vendor Dashboard
             </Link>
           )}
           {profile?.is_artist && (
             <Link
               to="/artist"
               onClick={() => closeOnClick && setMobileDrawerOpen(false)}
-              className="flex items-center px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors"
+              className="flex items-center px-3.5 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-xl transition-colors min-h-[44px]"
             >
-              <Star className="mr-3 h-4 w-4" /> Artist Dashboard
+              <Star className="mr-2.5 h-[18px] w-[18px] shrink-0" /> Artist Dashboard
             </Link>
           )}
           {profile?.is_affiliate && (
             <Link
               to="/affiliate"
               onClick={() => closeOnClick && setMobileDrawerOpen(false)}
-              className="flex items-center px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors"
+              className="flex items-center px-3.5 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-xl transition-colors min-h-[44px]"
             >
-              <Share2 className="mr-3 h-4 w-4" /> Affiliate Dashboard
+              <Share2 className="mr-2.5 h-[18px] w-[18px] shrink-0" /> Affiliate Dashboard
             </Link>
           )}
         </div>
       </nav>
 
-      <div className="p-4 border-t border-dark-800 sticky bottom-0 bg-dark-900">
+      <div className="p-3 border-t border-dark-800 sticky bottom-0 bg-dark-900 shrink-0">
         <Link
           to="/"
           onClick={() => closeOnClick && setMobileDrawerOpen(false)}
-          className="flex items-center w-full px-3 py-2 text-sm font-medium text-gray-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors mb-1"
+          className="flex items-center w-full px-3.5 py-2 text-sm font-medium text-gray-400 hover:text-white hover:bg-dark-800 rounded-xl transition-colors min-h-[44px] mb-0.5"
         >
-          <ExternalLink className="mr-3 h-4 w-4" /> Ver Tienda
+          <ExternalLink className="mr-2.5 h-[18px] w-[18px] shrink-0" /> Ver Tienda
         </Link>
         <button
           onClick={() => {
             if (closeOnClick) setMobileDrawerOpen(false);
             handleSignOut();
           }}
-          className="flex items-center w-full px-3 py-2 text-sm font-medium text-gray-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors"
+          className="flex items-center w-full px-3.5 py-2 text-sm font-medium text-gray-400 hover:text-white hover:bg-dark-800 rounded-xl transition-colors min-h-[44px]"
         >
-          <LogOut className="mr-3 h-5 w-5" /> Cerrar Sesión
+          <LogOut className="mr-2.5 h-[18px] w-[18px] shrink-0" /> Cerrar Sesión
         </button>
       </div>
     </>
