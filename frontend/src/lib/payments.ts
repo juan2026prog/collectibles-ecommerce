@@ -78,10 +78,11 @@ export interface PublicPaymentProvider {
   response_type: string;
 }
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
+const env = (typeof import.meta !== 'undefined' && import.meta?.env) ? import.meta.env : (process.env as any) || {};
+const SUPABASE_URL = env.VITE_SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
 const CREATE_ORDER_URL = `${SUPABASE_URL}/functions/v1/create-order`;
 const CREATE_PAYMENT_URL = `${SUPABASE_URL}/functions/v1/create-payment`;
-const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const ANON_KEY = env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
 
 async function getAuthHeaders() {
   const { data: { session } } = await supabase.auth.getSession();
@@ -274,21 +275,33 @@ function getFallbackProviders(): PublicPaymentProvider[] {
   ];
 }
 
+export function isOrderPaymentApproved(order: any): boolean {
+  if (!order) return false;
+
+  const paymentStatus = String(order.payment_status || '').toLowerCase().trim();
+  const processedAt = order.payment_processed_at;
+
+  const isValidStatus = ['approved', 'paid', 'accredited'].includes(paymentStatus);
+  const hasProcessedAt = Boolean(processedAt);
+
+  // Strict payment certification: requires valid approved status AND payment_processed_at timestamp.
+  // Never authorizes based on operational order.status alone (e.g. shipped, delivered).
+  return isValidStatus && hasProcessedAt;
+}
+
 export function isRealPaidOrder(order: any): boolean {
   if (!order) return false;
+
+  if (!isOrderPaymentApproved(order)) return false;
   
-  // 1. Check payment status
-  const validPaymentStatuses = ['approved', 'paid', 'accredited'];
-  if (!order.payment_status || !validPaymentStatuses.includes(order.payment_status)) return false;
-  
-  // 2. Check main status
+  // Check main status
   const invalidStatuses = ['cancelled', 'cancelada', 'refunded', 'partially_refunded', 'failed', 'rejected', 'pending'];
   if (order.status && invalidStatuses.includes(order.status)) return false;
   
-  // 3. Check test order flag
+  // Check test order flag
   if (order.is_test_order) return false;
   
-  // 4. Check mock references
+  // Check mock references
   const checkMock = (val: string | null | undefined) => {
     if (!val) return false;
     const lower = val.toLowerCase();

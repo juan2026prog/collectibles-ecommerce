@@ -80,7 +80,7 @@ export default function PortalLayout({ type }: { type: 'vendor' | 'artist' | 'af
     <div className="min-h-screen bg-[#05070f] text-[#f8fafc] font-inter selection:bg-[#f00856]/30 overflow-x-hidden">
       {/* TOP STATUS BAR */}
       <div className="bg-[#f00856] text-white text-[10px] font-black uppercase tracking-[0.3em] relative z-[60]">
-        <div className="max-w-7xl mx-auto px-6 h-10 flex items-center justify-between gap-6 overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-10 flex items-center justify-between gap-6 overflow-hidden">
           <div className="flex items-center gap-8 overflow-hidden whitespace-nowrap">
             <span className="flex items-center gap-2"><Truck className="w-3 h-3" /> Envío gratis desde $1500</span>
             <span className="opacity-30">•</span>
@@ -93,10 +93,10 @@ export default function PortalLayout({ type }: { type: 'vendor' | 'artist' | 'af
       </div>
 
       {/* HEADER */}
-      <header className="sticky top-0 z-50 bg-[#05070f]/80 backdrop-blur-2xl border-b border-white/5 px-6">
-        <div className="max-w-7xl mx-auto h-24 flex items-center justify-between gap-10">
-          <Link to="/" className="flex items-center gap-4 group transition-all shrink-0">
-            <img src={STORE_ISOLOGO_URL} className="h-12 object-contain group-hover:scale-110 transition-transform duration-500" alt="Collectibles" />
+      <header className="sticky top-0 z-50 bg-[#05070f]/80 backdrop-blur-2xl border-b border-white/5 px-4 sm:px-6">
+        <div className="max-w-7xl mx-auto h-20 sm:h-24 flex items-center justify-between gap-4 sm:gap-10">
+          <Link to="/" className="flex items-center gap-3 sm:gap-4 group transition-all shrink-0">
+            <img src={STORE_ISOLOGO_URL} className="h-10 sm:h-12 object-contain group-hover:scale-110 transition-transform duration-500" alt="Collectibles" />
             <div className="hidden sm:block">
               <p className="text-[10px] font-black text-[#f00856] uppercase tracking-[0.4em] leading-none">Marketplace</p>
               <p className="text-lg font-black text-white tracking-tighter mt-1">Collectibles</p>
@@ -112,13 +112,13 @@ export default function PortalLayout({ type }: { type: 'vendor' | 'artist' | 'af
             />
           </div>
 
-          <div className="flex items-center gap-4 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             <LocaleSwitcher />
-            <div className="w-[1px] h-8 bg-white/10 mx-2 hidden sm:block" />
-            <button className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all hover:scale-105 active:scale-95 group">
-              <span className="text-xl group-hover:animate-pulse">👤</span>
+            <div className="w-[1px] h-8 bg-white/10 mx-1 hidden sm:block" />
+            <button className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all hover:scale-105 active:scale-95 group">
+              <span className="text-lg sm:text-xl group-hover:animate-pulse">👤</span>
             </button>
-            <button className="h-12 px-6 rounded-2xl bg-[#f00856] text-white flex items-center justify-center gap-3 shadow-[0_10px_30px_rgba(240,8,86,0.3)] hover:bg-[#ff2c68] transition-all hover:scale-105 active:scale-95 font-black text-[10px] uppercase tracking-widest">
+            <button className="h-10 sm:h-12 px-4 sm:px-6 rounded-2xl bg-[#f00856] text-white flex items-center justify-center gap-2 sm:gap-3 shadow-[0_10px_30px_rgba(240,8,86,0.3)] hover:bg-[#ff2c68] transition-all hover:scale-105 active:scale-95 font-black text-[10px] uppercase tracking-widest">
               <ShoppingCart className="w-4 h-4" />
               <span className="hidden sm:inline">0 Items</span>
             </button>
@@ -127,10 +127,10 @@ export default function PortalLayout({ type }: { type: 'vendor' | 'artist' | 'af
       </header>
 
       {/* MAIN CONTENT GRID */}
-      <main className="max-w-7xl mx-auto px-6 py-12 grid lg:grid-cols-[300px_1fr] gap-10">
-        {/* SIDEBAR */}
-        <aside className="space-y-8">
-          <div className="glass rounded-[2.5rem] p-6 border border-white/5 shadow-2xl relative overflow-hidden group">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 md:py-12 grid lg:grid-cols-[300px_1fr] gap-6 md:gap-10 desktop-main w-full">
+        {/* SIDEBAR / NAVIGATION HUB */}
+        <aside className="hidden lg:block space-y-6 md:space-y-8 desktop-sidebar">
+          <div className="glass rounded-3xl md:rounded-[2.5rem] p-4 sm:p-6 border border-white/5 shadow-2xl relative overflow-hidden group">
             <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-[#f00856]/5 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700" />
             
             <div className="relative z-10 space-y-2">
@@ -142,7 +142,7 @@ export default function PortalLayout({ type }: { type: 'vendor' | 'artist' | 'af
                 
                 return (
                   <Link key={item.name} to={item.path}
-                    className={`flex items-center gap-5 px-6 py-4 rounded-2xl font-black text-[12px] uppercase tracking-widest transition-all duration-300 group/link ${
+                    className={`flex items-center gap-4 sm:gap-5 px-4 sm:px-6 py-3.5 sm:py-4 rounded-2xl font-black text-[11px] sm:text-[12px] uppercase tracking-widest transition-all duration-300 group/link ${
                       isActive 
                         ? 'bg-[#f00856] text-white shadow-[0_10px_25px_rgba(240,8,86,0.3)]' 
                         : 'text-slate-500 hover:text-white hover:bg-white/5'
@@ -156,12 +156,12 @@ export default function PortalLayout({ type }: { type: 'vendor' | 'artist' | 'af
             
             <div className="pt-6 mt-6 border-t border-white/5 relative z-10 space-y-2">
               {profile?.is_admin && (
-                <Link to="/admin" className="flex items-center gap-5 px-6 py-4 rounded-2xl font-black text-[12px] uppercase tracking-widest text-slate-500 hover:text-emerald-400 hover:bg-emerald-400/5 transition-all">
+                <Link to="/admin" className="flex items-center gap-4 sm:gap-5 px-4 sm:px-6 py-3.5 sm:py-4 rounded-2xl font-black text-[11px] sm:text-[12px] uppercase tracking-widest text-slate-500 hover:text-emerald-400 hover:bg-emerald-400/5 transition-all">
                   <ShieldCheck className="w-5 h-5" />
                   <span>Admin Protocol</span>
                 </Link>
               )}
-              <button onClick={handleSignOut} className="w-full flex items-center gap-5 px-6 py-4 rounded-2xl font-black text-[12px] uppercase tracking-widest text-red-500/60 hover:text-red-500 hover:bg-red-500/5 transition-all">
+              <button onClick={handleSignOut} className="w-full flex items-center gap-4 sm:gap-5 px-4 sm:px-6 py-3.5 sm:py-4 rounded-2xl font-black text-[11px] sm:text-[12px] uppercase tracking-widest text-red-500/60 hover:text-red-500 hover:bg-red-500/5 transition-all">
                 <LogOut className="w-5 h-5" />
                 <span>Exit Session</span>
               </button>
@@ -169,7 +169,7 @@ export default function PortalLayout({ type }: { type: 'vendor' | 'artist' | 'af
           </div>
 
           {/* Quick Stats Sidebar Card */}
-          <div className="glass rounded-[2.5rem] p-8 border border-white/5 shadow-xl relative overflow-hidden bg-gradient-to-br from-white/[0.03] to-transparent">
+          <div className="glass rounded-3xl md:rounded-[2.5rem] p-6 md:p-8 border border-white/5 shadow-xl relative overflow-hidden bg-gradient-to-br from-white/[0.03] to-transparent">
              <div className="flex items-center justify-between mb-6">
                 <div className="w-10 h-10 rounded-xl bg-[#f00856]/10 flex items-center justify-center">
                    <Zap className="w-5 h-5 text-[#f00856]" />
@@ -177,7 +177,7 @@ export default function PortalLayout({ type }: { type: 'vendor' | 'artist' | 'af
                 <div className="text-[10px] font-black text-emerald-500 uppercase tracking-widest bg-emerald-500/10 px-3 py-1 rounded-full">Active</div>
              </div>
              <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1">Status Report</p>
-             <p className="text-xl font-black text-white tracking-tighter">System Nominal</p>
+             <p className="text-lg sm:text-xl font-black text-white tracking-tighter">System Nominal</p>
              <div className="mt-6 h-1 w-full bg-white/5 rounded-full overflow-hidden">
                 <div className="h-full bg-[#f00856] w-2/3 shadow-[0_0_10px_rgba(240,8,86,0.5)]" />
              </div>
@@ -185,23 +185,23 @@ export default function PortalLayout({ type }: { type: 'vendor' | 'artist' | 'af
         </aside>
 
         {/* CONTENT AREA */}
-        <div className="space-y-10 min-w-0">
-          <div className="glass rounded-[3rem] p-10 md:p-14 border border-white/10 shadow-2xl relative overflow-hidden group">
+        <div className="space-y-6 sm:space-y-10 min-w-0">
+          <div className="glass rounded-3xl md:rounded-[3rem] p-6 sm:p-10 md:p-14 border border-white/10 shadow-2xl relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#f00856]/5 blur-[120px] rounded-full pointer-events-none group-hover:bg-[#f00856]/10 transition-colors duration-1000" />
             <div className="absolute -left-20 -top-20 w-80 h-80 bg-blue-500/5 blur-[100px] rounded-full pointer-events-none" />
             
-            <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-10">
-              <div className="space-y-4">
+            <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-6 sm:gap-10">
+              <div className="space-y-3 sm:space-y-4">
                 <div className="flex items-center gap-4">
                   <div className="h-[2px] w-10 bg-[#f00856]" />
                   <div className="text-[#f00856] text-[12px] font-black tracking-[0.5em] uppercase">{portalLabel}</div>
                 </div>
-                <h1 className="text-5xl md:text-6xl font-black tracking-tighter text-white leading-none max-w-2xl">{title}</h1>
-                <p className="text-slate-400 font-bold uppercase tracking-widest text-sm mt-4">Gestioná cada aspecto de tu presencia operativa en Collectibles.</p>
+                <h1 className="text-3xl sm:text-5xl md:text-6xl font-black tracking-tighter text-white leading-tight max-w-2xl">{title}</h1>
+                <p className="text-slate-400 font-bold uppercase tracking-widest text-xs sm:text-sm mt-4">Gestioná cada aspecto de tu presencia operativa en Collectibles.</p>
               </div>
               
               <div className="flex flex-col gap-4 shrink-0">
-                <button className="bg-white text-black rounded-full px-12 py-5 font-black uppercase tracking-[0.2em] text-[11px] shadow-2xl hover:bg-[#f00856] hover:text-white transition-all hover:scale-105 active:scale-95 border border-white/10">
+                <button className="bg-white text-black rounded-full px-8 sm:px-12 py-4 sm:py-5 font-black uppercase tracking-[0.2em] text-[11px] shadow-2xl hover:bg-[#f00856] hover:text-white transition-all hover:scale-105 active:scale-95 border border-white/10 min-h-[44px]">
                   Acción de Protocolo
                 </button>
                 <div className="flex items-center justify-center gap-3 opacity-40">

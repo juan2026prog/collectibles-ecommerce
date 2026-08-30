@@ -13,6 +13,8 @@ import { useConfirmModal } from '../../components/admin/ConfirmModal';
 import { slugify, generateUniqueSlug } from '../../lib/slugUtils';
 import { CONDITION_OPTIONS, getConditionLabel, normalizeCondition } from '../../config/conditionConfig';
 import { CardDetailsFormSection } from '../../components/vendor/CardDetailsFormSection';
+import ResponsiveDataList from '../../components/admin/ResponsiveDataList';
+import FilterDrawer from '../../components/admin/FilterDrawer';
 import { type CardDetails, buildCategoryTreeOptions, isSportsCardCategory, isTCGCategory } from '../../config/tcgConfig';
 import { validateProductForPublication, type PublicationValidationError } from '../../lib/productPublicationValidator';
 import { mapDatabaseErrorToUserMessage } from '../../lib/databaseErrorMapper';
@@ -1403,8 +1405,98 @@ export default function AdminProducts() {
             </div>
          )}
          <div className="flex-1 overflow-auto">
-            <table className="min-w-full divide-y divide-gray-100">
-               <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
+             <ResponsiveDataList
+               items={filteredProducts}
+               keyExtractor={(p: any) => p.id}
+               loading={loading}
+               emptyTitle="0 PRODUCTOS ENCONTRADOS"
+               emptyDescription="No se encontraron productos con los filtros seleccionados."
+               renderCard={(p: any) => {
+                 const primaryCat = p.product_categories?.[0]?.categories;
+                 const isSelected = selectedProducts.includes(p.id);
+                 const stock = p.variants?.[0]?.inventory_count || 0;
+
+                 return (
+                   <div key={p.id} className="bg-white rounded-xl border border-gray-200 p-4 space-y-3 shadow-xs min-w-0">
+                     <div className="flex items-start justify-between gap-3">
+                       <div className="flex items-center gap-3 min-w-0">
+                         <input 
+                           type="checkbox" 
+                           className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 shrink-0" 
+                           checked={isSelected}
+                           onChange={(e) => {
+                             if (e.target.checked) setSelectedProducts([...selectedProducts, p.id]);
+                             else setSelectedProducts(selectedProducts.filter(id => id !== p.id));
+                           }}
+                         />
+                         <img src={getProductImage(p)} alt="" className="w-12 h-12 rounded-lg object-cover border border-gray-100 shadow-xs shrink-0" />
+                         <div className="min-w-0">
+                           <h4 className="font-bold text-gray-900 text-xs sm:text-sm truncate">{p.title}</h4>
+                           <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                             <span className="text-[10px] font-mono text-gray-400 uppercase">SKU: {p.variants?.[0]?.sku || '-'}</span>
+                             {p.ml_item_id && <span className="bg-yellow-400 text-blue-900 text-[8px] font-black px-1 rounded">ML</span>}
+                           </div>
+                         </div>
+                       </div>
+
+                       <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider shrink-0 ${p.status === 'published' ? 'text-green-700 bg-green-50' : 'text-gray-500 bg-gray-100'}`}>
+                         {p.status === 'published' ? 'Visible' : 'Oculto'}
+                       </span>
+                     </div>
+
+                     <div className="grid grid-cols-2 gap-2 text-xs border-t border-b border-gray-100 py-2">
+                       <div>
+                         <span className="text-gray-400 block text-[10px] uppercase font-semibold">Precio</span>
+                         <span className="font-black text-gray-900 text-sm">UYU {(p.base_price || 0).toLocaleString()}</span>
+                       </div>
+                       <div>
+                         <span className="text-gray-400 block text-[10px] uppercase font-semibold">Stock</span>
+                         <span className="font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded text-[10px] inline-block">
+                           {stock} u.
+                         </span>
+                       </div>
+                       <div>
+                         <span className="text-gray-400 block text-[10px] uppercase font-semibold">Categoría</span>
+                         <span className="font-medium text-gray-700 truncate block">{primaryCat?.name || '-'}</span>
+                       </div>
+                       <div>
+                         <span className="text-gray-400 block text-[10px] uppercase font-semibold">Marca</span>
+                         <span className="font-medium text-gray-700 truncate block">{p.brand?.name || '-'}</span>
+                       </div>
+                     </div>
+
+                     <div className="flex items-center justify-between pt-1">
+                       <span className="text-gray-400 text-[10px]">
+                         {new Date(p.created_at).toLocaleDateString()}
+                       </span>
+
+                       <div className="flex items-center gap-2">
+                         <button
+                           onClick={() => openEdit(p)}
+                           className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg text-xs transition-colors min-h-[36px]"
+                         >
+                           Editar Detalles
+                         </button>
+                         <button
+                           onClick={(e) => handleDuplicate(p, e)}
+                           className="p-2 text-gray-500 hover:text-blue-600 bg-gray-50 rounded-lg min-h-[36px] min-w-[36px] flex items-center justify-center"
+                           title="Duplicar producto"
+                         >
+                           <Copy className="w-4 h-4" />
+                         </button>
+                         <button
+                           onClick={() => handleDelete(p)}
+                           className="p-2 text-red-500 hover:text-red-700 bg-red-50 rounded-lg min-h-[36px] min-w-[36px] flex items-center justify-center"
+                           title="Eliminar producto"
+                         >
+                           <Trash2 className="w-4 h-4" />
+                         </button>
+                       </div>
+                     </div>
+                   </div>
+                 );
+               }}
+               renderTableHeader={() => (
                  <tr className="text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">
                    <th className="px-6 py-4 w-12">
                      <input 
@@ -1448,210 +1540,202 @@ export default function AdminProducts() {
                      Fecha {sortField === 'created_at' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
                    </th>
                  </tr>
-               </thead>
-               <tbody className="divide-y divide-gray-100">
-                 {loading ? (
-                    <tr><td colSpan={13} className="px-6 py-12 text-center text-gray-400 animate-pulse">Cargando catálogo...</td></tr>
-                 ) : filteredProducts.length === 0 ? (
-                    <tr><td colSpan={13} className="px-6 py-12 text-center text-gray-400 font-bold">0 PRODUCTOS ENCONTRADOS</td></tr>
-                 ) : (
-                    filteredProducts.map((p: any) => {
-                      const primaryCat = p.product_categories?.[0]?.categories;
-                      return (
-                      <tr key={p.id} className="hover:bg-blue-50/20 group transition-all" title="Haz clic en cualquier campo para editarlo en línea">
-                        <td className="px-6 py-4">
-                          <input 
-                            type="checkbox" 
-                            className="rounded border-gray-300" 
-                            checked={selectedProducts.includes(p.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) setSelectedProducts([...selectedProducts, p.id]);
-                              else setSelectedProducts(selectedProducts.filter(id => id !== p.id));
-                            }}
-                            onClick={e => e.stopPropagation()} 
-                          />
-                        </td>
-                        <td className="px-6 py-4 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'title'}); setInlineValue(p.title); }}>
-                           <div className="flex items-center gap-4">
-                              <img src={getProductImage(p)} alt="" className="w-12 h-12 rounded-lg object-cover border border-gray-100 shadow-sm" />
-                              <div>
-                                 {inlineEdit?.id === p.id && inlineEdit.field === 'title' ? (
-                                    <input autoFocus type="text" className="w-48 p-1 border rounded text-xs font-bold text-dark-900" 
-                                      value={inlineValue} onChange={e => setInlineValue(e.target.value)}
-                                      onBlur={() => handleInlineUpdate(p.id, 'title', inlineValue)}
-                                      onKeyDown={e => e.key === 'Enter' && handleInlineUpdate(p.id, 'title', inlineValue)}
-                                      onClick={e => e.stopPropagation()} />
-                                 ) : (
-                                    <p className="font-bold text-dark-900 group-hover:text-blue-600 transition-colors">{p.title}</p>
-                                 )}
-                                 <div className="flex gap-1 items-center mt-0.5">
-                                    <span className="text-[9px] font-mono text-gray-400 uppercase">{p.variants?.[0]?.sku || '-'}</span>
-                                    {p.ml_item_id && <div className="w-6 h-3 bg-yellow-400 rounded-sm text-[8px] flex items-center justify-center font-bold text-blue-900 ml-1">ML</div>}
-                                 </div>
-                              </div>
-                           </div>
-                        </td>
-                        <td className="px-6 py-4 font-black text-dark-800 text-sm whitespace-nowrap cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'base_price'}); setInlineValue(p.base_price); }}>
-                          {inlineEdit?.id === p.id && inlineEdit.field === 'base_price' ? (
-                            <input autoFocus type="number" className="w-24 p-1 border rounded text-xs font-bold" value={inlineValue} onChange={e => setInlineValue(e.target.value)} onBlur={() => handleInlineUpdate(p.id, 'base_price', inlineValue)} onKeyDown={e => e.key === 'Enter' && handleInlineUpdate(p.id, 'base_price', inlineValue)} onClick={e => e.stopPropagation()} />
-                          ) : (
-                            <span>UYU {(p.base_price || 0).toLocaleString()}</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 text-xs font-bold text-gray-500 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'category_id'}); setInlineValue(primaryCat?.id || ''); }}>
-                          {inlineEdit?.id === p.id && inlineEdit.field === 'category_id' ? (
-                            <select 
-                              autoFocus
-                              className="bg-white border rounded text-[10px] p-1 font-bold outline-none"
-                              value={inlineValue || ''}
-                              onChange={e => { setInlineValue(e.target.value); handleInlineUpdate(p.id, 'category_id', e.target.value); }}
-                              onBlur={() => setInlineEdit(null)}
-                              onClick={e => e.stopPropagation()}
-                            >
-                              <option value="">- Sin Categoría -</option>
-                              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
-                          ) : (
-                            primaryCat?.name || '-'
-                          )}
-                        </td>
-                        <td className="px-6 py-4 text-xs font-bold text-gray-500 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'brand_id'}); setInlineValue(p.brand?.id || ''); }}>
-                          {inlineEdit?.id === p.id && inlineEdit.field === 'brand_id' ? (
-                            <select 
-                              autoFocus
-                              className="bg-white border rounded text-[10px] p-1 font-bold outline-none"
-                              value={inlineValue || ''}
-                              onChange={e => { setInlineValue(e.target.value); handleInlineUpdate(p.id, 'brand_id', e.target.value); }}
-                              onBlur={() => setInlineEdit(null)}
-                              onClick={e => e.stopPropagation()}
-                            >
-                              <option value="">- Sin Marca -</option>
-                              {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                            </select>
-                          ) : (
-                            p.brand?.name || '-'
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {p.vendor_id ? (
-                            <span 
-                              className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-200"
-                              title={`Producto vendido por ${p.vendor?.store_name || p.vendor?.company_name || 'Vendor'}`}
-                            >
-                              {p.vendor?.store_name || p.vendor?.company_name || 'Vendor Marketplace'}
-                            </span>
-                          ) : (
-                            <span 
-                              className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-100"
-                              title="Producto propio de Collectibles"
-                            >
-                              COLLECTIBLES
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'stock'}); setInlineValue(p.variants?.[0]?.inventory_count || 0); }}>
-                           {inlineEdit?.id === p.id && inlineEdit.field === 'stock' ? (
-                              <input autoFocus type="number" className="w-16 p-1 border rounded text-xs font-bold text-center" value={inlineValue} onChange={e => setInlineValue(e.target.value)} onBlur={() => handleInlineUpdate(p.id, 'stock', inlineValue)} onKeyDown={e => e.key === 'Enter' && handleInlineUpdate(p.id, 'stock', inlineValue)} onClick={e => e.stopPropagation()} />
-                           ) : (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tight text-blue-700 bg-blue-50 border border-blue-100">
-                                 {p.variants?.[0]?.inventory_count || 0} u.
-                              </span>
-                           )}
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
-                          {(() => {
-                            const pkg = sanitizeMbePackagingType(p.metadata?.packaging_type || p.metadata?.mbe_service_type);
-                            if (pkg === 'mbe_pak') {
-                              return <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-sky-800 bg-sky-100 border border-sky-200">PAK</span>;
-                            }
-                            if (pkg === 'mbe_caja') {
-                              return <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-purple-800 bg-purple-100 border border-purple-200">CAJA</span>;
-                            }
-                            return <span className="px-2 py-0.5 rounded text-[10px] font-bold text-gray-400 bg-gray-100 border border-gray-200">Sin definir</span>;
-                          })()}
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
-                          {(() => {
-                            const arStatus = calculateArgentinaShippingStatus(p);
-                            if (arStatus.isEligible) {
-                              return (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black text-emerald-800 bg-emerald-100 border border-emerald-200" title="Envío automático a Argentina disponible">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-                                  Auto (AR)
-                                </span>
-                              );
-                            }
-                            return (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-200" title={arStatus.reason || 'Requiere cotización manual'}>
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-600" />
-                                Cotización (AR)
-                              </span>
-                            );
-                          })()}
-                        </td>
-                        <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
-                          <button
-                            onClick={async () => {
-                              const newActive = p.is_active !== false ? false : true;
-                              try {
-                                const { error } = await supabase
-                                  .from('products')
-                                  .update({ is_active: newActive })
-                                  .eq('id', p.id);
-                                if (error) throw error;
-                                setProducts(prev => prev.map(prod => prod.id === p.id ? { ...prod, is_active: newActive } : prod));
-                                toast.success(newActive ? 'Producto visible en la tienda' : 'Producto oculto en la tienda');
-                              } catch (err: any) {
-                                toast.error(`Error al cambiar estado: ${err.message}`);
-                              }
-                            }}
-                            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${p.is_active !== false ? 'bg-green-500' : 'bg-gray-300'}`}
-                          >
-                            <span
-                              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${p.is_active !== false ? 'translate-x-5' : 'translate-x-0'}`}
-                            />
-                          </button>
-                        </td>
-                        <td className="px-6 py-4 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'status'}); setInlineValue(p.status); }}>
-                          {inlineEdit?.id === p.id && inlineEdit.field === 'status' ? (
-                             <select autoFocus className="bg-white border rounded text-[10px] p-1 font-bold outline-none" value={inlineValue} onChange={e => { setInlineValue(e.target.value); handleInlineUpdate(p.id, 'status', e.target.value); }} onBlur={() => setInlineEdit(null)} onClick={e => e.stopPropagation()}>
-                               <option value="published">Visible</option>
-                               <option value="draft">Borrador</option>
-                               <option value="archived">Archivado</option>
-                             </select>
-                          ) : (
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${p.status === 'published' ? 'text-green-700 bg-green-50' : 'text-gray-500 bg-gray-100'}`}>
-                               {p.status === 'published' ? 'Visible' : 'Oculto'}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 text-xs font-bold text-gray-700 whitespace-nowrap">
-                           {p.condition ? (
-                             <span className="px-2 py-1 rounded bg-gray-100 border border-gray-200 text-gray-800 font-semibold">
-                               {getConditionLabel(p.condition)}
-                             </span>
-                           ) : (
-                             <span className="text-gray-300 font-mono">—</span>
-                           )}
-                        </td>
-                        <td className="px-6 py-4 text-right text-xs font-medium text-gray-400">
-                          <div className="flex justify-end gap-3 items-center mb-1">
-                            <button onClick={(e) => { e.stopPropagation(); openEdit(p); }} className="text-blue-500 hover:underline text-xs font-bold">Detalles</button>
-                            <button onClick={(e) => handleDuplicate(p, e)} className="text-gray-500 hover:text-blue-600 transition-colors" title="Duplicar producto">
-                               <Copy className="w-4 h-4" />
-                            </button>
-                            <button onClick={(e) => { e.stopPropagation(); handleDelete(p); }} className="text-red-400 hover:text-red-600 transition-colors" title="Eliminar producto">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                          {new Date(p.created_at).toLocaleDateString()}
-                        </td>
-                      </tr>
-                   );
-                   })
-                 )}
-                </tbody>
-             </table>
+               )}
+               renderTableRow={(p: any) => {
+                 const primaryCat = p.product_categories?.[0]?.categories;
+                 return (
+                 <tr key={p.id} className="hover:bg-blue-50/20 group transition-all" title="Haz clic en cualquier campo para editarlo en línea">
+                   <td className="px-6 py-4">
+                     <input 
+                       type="checkbox" 
+                       className="rounded border-gray-300" 
+                       checked={selectedProducts.includes(p.id)}
+                       onChange={(e) => {
+                         if (e.target.checked) setSelectedProducts([...selectedProducts, p.id]);
+                         else setSelectedProducts(selectedProducts.filter(id => id !== p.id));
+                       }}
+                       onClick={e => e.stopPropagation()} 
+                     />
+                   </td>
+                   <td className="px-6 py-4 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'title'}); setInlineValue(p.title); }}>
+                      <div className="flex items-center gap-4">
+                         <img src={getProductImage(p)} alt="" className="w-12 h-12 rounded-lg object-cover border border-gray-100 shadow-sm" />
+                         <div>
+                            {inlineEdit?.id === p.id && inlineEdit.field === 'title' ? (
+                               <input autoFocus type="text" className="w-48 p-1 border rounded text-xs font-bold text-dark-900" 
+                                 value={inlineValue} onChange={e => setInlineValue(e.target.value)}
+                                 onBlur={() => handleInlineUpdate(p.id, 'title', inlineValue)}
+                                 onKeyDown={e => e.key === 'Enter' && handleInlineUpdate(p.id, 'title', inlineValue)}
+                                 onClick={e => e.stopPropagation()} />
+                            ) : (
+                               <p className="font-bold text-dark-900 group-hover:text-blue-600 transition-colors">{p.title}</p>
+                            )}
+                            <div className="flex gap-1 items-center mt-0.5">
+                               <span className="text-[9px] font-mono text-gray-400 uppercase">{p.variants?.[0]?.sku || '-'}</span>
+                               {p.ml_item_id && <div className="w-6 h-3 bg-yellow-400 rounded-sm text-[8px] flex items-center justify-center font-bold text-blue-900 ml-1">ML</div>}
+                            </div>
+                         </div>
+                      </div>
+                   </td>
+                   <td className="px-6 py-4 font-black text-dark-800 text-sm whitespace-nowrap cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'base_price'}); setInlineValue(p.base_price); }}>
+                     {inlineEdit?.id === p.id && inlineEdit.field === 'base_price' ? (
+                       <input autoFocus type="number" className="w-24 p-1 border rounded text-xs font-bold" value={inlineValue} onChange={e => setInlineValue(e.target.value)} onBlur={() => handleInlineUpdate(p.id, 'base_price', inlineValue)} onKeyDown={e => e.key === 'Enter' && handleInlineUpdate(p.id, 'base_price', inlineValue)} onClick={e => e.stopPropagation()} />
+                     ) : (
+                       <span>UYU {(p.base_price || 0).toLocaleString()}</span>
+                     )}
+                   </td>
+                   <td className="px-6 py-4 text-xs font-bold text-gray-500 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'category_id'}); setInlineValue(primaryCat?.id || ''); }}>
+                     {inlineEdit?.id === p.id && inlineEdit.field === 'category_id' ? (
+                       <select 
+                         autoFocus
+                         className="bg-white border rounded text-[10px] p-1 font-bold outline-none"
+                         value={inlineValue || ''}
+                         onChange={e => { setInlineValue(e.target.value); handleInlineUpdate(p.id, 'category_id', e.target.value); }}
+                         onBlur={() => setInlineEdit(null)}
+                         onClick={e => e.stopPropagation()}
+                       >
+                         <option value="">- Sin Categoría -</option>
+                         {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                       </select>
+                     ) : (
+                       primaryCat?.name || '-'
+                     )}
+                   </td>
+                   <td className="px-6 py-4 text-xs font-bold text-gray-500 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'brand_id'}); setInlineValue(p.brand?.id || ''); }}>
+                     {inlineEdit?.id === p.id && inlineEdit.field === 'brand_id' ? (
+                       <select 
+                         autoFocus
+                         className="bg-white border rounded text-[10px] p-1 font-bold outline-none"
+                         value={inlineValue || ''}
+                         onChange={e => { setInlineValue(e.target.value); handleInlineUpdate(p.id, 'brand_id', e.target.value); }}
+                         onBlur={() => setInlineEdit(null)}
+                         onClick={e => e.stopPropagation()}
+                       >
+                         <option value="">- Sin Marca -</option>
+                         {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                       </select>
+                     ) : (
+                       p.brand?.name || '-'
+                     )}
+                   </td>
+                   <td className="px-6 py-4 whitespace-nowrap">
+                     {p.vendor_id ? (
+                       <span 
+                         className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-200"
+                         title={`Producto vendido por ${p.vendor?.store_name || p.vendor?.company_name || 'Vendor'}`}
+                       >
+                         {p.vendor?.store_name || p.vendor?.company_name || 'Vendor Marketplace'}
+                       </span>
+                     ) : (
+                       <span 
+                         className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-100"
+                         title="Producto propio de Collectibles"
+                       >
+                         COLLECTIBLES
+                       </span>
+                     )}
+                   </td>
+                   <td className="px-6 py-4 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'stock'}); setInlineValue(p.variants?.[0]?.inventory_count || 0); }}>
+                      {inlineEdit?.id === p.id && inlineEdit.field === 'stock' ? (
+                         <input autoFocus type="number" className="w-16 p-1 border rounded text-xs font-bold text-center" value={inlineValue} onChange={e => setInlineValue(e.target.value)} onBlur={() => handleInlineUpdate(p.id, 'stock', inlineValue)} onKeyDown={e => e.key === 'Enter' && handleInlineUpdate(p.id, 'stock', inlineValue)} onClick={e => e.stopPropagation()} />
+                      ) : (
+                         <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tight text-blue-700 bg-blue-50 border border-blue-100">
+                            {p.variants?.[0]?.inventory_count || 0} u.
+                         </span>
+                      )}
+                   </td>
+                   <td className="px-4 py-4 whitespace-nowrap">
+                     {(() => {
+                       const pkg = sanitizeMbePackagingType(p.metadata?.packaging_type || p.metadata?.mbe_service_type);
+                       if (pkg === 'mbe_pak') {
+                         return <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-sky-800 bg-sky-100 border border-sky-200">PAK</span>;
+                       }
+                       if (pkg === 'mbe_caja') {
+                         return <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-purple-800 bg-purple-100 border border-purple-200">CAJA</span>;
+                       }
+                       return <span className="px-2 py-0.5 rounded text-[10px] font-bold text-gray-400 bg-gray-100 border border-gray-200">Sin definir</span>;
+                     })()}
+                   </td>
+                   <td className="px-4 py-4 whitespace-nowrap">
+                     {(() => {
+                       const arStatus = calculateArgentinaShippingStatus(p);
+                       if (arStatus.isEligible) {
+                         return (
+                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black text-emerald-800 bg-emerald-100 border border-emerald-200" title="Envío automático a Argentina disponible">
+                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                             Auto (AR)
+                           </span>
+                         );
+                       }
+                       return (
+                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-200" title={arStatus.reason || 'Requiere cotización manual'}>
+                           <span className="w-1.5 h-1.5 rounded-full bg-amber-600" />
+                           Cotización (AR)
+                         </span>
+                       );
+                     })()}
+                   </td>
+                   <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
+                     <button
+                       onClick={async () => {
+                         const newActive = p.is_active !== false ? false : true;
+                         try {
+                           const { error } = await supabase
+                             .from('products')
+                             .update({ is_active: newActive })
+                             .eq('id', p.id);
+                           if (error) throw error;
+                           setProducts(prev => prev.map(prod => prod.id === p.id ? { ...prod, is_active: newActive } : prod));
+                           toast.success(newActive ? 'Producto visible en la tienda' : 'Producto oculto en la tienda');
+                         } catch (err: any) {
+                           toast.error(`Error al cambiar estado: ${err.message}`);
+                         }
+                       }}
+                       className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${p.is_active !== false ? 'bg-green-500' : 'bg-gray-300'}`}
+                     >
+                       <span
+                         className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${p.is_active !== false ? 'translate-x-5' : 'translate-x-0'}`}
+                       />
+                     </button>
+                   </td>
+                   <td className="px-6 py-4 cursor-pointer hover:bg-white transition-colors rounded" onDoubleClick={(e) => { e.stopPropagation(); setInlineEdit({id: p.id, field: 'status'}); setInlineValue(p.status); }}>
+                     {inlineEdit?.id === p.id && inlineEdit.field === 'status' ? (
+                        <select autoFocus className="bg-white border rounded text-[10px] p-1 font-bold outline-none" value={inlineValue} onChange={e => { setInlineValue(e.target.value); handleInlineUpdate(p.id, 'status', e.target.value); }} onBlur={() => setInlineEdit(null)} onClick={e => e.stopPropagation()}>
+                          <option value="published">Visible</option>
+                          <option value="draft">Borrador</option>
+                          <option value="archived">Archivado</option>
+                        </select>
+                     ) : (
+                       <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${p.status === 'published' ? 'text-green-700 bg-green-50' : 'text-gray-500 bg-gray-100'}`}>
+                          {p.status === 'published' ? 'Visible' : 'Oculto'}
+                       </span>
+                     )}
+                   </td>
+                   <td className="px-6 py-4 text-xs font-bold text-gray-700 whitespace-nowrap">
+                      {p.condition ? (
+                        <span className="px-2 py-1 rounded bg-gray-100 border border-gray-200 text-gray-800 font-semibold">
+                          {getConditionLabel(p.condition)}
+                        </span>
+                      ) : (
+                        <span className="text-gray-300 font-mono">—</span>
+                      )}
+                   </td>
+                   <td className="px-6 py-4 text-right text-xs font-medium text-gray-400">
+                     <div className="flex justify-end gap-3 items-center mb-1">
+                       <button onClick={(e) => { e.stopPropagation(); openEdit(p); }} className="text-blue-500 hover:underline text-xs font-bold">Detalles</button>
+                       <button onClick={(e) => handleDuplicate(p, e)} className="text-gray-500 hover:text-blue-600 transition-colors" title="Duplicar producto">
+                          <Copy className="w-4 h-4" />
+                       </button>
+                       <button onClick={(e) => { e.stopPropagation(); handleDelete(p); }} className="text-red-400 hover:text-red-600 transition-colors" title="Eliminar producto">
+                         <Trash2 className="w-4 h-4" />
+                       </button>
+                     </div>
+                     {new Date(p.created_at).toLocaleDateString()}
+                   </td>
+                 </tr>
+              );
+            }}
+          />
           </div>
           {itemsPerPage !== 'Todos' && (
              <div className="bg-white border-t px-6 py-3 flex items-center justify-between text-xs text-gray-500">

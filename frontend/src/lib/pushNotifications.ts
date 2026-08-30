@@ -63,12 +63,60 @@ export function getDeviceName(): string {
   return 'Navegador Web';
 }
 
+export type MobilePlatform = 'android' | 'ios' | 'desktop' | 'other_mobile';
+
+/**
+ * Detect current platform combining navigator.userAgent, userAgentData, maxTouchPoints & display-mode standalone
+ */
+export function getMobilePlatform(): MobilePlatform {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return 'desktop';
+  }
+
+  const ua = navigator.userAgent || '';
+  const lowerUA = ua.toLowerCase();
+
+  // 1. Android check
+  if (/android/i.test(ua)) {
+    return 'android';
+  }
+
+  // 2. iOS (iPhone, iPad, iPod) check
+  if (/iphone|ipad|ipod/i.test(ua)) {
+    return 'ios';
+  }
+
+  // iPad OS 13+ desktop mode sends 'Macintosh' user agent but has touch points
+  if (/macintosh/i.test(ua) && typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 1) {
+    return 'ios';
+  }
+
+  // 3. UserAgentData Client Hints check if supported
+  const uaData = (navigator as any).userAgentData;
+  if (uaData) {
+    if (uaData.mobile) {
+      const platform = (uaData.platform || '').toLowerCase();
+      if (platform.includes('android')) return 'android';
+      if (platform.includes('ios') || platform.includes('iphone') || platform.includes('ipad')) return 'ios';
+      return 'other_mobile';
+    }
+  }
+
+  // 4. Other mobile device check
+  if (/mobile|tablet|ipod|blackberry|opera mini|iemobile|silk|kindle/i.test(lowerUA)) {
+    return 'other_mobile';
+  }
+
+  return 'desktop';
+}
+
 /**
  * Check if device is iOS (iPhone/iPad)
  */
 export function isIOSDevice(): boolean {
   if (typeof navigator === 'undefined') return false;
-  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const platform = getMobilePlatform();
+  return platform === 'ios';
 }
 
 /**

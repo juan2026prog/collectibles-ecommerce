@@ -215,24 +215,38 @@ export const EmailRecipientsConfig: React.FC<EmailRecipientsConfigProps> = ({
                         <label className="block text-[11px] font-medium text-slate-600 mb-1">
                           Correo Electrónico
                         </label>
-                        <input
-                          type="email"
-                          value={recipient.email}
-                          onChange={(e) => handleUpdateRecipient(recipient.id, 'email', e.target.value)}
-                          placeholder="usuario@dominio.com"
-                          disabled={disabled}
-                          className={`w-full text-xs px-2.5 py-1.5 rounded-lg border focus:outline-none focus:ring-2 bg-white ${
-                            hasError
-                              ? 'border-rose-400 focus:ring-rose-500/20 focus:border-rose-500 text-rose-900'
-                              : 'border-slate-300 focus:ring-indigo-500/20 focus:border-indigo-500'
-                          }`}
-                        />
-                        {hasError && (
-                          <p className="text-[10px] text-rose-600 mt-1 flex items-center gap-1">
-                            <AlertCircle className="w-3 h-3 shrink-0" />
-                            <span>Formato de email inválido</span>
-                          </p>
-                        )}
+                        {(() => {
+                          const trimmed = (recipient.email || '').trim().toLowerCase();
+                          const isDuplicate = trimmed !== '' && recipients.some((r, idx) => idx !== index && (r.email || '').trim().toLowerCase() === trimmed);
+                          return (
+                            <>
+                              <input
+                                type="email"
+                                value={recipient.email}
+                                onChange={(e) => handleUpdateRecipient(recipient.id, 'email', e.target.value)}
+                                placeholder="usuario@dominio.com"
+                                disabled={disabled}
+                                className={`w-full text-xs px-2.5 py-1.5 rounded-lg border focus:outline-none focus:ring-2 bg-white ${
+                                  hasError || isDuplicate
+                                    ? 'border-rose-400 focus:ring-rose-500/20 focus:border-rose-500 text-rose-900'
+                                    : 'border-slate-300 focus:ring-indigo-500/20 focus:border-indigo-500'
+                                }`}
+                              />
+                              {hasError && (
+                                <p className="text-[10px] text-rose-600 mt-1 flex items-center gap-1">
+                                  <AlertCircle className="w-3 h-3 shrink-0" />
+                                  <span>Formato de email inválido</span>
+                                </p>
+                              )}
+                              {!hasError && isDuplicate && (
+                                <p className="text-[10px] text-rose-600 mt-1 flex items-center gap-1">
+                                  <AlertCircle className="w-3 h-3 shrink-0" />
+                                  <span>Correo electrónico duplicado</span>
+                                </p>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
 
                       {/* Active Checkbox */}

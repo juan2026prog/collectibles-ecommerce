@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
+import { notificationTemplates, formatCurrencyUYU, formatOrderNumber } from "../_shared/notificationTemplates.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -39,6 +40,15 @@ export interface NotificationPayload {
   product_id?: string;
   shipment_id?: string;
   webhook_secret?: string;
+  channel?: string;
+  subject?: string;
+  // Daily Summary fields
+  date_str?: string;
+  vendor_rows?: Array<{ store_name: string; order_count: number; total_amount: number }>;
+  marketplace_total?: number;
+  order_count?: number;
+  vendor_count?: number;
+  commission_total?: number;
 }
 
 serve(async (req: Request) => {
@@ -104,7 +114,7 @@ serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
     }
 
-    // 2. Load Environment Variables & Server Secrets
+    // 2. Load Secrets
     const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID') || '00a0c8cc-6b24-4ad1-9503-2e329ee5c566';
     const ONESIGNAL_REST_API_KEY = Deno.env.get('ONESIGNAL_REST_API_KEY') || '';
 
@@ -114,9 +124,6 @@ serve(async (req: Request) => {
       .in('key', ['whatsapp_token', 'whatsapp_phone_id', 'resend_api_key', 'resend_from']);
 
     const waConfig = Object.fromEntries((waSettings || []).map((s: any) => [s.key, s.value]));
-    const WHATSAPP_TOKEN = Deno.env.get('WHATSAPP_TOKEN') || waConfig.whatsapp_token || '';
-    const WHATSAPP_PHONE_ID = Deno.env.get('WHATSAPP_PHONE_ID') || waConfig.whatsapp_phone_id || '';
-
     const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || waConfig.resend_api_key || '';
     const RESEND_FROM = Deno.env.get('RESEND_FROM') || waConfig.resend_from || 'Collectibles Marketplace <notificaciones@collectibles.uy>';
 
@@ -167,9 +174,7 @@ serve(async (req: Request) => {
       }
     };
 
-    // 5. MODULAR PROVIDERS
-
-    // Provider A: PUSH (OneSignal v16 REST API)
+    // 5. PROVIDERS
     const dispatchPushProvider = async (
       userIds: string[], 
       vendorId: string | null,
@@ -185,7 +190,6 @@ serve(async (req: Request) => {
       }
 
       if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
-        console.log(`[Push Provider] OneSignal secret (ONESIGNAL_REST_API_KEY) not configured. Status: provider_unavailable.`);
         await logNotification({
           scope,
           vendor_id: vendorId,
@@ -208,13 +212,9 @@ serve(async (req: Request) => {
       };
 
       if (validUserIds.length > 0) {
-        // Target by External ID (auth.uid())
         payload.target_channel = "push";
-        payload.include_aliases = {
-          external_id: validUserIds
-        };
+        payload.include_aliases = { external_id: validUserIds };
       } else {
-        // Query active devices for vendorId or admin fallback
         let query = supabaseAdmin
           .from('user_notification_devices')
           .select('provider_subscription_id')
@@ -228,7 +228,6 @@ serve(async (req: Request) => {
         const subscriptionIds = (devices || []).map(d => d.provider_subscription_id).filter(Boolean);
 
         if (subscriptionIds.length === 0) {
-          console.log(`[Push Provider] No active registered push devices found.`);
           await logNotification({
             scope,
             vendor_id: vendorId,
@@ -263,7 +262,7 @@ serve(async (req: Request) => {
           vendor_id: vendorId,
           channel: 'push',
           provider: 'onesignal',
-          recipient: validUserIds.length > 0 ? `${validUserIds.length} usuario(s) (External ID)` : 'Dispositivo(s) registrados',
+          recipient: validUserIds.length > 0 ? `${validUserIds.length} usuario(s)` : 'Dispositivo(s) registrados',
           status: 'sent',
           idempotency_key: idempotencyKey,
           provider_message_id: resData?.id || null
@@ -286,105 +285,6 @@ serve(async (req: Request) => {
       }
     };
 
-    // Provider B: WHATSAPP (Meta Graph API)
-    const dispatchWhatsAppProvider = async (
-      phone: string, 
-      message: string, 
-      idempotencyKey: string,
-      scope: 'vendor' | 'admin',
-      vendorId: string | null,
-      templateName?: string, 
-      templateParams?: string[]
-    ): Promise<boolean> => {
-      if (await isAlreadyDispatched(idempotencyKey)) {
-        return true;
-      }
-
-      if (!WHATSAPP_TOKEN || WHATSAPP_TOKEN === 'mock-whatsapp-key' || !WHATSAPP_TOKEN.startsWith('EAAG')) {
-        await logNotification({
-          scope,
-          vendor_id: vendorId,
-          channel: 'whatsapp',
-          provider: 'meta_whatsapp',
-          recipient: phone,
-          status: 'provider_unavailable',
-          idempotency_key: idempotencyKey,
-          error_message: 'WhatsApp provider no conectado (credenciales WHATSAPP_TOKEN faltantes)'
-        });
-        return false;
-      }
-
-      try {
-        const cleanPhone = phone.replace(/[\+\s\-]/g, '');
-        let payload: any;
-
-        if (templateName) {
-          payload = {
-            messaging_product: "whatsapp",
-            recipient_type: "individual",
-            to: cleanPhone,
-            type: "template",
-            template: {
-              name: templateName,
-              language: { code: "es" },
-              components: [
-                {
-                  type: "body",
-                  parameters: (templateParams || []).map(val => ({ type: "text", text: String(val) }))
-                }
-              ]
-            }
-          };
-        } else {
-          payload = {
-            messaging_product: "whatsapp",
-            recipient_type: "individual",
-            to: cleanPhone,
-            type: "text",
-            text: { body: message, preview_url: false }
-          };
-        }
-
-        const response = await fetch(`https://graph.facebook.com/v17.0/${WHATSAPP_PHONE_ID}/messages`, {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${WHATSAPP_TOKEN}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(payload)
-        });
-
-        const data = await response.json();
-        if (!response.ok) throw new Error(data?.error?.message || JSON.stringify(data));
-
-        await logNotification({
-          scope,
-          vendor_id: vendorId,
-          channel: 'whatsapp',
-          provider: 'meta_whatsapp',
-          recipient: phone,
-          status: 'sent',
-          idempotency_key: idempotencyKey,
-          provider_message_id: data?.messages?.[0]?.id || null
-        });
-
-        return true;
-      } catch (err: any) {
-        await logNotification({
-          scope,
-          vendor_id: vendorId,
-          channel: 'whatsapp',
-          provider: 'meta_whatsapp',
-          recipient: phone,
-          status: 'failed',
-          idempotency_key: idempotencyKey,
-          error_message: err.message
-        });
-        return false;
-      }
-    };
-
-    // Provider C: EMAIL (Resend)
     const dispatchEmailProvider = async (
       email: string,
       subject: string,
@@ -467,7 +367,6 @@ serve(async (req: Request) => {
       }
     };
 
-    // Helper: Resolve Active Email Recipients for Admin or Vendor from DB
     const getActiveEmailRecipients = async (scope: 'admin' | 'vendor', vendorId?: string | null): Promise<{ name: string; email: string }[]> => {
       try {
         if (scope === 'vendor' && vendorId) {
@@ -479,9 +378,7 @@ serve(async (req: Request) => {
 
           const raw = data?.email_recipients || [];
           const active = raw.filter((r: any) => r.active && r.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(r.email).trim()));
-          if (active.length > 0) {
-            return active.map((r: any) => ({ name: r.name || 'Vendedor', email: String(r.email).trim() }));
-          }
+          return active.map((r: any) => ({ name: r.name || 'Vendedor', email: String(r.email).trim() }));
         } else {
           const { data } = await supabaseAdmin
             .from('admin_notification_settings')
@@ -490,40 +387,12 @@ serve(async (req: Request) => {
 
           const raw = data?.email_recipients || [];
           const active = raw.filter((r: any) => r.active && r.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(r.email).trim()));
-          if (active.length > 0) {
-            return active.map((r: any) => ({ name: r.name || 'Admin', email: String(r.email).trim() }));
-          }
+          return active.map((r: any) => ({ name: r.name || 'Admin', email: String(r.email).trim() }));
         }
       } catch (err) {
         console.error('[Notification Dispatcher] Error loading email recipients:', err);
       }
-
-      // Fallback: If no email_recipients configured, use authenticated user email
-      if (authUser?.email) {
-        return [{ name: 'Usuario Autenticado', email: authUser.email }];
-      }
       return [];
-    };
-
-    // Provider D: SMS (Stub / Inactivo)
-    const dispatchSmsProvider = async (
-      phone: string,
-      message: string,
-      idempotencyKey: string,
-      scope: 'vendor' | 'admin',
-      vendorId: string | null
-    ): Promise<boolean> => {
-      await logNotification({
-        scope,
-        vendor_id: vendorId,
-        channel: 'sms',
-        provider: 'none',
-        recipient: phone,
-        status: 'provider_unavailable',
-        idempotency_key: idempotencyKey,
-        error_message: 'SMS provider no configurado'
-      });
-      return false;
     };
 
     // 6. EVENT PROCESSORS
@@ -537,24 +406,49 @@ serve(async (req: Request) => {
 
       if (!order) throw new Error("Order not found");
 
+      // ════════════════════════════════════════════════════════════════════════════════
+      // VALIDACIÓN ROBUSTA DE PAGO REALMENTE PROCESADO (VALIDACIÓN 1 OBLIGATORIA)
+      // Condición estricta certificada en producción:
+      // payment_processed_at IS NOT NULL AND payment_status IN ('approved', 'paid')
+      // Un cambio administrativo de status (e.g. status='confirmed') SIN payment_processed_at
+      // o SIN payment_status IN ('approved', 'paid') genera EXACTAMENTE 0 NOTIFICACIONES.
+      // ════════════════════════════════════════════════════════════════════════════════
+      const isPaymentCertifiedProcessed = order.payment_processed_at !== null && (order.payment_status === 'approved' || order.payment_status === 'paid' || order.payment_status === 'accredited');
+
+      if (!isPaymentCertifiedProcessed) {
+        console.log(`[Notification Dispatcher] REJECTED order_paid for order ${order_id} — payment NOT certified as processed (payment_processed_at: ${order.payment_processed_at}, payment_status: ${order.payment_status}, status: ${order.status})`);
+        return new Response(JSON.stringify({
+          success: true,
+          skipped: true,
+          reason: 'payment_not_certified_processed',
+          details: {
+            order_id,
+            status: order.status,
+            payment_status: order.payment_status,
+            payment_processed_at: order.payment_processed_at
+          }
+        }), { headers: corsHeaders });
+      }
+
       const { data: items } = await supabaseAdmin
         .from('order_items')
         .select('id, quantity, unit_price, product_id, vendor_id, products(title, vendor_id, vendors(store_name, user_id))')
         .eq('order_id', order_id);
 
       const itemsList = items || [];
-      const orderIdShort = order.id.slice(0, 8).toUpperCase();
+      const orderNumStr = formatOrderNumber(order);
 
-      const vendorItemsMap: Record<string, { store_name: string; vendor_user_id: string | null; items: any[]; total: number }> = {};
+      const vendorItemsMap: Record<string, { store_name: string; vendor_user_id: string | null; items: { product_name: string; quantity: number }[]; total: number }> = {};
+      let collectiblesItems: { product_name: string; quantity: number }[] = [];
       let collectiblesTotal = 0;
-      let hasVendorItems = false;
 
       for (const item of itemsList) {
         const product = item.products;
         const vendorId = item.vendor_id || product?.vendor_id;
+        const productName = product?.title || 'Producto';
+        const itemSubtotal = Number(item.unit_price || 0) * item.quantity;
 
         if (vendorId) {
-          hasVendorItems = true;
           if (!vendorItemsMap[vendorId]) {
             const storeName = product?.vendors?.store_name || 'Tienda';
             const vendorUserId = product?.vendors?.user_id || null;
@@ -565,14 +459,15 @@ serve(async (req: Request) => {
               total: 0
             };
           }
-          vendorItemsMap[vendorId].items.push(item);
-          vendorItemsMap[vendorId].total += Number(item.unit_price || 0) * item.quantity;
+          vendorItemsMap[vendorId].items.push({ product_name: productName, quantity: item.quantity });
+          vendorItemsMap[vendorId].total += itemSubtotal;
         } else {
-          collectiblesTotal += Number(item.unit_price || 0) * item.quantity;
+          collectiblesItems.push({ product_name: productName, quantity: item.quantity });
+          collectiblesTotal += itemSubtotal;
         }
       }
 
-      // Dispatch to Vendors
+      // 1. Dispatch Vendor Notifications (Strict Multi-Vendor Isolation)
       for (const [vendorId, group] of Object.entries(vendorItemsMap)) {
         const { data: vSettings } = await supabaseAdmin
           .from('vendor_notification_settings')
@@ -583,56 +478,211 @@ serve(async (req: Request) => {
         const isVendorActive = vSettings ? (vSettings.is_active && vSettings.notify_new_sale !== false) : true;
         if (!isVendorActive) continue;
 
-        const totalItemsCount = group.items.reduce((sum, i) => sum + i.quantity, 0);
-        const title = "🛒 Nueva venta";
-        const message = `Recibiste un pedido con ${totalItemsCount} producto(s) por $${group.total.toLocaleString()}.`;
-        const targetUrl = `https://collectibles.uy/vendor?tab=orders&order_id=${order_id}`;
+        const channelPrefs = vSettings?.channel_preferences || { push: true, email: true };
 
-        const pushKey = `order_paid:${order_id}:${vendorId}:push`;
-        const vendorUserIds = group.vendor_user_id ? [group.vendor_user_id] : [];
-        await dispatchPushProvider(vendorUserIds, vendorId, title, message, targetUrl, pushKey, 'vendor');
+        const tpl = notificationTemplates.vendor_order_paid({
+          orderNumber: orderNumStr,
+          orderId: order.id,
+          vendorTotal: group.total,
+          items: group.items
+        });
 
-        const numbers = (vSettings?.whatsapp_numbers || []) as any[];
-        for (let i = 0; i < numbers.length; i++) {
-          const numObj = numbers[i];
-          if (numObj.enabled && numObj.number) {
-            const waKey = `order_paid:${order_id}:${vendorId}:wa:${i}`;
-            const fullWaMessage = `Nueva venta en tu tienda "${group.store_name}"\n\nPedido: #${orderIdShort}\nTotal: $${group.total.toLocaleString()}\nProductos: ${totalItemsCount}\n\nVer en panel: ${targetUrl}`;
-            await dispatchWhatsAppProvider(numObj.number, fullWaMessage, waKey, 'vendor', vendorId);
+        // PUSH VENDOR
+        if (channelPrefs.push !== false) {
+          const pushKey = `vendor_order_paid:${order.id}:${vendorId}:push`;
+          const vendorUserIds = group.vendor_user_id ? [group.vendor_user_id] : [];
+          await dispatchPushProvider(vendorUserIds, vendorId, tpl.push.title, tpl.push.body, tpl.deepLink, pushKey, 'vendor');
+        }
+
+        // EMAIL VENDOR
+        if (channelPrefs.email !== false) {
+          const activeEmails = await getActiveEmailRecipients('vendor', vendorId);
+          for (let i = 0; i < activeEmails.length; i++) {
+            const recipient = activeEmails[i];
+            const emailKey = `vendor_order_paid:${order.id}:${vendorId}:email:${i}`;
+            await dispatchEmailProvider(recipient.email, tpl.email.subject, tpl.email.html, emailKey, 'vendor', vendorId);
           }
         }
       }
 
-      // Dispatch to Admin
+      // 2. Dispatch Admin Notifications (ONLY for Collectibles own products)
+      if (collectiblesTotal > 0 && collectiblesItems.length > 0) {
+        const { data: adminSettings } = await supabaseAdmin
+          .from('admin_notification_settings')
+          .select('*')
+          .eq('is_singleton', true)
+          .maybeSingle();
+
+        const isAdminActive = adminSettings ? (adminSettings.is_active && adminSettings.notify_own_sales !== false) : true;
+        if (isAdminActive) {
+          const channelPrefs = adminSettings?.channel_preferences || { push: true, email: true };
+          
+          const adminTpl = notificationTemplates.admin_own_order_paid({
+            orderNumber: orderNumStr,
+            orderId: order.id,
+            collectiblesTotal,
+            items: collectiblesItems
+          });
+
+          // PUSH ADMIN
+          if (channelPrefs.push !== false) {
+            const adminPushKey = `admin_own_order_paid:${order.id}:push`;
+            await dispatchPushProvider([], null, adminTpl.push.title, adminTpl.push.body, adminTpl.deepLink, adminPushKey, 'admin');
+          }
+
+          // EMAIL ADMIN
+          if (channelPrefs.email !== false) {
+            const activeAdminEmails = await getActiveEmailRecipients('admin', null);
+            for (let i = 0; i < activeAdminEmails.length; i++) {
+              const recipient = activeAdminEmails[i];
+              const adminEmailKey = `admin_own_order_paid:${order.id}:email:${i}`;
+              await dispatchEmailProvider(recipient.email, adminTpl.email.subject, adminTpl.email.html, adminEmailKey, 'admin', null);
+            }
+          }
+        }
+      }
+
+    } else if (event_type === 'order_cancelled') {
+      const { data: order } = await supabaseAdmin
+        .from('orders')
+        .select('*')
+        .eq('id', order_id)
+        .single();
+
+      if (!order) throw new Error("Order not found");
+
+      // REQUIREMENT 8 & 23: Only notify commercial cancellation if order was previously certified as paid/confirmed!
+      const werePreviouslyPaid = order.payment_processed_at !== null || order.payment_status === 'approved' || order.payment_status === 'paid' || order.payment_status === 'refunded' || order.status === 'refunded';
+      
+      const { data: paidLog } = await supabaseAdmin
+        .from('notification_logs')
+        .select('id')
+        .eq('event_type', 'order_paid')
+        .like('idempotency_key', `%:${order_id}:%`)
+        .limit(1)
+        .maybeSingle();
+
+      if (!werePreviouslyPaid && !paidLog) {
+        console.log(`[Notification Dispatcher] Skipping order_cancelled for order ${order_id} — order was never paid/confirmed`);
+        return new Response(JSON.stringify({ success: true, skipped: true, reason: 'order_never_paid' }), { headers: corsHeaders });
+      }
+
+      const { data: items } = await supabaseAdmin
+        .from('order_items')
+        .select('vendor_id, products(vendor_id, vendors(user_id))')
+        .eq('order_id', order_id);
+
+      const vendorIds = new Set<string>();
+      const vendorUserMap: Record<string, string | null> = {};
+
+      for (const item of (items || [])) {
+        const vId = item.vendor_id || item.products?.vendor_id;
+        if (vId) {
+          vendorIds.add(vId);
+          vendorUserMap[vId] = item.products?.vendors?.user_id || null;
+        }
+      }
+
+      const orderNumStr = formatOrderNumber(order);
+
+      // Notify Vendors
+      for (const vendorId of vendorIds) {
+        const { data: vSettings } = await supabaseAdmin
+          .from('vendor_notification_settings')
+          .select('*')
+          .eq('vendor_id', vendorId)
+          .maybeSingle();
+
+        const channelPrefs = vSettings?.channel_preferences || { push: true, email: true };
+        const tpl = notificationTemplates.order_cancelled({ orderNumber: orderNumStr, orderId: order.id, isVendor: true });
+
+        if (channelPrefs.push !== false) {
+          const vendorUserIds = vendorUserMap[vendorId] ? [vendorUserMap[vendorId]!] : [];
+          const pushKey = `order_cancelled:${order.id}:${vendorId}:push`;
+          await dispatchPushProvider(vendorUserIds, vendorId, tpl.push.title, tpl.push.body, tpl.deepLink, pushKey, 'vendor');
+        }
+
+        if (channelPrefs.email !== false) {
+          const activeEmails = await getActiveEmailRecipients('vendor', vendorId);
+          for (let i = 0; i < activeEmails.length; i++) {
+            const recipient = activeEmails[i];
+            const emailKey = `order_cancelled:${order.id}:${vendorId}:email:${i}`;
+            await dispatchEmailProvider(recipient.email, tpl.email.subject, tpl.email.html, emailKey, 'vendor', vendorId);
+          }
+        }
+      }
+
+      // Notify Admin
       const { data: adminSettings } = await supabaseAdmin
         .from('admin_notification_settings')
         .select('*')
         .eq('is_singleton', true)
         .maybeSingle();
 
-      if (adminSettings && adminSettings.is_active) {
-        const adminTitle = "💰 Nueva venta Marketplace";
-        const adminMessage = `Pedido #${orderIdShort} · Total: $${Number(order.total_amount || 0).toLocaleString()}`;
-        const adminUrl = `https://collectibles.uy/admin/orders?order_id=${order_id}`;
+      const channelPrefs = adminSettings?.channel_preferences || { push: true, email: true };
+      const adminTpl = notificationTemplates.order_cancelled({ orderNumber: orderNumStr, orderId: order.id, isVendor: false });
 
-        if (adminSettings.notify_own_sales && collectiblesTotal > 0) {
-          const adminPushKey = `order_paid:${order_id}:admin_own:push`;
-          await dispatchPushProvider([], null, adminTitle, adminMessage, adminUrl, adminPushKey, 'admin');
+      if (channelPrefs.push !== false) {
+        const pushKey = `order_cancelled:${order.id}:admin:push`;
+        await dispatchPushProvider([], null, adminTpl.push.title, adminTpl.push.body, adminTpl.deepLink, pushKey, 'admin');
+      }
+
+      if (channelPrefs.email !== false) {
+        const activeAdminEmails = await getActiveEmailRecipients('admin', null);
+        for (let i = 0; i < activeAdminEmails.length; i++) {
+          const recipient = activeAdminEmails[i];
+          const emailKey = `order_cancelled:${order.id}:admin:email:${i}`;
+          await dispatchEmailProvider(recipient.email, adminTpl.email.subject, adminTpl.email.html, adminEmailKey, 'admin', null);
         }
+      }
 
-        if (adminSettings.notify_vendor_sales && hasVendorItems) {
-          const adminPushKey = `order_paid:${order_id}:admin_vendors:push`;
-          await dispatchPushProvider([], null, adminTitle, adminMessage, adminUrl, adminPushKey, 'admin');
-        }
+    } else if (event_type === 'admin_vendor_daily_summary') {
+      const { date_str, vendor_rows, marketplace_total, order_count, vendor_count, commission_total } = body;
 
-        const adminNumbers = (adminSettings.whatsapp_numbers || []) as any[];
-        for (let i = 0; i < adminNumbers.length; i++) {
-          const n = adminNumbers[i];
-          if (n.enabled && n.number) {
-            const adminWaKey = `order_paid:${order_id}:admin:wa:${i}`;
-            const adminWaMsg = `Nueva venta en Marketplace\n\nPedido: #${orderIdShort}\nTotal: $${Number(order.total_amount || 0).toLocaleString()}\nVer: ${adminUrl}`;
-            await dispatchWhatsAppProvider(n.number, adminWaMsg, adminWaKey, 'admin', null);
-          }
+      // REQUIREMENT 13: Zero sales guard
+      if (!vendor_count || vendor_count === 0 || !vendor_rows || vendor_rows.length === 0) {
+        console.log(`[Notification Dispatcher] Skipping daily summary — 0 vendor sales in period.`);
+        return new Response(JSON.stringify({ success: true, skipped: true, reason: 'no_vendor_sales' }), { headers: corsHeaders });
+      }
+
+      const { data: adminSettings } = await supabaseAdmin
+        .from('admin_notification_settings')
+        .select('*')
+        .eq('is_singleton', true)
+        .maybeSingle();
+
+      const isAdminActive = adminSettings ? (adminSettings.is_active && adminSettings.notify_vendor_sales !== false) : true;
+      if (!isAdminActive) {
+        return new Response(JSON.stringify({ success: true, skipped: true, reason: 'admin_notifications_disabled' }), { headers: corsHeaders });
+      }
+
+      const channelPrefs = adminSettings?.channel_preferences || { push: true, email: true };
+      const tpl = notificationTemplates.admin_vendor_daily_summary({
+        dateStr: date_str || new Date().toLocaleDateString('es-UY'),
+        vendorRows: (vendor_rows || []).map((r: any) => ({
+          storeName: r.store_name,
+          orderCount: r.order_count,
+          totalAmount: r.total_amount
+        })),
+        marketplaceTotal: marketplace_total || 0,
+        orderCount: order_count || 0,
+        vendorCount: vendor_count || 0,
+        commissionTotal: commission_total || 0
+      });
+
+      const dateKey = (date_str || new Date().toISOString().slice(0, 10)).replace(/\//g, '-');
+
+      if (channelPrefs.push !== false) {
+        const pushKey = `admin_vendor_daily_summary:${dateKey}:push`;
+        await dispatchPushProvider([], null, tpl.push.title, tpl.push.body, tpl.deepLink, pushKey, 'admin');
+      }
+
+      if (channelPrefs.email !== false) {
+        const activeAdminEmails = await getActiveEmailRecipients('admin', null);
+        for (let i = 0; i < activeAdminEmails.length; i++) {
+          const recipient = activeAdminEmails[i];
+          const emailKey = `admin_vendor_daily_summary:${dateKey}:email:${i}`;
+          await dispatchEmailProvider(recipient.email, tpl.email.subject, tpl.email.html, emailKey, 'admin', null);
         }
       }
 
@@ -714,7 +764,6 @@ serve(async (req: Request) => {
           return new Response(JSON.stringify({ status: 'failed', error: lastError || 'Error al entregar correo vía Resend API' }), { status: lastStatus || 500, headers: corsHeaders });
         }
       } else {
-        // Direct test Push strictly to auth.uid() derived from authenticated user JWT
         const title = body.title || "Collectibles Marketplace";
         const message = body.body || "Esta es una notificación de prueba. Todo está funcionando correctamente. ✅";
         const targetUrl = body.url || "https://collectibles.uy";
@@ -732,51 +781,6 @@ serve(async (req: Request) => {
             idempotency_key: testKey,
             error_message: 'No se especificó un usuario autenticado para enviar la prueba.'
           });
-        }
-      }
-    } else if (event_type === 'payout_paid') {
-      if (payout_id) {
-        const { data: payout } = await supabaseAdmin
-          .from('vendor_payouts')
-          .select('*, vendors(user_id)')
-          .eq('id', payout_id)
-          .single();
-
-        if (payout && payout.vendor_id) {
-          const title = "💵 Liquidación pagada";
-          const message = `Se ha procesado el pago de tu liquidación por $${Number(payout.amount).toLocaleString()}.`;
-          const targetUrl = "https://collectibles.uy/vendor?tab=finances";
-          const pushKey = `payout_paid:${payout_id}:${payout.vendor_id}:push`;
-          const vendorUserIds = payout.vendors?.user_id ? [payout.vendors.user_id] : [];
-          await dispatchPushProvider(vendorUserIds, payout.vendor_id, title, message, targetUrl, pushKey, 'vendor');
-        }
-      }
-    } else if (event_type === 'shipment_created' || event_type === 'shipment_delivered') {
-      if (shipment_id) {
-        const { data: shipment } = await supabaseAdmin
-          .from('shipments')
-          .select('*, orders(id)')
-          .eq('id', shipment_id)
-          .single();
-
-        if (shipment && body_vendor_id) {
-          const isDelivered = event_type === 'shipment_delivered';
-          const title = isDelivered ? "✅ Pedido entregado" : "📦 Pedido enviado";
-          const orderIdShort = shipment.order_id.slice(0, 8).toUpperCase();
-          const message = isDelivered 
-            ? `El pedido #${orderIdShort} ha sido entregado exitosamente.`
-            : `El pedido #${orderIdShort} fue despachado por ${shipment.provider_key || 'Envío'}.`;
-          const targetUrl = `https://collectibles.uy/vendor?tab=orders&order_id=${shipment.order_id}`;
-          const pushKey = `${event_type}:${shipment_id}:${body_vendor_id}:push`;
-
-          const { data: vendor } = await supabaseAdmin
-            .from('vendors')
-            .select('user_id')
-            .eq('id', body_vendor_id)
-            .maybeSingle();
-
-          const vendorUserIds = vendor?.user_id ? [vendor.user_id] : [];
-          await dispatchPushProvider(vendorUserIds, body_vendor_id, title, message, targetUrl, pushKey, 'vendor');
         }
       }
     }

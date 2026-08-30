@@ -9,6 +9,9 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/admin/Toast';
 import ShipmentLabelModal from '../ShipmentLabelModal';
+import ResponsiveDataList from '../admin/ResponsiveDataList';
+
+import { isOrderPaymentApproved } from '../../lib/payments';
 
 export default function VOrders() {
   const { user } = useAuth();
@@ -35,6 +38,12 @@ export default function VOrders() {
   const [labelModalSuborderId, setLabelModalSuborderId] = useState<string | null>(null);
   const [modalTab, setModalTab] = useState<'label' | 'slip'>('label');
 
+  // Quick Filter State
+  const [quickFilter, setQuickFilter] = useState<'all' | 'pending' | 'prepared' | 'dispatched'>('all');
+  
+  // Preparation Bottom Sheet State
+  const [showPrepareModal, setShowPrepareModal] = useState(false);
+
   useEffect(() => {
     if (user) {
       fetchSuborders();
@@ -43,17 +52,17 @@ export default function VOrders() {
     }
   }, [user]);
 
-  // Sync drawer open state with URL search params
+  // Sync drawer open state with URL search params (supporting deep links: suborder, order_id, order_number, order)
   useEffect(() => {
-    const subParam = searchParams.get('suborder');
+    const subParam = searchParams.get('suborder') || searchParams.get('order_id') || searchParams.get('order_number') || searchParams.get('order');
     if (subParam) {
       setActiveSuborderNumber(subParam);
-      loadSuborderDetailByNumber(subParam);
+      loadSuborderDetailByParam(subParam);
     } else {
       setActiveSuborderNumber(null);
       setDetailData(null);
     }
-  }, [searchParams]);
+  }, [searchParams, user?.id]);
 
   async function fetchSuborders() {
     if (!user) {
@@ -89,11 +98,37 @@ export default function VOrders() {
     }
   }
 
-  async function loadSuborderDetailByNumber(suborderNo: string) {
+  async function loadSuborderDetailByParam(param: string) {
     setLoadingDetail(true);
     try {
+      // 1. Strict vendor ownership resolution when receiving order_id from push notifications
+      if (user?.id) {
+        const { data: vendorSub } = await supabase
+          .from('order_suborders')
+          .select('id, suborder_number')
+          .eq('vendor_id', user.id)
+          .or(`id.eq.${param},suborder_number.eq.${param},parent_order_id.eq.${param}`)
+          .maybeSingle();
+
+        if (vendorSub?.id) {
+          const { data: detailData, error: detailErr } = await supabase.rpc('get_vendor_suborder_details', {
+            p_suborder_id: vendorSub.id
+          });
+          if (!detailErr && detailData) {
+            setDetailData(detailData);
+            if (detailData.suborder) {
+              setManualCarrier(detailData.suborder.shipping_provider || '');
+              setManualTrackingNo(detailData.suborder.tracking_number || '');
+              setManualTrackingUrl(detailData.suborder.tracking_url || '');
+            }
+            return;
+          }
+        }
+      }
+
+      // 2. Fallback query by suborder number
       const { data, error } = await supabase.rpc('get_vendor_suborder_details_by_number', {
-        p_suborder_number: suborderNo
+        p_suborder_number: param
       });
 
       if (error) throw error;
@@ -127,7 +162,7 @@ export default function VOrders() {
 
   async function handleUpdatePreparationStatus(newStatus: string) {
     if (!detailData?.suborder?.id) return;
-    if (detailData.order?.payment_status !== 'approved') {
+    if (!isOrderPaymentApproved(detailData?.order)) {
       toast.error('No podés modificar la preparación de un pedido sin pago confirmado.');
       return;
     }
@@ -150,7 +185,7 @@ export default function VOrders() {
   async function handleSaveManualTracking(e: React.FormEvent) {
     e.preventDefault();
     if (!detailData?.suborder?.id) return;
-    if (detailData.order?.payment_status !== 'approved') {
+    if (!isOrderPaymentApproved(detailData?.order)) {
       toast.error('No se puede guardar información de seguimiento en una orden sin pago confirmado.');
       return;
     }
@@ -163,13 +198,13 @@ export default function VOrders() {
           shipping_provider: manualCarrier.trim(),
           tracking_number: manualTrackingNo.trim(),
           tracking_url: manualTrackingUrl.trim(),
-          status: 'despachado'
+          status: 'shipped'
         })
         .eq('id', detailData.suborder.id);
 
       if (error) throw error;
       toast.success('Información de seguimiento guardada correctamente.');
-      if (activeSuborderNumber) loadSuborderDetailByNumber(activeSuborderNumber);
+      if (activeSuborderNumber) loadSuborderDetailByParam(activeSuborderNumber);
       fetchSuborders();
     } catch (err: any) {
       toast.error(`Error al guardar tracking: ${err.message}`);
@@ -279,107 +314,201 @@ Referencias: ${addressObj.reference || 'N/A'}
         </button>
       </div>
 
-      {/* Orders Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-100">
-            <thead className="bg-gray-50/80">
-              <tr>
-                <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Suborden / Fecha</th>
-                <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Cliente</th>
-                <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Estado de Pago</th>
-                <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Finanzas Estimadas</th>
-                <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Logística / Tracking</th>
-                <th className="px-6 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest">Acción</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {loading ? (
-                <tr><td colSpan={6} className="p-8 text-center text-gray-500">Cargando subórdenes...</td></tr>
-              ) : suborders.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="p-12 text-center text-gray-400">
-                    <Package className="w-12 h-12 mx-auto mb-3 text-gray-200" />
-                    <p className="font-semibold">No hay subórdenes registradas para tu tienda.</p>
-                  </td>
-                </tr>
-              ) : (
-                suborders.map(sub => {
-                  const addr = sub.parentOrder?.shipping_address || {};
-                  const clientName = sub.parentOrder?.customer_name || `${addr.first_name || ''} ${addr.last_name || ''}`.trim() || 'Cliente Oculto';
-                  const isPaymentApproved = (sub.parentOrder?.payment_status === 'approved') || (sub.parentOrder?.status === 'paid');
-
-                  const gross = Number(sub.product_subtotal || 0);
-                  const shipCost = Number(sub.shipping_cost || 0);
-                  const mktFee = Number(sub.marketplace_fee || 0);
-                  const feeShare = Number(sub.payment_fee_share || 0);
-                  const net = Number(sub.vendor_net_amount || (gross + shipCost - mktFee - feeShare));
-
-                  const subNumber = sub.suborder_number || sub.id;
-                  
-                  return (
-                    <tr 
-                      key={sub.id} 
-                      onClick={() => openSuborderDrawer(subNumber)}
-                      className="hover:bg-slate-50/90 cursor-pointer transition-colors group"
-                      tabIndex={0}
-                      aria-label={`Ver detalle de suborden ${subNumber}`}
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="font-bold text-gray-900 text-sm group-hover:text-emerald-700 flex items-center gap-1.5 transition-colors">
-                          {subNumber}
-                          <Eye className="w-3.5 h-3.5 text-gray-400 group-hover:text-emerald-600 opacity-0 group-hover:opacity-100 transition-all" />
-                        </div>
-                        <div className="text-xs text-gray-500">{new Date(sub.created_at).toLocaleDateString()}</div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">
-                        {clientName}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {renderPaymentBadge(sub.parentOrder?.payment_status || (isPaymentApproved ? 'approved' : 'pending'))}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-xs">
-                        <div className="flex flex-col">
-                          <span className="font-bold text-gray-900">Neto: ${net.toFixed(2)} UYU</span>
-                          <span className="text-[10px] text-gray-500">
-                            Prod: ${gross} | Com: -${mktFee} | Liq: <span className="font-semibold capitalize text-emerald-700">{sub.liquidation_status || 'pendiente'}</span>
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex flex-col gap-1">
-                          <span className="text-xs font-bold text-gray-700 uppercase tracking-widest">{sub.shipping_method || 'Standard'}</span>
-                          {sub.tracking_number ? (
-                            <div className="flex items-center gap-1 text-[11px] text-blue-600 font-bold bg-blue-50 px-2 py-1 rounded w-fit border border-blue-100 font-mono">
-                              <Truck className="w-3 h-3" />
-                              {sub.shipping_provider ? `${sub.shipping_provider.toUpperCase()}: ` : ''}{sub.tracking_number}
-                            </div>
-                          ) : (
-                            <span className="text-[10px] text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-100 flex items-center gap-1 w-fit">
-                              {['pickup', 'local'].includes((sub.shipping_method || '').toLowerCase()) ? 'Listo para retiro' : 'Rastreo pendiente'}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openSuborderDrawer(subNumber);
-                          }}
-                          className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 font-bold text-xs rounded-lg transition-colors flex items-center gap-1 mx-auto"
-                        >
-                          <Eye className="w-3.5 h-3.5" /> Ver Detalle
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+      {/* Quick Filter Chips for Mobile & Desktop */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+        <button
+          onClick={() => setQuickFilter('all')}
+          className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors min-h-[36px] border ${
+            quickFilter === 'all'
+              ? 'bg-slate-900 text-white border-slate-900'
+              : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+          }`}
+        >
+          Todos ({suborders.length})
+        </button>
+        <button
+          onClick={() => setQuickFilter('pending')}
+          className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors min-h-[36px] border ${
+            quickFilter === 'pending'
+              ? 'bg-amber-500 text-white border-amber-500'
+              : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+          }`}
+        >
+          Por preparar ({suborders.filter(s => (s.parentOrder?.payment_status === 'approved') && (!s.status || s.status === 'pendiente')).length})
+        </button>
+        <button
+          onClick={() => setQuickFilter('prepared')}
+          className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors min-h-[36px] border ${
+            quickFilter === 'prepared'
+              ? 'bg-emerald-600 text-white border-emerald-600'
+              : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+          }`}
+        >
+          Preparados ({suborders.filter(s => s.status === 'preparado').length})
+        </button>
+        <button
+          onClick={() => setQuickFilter('dispatched')}
+          className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors min-h-[36px] border ${
+            quickFilter === 'dispatched'
+              ? 'bg-blue-600 text-white border-blue-600'
+              : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+          }`}
+        >
+          Despachados ({suborders.filter(s => s.status === 'despachado').length})
+        </button>
       </div>
+
+      {/* Orders Responsive List */}
+      <ResponsiveDataList
+        items={suborders.filter(sub => {
+          const isApproved = sub.parentOrder?.payment_status === 'approved' || sub.parentOrder?.status === 'paid';
+          if (quickFilter === 'pending') return isApproved && (!sub.status || sub.status === 'pendiente' || sub.status === 'preparando');
+          if (quickFilter === 'prepared') return sub.status === 'preparado';
+          if (quickFilter === 'dispatched') return sub.status === 'despachado';
+          return true;
+        })}
+        keyExtractor={(sub) => sub.id}
+        loading={loading}
+        emptyTitle="No hay subórdenes registradas"
+        emptyDescription="Aún no tienes subórdenes en tu tienda."
+        renderCard={(sub) => {
+          const addr = sub.parentOrder?.shipping_address || {};
+          const clientName = sub.parentOrder?.customer_name || `${addr.first_name || ''} ${addr.last_name || ''}`.trim() || 'Cliente Oculto';
+          const isPaymentApproved = (sub.parentOrder?.payment_status === 'approved') || (sub.parentOrder?.status === 'paid');
+          const gross = Number(sub.product_subtotal || 0);
+          const shipCost = Number(sub.shipping_cost || 0);
+          const mktFee = Number(sub.marketplace_fee || 0);
+          const feeShare = Number(sub.payment_fee_share || 0);
+          const net = Number(sub.vendor_net_amount || (gross + shipCost - mktFee - feeShare));
+          const subNumber = sub.suborder_number || sub.id;
+
+          return (
+            <div key={sub.id} className="bg-white rounded-xl border border-gray-200 p-4 space-y-3 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-gray-900 text-sm">
+                  {subNumber}
+                </span>
+                <span className="text-xs text-gray-400">
+                  {new Date(sub.created_at).toLocaleDateString()}
+                </span>
+              </div>
+
+              <div className="text-xs text-gray-600 truncate">
+                <span className="text-gray-400 block text-[10px] uppercase font-semibold">Cliente</span>
+                <span className="font-bold text-gray-800">{clientName}</span>
+              </div>
+
+              <div className="border-t border-b border-gray-100 py-2 space-y-2">
+                <div>
+                  <span className="text-gray-400 block text-[10px] uppercase font-semibold mb-1">Estado Pago</span>
+                  {renderPaymentBadge(sub.parentOrder?.payment_status || (isPaymentApproved ? 'approved' : 'pending'))}
+                </div>
+
+                <div className="flex items-center justify-between text-xs pt-1">
+                  <div>
+                    <span className="text-gray-400 block text-[10px] uppercase font-semibold">Neto Estimado</span>
+                    <span className="font-black text-emerald-700">${net.toFixed(2)} UYU</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-gray-400 block text-[10px] uppercase font-semibold">Logística</span>
+                    <span className="font-bold text-gray-700 uppercase text-[11px]">{sub.shipping_method || 'Standard'}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end pt-1">
+                <button
+                  onClick={() => openSuborderDrawer(subNumber)}
+                  className="w-full sm:w-auto px-4 py-2 bg-emerald-600 text-white font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-1 min-h-[40px] shadow-xs"
+                >
+                  <Eye className="w-3.5 h-3.5" /> Ver Detalle de Suborden
+                </button>
+              </div>
+            </div>
+          );
+        }}
+        renderTableHeader={() => (
+          <tr>
+            <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Suborden / Fecha</th>
+            <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Cliente</th>
+            <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Estado de Pago</th>
+            <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Finanzas Estimadas</th>
+            <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Logística / Tracking</th>
+            <th className="px-6 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest">Acción</th>
+          </tr>
+        )}
+        renderTableRow={(sub) => {
+          const addr = sub.parentOrder?.shipping_address || {};
+          const clientName = sub.parentOrder?.customer_name || `${addr.first_name || ''} ${addr.last_name || ''}`.trim() || 'Cliente Oculto';
+          const isPaymentApproved = (sub.parentOrder?.payment_status === 'approved') || (sub.parentOrder?.status === 'paid');
+
+          const gross = Number(sub.product_subtotal || 0);
+          const shipCost = Number(sub.shipping_cost || 0);
+          const mktFee = Number(sub.marketplace_fee || 0);
+          const feeShare = Number(sub.payment_fee_share || 0);
+          const net = Number(sub.vendor_net_amount || (gross + shipCost - mktFee - feeShare));
+
+          const subNumber = sub.suborder_number || sub.id;
+
+          return (
+            <tr 
+              key={sub.id} 
+              onClick={() => openSuborderDrawer(subNumber)}
+              className="hover:bg-slate-50/90 cursor-pointer transition-colors group"
+              tabIndex={0}
+              aria-label={`Ver detalle de suborden ${subNumber}`}
+            >
+              <td className="px-6 py-4 whitespace-nowrap">
+                <div className="font-bold text-gray-900 text-sm group-hover:text-emerald-700 flex items-center gap-1.5 transition-colors">
+                  {subNumber}
+                  <Eye className="w-3.5 h-3.5 text-gray-400 group-hover:text-emerald-600 opacity-0 group-hover:opacity-100 transition-all" />
+                </div>
+                <div className="text-xs text-gray-500">{new Date(sub.created_at).toLocaleDateString()}</div>
+              </td>
+              <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap">
+                {clientName}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                {renderPaymentBadge(sub.parentOrder?.payment_status || (isPaymentApproved ? 'approved' : 'pending'))}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-xs">
+                <div className="flex flex-col">
+                  <span className="font-bold text-gray-900">Neto: ${net.toFixed(2)} UYU</span>
+                  <span className="text-[10px] text-gray-500">
+                    Prod: ${gross} | Com: -${mktFee} | Liq: <span className="font-semibold capitalize text-emerald-700">{sub.liquidation_status || 'pendiente'}</span>
+                  </span>
+                </div>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-bold text-gray-700 uppercase tracking-widest">{sub.shipping_method || 'Standard'}</span>
+                  {sub.tracking_number ? (
+                    <div className="flex items-center gap-1 text-[11px] text-blue-600 font-bold bg-blue-50 px-2 py-1 rounded w-fit border border-blue-100 font-mono">
+                      <Truck className="w-3 h-3" />
+                      {sub.shipping_provider ? `${sub.shipping_provider.toUpperCase()}: ` : ''}{sub.tracking_number}
+                    </div>
+                  ) : (
+                    <span className="text-[10px] text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-100 flex items-center gap-1 w-fit">
+                      {['pickup', 'local'].includes((sub.shipping_method || '').toLowerCase()) ? 'Listo para retiro' : 'Rastreo pendiente'}
+                    </span>
+                  )}
+                </div>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-center">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openSuborderDrawer(subNumber);
+                  }}
+                  className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 font-bold text-xs rounded-lg transition-colors flex items-center gap-1 mx-auto"
+                >
+                  <Eye className="w-3.5 h-3.5" /> Ver Detalle
+                </button>
+              </td>
+            </tr>
+          );
+        }}
+      />
 
       {/* SUBORDER DETAIL DRAWER (RESPONSIVE) */}
       {activeSuborderNumber && (
@@ -422,6 +551,124 @@ Referencias: ${addressObj.reference || 'N/A'}
                 <div className="py-12 text-center text-gray-500">No se encontraron datos para la suborden.</div>
               ) : (
                 <>
+                  {/* CANCELLATION WARNING BANNER */}
+                  {(detailData.suborder?.status === 'cancelada' || ['cancelled', 'refunded'].includes(detailData.order?.payment_status)) && (
+                    <div className="bg-rose-50 border-2 border-rose-300 p-4 rounded-2xl text-rose-900 space-y-1 shadow-sm animate-fade-in">
+                      <div className="flex items-center gap-2 font-black text-sm text-rose-800">
+                        <XCircle className="w-5 h-5 text-rose-600 shrink-0" />
+                        PEDIDO CANCELADO
+                      </div>
+                      <p className="text-xs font-bold text-rose-700 leading-relaxed">
+                        Este pedido fue cancelado. No prepares ni despaches los productos.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* PROMINENT MOBILE OPERATIONAL HEADER */}
+                  <div className="bg-gradient-to-br from-slate-900 via-slate-850 to-slate-900 text-white p-5 rounded-2xl shadow-md space-y-4 border border-slate-800">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 block">
+                          Resumen Operativo Vendor
+                        </span>
+                        <h3 className="text-xl font-black font-mono tracking-tight text-white mt-0.5">
+                          Pedido #{detailData.order?.order_number || activeSuborderNumber}
+                        </h3>
+                        <p className="text-xs text-slate-400 font-mono">
+                          Suborden: {activeSuborderNumber}
+                        </p>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Total de tus productos</span>
+                        <span className="text-lg font-black text-emerald-400 font-mono">
+                          ${detailData.suborder?.product_subtotal || detailData.suborder?.vendor_net_amount || 0} UYU
+                        </span>
+                        {detailData.suborder?.vendor_net_amount && (
+                          <span className="text-[10px] text-slate-400 block font-mono mt-0.5">
+                            Neto a cobrar: ${detailData.suborder.vendor_net_amount} UYU
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-800 text-xs font-bold">
+                      {isOrderPaymentApproved(detailData?.order) ? (
+                        <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-black uppercase tracking-wider flex items-center gap-1">
+                          <CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> PAGO APROBADO
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 font-black uppercase tracking-wider flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-amber-400" /> PAGO PENDIENTE
+                        </span>
+                      )}
+
+                      <span className={`px-2.5 py-1 rounded-lg font-black uppercase tracking-wider border ${
+                        detailData.suborder?.status === 'despachado' || detailData.suborder?.status === 'shipped' ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' :
+                        detailData.suborder?.status === 'preparado' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' :
+                        detailData.suborder?.status === 'preparando' || detailData.suborder?.status === 'preparing' ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' :
+                        detailData.suborder?.status === 'cancelada' || detailData.suborder?.status === 'cancelled' ? 'bg-rose-500/20 text-rose-300 border-rose-500/30' :
+                        'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                      }`}>
+                        {detailData.suborder?.status === 'despachado' || detailData.suborder?.status === 'shipped' ? 'DESPACHADO' :
+                         detailData.suborder?.status === 'preparado' ? 'PREPARADO' :
+                         detailData.suborder?.status === 'preparando' || detailData.suborder?.status === 'preparing' ? 'EN PREPARACIÓN' :
+                         detailData.suborder?.status === 'cancelada' || detailData.suborder?.status === 'cancelled' ? 'CANCELADO' :
+                         'PENDIENTE DE PREPARACIÓN'}
+                      </span>
+
+                      <span className="text-slate-400 text-xs ml-auto font-medium">
+                        {detailData.items?.length || 0} {detailData.items?.length === 1 ? 'producto' : 'productos'}
+                      </span>
+                    </div>
+
+                    {/* DYNAMIC PRIMARY CTA ACCORDING TO OPERATIONAL STATE */}
+                    {isOrderPaymentApproved(detailData?.order) && !['cancelled', 'cancelada', 'refunded'].includes(detailData?.suborder?.status) && (
+                      <div className="pt-2">
+                        {(!detailData.suborder?.status || detailData.suborder?.status === 'pendiente') && (
+                          <button
+                            onClick={() => setShowPrepareModal(true)}
+                            className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2 min-h-[48px]"
+                          >
+                            <Package className="w-5 h-5" /> Preparar Pedido
+                          </button>
+                        )}
+
+                        {detailData.suborder?.status === 'preparando' && (
+                          <button
+                            onClick={() => handleUpdatePreparationStatus('preparado')}
+                            className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2 min-h-[48px]"
+                          >
+                            <CheckCircle className="w-5 h-5" /> Marcar como Preparado
+                          </button>
+                        )}
+
+                        {detailData.suborder?.status === 'preparado' && (
+                          <button
+                            onClick={() => {
+                              const formEl = document.querySelector('form');
+                              if (formEl) formEl.scrollIntoView({ behavior: 'smooth' });
+                            }}
+                            className="w-full py-3 bg-indigo-500 hover:bg-indigo-400 text-white font-black text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2 min-h-[48px]"
+                          >
+                            <Truck className="w-5 h-5" /> Despachar Pedido
+                          </button>
+                        )}
+
+                        {detailData.suborder?.status === 'despachado' && (
+                          <div className="p-3 bg-slate-800/80 rounded-xl text-xs text-slate-300 flex items-center justify-between">
+                            <span className="font-bold text-white flex items-center gap-1.5">
+                              <Truck className="w-4 h-4 text-indigo-400" /> Pedido Despachado
+                            </span>
+                            <span className="font-mono text-emerald-400 font-bold">
+                              {detailData.suborder?.tracking_number || 'En tránsito'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   {/* SECTION 1: ESTADO DEL PAGO */}
                   <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm space-y-3">
                     <h4 className="text-xs font-black text-gray-500 uppercase tracking-wider flex items-center gap-2 border-b border-gray-100 pb-2">
@@ -615,7 +862,7 @@ Referencias: ${addressObj.reference || 'N/A'}
 
                     <div className="space-y-1.5 text-xs text-gray-700">
                       <div className="flex justify-between">
-                        <span>Subtotal Productos:</span>
+                        <span>Total de tus productos:</span>
                         <span className="font-bold">${detailData.suborder?.product_subtotal} UYU</span>
                       </div>
                       <div className="flex justify-between">
@@ -666,8 +913,42 @@ Referencias: ${addressObj.reference || 'N/A'}
               )}
             </div>
 
-            {/* Drawer Footer Actions (Sticky Bottom) */}
-            <div className="p-4 border-t border-gray-200 bg-white flex flex-wrap items-center justify-between gap-3">
+            {/* Drawer Footer Actions (Sticky Bottom on Desktop & Mobile with safe area insets) */}
+            <div className="p-4 border-t border-gray-200 bg-white flex flex-wrap items-center justify-between gap-3 pb-[max(16px,env(safe-area-inset-bottom))]">
+              {detailData?.order?.payment_status === 'approved' && detailData?.suborder?.status !== 'cancelada' && (
+                <div className="w-full md:hidden mb-2">
+                  {(!detailData.suborder?.status || detailData.suborder?.status === 'pendiente') && (
+                    <button
+                      onClick={() => setShowPrepareModal(true)}
+                      className="w-full py-3 bg-emerald-600 text-white font-black text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2 min-h-[48px]"
+                    >
+                      <Package className="w-5 h-5" /> Preparar Pedido
+                    </button>
+                  )}
+
+                  {detailData.suborder?.status === 'preparando' && (
+                    <button
+                      onClick={() => handleUpdatePreparationStatus('preparado')}
+                      className="w-full py-3 bg-emerald-600 text-white font-black text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2 min-h-[48px]"
+                    >
+                      <CheckCircle className="w-5 h-5" /> Marcar como Preparado
+                    </button>
+                  )}
+
+                  {detailData.suborder?.status === 'preparado' && (
+                    <button
+                      onClick={() => {
+                        const formEl = document.querySelector('form');
+                        if (formEl) formEl.scrollIntoView({ behavior: 'smooth' });
+                      }}
+                      className="w-full py-3 bg-indigo-600 text-white font-black text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2 min-h-[48px]"
+                    >
+                      <Truck className="w-5 h-5" /> Despachar Pedido
+                    </button>
+                  )}
+                </div>
+              )}
+
               <button
                 onClick={() => {
                   if (detailData?.suborder?.id) {
@@ -676,7 +957,7 @@ Referencias: ${addressObj.reference || 'N/A'}
                   }
                 }}
                 disabled={detailData?.order?.payment_status !== 'approved'}
-                className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[40px]"
                 title={detailData?.order?.payment_status === 'approved' ? 'Ver Etiqueta' : 'Bloqueado: Pago no confirmado'}
               >
                 <Truck className="w-4 h-4" /> Etiqueta DAC
@@ -690,7 +971,7 @@ Referencias: ${addressObj.reference || 'N/A'}
                   }
                 }}
                 disabled={detailData?.order?.payment_status !== 'approved'}
-                className="flex-1 py-2.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 py-2.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[40px]"
                 title={detailData?.order?.payment_status === 'approved' ? 'Imprimir Packing Slip' : 'Bloqueado: Pago no confirmado'}
               >
                 <FileText className="w-4 h-4" /> Packing Slip
@@ -698,6 +979,58 @@ Referencias: ${addressObj.reference || 'N/A'}
             </div>
           </div>
         </>
+      )}
+
+      {/* PREPARATION CONFIRMATION BOTTOM SHEET */}
+      {showPrepareModal && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center animate-fade-in">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setShowPrepareModal(false)} />
+          <div className="relative w-full max-w-md bg-white rounded-t-3xl sm:rounded-2xl p-6 space-y-4 z-10 shadow-2xl pb-[max(24px,env(safe-area-inset-bottom))]">
+            <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto sm:hidden" />
+            
+            <div className="flex items-center gap-3 border-b border-gray-100 pb-3">
+              <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                <Package className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-black text-lg text-gray-900">Preparar Pedido</h3>
+                <p className="text-xs text-gray-500 font-mono">Suborden #{activeSuborderNumber}</p>
+              </div>
+            </div>
+
+            <div className="space-y-2 text-xs text-gray-600 bg-slate-50 p-4 rounded-xl border border-slate-100">
+              <div className="flex justify-between">
+                <span className="font-semibold text-gray-500">Productos en paquete:</span>
+                <span className="font-bold text-gray-900">{detailData?.items?.length || 0} ítems</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-semibold text-gray-500">Cliente:</span>
+                <span className="font-bold text-gray-900">{detailData?.order?.customer_name || 'Cliente'}</span>
+              </div>
+              <p className="text-[11px] text-emerald-800 font-medium pt-2 border-t border-slate-200">
+                Confirma que vas a empaquetar los productos para dejarlos listos para despacho.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-2">
+              <button
+                onClick={() => {
+                  setShowPrepareModal(false);
+                  handleUpdatePreparationStatus('preparando');
+                }}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm rounded-xl transition-colors min-h-[48px] shadow-sm"
+              >
+                Comenzar preparación
+              </button>
+              <button
+                onClick={() => setShowPrepareModal(false)}
+                className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-colors min-h-[44px]"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Reusable Shipment Label / Slip Modal */}

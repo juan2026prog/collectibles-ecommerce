@@ -2201,7 +2201,7 @@ export default function AdminSettings() {
               <EmailRecipientsModal
                 isOpen={isEmailModalOpen}
                 onClose={() => setIsEmailModalOpen(false)}
-                recipients={adminNotifications.email_recipients}
+                recipients={adminNotifications.email_recipients || []}
                 scope="admin"
                 onSave={async (updatedRecipients) => {
                   const updatedState = { ...adminNotifications, email_recipients: updatedRecipients };
@@ -2215,8 +2215,8 @@ export default function AdminSettings() {
               <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Avisos Disponibles para Collectibles</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {[
-                  { key: 'notify_own_sales', label: 'Ventas propias de Collectibles', desc: 'Avisos de ventas directas de mercadería propia de Collectibles.' },
-                  { key: 'notify_vendor_sales', label: 'Ventas de Vendors', desc: 'Alertas cuando un vendedor del Marketplace realiza una venta.' },
+                  { key: 'notify_own_sales', label: 'Venta propia Collectibles', desc: 'Cuando una venta propia ya fue pagada y debe prepararse.' },
+                  { key: 'notify_vendor_sales', label: 'Resumen diario Marketplace', desc: 'Resumen diario de ventas confirmadas de Vendors a las 22:00.' },
                   { key: 'notify_payment_received', label: 'Pagos recibidos', desc: 'Notificaciones inmediatas al procesar un pago con tarjeta/Mercado Pago.' },
                   { key: 'notify_low_stock', label: 'Stock bajo', desc: 'Alerta general cuando algún producto o variante queda con poco stock (<= 2).' },
                   { key: 'notify_shipping_events', label: 'Eventos de envío', desc: 'Actualización sobre etiquetas generadas, despachadas o entregas finalizadas.' },

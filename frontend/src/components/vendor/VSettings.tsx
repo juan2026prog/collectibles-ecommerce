@@ -951,18 +951,19 @@ export default function VSettings() {
                 </div>
               </div>
 
-              {/* Email Recipients Modal */}
-              <EmailRecipientsModal
-                isOpen={isEmailModalOpen}
-                onClose={() => setIsEmailModalOpen(false)}
-                recipients={notificationSettings.email_recipients}
-                scope="vendor"
-                onSave={async (updatedRecipients) => {
-                  const updatedState = { ...notificationSettings, email_recipients: updatedRecipients };
-                  setNotificationSettings(updatedState);
-                  await saveVendorNotifications(false, updatedState);
-                }}
-              />
+              {/* DESTINATARIOS EMAIL (MÁX. 3) INLINE BLOCK */}
+              <div className="mb-8">
+                <EmailRecipientsConfig
+                  recipients={notificationSettings.email_recipients || []}
+                  onChange={(updatedRecipients) => {
+                    const updatedState = { ...notificationSettings, email_recipients: updatedRecipients };
+                    setNotificationSettings(updatedState);
+                  }}
+                  maxRecipients={3}
+                  scope="vendor"
+                  disabled={saving}
+                />
+              </div>
 
               {/* Push Device Management Card (Desktop vs Mobile) */}
               {getMobilePlatform() === 'desktop' ? (
@@ -1128,8 +1129,8 @@ export default function VSettings() {
                 <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Avisos Disponibles</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {[
-                    { key: 'notify_new_sale', label: 'Nueva venta', desc: 'Aviso inmediato al recibir un pedido de tu tienda.' },
-                    { key: 'notify_payment_received', label: 'Pago recibido', desc: 'Confirmación de cobro aprobado por el cliente.' },
+                    { key: 'notify_new_sale', label: 'Nueva venta', desc: 'Cuando un pedido ya fue pagado y está listo para preparar.' },
+                    { key: 'notify_order_cancelled', label: 'Pedido cancelado', desc: 'Cuando un pedido previamente pagado es cancelado o reembolsado.' },
                     { key: 'notify_order_shipped', label: 'Pedido enviado', desc: 'Aviso al generar la etiqueta de despacho o entrega.' },
                     { key: 'notify_low_stock', label: 'Stock bajo', desc: 'Alerta cuando un producto queda con 2 o menos unidades.' },
                     { key: 'notify_payout_paid', label: 'Liquidación pagada', desc: 'Notificación de fondos transferidos a tu cuenta.' },

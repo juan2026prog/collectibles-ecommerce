@@ -81,7 +81,6 @@ export const EmailRecipientsModal: React.FC<EmailRecipientsModalProps> = ({
   };
 
   const handleSaveInternal = async () => {
-    // Validations
     if (draftRecipients.length > 3) {
       toast.error('Máximo 3 destinatarios permitidos.');
       return;
@@ -114,42 +113,43 @@ export const EmailRecipientsModal: React.FC<EmailRecipientsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-fadeIn" role="dialog" aria-modal="true">
       <div 
-        className="bg-white rounded-2xl shadow-2xl border border-gray-100 w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-gray-100 w-full sm:w-calc(100vw-24px) max-w-3xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">
+        <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 sticky top-0 z-10">
+          <div className="flex items-center gap-3 min-w-0 pr-2">
+            <div className="p-2 sm:p-2.5 bg-blue-50 text-blue-600 rounded-xl shrink-0">
               <Mail className="w-5 h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-gray-900">DESTINATARIOS EMAIL</h3>
-                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-50 text-blue-700 border border-blue-100 uppercase tracking-wider">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm sm:text-base font-bold text-gray-900 truncate">DESTINATARIOS EMAIL</h3>
+                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-50 text-blue-700 border border-blue-100 uppercase tracking-wider shrink-0">
                   MÁX. 3
                 </span>
-                <span className="text-xs text-gray-500 font-medium ml-2">
+                <span className="text-xs text-gray-500 font-medium shrink-0">
                   {activeCount} de {draftRecipients.length} activo(s)
                 </span>
               </div>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-xs text-gray-500 mt-0.5 truncate hidden sm:block">
                 Configurá hasta 3 cuentas internas para recibir notificaciones y reportes del sistema.
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+            className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center"
+            aria-label="Cerrar modal"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 overflow-y-auto space-y-6">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 sm:space-y-6 flex-1">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {draftRecipients.map((recipient, index) => {
               const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient.email.trim());
@@ -173,7 +173,7 @@ export const EmailRecipientsModal: React.FC<EmailRecipientsModalProps> = ({
                       <button
                         type="button"
                         onClick={() => handleRemoveRecipient(recipient.id)}
-                        className="text-gray-400 hover:text-rose-600 transition-colors p-1 rounded hover:bg-rose-50"
+                        className="text-gray-400 hover:text-rose-600 transition-colors p-1.5 rounded hover:bg-rose-50 min-h-[36px] min-w-[36px] flex items-center justify-center"
                         title="Eliminar este destinatario"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -192,7 +192,7 @@ export const EmailRecipientsModal: React.FC<EmailRecipientsModalProps> = ({
                         value={recipient.name}
                         onChange={(e) => handleUpdateField(recipient.id, 'name', e.target.value)}
                         placeholder="Ej: Administración"
-                        className="w-full text-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-black focus:border-black bg-white"
+                        className="w-full text-base sm:text-xs px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-black focus:border-black bg-white min-h-[44px] sm:min-h-[36px]"
                       />
                     </div>
 
@@ -205,26 +205,26 @@ export const EmailRecipientsModal: React.FC<EmailRecipientsModalProps> = ({
                         value={recipient.email}
                         onChange={(e) => handleUpdateField(recipient.id, 'email', e.target.value)}
                         placeholder="ejemplo@collectibles.uy"
-                        className="w-full text-xs font-mono px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-black focus:border-black bg-white"
+                        className="w-full text-base sm:text-xs font-mono px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-black focus:border-black bg-white min-h-[44px] sm:min-h-[36px]"
                       />
                     </div>
 
                     {/* Active & Status Badge */}
                     <div className="flex items-center justify-between pt-2">
-                      <label className="flex items-center cursor-pointer select-none">
+                      <label className="flex items-center cursor-pointer select-none py-1">
                         <input
                           type="checkbox"
                           checked={recipient.active}
                           onChange={(e) => handleUpdateField(recipient.id, 'active', e.target.checked)}
-                          className="w-4 h-4 text-black border-gray-300 rounded focus:ring-black cursor-pointer"
+                          className="w-5 h-5 sm:w-4 sm:h-4 text-black border-gray-300 rounded focus:ring-black cursor-pointer"
                         />
-                        <span className="text-xs font-bold text-gray-700 ml-1.5">Activo</span>
+                        <span className="text-xs font-bold text-gray-700 ml-2">Activo</span>
                       </label>
 
                       {isReady ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full">
                           <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                          Listo para recibir
+                          Listo
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold text-gray-500 bg-gray-100 rounded-full">
@@ -244,7 +244,7 @@ export const EmailRecipientsModal: React.FC<EmailRecipientsModalProps> = ({
             <button
               type="button"
               onClick={handleAddRecipient}
-              className="w-full py-3 border-2 border-dashed border-blue-200 rounded-xl text-blue-600 text-xs font-bold hover:bg-blue-50/50 hover:border-blue-300 transition-colors flex items-center justify-center gap-2"
+              className="w-full py-3 border-2 border-dashed border-blue-200 rounded-xl text-blue-600 text-xs font-bold hover:bg-blue-50/50 hover:border-blue-300 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
             >
               <Plus className="w-4 h-4" />
               Agregar destinatario ({draftRecipients.length}/3)
@@ -253,12 +253,12 @@ export const EmailRecipientsModal: React.FC<EmailRecipientsModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex items-center justify-end gap-3">
+        <div className="px-4 sm:px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex items-center justify-end gap-3 sticky bottom-0 z-10 pb-safe">
           <button
             type="button"
             onClick={onClose}
             disabled={saving}
-            className="px-4 py-2 text-xs font-bold text-gray-600 hover:text-gray-900 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            className="flex-1 sm:flex-none py-2.5 px-4 text-xs font-bold text-gray-600 hover:text-gray-900 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors min-h-[44px] sm:min-h-[36px]"
           >
             Cancelar
           </button>
@@ -266,7 +266,7 @@ export const EmailRecipientsModal: React.FC<EmailRecipientsModalProps> = ({
             type="button"
             onClick={handleSaveInternal}
             disabled={saving}
-            className="px-5 py-2 text-xs font-bold text-white bg-black rounded-lg hover:bg-gray-800 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-2 shadow-sm"
+            className="flex-1 sm:flex-none py-2.5 px-5 text-xs font-bold text-white bg-black rounded-lg hover:bg-gray-800 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm min-h-[44px] sm:min-h-[36px]"
           >
             <Save className={`w-4 h-4 ${saving ? 'animate-spin' : ''}`} />
             {saving ? 'Guardando...' : 'Guardar Cambios'}

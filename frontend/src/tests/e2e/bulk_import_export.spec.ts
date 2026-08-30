@@ -106,7 +106,7 @@ test.describe('Bulk Product Import / Export System E2E Tests', () => {
     await page.waitForTimeout(500);
 
     // Close Import Modal
-    await page.getByRole('button', { name: /Cancelar/i }).last().click();
+    await page.getByRole('button', { name: /Cancelar/i }).last().click({ force: true });
     await page.waitForTimeout(500);
   });
 
