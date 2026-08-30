@@ -295,15 +295,17 @@ export default function AdminPromotions() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><Percent className="w-6 h-6 text-primary-600" /> Promociones</h2>
-          <p className="text-sm text-gray-500 mt-1">Descuentos porcentuales, 2x1, promos bancarias y por cantidad</p>
+    <div className="space-y-4 min-w-0">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">Promociones</h2>
+          <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full border border-gray-200">
+            {promos.length} {promos.length === 1 ? 'promoción' : 'promociones'}
+          </span>
         </div>
         <div className="flex gap-2">
-          {saved && <span className="text-sm font-bold text-green-600 bg-green-50 px-3 py-1.5 rounded-lg border border-green-200 flex items-center gap-1"><Save className="w-4 h-4" /> Guardado</span>}
-          <button onClick={startNew} className="btn-primary flex items-center gap-2"><Plus className="w-4 h-4" /> Nueva Promoción</button>
+          {saved && <span className="text-xs font-bold text-green-600 bg-green-50 px-3 py-2 rounded-xl border border-green-200 flex items-center gap-1 min-h-[44px]"><Save className="w-4 h-4" /> Guardado</span>}
+          <button onClick={startNew} className="bg-[#f00856] hover:bg-[#ff2c68] text-white font-semibold text-xs sm:text-sm px-4 py-2 rounded-xl cursor-pointer min-h-[44px] shadow-sm active:scale-95 flex items-center justify-center gap-1.5 transition-all"><Plus className="w-4 h-4" /> Nueva Promoción</button>
         </div>
       </div>
 

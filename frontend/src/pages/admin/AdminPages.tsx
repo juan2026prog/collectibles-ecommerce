@@ -59,55 +59,90 @@ export default function AdminPages() {
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-           <h2 className="text-2xl font-bold dark:text-white">Páginas Institucionales</h2>
-           <p className="text-sm text-gray-500 mt-1">Crea páginas estáticas (Contacto, Políticas, FAQs).</p>
+    <div className="space-y-4 min-w-0">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">Páginas Estáticas</h2>
+          <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full border border-gray-200">
+            {pages.length} {pages.length === 1 ? 'página' : 'páginas'}
+          </span>
         </div>
-        <button onClick={openCreate} className="btn-primary gap-2"><Plus className="w-4 h-4" /> Crear Página</button>
+        <button onClick={openCreate} className="bg-[#f00856] hover:bg-[#ff2c68] text-white font-semibold text-xs sm:text-sm px-4 py-2 rounded-xl cursor-pointer min-h-[44px] shadow-sm active:scale-95 flex items-center justify-center gap-1.5 transition-all">
+          <Plus className="w-4 h-4" /> Crear Página
+        </button>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-2xs border border-gray-200 overflow-hidden">
         {loading ? (
-           <div className="p-12 text-center text-gray-400 flex flex-col items-center">
-              <RefreshCw className="w-8 h-8 animate-spin mb-4" /> Cargando páginas...
+           <div className="p-12 text-center text-gray-400 flex flex-col items-center text-xs font-bold animate-pulse">
+              <RefreshCw className="w-6 h-6 animate-spin mb-2" /> Cargando páginas...
            </div>
         ) : pages.length === 0 ? (
-           <div className="text-center py-16">
-              <h3 className="text-lg font-bold text-gray-900 mb-1">No hay páginas creadas</h3>
-              <p className="text-gray-500 text-sm mb-4">Empieza añadiendo tu política de privacidad o sobre nosotros.</p>
-              <button onClick={openCreate} className="btn-primary mx-auto">Crear tu primera página</button>
+           <div className="text-center py-12 p-4">
+              <h3 className="text-base font-bold text-gray-900 mb-1">No hay páginas creadas</h3>
+              <p className="text-gray-500 text-xs mb-4">Empieza añadiendo tu política de privacidad o sobre nosotros.</p>
+              <button onClick={openCreate} className="bg-[#f00856] text-white font-bold text-xs px-4 py-2 rounded-xl min-h-[44px]">Crear tu primera página</button>
            </div>
         ) : (
-          <table className="min-w-full divide-y divide-gray-200">
-             <thead className="bg-gray-50">
-               <tr>
-                 <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Título</th>
-                 <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">URL (Slug)</th>
-                 <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Estado</th>
-                 <th className="px-6 py-3 text-right text-xs font-black text-gray-500 uppercase tracking-widest">Acciones</th>
-               </tr>
-             </thead>
-             <tbody className="divide-y divide-gray-100">
-               {pages.map(p => (
-                 <tr key={p.id} className="hover:bg-gray-50">
-                   <td className="px-6 py-4 font-bold text-sm text-gray-900">{p.title}</td>
-                   <td className="px-6 py-4 text-sm font-mono text-blue-600">/page/{p.slug}</td>
-                   <td className="px-6 py-4">
-                      <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest rounded ${p.status === 'published' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
-                         {p.status === 'published' ? 'Publicado' : 'Borrador'}
-                      </span>
-                   </td>
-                   <td className="px-6 py-4 text-right flex justify-end gap-2">
-                     <Link to={`/page/${p.slug}`} target="_blank" className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded" title="Ver en tienda"><ExternalLink className="w-4 h-4" /></Link>
-                     <button onClick={() => openEdit(p)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded" title="Editar"><Pencil className="w-4 h-4" /></button>
-                     <button onClick={() => handleDelete(p.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded" title="Eliminar"><Trash2 className="w-4 h-4" /></button>
-                   </td>
-                 </tr>
-               ))}
-             </tbody>
-          </table>
+          <>
+            {/* Mobile Card View (<768px) */}
+            <div className="md:hidden divide-y divide-gray-100">
+              {pages.map(p => (
+                <div key={p.id} className="p-3.5 space-y-2 hover:bg-gray-50/50 transition-colors">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="font-bold text-gray-900 text-sm truncate">{p.title}</h4>
+                    <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded shrink-0 ${p.status === 'published' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
+                      {p.status === 'published' ? 'Publicado' : 'Borrador'}
+                    </span>
+                  </div>
+                  <p className="font-mono text-xs text-blue-600 truncate">/page/{p.slug}</p>
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100 text-xs">
+                    <Link to={`/page/${p.slug}`} target="_blank" className="text-gray-500 hover:text-blue-600 flex items-center gap-1 font-medium min-h-[44px]">
+                      <ExternalLink className="w-3.5 h-3.5" /> Ver en vivo
+                    </Link>
+                    <div className="flex gap-1">
+                      <button onClick={() => openEdit(p)} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center"><Pencil className="w-4 h-4" /></button>
+                      <button onClick={() => handleDelete(p.id)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table View (>=768px) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                 <thead className="bg-gray-50">
+                   <tr>
+                     <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Título</th>
+                     <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">URL (Slug)</th>
+                     <th className="px-6 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-widest">Estado</th>
+                     <th className="px-6 py-3 text-right text-xs font-black text-gray-500 uppercase tracking-widest">Acciones</th>
+                   </tr>
+                 </thead>
+                 <tbody className="divide-y divide-gray-100">
+                   {pages.map(p => (
+                     <tr key={p.id} className="hover:bg-gray-50">
+                       <td className="px-6 py-4 font-bold text-sm text-gray-900">{p.title}</td>
+                       <td className="px-6 py-4 text-sm font-mono text-blue-600">/page/{p.slug}</td>
+                       <td className="px-6 py-4">
+                          <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest rounded ${p.status === 'published' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
+                             {p.status === 'published' ? 'Publicado' : 'Borrador'}
+                          </span>
+                       </td>
+                       <td className="px-6 py-4 text-right">
+                         <div className="flex items-center justify-end gap-2">
+                           <Link to={`/page/${p.slug}`} target="_blank" className="p-2 text-gray-400 hover:text-blue-600"><ExternalLink className="w-4 h-4" /></Link>
+                           <button onClick={() => openEdit(p)} className="p-2 text-gray-400 hover:text-blue-600"><Pencil className="w-4 h-4" /></button>
+                           <button onClick={() => handleDelete(p.id)} className="p-2 text-gray-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+                         </div>
+                       </td>
+                     </tr>
+                   ))}
+                 </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 

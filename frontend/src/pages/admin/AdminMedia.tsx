@@ -356,46 +356,24 @@ export default function AdminMedia() {
   const isImage = (name: string) => /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(name);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold dark:text-white flex items-center gap-2">
+    <div className="space-y-4 min-w-0">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">
             Medios y Archivos
           </h2>
-          {/* Breadcrumbs */}
-          <div className="flex items-center text-sm font-medium text-gray-500 mt-2">
-             <button 
-               disabled={loading}
-               onClick={() => !loading && setCurrentPath('')} 
-               className="hover:text-primary-600 transition-colors disabled:opacity-50"
-             >
-               Inicio
-             </button>
-             {currentPath.split('/').filter(Boolean).map((part, i, arr) => {
-                const targetPath = arr.slice(0, i + 1).join('/') + '/';
-                return (
-                  <div key={i} className="flex items-center">
-                    <ChevronRight className="w-3 h-3 mx-1" />
-                    <button 
-                      disabled={loading}
-                      onClick={() => !loading && setCurrentPath(targetPath)} 
-                      className="hover:text-primary-600 transition-colors disabled:opacity-50"
-                    >
-                      {part}
-                    </button>
-                  </div>
-                );
-             })}
-          </div>
+          <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full border border-gray-200">
+            {files.length} {files.length === 1 ? 'archivo' : 'archivos'}
+          </span>
         </div>
         
-        <div className="flex items-center gap-3">
-          <button onClick={() => fetchMedia(currentPath)} className="btn-secondary px-3" title="Recargar">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <button onClick={() => fetchMedia(currentPath)} className="p-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors" title="Recargar">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
           
-          <button onClick={handleCreateFolder} className="btn-secondary flex items-center gap-2">
-            <FolderPlus className="w-4 h-4" /> Nueva Carpeta
+          <button onClick={handleCreateFolder} className="py-2 px-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl min-h-[44px] flex items-center justify-center gap-1.5 transition-colors">
+            <FolderPlus className="w-4 h-4 text-gray-500" /> Nueva Carpeta
           </button>
           
           <input 
@@ -409,7 +387,7 @@ export default function AdminMedia() {
           <button 
             onClick={() => fileInputRef.current?.click()} 
             disabled={uploading}
-            className="btn-primary flex items-center gap-2 shadow-md"
+            className="bg-[#f00856] hover:bg-[#ff2c68] text-white font-semibold text-xs sm:text-sm px-4 py-2 rounded-xl cursor-pointer min-h-[44px] shadow-sm active:scale-95 flex items-center justify-center gap-1.5 transition-all flex-1 sm:flex-initial"
           >
             {uploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
             {uploading ? 'Subiendo...' : 'Subir Archivos'}

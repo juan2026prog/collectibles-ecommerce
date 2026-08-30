@@ -80,33 +80,34 @@ export default function AdminSeo() {
   const score = seoScore();
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><Search className="w-6 h-6 text-primary-600" /> SEO & Metadatos</h2>
-          <p className="text-sm text-gray-500 mt-1">Optimiza cada página, producto y metadato para motores de búsqueda</p>
-        </div>
-        <div className="flex gap-2 items-center">
-          {saved && <span className="text-sm font-bold text-green-600 bg-green-50 px-3 py-1.5 rounded-lg border border-green-200 flex items-center gap-1"><Save className="w-4 h-4" /> Guardado</span>}
-          <div className={`px-4 py-2 rounded-xl font-black text-sm ${score >= 75 ? 'bg-green-100 text-green-700' : score >= 50 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
+    <div className="space-y-4 min-w-0">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">SEO & Metadatos</h2>
+          <div className={`px-3 py-1 rounded-full font-black text-xs shrink-0 ${score >= 75 ? 'bg-green-100 text-green-700' : score >= 50 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
             SEO Score: {score}%
           </div>
         </div>
+        {saved && <span className="text-xs font-bold text-green-600 bg-green-50 px-3 py-2 rounded-xl border border-green-200 flex items-center gap-1 min-h-[44px]"><Save className="w-4 h-4" /> Guardado</span>}
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
-        {[
-          { key: 'global', label: 'Global', icon: Globe },
-          { key: 'products', label: `Productos (${products.length})`, icon: FileText },
-          { key: 'pages', label: `Páginas (${pages.length})`, icon: FileText },
-          { key: 'sitemap', label: 'Sitemap', icon: Code },
-        ].map(t => (
-          <button key={t.key} onClick={() => setTab(t.key as any)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-bold transition-colors ${tab === t.key ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-900'}`}>
-            <t.icon className="w-4 h-4" /> {t.label}
-          </button>
-        ))}
+      <div className="border-b border-gray-200 dark:border-slate-800 pb-1">
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none no-scrollbar py-1 text-xs">
+          {[
+            { key: 'global', label: 'Global', icon: Globe },
+            { key: 'products', label: `Productos (${products.length})`, icon: FileText },
+            { key: 'pages', label: `Páginas (${pages.length})`, icon: FileText },
+            { key: 'sitemap', label: 'Sitemap', icon: Code },
+          ].map(t => (
+            <button key={t.key} onClick={() => setTab(t.key as any)}
+              className={`whitespace-nowrap flex items-center px-3 py-2 rounded-xl font-bold text-xs transition-all min-h-[44px] shrink-0 ${
+                tab === t.key ? 'bg-[#f00856] text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+              }`}>
+              <t.icon className="w-4 h-4 mr-1.5 shrink-0" /> {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Global SEO */}

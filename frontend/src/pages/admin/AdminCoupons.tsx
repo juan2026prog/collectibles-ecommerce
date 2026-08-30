@@ -51,34 +51,43 @@ export default function AdminCoupons() {
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-lg font-bold">Coupons</h2>
-        <button onClick={openCreate} className="btn-primary gap-2"><Plus className="w-4 h-4" /> Create Coupon</button>
+    <div className="space-y-4 min-w-0">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">Cupones</h2>
+          <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full border border-gray-200">
+            {coupons.length} {coupons.length === 1 ? 'cupón' : 'cupones'}
+          </span>
+        </div>
+        <button onClick={openCreate} className="bg-[#f00856] hover:bg-[#ff2c68] text-white font-semibold text-xs sm:text-sm px-4 py-2 rounded-xl cursor-pointer min-h-[44px] shadow-sm active:scale-95 flex items-center justify-center gap-1.5 transition-all">
+          <Plus className="w-4 h-4" /> Crear Cupón
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {loading ? <p className="text-gray-400 col-span-3 text-center py-12">Loading...</p> :
-        coupons.length === 0 ? <p className="text-gray-400 col-span-3 text-center py-12">No coupons yet</p> :
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+        {loading ? <p className="text-gray-400 col-span-full text-center py-12 text-xs font-bold animate-pulse">Cargando cupones...</p> :
+        coupons.length === 0 ? <p className="text-gray-400 col-span-full text-center py-12 text-xs font-medium">No hay cupones registrados</p> :
         coupons.map(c => (
-          <div key={c.id} className={`bg-white rounded-xl border p-5 ${c.is_active ? 'border-gray-200' : 'border-gray-100 opacity-60'}`}>
-            <div className="flex items-center gap-2 mb-3">
-              <Tag className="w-5 h-5 text-primary-500" />
-              <span className="font-mono font-extrabold text-lg text-dark-900">{c.code}</span>
-              {!c.is_active && <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">INACTIVE</span>}
+          <div key={c.id} className={`bg-white rounded-xl border p-4 space-y-2.5 shadow-2xs ${c.is_active ? 'border-gray-200' : 'border-gray-100 opacity-60'}`}>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Tag className="w-4 h-4 text-[#f00856]" />
+                <span className="font-mono font-extrabold text-base text-gray-900">{c.code}</span>
+              </div>
+              {!c.is_active && <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">INACTIVO</span>}
             </div>
-            <p className="text-2xl font-black text-primary-600">
+            <p className="text-xl font-black text-gray-900">
               {c.discount_type === 'percentage' ? `${c.discount_value}%` : `$${c.discount_value}`}
               <span className="text-xs font-medium text-gray-400 ml-1">off</span>
             </p>
-            <div className="mt-3 text-xs text-gray-500 space-y-1">
-              {c.min_order_amount && <p>Min. order: ${c.min_order_amount}</p>}
-              {c.max_uses && <p>Uses: {c.used_count || 0}/{c.max_uses}</p>}
-              {c.expires_at && <p>Expires: {new Date(c.expires_at).toLocaleDateString()}</p>}
+            <div className="text-xs text-gray-500 space-y-1 border-t border-gray-100 pt-2">
+              {c.min_order_amount && <p>Compra mín: ${c.min_order_amount}</p>}
+              {c.max_uses && <p>Usos: {c.used_count || 0}/{c.max_uses}</p>}
+              {c.expires_at && <p>Vence: {new Date(c.expires_at).toLocaleDateString()}</p>}
             </div>
-            <div className="flex gap-2 mt-4">
-              <button onClick={() => openEdit(c)} className="btn-secondary py-1.5 px-3 text-xs gap-1"><Pencil className="w-3 h-3" /> Edit</button>
-              <button onClick={() => handleDelete(c.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+            <div className="flex gap-2 pt-2 border-t border-gray-100">
+              <button onClick={() => openEdit(c)} className="flex-1 py-2 px-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl min-h-[44px] flex items-center justify-center gap-1.5 transition-colors"><Pencil className="w-3.5 h-3.5" /> Editar</button>
+              <button onClick={() => handleDelete(c.id)} className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0"><Trash2 className="w-4 h-4" /></button>
             </div>
           </div>
         ))}
