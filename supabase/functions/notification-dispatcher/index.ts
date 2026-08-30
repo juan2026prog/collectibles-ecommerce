@@ -111,13 +111,14 @@ serve(async (req: Request) => {
     const { data: waSettings } = await supabaseAdmin
       .from('site_settings')
       .select('key, value')
-      .in('key', ['whatsapp_token', 'whatsapp_phone_id']);
+      .in('key', ['whatsapp_token', 'whatsapp_phone_id', 'resend_api_key', 'resend_from']);
 
     const waConfig = Object.fromEntries((waSettings || []).map((s: any) => [s.key, s.value]));
     const WHATSAPP_TOKEN = Deno.env.get('WHATSAPP_TOKEN') || waConfig.whatsapp_token || '';
     const WHATSAPP_PHONE_ID = Deno.env.get('WHATSAPP_PHONE_ID') || waConfig.whatsapp_phone_id || '';
 
-    const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || '';
+    const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || waConfig.resend_api_key || '';
+    const RESEND_FROM = Deno.env.get('RESEND_FROM') || waConfig.resend_from || 'Collectibles Marketplace <notificaciones@collectibles.uy>';
 
     // 3. Helper: Check Idempotency Key
     const isAlreadyDispatched = async (idempotencyKey: string): Promise<boolean> => {
@@ -391,8 +392,8 @@ serve(async (req: Request) => {
       idempotencyKey: string,
       scope: 'vendor' | 'admin',
       vendorId: string | null
-    ): Promise<boolean> => {
-      if (await isAlreadyDispatched(idempotencyKey)) return true;
+    ): Promise<{ success: boolean; status: number; error?: string; provider_message_id?: string | null }> => {
+      if (await isAlreadyDispatched(idempotencyKey)) return { success: true, status: 200 };
 
       if (!RESEND_API_KEY) {
         await logNotification({
@@ -403,9 +404,9 @@ serve(async (req: Request) => {
           recipient: email,
           status: 'provider_unavailable',
           idempotency_key: idempotencyKey,
-          error_message: 'Email provider no configurado (RESEND_API_KEY faltante)'
+          error_message: 'Falta RESEND_API_KEY en Supabase Secrets'
         });
-        return false;
+        return { success: false, status: 503, error: 'Falta RESEND_API_KEY en Supabase Secrets' };
       }
 
       try {
@@ -416,7 +417,7 @@ serve(async (req: Request) => {
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            from: "Collectibles Marketplace <notificaciones@collectibles.uy>",
+            from: RESEND_FROM,
             to: [email],
             subject: subject,
             html: body.includes('<') ? body : `<div style="font-family: sans-serif; padding: 20px; color: #333;"><h2 style="color: #6366f1;">Collectibles Store</h2><p>${body}</p></div>`,
@@ -425,7 +426,20 @@ serve(async (req: Request) => {
         });
 
         const resData = await res.json();
-        if (!res.ok) throw new Error(JSON.stringify(resData));
+        if (!res.ok) {
+          const errMsg = resData?.message || resData?.error || JSON.stringify(resData);
+          await logNotification({
+            scope,
+            vendor_id: vendorId,
+            channel: 'email',
+            provider: 'resend',
+            recipient: email,
+            status: 'failed',
+            idempotency_key: idempotencyKey,
+            error_message: errMsg
+          });
+          return { success: false, status: res.status || 502, error: errMsg };
+        }
 
         await logNotification({
           scope,
@@ -437,7 +451,7 @@ serve(async (req: Request) => {
           idempotency_key: idempotencyKey,
           provider_message_id: resData?.id || null
         });
-        return true;
+        return { success: true, status: 200, provider_message_id: resData?.id || null };
       } catch (err: any) {
         await logNotification({
           scope,
@@ -449,7 +463,7 @@ serve(async (req: Request) => {
           idempotency_key: idempotencyKey,
           error_message: err.message
         });
-        return false;
+        return { success: false, status: 500, error: err.message };
       }
     };
 
@@ -631,30 +645,18 @@ serve(async (req: Request) => {
           return new Response(JSON.stringify({ error: 'No authenticated email available' }), { status: 422, headers: corsHeaders });
         }
 
-        if (!RESEND_API_KEY) {
-          await logNotification({
-            scope: body_vendor_id ? 'vendor' : 'admin',
-            vendor_id: body_vendor_id || null,
-            channel: 'email',
-            provider: 'resend',
-            recipient: recipientEmail,
-            status: 'provider_unavailable',
-            idempotency_key: testKey,
-            error_message: 'RESEND_API_KEY no configurado en el servidor'
-          });
-          return new Response(JSON.stringify({ status: 'provider_unavailable', error: 'El servicio de Email no está disponible' }), { status: 503, headers: corsHeaders });
-        }
-
         const subject = body.subject || "Prueba de notificaciones — Collectibles";
         const emailMessage = body.body || "Esta es una notificación de prueba. El canal Email está funcionando correctamente. ✅";
         const htmlBody = `<div style="font-family: sans-serif; padding: 20px; color: #333;"><h2 style="color: #6366f1;">Collectibles Store</h2><p>${emailMessage}</p></div>`;
 
-        const sent = await dispatchEmailProvider(recipientEmail, subject, htmlBody, testKey, body_vendor_id ? 'vendor' : 'admin', body_vendor_id || null);
+        const result = await dispatchEmailProvider(recipientEmail, subject, htmlBody, testKey, body_vendor_id ? 'vendor' : 'admin', body_vendor_id || null);
 
-        if (sent) {
-          return new Response(JSON.stringify({ success: true, message: 'Email de prueba enviado exitosamente' }), { status: 200, headers: corsHeaders });
+        if (result.success) {
+          return new Response(JSON.stringify({ success: true, message: 'Email de prueba enviado exitosamente', message_id: result.provider_message_id }), { status: 200, headers: corsHeaders });
+        } else if (result.status === 503) {
+          return new Response(JSON.stringify({ status: 'provider_unavailable', error: 'Falta RESEND_API_KEY en Supabase Secrets' }), { status: 503, headers: corsHeaders });
         } else {
-          return new Response(JSON.stringify({ error: 'Error al enviar el correo de prueba mediante Resend' }), { status: 500, headers: corsHeaders });
+          return new Response(JSON.stringify({ status: 'failed', error: result.error || 'Error al entregar correo vía Resend API' }), { status: result.status || 500, headers: corsHeaders });
         }
       } else {
         // Direct test Push strictly to auth.uid() derived from authenticated user JWT
