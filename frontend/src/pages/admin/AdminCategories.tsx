@@ -163,30 +163,34 @@ export default function AdminCategories() {
 
   return (
     <div>
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-        <div>
-           <h2 className="text-2xl font-bold dark:text-white">Categorías</h2>
-           <p className="text-sm text-gray-500 mt-1">Administra las agrupaciones de productos ({categories.length} totales)</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">Categorías</h2>
+          <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full border border-gray-200">
+            {categories.length} {categories.length === 1 ? 'categoría' : 'categorías'}
+          </span>
         </div>
-        <div className="flex flex-wrap items-center gap-4">
-          <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300 cursor-pointer bg-white dark:bg-slate-800 px-3 py-2 rounded-lg border border-gray-200 dark:border-slate-700 shadow-sm hover:bg-gray-50 transition-colors">
+        <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2.5">
+          <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 dark:text-gray-300 cursor-pointer bg-white dark:bg-slate-800 px-3 py-2 rounded-xl border border-gray-200 dark:border-slate-700 shadow-2xs hover:bg-gray-50 transition-colors min-h-[44px]">
             <input 
               type="checkbox" 
               checked={showEmpty} 
               onChange={e => setShowEmpty(e.target.checked)} 
-              className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+              className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
             />
             <span>Mostrar vacías</span>
           </label>
-          <div className="flex bg-gray-100 rounded-lg p-1 border">
-            <button onClick={() => setViewMode('list')} className={`p-2 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white shadow-sm text-primary-600' : 'text-gray-500 hover:text-gray-700'}`} title="Vista de lista">
+          <div className="flex bg-gray-100/90 rounded-xl p-1">
+            <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center ${viewMode === 'list' ? 'bg-white shadow-2xs text-primary-600 font-bold' : 'text-gray-500 hover:text-gray-700'}`} title="Vista de lista">
               <List className="w-4 h-4" />
             </button>
-            <button onClick={() => setViewMode('grid')} className={`p-2 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-white shadow-sm text-primary-600' : 'text-gray-500 hover:text-gray-700'}`} title="Vista de grilla">
+            <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center ${viewMode === 'grid' ? 'bg-white shadow-2xs text-primary-600 font-bold' : 'text-gray-500 hover:text-gray-700'}`} title="Vista de grilla">
               <Grid3X3 className="w-4 h-4" />
             </button>
           </div>
-          <button onClick={openCreate} className="btn-primary gap-2"><Plus className="w-4 h-4" /> Crear Categoría</button>
+          <button onClick={openCreate} className="bg-[#f00856] hover:bg-[#ff2c68] text-white font-semibold text-xs sm:text-sm px-4 py-2 rounded-xl cursor-pointer min-h-[44px] shadow-sm active:scale-95 flex items-center justify-center gap-1.5 transition-all">
+            <Plus className="w-4 h-4" /> Crear Categoría
+          </button>
         </div>
       </div>
 

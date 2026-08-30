@@ -72,7 +72,7 @@ export default function AdminLayout() {
 
   const renderNavContent = (closeOnClick = false) => (
     <>
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 px-2.5 py-2 space-y-0.5">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path || (location.pathname.startsWith(item.path) && item.path !== '/admin');
           const Icon = item.icon;
@@ -81,12 +81,12 @@ export default function AdminLayout() {
               key={item.name}
               to={item.path}
               onClick={() => closeOnClick && setMobileDrawerOpen(false)}
-              className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[40px] ${
+              className={`flex items-center px-3 py-2 rounded-lg text-[15px] font-semibold transition-colors min-h-[44px] ${
                 isActive ? 'bg-primary-600 text-white shadow-md' : 'hover:bg-dark-800 hover:text-white text-gray-300'
               }`}
             >
-              <Icon className={`mr-3 h-5 w-5 ${isActive ? 'text-white' : 'text-gray-400'}`} />
-              {item.name}
+              <Icon className={`mr-3 h-[19px] w-[19px] shrink-0 ${isActive ? 'text-white' : 'text-gray-400'}`} />
+              <span className="truncate">{item.name}</span>
             </Link>
           );
         })}

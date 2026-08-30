@@ -61,7 +61,7 @@ export default function AdminBreadcrumbs({ items }: { items?: BreadcrumbItem[] }
   if (crumbs.length <= 1) return null;
 
   return (
-    <nav className="flex items-center gap-1.5 text-xs font-medium text-gray-400 mb-4" aria-label="Breadcrumb">
+    <nav className="hidden md:flex items-center gap-1.5 text-xs font-medium text-gray-400 mb-4" aria-label="Breadcrumb">
       <Link to="/admin" className="hover:text-gray-600 transition-colors p-1">
         <Home className="w-3.5 h-3.5" />
       </Link>

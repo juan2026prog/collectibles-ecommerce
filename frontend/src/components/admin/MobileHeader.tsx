@@ -23,24 +23,24 @@ export default function MobileHeader({
   const [showUserMenu, setShowUserMenu] = React.useState(false);
 
   return (
-    <header className="lg:hidden sticky top-0 z-30 bg-white border-b border-gray-200 h-14 px-4 flex items-center justify-between shadow-sm">
+    <header className="lg:hidden sticky top-0 z-30 bg-white border-b border-gray-200 h-14 px-3 sm:px-4 flex items-center justify-between shadow-xs">
       {/* Left: Menu Hamburger & Brand/Title */}
-      <div className="flex items-center gap-3 min-w-0">
+      <div className="flex items-center gap-2 min-w-0">
         <button
           onClick={onOpenDrawer}
-          className="p-2 text-gray-700 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500"
+          className="p-2 text-gray-700 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 min-h-[44px] min-w-[44px] flex items-center justify-center"
           aria-label="Abrir navegación"
         >
-          <Menu className="w-6 h-6" />
+          <Menu className="w-5 h-5" />
         </button>
 
         <div className="flex items-center gap-2 min-w-0">
           <img
             src={logoUrl}
             alt="Logo"
-            className="w-7 h-7 rounded-full object-cover shrink-0"
+            className="w-6 h-6 rounded-full object-cover shrink-0"
           />
-          <span className="font-bold text-gray-900 text-sm tracking-tight truncate">
+          <span className="font-extrabold text-gray-900 text-base tracking-tight truncate">
             {title || 'Collectibles'}
           </span>
         </div>

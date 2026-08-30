@@ -148,35 +148,39 @@ export default function AdminBrands() {
 
   return (
     <div>
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-        <div>
-           <h2 className="text-2xl font-bold dark:text-white">Marcas</h2>
-           <p className="text-sm text-gray-500 mt-1">Gestión del directorio de marcas ({brands.length} totales)</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">Marcas</h2>
+          <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full border border-gray-200">
+            {brands.length} {brands.length === 1 ? 'marca' : 'marcas'}
+          </span>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2.5">
           {/* Sorting Dropdown */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Ordenar por:</span>
+          <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 shadow-2xs">
+            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider hidden sm:inline">Ordenar:</span>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
-              className="bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 outline-none shadow-sm"
+              className="bg-transparent text-xs font-bold text-gray-700 outline-none cursor-pointer"
             >
-              <option value="sort_order">Orden de Visualización</option>
+              <option value="sort_order">Visualización</option>
               <option value="name">Nombre (A-Z)</option>
               <option value="name_desc">Nombre (Z-A)</option>
             </select>
           </div>
 
-          <div className="flex bg-gray-100 rounded-lg p-1">
-            <button onClick={() => setViewMode('list')} className={`p-2 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white shadow-sm text-primary-600' : 'text-gray-500 hover:text-gray-700'}`} title="Vista de lista">
+          <div className="flex bg-gray-100/90 rounded-xl p-1">
+            <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center ${viewMode === 'list' ? 'bg-white shadow-2xs text-primary-600 font-bold' : 'text-gray-500 hover:text-gray-700'}`} title="Vista de lista">
               <List className="w-4 h-4" />
             </button>
-            <button onClick={() => setViewMode('grid')} className={`p-2 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-white shadow-sm text-primary-600' : 'text-gray-500 hover:text-gray-700'}`} title="Vista de grilla">
+            <button onClick={() => setViewMode('grid')} className={`p-2 rounded-md transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center ${viewMode === 'grid' ? 'bg-white shadow-2xs text-primary-600 font-bold' : 'text-gray-500 hover:text-gray-700'}`} title="Vista de grilla">
               <Grid3X3 className="w-4 h-4" />
             </button>
           </div>
-          <button onClick={openCreate} className="btn-primary gap-2"><Plus className="w-4 h-4" /> Nueva Marca</button>
+          <button onClick={openCreate} className="bg-[#f00856] hover:bg-[#ff2c68] text-white font-semibold text-xs sm:text-sm px-4 py-2 rounded-xl cursor-pointer min-h-[44px] shadow-sm active:scale-95 flex items-center justify-center gap-1.5 transition-all">
+            <Plus className="w-4 h-4" /> Nueva Marca
+          </button>
         </div>
       </div>
 

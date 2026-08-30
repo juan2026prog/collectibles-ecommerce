@@ -174,6 +174,7 @@ export default function AdminProducts() {
   const [filterVendor, setFilterVendor] = useState<string>(searchParams.get('vendor') || 'all');
   const [filterMbe, setFilterMbe] = useState<string>(''); // '', 'mbe_pak', 'mbe_caja', 'unclassified'
   const [filterArgentina, setFilterArgentina] = useState<string>(''); // '', 'auto', 'quote'
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
 
   const [bulkMbeModalOpen, setBulkMbeModalOpen] = useState(false);
   const [targetBulkMbeType, setTargetBulkMbeType] = useState<MbePackagingType>(null);
@@ -1244,22 +1245,19 @@ export default function AdminProducts() {
   return (
     <div className="max-w-full">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-6">
-          <div>
-            <div className="flex items-center gap-3">
-               <h2 className="text-2xl font-black text-dark-900">Productos <span className="bg-blue-600 text-white text-[8px] px-1 py-0.5 rounded ml-2 relative -top-1">v2</span></h2>
-               {!loading && (
-                 <span className="bg-gray-100/80 border border-gray-200 text-gray-500 text-[10px] font-black uppercase px-2 py-1 rounded-md tracking-widest hidden md:inline-flex items-center gap-1">
-                   {totalProductsCount} {totalProductsCount === 1 ? 'Producto' : 'Productos'}
-                 </span>
-               )}
-            </div>
-            <p className="text-gray-500 text-sm italic mt-1">Gestión de catálogo y stock</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        <div className="flex items-center justify-between sm:justify-start gap-3">
+          <div className="flex items-center gap-2">
+             <h2 className="text-xl sm:text-2xl font-black text-dark-900">Productos</h2>
+             {!loading && (
+               <span className="bg-gray-100 border border-gray-200 text-gray-600 text-xs font-bold px-2 py-0.5 rounded-full">
+                 {totalProductsCount}
+               </span>
+             )}
           </div>
-          
-          <div className="flex items-center gap-4 bg-white border border-gray-200 px-4 py-2 rounded-xl shadow-sm hover:border-blue-400 transition-colors">
-            <label className="flex items-center gap-2 cursor-pointer group">
+
+          <div className="flex items-center gap-2 bg-white border border-gray-200 px-3 py-1.5 rounded-xl shadow-2xs">
+            <label className="flex items-center gap-1.5 cursor-pointer group text-xs font-bold text-gray-600">
               <input 
                 type="checkbox" 
                 className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer" 
@@ -1274,95 +1272,81 @@ export default function AdminProducts() {
                   }
                 }}
               />
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest group-hover:text-blue-600 transition-colors">Página</span>
-            </label>
-            
-            <div className="w-px h-4 bg-gray-200"></div>
-            
-            <label className="flex items-center gap-2 cursor-pointer group">
-              <input 
-                type="checkbox" 
-                className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer" 
-                checked={products.length > 0 && selectedProducts.length >= totalProductsCount}
-                onChange={(e) => {
-                  if (e.target.checked) setSelectedProducts(products.map(p => p.id));
-                  else setSelectedProducts([]);
-                }}
-              />
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest group-hover:text-blue-600 transition-colors">Selección ({selectedProducts.length})</span>
+              <span>Seleccionar</span>
+              {selectedProducts.length > 0 && <span className="text-blue-600 font-extrabold">({selectedProducts.length})</span>}
             </label>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setShowExport(true)}
-            className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm flex items-center gap-2 transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+            className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer min-h-[44px]"
           >
             <Download className="w-4 h-4 text-emerald-600" /> Exportar
           </button>
           <button
             type="button"
             onClick={() => setShowImport(true)}
-            className="bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm flex items-center gap-2 transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+            className="bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer min-h-[44px]"
           >
             <Upload className="w-4 h-4 text-blue-600" /> Importar
           </button>
           <button
             type="button"
             onClick={openCreate}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs sm:text-sm flex items-center gap-2 transition-all shadow-lg shadow-blue-600/20 cursor-pointer"
+            className="bg-[#f00856] hover:bg-[#ff2c68] text-white font-bold px-4 py-2 rounded-xl text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-sm cursor-pointer min-h-[44px]"
           >
-            <Plus className="w-5 h-5" /> Añadir nuevo
+            <Plus className="w-4 h-4" /> Añadir
           </button>
         </div>
       </div>
 
-      {/* Main Table */}
-      <div className="bg-white rounded-xl border shadow-sm min-h-[calc(100vh-160px)] flex flex-col overflow-hidden">
-         <div className="p-4 border-b bg-gray-50/50 flex gap-4 items-center">
-            <div className="relative flex-1 max-w-md">
+      {/* Main Table Container */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-2xs min-h-[calc(100vh-160px)] flex flex-col overflow-hidden">
+         <div className="p-3 sm:p-4 border-b bg-gray-50/50 flex flex-col md:flex-row gap-3 items-stretch md:items-center">
+            {/* Search Input - Full Width on Mobile */}
+            <div className="relative flex-1 w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input type="text" placeholder="Buscar productos por título, marca, SKU, categoría o vendedor..." value={search} onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
-                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500" />
+              <input type="text" placeholder="Buscar productos por título, marca, SKU..." value={search} onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
+                className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 bg-white" />
             </div>
-            <div className="flex gap-4 items-center">
-               <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500 font-bold">Mostrar:</span>
-                  <select className="border-gray-200 border rounded text-xs p-1" value={itemsPerPage} onChange={(e) => { setItemsPerPage(e.target.value === 'Todos' ? 'Todos' : Number(e.target.value)); setCurrentPage(1); }}>
-                     <option value="50">50</option>
-                     <option value="200">200</option>
-                     <option value="Todos">Todos</option>
-                  </select>
-               </div>
-               <div className="flex gap-2 text-xs font-bold text-gray-500 flex-wrap items-center">
-                  <select className="border-gray-200 border rounded px-2 py-1 text-xs outline-none bg-white" value={filterCategory} onChange={e => { setFilterCategory(e.target.value); setCurrentPage(1); }}>
+
+            {/* Controls Row on Mobile */}
+            <div className="flex items-center justify-between md:justify-end gap-2 w-full md:w-auto">
+               <button
+                 type="button"
+                 onClick={() => setFilterDrawerOpen(true)}
+                 className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 shadow-2xs min-h-[44px]"
+               >
+                 <span>Filtros</span>
+                 {(filterCategory || filterBrand || (filterVendor && filterVendor !== 'all') || filterMbe || filterArgentina) && (
+                   <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+                 )}
+               </button>
+
+               {/* Desktop Only Inline Selects */}
+               <div className="hidden md:flex gap-2 text-xs font-bold text-gray-500 flex-wrap items-center">
+                  <select className="border-gray-200 border rounded-lg px-2 py-1.5 text-xs outline-none bg-white" value={filterCategory} onChange={e => { setFilterCategory(e.target.value); setCurrentPage(1); }}>
                     <option value="">Todas las categorías</option>
                     {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
-                  <select className="border-gray-200 border rounded px-2 py-1 text-xs outline-none bg-white" value={filterBrand} onChange={e => { setFilterBrand(e.target.value); setCurrentPage(1); }}>
+                  <select className="border-gray-200 border rounded-lg px-2 py-1.5 text-xs outline-none bg-white" value={filterBrand} onChange={e => { setFilterBrand(e.target.value); setCurrentPage(1); }}>
                     <option value="">Todas las marcas</option>
                     {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>
-                  <select className="border-gray-200 border rounded px-2 py-1 text-xs outline-none bg-white" value={filterVendor} onChange={e => handleVendorFilterChange(e.target.value)}>
+                  <select className="border-gray-200 border rounded-lg px-2 py-1.5 text-xs outline-none bg-white" value={filterVendor} onChange={e => handleVendorFilterChange(e.target.value)}>
                     <option value="all">Todos los vendedores</option>
                     <option value="platform">Solo Collectibles</option>
                     {vendors.map(v => <option key={v.id} value={v.id}>{v.store_name || v.company_name}</option>)}
                   </select>
-                  <select className="border-gray-200 border rounded px-2 py-1 text-xs outline-none bg-white font-bold text-slate-700" value={filterMbe} onChange={e => { setFilterMbe(e.target.value); setCurrentPage(1); }}>
-                    <option value="">Tipo MBE: Todos</option>
+                  <select className="border-gray-200 border rounded-lg px-2 py-1.5 text-xs outline-none bg-white font-bold text-slate-700" value={filterMbe} onChange={e => { setFilterMbe(e.target.value); setCurrentPage(1); }}>
+                    <option value="">MBE: Todos</option>
                     <option value="mbe_pak">MBE PAK</option>
                     <option value="mbe_caja">MBE Caja</option>
                     <option value="unclassified">Sin definir</option>
                   </select>
-                  <select className="border-gray-200 border rounded px-2 py-1 text-xs outline-none bg-white font-bold text-slate-700" value={filterArgentina} onChange={e => { setFilterArgentina(e.target.value); setCurrentPage(1); }}>
-                    <option value="">Estado AR: Todos</option>
-                    <option value="auto">Envío automático</option>
-                    <option value="quote">Requiere cotización</option>
-                  </select>
-                  <span className="bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-black uppercase px-2 py-1 rounded-md tracking-wider flex items-center gap-1" title="Productos sin tipo de empaque MBE asignado">
-                    Sin packaging MBE: {unclassifiedMbeCount}
-                  </span>
                </div>
             </div>
          </div>
@@ -2232,6 +2216,84 @@ export default function AdminProducts() {
               >
                 {bulkUpdatingMbe && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* 📦 FILTER DRAWER MOBILE BOTTOM SHEET 📦 */}
+      {filterDrawerOpen && (
+        <div className="fixed inset-0 z-[120] flex flex-col justify-end" role="dialog" aria-modal="true">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setFilterDrawerOpen(false)} />
+          <div className="relative z-10 w-full bg-white rounded-t-2xl shadow-2xl flex flex-col max-h-[85vh] animate-slideUp">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white z-10 rounded-t-2xl">
+              <h3 className="font-bold text-gray-900 text-base">Filtros de Productos</h3>
+              <button onClick={() => setFilterDrawerOpen(false)} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto space-y-4 flex-1">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Categoría</label>
+                <select className="w-full border border-gray-200 rounded-xl p-2.5 text-sm bg-white" value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
+                  <option value="">Todas las categorías</option>
+                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Marca</label>
+                <select className="w-full border border-gray-200 rounded-xl p-2.5 text-sm bg-white" value={filterBrand} onChange={e => setFilterBrand(e.target.value)}>
+                  <option value="">Todas las marcas</option>
+                  {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Vendedor</label>
+                <select className="w-full border border-gray-200 rounded-xl p-2.5 text-sm bg-white" value={filterVendor} onChange={e => handleVendorFilterChange(e.target.value)}>
+                  <option value="all">Todos los vendedores</option>
+                  <option value="platform">Solo Collectibles</option>
+                  {vendors.map(v => <option key={v.id} value={v.id}>{v.store_name || v.company_name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Tipo MBE</label>
+                <select className="w-full border border-gray-200 rounded-xl p-2.5 text-sm bg-white font-bold" value={filterMbe} onChange={e => setFilterMbe(e.target.value)}>
+                  <option value="">MBE: Todos</option>
+                  <option value="mbe_pak">MBE PAK</option>
+                  <option value="mbe_caja">MBE Caja</option>
+                  <option value="unclassified">Sin definir</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Estado Argentina</label>
+                <select className="w-full border border-gray-200 rounded-xl p-2.5 text-sm bg-white font-bold" value={filterArgentina} onChange={e => setFilterArgentina(e.target.value)}>
+                  <option value="">Estado AR: Todos</option>
+                  <option value="auto">Envío automático</option>
+                  <option value="quote">Requiere cotización</option>
+                </select>
+              </div>
+            </div>
+            <div className="p-4 border-t border-gray-200 bg-gray-50 flex items-center gap-3 sticky bottom-0 z-10">
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterCategory('');
+                  setFilterBrand('');
+                  setFilterVendor('all');
+                  setFilterMbe('');
+                  setFilterArgentina('');
+                  setFilterDrawerOpen(false);
+                }}
+                className="flex-1 py-3 px-4 bg-white border border-gray-300 rounded-xl font-bold text-sm text-gray-700 hover:bg-gray-100 flex items-center justify-center gap-2 min-h-[44px]"
+              >
+                Limpiar
+              </button>
+              <button
+                type="button"
+                onClick={() => { setCurrentPage(1); setFilterDrawerOpen(false); }}
+                className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 flex items-center justify-center gap-2 shadow-sm min-h-[44px]"
+              >
+                Aplicar filtros
               </button>
             </div>
           </div>

@@ -52,15 +52,15 @@ export default function AdminBanners() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-bold">Gestión del Home — Módulos</h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-xl sm:text-2xl font-black text-gray-900">Gestión del Home — Módulos</h2>
       </div>
 
       {/* Tab navigation */}
-      <div className="flex gap-1 mb-6 bg-gray-100 rounded-lg p-1 w-fit overflow-x-auto">
+      <div className="flex gap-1 mb-4 bg-gray-100/90 rounded-xl p-1 w-full md:w-fit overflow-x-auto no-scrollbar">
         {tabs.map(t => (
           <button key={t.key} onClick={() => setActiveTab(t.key)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-bold transition-colors whitespace-nowrap ${
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold transition-colors whitespace-nowrap min-h-[44px] ${
               activeTab === t.key ? 'bg-white shadow-sm text-gray-900 border border-gray-200/50' : 'text-gray-500 hover:text-gray-900'
             }`}>
             <t.icon className="w-4 h-4" /> {t.label}
@@ -165,36 +165,40 @@ function HeroTab() {
 
   return (
     <>
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 text-sm text-blue-800">
-        <p className="font-bold mb-1">💡 Hero Cinemático</p>
-        <p className="text-xs text-blue-700">Los slides del hero principal se muestran como carrusel cinematográfico a pantalla completa al tope del home.</p>
+      <div className="bg-blue-50 border border-blue-200/80 rounded-xl p-3 sm:p-4 mb-4 text-xs sm:text-sm text-blue-900 shadow-2xs">
+        <p className="font-bold mb-0.5 flex items-center gap-1.5 text-blue-900">💡 Hero Cinemático</p>
+        <p className="text-xs text-blue-700 leading-relaxed">Los slides del hero principal se muestran como carrusel cinematográfico a pantalla completa al tope del home.</p>
       </div>
 
       <div className="flex justify-end mb-4">
-        <button onClick={openCreate} className="btn-primary gap-2"><Plus className="w-4 h-4" /> Crear Slide</button>
+        <button onClick={openCreate} className="bg-[#f00856] hover:bg-[#ff2c68] text-white font-semibold text-xs sm:text-sm px-4 py-2.5 rounded-xl cursor-pointer min-h-[44px] shadow-sm active:scale-95 flex items-center justify-center gap-1.5 transition-all">
+          <Plus className="w-4 h-4" /> Crear Slide
+        </button>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-3.5">
         {loading ? <p className="text-gray-400 text-center py-12">Cargando...</p> :
         banners.map((b, i) => (
-          <div key={b.id} className={`bg-white rounded-xl border ${b.is_active ? 'border-gray-200' : 'border-gray-100 opacity-60'} overflow-hidden flex`}>
-            <div className="w-48 h-28 flex-shrink-0 bg-gray-100 relative">
+          <div key={b.id} className={`bg-white rounded-xl border ${b.is_active ? 'border-gray-200' : 'border-gray-100 opacity-60'} overflow-hidden flex flex-col md:flex-row shadow-2xs`}>
+            <div className="w-full md:w-48 h-40 md:h-28 flex-shrink-0 bg-gray-100 relative">
               <img src={b.image_url} alt={b.title} className="w-full h-full object-cover" />
-              <span className="absolute top-1.5 left-1.5 bg-indigo-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">Hero Slide</span>
+              <span className="absolute top-2 left-2 bg-indigo-600 text-white text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider shadow-xs">Hero Slide</span>
             </div>
-            <div className="flex-1 p-4 flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-gray-900">{b.title || `Slide ${i + 1}`}</h3>
-                <p className="text-sm text-gray-500 mt-1 line-clamp-1">{b.subtitle}</p>
-                <p className="text-xs text-gray-400 mt-1">Link: {b.link_url || '—'} • Orden: {b.sort_order}</p>
+            <div className="flex-1 p-3.5 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <h3 className="font-bold text-gray-900 text-sm sm:text-base leading-snug">{b.title || `Slide ${i + 1}`}</h3>
+                {b.subtitle && <p className="text-xs sm:text-sm text-gray-500 mt-1 line-clamp-2 leading-relaxed">{b.subtitle}</p>}
+                <p className="text-[11px] sm:text-xs text-gray-400 mt-1.5 break-all">Link: {b.link_url || '—'} • Orden: {b.sort_order}</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between md:justify-end gap-2 border-t md:border-t-0 pt-2.5 md:pt-0 border-gray-100">
                 <button onClick={() => toggleActive(b.id, b.is_active)}
-                  className={`px-3 py-1 text-xs font-bold rounded-full ${b.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                  className={`px-3 py-1 text-xs font-bold rounded-full min-h-[36px] flex items-center ${b.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                   {b.is_active ? 'Activo' : 'Inactivo'}
                 </button>
-                <button onClick={() => openEdit(b)} className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg"><Pencil className="w-4 h-4" /></button>
-                <button onClick={() => handleDelete(b.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => openEdit(b)} className="p-2 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg min-h-[40px] min-w-[40px] flex items-center justify-center"><Pencil className="w-4 h-4" /></button>
+                  <button onClick={() => handleDelete(b.id)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg min-h-[40px] min-w-[40px] flex items-center justify-center"><Trash2 className="w-4 h-4" /></button>
+                </div>
               </div>
             </div>
           </div>
