@@ -848,31 +848,39 @@ export default function AdminSettings() {
   if (loading) return <div className="text-center py-12 text-gray-400 animate-pulse">Cargando configuración...</div>;
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold dark:text-white">Configuración Global</h2>
+    <div className="space-y-4 min-w-0">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">Configuración Global</h2>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-gray-100 rounded-lg p-1 w-fit overflow-x-auto">
-        {[
-          { key: 'general', label: 'General', icon: Store },
-          { key: 'appearance', label: 'Theme Builder', icon: LayoutTemplate },
-          { key: 'texts', label: 'Textos de Páginas', icon: FileText },
-          { key: 'payments', label: 'Pagos', icon: CreditCard },
-          { key: 'modules', label: 'Modulos Activos', icon: Settings },
-          { key: 'shipping', label: 'Envios', icon: Truck },
-          { key: 'social', label: 'Redes Sociales', icon: Share2 },
-          { key: 'ai', label: 'Asistencia IA', icon: Sparkles },
-          { key: 'notifications', label: 'Notificaciones', icon: Bell },
-        ].map(t => (
-          <button key={t.key} onClick={() => setTab(t.key as any)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-bold transition-colors whitespace-nowrap ${
-              currentTab === t.key ? 'bg-white shadow-sm text-gray-900 border border-gray-200/50' : 'text-gray-500 hover:text-gray-900'
-            }`}>
-            <t.icon className="w-4 h-4" /> {t.label}
-          </button>
-        ))}
+      <div className="border-b border-gray-200 dark:border-slate-800 pb-1">
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none no-scrollbar py-1 text-xs">
+          {[
+            { key: 'general', label: 'General', icon: Store },
+            { key: 'appearance', label: 'Theme Builder', icon: LayoutTemplate },
+            { key: 'payments', label: 'Pasarelas de Pago', icon: CreditCard },
+            { key: 'legal', label: 'Términos & Políticas', icon: FileText },
+            { key: 'menus', label: 'Menú Navegación', icon: Menu },
+            { key: 'notifications', label: 'Notificaciones & Push', icon: Bell },
+            { key: 'banners', label: 'Mini Banners HP', icon: ImageIcon },
+            { key: 'ai', label: 'IA & Integraciones (Gemini)', icon: Brain },
+          ].map(t => (
+            <button
+              key={t.key}
+              onClick={() => {
+                setTab(t.key as any);
+                setSearchParams({ tab: t.key });
+              }}
+              className={`whitespace-nowrap flex items-center px-3 py-2 rounded-xl font-bold text-xs transition-all min-h-[44px] shrink-0 ${
+                currentTab === t.key ? 'bg-[#f00856] text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+              }`}
+            >
+              <t.icon className="w-4 h-4 mr-1.5 shrink-0" />
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* General Settings */}

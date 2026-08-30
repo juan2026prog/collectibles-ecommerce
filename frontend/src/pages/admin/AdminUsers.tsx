@@ -381,21 +381,23 @@ export default function AdminUsers() {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Usuarios & Auditoría</h2>
-          <p className="text-sm text-gray-500 mt-1">{users.length} usuarios registrados · Gestión de roles, tiendas y permisos de catálogo</p>
+    <div className="space-y-4 min-w-0">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">Usuarios & Permisos</h2>
+          <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full border border-gray-200">
+            {users.length} {users.length === 1 ? 'usuario' : 'usuarios'}
+          </span>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => setShowCreateModal(true)} className="btn-primary text-sm flex items-center gap-2 bg-green-600 hover:bg-green-700 border-green-700 text-white shadow-sm font-bold">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          <button onClick={() => setShowCreateModal(true)} className="bg-[#f00856] hover:bg-[#ff2c68] text-white font-semibold text-xs sm:text-sm px-4 py-2 rounded-xl cursor-pointer min-h-[44px] shadow-sm active:scale-95 flex items-center justify-center gap-1.5 transition-all flex-1 sm:flex-initial">
             <UserCog className="w-4 h-4" /> Crear Usuario
           </button>
-          <button onClick={() => setShowAudit(!showAudit)} className={`btn-secondary text-sm flex items-center gap-2 ${showAudit ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : ''}`}>
+          <button onClick={() => setShowAudit(!showAudit)} className={`py-2 px-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl min-h-[44px] flex items-center justify-center gap-1.5 transition-colors ${showAudit ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : ''}`}>
             <Clock className="w-4 h-4" /> {showAudit ? 'Ver Usuarios' : 'Ver Logs'}
           </button>
-          <button onClick={() => { fetchUsers(); fetchAuditLogs(); }} className="btn-secondary text-sm flex items-center gap-2">
-            <RefreshCw className="w-4 h-4" /> Refrescar
+          <button onClick={() => { fetchUsers(); fetchAuditLogs(); }} className="p-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors">
+            <RefreshCw className="w-4 h-4" />
           </button>
         </div>
       </div>
