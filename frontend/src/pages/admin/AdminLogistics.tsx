@@ -920,79 +920,68 @@ Intentos Cola: ${qItem?.attempts || 0}
   }, [adminShipments, adminQueue, selectedCardFilter, filterSearch, filterCourier, filterVendor, filterStatus, filterSla, filterDateRange]);
 
   return (
-    <div className="max-w-5xl space-y-8 pb-12">
-      <div className="flex items-center justify-between">
+    <div className="max-w-5xl space-y-4 pb-12 min-w-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-black text-gray-900">Logística y Envíos</h2>
-          <p className="text-sm text-gray-500 mt-1">Configura las integraciones de envíos Flex (SoyDelivery), DAC y despacho al interior.</p>
+          <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">Logística y Envíos</h2>
         </div>
-        <button onClick={handleSave} disabled={isSaving} className="btn-primary gap-2">
+        <button onClick={handleSave} disabled={isSaving} className="bg-[#f00856] hover:bg-[#ff2c68] text-white font-semibold text-xs sm:text-sm px-4 py-2 rounded-xl cursor-pointer min-h-[44px] shadow-sm active:scale-95 flex items-center justify-center gap-1.5 transition-all">
           <Save className="w-4 h-4" /> {isSaving ? 'Guardando...' : 'Guardar Cambios'}
         </button>
       </div>
 
       {/* Tabs Switcher */}
-      <div className="flex border-b border-gray-200">
-        <button
-          onClick={() => setActiveTab('dashboard')}
-          className={`px-4 py-2.5 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${
-            activeTab === 'dashboard'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <FileText className="w-4 h-4" /> Dashboard Operativo
-        </button>
-        <button
-          onClick={() => setActiveTab('control-tower')}
-          className={`px-4 py-2.5 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${
-            activeTab === 'control-tower'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <Activity className="w-4 h-4" /> Torre de Control
-        </button>
-        <button
-          onClick={() => setActiveTab('soydelivery')}
-          className={`px-4 py-2.5 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${
-            activeTab === 'soydelivery'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <Truck className="w-4 h-4" /> SoyDelivery (Flex)
-        </button>
-        <button
-          onClick={() => setActiveTab('dac')}
-          className={`px-4 py-2.5 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${
-            activeTab === 'dac'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <Settings className="w-4 h-4" /> DAC / Grupo Agencia
-        </button>
-        <button
-          onClick={() => setActiveTab('ues')}
-          className={`px-4 py-2.5 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${
-            activeTab === 'ues'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <Truck className="w-4 h-4" /> UES Envíos
-        </button>
-        <button
-          onClick={() => setActiveTab('general')}
-          className={`px-4 py-2.5 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${
-            activeTab === 'general'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <QrCode className="w-4 h-4" /> Formato de Etiquetas
-        </button>
+      <div className="border-b border-gray-200 dark:border-slate-800 pb-1">
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none no-scrollbar py-1 text-xs">
+          <button
+            onClick={() => setActiveTab('dashboard')}
+            className={`whitespace-nowrap flex items-center px-3 py-2 rounded-xl font-bold text-xs transition-all min-h-[44px] shrink-0 ${
+              activeTab === 'dashboard' ? 'bg-[#f00856] text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+            }`}
+          >
+            <FileText className="w-4 h-4 mr-1.5 shrink-0" /> Dashboard Operativo
+          </button>
+          <button
+            onClick={() => setActiveTab('control-tower')}
+            className={`whitespace-nowrap flex items-center px-3 py-2 rounded-xl font-bold text-xs transition-all min-h-[44px] shrink-0 ${
+              activeTab === 'control-tower' ? 'bg-[#f00856] text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+            }`}
+          >
+            <Activity className="w-4 h-4 mr-1.5 shrink-0" /> Torre de Control
+          </button>
+          <button
+            onClick={() => setActiveTab('soydelivery')}
+            className={`whitespace-nowrap flex items-center px-3 py-2 rounded-xl font-bold text-xs transition-all min-h-[44px] shrink-0 ${
+              activeTab === 'soydelivery' ? 'bg-[#f00856] text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+            }`}
+          >
+            <Truck className="w-4 h-4 mr-1.5 shrink-0" /> SoyDelivery (Flex)
+          </button>
+          <button
+            onClick={() => setActiveTab('dac')}
+            className={`whitespace-nowrap flex items-center px-3 py-2 rounded-xl font-bold text-xs transition-all min-h-[44px] shrink-0 ${
+              activeTab === 'dac' ? 'bg-[#f00856] text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+            }`}
+          >
+            <Settings className="w-4 h-4 mr-1.5 shrink-0" /> DAC / Grupo Agencia
+          </button>
+          <button
+            onClick={() => setActiveTab('ues')}
+            className={`whitespace-nowrap flex items-center px-3 py-2 rounded-xl font-bold text-xs transition-all min-h-[44px] shrink-0 ${
+              activeTab === 'ues' ? 'bg-[#f00856] text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+            }`}
+          >
+            <Truck className="w-4 h-4 mr-1.5 shrink-0" /> UES Logística
+          </button>
+          <button
+            onClick={() => setActiveTab('general')}
+            className={`whitespace-nowrap flex items-center px-3 py-2 rounded-xl font-bold text-xs transition-all min-h-[44px] shrink-0 ${
+              activeTab === 'general' ? 'bg-[#f00856] text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+            }`}
+          >
+            <QrCode className="w-4 h-4 mr-1.5 shrink-0" /> Formato de Etiquetas
+          </button>
+        </div>
       </div>
 
       {/* TAB CONTENT: DASHBOARD */}

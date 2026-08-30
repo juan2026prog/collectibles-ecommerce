@@ -53,10 +53,12 @@ export default function AdminCustomers() {
 
   return (
     <div className="space-y-6 min-w-0">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-           <h2 className="text-xl sm:text-2xl font-black text-gray-900">CRM de Clientes</h2>
-           <p className="text-xs sm:text-sm text-gray-500">Base de datos, segmentación y ciclo de vida.</p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+           <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">CRM de Clientes</h2>
+           <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full border border-gray-200">
+             {customers.length} {customers.length === 1 ? 'cliente' : 'clientes'}
+           </span>
         </div>
 
         <FilterDrawer

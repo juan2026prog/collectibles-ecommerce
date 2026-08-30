@@ -246,48 +246,43 @@ export default function AdminFinances() {
   const totalEligibleGateway = eligibleSuborders.reduce((sum, s) => sum + Number(s.payment_fee_share), 0);
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-4 min-w-0">
+      <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 font-sans">Finanzas y Facturación</h2>
-          <p className="text-gray-500 mt-1">Control de pagos a vendedores, afiliados y facturación de la plataforma.</p>
+          <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">Finanzas y Facturación</h2>
         </div>
       </div>
 
-      <div className="flex border-b border-gray-200">
-        <button
-          onClick={() => setActiveTab('liquidations')}
-          className={`py-3 px-6 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'liquidations' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <Landmark className="h-4 w-4" />
+      <div className="border-b border-gray-200 dark:border-slate-800 pb-1">
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none no-scrollbar py-1 text-xs">
+          <button
+            onClick={() => setActiveTab('liquidations')}
+            className={`whitespace-nowrap flex items-center px-3 py-2 rounded-xl font-bold text-xs transition-all min-h-[44px] shrink-0 ${
+              activeTab === 'liquidations' ? 'bg-[#f00856] text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+            }`}
+          >
+            <Landmark className="h-4 w-4 mr-1.5 shrink-0" />
             Liquidaciones Marketplace
-          </div>
-        </button>
-        <button
-          onClick={() => setActiveTab('legacy_payouts')}
-          className={`py-3 px-6 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'legacy_payouts' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <ArrowUpRight className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => setActiveTab('legacy_payouts')}
+            className={`whitespace-nowrap flex items-center px-3 py-2 rounded-xl font-bold text-xs transition-all min-h-[44px] shrink-0 ${
+              activeTab === 'legacy_payouts' ? 'bg-[#f00856] text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+            }`}
+          >
+            <ArrowUpRight className="h-4 w-4 mr-1.5 shrink-0" />
             Payouts (Legacy)
-          </div>
-        </button>
-        <button
-          onClick={() => setActiveTab('invoices')}
-          className={`py-3 px-6 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'invoices' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <FileText className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => setActiveTab('invoices')}
+            className={`whitespace-nowrap flex items-center px-3 py-2 rounded-xl font-bold text-xs transition-all min-h-[44px] shrink-0 ${
+              activeTab === 'invoices' ? 'bg-[#f00856] text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+            }`}
+          >
+            <FileText className="h-4 w-4 mr-1.5 shrink-0" />
             Facturación AFIP
-          </div>
-        </button>
+          </button>
+        </div>
       </div>
 
       {activeTab === 'liquidations' && (
