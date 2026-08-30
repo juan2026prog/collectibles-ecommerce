@@ -69,6 +69,7 @@ serve(async (req: Request) => {
     
     let isAuthorized = false;
     let authUserId: string | null = null;
+    let authUser: any = null;
 
     if (token === supabaseServiceKey) {
       isAuthorized = true;
@@ -83,12 +84,15 @@ serve(async (req: Request) => {
       }
     }
 
-    if (!isAuthorized && token) {
+    if (token) {
       try {
-        const { data: { user: authUser } } = await supabaseAdmin.auth.getUser(token);
-        if (authUser) {
+        const { data: userData } = await supabaseAdmin.auth.getUser(token);
+        if (userData?.user) {
+          authUser = userData.user;
           authUserId = authUser.id;
-          isAuthorized = true;
+          if (token !== supabaseServiceKey) {
+            isAuthorized = true;
+          }
         }
       } catch (err) {
         console.error("[Notification Dispatcher] Auth token check error:", err);
@@ -415,7 +419,8 @@ serve(async (req: Request) => {
             from: "Collectibles Marketplace <notificaciones@collectibles.uy>",
             to: [email],
             subject: subject,
-            text: body
+            html: body.includes('<') ? body : `<div style="font-family: sans-serif; padding: 20px; color: #333;"><h2 style="color: #6366f1;">Collectibles Store</h2><p>${body}</p></div>`,
+            text: body.replace(/<[^>]*>?/gm, '')
           })
         });
 
@@ -619,23 +624,37 @@ serve(async (req: Request) => {
       const testKey = `test:${testChannel}:${targetUserId || 'test'}:${Date.now()}`;
 
       if (testChannel === 'email') {
-        const recipientEmail = authUser?.email || body.email;
-        if (recipientEmail) {
-          const subject = body.subject || "Prueba de notificaciones — Collectibles";
-          const emailMessage = body.body || "Esta es una notificación de prueba. El canal Email está funcionando correctamente. ✅";
-          const htmlBody = `<div style="font-family: sans-serif; padding: 20px;"><h2 style="color: #6366f1;">Collectibles Store</h2><p>${emailMessage}</p></div>`;
-          await dispatchEmailProvider(recipientEmail, subject, htmlBody, testKey, body_vendor_id ? 'vendor' : 'admin');
-        } else {
+        const recipientEmail = (token === supabaseServiceKey) ? (body.email || authUser?.email) : authUser?.email;
+
+        if (!recipientEmail) {
+          console.error("[Notification Dispatcher] Email test failed: No authenticated user email.");
+          return new Response(JSON.stringify({ error: 'No authenticated email available' }), { status: 422, headers: corsHeaders });
+        }
+
+        if (!RESEND_API_KEY) {
           await logNotification({
             scope: body_vendor_id ? 'vendor' : 'admin',
             vendor_id: body_vendor_id || null,
             channel: 'email',
             provider: 'resend',
-            recipient: 'Email de prueba',
+            recipient: recipientEmail,
             status: 'provider_unavailable',
             idempotency_key: testKey,
-            error_message: 'No se encontró una dirección de correo autenticada para enviar la prueba.'
+            error_message: 'RESEND_API_KEY no configurado en el servidor'
           });
+          return new Response(JSON.stringify({ status: 'provider_unavailable', error: 'El servicio de Email no está disponible' }), { status: 503, headers: corsHeaders });
+        }
+
+        const subject = body.subject || "Prueba de notificaciones — Collectibles";
+        const emailMessage = body.body || "Esta es una notificación de prueba. El canal Email está funcionando correctamente. ✅";
+        const htmlBody = `<div style="font-family: sans-serif; padding: 20px; color: #333;"><h2 style="color: #6366f1;">Collectibles Store</h2><p>${emailMessage}</p></div>`;
+
+        const sent = await dispatchEmailProvider(recipientEmail, subject, htmlBody, testKey, body_vendor_id ? 'vendor' : 'admin', body_vendor_id || null);
+
+        if (sent) {
+          return new Response(JSON.stringify({ success: true, message: 'Email de prueba enviado exitosamente' }), { status: 200, headers: corsHeaders });
+        } else {
+          return new Response(JSON.stringify({ error: 'Error al enviar el correo de prueba mediante Resend' }), { status: 500, headers: corsHeaders });
         }
       } else {
         // Direct test Push strictly to auth.uid() derived from authenticated user JWT

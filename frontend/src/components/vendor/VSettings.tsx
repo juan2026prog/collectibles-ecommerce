@@ -177,7 +177,28 @@ export default function VSettings() {
           vendor_id: user.id
         }
       });
-      if (error) throw error;
+
+      if (error) {
+        const status = (error as any)?.status;
+        const msg = error.message || '';
+
+        if (status === 503 || msg.includes('provider_unavailable') || msg.includes('503')) {
+          toast.error('El servicio de Email no está disponible');
+        } else if (status === 422 || msg.includes('authenticated email') || msg.includes('422')) {
+          toast.error('No hay un email asociado a esta cuenta');
+        } else if (status === 401 || msg.includes('Unauthorized') || msg.includes('401')) {
+          toast.error('Sesión no autenticada');
+        } else {
+          toast.error(msg || 'No se pudo enviar el Email de prueba');
+        }
+        return;
+      }
+
+      if (data?.status === 'provider_unavailable') {
+        toast.error('El servicio de Email no está disponible');
+        return;
+      }
+
       toast.success(`Correo de prueba enviado a ${user.email}`);
       try {
         await loadLogs();
@@ -185,7 +206,7 @@ export default function VSettings() {
         console.warn('Could not refresh vendor notification logs:', logErr);
       }
     } catch (err: any) {
-      toast.error(err.message || 'Error al enviar el correo de prueba');
+      toast.error(err.message || 'No se pudo enviar el Email de prueba');
     } finally {
       setSendingTestEmail(false);
     }

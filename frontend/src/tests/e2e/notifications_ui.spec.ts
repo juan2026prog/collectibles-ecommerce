@@ -146,5 +146,22 @@ test.describe('Notification UI E2E Verification', () => {
     // Verify "Enviar prueba por Email" button exists
     const emailTestBtn = page.locator('button:has-text("Enviar prueba por Email")');
     await expect(emailTestBtn).toBeVisible();
+
+    // Intercept function call for test_notification email
+    await page.route('**/functions/v1/notification-dispatcher*', async (route) => {
+      const reqBody = route.request().postDataJSON();
+      if (reqBody?.event_type === 'test_notification' && reqBody?.channel === 'email') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ success: true, message: 'Email de prueba enviado exitosamente' })
+        });
+      } else {
+        await route.continue();
+      }
+    });
+
+    await emailTestBtn.click();
+    await expect(page.locator('text=Correo de prueba enviado')).toBeVisible({ timeout: 5000 });
   });
 });
