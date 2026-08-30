@@ -7,8 +7,8 @@ import VMercadoLibre from './VMercadoLibre';
 import VShipping from './VShipping';
 import VKyc from './VKyc';
 import VTermsSettings from './VTermsSettings';
-import { User, CreditCard, Truck, Link2, FileText, Save, UploadCloud, Bell, AlertCircle, CheckCircle2, RefreshCw, ToggleLeft, ToggleRight, ShieldCheck, Smartphone, Mail, MessageSquare, BellRing } from 'lucide-react';
-import { EmailRecipientsConfig, type EmailRecipient } from '../common/EmailRecipientsConfig';
+import { User, CreditCard, Truck, Link2, FileText, Save, UploadCloud, Bell, AlertCircle, CheckCircle2, RefreshCw, ToggleLeft, ToggleRight, ShieldCheck, Smartphone, Mail, MessageSquare, BellRing, Settings } from 'lucide-react';
+import { EmailRecipientsModal, type EmailRecipient } from '../common/EmailRecipientsModal';
 import { MobilePushSetup } from '../common/MobilePushSetup';
 import {
   requestAndRegisterPush,
@@ -75,6 +75,7 @@ export default function VSettings() {
     } as Record<string, any>,
   });
 
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [notificationSettings, setNotificationSettings] = useState({
     id: '',
     whatsapp_numbers: [] as { label: string; number: string; enabled: boolean }[],
@@ -167,9 +168,10 @@ export default function VSettings() {
 
   const [sendingTestEmail, setSendingTestEmail] = useState(false);
 
-  const saveVendorNotifications = async (showToast = true) => {
+  const saveVendorNotifications = async (showToast = true, customState?: typeof notificationSettings) => {
     if (!user) return;
-    const numbers = notificationSettings.whatsapp_numbers || [];
+    const targetState = customState || notificationSettings;
+    const numbers = targetState.whatsapp_numbers || [];
     
     // Validations
     for (const n of numbers) {
@@ -195,7 +197,7 @@ export default function VSettings() {
     }
 
     // Email Recipients Validation (Max 3, format check if active)
-    const emails = notificationSettings.email_recipients || [];
+    const emails = targetState.email_recipients || [];
     if (emails.length > 3) {
       throw new Error('Solo se permiten hasta 3 destinatarios de Email.');
     }
@@ -209,13 +211,13 @@ export default function VSettings() {
       vendor_id: user.id,
       whatsapp_numbers: numbers,
       email_recipients: emails,
-      notify_new_sale: notificationSettings.notify_new_sale,
-      notify_payment_received: notificationSettings.notify_payment_received,
-      notify_order_shipped: notificationSettings.notify_order_shipped,
-      notify_low_stock: notificationSettings.notify_low_stock,
-      notify_payout_paid: notificationSettings.notify_payout_paid,
-      notify_test: notificationSettings.notify_test,
-      is_active: notificationSettings.is_active,
+      notify_new_sale: targetState.notify_new_sale,
+      notify_payment_received: targetState.notify_payment_received,
+      notify_order_shipped: targetState.notify_order_shipped,
+      notify_low_stock: targetState.notify_low_stock,
+      notify_payout_paid: targetState.notify_payout_paid,
+      notify_test: targetState.notify_test,
+      is_active: targetState.is_active,
       updated_at: new Date().toISOString()
     };
 
@@ -909,15 +911,26 @@ export default function VSettings() {
                         <p className="text-xs text-gray-500 mt-1">Correos transaccionales a tu email de contacto.</p>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleSendTestEmail}
-                      disabled={sendingTestEmail}
-                      className="text-xs bg-blue-50 text-blue-700 border border-blue-200 font-bold px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1 mt-0.5"
-                    >
-                      <Mail className={`w-3.5 h-3.5 ${sendingTestEmail ? 'animate-spin' : ''}`} />
-                      {sendingTestEmail ? 'Enviando...' : 'Enviar prueba por Email'}
-                    </button>
+                    <div className="flex flex-col items-end gap-2 mt-0.5">
+                      <button
+                        type="button"
+                        onClick={handleSendTestEmail}
+                        disabled={sendingTestEmail}
+                        className="text-xs bg-blue-50 text-blue-700 border border-blue-200 font-bold px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                      >
+                        <Mail className={`w-3.5 h-3.5 ${sendingTestEmail ? 'animate-spin' : ''}`} />
+                        {sendingTestEmail ? 'Enviando...' : 'Enviar prueba por Email'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsEmailModalOpen(true)}
+                        className="text-xs bg-gray-50 text-gray-700 border border-gray-200 font-bold px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-all active:scale-95 flex items-center gap-1.5 shadow-sm"
+                      >
+                        <Settings className="w-3.5 h-3.5 text-gray-500" />
+                        Configurar destinatarios Email
+                      </button>
+                    </div>
                   </div>
 
                   {/* SMS Channel */}
@@ -937,6 +950,19 @@ export default function VSettings() {
                   </div>
                 </div>
               </div>
+
+              {/* Email Recipients Modal */}
+              <EmailRecipientsModal
+                isOpen={isEmailModalOpen}
+                onClose={() => setIsEmailModalOpen(false)}
+                recipients={notificationSettings.email_recipients}
+                scope="vendor"
+                onSave={async (updatedRecipients) => {
+                  const updatedState = { ...notificationSettings, email_recipients: updatedRecipients };
+                  setNotificationSettings(updatedState);
+                  await saveVendorNotifications(false, updatedState);
+                }}
+              />
 
               {/* Push Device Management Card (Desktop vs Mobile) */}
               {getMobilePlatform() === 'desktop' ? (
@@ -1095,15 +1121,6 @@ export default function VSettings() {
                     </div>
                   ));
                 })()}
-              </div>
-
-              {/* Email Recipients Block (Max 3) */}
-              <div className="mb-8">
-                <EmailRecipientsConfig
-                  scope="vendor"
-                  recipients={notificationSettings.email_recipients}
-                  onChange={(recs) => setNotificationSettings(p => ({ ...p, email_recipients: recs }))}
-                />
               </div>
 
               {/* Notification Toggles */}

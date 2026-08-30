@@ -4,7 +4,7 @@ import { Save, ToggleLeft, ToggleRight, Settings, Store, Truck, Palette, LayoutT
 import { MediaPickerModal } from '../../components/MediaPickerModal';
 import { useToast } from '../../components/admin/Toast';
 import { useAuth } from '../../contexts/AuthContext';
-import { EmailRecipientsConfig, type EmailRecipient } from '../../components/common/EmailRecipientsConfig';
+import { EmailRecipientsModal, type EmailRecipient } from '../../components/common/EmailRecipientsModal';
 import { MobilePushSetup } from '../../components/common/MobilePushSetup';
 import {
   requestAndRegisterPush,
@@ -606,6 +606,7 @@ export default function AdminSettings() {
     }
   };
 
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [adminNotifications, setAdminNotifications] = useState({
     id: '',
     whatsapp_numbers: [] as { label: string; number: string; enabled: boolean }[],
@@ -673,9 +674,10 @@ export default function AdminSettings() {
   const fetchWhatsappLogs = fetchNotificationLogs;
   const loadNotificationLogs = fetchNotificationLogs;
 
-  async function saveAdminNotifications(showToast = true) {
+  async function saveAdminNotifications(showToast = true, customState?: typeof adminNotifications) {
+    const targetState = customState || adminNotifications;
     try {
-      const numbers = adminNotifications.whatsapp_numbers || [];
+      const numbers = targetState.whatsapp_numbers || [];
       
       // Validations
       for (const n of numbers) {
@@ -701,7 +703,7 @@ export default function AdminSettings() {
       }
 
       // Email Recipients Validation (Max 3, format check if active)
-      const emails = adminNotifications.email_recipients || [];
+      const emails = targetState.email_recipients || [];
       if (emails.length > 3) {
         throw new Error('Solo se permiten hasta 3 destinatarios de Email.');
       }
@@ -714,13 +716,13 @@ export default function AdminSettings() {
       const payload = {
         whatsapp_numbers: numbers,
         email_recipients: emails,
-        notify_own_sales: adminNotifications.notify_own_sales,
-        notify_vendor_sales: adminNotifications.notify_vendor_sales,
-        notify_payment_received: adminNotifications.notify_payment_received,
-        notify_low_stock: adminNotifications.notify_low_stock,
-        notify_shipping_events: adminNotifications.notify_shipping_events,
-        notify_payout_pending: adminNotifications.notify_payout_pending,
-        is_active: adminNotifications.is_active,
+        notify_own_sales: targetState.notify_own_sales,
+        notify_vendor_sales: targetState.notify_vendor_sales,
+        notify_payment_received: targetState.notify_payment_received,
+        notify_low_stock: targetState.notify_low_stock,
+        notify_shipping_events: targetState.notify_shipping_events,
+        notify_payout_pending: targetState.notify_payout_pending,
+        is_active: targetState.is_active,
         updated_at: new Date().toISOString()
       };
 
@@ -2156,92 +2158,57 @@ export default function AdminSettings() {
                       <p className="text-xs text-gray-500 mt-1">Envíos transaccionales mediante Resend.</p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleSendTestEmail}
-                    disabled={sendingTestEmail}
-                    className="text-xs bg-blue-50 text-blue-700 border border-blue-200 font-bold px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1 mt-0.5"
-                  >
-                    <Mail className={`w-3.5 h-3.5 ${sendingTestEmail ? 'animate-spin' : ''}`} />
-                    {sendingTestEmail ? 'Enviando...' : 'Enviar prueba por Email'}
-                  </button>
-                </div>
+                    <div className="flex flex-col items-end gap-2 mt-0.5">
+                      <button
+                        type="button"
+                        onClick={handleSendTestEmail}
+                        disabled={sendingTestEmail}
+                        className="text-xs bg-blue-50 text-blue-700 border border-blue-200 font-bold px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                      >
+                        <Mail className={`w-3.5 h-3.5 ${sendingTestEmail ? 'animate-spin' : ''}`} />
+                        {sendingTestEmail ? 'Enviando...' : 'Enviar prueba por Email'}
+                      </button>
 
-                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-start justify-between opacity-60">
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 bg-gray-100 rounded-lg text-gray-500 mt-0.5">
-                      <Smartphone className="w-5 h-5" />
+                      <button
+                        type="button"
+                        onClick={() => setIsEmailModalOpen(true)}
+                        className="text-xs bg-gray-50 text-gray-700 border border-gray-200 font-bold px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-all active:scale-95 flex items-center gap-1.5 shadow-sm"
+                      >
+                        <Settings className="w-3.5 h-3.5 text-gray-500" />
+                        Configurar destinatarios Email
+                      </button>
                     </div>
-                    <div>
-                      <span className="text-sm font-bold text-gray-900 block">SMS</span>
-                      <span className="inline-block mt-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-gray-100 text-gray-600 border border-gray-200">
-                        No configurado / Próximamente
-                      </span>
-                      <p className="text-xs text-gray-500 mt-1">Integración preparada para futuro proveedor SMS.</p>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-start justify-between opacity-60">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 bg-gray-100 rounded-lg text-gray-500 mt-0.5">
+                        <Smartphone className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <span className="text-sm font-bold text-gray-900 block">SMS</span>
+                        <span className="inline-block mt-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-gray-100 text-gray-600 border border-gray-200">
+                          No configurado / Próximamente
+                        </span>
+                        <p className="text-xs text-gray-500 mt-1">Integración preparada para futuro proveedor SMS.</p>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* 3 WhatsApp / Internal Numbers */}
-            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-6 mb-3">Destinatarios Internos (Máx 3)</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {(() => {
-                const padded = [...(adminNotifications.whatsapp_numbers || [])];
-                while (padded.length < 3) {
-                  padded.push({ label: `Admin ${padded.length + 1}`, number: '', enabled: false });
-                }
-                return padded.slice(0, 3).map((n, i) => {
-                  const updateIndex = (field: 'label' | 'number' | 'enabled', val: any) => {
-                    const nextList = [...padded];
-                    nextList[i] = { ...nextList[i], [field]: val };
-                    setAdminNotifications(prev => ({ ...prev, whatsapp_numbers: nextList }));
-                  };
-                  return (
-                    <div key={i} className="bg-white p-4 rounded-xl border border-gray-200 space-y-3 shadow-sm hover:border-gray-300 transition-colors">
-                      <div className="flex justify-between items-center border-b border-gray-50 pb-2">
-                        <input 
-                          type="text"
-                          value={n.label}
-                          onChange={(e) => updateIndex('label', e.target.value)}
-                          className="text-xs font-bold text-gray-800 uppercase tracking-wider bg-transparent border-none focus:outline-none w-2/3"
-                          placeholder={`Administrador ${i+1}`}
-                        />
-                        <label className="flex items-center cursor-pointer">
-                          <input 
-                            type="checkbox"
-                            checked={n.enabled}
-                            onChange={(e) => updateIndex('enabled', e.target.checked)}
-                            className="w-4 h-4 text-black border-gray-300 rounded focus:ring-black cursor-pointer"
-                          />
-                          <span className="text-[10px] text-gray-500 ml-1.5 font-medium select-none">Activo</span>
-                        </label>
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Número de Celular</label>
-                        <input 
-                          type="text"
-                          value={n.number}
-                          onChange={(e) => updateIndex('number', e.target.value)}
-                          className="w-full text-xs font-mono px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-black focus:border-black"
-                          placeholder="Ej: +59899123456"
-                        />
-                      </div>
-                    </div>
-                  );
-                });
-              })()}
-            </div>
-
-            {/* Email Recipients Block (Max 3) */}
-            <div className="mt-6">
-              <EmailRecipientsConfig
-                scope="admin"
+              {/* Email Recipients Modal */}
+              <EmailRecipientsModal
+                isOpen={isEmailModalOpen}
+                onClose={() => setIsEmailModalOpen(false)}
                 recipients={adminNotifications.email_recipients}
-                onChange={(recs) => setAdminNotifications(p => ({ ...p, email_recipients: recs }))}
+                scope="admin"
+                onSave={async (updatedRecipients) => {
+                  const updatedState = { ...adminNotifications, email_recipients: updatedRecipients };
+                  setAdminNotifications(updatedState);
+                  await saveAdminNotifications(false, updatedState);
+                }}
               />
-            </div>
 
             {/* Config Toggles */}
             <div className="bg-gray-50/50 p-6 rounded-xl border border-gray-200/50 space-y-4 shadow-sm mt-6">
