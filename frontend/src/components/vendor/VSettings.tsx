@@ -149,7 +149,11 @@ export default function VSettings() {
       });
       if (error) throw error;
       toast.success('Notificación de prueba enviada');
-      loadLogs();
+      try {
+        await loadLogs();
+      } catch (logErr) {
+        console.warn('Could not refresh vendor notification logs:', logErr);
+      }
     } catch (err: any) {
       toast.error(err.message || 'Error al enviar la notificación de prueba');
     } finally {
@@ -175,7 +179,11 @@ export default function VSettings() {
       });
       if (error) throw error;
       toast.success(`Correo de prueba enviado a ${user.email}`);
-      loadLogs();
+      try {
+        await loadLogs();
+      } catch (logErr) {
+        console.warn('Could not refresh vendor notification logs:', logErr);
+      }
     } catch (err: any) {
       toast.error(err.message || 'Error al enviar el correo de prueba');
     } finally {

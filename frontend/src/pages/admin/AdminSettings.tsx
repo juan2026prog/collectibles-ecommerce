@@ -521,7 +521,11 @@ export default function AdminSettings() {
       });
       if (error) throw error;
       toast.success('Notificación de prueba enviada');
-      loadWhatsappLogs();
+      try {
+        await fetchNotificationLogs();
+      } catch (logErr) {
+        console.warn('Could not refresh notification logs:', logErr);
+      }
     } catch (err: any) {
       toast.error(err.message || 'Error al enviar la notificación de prueba');
     } finally {
@@ -546,7 +550,11 @@ export default function AdminSettings() {
       });
       if (error) throw error;
       toast.success(`Correo de prueba enviado a ${user.email}`);
-      loadWhatsappLogs();
+      try {
+        await fetchNotificationLogs();
+      } catch (logErr) {
+        console.warn('Could not refresh notification logs:', logErr);
+      }
     } catch (err: any) {
       toast.error(err.message || 'Error al enviar el correo de prueba');
     } finally {
@@ -598,7 +606,7 @@ export default function AdminSettings() {
     }
   }
 
-  async function fetchWhatsappLogs() {
+  async function fetchNotificationLogs() {
     setLoadingLogs(true);
     try {
       const { data, error } = await supabase
@@ -609,11 +617,14 @@ export default function AdminSettings() {
       if (error) throw error;
       setWhatsappLogs(data || []);
     } catch (err: any) {
-      console.error("Error loading admin whatsapp logs:", err);
+      console.error("Error loading admin notification logs:", err);
     } finally {
       setLoadingLogs(false);
     }
   }
+
+  const fetchWhatsappLogs = fetchNotificationLogs;
+  const loadNotificationLogs = fetchNotificationLogs;
 
   async function saveAdminNotifications() {
     try {
