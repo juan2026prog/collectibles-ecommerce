@@ -9,7 +9,7 @@ export default function AdminAffiliates() {
 
   useEffect(() => {
     async function load() {
-      const { data } = await supabase.from('affiliates').select('*, profiles(full_name, email)');
+      const { data } = await supabase.from('affiliates').select('*');
       if (data) setAffiliates(data);
       setLoading(false);
     }

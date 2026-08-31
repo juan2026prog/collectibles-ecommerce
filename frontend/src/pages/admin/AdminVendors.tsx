@@ -87,7 +87,7 @@ export default function AdminVendors() {
         .from('vendors')
         .select(`
           *, 
-          profiles:profiles!vendors_id_fkey(email, first_name, last_name, phone),
+          profiles:profiles(email, first_name, last_name, phone),
           vendor_stores(
             *,
             vendor_store_brands(
