@@ -1988,261 +1988,149 @@ export default function AdminSettings() {
 
       {/* CENTRO DE NOTIFICACIONES MULTICANAL TAB */}
       {currentTab === 'notifications' && (
-        <div className="space-y-8 max-w-4xl">
-          <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6 shadow-sm">
-            <div className="flex justify-between items-center border-b pb-4">
-              <div>
-                <h3 className="font-bold text-lg text-gray-950 flex items-center gap-2">
-                  <Bell className="w-5 h-5 text-indigo-600" /> Centro de Notificaciones
-                </h3>
-                <p className="text-sm text-gray-500 mt-1 font-medium">Configura cómo recibe el equipo de Collectibles los avisos operativos del marketplace.</p>
-              </div>
-              <button 
-                onClick={saveAdminNotifications}
-                className="bg-black text-white px-5 py-2 rounded-lg font-bold hover:bg-gray-800 transition-colors flex items-center gap-2 text-sm shadow-sm"
-              >
-                <Save className="w-4 h-4" />
-                Guardar cambios
-              </button>
+        <div className="space-y-6 max-w-3xl">
+          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-5 shadow-xs">
+            <div>
+              <h3 className="font-bold text-lg text-gray-950">Centro de Notificaciones</h3>
+              <p className="text-xs text-gray-500 mt-0.5 font-medium">Gestioná los avisos del marketplace.</p>
             </div>
 
-            {/* Toggle Activo */}
-            <div className="flex items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-200/50">
+            {/* Row 1: Avisos internos [ON] */}
+            <div className="flex items-center justify-between py-1 min-h-[44px]">
               <div>
-                <span className="text-sm font-bold text-gray-900">Activar servicio de avisos internos</span>
-                <p className="text-xs text-gray-500 mt-0.5 font-medium">Habilita o deshabilita los envíos de notificaciones para el equipo administrativo.</p>
+                <span className="text-sm font-bold text-gray-900 block">Avisos internos</span>
+                <span className="text-xs text-gray-500 font-medium">Notificaciones operativas para el equipo</span>
               </div>
               <button 
+                type="button"
                 onClick={() => setAdminNotifications(p => ({ ...p, is_active: !p.is_active }))}
-                className="focus:outline-none"
+                className="focus:outline-none min-h-[44px] min-w-[44px] flex items-center justify-end"
               >
                 {adminNotifications.is_active ? (
-                  <ToggleRight className="w-10 h-10 text-emerald-600 transition-colors" />
+                  <ToggleRight className="w-9 h-9 text-[#f00856] transition-colors" />
                 ) : (
-                  <ToggleLeft className="w-10 h-10 text-gray-300 transition-colors" />
+                  <ToggleLeft className="w-9 h-9 text-gray-300 transition-colors" />
                 )}
               </button>
             </div>
 
-            {/* PUSH DEVICE MANAGEMENT CARD (Desktop vs Mobile) */}
-            {getMobilePlatform() === 'desktop' ? (
-              <div className="bg-gradient-to-r from-indigo-50/50 to-purple-50/50 p-5 rounded-xl border border-indigo-100 mb-6 shadow-sm">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <BellRing className="w-4 h-4 text-indigo-600" />
-                      <h4 className="text-sm font-bold text-gray-900">Notificaciones Push en este dispositivo</h4>
-                      
-                      {pushStatus.state === 'granted' && (
-                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                          Activas en este dispositivo
-                        </span>
-                      )}
-                      {pushStatus.state === 'default' && (
-                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                          Notificaciones disponibles (Permiso pendiente)
-                        </span>
-                      )}
-                      {pushStatus.state === 'denied' && (
-                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-red-100 text-red-800 border border-red-200">
-                          Bloqueadas por navegador
-                        </span>
-                      )}
-                      {pushStatus.state === 'not_supported' && (
-                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-gray-100 text-gray-700 border border-gray-200">
-                          Navegador no compatible
-                        </span>
-                      )}
-                      {pushStatus.state === 'unconfigured' && (
-                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-gray-100 text-gray-700 border border-gray-200">
-                          OneSignal no configurado
-                        </span>
-                      )}
-                      {pushStatus.state === 'error' && (
-                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-red-100 text-red-800 border border-red-200">
-                          Error de registro
-                        </span>
-                      )}
-                    </div>
+            <hr className="border-gray-200 dark:border-slate-800" />
 
-                    <p className="text-xs text-gray-600 mt-1 font-medium">
-                      {pushStatus.state === 'granted' && (
-                        userDevices.length > 0 
-                          ? `Alertas push activas en tu navegador actual (${userDevices.length} dispositivo(s) vinculado(s)).` 
-                          : 'Notificaciones push activas en este navegador.'
-                      )}
-                      {pushStatus.state === 'default' && 'Permite recibir alertas instantáneas en tu navegador al pulsar el botón de activación.'}
-                      {pushStatus.state === 'denied' && 'Las notificaciones están bloqueadas en este navegador. Permitilas desde la configuración del sitio en tu navegador.'}
-                      {pushStatus.state === 'not_supported' && (
-                        pushStatus.isIOSNonStandalone 
-                          ? 'En iOS (iPhone/iPad) se requiere agregar Collectibles a la pantalla de inicio (PWA) para recibir notificaciones Push.' 
-                          : 'Este navegador/dispositivo no admite notificaciones Push.'
-                      )}
-                      {pushStatus.state === 'unconfigured' && 'OneSignal App ID no está configurado.'}
-                      {pushStatus.state === 'error' && 'No pudimos inicializar las notificaciones. Reintenta o revisa la configuración.'}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {pushStatus.state === 'granted' ? (
-                      <button
-                        type="button"
-                        onClick={handleUnregisterDevice}
-                        className="text-xs bg-white text-red-600 border border-red-200 font-bold px-3 py-2 rounded-lg hover:bg-red-50 transition-all active:scale-95 shadow-sm"
-                      >
-                        Desactivar este dispositivo
-                      </button>
-                    ) : (
-                      (pushStatus.state === 'default' || pushStatus.state === 'error') && (
-                        <button
-                          type="button"
-                          onClick={handleRegisterDevice}
-                          disabled={registeringPush}
-                          className="text-xs bg-indigo-600 text-white font-bold px-4 py-2 rounded-lg hover:bg-indigo-700 transition-all shadow-sm active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
-                        >
-                          <BellRing className="w-3.5 h-3.5" />
-                          {registeringPush ? 'Activando...' : 'Activar notificaciones en este dispositivo'}
-                        </button>
-                      )
-                    )}
-                  </div>
-                </div>
+            {/* Row 2: Notificaciones en este celular */}
+            <div className="space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                <h4 className="text-sm font-bold text-gray-900">Notificaciones en este celular</h4>
+                {pushStatus.state === 'granted' ? (
+                  <span className="text-xs text-emerald-600 font-bold flex items-center gap-1">
+                    ✓ Activo en este dispositivo
+                  </span>
+                ) : (
+                  <span className="text-xs text-amber-600 font-bold">
+                    No activo en este dispositivo
+                  </span>
+                )}
               </div>
-            ) : (
-              <MobilePushSetup
-                userId={user?.id || ''}
-                vendorId={null}
-                pushStatus={pushStatus}
-                onActivate={handleRegisterDevice}
-                onDeactivate={handleUnregisterDevice}
-                onTest={handleSendTestNotification}
-                registeringPush={registeringPush}
-                sendingTest={sendingTest}
-              />
-            )}
 
-            {/* PRUEBA DE NOTIFICACIONES */}
-            <div className="bg-white p-5 rounded-xl border border-gray-200 mb-6 shadow-sm">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div>
-                  <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-amber-500" />
-                    Prueba de Notificaciones
-                  </h4>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Envía una notificación Push de prueba exclusivamente a tu usuario autenticado (auth.uid()).
-                  </p>
-                </div>
+              <div className="flex items-center gap-2 pt-1">
                 <button
                   type="button"
                   onClick={handleSendTestNotification}
                   disabled={sendingTest || pushStatus.state !== 'granted'}
-                  className="text-xs bg-emerald-600 text-white font-bold px-4 py-2 rounded-lg hover:bg-emerald-700 transition-all shadow-sm active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+                  className="px-4 py-2 bg-gray-100 dark:bg-slate-800 text-gray-900 dark:text-white font-bold text-xs rounded-xl min-h-[44px] hover:bg-gray-200 transition-all disabled:opacity-50 cursor-pointer"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${sendingTest ? 'animate-spin' : ''}`} />
                   {sendingTest ? 'Enviando...' : 'Enviar prueba'}
                 </button>
+
+                {pushStatus.state === 'granted' ? (
+                  <button
+                    type="button"
+                    onClick={handleUnregisterDevice}
+                    className="px-4 py-2 bg-rose-50 text-rose-600 border border-rose-200 font-bold text-xs rounded-xl min-h-[44px] hover:bg-rose-100 transition-all cursor-pointer"
+                  >
+                    Desactivar
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleRegisterDevice}
+                    disabled={registeringPush}
+                    className="px-4 py-2 bg-[#f00856] text-white font-bold text-xs rounded-xl min-h-[44px] hover:bg-[#ff2c68] transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {registeringPush ? 'Activando...' : 'Activar'}
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* CANALES DISPONIBLES */}
-            <div>
-              <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Canales Disponibles</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-start justify-between">
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600 mt-0.5">
-                      <BellRing className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <span className="text-sm font-bold text-gray-900 block">Push Notifications</span>
-                      <span className={`inline-block mt-1 px-2 py-0.5 text-[10px] font-bold rounded-full ${pushStatus.state === 'granted' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
-                        {pushStatus.state === 'granted' ? 'Configurado / Activo en dispositivo' : 'Configurado / Permiso pendiente'}
-                      </span>
-                      <p className="text-xs text-gray-500 mt-1">Alertas instantáneas en navegadores y PWA.</p>
-                    </div>
-                  </div>
-                </div>
+            <hr className="border-gray-200 dark:border-slate-800" />
 
-                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-start justify-between opacity-80">
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600 mt-0.5">
-                      <MessageSquare className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <span className="text-sm font-bold text-gray-900 block">WhatsApp</span>
-                      <span className="inline-block mt-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-50 text-amber-700 border border-amber-100">
-                        No conectado
-                      </span>
-                      <p className="text-xs text-gray-500 mt-1">Requiere credenciales del proveedor Meta Cloud API.</p>
-                    </div>
-                  </div>
-                </div>
+            {/* Row 3: Canales (Push, Email, WhatsApp, SMS) */}
+            <div className="space-y-4 pt-1">
+              <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Canales de envío</h4>
 
-                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-start justify-between">
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 bg-blue-50 rounded-lg text-blue-600 mt-0.5">
-                      <Mail className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <span className="text-sm font-bold text-gray-900 block">Email</span>
-                      <span className="inline-block mt-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
-                        Proveedor: Configurado
-                      </span>
-                      <p className="text-xs text-gray-500 mt-1">Envíos transaccionales mediante Resend.</p>
-                    </div>
-                  </div>
-                    <div className="flex flex-col items-end gap-2 mt-0.5">
-                      <button
-                        type="button"
-                        onClick={handleSendTestEmail}
-                        disabled={sendingTestEmail}
-                        className="text-xs bg-blue-50 text-blue-700 border border-blue-200 font-bold px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
-                      >
-                        <Mail className={`w-3.5 h-3.5 ${sendingTestEmail ? 'animate-spin' : ''}`} />
-                        {sendingTestEmail ? 'Enviando...' : 'Enviar prueba por Email'}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setIsEmailModalOpen(true)}
-                        className="text-xs bg-gray-50 text-gray-700 border border-gray-200 font-bold px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-all active:scale-95 flex items-center gap-1.5 shadow-sm"
-                      >
-                        <Settings className="w-3.5 h-3.5 text-gray-500" />
-                        Configurar destinatarios Email
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-start justify-between opacity-60">
-                    <div className="flex items-start gap-3">
-                      <div className="p-2 bg-gray-100 rounded-lg text-gray-500 mt-0.5">
-                        <Smartphone className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <span className="text-sm font-bold text-gray-900 block">SMS</span>
-                        <span className="inline-block mt-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-gray-100 text-gray-600 border border-gray-200">
-                          No configurado / Próximamente
-                        </span>
-                        <p className="text-xs text-gray-500 mt-1">Integración preparada para futuro proveedor SMS.</p>
-                      </div>
-                    </div>
-                  </div>
+              {/* Push */}
+              <div className="flex items-center justify-between py-2 border-b border-gray-100 pb-3">
+                <div>
+                  <span className="text-sm font-bold text-gray-900 block">Push Notifications</span>
+                  <span className="text-xs text-gray-500 font-medium">Proveedor configurado</span>
                 </div>
               </div>
 
-              {/* Email Recipients Modal */}
-              <EmailRecipientsModal
-                isOpen={isEmailModalOpen}
-                onClose={() => setIsEmailModalOpen(false)}
-                recipients={adminNotifications.email_recipients || []}
-                scope="admin"
-                onSave={async (updatedRecipients) => {
-                  const updatedState = { ...adminNotifications, email_recipients: updatedRecipients };
-                  setAdminNotifications(updatedState);
-                  await saveAdminNotifications(false, updatedState);
-                }}
-              />
+              {/* Email */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-2 border-b border-gray-100 pb-3">
+                <div>
+                  <span className="text-sm font-bold text-gray-900 block">Email</span>
+                  <span className="text-xs text-gray-500 font-medium">Proveedor configurado</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSendTestEmail}
+                    disabled={sendingTestEmail}
+                    className="px-3.5 py-2 bg-gray-100 text-gray-900 font-bold text-xs rounded-xl min-h-[44px] hover:bg-gray-200 transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {sendingTestEmail ? 'Enviando...' : 'Probar'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsEmailModalOpen(true)}
+                    className="px-3.5 py-2 bg-gray-100 text-gray-900 font-bold text-xs rounded-xl min-h-[44px] hover:bg-gray-200 transition-all cursor-pointer"
+                  >
+                    Destinatarios
+                  </button>
+                </div>
+              </div>
+
+              {/* WhatsApp */}
+              <div className="flex items-center justify-between py-2 border-b border-gray-100 pb-3">
+                <div>
+                  <span className="text-sm font-bold text-gray-900 block">WhatsApp</span>
+                  <span className="text-xs text-amber-600 font-bold">No conectado</span>
+                </div>
+              </div>
+
+              {/* SMS */}
+              <div className="flex items-center justify-between py-2">
+                <div>
+                  <span className="text-sm font-bold text-gray-900 block">SMS</span>
+                  <span className="text-xs text-gray-400 font-bold">No configurado</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Email Recipients Modal */}
+          <EmailRecipientsModal
+            isOpen={isEmailModalOpen}
+            onClose={() => setIsEmailModalOpen(false)}
+            recipients={adminNotifications.email_recipients || []}
+            scope="admin"
+            onSave={async (updatedRecipients) => {
+              const updatedState = { ...adminNotifications, email_recipients: updatedRecipients };
+              setAdminNotifications(updatedState);
+              await saveAdminNotifications(false, updatedState);
+            }}
+          />
 
             {/* Config Toggles */}
             <div className="bg-gray-50/50 p-6 rounded-xl border border-gray-200/50 space-y-4 shadow-sm mt-6">
@@ -2271,7 +2159,6 @@ export default function AdminSettings() {
                 ))}
               </div>
             </div>
-          </div>
 
           {/* Logs Globales */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
@@ -2382,10 +2269,10 @@ export default function AdminSettings() {
                   </table>
                 </div>
               )}
-            </div>
           </div>
         </div>
-      )}
+      </div>
+    )}
       <MediaPickerModal 
         isOpen={showMediaPicker !== false}
         onClose={() => setShowMediaPicker(false)}
