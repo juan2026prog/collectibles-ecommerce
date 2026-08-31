@@ -56,16 +56,36 @@ export default function AdminBanners() {
         <h2 className="text-xl sm:text-2xl font-black text-gray-900">Gestión del Home — Módulos</h2>
       </div>
 
-      {/* Tab navigation */}
-      <div className="flex gap-1 mb-4 bg-gray-100/90 rounded-xl p-1 w-full md:w-fit overflow-x-auto no-scrollbar">
-        {tabs.map(t => (
-          <button key={t.key} onClick={() => setActiveTab(t.key)}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold transition-colors whitespace-nowrap min-h-[44px] ${
-              activeTab === t.key ? 'bg-white shadow-sm text-gray-900 border border-gray-200/50' : 'text-gray-500 hover:text-gray-900'
-            }`}>
-            <t.icon className="w-4 h-4" /> {t.label}
-          </button>
-        ))}
+      {/* Tab navigation: Mobile Dropdown (< md) & Desktop Horizontal Pills (>= md) */}
+      <div>
+        <div className="md:hidden mb-4">
+          <label htmlFor="admin-banners-tab-select" className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+            Módulo del Home
+          </label>
+          <select
+            id="admin-banners-tab-select"
+            value={activeTab}
+            onChange={(e) => setActiveTab(e.target.value as any)}
+            className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2.5 text-xs font-bold text-gray-900 shadow-2xs outline-none min-h-[44px] cursor-pointer"
+          >
+            {tabs.map(t => (
+              <option key={t.key} value={t.key}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="hidden md:flex gap-1 mb-4 bg-gray-100/90 rounded-xl p-1 w-full md:w-fit overflow-x-auto no-scrollbar">
+          {tabs.map(t => (
+            <button key={t.key} onClick={() => setActiveTab(t.key)}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold transition-colors whitespace-nowrap min-h-[44px] ${
+                activeTab === t.key ? 'bg-white shadow-sm text-gray-900 border border-gray-200/50' : 'text-gray-500 hover:text-gray-900'
+              }`}>
+              <t.icon className="w-4 h-4" /> {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {activeTab === 'hero' && <HeroTab />}
