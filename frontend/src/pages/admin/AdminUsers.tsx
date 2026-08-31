@@ -5,6 +5,7 @@ import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
 import CustomerFileModal from '../../components/admin/crm/CustomerFileModal';
 import { STORE_TYPE_OPTIONS, type StoreType } from '../../config/conditionConfig';
+import { BackofficePageHeader, BackofficeSearch, BackofficeTabs, BackofficeCompactRow } from '../../components/backoffice';
 
 export default function AdminUsers() {
   const [users, setUsers] = useState<any[]>([]);

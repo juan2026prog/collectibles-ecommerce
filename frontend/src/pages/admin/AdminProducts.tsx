@@ -15,6 +15,7 @@ import { CONDITION_OPTIONS, getConditionLabel, normalizeCondition } from '../../
 import { CardDetailsFormSection } from '../../components/vendor/CardDetailsFormSection';
 import ResponsiveDataList from '../../components/admin/ResponsiveDataList';
 import FilterDrawer from '../../components/admin/FilterDrawer';
+import { BackofficePageHeader, BackofficeSearch, BackofficeActionMenu, BackofficeStatusBadge } from '../../components/backoffice';
 import { type CardDetails, buildCategoryTreeOptions, isSportsCardCategory, isTCGCategory } from '../../config/tcgConfig';
 import { validateProductForPublication, type PublicationValidationError } from '../../lib/productPublicationValidator';
 import { mapDatabaseErrorToUserMessage } from '../../lib/databaseErrorMapper';
@@ -1420,9 +1421,11 @@ export default function AdminProducts() {
                          </div>
                        </div>
 
-                       <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shrink-0 ${p.status === 'published' ? 'text-green-700 bg-green-50' : 'text-gray-500 bg-gray-100'}`}>
-                         {p.status === 'published' ? 'Visible' : 'Oculto'}
-                       </span>
+                       <BackofficeStatusBadge
+                         status={p.status}
+                         label={p.status === 'published' ? 'Visible' : 'Oculto'}
+                         type={p.status === 'published' ? 'success' : 'neutral'}
+                       />
                      </div>
 
                      <div className="flex items-center justify-between pt-1 border-t border-gray-100">
@@ -1440,33 +1443,12 @@ export default function AdminProducts() {
                          >
                            Editar
                          </button>
-                         <div className="relative group">
-                           <button
-                             type="button"
-                             onClick={(e) => {
-                               const el = e.currentTarget.nextElementSibling;
-                               if (el) el.classList.toggle('hidden');
-                             }}
-                             className="p-1.5 text-gray-500 hover:text-black bg-gray-50 hover:bg-gray-100 rounded-lg min-h-[36px] min-w-[36px] flex items-center justify-center font-bold"
-                             title="Más acciones"
-                           >
-                             ⋮
-                           </button>
-                           <div className="hidden absolute right-0 bottom-full mb-1 w-32 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1 text-xs font-medium">
-                             <button
-                               onClick={(e) => handleDuplicate(p, e)}
-                               className="w-full px-3 py-1.5 text-left hover:bg-gray-50 flex items-center gap-2 text-gray-700"
-                             >
-                               <Copy className="w-3.5 h-3.5" /> Duplicar
-                             </button>
-                             <button
-                               onClick={() => handleDelete(p)}
-                               className="w-full px-3 py-1.5 text-left hover:bg-red-50 text-red-600 flex items-center gap-2"
-                             >
-                               <Trash2 className="w-3.5 h-3.5" /> Eliminar
-                             </button>
-                           </div>
-                         </div>
+                         <BackofficeActionMenu
+                           items={[
+                             { label: 'Duplicar', icon: Copy, onClick: () => handleDuplicate(p) },
+                             { label: 'Eliminar', icon: Trash2, onClick: () => handleDelete(p), danger: true },
+                           ]}
+                         />
                        </div>
                      </div>
                    </div>

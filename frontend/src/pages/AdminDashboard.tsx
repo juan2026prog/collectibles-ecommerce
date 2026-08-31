@@ -6,7 +6,7 @@ import {
   DollarSign, ArrowUpRight, ShoppingCart, Users, Package, TrendingUp,
   AlertTriangle, Clock, Eye, Star, Store, FileText, Settings as SettingsIcon, RefreshCw, ChevronRight
 } from 'lucide-react';
-import ResponsiveDataList from '../components/admin/ResponsiveDataList';
+import { BackofficeKPI, BackofficeResponsiveDataList } from '../components/backoffice';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -160,76 +160,54 @@ export default function AdminDashboard() {
 
       {/* KPI Grid: 2 cols on mobile (<1024px), 4 cols >=1024px */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 md:gap-6">
-        {/* Total Revenue */}
-        <div className="bg-white rounded-xl shadow-2xs border border-gray-200 p-3 sm:p-5">
-          <div className="flex justify-between items-start">
-            <div className="text-gray-500 font-bold text-[10px] sm:text-xs tracking-wider uppercase">Ingresos</div>
-            <div className="p-1.5 bg-green-50 rounded-lg shrink-0"><DollarSign className="w-4 h-4 text-green-600" /></div>
-          </div>
-          <div className="mt-2 flex items-baseline flex-wrap gap-1">
-            <div className="text-lg sm:text-2xl font-black text-gray-900">${stats.totalRevenue.toLocaleString()}</div>
-          </div>
-        </div>
+        <BackofficeKPI
+          label="Ingresos"
+          value={`$${stats.totalRevenue.toLocaleString()}`}
+          icon={DollarSign}
+          variant="admin"
+        />
 
-        {/* Orders */}
-        <div className="bg-white rounded-xl shadow-2xs border border-gray-200 p-3 sm:p-5">
-          <div className="flex justify-between items-start">
-            <div className="text-gray-500 font-bold text-[10px] sm:text-xs tracking-wider uppercase">Pedidos</div>
-            <div className="p-1.5 bg-blue-50 rounded-lg shrink-0"><ShoppingCart className="w-4 h-4 text-blue-600" /></div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-1 flex-wrap">
-            <div className="text-lg sm:text-2xl font-black text-gray-900">{stats.activeOrders}</div>
-            {stats.pendingOrders > 0 && (
+        <BackofficeKPI
+          label="Pedidos"
+          value={stats.activeOrders}
+          icon={ShoppingCart}
+          variant="admin"
+          secondaryBadge={
+            stats.pendingOrders > 0 ? (
               <span className="text-[10px] font-bold text-yellow-700 bg-yellow-50 px-1 py-0.5 rounded">
                 {stats.pendingOrders} pend.
               </span>
-            )}
-          </div>
-        </div>
+            ) : undefined
+          }
+        />
 
-        {/* Products */}
-        <div className="bg-white rounded-xl shadow-2xs border border-gray-200 p-3 sm:p-5">
-          <div className="flex justify-between items-start">
-            <div className="text-gray-500 font-bold text-[10px] sm:text-xs tracking-wider uppercase">Productos</div>
-            <div className="p-1.5 bg-purple-50 rounded-lg shrink-0"><Package className="w-4 h-4 text-purple-600" /></div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-1 flex-wrap">
-            <div className="text-lg sm:text-2xl font-black text-gray-900">{stats.totalProducts}</div>
-            {stats.lowStockCount > 0 && (
+        <BackofficeKPI
+          label="Productos"
+          value={stats.totalProducts}
+          icon={Package}
+          variant="admin"
+          secondaryBadge={
+            stats.lowStockCount > 0 ? (
               <span className="text-[10px] font-bold text-red-600 bg-red-50 px-1 py-0.5 rounded">
                 {stats.lowStockCount} stock bajo
               </span>
-            )}
-          </div>
-        </div>
+            ) : undefined
+          }
+        />
 
-        {/* Customers */}
-        <div className="bg-white rounded-xl shadow-2xs border border-gray-200 p-3 sm:p-5">
-          <div className="flex justify-between items-start">
-            <div className="text-gray-500 font-bold text-[10px] sm:text-xs tracking-wider uppercase">Clientes</div>
-            <div className="p-1.5 bg-indigo-50 rounded-lg shrink-0"><Users className="w-4 h-4 text-indigo-600" /></div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-1 flex-wrap">
-            <div className="text-lg sm:text-2xl font-black text-gray-900">{stats.totalCustomers}</div>
-          </div>
-        </div>
+        <BackofficeKPI
+          label="Clientes"
+          value={stats.totalCustomers}
+          icon={Users}
+          variant="admin"
+        />
       </div>
 
-      {/* Two-column layout */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 md:gap-8">
-        {/* Recent Orders */}
-        <div className="xl:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-            <h3 className="font-bold text-gray-900 flex items-center gap-2 text-sm sm:text-base">
-              <FileText className="w-4 h-4 text-gray-400" /> Últimos Pedidos
-            </h3>
-            <Link to="/admin/orders" className="text-xs sm:text-sm font-bold text-primary-600 hover:text-primary-700">
-              Ver todos →
-            </Link>
-          </div>
-
-          <ResponsiveDataList
-            items={recentOrders}
+      {/* RECENT ORDERS LIST */}
+      <BackofficeResponsiveDataList
+        title="Últimos Pedidos"
+        subtitle="Monitoreo en tiempo real de los pedidos ingresados."
+        data={recentOrders}
             keyExtractor={(o) => o.id}
             emptyTitle="Aún no hay pedidos"
             emptyDescription="Los pedidos aparecerán aquí cuando los clientes compren en la tienda."
@@ -286,7 +264,6 @@ export default function AdminDashboard() {
               );
             }}
           />
-        </div>
 
         {/* Quick Access & Products */}
         <div className="space-y-6">
@@ -341,6 +318,5 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
-    </div>
   );
 }
