@@ -9,6 +9,7 @@ import { useCurrency } from '../contexts/CurrencyContext';
 import { URUGUAY_LOCATIONS, DEPARTAMENTOS } from '../utils/uruguayLocations';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import { useImageProtection } from '../hooks/useImageProtection';
+import { BackofficePageHeader, BackofficeTabs, BackofficeStatusBadge, BackofficeCompactRow, BackofficePrimaryAction } from '../components/backoffice';
 
 function getOrderItemImage(item: any): string {
   const img = item.products?.images?.[0];

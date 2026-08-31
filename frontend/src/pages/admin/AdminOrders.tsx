@@ -7,6 +7,7 @@ import { useConfirmModal } from '../../components/admin/ConfirmModal';
 import { createDacShipment, getDacLabel, trackDacShipment } from '../../lib/dac';
 import ResponsiveDataList from '../../components/admin/ResponsiveDataList';
 import FilterDrawer from '../../components/admin/FilterDrawer';
+import { BackofficePageHeader, BackofficeSearch, BackofficeTabs, BackofficeStatusBadge, BackofficeActionMenu } from '../../components/backoffice';
 
 const SUPABASE_URL = 'https://cobtsgkwcftvexaarwmo.supabase.co';
 const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNvYnRzZ2t3Y2Z0dmV4YWFyd21vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NzIwNTMsImV4cCI6MjA5MDE0ODA1M30.vXyiMl093ojZ8OyEpRuGnX5O5lHsLXxljynrYtMmf50';

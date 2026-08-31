@@ -11,6 +11,7 @@ import { resolveImage } from '../../lib/imageUtils';
 import { isRealPaidOrder } from '../../lib/payments';
 import VendorOnboardingWidget from './VendorOnboardingWidget';
 import ResponsiveDataList from '../admin/ResponsiveDataList';
+import { BackofficeKPI, BackofficePrimaryAction, BackofficePageHeader } from '../backoffice';
 
 interface VOverviewProps {
   onChangeTab?: (tab: string) => void;

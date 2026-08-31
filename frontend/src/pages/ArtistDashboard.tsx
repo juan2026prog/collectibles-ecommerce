@@ -7,6 +7,7 @@ import {
   AlertCircle, ChevronRight, X, Image as ImageIcon, Send, RefreshCw, Truck
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+import { BackofficePageHeader, BackofficeKPI, BackofficeTabs, BackofficeStatusBadge, BackofficeCompactRow, BackofficePrimaryAction } from '../components/backoffice';
 
 export default function ArtistDashboard() {
   const { user, profile } = useAuth();

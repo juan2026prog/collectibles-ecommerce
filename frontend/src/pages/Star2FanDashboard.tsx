@@ -11,6 +11,7 @@ import S2FEarnings from '../components/star2fan/S2FEarnings';
 import S2FProfile from '../components/star2fan/S2FProfile';
 import S2FReviews from '../components/star2fan/S2FReviews';
 import S2FSupport from '../components/star2fan/S2FSupport';
+import { BackofficePageHeader, BackofficeTabs, BackofficeKPI } from '../components/backoffice';
 
 export default function Star2FanDashboard() {
   const { user, profile } = useAuth();

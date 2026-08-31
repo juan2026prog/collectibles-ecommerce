@@ -8,6 +8,7 @@ import {
   AlertCircle, Edit2, Save, X
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+import { BackofficePageHeader, BackofficeKPI, BackofficeTabs, BackofficeStatusBadge, BackofficeCompactRow, BackofficePrimaryAction } from '../components/backoffice';
 
 export default function AffiliateDashboard() {
   const { user, profile } = useAuth();

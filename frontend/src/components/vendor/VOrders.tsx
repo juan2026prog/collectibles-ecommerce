@@ -10,7 +10,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/admin/Toast';
 import ShipmentLabelModal from '../ShipmentLabelModal';
 import ResponsiveDataList from '../admin/ResponsiveDataList';
-
+import { BackofficePrimaryAction, BackofficePageHeader, BackofficeStatusBadge, BackofficeTabs, BackofficeSearch } from '../backoffice';
 import { isOrderPaymentApproved } from '../../lib/payments';
 
 export default function VOrders() {

@@ -15,6 +15,8 @@ import AdminLegalDocuments from '../../components/admin/AdminLegalDocuments';
 import { useFeatures } from '../../contexts/FeatureToggleContext';
 import { supabase } from '../../lib/supabase';
 
+import { BackofficePageHeader, BackofficeTabs, BackofficeKPI } from '../../components/backoffice';
+
 export default function AdminMarketplace() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -63,16 +65,16 @@ export default function AdminMarketplace() {
   };
 
   const tabs = [
-    { id: 'vendors', label: 'Vendors', icon: Store },
-    { id: 'onboarding', label: 'Revisión Onboarding', icon: Sparkles },
-    { id: 'kyc', label: 'KYC', icon: ShieldCheck },
-    { id: 'stores', label: 'Tiendas Oficiales', icon: Award },
-    { id: 'taxonomias', label: 'Taxonomías', icon: Sliders },
-    { id: 'logistica', label: 'Logística', icon: Truck },
-    { id: 'liquidaciones', label: 'Liquidaciones', icon: CreditCard },
-    { id: 'conexiones', label: 'Conexiones', icon: Link2 },
-    { id: 'legal', label: 'Términos & Legal', icon: FileText },
-    { id: 'analytics', label: 'Analytics', icon: Trophy },
+    { key: 'vendors', label: 'Vendors' },
+    { key: 'onboarding', label: 'Revisión Onboarding' },
+    { key: 'kyc', label: 'KYC' },
+    { key: 'stores', label: 'Tiendas Oficiales' },
+    { key: 'taxonomias', label: 'Taxonomías' },
+    { key: 'logistica', label: 'Logística' },
+    { key: 'liquidaciones', label: 'Liquidaciones' },
+    { key: 'conexiones', label: 'Conexiones' },
+    { key: 'legal', label: 'Términos & Legal' },
+    { key: 'analytics', label: 'Analytics' },
   ];
 
   if (!features.marketplaceEnabled) {
@@ -85,34 +87,16 @@ export default function AdminMarketplace() {
 
   return (
     <div className="space-y-4 min-w-0">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">Marketplace</h1>
-      </div>
+      <BackofficePageHeader
+        title="Marketplace"
+        subtitle="Gestión centralizada de vendedores, comisiones y tiendas oficiales."
+      />
 
-      <div className="border-b border-gray-200 dark:border-slate-800 pb-1">
-        <nav className="flex items-center gap-1.5 overflow-x-auto scrollbar-none no-scrollbar py-1 text-xs">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = currentTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setTab(tab.id)}
-                className={`
-                  whitespace-nowrap flex items-center px-3 py-2 rounded-xl font-bold text-xs transition-all min-h-[44px] shrink-0
-                  ${isActive 
-                    ? 'bg-[#f00856] text-white shadow-sm' 
-                    : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
-                  }
-                `}
-              >
-                <Icon className={`w-4 h-4 mr-1.5 shrink-0 ${isActive ? 'text-white' : 'text-gray-500'}`} />
-                {tab.label}
-              </button>
-            );
-          })}
-        </nav>
-      </div>
+      <BackofficeTabs
+        tabs={tabs}
+        activeTab={currentTab}
+        onChange={setTab}
+      />
 
       <div className="mt-6">
         {currentTab === 'vendors' && <AdminVendors />}
