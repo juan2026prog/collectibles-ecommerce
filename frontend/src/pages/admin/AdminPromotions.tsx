@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Percent, Plus, Trash2, Save, X, Calendar, CreditCard, Tag, Building2, ChevronDown, AlertTriangle } from 'lucide-react';
+import { BackofficePageHeader, BackofficePrimaryAction } from '../../components/backoffice';
 
 // ═══ URUGUAYAN BANK CARDS ═══
 const UY_CARDS = [
@@ -120,13 +121,13 @@ export default function AdminPromotions() {
       const [{ data: b }, { data: c }, { data: v }, { data: t }, { data: g }] = await Promise.all([
         supabase.from('brands').select('id, name'),
         supabase.from('categories').select('id, name'),
-        supabase.from('vendors').select('id, name'),
+        supabase.from('vendors').select('id, store_name'),
         supabase.from('tags').select('id, name'),
         supabase.from('product_groups').select('id, name')
       ]);
       setBrands(b || []);
       setCategories(c || []);
-      setVendors(v || []);
+      setVendors((v || []).map(item => ({ id: item.id, name: item.store_name || item.name || 'Vendor' })));
       setTags(t || []);
       setGroups(g || []);
     } catch(e) {
@@ -296,18 +297,20 @@ export default function AdminPromotions() {
 
   return (
     <div className="space-y-4 min-w-0">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
-        <div className="flex items-center gap-3">
-          <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">Promociones</h2>
-          <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full border border-gray-200">
-            {promos.length} {promos.length === 1 ? 'promoción' : 'promociones'}
-          </span>
-        </div>
-        <div className="flex gap-2">
-          {saved && <span className="text-xs font-bold text-green-600 bg-green-50 px-3 py-2 rounded-xl border border-green-200 flex items-center gap-1 min-h-[44px]"><Save className="w-4 h-4" /> Guardado</span>}
-          <button onClick={startNew} className="bg-[#f00856] hover:bg-[#ff2c68] text-white font-semibold text-xs sm:text-sm px-4 py-2 rounded-xl cursor-pointer min-h-[44px] shadow-sm active:scale-95 flex items-center justify-center gap-1.5 transition-all"><Plus className="w-4 h-4" /> Nueva Promoción</button>
-        </div>
-      </div>
+      <BackofficePageHeader
+        title="Promociones"
+        subtitle="Reglas de descuento, cupones automáticos y promociones bancarias."
+        count={promos.length}
+        countLabel="promociones"
+        actions={
+          <div className="flex gap-2">
+            {saved && <span className="text-xs font-bold text-green-600 bg-green-50 px-3 py-2 rounded-xl border border-green-200 flex items-center gap-1 min-h-[44px]"><Save className="w-4 h-4" /> Guardado</span>}
+            <BackofficePrimaryAction icon={Plus} onClick={startNew} variant="admin">
+              Nueva Promoción
+            </BackofficePrimaryAction>
+          </div>
+        }
+      />
 
       <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl flex items-start gap-2.5">
         <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
