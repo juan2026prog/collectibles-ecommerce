@@ -158,67 +158,60 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* KPI Grid: 1 col <390px, 2 cols 390px-1023px, 4 cols >=1024px */}
-      <div className="grid grid-cols-1 min-[390px]:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+      {/* KPI Grid: 2 cols on mobile (<1024px), 4 cols >=1024px */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 md:gap-6">
         {/* Total Revenue */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow">
+        <div className="bg-white rounded-xl shadow-2xs border border-gray-200 p-3 sm:p-5">
           <div className="flex justify-between items-start">
-            <div className="text-gray-500 font-medium text-xs tracking-widest uppercase">Ingresos Totales</div>
-            <div className="p-2 bg-green-50 rounded-lg shrink-0"><DollarSign className="w-5 h-5 text-green-600" /></div>
+            <div className="text-gray-500 font-bold text-[10px] sm:text-xs tracking-wider uppercase">Ingresos</div>
+            <div className="p-1.5 bg-green-50 rounded-lg shrink-0"><DollarSign className="w-4 h-4 text-green-600" /></div>
           </div>
-          <div className="mt-3 sm:mt-4 flex items-baseline flex-wrap gap-1">
-            <div className="text-2xl sm:text-3xl font-black text-gray-900">${stats.totalRevenue.toLocaleString()}</div>
-            <div className="flex items-center text-[10px] sm:text-xs font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">
-              <ArrowUpRight className="w-3 h-3 mr-0.5" /> Tiempo Real
-            </div>
+          <div className="mt-2 flex items-baseline flex-wrap gap-1">
+            <div className="text-lg sm:text-2xl font-black text-gray-900">${stats.totalRevenue.toLocaleString()}</div>
           </div>
-          <p className="text-[11px] text-gray-400 mt-2">De pedidos pagados, enviados y entregados</p>
         </div>
 
         {/* Orders */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow">
+        <div className="bg-white rounded-xl shadow-2xs border border-gray-200 p-3 sm:p-5">
           <div className="flex justify-between items-start">
-            <div className="text-gray-500 font-medium text-xs tracking-widest uppercase">Pedidos</div>
-            <div className="p-2 bg-blue-50 rounded-lg shrink-0"><ShoppingCart className="w-5 h-5 text-blue-600" /></div>
+            <div className="text-gray-500 font-bold text-[10px] sm:text-xs tracking-wider uppercase">Pedidos</div>
+            <div className="p-1.5 bg-blue-50 rounded-lg shrink-0"><ShoppingCart className="w-4 h-4 text-blue-600" /></div>
           </div>
-          <div className="mt-3 sm:mt-4 flex items-baseline gap-2 flex-wrap">
-            <div className="text-2xl sm:text-3xl font-black text-gray-900">{stats.activeOrders}</div>
+          <div className="mt-2 flex items-baseline gap-1 flex-wrap">
+            <div className="text-lg sm:text-2xl font-black text-gray-900">{stats.activeOrders}</div>
             {stats.pendingOrders > 0 && (
-              <span className="text-[10px] sm:text-xs font-bold text-yellow-700 bg-yellow-50 px-1.5 py-0.5 rounded flex items-center gap-1">
-                <Clock className="w-3 h-3" /> {stats.pendingOrders} pendientes
+              <span className="text-[10px] font-bold text-yellow-700 bg-yellow-50 px-1 py-0.5 rounded">
+                {stats.pendingOrders} pend.
               </span>
             )}
           </div>
-          <Link to="/admin/orders" className="text-xs text-primary-600 font-bold mt-2 block hover:underline">Ver todos →</Link>
         </div>
 
         {/* Products */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow">
+        <div className="bg-white rounded-xl shadow-2xs border border-gray-200 p-3 sm:p-5">
           <div className="flex justify-between items-start">
-            <div className="text-gray-500 font-medium text-xs tracking-widest uppercase">Productos</div>
-            <div className="p-2 bg-purple-50 rounded-lg shrink-0"><Package className="w-5 h-5 text-purple-600" /></div>
+            <div className="text-gray-500 font-bold text-[10px] sm:text-xs tracking-wider uppercase">Productos</div>
+            <div className="p-1.5 bg-purple-50 rounded-lg shrink-0"><Package className="w-4 h-4 text-purple-600" /></div>
           </div>
-          <div className="mt-3 sm:mt-4 flex items-baseline gap-2 flex-wrap">
-            <div className="text-2xl sm:text-3xl font-black text-gray-900">{stats.totalProducts}</div>
+          <div className="mt-2 flex items-baseline gap-1 flex-wrap">
+            <div className="text-lg sm:text-2xl font-black text-gray-900">{stats.totalProducts}</div>
             {stats.lowStockCount > 0 && (
-              <span className="text-[10px] sm:text-xs font-bold text-red-700 bg-red-50 px-1.5 py-0.5 rounded flex items-center gap-1">
-                <AlertTriangle className="w-3 h-3" /> {stats.lowStockCount} bajo stock
+              <span className="text-[10px] font-bold text-red-600 bg-red-50 px-1 py-0.5 rounded">
+                {stats.lowStockCount} stock bajo
               </span>
             )}
           </div>
-          <Link to="/admin/products" className="text-xs text-primary-600 font-bold mt-2 block hover:underline">Gestionar →</Link>
         </div>
 
         {/* Customers */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow">
+        <div className="bg-white rounded-xl shadow-2xs border border-gray-200 p-3 sm:p-5">
           <div className="flex justify-between items-start">
-            <div className="text-gray-500 font-medium text-xs tracking-widest uppercase">Clientes</div>
-            <div className="p-2 bg-indigo-50 rounded-lg shrink-0"><Users className="w-5 h-5 text-indigo-600" /></div>
+            <div className="text-gray-500 font-bold text-[10px] sm:text-xs tracking-wider uppercase">Clientes</div>
+            <div className="p-1.5 bg-indigo-50 rounded-lg shrink-0"><Users className="w-4 h-4 text-indigo-600" /></div>
           </div>
-          <div className="mt-3 sm:mt-4 flex items-baseline">
-            <div className="text-2xl sm:text-3xl font-black text-gray-900">{stats.totalCustomers}</div>
+          <div className="mt-2 flex items-baseline gap-1 flex-wrap">
+            <div className="text-lg sm:text-2xl font-black text-gray-900">{stats.totalCustomers}</div>
           </div>
-          <Link to="/admin/customers" className="text-xs text-primary-600 font-bold mt-2 block hover:underline">Ver CRM →</Link>
         </div>
       </div>
 
@@ -245,36 +238,26 @@ export default function AdminDashboard() {
               const profile = o.customer;
               const customerName = profile?.first_name || profile?.email || 'Anónimo';
               return (
-                <div key={o.id} className="bg-white rounded-xl border border-gray-200 p-4 space-y-3 shadow-xs">
+                <div key={o.id} className="bg-white rounded-xl border border-gray-200 p-3 space-y-2 shadow-2xs">
                   <div className="flex items-center justify-between">
-                    <span className="font-black text-primary-600 text-sm">
-                      Pedido #{o.id.slice(0, 8)}
+                    <span className="font-bold text-gray-900 text-xs truncate max-w-[200px]">
+                      #{o.id.slice(0, 8)} · <span className="text-gray-500 font-normal">{customerName}</span>
                     </span>
-                    <span className={`px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-md border ${st.cls}`}>
+                    <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded border ${st.cls}`}>
                       {st.label}
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 text-xs border-t border-b border-gray-100 py-2">
-                    <div>
-                      <span className="text-gray-400 block text-[10px] uppercase font-semibold">Cliente</span>
-                      <span className="font-bold text-gray-800 truncate block">{customerName}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-400 block text-[10px] uppercase font-semibold">Total</span>
-                      <span className="font-black text-gray-900 text-sm">${Number(o.total_amount).toLocaleString()}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs pt-1">
-                    <span className="text-gray-400">
-                      Fecha: {new Date(o.created_at).toLocaleDateString('es')}
+                  <div className="flex items-center justify-between pt-1 border-t border-gray-100">
+                    <span className="font-black text-gray-900 text-sm">
+                      ${Number(o.total_amount).toLocaleString()}
+                      <span className="text-[10px] text-gray-400 font-normal ml-2">{new Date(o.created_at).toLocaleDateString('es')}</span>
                     </span>
                     <button
                       onClick={() => navigate('/admin/orders')}
-                      className="px-3 py-1.5 bg-primary-50 text-primary-700 hover:bg-primary-100 font-bold rounded-lg transition-colors flex items-center gap-1 min-h-[36px]"
+                      className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-900 font-bold rounded-lg text-xs transition-colors flex items-center gap-1 min-h-[36px]"
                     >
-                      Ver pedido <ChevronRight className="w-3.5 h-3.5" />
+                      Ver <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>

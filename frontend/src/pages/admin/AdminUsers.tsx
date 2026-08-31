@@ -405,12 +405,29 @@ export default function AdminUsers() {
       {!showAudit ? (
         <>
           {/* Filters Bar */}
-          <div className="flex flex-wrap gap-3 items-center">
-            <div className="relative flex-1 min-w-[250px] max-w-md">
+          <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center">
+            <div className="relative flex-1 w-full md:max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input className="form-input pl-10 w-full" placeholder="Buscar por email, nombre o tienda..." value={search} onChange={e => setSearch(e.target.value)} />
+              <input className="form-input pl-10 w-full text-xs py-2 rounded-xl" placeholder="Buscar por email, nombre o tienda..." value={search} onChange={e => setSearch(e.target.value)} />
             </div>
-            <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+
+            {/* Mobile Filter Selector (< md) */}
+            <div className="md:hidden w-full">
+              <select
+                value={filter}
+                onChange={(e) => setFilter(e.target.value as any)}
+                className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-gray-900 shadow-2xs focus:ring-2 focus:ring-[#f00856] outline-none min-h-[44px] cursor-pointer"
+              >
+                <option value="all">Todos los usuarios</option>
+                <option value="admin">Administradores</option>
+                <option value="vendor">Vendedores (Vendors)</option>
+                <option value="artist">Artistas (Artists)</option>
+                <option value="affiliate">Afiliados (Affiliates)</option>
+              </select>
+            </div>
+
+            {/* Desktop Filter Pills (>= md) */}
+            <div className="hidden md:flex gap-1 bg-gray-100 rounded-lg p-1">
               {[
                 { key: 'all', label: 'Todos' },
                 { key: 'admin', label: 'Admins' },
@@ -419,15 +436,77 @@ export default function AdminUsers() {
                 { key: 'affiliate', label: 'Affiliates' },
               ].map(f => (
                 <button key={f.key} onClick={() => setFilter(f.key as any)}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${filter === f.key ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-900'}`}>
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${filter === f.key ? 'bg-white shadow-xs text-gray-900' : 'text-gray-500 hover:text-gray-900'}`}>
                   {f.label}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Users Table */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          {/* MOBILE CARDS LIST (< md) */}
+          <div className="block md:hidden space-y-2.5">
+            {loading ? (
+              <div className="p-6 text-center text-xs text-gray-400 font-medium bg-white rounded-xl border border-gray-200 animate-pulse">
+                Cargando usuarios...
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="p-6 text-center text-xs text-gray-400 bg-white rounded-xl border border-gray-200">
+                No se encontraron usuarios
+              </div>
+            ) : (
+              filtered.map(u => (
+                <div 
+                  key={u.id} 
+                  onClick={() => setSelectedCustomer(u.id)}
+                  className="bg-white rounded-xl border border-gray-200 p-3 space-y-2 shadow-2xs cursor-pointer hover:border-primary-300 transition-colors"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <div className="w-8 h-8 bg-gradient-to-br from-primary-400 to-primary-600 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0">
+                        {(u.first_name?.[0] || u.email?.[0] || '?').toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold text-gray-900 truncate">
+                          {u.first_name || ''} {u.last_name || ''} {!u.first_name && u.email}
+                        </p>
+                        <p className="text-[10px] text-gray-400 font-mono truncate">{u.email}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      {roleBadge(u.is_admin, 'Admin', 'bg-blue-100 text-blue-700 border-blue-200')}
+                      {roleBadge(u.is_vendor, 'Vendor', 'bg-purple-100 text-purple-700 border-purple-200')}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1 border-t border-gray-100 text-xs">
+                    {u.is_vendor ? (
+                      <span className="text-[11px] font-bold text-purple-800 flex items-center gap-1 truncate max-w-[180px]">
+                        <Store className="w-3 h-3 text-purple-600 shrink-0" />
+                        {u.canonical_store_name}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-gray-400 font-mono">Usuario Estándar</span>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openVendorModal(u);
+                      }}
+                      className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-900 font-bold rounded-lg text-xs transition-colors min-h-[36px]"
+                    >
+                      {u.is_vendor ? 'Gestionar' : 'Autorizar'}
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* DESKTOP TABLE (>= md) */}
+          <div className="hidden md:block bg-white rounded-xl border border-gray-200 shadow-2xs overflow-hidden">
             {loading ? (
               <div className="p-12 text-center text-gray-400 animate-pulse">Cargando usuarios y tiendas...</div>
             ) : filtered.length === 0 ? (
@@ -437,7 +516,7 @@ export default function AdminUsers() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
+                <table className="min-w-full divide-y divide-gray-200 text-xs">
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Usuario</th>

@@ -258,7 +258,7 @@ export default function AdminProducts() {
           id, title, slug, description, short_description, base_price, compare_at_price, status, is_active, badge, is_featured, vendor_id, metadata, created_at,
           category:categories(id, name),
           brand:brands!products_brand_id_fkey(id, name),
-          vendor:vendors(id, store_name, company_name),
+          vendor:vendors(id, store_name),
           images:product_images(id, url, is_primary, sort_order),
           variants:product_variants(id, sku, inventory_count)
         `, { count: 'exact' });
@@ -1396,14 +1396,14 @@ export default function AdminProducts() {
                emptyTitle="0 PRODUCTOS ENCONTRADOS"
                emptyDescription="No se encontraron productos con los filtros seleccionados."
                renderCard={(p: any) => {
-                 const primaryCat = p.product_categories?.[0]?.categories;
                  const isSelected = selectedProducts.includes(p.id);
                  const stock = p.variants?.[0]?.inventory_count || 0;
+                 const sku = p.variants?.[0]?.sku;
 
                  return (
-                   <div key={p.id} className="bg-white rounded-xl border border-gray-200 p-4 space-y-3 shadow-xs min-w-0">
-                     <div className="flex items-start justify-between gap-3">
-                       <div className="flex items-center gap-3 min-w-0">
+                   <div key={p.id} className="bg-white rounded-xl border border-gray-200 p-3 space-y-2 shadow-2xs min-w-0">
+                     <div className="flex items-center justify-between gap-2">
+                       <div className="flex items-center gap-2.5 min-w-0 flex-1">
                          <input 
                            type="checkbox" 
                            className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 shrink-0" 
@@ -1413,68 +1413,60 @@ export default function AdminProducts() {
                              else setSelectedProducts(selectedProducts.filter(id => id !== p.id));
                            }}
                          />
-                         <img src={getProductImage(p)} alt="" className="w-12 h-12 rounded-lg object-cover border border-gray-100 shadow-xs shrink-0" />
-                         <div className="min-w-0">
-                           <h4 className="font-bold text-gray-900 text-xs sm:text-sm truncate">{p.title}</h4>
-                           <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                             <span className="text-[10px] font-mono text-gray-400 uppercase">SKU: {p.variants?.[0]?.sku || '-'}</span>
-                             {p.ml_item_id && <span className="bg-yellow-400 text-blue-900 text-[8px] font-black px-1 rounded">ML</span>}
-                           </div>
+                         <img src={getProductImage(p)} alt="" className="w-10 h-10 rounded-lg object-cover border border-gray-100 shrink-0" />
+                         <div className="min-w-0 flex-1">
+                           <h4 className="font-bold text-gray-900 text-xs truncate">{p.title}</h4>
+                           {sku && <span className="text-[10px] font-mono text-gray-400 block truncate">SKU: {sku}</span>}
                          </div>
                        </div>
 
-                       <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider shrink-0 ${p.status === 'published' ? 'text-green-700 bg-green-50' : 'text-gray-500 bg-gray-100'}`}>
+                       <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shrink-0 ${p.status === 'published' ? 'text-green-700 bg-green-50' : 'text-gray-500 bg-gray-100'}`}>
                          {p.status === 'published' ? 'Visible' : 'Oculto'}
                        </span>
                      </div>
 
-                     <div className="grid grid-cols-2 gap-2 text-xs border-t border-b border-gray-100 py-2">
-                       <div>
-                         <span className="text-gray-400 block text-[10px] uppercase font-semibold">Precio</span>
-                         <span className="font-black text-gray-900 text-sm">UYU {(p.base_price || 0).toLocaleString()}</span>
-                       </div>
-                       <div>
-                         <span className="text-gray-400 block text-[10px] uppercase font-semibold">Stock</span>
-                         <span className="font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded text-[10px] inline-block">
-                           {stock} u.
+                     <div className="flex items-center justify-between pt-1 border-t border-gray-100">
+                       <div className="flex items-center gap-2 text-xs">
+                         <span className="font-black text-gray-900">${(p.base_price || 0).toLocaleString()}</span>
+                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${stock > 0 ? 'bg-blue-50 text-blue-700' : 'bg-red-50 text-red-600'}`}>
+                           Stock: {stock}
                          </span>
                        </div>
-                       <div>
-                         <span className="text-gray-400 block text-[10px] uppercase font-semibold">Categoría</span>
-                         <span className="font-medium text-gray-700 truncate block">{primaryCat?.name || '-'}</span>
-                       </div>
-                       <div>
-                         <span className="text-gray-400 block text-[10px] uppercase font-semibold">Marca</span>
-                         <span className="font-medium text-gray-700 truncate block">{p.brand?.name || '-'}</span>
-                       </div>
-                     </div>
 
-                     <div className="flex items-center justify-between pt-1">
-                       <span className="text-gray-400 text-[10px]">
-                         {new Date(p.created_at).toLocaleDateString()}
-                       </span>
-
-                       <div className="flex items-center gap-2">
+                       <div className="flex items-center gap-1.5">
                          <button
                            onClick={() => openEdit(p)}
-                           className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg text-xs transition-colors min-h-[36px]"
+                           className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-900 font-bold rounded-lg text-xs transition-colors min-h-[36px]"
                          >
-                           Editar Detalles
+                           Editar
                          </button>
-                         <button
-                           onClick={(e) => handleDuplicate(p, e)}
-                           className="p-2 text-gray-500 hover:text-blue-600 bg-gray-50 rounded-lg min-h-[36px] min-w-[36px] flex items-center justify-center"
-                           title="Duplicar producto"
-                         >
-                           <Copy className="w-4 h-4" />
-                         </button>
-                         <button
-                           onClick={() => handleDelete(p)}
-                           className="p-2 text-red-500 hover:text-red-700 bg-red-50 rounded-lg min-h-[36px] min-w-[36px] flex items-center justify-center"
-                           title="Eliminar producto"
-                         >
-                           <Trash2 className="w-4 h-4" />
-                         </button>
+                         <div className="relative group">
+                           <button
+                             type="button"
+                             onClick={(e) => {
+                               const el = e.currentTarget.nextElementSibling;
+                               if (el) el.classList.toggle('hidden');
+                             }}
+                             className="p-1.5 text-gray-500 hover:text-black bg-gray-50 hover:bg-gray-100 rounded-lg min-h-[36px] min-w-[36px] flex items-center justify-center font-bold"
+                             title="Más acciones"
+                           >
+                             ⋮
+                           </button>
+                           <div className="hidden absolute right-0 bottom-full mb-1 w-32 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1 text-xs font-medium">
+                             <button
+                               onClick={(e) => handleDuplicate(p, e)}
+                               className="w-full px-3 py-1.5 text-left hover:bg-gray-50 flex items-center gap-2 text-gray-700"
+                             >
+                               <Copy className="w-3.5 h-3.5" /> Duplicar
+                             </button>
+                             <button
+                               onClick={() => handleDelete(p)}
+                               className="w-full px-3 py-1.5 text-left hover:bg-red-50 text-red-600 flex items-center gap-2"
+                             >
+                               <Trash2 className="w-3.5 h-3.5" /> Eliminar
+                             </button>
+                           </div>
+                         </div>
                        </div>
                      </div>
                    </div>

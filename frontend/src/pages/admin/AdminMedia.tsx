@@ -396,16 +396,16 @@ export default function AdminMedia() {
       </div>
 
       {/* Search Bar */}
-      <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm">
-        <div className="relative max-w-md">
+      <div className="bg-white border border-gray-200 p-3 rounded-xl shadow-2xs">
+        <div className="relative w-full">
           <input
             type="text"
             placeholder="Buscar archivos o carpetas por nombre..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="form-input w-full pl-10 pr-10 py-2 border-gray-300 rounded-lg text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+            className="form-input w-full pl-10 pr-10 py-2 border-gray-300 rounded-lg text-xs focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
           />
-          <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
@@ -418,48 +418,48 @@ export default function AdminMedia() {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-          <p className="text-sm">{error}</p>
+        <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl flex items-start gap-2.5">
+          <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+          <p className="text-xs">{error}</p>
         </div>
       )}
 
-      {/* Drag & Drop Zone */}
+      {/* Drag & Drop Zone: Compacted height ~80-100px */}
       <div 
         ref={dropZoneRef}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`border-2 border-dashed p-6 text-center transition-all rounded-xl shadow-sm ${
+        className={`border-2 border-dashed p-3.5 text-center transition-all rounded-xl shadow-2xs min-h-[72px] flex items-center justify-center ${
           isDragging ? 'border-primary-500 bg-primary-50/50 scale-[1.01]' : 'border-gray-200 bg-white hover:border-primary-400'
         }`}
       >
         {uploading ? (
-          <div className="flex items-center justify-center gap-2 text-primary-600 font-medium">
-            <RefreshCw className="w-5 h-5 animate-spin" />
+          <div className="flex items-center justify-center gap-2 text-primary-600 font-medium text-xs">
+            <RefreshCw className="w-4 h-4 animate-spin" />
             <span>Subiendo archivos...</span>
           </div>
         ) : (
-          <p className="text-sm text-gray-500">
+          <p className="text-xs text-gray-500">
             <span className="font-semibold text-primary-600">Arrastra y suelta</span> archivos aquí, o 
-            <button onClick={() => fileInputRef.current?.click()} className="text-primary-600 hover:underline ml-1 font-semibold">selecciona desde tu equipo</button>
+            <button onClick={() => fileInputRef.current?.click()} className="text-primary-600 hover:underline ml-1 font-semibold">seleccionar equipo</button>
           </p>
         )}
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm min-h-[400px] p-4">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-2xs min-h-[220px] p-3">
         {loading && files.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-            <RefreshCw className="w-8 h-8 animate-spin mb-4" />
-            <p>Cargando biblioteca...</p>
+          <div className="flex flex-col items-center justify-center h-36 text-gray-400">
+            <RefreshCw className="w-6 h-6 animate-spin mb-2" />
+            <p className="text-xs font-medium">Cargando biblioteca...</p>
           </div>
         ) : files.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-center p-6">
-            <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-              <Folder className="w-10 h-10 text-gray-300" />
+          <div className="flex flex-col items-center justify-center h-40 text-center p-4">
+            <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-2">
+              <Folder className="w-6 h-6 text-gray-300" />
             </div>
-            <h3 className="text-lg font-bold text-gray-900">Carpeta Vacía</h3>
-            <p className="text-gray-500 mt-1 max-w-sm">No hay archivos en esta ubicación. Sube uno o crea una carpeta nueva.</p>
+            <h3 className="text-sm font-bold text-gray-900">Carpeta Vacía</h3>
+            <p className="text-xs text-gray-500 mt-0.5 max-w-sm">No hay archivos en esta ubicación.</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
