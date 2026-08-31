@@ -381,47 +381,49 @@ Referencias: ${addressObj.reference || 'N/A'}
           const feeShare = Number(sub.payment_fee_share || 0);
           const net = Number(sub.vendor_net_amount || (gross + shipCost - mktFee - feeShare));
           const subNumber = sub.suborder_number || sub.id;
+          const statusOp = sub.status === 'ready_to_ship' ? 'PREPARADO' : sub.status === 'shipped' ? 'DESPACHADO' : sub.status === 'delivered' ? 'ENTREGADO' : 'POR PREPARAR';
 
           return (
-            <div key={sub.id} className="bg-white rounded-xl border border-gray-200 p-4 space-y-3 shadow-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-gray-900 text-sm">
-                  {subNumber}
+            <div key={sub.id} className="bg-white rounded-xl border border-gray-200 p-3.5 space-y-2.5 shadow-2xs min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono font-extrabold text-gray-900 text-sm">
+                  #{subNumber}
                 </span>
-                <span className="text-xs text-gray-400">
+                <span className="text-[11px] font-medium text-gray-400">
                   {new Date(sub.created_at).toLocaleDateString()}
                 </span>
               </div>
 
-              <div className="text-xs text-gray-600 truncate">
-                <span className="text-gray-400 block text-[10px] uppercase font-semibold">Cliente</span>
-                <span className="font-bold text-gray-800">{clientName}</span>
+              <div className="flex items-center justify-between gap-2">
+                <div>{renderPaymentBadge(sub.parentOrder?.payment_status || (isPaymentApproved ? 'approved' : 'pending'))}</div>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
+                  sub.status === 'delivered' ? 'bg-emerald-100 text-emerald-800' :
+                  sub.status === 'shipped' ? 'bg-blue-100 text-blue-800' :
+                  sub.status === 'ready_to_ship' ? 'bg-indigo-100 text-indigo-800' :
+                  'bg-amber-100 text-amber-800'
+                }`}>
+                  {statusOp}
+                </span>
               </div>
 
-              <div className="border-t border-b border-gray-100 py-2 space-y-2">
+              <div className="flex items-center justify-between text-xs border-t border-b border-gray-100 py-2">
                 <div>
-                  <span className="text-gray-400 block text-[10px] uppercase font-semibold mb-1">Estado Pago</span>
-                  {renderPaymentBadge(sub.parentOrder?.payment_status || (isPaymentApproved ? 'approved' : 'pending'))}
+                  <span className="text-gray-400 block text-[10px] uppercase font-semibold">Neto a Cobrar</span>
+                  <span className="font-black text-emerald-700 text-sm">${net.toFixed(2)} UYU</span>
                 </div>
-
-                <div className="flex items-center justify-between text-xs pt-1">
-                  <div>
-                    <span className="text-gray-400 block text-[10px] uppercase font-semibold">Neto Estimado</span>
-                    <span className="font-black text-emerald-700">${net.toFixed(2)} UYU</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-gray-400 block text-[10px] uppercase font-semibold">Logística</span>
-                    <span className="font-bold text-gray-700 uppercase text-[11px]">{sub.shipping_method || 'Standard'}</span>
-                  </div>
+                <div className="text-right">
+                  <span className="text-gray-400 block text-[10px] uppercase font-semibold">Cliente</span>
+                  <span className="font-bold text-gray-800 truncate max-w-[140px] block">{clientName}</span>
                 </div>
               </div>
 
-              <div className="flex items-center justify-end pt-1">
+              <div className="pt-1">
                 <button
                   onClick={() => openSuborderDrawer(subNumber)}
-                  className="w-full sm:w-auto px-4 py-2 bg-emerald-600 text-white font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-1 min-h-[40px] shadow-xs"
+                  className="w-full bg-[#f00856] hover:bg-[#ff2c68] text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 min-h-[48px] shadow-sm cursor-pointer active:scale-95"
                 >
-                  <Eye className="w-3.5 h-3.5" /> Ver Detalle de Suborden
+                  <Package className="w-4 h-4" />
+                  {isPaymentApproved && sub.status !== 'delivered' ? 'Preparar pedido' : 'Ver detalle del pedido'}
                 </button>
               </div>
             </div>
