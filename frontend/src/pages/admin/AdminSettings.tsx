@@ -853,33 +853,59 @@ export default function AdminSettings() {
         <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">Configuración Global</h2>
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-gray-200 dark:border-slate-800 pb-1">
-        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none no-scrollbar py-1 text-xs">
-          {[
-            { key: 'general', label: 'General', icon: Store },
-            { key: 'appearance', label: 'Theme Builder', icon: LayoutTemplate },
-            { key: 'payments', label: 'Pasarelas de Pago', icon: CreditCard },
-            { key: 'legal', label: 'Términos & Políticas', icon: FileText },
-            { key: 'menus', label: 'Menú Navegación', icon: Menu },
-            { key: 'notifications', label: 'Notificaciones & Push', icon: Bell },
-            { key: 'banners', label: 'Mini Banners HP', icon: ImageIcon },
-            { key: 'ai', label: 'IA & Integraciones (Gemini)', icon: Brain },
-          ].map(t => (
-            <button
-              key={t.key}
-              onClick={() => {
-                setTab(t.key as any);
-                setSearchParams({ tab: t.key });
-              }}
-              className={`whitespace-nowrap flex items-center px-3 py-2 rounded-xl font-bold text-xs transition-all min-h-[44px] shrink-0 ${
-                currentTab === t.key ? 'bg-[#f00856] text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
-              }`}
-            >
-              <t.icon className="w-4 h-4 mr-1.5 shrink-0" />
-              {t.label}
-            </button>
-          ))}
+      {/* Section Navigation: Mobile Dropdown (< md) & Desktop Horizontal Pills (>= md) */}
+      <div>
+        <div className="md:hidden">
+          <label htmlFor="admin-settings-tab-select" className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+            Sección de configuración
+          </label>
+          <select
+            id="admin-settings-tab-select"
+            value={currentTab}
+            onChange={(e) => {
+              setTab(e.target.value as any);
+              setSearchParams({ tab: e.target.value });
+            }}
+            className="w-full bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-900 dark:text-white shadow-2xs focus:ring-2 focus:ring-[#f00856] outline-none min-h-[44px] cursor-pointer"
+          >
+            <option value="general">Store Details / General</option>
+            <option value="appearance">Theme Builder & Identidad</option>
+            <option value="payments">Pasarelas de Pago</option>
+            <option value="legal">Términos & Políticas</option>
+            <option value="menus">Menú Navegación</option>
+            <option value="notifications">Notificaciones & Push</option>
+            <option value="banners">Mini Banners HP</option>
+            <option value="ai">IA & Integraciones (Gemini)</option>
+          </select>
+        </div>
+
+        <div className="hidden md:block border-b border-gray-200 dark:border-slate-800 pb-1">
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none no-scrollbar py-1 text-xs">
+            {[
+              { key: 'general', label: 'General', icon: Store },
+              { key: 'appearance', label: 'Theme Builder', icon: LayoutTemplate },
+              { key: 'payments', label: 'Pasarelas de Pago', icon: CreditCard },
+              { key: 'legal', label: 'Términos & Políticas', icon: FileText },
+              { key: 'menus', label: 'Menú Navegación', icon: Menu },
+              { key: 'notifications', label: 'Notificaciones & Push', icon: Bell },
+              { key: 'banners', label: 'Mini Banners HP', icon: ImageIcon },
+              { key: 'ai', label: 'IA & Integraciones (Gemini)', icon: Brain },
+            ].map(t => (
+              <button
+                key={t.key}
+                onClick={() => {
+                  setTab(t.key as any);
+                  setSearchParams({ tab: t.key });
+                }}
+                className={`whitespace-nowrap flex items-center px-3 py-2 rounded-xl font-bold text-xs transition-all min-h-[44px] shrink-0 ${
+                  currentTab === t.key ? 'bg-[#f00856] text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+                }`}
+              >
+                <t.icon className="w-4 h-4 mr-1.5 shrink-0" />
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
