@@ -196,7 +196,7 @@ export default function PortalLayout({ type }: { type: 'vendor' | 'artist' | 'af
                   <div className="h-[2px] w-10 bg-[#f00856]" />
                   <div className="text-[#f00856] text-[12px] font-black tracking-[0.5em] uppercase">{portalLabel}</div>
                 </div>
-                <h1 className="text-3xl sm:text-5xl md:text-6xl font-black tracking-tighter text-white leading-tight max-w-2xl">{title}</h1>
+                <h1 className="text-xl sm:text-4xl md:text-5xl font-black tracking-tighter text-white leading-tight max-w-2xl">{title}</h1>
                 <p className="text-slate-400 font-bold uppercase tracking-widest text-xs sm:text-sm mt-4">Gestioná cada aspecto de tu presencia operativa en Collectibles.</p>
               </div>
               
