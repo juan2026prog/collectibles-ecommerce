@@ -173,9 +173,13 @@ export default function ProductDetail() {
   }
 
   const bbWinner = buyBox?.winner;
-  const winnerIsCollectibles = !bbWinner || bbWinner.vendor_id === 'platform' || !bbWinner.vendor_id;
-  const winnerVendorName = winnerIsCollectibles ? 'Collectibles.uy' : (bbWinner?.vendor_store_name || product.vendor_store?.name || product.vendor?.name || 'Vendedor Oficial');
-  const winnerVendorId = bbWinner?.vendor_id || product.vendor_id;
+  const winnerIsCollectibles = bbWinner 
+    ? (bbWinner.vendor_id === 'platform' || !bbWinner.vendor_id)
+    : (!product.vendor_id || product.vendor_id === 'platform');
+  const winnerVendorName = winnerIsCollectibles 
+    ? 'Collectibles.uy' 
+    : (bbWinner?.vendor_store_name || product.vendor_store?.store_name || product.vendor_store?.name || product.vendor?.company_name || product.vendor?.store_name || product.vendor?.name || 'Vendedor Oficial');
+  const winnerVendorId = winnerIsCollectibles ? null : (bbWinner?.vendor_id || product.vendor_id);
 
   const variants = product.variants && product.variants.length > 0 ? product.variants : [];
   const selectedVariant = variants[selectedVariantIdx] || null;

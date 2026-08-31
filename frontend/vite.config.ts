@@ -37,6 +37,7 @@ export default defineConfig({
     globals: true,
     include: [
       'src/**/*.{test,spec}.{ts,tsx}',
+      'tests/**/*.{test,spec}.{ts,tsx}',
       '../tests/integration/**/*.test.ts',
     ],
     coverage: {

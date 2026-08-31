@@ -79,7 +79,7 @@ export default function VendorStorefront() {
       const { data: storeData, error: storeErr } = await supabase
         .from('vendor_stores')
         .select('*')
-        .eq('slug', slug)
+        .ilike('slug', slug)
         .eq('status', 'active')
         .single();
 

@@ -92,10 +92,10 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
   const isCollectibles = !product.vendor_id;
 
   return (
-    <article className={`grid-card group relative p-3 bg-[#0a0f1d]/40 border rounded-[16px] transition-all duration-200 hover:border-[#f00856]/40 ${
+    <article className={`grid-card group relative p-3 bg-[#0a0f1d]/40 rounded-[16px] transition-all duration-200 ${
       isCollectibles 
-        ? 'border-[#ff0f6d]/30 shadow-[0_0_8px_rgba(255,15,109,0.08)]' 
-        : 'border-white/5'
+        ? 'border-2 border-[#f00856]' 
+        : 'border-2 border-white/5 hover:border-white/20'
     }`}>
       {/* 1. IMAGEN */}
       <div className="relative">
@@ -184,37 +184,6 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
            );
         })()}
 
-        {/* CTA AGREGAR AL CARRITO CON FEEDBACK INMEDIATO (Min 44x44px touch area) */}
-        <button
-          onClick={handleAddCartAction}
-          disabled={addState !== 'idle'}
-          className={`absolute bottom-2 right-2 min-w-[44px] min-h-[44px] px-3 bg-[#f00856] text-white flex items-center justify-center gap-1.5 rounded-full shadow-lg z-30 
-                     transition-all transform active:scale-95 disabled:opacity-90 ${
-                       addState === 'added' ? 'bg-emerald-600' : ''
-                     }`}
-          title="Agregar al carrito"
-          aria-label="Agregar al carrito"
-        >
-          {addState === 'idle' && (
-            <>
-              <ShoppingCart className="w-4 h-4" />
-              <span className="hidden sm:inline text-[10px] font-black uppercase">Agregar</span>
-            </>
-          )}
-          {addState === 'loading' && (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin text-white" />
-              <span className="text-[10px] font-black uppercase">Cargando...</span>
-            </>
-          )}
-          {addState === 'added' && (
-            <>
-              <Check className="w-4 h-4 text-white" />
-              <span className="text-[10px] font-black uppercase">✓ Agregado</span>
-            </>
-          )}
-        </button>
-
         {/* Admin Mode Badge */}
         {isAdminMode && product.source_provider === 'zinc' && product.international_products?.[0] && (
           <div className="absolute bottom-2 right-2 bg-indigo-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm z-20">
@@ -240,7 +209,24 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
 
         {/* COMPACT VENDOR LINE (Replaces heavy box) */}
         <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-1 flex items-center flex-wrap gap-1 leading-tight">
-          <span>Vendido por <strong className="text-white">{isCollectibles ? 'Collectibles' : (product.vendor_store?.display_name || product.vendor_store?.store_name || product.vendor_store?.name || product.vendor?.company_name || product.vendor?.store_name || 'Vendedor')}</strong></span>
+          <span>
+            Vendido por{' '}
+            {isCollectibles ? (
+              <strong className="text-[#f00856]">Collectibles</strong>
+            ) : (product.vendor_store?.slug || product.vendor?.slug) ? (
+              <Link 
+                to={`/store/${product.vendor_store?.slug || product.vendor?.slug}`}
+                onClick={(e) => e.stopPropagation()}
+                className="text-white hover:text-[#f00856] underline font-bold transition-colors"
+              >
+                {product.vendor_store?.display_name || product.vendor_store?.store_name || product.vendor_store?.name || product.vendor?.company_name || product.vendor?.store_name || 'Vendedor'}
+              </Link>
+            ) : (
+              <strong className="text-white">
+                {product.vendor_store?.display_name || product.vendor_store?.store_name || product.vendor_store?.name || product.vendor?.company_name || product.vendor?.store_name || 'Vendedor'}
+              </strong>
+            )}
+          </span>
           {!isCollectibles && product.vendor_store?.is_official && (
             <span className="text-[8px] px-1 font-semibold leading-none uppercase rounded bg-red-500 text-white border border-red-400">
               {language === 'en' ? 'Official Store' : 'TIENDA OFICIAL'}
@@ -254,15 +240,39 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
           </h3>
         </Link>
         
-        <div className="mt-1.5 flex flex-wrap items-baseline gap-1.5">
-          <span className="text-[#f00856] font-black text-base md:text-lg leading-none">
-            {formatPrice(displayPrice)}
-          </span>
-          {hasDiscount && (
-            <span className="text-[10px] text-slate-500 line-through leading-none">
-              {formatPrice(displayOldPrice)}
+        {/* PRECIO + BOTÓN CARRITO CIRCULAR (Fila inferior) */}
+        <div className="mt-2.5 flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-baseline gap-1.5">
+            <span className="text-[#f00856] font-black text-base md:text-lg leading-none">
+              {formatPrice(displayPrice)}
             </span>
-          )}
+            {hasDiscount && (
+              <span className="text-[10px] text-slate-500 line-through leading-none">
+                {formatPrice(displayOldPrice)}
+              </span>
+            )}
+          </div>
+
+          <button
+            onClick={handleAddCartAction}
+            disabled={addState !== 'idle'}
+            className={`w-11 h-11 min-w-[44px] min-h-[44px] bg-[#f00856] text-white flex items-center justify-center rounded-full shadow-md z-10 shrink-0 
+                       transition-all transform active:scale-95 disabled:opacity-90 ${
+                         addState === 'added' ? 'bg-emerald-600' : 'hover:bg-[#d00749]'
+                       }`}
+            title="Agregar al carrito"
+            aria-label="Agregar al carrito"
+          >
+            {addState === 'idle' && (
+              <ShoppingCart className="w-5 h-5" />
+            )}
+            {addState === 'loading' && (
+              <Loader2 className="w-5 h-5 animate-spin text-white" />
+            )}
+            {addState === 'added' && (
+              <Check className="w-5 h-5 text-white" />
+            )}
+          </button>
         </div>
       </div>
     </article>
