@@ -10,6 +10,7 @@ import { resolveImage } from '../lib/imageUtils';
 import { usePromotions, evaluateItemDiscount } from '../hooks/usePromotions';
 import { trackGA4Event, trackClarityEvent, mapCartItemsToGA4 } from '../lib/analyticsTracker';
 import { useImageProtection } from '../hooks/useImageProtection';
+import { formatUSD } from '../lib/formatters';
 
 export default function CartDrawer() {
   const navigate = useNavigate();
@@ -294,11 +295,20 @@ export default function CartDrawer() {
                 {items.map(item => {
                   const itemDiscount = evaluateItemDiscount(item as any, promotions);
                   const displayPrice = (item.price * item.quantity) - itemDiscount;
+                  const isItemIntl = Boolean(
+                    (item as any).is_international || 
+                    (item as any).source_provider === 'zinc' || 
+                    (item as any).shipping_type === 'international_courier_direct'
+                  );
 
                   return (
                   <div 
                     key={item.variant_id} 
-                    className="glass border border-white/5 p-4 rounded-2xl flex gap-3.5 hover:border-white/10 transition-all group"
+                    className={`glass p-4 rounded-2xl flex gap-3.5 transition-all group ${
+                      isItemIntl 
+                        ? 'border border-sky-500/30 bg-sky-950/20 hover:border-sky-500/50 shadow-sm shadow-sky-950/20' 
+                        : 'border border-white/5 hover:border-white/10'
+                    }`}
                   >
                     <img 
                       src={resolveImage(item.image) || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect fill="%230f172a" width="80" height="80" rx="8"/></svg>'} 
@@ -317,11 +327,11 @@ export default function CartDrawer() {
                               {item.variant_name}
                             </p>
                           )}
-                          {((item as any).is_international || (item as any).source_provider === 'zinc' || (item as any).shipping_type === 'international_courier_direct') ? (
+                          {isItemIntl ? (
                              <div className="mt-1 space-y-0.5">
                                <div className="flex items-center gap-1.5 flex-wrap">
                                  <span className="text-[9px] font-black uppercase text-[#f00856]">Tienda Collectibles</span>
-                                 <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-sky-950/80 border border-sky-500/30 text-sky-400">
+                                 <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-sky-950/80 border border-sky-500/40 text-sky-400">
                                    🌎 INTERNACIONAL
                                  </span>
                                </div>
@@ -370,12 +380,12 @@ export default function CartDrawer() {
 
                         {/* Price */}
                         <div className="flex flex-col items-end">
-                          <span className="text-sm font-black text-emerald-400">
-                            {formatCurrencyPrice(displayPrice)}
+                          <span className={`text-sm font-black ${isItemIntl ? 'text-sky-400' : 'text-emerald-400'}`}>
+                            {isItemIntl ? formatUSD(displayPrice) : formatCurrencyPrice(displayPrice)}
                           </span>
                           {itemDiscount > 0 && (
                             <span className="text-[10px] text-slate-500 line-through">
-                              {formatCurrencyPrice(item.price * item.quantity)}
+                              {isItemIntl ? formatUSD(item.price * item.quantity) : formatCurrencyPrice(item.price * item.quantity)}
                             </span>
                           )}
                         </div>

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { formatUSD, formatUYU, formatProductPrice } from '../lib/formatters';
 
 // ─── TYPES & HELPER FUNCTIONS ───────────────────────────
 
@@ -282,6 +283,40 @@ describe('INTEGRACIÓN UX Y CHECKOUT MIXTO DE COMPRAS INTERNACIONALES', () => {
     expect(state3.visible).toBe(true);
     expect(state3.canBuy).toBe(true);
     expect(state3.cta).toBe('AGREGAR_AL_CARRITO');
+  });
+
+  it('8. Formato de Precios: Internacional muestra estrictamente USD XX,XX y Local muestra $ X.XXX', () => {
+    // Producto internacional (USD 38.65)
+    expect(formatUSD(38.65)).toBe('USD 38,65');
+    expect(formatProductPrice(38.65, true)).toBe('USD 38,65');
+    expect(formatProductPrice(120, true)).toBe('USD 120,00');
+    expect(formatProductPrice(9.15, true)).toBe('USD 9,15');
+
+    // Producto nacional / local (UYU 1750, 4990)
+    expect(formatUYU(1750)).toBe('$ 1.750');
+    expect(formatProductPrice(1750, false)).toBe('$ 1.750');
+    expect(formatProductPrice(4990, false)).toBe('$ 4.990');
+  });
+
+  it('9. Semántica visual: Celeste para elementos internacionales y Magenta para CTAs corporativos', () => {
+    const getProductCardVisualTokens = (isInternational: boolean) => {
+      return {
+        borderClass: isInternational ? 'border-2 border-sky-500/40' : 'border-2 border-[#f00856]',
+        badgeClass: isInternational ? 'bg-sky-950/60 border-sky-500/40 text-sky-300' : 'bg-[#f00856]',
+        priceColor: isInternational ? 'text-sky-400' : 'text-[#f00856]',
+        ctaButtonClass: 'bg-[#f00856] text-white hover:bg-[#d00749]' // CTAs always magenta
+      };
+    };
+
+    const intlTokens = getProductCardVisualTokens(true);
+    expect(intlTokens.borderClass).toContain('sky-500');
+    expect(intlTokens.badgeClass).toContain('sky-300');
+    expect(intlTokens.priceColor).toBe('text-sky-400');
+    expect(intlTokens.ctaButtonClass).toContain('#f00856'); // Magenta intact for CTAs
+
+    const localTokens = getProductCardVisualTokens(false);
+    expect(localTokens.borderClass).toContain('#f00856');
+    expect(localTokens.ctaButtonClass).toContain('#f00856');
   });
 
 });

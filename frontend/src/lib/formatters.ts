@@ -3,13 +3,20 @@
  */
 
 export function formatUSD(value: number | string | null | undefined): string {
-  if (value === null || value === undefined || isNaN(Number(value))) return 'USD 0.00';
-  return `USD ${Number(value).toFixed(2)}`;
+  if (value === null || value === undefined || isNaN(Number(value))) return 'USD 0,00';
+  return `USD ${Number(value).toFixed(2).replace('.', ',')}`;
 }
 
 export function formatUYU(value: number | string | null | undefined): string {
   if (value === null || value === undefined || isNaN(Number(value))) return '$ 0';
   return `$ ${Math.round(Number(value)).toLocaleString('es-UY')}`;
+}
+
+export function formatProductPrice(price: number | string | null | undefined, isInternational = false): string {
+  if (isInternational) {
+    return formatUSD(price);
+  }
+  return formatUYU(price);
 }
 
 export function formatPercent(value: number | string | null | undefined): string {

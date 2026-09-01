@@ -22,6 +22,7 @@ import CheckoutSectionHeader from '../components/checkout/CheckoutSectionHeader'
 import PackageCard from '../components/checkout/PackageCard';
 import PaymentMethodCard from '../components/checkout/PaymentMethodCard';
 import ShipmentSummary from '../components/checkout/ShipmentSummary';
+import { formatUSD } from '../lib/formatters';
 
 const PROVINCIAS_ARGENTINA = [
   "Buenos Aires",
@@ -3078,11 +3079,11 @@ export default function Checkout() {
                   />
 
                   {items.some(i => i.is_international) && (
-                    <div className="mb-6 bg-[#f00856]/5 border border-[#f00856]/20 p-4 rounded-xl">
+                    <div className="mb-6 bg-sky-950/20 border border-sky-500/30 p-4 rounded-xl">
                       <h3 className="font-bold text-white mb-2 flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4 text-[#f00856]" /> Importación Internacional
+                        <span className="text-base">🌎</span> Importación Internacional
                       </h3>
-                      <p className="text-xs text-slate-400 mb-4">
+                      <p className="text-xs text-slate-300 mb-4">
                         Tus productos se enviarán a un courier en Miami, USA.
                       </p>
                       
@@ -3095,7 +3096,7 @@ export default function Checkout() {
 
                       <div className="space-y-4 mb-6">
                         {savedIntlAddresses.map((addr) => (
-                          <label key={addr.id} className={`flex items-start gap-4 p-4 border-2 cursor-pointer transition-all rounded-lg ${selectedIntlAddressId === addr.id ? 'border-[#f00856] bg-[#f00856]/10' : 'border-white/10 hover:border-white/20 bg-white/5'}`}>
+                          <label key={addr.id} className={`flex items-start gap-4 p-4 border-2 cursor-pointer transition-all rounded-lg ${selectedIntlAddressId === addr.id ? 'border-sky-400 bg-sky-500/10 shadow-sm shadow-sky-950/20' : 'border-white/10 hover:border-white/20 bg-white/5'}`}>
                             <input 
                               type="radio" 
                               name="selected_intl_address"
@@ -3103,15 +3104,15 @@ export default function Checkout() {
                               onChange={() => setSelectedIntlAddressId(addr.id)} 
                               className="sr-only" 
                             />
-                            <div className={`w-4 h-4 rounded-full mt-1 border-2 flex items-center justify-center ${selectedIntlAddressId === addr.id ? 'border-[#f00856]' : 'border-slate-500'}`}>
-                              {selectedIntlAddressId === addr.id && <div className="w-2 h-2 bg-[#f00856] rounded-full" />}
+                            <div className={`w-4 h-4 rounded-full mt-1 border-2 flex items-center justify-center ${selectedIntlAddressId === addr.id ? 'border-sky-400' : 'border-slate-500'}`}>
+                              {selectedIntlAddressId === addr.id && <div className="w-2 h-2 bg-sky-400 rounded-full" />}
                             </div>
                             <div className="flex-1 text-xs text-slate-300">
                               <div className="font-bold text-white mb-1 flex items-center gap-2">
                                 {addr.label}
-                                {addr.is_default && <span className="bg-white/10 text-white text-[9px] px-1.5 py-0.5 rounded">Predeterminada</span>}
+                                {addr.is_default && <span className="bg-sky-950/80 border border-sky-500/30 text-sky-300 text-[9px] px-1.5 py-0.5 rounded">Predeterminada</span>}
                               </div>
-                              <p><span className="text-slate-400">Courier:</span> {addr.courier_name}</p>
+                              <p><span className="text-slate-400">Courier:</span> <span className="text-sky-300 font-semibold">{addr.courier_name}</span></p>
                               <p><span className="text-slate-400">Destinatario:</span> {addr.recipient_name} {addr.customer_code ? `(${addr.customer_code})` : ''}</p>
                               <p><span className="text-slate-400">Dirección:</span> {addr.address_line_1} {addr.address_line_2 ? `, ${addr.address_line_2}` : ''}</p>
                               <p><span className="text-slate-400">Ubicación:</span> {addr.city}, {addr.state} {addr.postal_code}, {addr.country}</p>
@@ -3120,7 +3121,7 @@ export default function Checkout() {
                           </label>
                         ))}
 
-                        <label className={`flex items-start gap-4 p-4 border-2 cursor-pointer transition-all rounded-lg ${selectedIntlAddressId === 'new' ? 'border-[#f00856] bg-[#f00856]/10' : 'border-white/10 hover:border-white/20 bg-white/5'}`}>
+                        <label className={`flex items-start gap-4 p-4 border-2 cursor-pointer transition-all rounded-lg ${selectedIntlAddressId === 'new' ? 'border-sky-400 bg-sky-500/10' : 'border-white/10 hover:border-white/20 bg-white/5'}`}>
                           <input 
                             type="radio" 
                             name="selected_intl_address"
@@ -3128,8 +3129,8 @@ export default function Checkout() {
                             onChange={() => setSelectedIntlAddressId('new')} 
                             className="sr-only" 
                           />
-                          <div className={`w-4 h-4 rounded-full mt-1 border-2 flex items-center justify-center ${selectedIntlAddressId === 'new' ? 'border-[#f00856]' : 'border-slate-500'}`}>
-                            {selectedIntlAddressId === 'new' && <div className="w-2 h-2 bg-[#f00856] rounded-full" />}
+                          <div className={`w-4 h-4 rounded-full mt-1 border-2 flex items-center justify-center ${selectedIntlAddressId === 'new' ? 'border-sky-400' : 'border-slate-500'}`}>
+                            {selectedIntlAddressId === 'new' && <div className="w-2 h-2 bg-sky-400 rounded-full" />}
                           </div>
                           <div className="flex-1">
                             <div className="font-bold text-white">Agregar nueva dirección de courier</div>
@@ -4462,12 +4463,12 @@ export default function Checkout() {
                                     </button>
                                   </div>
                                   <div className="flex flex-col items-end gap-0.5">
-                                    <span className="text-xs font-bold text-white whitespace-nowrap">
-                                      {formatCurrencyPrice(displayPrice)}
+                                    <span className={`text-xs font-bold whitespace-nowrap ${(item.is_international || storeKey === 'international') ? 'text-sky-300' : 'text-white'}`}>
+                                      {(item.is_international || storeKey === 'international') ? formatUSD(displayPrice) : formatCurrencyPrice(displayPrice)}
                                     </span>
                                     {itemDiscount > 0 && (
                                       <span className="text-[10px] text-slate-500 line-through whitespace-nowrap">
-                                        {formatCurrencyPrice(item.price * item.quantity)}
+                                        {(item.is_international || storeKey === 'international') ? formatUSD(item.price * item.quantity) : formatCurrencyPrice(item.price * item.quantity)}
                                       </span>
                                     )}
                                   </div>

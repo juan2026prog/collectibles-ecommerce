@@ -153,7 +153,7 @@ export default function InternationalLaboratory() {
                   const uruboxEstimate = uruboxEstimateResult.total_urubox_usd;
                   
                   return (
-                    <div key={p.id} className="glass p-5 rounded-2xl border border-white/10 flex flex-col relative group transition-all hover:border-[#f00856]/50">
+                    <div key={p.id} className="glass p-5 rounded-2xl border border-sky-500/30 flex flex-col relative group transition-all hover:border-sky-400">
                       {isDraft && (
                         <div className="absolute -top-3 left-4 bg-yellow-500 text-black text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full z-10 shadow-lg">
                           Borrador
@@ -162,7 +162,7 @@ export default function InternationalLaboratory() {
                       <div className="bg-white rounded-xl p-4 mb-4 h-48 flex items-center justify-center relative overflow-hidden">
                         <img src={p.images?.[0]?.url || p.image_url} alt={p.title} draggable={false} onDragStart={(e) => e.preventDefault()} className="max-w-full max-h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-500 img-protected" />
                         <div className="absolute top-2 left-2 flex gap-1 flex-col">
-                          <span className="bg-black/80 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider shadow-sm flex items-center gap-1">
+                          <span className="bg-sky-950/80 border border-sky-500/40 text-sky-300 text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider shadow-sm flex items-center gap-1">
                             🌎 Internacional
                           </span>
                         </div>

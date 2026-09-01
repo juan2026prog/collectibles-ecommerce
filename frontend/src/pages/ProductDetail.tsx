@@ -468,13 +468,13 @@ export default function ProductDetail() {
           <div className="pt-4 border-t border-white/10 space-y-3">
             <div className="text-[10px] uppercase text-slate-400 font-black tracking-widest">Precio actual</div>
             <div className="flex items-baseline gap-4 flex-wrap">
-              <span className="text-4xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight">
-                {formatCurrencyPrice(displayPrice)}
+              <span className={`text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight ${isIntl ? 'text-sky-400' : 'text-white'}`}>
+                {isIntl ? formatUSD(product.final_price_usd || product.base_price || displayPrice) : formatCurrencyPrice(displayPrice)}
               </span>
               {hasDiscount && (
                 <div className="flex items-center gap-2">
                   <span className="text-xl sm:text-2xl text-slate-500 line-through font-bold">
-                    {formatCurrencyPrice(displayOldPrice)}
+                    {isIntl ? formatUSD(product.amazon_list_price_usd || displayOldPrice) : formatCurrencyPrice(displayOldPrice)}
                   </span>
                   <span className="bg-[#f00856]/15 text-[#f00856] text-xs font-black px-2.5 py-1 rounded-md uppercase border border-[#f00856]/30">
                     {discountPercent}% OFF
@@ -490,7 +490,13 @@ export default function ProductDetail() {
                 {stockInfo.text}
               </div>
 
-              {(product.source_provider === 'zinc' || product.is_international) && (
+              {isIntl && (
+                <span className="text-xs font-bold px-3 py-1 rounded-full border border-sky-500/40 bg-sky-950/60 text-sky-300 flex items-center gap-1.5 shadow-sm">
+                  <span>🌎</span> Producto Internacional
+                </span>
+              )}
+
+              {isIntl && (
                 <InternationalCuposBadge 
                   productCostUsd={product.base_price_usd || (finalPrice / 42)}
                   onOpenWaitlist={() => setShowWaitlistModal(true)}
@@ -947,7 +953,9 @@ export default function ProductDetail() {
               />
               <div className="overflow-hidden">
                 <p className="text-white font-black text-sm truncate uppercase tracking-tight">{product.title}</p>
-                <p className="text-[#f00856] font-black text-sm">{formatCurrencyPrice(finalPrice)}</p>
+                <p className={`font-black text-sm ${isIntl ? 'text-sky-400' : 'text-[#f00856]'}`}>
+                  {isIntl ? formatUSD(product.final_price_usd || product.base_price || finalPrice) : formatCurrencyPrice(finalPrice)}
+                </p>
               </div>
             </div>
             <button

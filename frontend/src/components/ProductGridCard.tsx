@@ -11,6 +11,7 @@ import { trackGA4Event, trackClarityEvent } from '../lib/analyticsTracker';
 import { getProductGroupBadge, getAllProductGroupBadges } from '../hooks/useData';
 import { useImageProtection } from '../hooks/useImageProtection';
 import { getConditionBadgeInfo } from '../config/conditionConfig';
+import { formatUSD } from '../lib/formatters';
 
 interface ProductGridCardProps {
   product: any;
@@ -32,6 +33,11 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
 
   const img = getProductImage(product);
   const finalPrice = Number(product.base_price || 0) + Number(product.variants?.[0]?.price_adjustment || 0);
+  const isInternational = Boolean(
+    product.is_international || 
+    product.source_provider === 'zinc' || 
+    product.shipping_type === 'international_courier_direct'
+  );
 
   const handleCardClick = () => {
     trackClarityEvent('product_card_click');
@@ -93,16 +99,22 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
 
   return (
     <article className={`grid-card group relative p-3 bg-[#0a0f1d]/40 rounded-[16px] transition-all duration-200 ${
-      isCollectibles 
-        ? 'border-2 border-[#f00856]' 
-        : 'border-2 border-white/5 hover:border-white/20'
+      isInternational
+        ? 'border-2 border-sky-500/40 hover:border-sky-400 shadow-lg shadow-sky-950/20'
+        : isCollectibles 
+          ? 'border-2 border-[#f00856]' 
+          : 'border-2 border-white/5 hover:border-white/20'
     }`}>
       {/* 1. IMAGEN */}
       <div className="relative">
         <Link 
           to={`/p/${product.slug}`} 
           onClick={handleCardClick}
-          className="flex bg-white w-full aspect-square overflow-hidden p-5 items-center justify-center border border-white/5 rounded-xl group-hover:border-[#f00856]/20 transition-colors"
+          className={`flex bg-white w-full aspect-square overflow-hidden p-5 items-center justify-center border rounded-xl transition-colors ${
+            isInternational 
+              ? 'border-sky-500/10 group-hover:border-sky-500/30' 
+              : 'border-white/5 group-hover:border-[#f00856]/20'
+          }`}
         >
           <img
             src={img}
@@ -203,8 +215,8 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
           <span className="text-slate-500">({reviewsCount})</span>
         </div>
         
-        {(product.is_international || product.source_provider === 'zinc' || product.shipping_type === 'international_courier_direct') && (
-          <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-950/80 border border-sky-500/30 text-[9px] text-sky-400 font-black tracking-wider uppercase mb-1">
+        {isInternational && (
+          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-sky-950/60 border border-sky-500/40 text-[9px] text-sky-300 font-black tracking-wider uppercase mb-1.5 shadow-sm">
             <span>🌎</span> INTERNACIONAL
           </div>
         )}
@@ -245,12 +257,12 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
         {/* PRECIO + BOTÓN CARRITO CIRCULAR (Fila inferior) */}
         <div className="mt-2.5 flex items-center justify-between gap-2">
           <div className="flex flex-wrap items-baseline gap-1.5">
-            <span className="text-[#f00856] font-black text-base md:text-lg leading-none">
-              {formatPrice(displayPrice)}
+            <span className={`font-black text-base md:text-lg leading-none ${isInternational ? 'text-sky-400' : 'text-[#f00856]'}`}>
+              {isInternational ? formatUSD(displayPrice) : formatPrice(displayPrice)}
             </span>
             {hasDiscount && (
               <span className="text-[10px] text-slate-500 line-through leading-none">
-                {formatPrice(displayOldPrice)}
+                {isInternational ? formatUSD(displayOldPrice) : formatPrice(displayOldPrice)}
               </span>
             )}
           </div>

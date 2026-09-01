@@ -2,6 +2,7 @@ import React from 'react';
 import { Package, Store, CheckCircle2, Info, Sparkles, MapPin, Tag } from 'lucide-react';
 import ShippingMethodCard from './ShippingMethodCard';
 import { useImageProtection } from '../../hooks/useImageProtection';
+import { formatUSD } from '../../lib/formatters';
 
 export interface PackageCardProps {
   packageIndex: number;
@@ -78,11 +79,17 @@ export const PackageCard: React.FC<PackageCardProps> = ({
   const isPickupSelected = selectedMethodId === 'pickup';
 
   return (
-    <div className="bg-neutral-900/90 border border-neutral-800 rounded-2xl p-5 md:p-6 shadow-xl mb-6 transition-all duration-300">
+    <div className={`rounded-2xl p-5 md:p-6 shadow-xl mb-6 transition-all duration-300 ${
+      isInternational 
+        ? 'bg-neutral-900/90 border-2 border-sky-500/30 shadow-sky-950/20' 
+        : 'bg-neutral-900/90 border border-neutral-800'
+    }`}>
       {/* Header: Vendor Info & Package Counter */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-4 border-b border-neutral-800/80">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-neutral-800 border border-neutral-700/80 flex items-center justify-center overflow-hidden flex-shrink-0">
+          <div className={`w-10 h-10 rounded-xl border flex items-center justify-center overflow-hidden flex-shrink-0 ${
+            isInternational ? 'bg-sky-950/40 border-sky-500/30 text-sky-400' : 'bg-neutral-800 border-neutral-700/80'
+          }`}>
             {vendorLogo ? (
               <img src={vendorLogo} alt={vendorName} draggable={false} onDragStart={handleDragStart} className="w-full h-full object-cover img-protected" />
             ) : isInternational ? (
@@ -99,8 +106,8 @@ export const PackageCard: React.FC<PackageCardProps> = ({
                 {isInternational ? 'Collectibles · Internacional' : vendorName}
               </h3>
               {isInternational && (
-                <span className="text-[10px] font-black px-2 py-0.5 rounded bg-sky-950/80 text-sky-400 border border-sky-500/30 uppercase tracking-wider">
-                  🌎 Producto internacional
+                <span className="text-[10px] font-black px-2 py-0.5 rounded bg-sky-950/80 text-sky-400 border border-sky-500/40 uppercase tracking-wider">
+                  🌎 INTERNACIONAL
                 </span>
               )}
               {isOfficialStore && !isInternational && (
@@ -110,7 +117,10 @@ export const PackageCard: React.FC<PackageCardProps> = ({
               )}
             </div>
             <p className="text-xs text-neutral-400">
-              Paquete {packageIndex} de {totalPackages} · {items.length} {items.length === 1 ? 'producto' : 'productos'} · Subtotal: <span className="text-white font-semibold">${groupTotal.toLocaleString('es-UY')}</span>
+              Paquete {packageIndex} de {totalPackages} · {items.length} {items.length === 1 ? 'producto' : 'productos'} · Subtotal:{' '}
+              <span className={`font-semibold ${isInternational ? 'text-sky-400' : 'text-white'}`}>
+                {isInternational ? formatUSD(groupTotal) : `$ ${groupTotal.toLocaleString('es-UY')}`}
+              </span>
             </p>
           </div>
         </div>
@@ -138,10 +148,10 @@ export const PackageCard: React.FC<PackageCardProps> = ({
       </div>
 
       {/* Items Preview */}
-      <div className="bg-neutral-950/60 rounded-xl p-3 mb-5 border border-neutral-800/60">
+      <div className={`rounded-xl p-3 mb-5 border ${isInternational ? 'bg-neutral-950/80 border-sky-500/20' : 'bg-neutral-950/60 border-neutral-800/60'}`}>
         <div className="flex items-center gap-3 overflow-x-auto pb-1 scrollbar-thin">
           {items.map((item) => (
-            <div key={item.id} className="flex items-center gap-2 flex-shrink-0 bg-neutral-900/80 p-2 rounded-lg border border-neutral-800">
+            <div key={item.id} className={`flex items-center gap-2 flex-shrink-0 p-2 rounded-lg border ${isInternational ? 'bg-neutral-900/90 border-sky-500/30' : 'bg-neutral-900/80 border-neutral-800'}`}>
               <img
                 src={item.image_url || '/placeholder.png'}
                 alt={item.title}
@@ -149,7 +159,9 @@ export const PackageCard: React.FC<PackageCardProps> = ({
               />
               <div className="max-w-[140px] md:max-w-[180px]">
                 <p className="text-xs font-medium text-white truncate">{item.title}</p>
-                <p className="text-[11px] text-neutral-400">Cant: {item.quantity} · ${item.price.toLocaleString('es-UY')}</p>
+                <p className="text-[11px] text-neutral-400">
+                  Cant: {item.quantity} · <span className={isInternational ? 'text-sky-300 font-semibold' : ''}>{isInternational ? formatUSD(item.price) : `$ ${item.price.toLocaleString('es-UY')}`}</span>
+                </p>
               </div>
             </div>
           ))}

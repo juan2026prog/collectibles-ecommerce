@@ -810,9 +810,11 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
 
       {/* EDITORIAL HERO SECTION */}
       <section className="relative hero-noise overflow-hidden border-b border-white/10">
-        <div className="absolute -right-40 top-0 w-[560px] h-[560px] bg-[#f00856]/20 blur-3xl rounded-full"></div>
+        <div className={`absolute -right-40 top-0 w-[560px] h-[560px] blur-3xl rounded-full ${isInternational ? 'bg-sky-500/20' : 'bg-[#f00856]/20'}`}></div>
         <div className="relative max-w-7xl mx-auto px-6 py-6 md:py-10">
-          <div className="label-tag">{isInternational ? "Especial" : group ? "Colección" : isCategoryRoute ? "Categoría" : isBrandRoute ? "Marca" : "Catálogo"}</div>
+          <div className={`label-tag ${isInternational ? 'bg-sky-950/80 border border-sky-500/40 text-sky-300' : ''}`}>
+            {isInternational ? "🌎 Catálogo Internacional" : group ? "Colección" : isCategoryRoute ? "Categoría" : isBrandRoute ? "Marca" : "Catálogo"}
+          </div>
           <div className="flex items-center gap-4 mt-3 flex-wrap">
             <h1 className="text-5xl md:text-7xl font-black leading-[.9] tracking-tighter">
               {isInternational ? "Collectibles Internacional" : group ? group.name : isCategoryRoute && currentCategory ? currentCategory.name : isBrandRoute && currentBrand ? currentBrand.name : "Productos"}
@@ -826,7 +828,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
             )}
           </div>
           <p className="text-slate-300 text-lg mt-5 max-w-3xl leading-relaxed">
-            {isInternational ? "Explora nuestro catálogo de productos internacionales importados a pedido." : group ? group.description || "Explora esta colección exclusiva de productos curados." : ""}
+            {isInternational ? "Explorá figuras y coleccionables importados a pedido. Precios en USD con entrega directa en tu casilla de EE.UU." : group ? group.description || "Explora esta colección exclusiva de productos curados." : ""}
           </p>
         </div>
       </section>

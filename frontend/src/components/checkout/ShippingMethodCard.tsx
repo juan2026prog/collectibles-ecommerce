@@ -44,6 +44,7 @@ export const ShippingMethodCard: React.FC<ShippingMethodCardProps> = ({
   };
 
   const isActuallyFree = cost === 0 || isFree;
+  const isIntlMethod = id === 'international_courier_direct';
 
   return (
     <div
@@ -53,7 +54,9 @@ export const ShippingMethodCard: React.FC<ShippingMethodCardProps> = ({
         ${isDisabled 
           ? 'bg-neutral-900/40 border-neutral-800/60 opacity-60 cursor-not-allowed' 
           : isSelected
-          ? 'bg-neutral-900 border-[#f00856] shadow-lg shadow-[#f00856]/10 ring-1 ring-[#f00856]'
+          ? isIntlMethod 
+            ? 'bg-neutral-900 border-sky-500 shadow-lg shadow-sky-500/10 ring-1 ring-sky-500'
+            : 'bg-neutral-900 border-[#f00856] shadow-lg shadow-[#f00856]/10 ring-1 ring-[#f00856]'
           : 'bg-neutral-900/80 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900'
         }
       `}
@@ -64,7 +67,7 @@ export const ShippingMethodCard: React.FC<ShippingMethodCardProps> = ({
           <div className={`
             w-5 h-5 rounded-full border flex items-center justify-center transition-all duration-200
             ${isSelected 
-              ? 'border-[#f00856] bg-[#f00856]' 
+              ? isIntlMethod ? 'border-sky-500 bg-sky-500' : 'border-[#f00856] bg-[#f00856]' 
               : isDisabled
               ? 'border-neutral-700 bg-neutral-800'
               : 'border-neutral-600 bg-neutral-950'
@@ -78,7 +81,7 @@ export const ShippingMethodCard: React.FC<ShippingMethodCardProps> = ({
         <div className={`
           p-2.5 rounded-lg flex-shrink-0
           ${isSelected 
-            ? 'bg-[#f00856]/20 text-[#f00856]' 
+            ? isIntlMethod ? 'bg-sky-500/20 text-sky-400' : 'bg-[#f00856]/20 text-[#f00856]' 
             : isDisabled
             ? 'bg-neutral-800 text-neutral-500'
             : 'bg-neutral-800/80 text-neutral-300'
