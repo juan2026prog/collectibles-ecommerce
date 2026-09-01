@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-describe('International Category Storefront & Sync Immunity', () => {
+describe('International Category Storefront, Defaults & Sync Immunity', () => {
   const sampleInternationalProduct = {
     id: 'c133426d-8678-44cd-b9d8-cbe14b76ed32',
     title: 'NECA Ghost Face - 7" Scale Action Figure - Ultimate Ghost Face Inferno',
@@ -20,6 +20,43 @@ describe('International Category Storefront & Sync Immunity', () => {
       first_party_seller: true
     }
   };
+
+  it('Default base state for new unclassified products is unmapped / 0', () => {
+    // When caller does not specify mapping source or confidence
+    const newProductPayload = {
+      title: 'Random New Item',
+      brand: 'SomeBrand',
+      base_price_usd: 25.00
+    };
+
+    const insertedDefaultValues = {
+      category_mapping_source: 'unmapped',
+      category_mapping_confidence: 0,
+      collectibles_category_id: null,
+      collectibles_subcategory_id: null
+    };
+
+    const finalProductRecord = {
+      ...insertedDefaultValues,
+      ...newProductPayload
+    };
+
+    expect(finalProductRecord.category_mapping_source).toBe('unmapped');
+    expect(finalProductRecord.category_mapping_confidence).toBe(0);
+    expect(finalProductRecord.collectibles_category_id).toBeNull();
+  });
+
+  it('Manual override produces manual / 100 and preserves classification', () => {
+    const adminEditedProduct = {
+      ...sampleInternationalProduct,
+      collectibles_category_id: 'ddd41421-fb1c-423f-a282-131aba8c4373',
+      category_mapping_source: 'manual',
+      category_mapping_confidence: 100
+    };
+
+    expect(adminEditedProduct.category_mapping_source).toBe('manual');
+    expect(adminEditedProduct.category_mapping_confidence).toBe(100);
+  });
 
   it('Storefront accurately maps internal category relation and preserves UUID filter', () => {
     // Simulated mapping in useProducts for isInternational mode

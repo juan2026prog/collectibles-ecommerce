@@ -54,10 +54,31 @@ export default function AdminInternationalAmazon() {
   const [brandRules, setBrandRules] = useState<any[]>([]);
   const [keywordRules, setKeywordRules] = useState<any[]>([]);
   const [loadingRules, setLoadingRules] = useState(false);
+  const [rulesSummary, setRulesSummary] = useState<any>({
+    category_rules_count: 0,
+    brand_rules_count: 0,
+    keyword_rules_count: 0,
+    active_rules_count: 0,
+    review_required_rules_count: 0,
+    unmapped_candidates_count: 0
+  });
+  const [resolverStats, setResolverStats] = useState<any>({
+    exact_path: 0,
+    leaf: 0,
+    brand: 0,
+    keyword: 0,
+    unmapped: 0
+  });
+
+  // Rules filtering & sorting
+  const [ruleSearchQuery, setRuleSearchQuery] = useState('');
+  const [ruleFilter, setRuleFilter] = useState<'all' | 'active' | 'inactive' | 'with_affected' | 'without_affected' | 'review'>('all');
+  const [ruleSortBy, setRuleSortBy] = useState<'affected_desc' | 'confidence_desc' | 'priority_desc' | 'name_asc'>('affected_desc');
+  const [editingRule, setEditingRule] = useState<{ type: 'category' | 'brand' | 'keyword'; data: any } | null>(null);
 
   // New rule form states
   const [newCatRule, setNewCatRule] = useState({ amazon_category: '', amazon_subcategory: '', amazon_category_path: '', collectibles_category_id: '', collectibles_subcategory_id: '', confidence_score: 90 });
-  const [newBrandRule, setNewBrandRule] = useState({ brand_name: '', collectibles_category_id: '', collectibles_subcategory_id: '', confidence_score: 70 });
+  const [newBrandRule, setNewBrandRule] = useState({ brand_name: '', collectibles_category_id: '', collectibles_subcategory_id: '', confidence_score: 70, allow_standalone: true });
   const [newKeywordRule, setNewKeywordRule] = useState({ keyword: '', target_category_id: '', target_subcategory_id: '', priority: 10 });
 
   const [importSettings, setImportSettings] = useState({
@@ -115,6 +136,7 @@ export default function AdminInternationalAmazon() {
         type: 'success'
       });
       fetchCandidates();
+      fetchRules();
     } catch (err: any) {
       addToast({ title: 'Error recalculando', message: err.message, type: 'error' });
     } finally {
@@ -125,18 +147,104 @@ export default function AdminInternationalAmazon() {
   async function fetchRules() {
     setLoadingRules(true);
     try {
-      const [{ data: cats }, { data: brands }, { data: keywords }] = await Promise.all([
-        supabase.from('amazon_category_mapping').select('*').order('created_at', { ascending: false }),
-        supabase.from('amazon_brand_mapping').select('*').order('created_at', { ascending: false }),
-        supabase.from('keyword_mapping_rules').select('*').order('priority', { ascending: false })
+      const [{ data: statsData, error: statsError }, { data: distData }] = await Promise.all([
+        supabase.rpc('get_mapping_rules_stats'),
+        supabase.from('international_import_candidates').select('category_mapping_source, mapping_confidence').eq('status', 'review')
       ]);
-      setCatRules(cats || []);
-      setBrandRules(brands || []);
-      setKeywordRules(keywords || []);
+
+      if (statsError) throw statsError;
+
+      if (statsData) {
+        setCatRules(statsData.categories || []);
+        setBrandRules(statsData.brands || []);
+        setKeywordRules(statsData.keywords || []);
+        if (statsData.summary) {
+          setRulesSummary(statsData.summary);
+        }
+      }
+
+      if (distData) {
+        const stats = { exact_path: 0, leaf: 0, brand: 0, keyword: 0, unmapped: 0 };
+        distData.forEach(item => {
+          if (item.category_mapping_source === 'category_mapping') stats.exact_path++;
+          else if (item.category_mapping_source === 'category_mapping_leaf') stats.leaf++;
+          else if (item.category_mapping_source === 'brand_mapping') stats.brand++;
+          else if (item.category_mapping_source === 'keyword_mapping') stats.keyword++;
+          else stats.unmapped++;
+        });
+        setResolverStats(stats);
+      }
     } catch (err: any) {
       addToast({ title: 'Error cargando reglas', message: err.message, type: 'error' });
     } finally {
       setLoadingRules(false);
+    }
+  }
+
+  async function handleToggleRuleActive(type: 'category' | 'brand' | 'keyword', id: string, currentState: boolean) {
+    const table = type === 'category' ? 'amazon_category_mapping' : type === 'brand' ? 'amazon_brand_mapping' : 'keyword_mapping_rules';
+    try {
+      const { error } = await supabase.from(table).update({ is_active: !currentState }).eq('id', id);
+      if (error) throw error;
+      addToast({ title: 'Estado actualizado', message: `Regla ${!currentState ? 'activada' : 'desactivada'}.`, type: 'success' });
+      fetchRules();
+    } catch (err: any) {
+      addToast({ title: 'Error actualizando', message: err.message, type: 'error' });
+    }
+  }
+
+  async function handleToggleBrandStandalone(id: string, currentState: boolean) {
+    try {
+      const { error } = await supabase.from('amazon_brand_mapping').update({ allow_standalone: !currentState }).eq('id', id);
+      if (error) throw error;
+      addToast({ title: 'Modo actualizado', message: `Modo marca: ${!currentState ? 'Standalone (Autónomo)' : 'Requiere Contexto'}.`, type: 'success' });
+      fetchRules();
+    } catch (err: any) {
+      addToast({ title: 'Error actualizando', message: err.message, type: 'error' });
+    }
+  }
+
+  async function handleSaveEditRule(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingRule) return;
+
+    try {
+      if (editingRule.type === 'category') {
+        const { error } = await supabase.from('amazon_category_mapping').update({
+          amazon_category_path: editingRule.data.amazon_category_path || null,
+          amazon_subcategory: editingRule.data.amazon_subcategory || null,
+          collectibles_category_id: editingRule.data.collectibles_category_id,
+          collectibles_subcategory_id: editingRule.data.collectibles_subcategory_id || null,
+          confidence_score: Number(editingRule.data.confidence_score || 90),
+          is_active: editingRule.data.is_active
+        }).eq('id', editingRule.data.id);
+        if (error) throw error;
+      } else if (editingRule.type === 'brand') {
+        const { error } = await supabase.from('amazon_brand_mapping').update({
+          brand_name: editingRule.data.brand_name.trim(),
+          collectibles_category_id: editingRule.data.collectibles_category_id,
+          collectibles_subcategory_id: editingRule.data.collectibles_subcategory_id || null,
+          confidence_score: Number(editingRule.data.confidence_score || 70),
+          allow_standalone: editingRule.data.allow_standalone,
+          is_active: editingRule.data.is_active
+        }).eq('id', editingRule.data.id);
+        if (error) throw error;
+      } else if (editingRule.type === 'keyword') {
+        const { error } = await supabase.from('keyword_mapping_rules').update({
+          keyword: editingRule.data.keyword.trim().toLowerCase(),
+          target_category_id: editingRule.data.target_category_id,
+          target_subcategory_id: editingRule.data.target_subcategory_id || null,
+          priority: Number(editingRule.data.priority || 10),
+          is_active: editingRule.data.is_active
+        }).eq('id', editingRule.data.id);
+        if (error) throw error;
+      }
+
+      addToast({ title: 'Regla guardada', message: 'Cambios guardados exitosamente.', type: 'success' });
+      setEditingRule(null);
+      fetchRules();
+    } catch (err: any) {
+      addToast({ title: 'Error guardando regla', message: err.message, type: 'error' });
     }
   }
 
@@ -153,7 +261,8 @@ export default function AdminInternationalAmazon() {
         amazon_category_path: newCatRule.amazon_category_path || null,
         collectibles_category_id: newCatRule.collectibles_category_id,
         collectibles_subcategory_id: newCatRule.collectibles_subcategory_id || null,
-        confidence_score: Number(newCatRule.confidence_score || 90)
+        confidence_score: Number(newCatRule.confidence_score || 90),
+        is_active: true
       });
       if (error) throw error;
       addToast({ title: 'Regla agregada', message: 'Regla de categoría guardada exitosamente.', type: 'success' });
@@ -165,7 +274,7 @@ export default function AdminInternationalAmazon() {
   }
 
   async function handleDeleteCatRule(id: string) {
-    if (!confirm('¿Eliminar esta regla de mapeo?')) return;
+    if (!confirm('¿Estás seguro de eliminar esta regla de categoría de forma permanente?')) return;
     try {
       const { error } = await supabase.from('amazon_category_mapping').delete().eq('id', id);
       if (error) throw error;
@@ -187,11 +296,13 @@ export default function AdminInternationalAmazon() {
         brand_name: newBrandRule.brand_name.trim(),
         collectibles_category_id: newBrandRule.collectibles_category_id,
         collectibles_subcategory_id: newBrandRule.collectibles_subcategory_id || null,
-        confidence_score: Number(newBrandRule.confidence_score || 70)
+        confidence_score: Number(newBrandRule.confidence_score || 70),
+        allow_standalone: newBrandRule.allow_standalone,
+        is_active: true
       });
       if (error) throw error;
       addToast({ title: 'Regla agregada', message: 'Regla de marca guardada exitosamente.', type: 'success' });
-      setNewBrandRule({ brand_name: '', collectibles_category_id: '', collectibles_subcategory_id: '', confidence_score: 70 });
+      setNewBrandRule({ brand_name: '', collectibles_category_id: '', collectibles_subcategory_id: '', confidence_score: 70, allow_standalone: true });
       fetchRules();
     } catch (err: any) {
       addToast({ title: 'Error', message: err.message, type: 'error' });
@@ -199,7 +310,7 @@ export default function AdminInternationalAmazon() {
   }
 
   async function handleDeleteBrandRule(id: string) {
-    if (!confirm('¿Eliminar esta regla de marca?')) return;
+    if (!confirm('¿Estás seguro de eliminar esta regla de marca de forma permanente?')) return;
     try {
       const { error } = await supabase.from('amazon_brand_mapping').delete().eq('id', id);
       if (error) throw error;
@@ -221,7 +332,8 @@ export default function AdminInternationalAmazon() {
         keyword: newKeywordRule.keyword.trim().toLowerCase(),
         target_category_id: newKeywordRule.target_category_id,
         target_subcategory_id: newKeywordRule.target_subcategory_id || null,
-        priority: Number(newKeywordRule.priority || 10)
+        priority: Number(newKeywordRule.priority || 10),
+        is_active: true
       });
       if (error) throw error;
       addToast({ title: 'Regla agregada', message: 'Regla de palabra clave guardada exitosamente.', type: 'success' });
@@ -233,7 +345,7 @@ export default function AdminInternationalAmazon() {
   }
 
   async function handleDeleteKeywordRule(id: string) {
-    if (!confirm('¿Eliminar esta regla de palabra clave?')) return;
+    if (!confirm('¿Estás seguro de eliminar esta regla de palabra clave de forma permanente?')) return;
     try {
       const { error } = await supabase.from('keyword_mapping_rules').delete().eq('id', id);
       if (error) throw error;
@@ -859,68 +971,163 @@ export default function AdminInternationalAmazon() {
       {/* Rules Manager Modal */}
       {showRulesModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden">
+            {/* Modal Header */}
             <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
               <div>
                 <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2">
                   <SlidersHorizontal className="w-5 h-5 text-indigo-600" />
-                  Reglas de Mapeo Automático de Categorías
+                  Mapeos de Catálogo Internacional (Taxonomía Collectibles)
                 </h3>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Define cómo se asignan las categorías internas de Collectibles a partir de la taxonomía externa, marcas o keywords.
+                  Gestiona reglas automáticas, audita candidatos afectados y configura modos seguros para marcas y palabras clave.
                 </p>
               </div>
-              <button onClick={() => setShowRulesModal(false)} className="text-gray-400 hover:text-gray-700">
+              <button onClick={() => setShowRulesModal(false)} className="text-gray-400 hover:text-gray-700 p-1">
                 <XCircle className="w-6 h-6" />
               </button>
             </div>
 
-            {/* Tabs */}
-            <div className="flex border-b border-gray-200 bg-gray-50/50 px-4 pt-2 gap-2">
-              <button
-                onClick={() => setActiveRuleTab('category')}
-                className={`px-4 py-2 text-xs font-bold rounded-t-lg border-b-2 transition-all ${
-                  activeRuleTab === 'category'
-                    ? 'border-indigo-600 text-indigo-600 bg-white shadow-sm'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Categorías Amazon ({catRules.length})
-              </button>
-              <button
-                onClick={() => setActiveRuleTab('brand')}
-                className={`px-4 py-2 text-xs font-bold rounded-t-lg border-b-2 transition-all ${
-                  activeRuleTab === 'brand'
-                    ? 'border-indigo-600 text-indigo-600 bg-white shadow-sm'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Por Marca ({brandRules.length})
-              </button>
-              <button
-                onClick={() => setActiveRuleTab('keyword')}
-                className={`px-4 py-2 text-xs font-bold rounded-t-lg border-b-2 transition-all ${
-                  activeRuleTab === 'keyword'
-                    ? 'border-indigo-600 text-indigo-600 bg-white shadow-sm'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Por Palabra Clave ({keywordRules.length})
-              </button>
+            {/* Summary Metrics Cards */}
+            <div className="bg-slate-50 border-b border-gray-200 p-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-center">
+                <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm">
+                  <div className="text-[11px] font-medium text-gray-500">Mapeos Categoría</div>
+                  <div className="text-lg font-bold text-indigo-700 mt-0.5">{rulesSummary.category_rules_count || catRules.length}</div>
+                </div>
+                <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm">
+                  <div className="text-[11px] font-medium text-gray-500">Mapeos Marca</div>
+                  <div className="text-lg font-bold text-blue-700 mt-0.5">{rulesSummary.brand_rules_count || brandRules.length}</div>
+                </div>
+                <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm">
+                  <div className="text-[11px] font-medium text-gray-500">Mapeos Keyword</div>
+                  <div className="text-lg font-bold text-amber-700 mt-0.5">{rulesSummary.keyword_rules_count || keywordRules.length}</div>
+                </div>
+                <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm">
+                  <div className="text-[11px] font-medium text-gray-500">Reglas Activas</div>
+                  <div className="text-lg font-bold text-emerald-700 mt-0.5">{rulesSummary.active_rules_count || 0}</div>
+                </div>
+                <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm">
+                  <div className="text-[11px] font-medium text-gray-500">Requieren Revisión</div>
+                  <div className="text-lg font-bold text-orange-600 mt-0.5">{rulesSummary.review_required_rules_count || 0}</div>
+                </div>
+                <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm">
+                  <div className="text-[11px] font-medium text-gray-500">Candidatos Sin Mapping</div>
+                  <div className="text-lg font-bold text-red-600 mt-0.5">{rulesSummary.unmapped_candidates_count || 0}</div>
+                </div>
+              </div>
+
+              {/* Resolver Distribution Bar */}
+              <div className="mt-3 bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between flex-wrap gap-2 text-xs">
+                <span className="font-bold text-gray-700 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-indigo-600" />
+                  Resultado Actual del Resolver ({candidates.length} en cola):
+                </span>
+                <div className="flex items-center gap-3 flex-wrap font-medium">
+                  <span className="bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded border border-emerald-200">
+                    Exact Path (90%): <strong className="font-bold">{resolverStats.exact_path}</strong>
+                  </span>
+                  <span className="bg-teal-50 text-teal-800 px-2 py-0.5 rounded border border-teal-200">
+                    Leaf (80%): <strong className="font-bold">{resolverStats.leaf}</strong>
+                  </span>
+                  <span className="bg-blue-50 text-blue-800 px-2 py-0.5 rounded border border-blue-200">
+                    Brand (70%): <strong className="font-bold">{resolverStats.brand}</strong>
+                  </span>
+                  <span className="bg-amber-50 text-amber-800 px-2 py-0.5 rounded border border-amber-200">
+                    Keyword (50%): <strong className="font-bold">{resolverStats.keyword}</strong>
+                  </span>
+                  <span className="bg-rose-50 text-rose-800 px-2 py-0.5 rounded border border-rose-200">
+                    Unmapped (0%): <strong className="font-bold">{resolverStats.unmapped}</strong>
+                  </span>
+                </div>
+              </div>
             </div>
 
+            {/* Navigation Tabs & Search/Filters Bar */}
+            <div className="flex border-b border-gray-200 bg-gray-50 px-4 pt-2 justify-between items-center flex-wrap gap-2">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setActiveRuleTab('category')}
+                  className={`px-4 py-2 text-xs font-bold rounded-t-lg border-b-2 transition-all ${
+                    activeRuleTab === 'category'
+                      ? 'border-indigo-600 text-indigo-600 bg-white shadow-sm'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Categorías ({catRules.length})
+                </button>
+                <button
+                  onClick={() => setActiveRuleTab('brand')}
+                  className={`px-4 py-2 text-xs font-bold rounded-t-lg border-b-2 transition-all ${
+                    activeRuleTab === 'brand'
+                      ? 'border-indigo-600 text-indigo-600 bg-white shadow-sm'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Marcas ({brandRules.length})
+                </button>
+                <button
+                  onClick={() => setActiveRuleTab('keyword')}
+                  className={`px-4 py-2 text-xs font-bold rounded-t-lg border-b-2 transition-all ${
+                    activeRuleTab === 'keyword'
+                      ? 'border-indigo-600 text-indigo-600 bg-white shadow-sm'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Palabras Clave ({keywordRules.length})
+                </button>
+              </div>
+
+              {/* Search, Filter & Sort Controls */}
+              <div className="flex items-center gap-2 pb-2">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Buscar regla o categoría..."
+                    className="text-xs pl-8 pr-3 py-1.5 rounded-lg border-gray-300 w-44 md:w-56"
+                    value={ruleSearchQuery}
+                    onChange={e => setRuleSearchQuery(e.target.value)}
+                  />
+                </div>
+                <select
+                  className="text-xs py-1.5 px-2.5 rounded-lg border-gray-300 bg-white font-medium text-gray-700"
+                  value={ruleFilter}
+                  onChange={e => setRuleFilter(e.target.value as any)}
+                >
+                  <option value="all">Todos</option>
+                  <option value="active">Solo Activos</option>
+                  <option value="inactive">Solo Inactivos</option>
+                  <option value="with_affected">Con Afectados</option>
+                  <option value="without_affected">Sin Afectados</option>
+                  <option value="review">Requieren Revisión</option>
+                </select>
+                <select
+                  className="text-xs py-1.5 px-2.5 rounded-lg border-gray-300 bg-white font-medium text-gray-700"
+                  value={ruleSortBy}
+                  onChange={e => setRuleSortBy(e.target.value as any)}
+                >
+                  <option value="affected_desc">Afectados ↓</option>
+                  <option value="confidence_desc">Confianza ↓</option>
+                  <option value="priority_desc">Prioridad ↓</option>
+                  <option value="name_asc">Nombre A-Z</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Tab Body */}
             <div className="p-6 overflow-y-auto flex-1 space-y-6">
               {loadingRules ? (
-                <div className="py-12 text-center">
+                <div className="py-16 text-center">
                   <Loader2 className="w-8 h-8 animate-spin mx-auto text-indigo-600" />
-                  <p className="text-sm text-gray-500 mt-2">Cargando reglas...</p>
+                  <p className="text-sm text-gray-500 mt-2">Cargando reglas y métricas de afectación...</p>
                 </div>
               ) : activeRuleTab === 'category' ? (
                 <div className="space-y-6">
                   {/* Add category mapping form */}
                   <form onSubmit={handleAddCatRule} className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-xl space-y-3">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-900 flex items-center gap-1.5">
-                      <Plus className="w-4 h-4" /> Agregar Regla de Categoría Amazon
+                      <Plus className="w-4 h-4" /> Agregar Nuevo Mapeo de Categoría
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <div>
@@ -980,57 +1187,128 @@ export default function AdminInternationalAmazon() {
                       </div>
                       <div className="flex items-end">
                         <button type="submit" className="w-full py-2 bg-indigo-600 text-white font-bold text-xs rounded-lg hover:bg-indigo-700 shadow-sm flex items-center justify-center gap-1.5">
-                          <Plus className="w-4 h-4" /> Guardar Regla
+                          <Plus className="w-4 h-4" /> Guardar Mapeo
                         </button>
                       </div>
                     </div>
                   </form>
 
-                  {/* List */}
-                  <table className="min-w-full divide-y divide-gray-200 text-xs">
-                    <thead>
-                      <tr className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px]">
-                        <th className="px-3 py-2 text-left">Path / Subcategoría Amazon</th>
-                        <th className="px-3 py-2 text-left">Categoría Collectibles</th>
-                        <th className="px-3 py-2 text-center">Confianza</th>
-                        <th className="px-3 py-2 text-right">Acción</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {catRules.map(r => (
-                        <tr key={r.id} className="hover:bg-gray-50">
-                          <td className="px-3 py-2">
-                            {r.amazon_category_path ? (
-                              <div className="font-mono text-gray-800 text-[11px]">{r.amazon_category_path}</div>
-                            ) : (
-                              <div className="font-medium text-gray-700">{r.amazon_subcategory || r.amazon_category}</div>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 font-semibold text-emerald-700">
-                            {getCategoryName(r.collectibles_category_id)}
-                            {r.collectibles_subcategory_id && ` > ${getCategoryName(r.collectibles_subcategory_id)}`}
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                              {r.confidence_score}%
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            <button onClick={() => handleDeleteCatRule(r.id)} className="text-red-500 hover:text-red-700 p-1" title="Eliminar">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </td>
+                  {/* Category Mappings Table */}
+                  <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                    <table className="min-w-full divide-y divide-gray-200 text-xs">
+                      <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px]">
+                        <tr>
+                          <th className="px-3 py-2.5 text-left">Categoría Externa</th>
+                          <th className="px-3 py-2.5 text-left">Categoría Collectibles</th>
+                          <th className="px-3 py-2.5 text-left">Subcategoría</th>
+                          <th className="px-3 py-2.5 text-center">Tipo Match</th>
+                          <th className="px-3 py-2.5 text-center">Confianza</th>
+                          <th className="px-3 py-2.5 text-center">Activa</th>
+                          <th className="px-3 py-2.5 text-center">Afectados</th>
+                          <th className="px-3 py-2.5 text-center">Riesgo</th>
+                          <th className="px-3 py-2.5 text-right">Acciones</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 bg-white">
+                        {catRules
+                          .filter(r => {
+                            if (ruleFilter === 'active') return r.is_active;
+                            if (ruleFilter === 'inactive') return !r.is_active;
+                            if (ruleFilter === 'with_affected') return (r.affected_candidates > 0 || r.affected_products > 0);
+                            if (ruleFilter === 'without_affected') return (r.affected_candidates === 0 && r.affected_products === 0);
+                            if (ruleFilter === 'review') return r.confidence_score < 90;
+                            return true;
+                          })
+                          .filter(r => {
+                            if (!ruleSearchQuery) return true;
+                            const q = ruleSearchQuery.toLowerCase();
+                            const path = (r.amazon_category_path || '').toLowerCase();
+                            const sub = (r.amazon_subcategory || '').toLowerCase();
+                            const catName = getCategoryName(r.collectibles_category_id).toLowerCase();
+                            return path.includes(q) || sub.includes(q) || catName.includes(q);
+                          })
+                          .sort((a, b) => {
+                            if (ruleSortBy === 'affected_desc') return (b.affected_candidates + b.affected_products) - (a.affected_candidates + a.affected_products);
+                            if (ruleSortBy === 'confidence_desc') return (b.confidence_score || 0) - (a.confidence_score || 0);
+                            return (a.amazon_category_path || a.amazon_subcategory || '').localeCompare(b.amazon_category_path || b.amazon_subcategory || '');
+                          })
+                          .map(r => (
+                            <tr key={r.id} className={`hover:bg-indigo-50/20 transition-colors ${!r.is_active ? 'opacity-50 bg-gray-50' : ''}`}>
+                              <td className="px-3 py-2.5">
+                                {r.amazon_category_path ? (
+                                  <div className="font-mono text-gray-800 text-[11px]" title={r.amazon_category_path}>
+                                    {r.amazon_category_path}
+                                  </div>
+                                ) : (
+                                  <div className="font-medium text-gray-700">{r.amazon_subcategory || r.amazon_category}</div>
+                                )}
+                              </td>
+                              <td className="px-3 py-2.5 font-bold text-emerald-700">
+                                {getCategoryName(r.collectibles_category_id)}
+                              </td>
+                              <td className="px-3 py-2.5 text-gray-500">
+                                {r.collectibles_subcategory_id ? getCategoryName(r.collectibles_subcategory_id) : '—'}
+                              </td>
+                              <td className="px-3 py-2.5 text-center">
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-700">
+                                  {r.amazon_category_path ? 'Path exacto' : 'Leaf'}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2.5 text-center">
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                                  {r.confidence_score}%
+                                </span>
+                              </td>
+                              <td className="px-3 py-2.5 text-center">
+                                <button
+                                  onClick={() => handleToggleRuleActive('category', r.id, r.is_active)}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                                    r.is_active ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                                  }`}
+                                  title="Click para alternar activo / inactivo"
+                                >
+                                  {r.is_active ? 'ACTIVO' : 'INACTIVO'}
+                                </button>
+                              </td>
+                              <td className="px-3 py-2.5 text-center">
+                                <div className="font-semibold text-gray-800">{r.affected_candidates || 0} cand.</div>
+                                <div className="text-[10px] text-gray-400">{r.affected_products || 0} pub.</div>
+                              </td>
+                              <td className="px-3 py-2.5 text-center">
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  BAJO
+                                </span>
+                              </td>
+                              <td className="px-3 py-2.5 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    onClick={() => setEditingRule({ type: 'category', data: { ...r } })}
+                                    className="p-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded"
+                                    title="Editar regla"
+                                  >
+                                    <Edit className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteCatRule(r.id)}
+                                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                                    title="Eliminar regla"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               ) : activeRuleTab === 'brand' ? (
                 <div className="space-y-6">
                   {/* Add brand mapping form */}
                   <form onSubmit={handleAddBrandRule} className="bg-blue-50/50 border border-blue-100 p-4 rounded-xl space-y-3">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-blue-900 flex items-center gap-1.5">
-                      <Plus className="w-4 h-4" /> Agregar Regla por Marca
+                      <Plus className="w-4 h-4" /> Agregar Nuevo Mapeo de Marca
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <div>
@@ -1071,6 +1349,17 @@ export default function AdminInternationalAmazon() {
                         </select>
                       </div>
                       <div>
+                        <label className="block text-[11px] font-medium text-gray-700 mb-1">Modo de Funcionamiento</label>
+                        <select
+                          className="w-full text-xs rounded-lg border-gray-300 p-2 bg-white font-medium"
+                          value={newBrandRule.allow_standalone ? 'standalone' : 'context'}
+                          onChange={e => setNewBrandRule({ ...newBrandRule, allow_standalone: e.target.value === 'standalone' })}
+                        >
+                          <option value="standalone">Standalone (Autónomo)</option>
+                          <option value="context">Requiere Contexto (Seguro)</option>
+                        </select>
+                      </div>
+                      <div>
                         <label className="block text-[11px] font-medium text-gray-700 mb-1">Puntaje Confianza (0-100)</label>
                         <input
                           type="number"
@@ -1079,53 +1368,135 @@ export default function AdminInternationalAmazon() {
                           onChange={e => setNewBrandRule({ ...newBrandRule, confidence_score: Number(e.target.value) })}
                         />
                       </div>
-                      <div className="md:col-span-2 flex items-end">
+                      <div className="flex items-end">
                         <button type="submit" className="w-full py-2 bg-blue-600 text-white font-bold text-xs rounded-lg hover:bg-blue-700 shadow-sm flex items-center justify-center gap-1.5">
-                          <Plus className="w-4 h-4" /> Guardar Regla de Marca
+                          <Plus className="w-4 h-4" /> Guardar Mapeo de Marca
                         </button>
                       </div>
                     </div>
                   </form>
 
-                  {/* List */}
-                  <table className="min-w-full divide-y divide-gray-200 text-xs">
-                    <thead>
-                      <tr className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px]">
-                        <th className="px-3 py-2 text-left">Marca</th>
-                        <th className="px-3 py-2 text-left">Categoría Collectibles</th>
-                        <th className="px-3 py-2 text-center">Confianza</th>
-                        <th className="px-3 py-2 text-right">Acción</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {brandRules.map(r => (
-                        <tr key={r.id} className="hover:bg-gray-50">
-                          <td className="px-3 py-2 font-bold text-gray-900">{r.brand_name}</td>
-                          <td className="px-3 py-2 font-semibold text-blue-700">
-                            {getCategoryName(r.collectibles_category_id)}
-                            {r.collectibles_subcategory_id && ` > ${getCategoryName(r.collectibles_subcategory_id)}`}
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold">
-                              {r.confidence_score}%
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            <button onClick={() => handleDeleteBrandRule(r.id)} className="text-red-500 hover:text-red-700 p-1" title="Eliminar">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </td>
+                  {/* Brand Mappings Table */}
+                  <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                    <table className="min-w-full divide-y divide-gray-200 text-xs">
+                      <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px]">
+                        <tr>
+                          <th className="px-3 py-2.5 text-left">Marca Externa</th>
+                          <th className="px-3 py-2.5 text-left">Categoría Collectibles</th>
+                          <th className="px-3 py-2.5 text-left">Subcategoría</th>
+                          <th className="px-3 py-2.5 text-center">Modo</th>
+                          <th className="px-3 py-2.5 text-center">Confianza</th>
+                          <th className="px-3 py-2.5 text-center">Activa</th>
+                          <th className="px-3 py-2.5 text-center">Afectados</th>
+                          <th className="px-3 py-2.5 text-center">Riesgo</th>
+                          <th className="px-3 py-2.5 text-right">Acciones</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 bg-white">
+                        {brandRules
+                          .filter(r => {
+                            if (ruleFilter === 'active') return r.is_active;
+                            if (ruleFilter === 'inactive') return !r.is_active;
+                            if (ruleFilter === 'with_affected') return (r.affected_candidates > 0 || r.affected_products > 0);
+                            if (ruleFilter === 'without_affected') return (r.affected_candidates === 0 && r.affected_products === 0);
+                            if (ruleFilter === 'review') return !r.allow_standalone;
+                            return true;
+                          })
+                          .filter(r => {
+                            if (!ruleSearchQuery) return true;
+                            const q = ruleSearchQuery.toLowerCase();
+                            const name = (r.brand_name || '').toLowerCase();
+                            const catName = getCategoryName(r.collectibles_category_id).toLowerCase();
+                            return name.includes(q) || catName.includes(q);
+                          })
+                          .sort((a, b) => {
+                            if (ruleSortBy === 'affected_desc') return (b.affected_candidates + b.affected_products) - (a.affected_candidates + a.affected_products);
+                            if (ruleSortBy === 'confidence_desc') return (b.confidence_score || 0) - (a.confidence_score || 0);
+                            return (a.brand_name || '').localeCompare(b.brand_name || '');
+                          })
+                          .map(r => (
+                            <tr key={r.id} className={`hover:bg-blue-50/20 transition-colors ${!r.is_active ? 'opacity-50 bg-gray-50' : ''}`}>
+                              <td className="px-3 py-2.5 font-bold text-gray-900">{r.brand_name}</td>
+                              <td className="px-3 py-2.5 font-bold text-blue-700">
+                                {getCategoryName(r.collectibles_category_id)}
+                              </td>
+                              <td className="px-3 py-2.5 text-gray-500">
+                                {r.collectibles_subcategory_id ? getCategoryName(r.collectibles_subcategory_id) : '—'}
+                              </td>
+                              <td className="px-3 py-2.5 text-center">
+                                <button
+                                  onClick={() => handleToggleBrandStandalone(r.id, r.allow_standalone)}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all ${
+                                    r.allow_standalone
+                                      ? 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100'
+                                      : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                                  }`}
+                                  title="Click para alternar entre Standalone y Requiere Contexto"
+                                >
+                                  {r.allow_standalone ? 'Standalone' : 'Requiere Contexto'}
+                                </button>
+                              </td>
+                              <td className="px-3 py-2.5 text-center">
+                                <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold">
+                                  {r.confidence_score}%
+                                </span>
+                              </td>
+                              <td className="px-3 py-2.5 text-center">
+                                <button
+                                  onClick={() => handleToggleRuleActive('brand', r.id, r.is_active)}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                                    r.is_active ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                                  }`}
+                                  title="Click para alternar activo / inactivo"
+                                >
+                                  {r.is_active ? 'ACTIVO' : 'INACTIVO'}
+                                </button>
+                              </td>
+                              <td className="px-3 py-2.5 text-center">
+                                <div className="font-semibold text-gray-800">{r.affected_candidates || 0} cand.</div>
+                                <div className="text-[10px] text-gray-400">{r.affected_products || 0} pub.</div>
+                              </td>
+                              <td className="px-3 py-2.5 text-center">
+                                {r.allow_standalone ? (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    BAJO
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                    REVISAR
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2.5 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    onClick={() => setEditingRule({ type: 'brand', data: { ...r } })}
+                                    className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded"
+                                    title="Editar regla"
+                                  >
+                                    <Edit className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteBrandRule(r.id)}
+                                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                                    title="Eliminar regla"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-6">
                   {/* Add keyword rule form */}
                   <form onSubmit={handleAddKeywordRule} className="bg-amber-50/50 border border-amber-100 p-4 rounded-xl space-y-3">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
-                      <Plus className="w-4 h-4" /> Agregar Regla por Palabra Clave
+                      <Plus className="w-4 h-4" /> Agregar Nuevo Mapeo por Palabra Clave
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <div>
@@ -1166,7 +1537,7 @@ export default function AdminInternationalAmazon() {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[11px] font-medium text-gray-700 mb-1">Prioridad (1-20)</label>
+                        <label className="block text-[11px] font-medium text-gray-700 mb-1">Prioridad de Evaluación (1-20)</label>
                         <input
                           type="number"
                           className="w-full text-xs rounded-lg border-gray-300 p-2"
@@ -1176,49 +1547,126 @@ export default function AdminInternationalAmazon() {
                       </div>
                       <div className="md:col-span-2 flex items-end">
                         <button type="submit" className="w-full py-2 bg-amber-600 text-white font-bold text-xs rounded-lg hover:bg-amber-700 shadow-sm flex items-center justify-center gap-1.5">
-                          <Plus className="w-4 h-4" /> Guardar Regla de Palabra Clave
+                          <Plus className="w-4 h-4" /> Guardar Mapeo de Palabra Clave
                         </button>
                       </div>
                     </div>
                   </form>
 
-                  {/* List */}
-                  <table className="min-w-full divide-y divide-gray-200 text-xs">
-                    <thead>
-                      <tr className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px]">
-                        <th className="px-3 py-2 text-left">Palabra Clave</th>
-                        <th className="px-3 py-2 text-left">Categoría Collectibles</th>
-                        <th className="px-3 py-2 text-center">Prioridad</th>
-                        <th className="px-3 py-2 text-right">Acción</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {keywordRules.map(r => (
-                        <tr key={r.id} className="hover:bg-gray-50">
-                          <td className="px-3 py-2 font-mono font-bold text-amber-900">"{r.keyword}"</td>
-                          <td className="px-3 py-2 font-semibold text-amber-700">
-                            {getCategoryName(r.target_category_id)}
-                            {r.target_subcategory_id && ` > ${getCategoryName(r.target_subcategory_id)}`}
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
-                              P: {r.priority || 10}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            <button onClick={() => handleDeleteKeywordRule(r.id)} className="text-red-500 hover:text-red-700 p-1" title="Eliminar">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </td>
+                  {/* Keyword Mappings Table */}
+                  <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                    <table className="min-w-full divide-y divide-gray-200 text-xs">
+                      <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px]">
+                        <tr>
+                          <th className="px-3 py-2.5 text-left">Palabra Clave</th>
+                          <th className="px-3 py-2.5 text-left">Campo</th>
+                          <th className="px-3 py-2.5 text-left">Categoría Collectibles</th>
+                          <th className="px-3 py-2.5 text-left">Subcategoría</th>
+                          <th className="px-3 py-2.5 text-center">Prioridad</th>
+                          <th className="px-3 py-2.5 text-center">Confianza</th>
+                          <th className="px-3 py-2.5 text-center">Activa</th>
+                          <th className="px-3 py-2.5 text-center">Afectados</th>
+                          <th className="px-3 py-2.5 text-center">Riesgo</th>
+                          <th className="px-3 py-2.5 text-right">Acciones</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 bg-white">
+                        {keywordRules
+                          .filter(r => {
+                            if (ruleFilter === 'active') return r.is_active;
+                            if (ruleFilter === 'inactive') return !r.is_active;
+                            if (ruleFilter === 'with_affected') return (r.affected_candidates > 0 || r.affected_products > 0);
+                            if (ruleFilter === 'without_affected') return (r.affected_candidates === 0 && r.affected_products === 0);
+                            if (ruleFilter === 'review') return r.priority < 10;
+                            return true;
+                          })
+                          .filter(r => {
+                            if (!ruleSearchQuery) return true;
+                            const q = ruleSearchQuery.toLowerCase();
+                            const kw = (r.keyword || '').toLowerCase();
+                            const catName = getCategoryName(r.target_category_id).toLowerCase();
+                            return kw.includes(q) || catName.includes(q);
+                          })
+                          .sort((a, b) => {
+                            if (ruleSortBy === 'affected_desc') return (b.affected_candidates + b.affected_products) - (a.affected_candidates + a.affected_products);
+                            if (ruleSortBy === 'priority_desc') return (b.priority || 0) - (a.priority || 0);
+                            return (a.keyword || '').localeCompare(b.keyword || '');
+                          })
+                          .map(r => (
+                            <tr key={r.id} className={`hover:bg-amber-50/20 transition-colors ${!r.is_active ? 'opacity-50 bg-gray-50' : ''}`}>
+                              <td className="px-3 py-2.5 font-mono font-bold text-amber-900">"{r.keyword}"</td>
+                              <td className="px-3 py-2.5 text-gray-500 font-medium">title</td>
+                              <td className="px-3 py-2.5 font-bold text-amber-700">
+                                {getCategoryName(r.target_category_id)}
+                              </td>
+                              <td className="px-3 py-2.5 text-gray-500">
+                                {r.target_subcategory_id ? getCategoryName(r.target_subcategory_id) : '—'}
+                              </td>
+                              <td className="px-3 py-2.5 text-center">
+                                <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-800 text-[10px] font-bold">
+                                  {r.priority || 10}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2.5 text-center">
+                                <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
+                                  50%
+                                </span>
+                              </td>
+                              <td className="px-3 py-2.5 text-center">
+                                <button
+                                  onClick={() => handleToggleRuleActive('keyword', r.id, r.is_active)}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                                    r.is_active ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                                  }`}
+                                  title="Click para alternar activo / inactivo"
+                                >
+                                  {r.is_active ? 'ACTIVO' : 'INACTIVO'}
+                                </button>
+                              </td>
+                              <td className="px-3 py-2.5 text-center">
+                                <div className="font-semibold text-gray-800">{r.affected_candidates || 0} cand.</div>
+                                <div className="text-[10px] text-gray-400">{r.affected_products || 0} pub.</div>
+                              </td>
+                              <td className="px-3 py-2.5 text-center">
+                                {(r.priority || 10) >= 10 ? (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    BAJO
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                    REVISAR
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2.5 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    onClick={() => setEditingRule({ type: 'keyword', data: { ...r } })}
+                                    className="p-1 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded"
+                                    title="Editar regla"
+                                  >
+                                    <Edit className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteKeywordRule(r.id)}
+                                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                                    title="Eliminar regla"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>
 
-            <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-between items-center flex-wrap gap-2">
               <button
                 onClick={() => {
                   setShowRulesModal(false);
@@ -1226,7 +1674,7 @@ export default function AdminInternationalAmazon() {
                 }}
                 className="px-4 py-2 bg-indigo-600 text-white font-bold text-xs rounded-lg hover:bg-indigo-700 shadow-sm flex items-center gap-1.5"
               >
-                <CheckCircle2 className="w-4 h-4" /> Aplicar y Recalcular Sugerencias
+                <Sparkles className="w-4 h-4" /> Aplicar y Recalcular Sugerencias
               </button>
               <button
                 onClick={() => setShowRulesModal(false)}
@@ -1235,6 +1683,200 @@ export default function AdminInternationalAmazon() {
                 Cerrar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Rule Sub-Modal */}
+      {editingRule && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+              <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                <Edit className="w-4 h-4 text-indigo-600" />
+                Editar Regla de {editingRule.type === 'category' ? 'Categoría' : editingRule.type === 'brand' ? 'Marca' : 'Palabra Clave'}
+              </h3>
+              <button onClick={() => setEditingRule(null)} className="text-gray-400 hover:text-gray-700">
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditRule} className="p-6 space-y-4 text-xs">
+              {editingRule.type === 'category' && (
+                <>
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">Path Completo Amazon</label>
+                    <input
+                      type="text"
+                      className="w-full rounded-lg border-gray-300 p-2 text-xs"
+                      value={editingRule.data.amazon_category_path || ''}
+                      onChange={e => setEditingRule({ ...editingRule, data: { ...editingRule.data, amazon_category_path: e.target.value } })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">Subcategoría Amazon (Leaf)</label>
+                    <input
+                      type="text"
+                      className="w-full rounded-lg border-gray-300 p-2 text-xs"
+                      value={editingRule.data.amazon_subcategory || ''}
+                      onChange={e => setEditingRule({ ...editingRule, data: { ...editingRule.data, amazon_subcategory: e.target.value } })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">Categoría Collectibles *</label>
+                    <select
+                      className="w-full rounded-lg border-gray-300 p-2 bg-white text-xs"
+                      value={editingRule.data.collectibles_category_id}
+                      onChange={e => setEditingRule({ ...editingRule, data: { ...editingRule.data, collectibles_category_id: e.target.value, collectibles_subcategory_id: '' } })}
+                      required
+                    >
+                      {parentCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">Subcategoría Collectibles</label>
+                    <select
+                      className="w-full rounded-lg border-gray-300 p-2 bg-white text-xs"
+                      value={editingRule.data.collectibles_subcategory_id || ''}
+                      onChange={e => setEditingRule({ ...editingRule, data: { ...editingRule.data, collectibles_subcategory_id: e.target.value } })}
+                      disabled={!editingRule.data.collectibles_category_id}
+                    >
+                      <option value="">-- Ninguna / Opcional --</option>
+                      {dbCategories.filter(c => c.parent_id === editingRule.data.collectibles_category_id).map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {editingRule.type === 'brand' && (
+                <>
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">Marca *</label>
+                    <input
+                      type="text"
+                      className="w-full rounded-lg border-gray-300 p-2 text-xs"
+                      value={editingRule.data.brand_name}
+                      onChange={e => setEditingRule({ ...editingRule, data: { ...editingRule.data, brand_name: e.target.value } })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">Categoría Collectibles *</label>
+                    <select
+                      className="w-full rounded-lg border-gray-300 p-2 bg-white text-xs"
+                      value={editingRule.data.collectibles_category_id}
+                      onChange={e => setEditingRule({ ...editingRule, data: { ...editingRule.data, collectibles_category_id: e.target.value, collectibles_subcategory_id: '' } })}
+                      required
+                    >
+                      {parentCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">Subcategoría Collectibles</label>
+                    <select
+                      className="w-full rounded-lg border-gray-300 p-2 bg-white text-xs"
+                      value={editingRule.data.collectibles_subcategory_id || ''}
+                      onChange={e => setEditingRule({ ...editingRule, data: { ...editingRule.data, collectibles_subcategory_id: e.target.value } })}
+                      disabled={!editingRule.data.collectibles_category_id}
+                    >
+                      <option value="">-- Ninguna / Opcional --</option>
+                      {dbCategories.filter(c => c.parent_id === editingRule.data.collectibles_category_id).map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">Modo de Funcionamiento</label>
+                    <select
+                      className="w-full rounded-lg border-gray-300 p-2 bg-white text-xs font-medium"
+                      value={editingRule.data.allow_standalone ? 'standalone' : 'context'}
+                      onChange={e => setEditingRule({ ...editingRule, data: { ...editingRule.data, allow_standalone: e.target.value === 'standalone' } })}
+                    >
+                      <option value="standalone">Standalone (Autónomo)</option>
+                      <option value="context">Requiere Contexto (Seguro)</option>
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {editingRule.type === 'keyword' && (
+                <>
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">Palabra Clave (en Título) *</label>
+                    <input
+                      type="text"
+                      className="w-full rounded-lg border-gray-300 p-2 text-xs"
+                      value={editingRule.data.keyword}
+                      onChange={e => setEditingRule({ ...editingRule, data: { ...editingRule.data, keyword: e.target.value } })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">Categoría Collectibles *</label>
+                    <select
+                      className="w-full rounded-lg border-gray-300 p-2 bg-white text-xs"
+                      value={editingRule.data.target_category_id}
+                      onChange={e => setEditingRule({ ...editingRule, data: { ...editingRule.data, target_category_id: e.target.value, target_subcategory_id: '' } })}
+                      required
+                    >
+                      {parentCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">Subcategoría Collectibles</label>
+                    <select
+                      className="w-full rounded-lg border-gray-300 p-2 bg-white text-xs"
+                      value={editingRule.data.target_subcategory_id || ''}
+                      onChange={e => setEditingRule({ ...editingRule, data: { ...editingRule.data, target_subcategory_id: e.target.value } })}
+                      disabled={!editingRule.data.target_category_id}
+                    >
+                      <option value="">-- Ninguna / Opcional --</option>
+                      {dbCategories.filter(c => c.parent_id === editingRule.data.target_category_id).map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">Prioridad (1-20)</label>
+                    <input
+                      type="number"
+                      className="w-full rounded-lg border-gray-300 p-2 text-xs"
+                      value={editingRule.data.priority || 10}
+                      onChange={e => setEditingRule({ ...editingRule, data: { ...editingRule.data, priority: Number(e.target.value) } })}
+                    />
+                  </div>
+                </>
+              )}
+
+              <div className="flex items-center gap-2 pt-2 border-t">
+                <input
+                  type="checkbox"
+                  id="rule_is_active_checkbox"
+                  className="rounded text-indigo-600 focus:ring-indigo-500"
+                  checked={editingRule.data.is_active}
+                  onChange={e => setEditingRule({ ...editingRule, data: { ...editingRule.data, is_active: e.target.checked } })}
+                />
+                <label htmlFor="rule_is_active_checkbox" className="font-semibold text-gray-800">Regla Activa</label>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <button
+                  type="button"
+                  onClick={() => setEditingRule(null)}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-sm"
+                >
+                  Guardar Cambios
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

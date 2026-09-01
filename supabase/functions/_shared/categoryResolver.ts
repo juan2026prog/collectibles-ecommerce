@@ -16,6 +16,7 @@ export interface CategoryMappingRecord {
   collectibles_category_id: string;
   collectibles_subcategory_id?: string | null;
   confidence_score?: number;
+  is_active?: boolean;
 }
 
 export interface BrandMappingRecord {
@@ -24,6 +25,8 @@ export interface BrandMappingRecord {
   collectibles_category_id: string;
   collectibles_subcategory_id?: string | null;
   confidence_score?: number;
+  is_active?: boolean;
+  allow_standalone?: boolean;
 }
 
 export interface KeywordMappingRuleRecord {
@@ -32,6 +35,7 @@ export interface KeywordMappingRuleRecord {
   target_category_id: string;
   target_subcategory_id?: string | null;
   priority?: number;
+  is_active?: boolean;
 }
 
 export function parseCategoryPath(categories: string[] | string | null | undefined): {
@@ -96,6 +100,7 @@ export function resolveInternationalCategory(params: {
   if (amazon_category_path && params.category_mappings && params.category_mappings.length > 0) {
     const normalizedPath = amazon_category_path.toLowerCase().trim();
     const match = params.category_mappings.find(m => 
+      m.is_active !== false &&
       m.amazon_category_path && m.amazon_category_path.toLowerCase().trim() === normalizedPath
     );
 
@@ -113,6 +118,7 @@ export function resolveInternationalCategory(params: {
   if (amazon_subcategory && params.category_mappings && params.category_mappings.length > 0) {
     const normalizedLeaf = amazon_subcategory.toLowerCase().trim();
     const match = params.category_mappings.find(m => 
+      m.is_active !== false &&
       m.amazon_subcategory && m.amazon_subcategory.toLowerCase().trim() === normalizedLeaf
     );
 
@@ -126,10 +132,12 @@ export function resolveInternationalCategory(params: {
     }
   }
 
-  // 4. Priority 4 (Score 70): Brand Mapping
+  // 4. Priority 4 (Score 70): Brand Mapping (Only if allow_standalone is true)
   if (params.brand && params.brand_mappings && params.brand_mappings.length > 0) {
     const normalizedBrand = params.brand.toLowerCase().trim();
     const match = params.brand_mappings.find(b => 
+      b.is_active !== false &&
+      b.allow_standalone !== false &&
       b.brand_name && b.brand_name.toLowerCase().trim() === normalizedBrand
     );
 
@@ -148,12 +156,14 @@ export function resolveInternationalCategory(params: {
     const normalizedTitle = params.title.toLowerCase();
     
     // Sort rules by priority descending, then keyword length descending
-    const sortedRules = [...params.keyword_rules].sort((a, b) => {
-      const pA = a.priority ?? 1;
-      const pB = b.priority ?? 1;
-      if (pB !== pA) return pB - pA;
-      return (b.keyword?.length ?? 0) - (a.keyword?.length ?? 0);
-    });
+    const sortedRules = [...params.keyword_rules]
+      .filter(r => r.is_active !== false)
+      .sort((a, b) => {
+        const pA = a.priority ?? 1;
+        const pB = b.priority ?? 1;
+        if (pB !== pA) return pB - pA;
+        return (b.keyword?.length ?? 0) - (a.keyword?.length ?? 0);
+      });
 
     for (const rule of sortedRules) {
       if (rule.keyword && normalizedTitle.includes(rule.keyword.toLowerCase().trim())) {
@@ -169,7 +179,7 @@ export function resolveInternationalCategory(params: {
     }
   }
 
-  // 6. Fallback / Unmapped (Score 0)
+  // 6. Fallback (Score 0): Unmapped
   return {
     category_id: null,
     subcategory_id: null,

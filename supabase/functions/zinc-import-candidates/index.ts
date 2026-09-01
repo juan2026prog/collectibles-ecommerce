@@ -91,7 +91,7 @@ serve(async (req) => {
 
       const categoryToUse = target_category_id || c.suggested_category_id || null;
       const subcategoryToUse = target_subcategory_id || c.suggested_subcategory_id || null;
-      const mappingSourceToUse = target_category_id ? 'manual' : (c.category_mapping_source || 'category_mapping');
+      const mappingSourceToUse = target_category_id ? 'manual' : (c.category_mapping_source || 'unmapped');
       const mappingConfidenceToUse = target_category_id ? 100 : (c.mapping_confidence || 0);
 
       const rawCategories = c.raw_data?._enriched_details?.categories || c.raw_data?.categories;

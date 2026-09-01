@@ -14,6 +14,7 @@ describe('International Category Resolver Engine', () => {
     funko: '94c47727-f07d-4c80-b74d-eb8344c8ddeb',
     tcg: '6e659b91-5130-4f20-9ddb-609410b9f84c',
     peluches: 'b1cdd325-1be1-47f8-a8af-bcb58fa9b403',
+    modelKits: '0ec3e416-9ec7-43d6-8c30-6d361da83644'
   };
 
   const mockCatMappings: CategoryMappingRecord[] = [
@@ -22,14 +23,24 @@ describe('International Category Resolver Engine', () => {
       amazon_subcategory: 'Action Figures',
       amazon_category_path: 'Toys & Games > Toy Figures & Playsets > Action Figures',
       collectibles_category_id: mockCategories.figuras,
-      confidence_score: 90
+      confidence_score: 90,
+      is_active: true
     },
     {
       amazon_category: 'Toys & Games',
       amazon_subcategory: 'Statues & Busts',
       amazon_category_path: 'Toys & Games > Collectible Toys > Statues & Busts',
       collectibles_category_id: mockCategories.estatuas,
-      confidence_score: 90
+      confidence_score: 90,
+      is_active: true
+    },
+    {
+      amazon_category: 'Toys & Games',
+      amazon_subcategory: 'Inactive Figures',
+      amazon_category_path: 'Toys & Games > Inactive Figures',
+      collectibles_category_id: mockCategories.figuras,
+      confidence_score: 90,
+      is_active: false
     }
   ];
 
@@ -37,12 +48,37 @@ describe('International Category Resolver Engine', () => {
     {
       brand_name: 'NECA',
       collectibles_category_id: mockCategories.figuras,
-      confidence_score: 70
+      confidence_score: 70,
+      is_active: true,
+      allow_standalone: true
     },
     {
       brand_name: 'Funko',
       collectibles_category_id: mockCategories.funko,
-      confidence_score: 70
+      confidence_score: 70,
+      is_active: true,
+      allow_standalone: true
+    },
+    {
+      brand_name: 'Hasbro',
+      collectibles_category_id: mockCategories.figuras,
+      confidence_score: 70,
+      is_active: true,
+      allow_standalone: false // TOO_BROAD: Must NOT map standalone
+    },
+    {
+      brand_name: 'LEGO',
+      collectibles_category_id: mockCategories.modelKits,
+      confidence_score: 70,
+      is_active: true,
+      allow_standalone: false // CONTEXT_REQUIRED: Must NOT map standalone
+    },
+    {
+      brand_name: 'DisabledBrand',
+      collectibles_category_id: mockCategories.figuras,
+      confidence_score: 70,
+      is_active: false,
+      allow_standalone: true
     }
   ];
 
@@ -50,12 +86,20 @@ describe('International Category Resolver Engine', () => {
     {
       keyword: 'action figure',
       target_category_id: mockCategories.figuras,
-      priority: 10
+      priority: 10,
+      is_active: true
     },
     {
       keyword: 'plush',
       target_category_id: mockCategories.peluches,
-      priority: 10
+      priority: 10,
+      is_active: true
+    },
+    {
+      keyword: 'inactive keyword',
+      target_category_id: mockCategories.estatuas,
+      priority: 10,
+      is_active: false
     }
   ];
 
@@ -82,7 +126,7 @@ describe('International Category Resolver Engine', () => {
     });
   });
 
-  describe('resolveInternationalCategory resolution cascade', () => {
+  describe('resolveInternationalCategory resolution cascade & safety', () => {
     it('Priority 1: Manual Override has absolute precedence with 100 confidence', () => {
       const result = resolveInternationalCategory({
         manual_category_id: mockCategories.peluches,
@@ -126,10 +170,10 @@ describe('International Category Resolver Engine', () => {
 
       expect(result.category_id).toBe(mockCategories.estatuas);
       expect(result.source).toBe('category_mapping_leaf');
-      expect(result.confidence).toBe(90); // Uses rule confidence_score
+      expect(result.confidence).toBe(90);
     });
 
-    it('Priority 4: Brand Mapping signal yields score 70 when category path is unknown', () => {
+    it('Priority 4: Brand Mapping signal yields score 70 for SAFE standalone brand', () => {
       const result = resolveInternationalCategory({
         category_path: ['Electronics', 'Gadgets'],
         brand: 'Funko',
@@ -142,6 +186,60 @@ describe('International Category Resolver Engine', () => {
       expect(result.category_id).toBe(mockCategories.funko);
       expect(result.source).toBe('brand_mapping');
       expect(result.confidence).toBe(70);
+    });
+
+    it('Safety Check: Broad Brand with allow_standalone = false (Hasbro/LEGO) does NOT map standalone', () => {
+      const resultHasbro = resolveInternationalCategory({
+        category_path: null,
+        brand: 'Hasbro',
+        title: 'Hasbro Monopoly Ultimate Banking Board Game',
+        category_mappings: mockCatMappings,
+        brand_mappings: mockBrandMappings,
+        keyword_rules: mockKeywordRules
+      });
+
+      // Hasbro is not standalone mapped to Figuras de Acción, but falls through to unmapped or keyword
+      expect(resultHasbro.source).not.toBe('brand_mapping');
+
+      const resultLego = resolveInternationalCategory({
+        category_path: null,
+        brand: 'LEGO',
+        title: 'LEGO Star Wars Millennium Falcon',
+        category_mappings: mockCatMappings,
+        brand_mappings: mockBrandMappings,
+        keyword_rules: mockKeywordRules
+      });
+
+      // LEGO is NOT standalone mapped to Model Kits without context
+      expect(resultLego.source).not.toBe('brand_mapping');
+    });
+
+    it('Safety Check: Inactive rules are strictly ignored across all tiers', () => {
+      const catResult = resolveInternationalCategory({
+        category_path: ['Toys & Games', 'Inactive Figures'],
+        title: 'Some Inactive item',
+        category_mappings: mockCatMappings,
+        brand_mappings: mockBrandMappings,
+        keyword_rules: mockKeywordRules
+      });
+      expect(catResult.source).toBe('unmapped');
+
+      const brandResult = resolveInternationalCategory({
+        brand: 'DisabledBrand',
+        title: 'Disabled item',
+        category_mappings: mockCatMappings,
+        brand_mappings: mockBrandMappings,
+        keyword_rules: mockKeywordRules
+      });
+      expect(brandResult.source).toBe('unmapped');
+
+      const kwResult = resolveInternationalCategory({
+        title: 'Something with inactive keyword here',
+        category_mappings: mockCatMappings,
+        brand_mappings: mockBrandMappings,
+        keyword_rules: mockKeywordRules
+      });
+      expect(kwResult.source).toBe('unmapped');
     });
 
     it('Priority 5: Keyword Rule match on Title yields score 50 when path and brand are unknown', () => {
