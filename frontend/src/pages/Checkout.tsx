@@ -131,7 +131,7 @@ export default function Checkout() {
   const { items, total, addItem, updateQuantity, removeItem } = useCartContext();
   const { settings, loaded: settingsLoaded } = useSiteSettings();
   const freeShippingThreshold = Number(settings['free_shipping_threshold'] || 4000);
-  const { formatCurrencyPrice, selectedCurrency, setSelectedCurrency } = useCurrency();
+  const { formatCurrencyPrice, selectedCurrency, setSelectedCurrency, convertUSDToARS } = useCurrency();
   const { user } = useAuth();
 
   const [form, setForm] = useState({
@@ -599,7 +599,7 @@ export default function Checkout() {
 
   const getVendorName = (storeKey: string) => {
     if (storeKey === 'collectibles' || storeKey === 'platform') return 'Collectibles.uy';
-    if (storeKey === 'international') return 'Importación Amazon USA';
+    if (storeKey === 'international') return 'Importación Internacional';
     return items.find(item => getStoreKey(item) === storeKey)?.vendor_name || 'Vendedor';
   };
 
@@ -2258,22 +2258,29 @@ export default function Checkout() {
     setCheckoutError('');
 
     try {
-      // 1. ZINC LIVE CHECK
+      // 1. ZINC LIVE CHECK & CAPITAL CAPACITY RESERVATION
+      let activeReservationId: string | null = null;
       const { data: { session } } = await supabase.auth.getSession();
-      if (session && items.length > 0) {
+      const hasIntlItems = items.some(i => i.is_international || i.product?.is_international || i.product?.source_provider === 'zinc');
+
+      if (session && hasIntlItems) {
          const { data: zincCheck, error: zincErr } = await supabase.functions.invoke('zinc-live-check-before-payment', {
-            body: { cart_items: items }
+            body: { cart_items: items, reserve_capacity: true }
          });
 
          if (zincErr) {
             console.error('zinc-live-check-before-payment error:', zincErr);
-         } else if (zincCheck && !zincCheck.all_ok) {
-            const blockedResult = zincCheck.results?.find((r: any) => !r.ok);
-            if (blockedResult && blockedResult.message) {
-               setCheckoutError(blockedResult.message);
-               setIsSubmitting(false);
-               submitLockRef.current = false;
-               return;
+         } else if (zincCheck) {
+            if (!zincCheck.all_ok) {
+              const blockedResult = zincCheck.results?.find((r: any) => !r.ok);
+              const errMsg = blockedResult?.message || zincCheck.reservation?.message || 'No se pudo verificar la compra internacional en este momento.';
+              setCheckoutError(errMsg);
+              setIsSubmitting(false);
+              submitLockRef.current = false;
+              return;
+            }
+            if (zincCheck.reservation?.reservation_id) {
+              activeReservationId = zincCheck.reservation.reservation_id;
             }
          }
       }
@@ -2334,6 +2341,7 @@ export default function Checkout() {
         })),
         coupon_code: couponCode.trim() || undefined,
         affiliate_code: affiliateCode.trim() || undefined,
+        reservation_id: activeReservationId || undefined,
         payment_method: paymentMethod,
         currency: selectedCurrency,
         shipping_method: primaryMethod,
@@ -3324,18 +3332,18 @@ export default function Checkout() {
                                 onChange={e => setSaveIntlAddress(e.target.checked)}
                                 className="rounded border-white/10 text-[#f00856] focus:ring-[#f00856] bg-black/20"
                               />
-                              <span className="text-xs text-slate-300">Guardar esta dirección en mi cuenta para futuras compras</span>
+                              <span className="text-xs text-slate-300">Guardar esta casilla en mi cuenta para futuras compras internacionales</span>
                             </label>
                           )}
                         </div>
                       )}
 
-                      <div className="bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-lg mb-4 text-xs text-yellow-300">
-                        <p className="font-bold flex items-center gap-1.5 mb-1.5">
-                          <AlertTriangle className="w-4 h-4 text-yellow-500" /> ¡Advertencia Importante!
+                      <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-xl mb-4 text-xs text-amber-200">
+                        <p className="font-bold flex items-center gap-1.5 mb-1.5 text-amber-300">
+                          <AlertTriangle className="w-4 h-4 text-amber-400" /> Confirmación y Deslinde de Responsabilidad
                         </p>
-                        <p className="leading-relaxed">
-                          Ingresá la dirección exactamente como te la asignó tu courier. Un dato incorrecto puede provocar demoras, devolución o pérdida del paquete.
+                        <p className="leading-relaxed text-slate-300 text-[11px]">
+                          Collectibles enviará tu compra exactamente a la dirección ingresada. El flete internacional Miami → Uruguay y la gestión aduanera corren por cuenta de tu courier seleccionado.
                         </p>
                         
                         <label className="flex items-start gap-2.5 mt-3.5 cursor-pointer text-white font-medium select-none">
@@ -3345,7 +3353,9 @@ export default function Checkout() {
                             onChange={e => setConfirmCopyAddress(e.target.checked)}
                             className="rounded border-white/10 text-[#f00856] focus:ring-[#f00856] bg-black/20 mt-0.5"
                           />
-                          <span>Confirmo que copié exactamente la dirección asignada por mi courier.</span>
+                          <span className="text-xs leading-snug">
+                            Confirmo que los datos de mi casilla y courier son correctos. Entiendo que soy responsable de proporcionar la dirección asignada por mi empresa de envíos.
+                          </span>
                         </label>
                       </div>
                     </div>
