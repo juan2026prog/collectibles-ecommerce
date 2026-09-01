@@ -241,7 +241,7 @@ export function calculateInternationalPricing(
   if (Number((finalPrice - realCost).toFixed(2)) < minAbsoluteProfit) {
     finalPrice = Number((realCost + minAbsoluteProfit).toFixed(2));
   }
-  if (targetMarginDecimal > 0 && finalPrice > 0 && ((finalPrice - realCost) / finalPrice) < (targetMarginDecimal - 0.0001)) {
+  if (targetMarginDecimal > 0 && targetMarginDecimal < 1 && finalPrice > 0 && ((finalPrice - realCost) / finalPrice) < (targetMarginDecimal - 0.0001)) {
     finalPrice = Number((realCost / (1 - targetMarginDecimal)).toFixed(2));
   }
   finalPrice = Number(finalPrice.toFixed(2));
