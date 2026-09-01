@@ -1,7 +1,12 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Search, Loader2, Import, XCircle, Eye, AlertCircle, RefreshCw, Wand2, ArrowRight, ExternalLink, Code, Sparkles, Filter, SlidersHorizontal, Trash2, Plus, CheckCircle2 } from 'lucide-react';
+import { 
+  Search, Loader2, Import, XCircle, Eye, AlertCircle, RefreshCw, Wand2, ArrowRight, 
+  ExternalLink, Code, Sparkles, Filter, SlidersHorizontal, Trash2, Plus, CheckCircle2,
+  HelpCircle, BookmarkPlus, Tag, ShieldAlert, Check, ChevronRight, Edit
+} from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
+import { resolveInternationalCategory } from '../../../../supabase/functions/_shared/categoryResolver';
 
 const QUICK_COLLECTIONS = [
   { name: '🔥 Top Marvel', query: 'marvel', category: 'Action Figures' },
@@ -42,12 +47,29 @@ export default function AdminInternationalAmazon() {
   });
 
   const [candidates, setCandidates] = useState<any[]>([]);
+  const [candidateCategoryFilter, setCandidateCategoryFilter] = useState<'all' | 'unmapped' | 'suggested'>('all');
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [activeRuleTab, setActiveRuleTab] = useState<'category' | 'brand' | 'keyword'>('category');
   const [dbCategories, setDbCategories] = useState<any[]>([]);
+
+  // Resolution Inspector & Quick Rule Creation Modals
+  const [candidateTraceModal, setCandidateTraceModal] = useState<{ candidate: any; traceResult: any } | null>(null);
+  const [createRuleCandidate, setCreateRuleCandidate] = useState<{
+    candidate: any;
+    ruleType: 'category' | 'brand' | 'keyword_include' | 'keyword_exclude';
+    keyword: string;
+    brand_name: string;
+    amazon_category_path: string;
+    amazon_subcategory: string;
+    collectibles_category_id: string;
+    collectibles_subcategory_id: string;
+    allow_standalone: boolean;
+    blocks: 'brand_mapping' | 'all';
+    priority: number;
+  } | null>(null);
 
   // Rules state
   const [catRules, setCatRules] = useState<any[]>([]);
@@ -79,7 +101,15 @@ export default function AdminInternationalAmazon() {
   // New rule form states
   const [newCatRule, setNewCatRule] = useState({ amazon_category: '', amazon_subcategory: '', amazon_category_path: '', collectibles_category_id: '', collectibles_subcategory_id: '', confidence_score: 90 });
   const [newBrandRule, setNewBrandRule] = useState({ brand_name: '', collectibles_category_id: '', collectibles_subcategory_id: '', confidence_score: 70, allow_standalone: true });
-  const [newKeywordRule, setNewKeywordRule] = useState({ keyword: '', target_category_id: '', target_subcategory_id: '', priority: 10 });
+  const [newKeywordRule, setNewKeywordRule] = useState({
+    keyword: '',
+    target_category_id: '',
+    target_subcategory_id: '',
+    priority: 10,
+    rule_type: 'include' as 'include' | 'exclude',
+    applies_to: 'title' as 'title' | 'external_path' | 'brand' | 'all',
+    blocks: 'brand_mapping' as 'brand_mapping' | 'all'
+  });
 
   const [importSettings, setImportSettings] = useState({
     collectibles_fee_usd: 5,
@@ -115,7 +145,7 @@ export default function AdminInternationalAmazon() {
       .from('international_import_candidates')
       .select('*')
       .order('created_at', { ascending: false })
-      .limit(50);
+      .limit(100);
     
     if (error) {
       addToast({ title: 'Error', message: error.message, type: 'error' });
@@ -232,9 +262,12 @@ export default function AdminInternationalAmazon() {
       } else if (editingRule.type === 'keyword') {
         const { error } = await supabase.from('keyword_mapping_rules').update({
           keyword: editingRule.data.keyword.trim().toLowerCase(),
-          target_category_id: editingRule.data.target_category_id,
-          target_subcategory_id: editingRule.data.target_subcategory_id || null,
+          target_category_id: editingRule.data.rule_type === 'exclude' ? null : (editingRule.data.target_category_id || null),
+          target_subcategory_id: editingRule.data.rule_type === 'exclude' ? null : (editingRule.data.target_subcategory_id || null),
           priority: Number(editingRule.data.priority || 10),
+          rule_type: editingRule.data.rule_type || 'include',
+          applies_to: editingRule.data.applies_to || 'title',
+          blocks: editingRule.data.blocks || 'brand_mapping',
           is_active: editingRule.data.is_active
         }).eq('id', editingRule.data.id);
         if (error) throw error;
@@ -245,6 +278,125 @@ export default function AdminInternationalAmazon() {
       fetchRules();
     } catch (err: any) {
       addToast({ title: 'Error guardando regla', message: err.message, type: 'error' });
+    }
+  }
+
+  function handleInspectCandidateResolution(candidate: any) {
+    const traceResult = resolveInternationalCategory({
+      category_path: candidate.amazon_category_path,
+      brand: candidate.brand,
+      title: candidate.title,
+      category_mappings: catRules,
+      brand_mappings: brandRules,
+      keyword_rules: keywordRules
+    });
+    setCandidateTraceModal({ candidate, traceResult });
+  }
+
+  async function handleAssignCandidateCategory(candidateId: string, categoryId: string, subcategoryId?: string) {
+    try {
+      const { error } = await supabase.from('international_import_candidates').update({
+        suggested_category_id: categoryId,
+        suggested_subcategory_id: subcategoryId || null,
+        category_mapping_source: 'manual',
+        mapping_confidence: 100,
+        updated_at: new Date().toISOString()
+      }).eq('id', candidateId);
+
+      if (error) throw error;
+      addToast({ title: 'Categoría asignada', message: 'Candidato actualizado manualmente (manual / 100).', type: 'success' });
+      fetchCandidates();
+    } catch (err: any) {
+      addToast({ title: 'Error asignando', message: err.message, type: 'error' });
+    }
+  }
+
+  function handleOpenCreateRuleFromCandidate(candidate: any) {
+    setCreateRuleCandidate({
+      candidate,
+      ruleType: candidate.amazon_category_path ? 'category' : candidate.brand ? 'brand' : 'keyword_include',
+      keyword: candidate.title ? candidate.title.split('-')[0].trim().toLowerCase() : '',
+      brand_name: candidate.brand || '',
+      amazon_category_path: candidate.amazon_category_path || '',
+      amazon_subcategory: candidate.amazon_subcategory || '',
+      collectibles_category_id: '',
+      collectibles_subcategory_id: '',
+      allow_standalone: true,
+      blocks: 'brand_mapping',
+      priority: 10
+    });
+  }
+
+  async function handleSaveRuleFromCandidate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!createRuleCandidate) return;
+
+    try {
+      if (createRuleCandidate.ruleType === 'category') {
+        if (!createRuleCandidate.collectibles_category_id) {
+          addToast({ title: 'Campo requerido', message: 'Selecciona una categoría interna.', type: 'error' });
+          return;
+        }
+        const { error } = await supabase.from('amazon_category_mapping').insert({
+          amazon_category_path: createRuleCandidate.amazon_category_path || null,
+          amazon_subcategory: createRuleCandidate.amazon_subcategory || null,
+          collectibles_category_id: createRuleCandidate.collectibles_category_id,
+          collectibles_subcategory_id: createRuleCandidate.collectibles_subcategory_id || null,
+          confidence_score: 90,
+          is_active: true
+        });
+        if (error) throw error;
+      } else if (createRuleCandidate.ruleType === 'brand') {
+        if (!createRuleCandidate.brand_name || !createRuleCandidate.collectibles_category_id) {
+          addToast({ title: 'Campos requeridos', message: 'Indica la marca y la categoría interna.', type: 'error' });
+          return;
+        }
+        const { error } = await supabase.from('amazon_brand_mapping').insert({
+          brand_name: createRuleCandidate.brand_name.trim(),
+          collectibles_category_id: createRuleCandidate.collectibles_category_id,
+          collectibles_subcategory_id: createRuleCandidate.collectibles_subcategory_id || null,
+          confidence_score: 70,
+          allow_standalone: createRuleCandidate.allow_standalone,
+          is_active: true
+        });
+        if (error) throw error;
+      } else if (createRuleCandidate.ruleType === 'keyword_include') {
+        if (!createRuleCandidate.keyword || !createRuleCandidate.collectibles_category_id) {
+          addToast({ title: 'Campos requeridos', message: 'Indica la palabra clave y la categoría.', type: 'error' });
+          return;
+        }
+        const { error } = await supabase.from('keyword_mapping_rules').insert({
+          keyword: createRuleCandidate.keyword.trim().toLowerCase(),
+          target_category_id: createRuleCandidate.collectibles_category_id,
+          target_subcategory_id: createRuleCandidate.collectibles_subcategory_id || null,
+          priority: Number(createRuleCandidate.priority || 10),
+          rule_type: 'include',
+          applies_to: 'title',
+          blocks: 'brand_mapping',
+          is_active: true
+        });
+        if (error) throw error;
+      } else if (createRuleCandidate.ruleType === 'keyword_exclude') {
+        if (!createRuleCandidate.keyword) {
+          addToast({ title: 'Campo requerido', message: 'Indica la palabra clave a excluir.', type: 'error' });
+          return;
+        }
+        const { error } = await supabase.from('keyword_mapping_rules').insert({
+          keyword: createRuleCandidate.keyword.trim().toLowerCase(),
+          priority: 100,
+          rule_type: 'exclude',
+          applies_to: 'title',
+          blocks: createRuleCandidate.blocks || 'brand_mapping',
+          is_active: true
+        });
+        if (error) throw error;
+      }
+
+      addToast({ title: 'Regla creada', message: 'Nueva regla registrada con éxito.', type: 'success' });
+      setCreateRuleCandidate(null);
+      handleRecalculateSuggestions();
+    } catch (err: any) {
+      addToast({ title: 'Error creando regla', message: err.message, type: 'error' });
     }
   }
 
@@ -323,21 +475,36 @@ export default function AdminInternationalAmazon() {
 
   async function handleAddKeywordRule(e: React.FormEvent) {
     e.preventDefault();
-    if (!newKeywordRule.keyword || !newKeywordRule.target_category_id) {
-      addToast({ title: 'Campos requeridos', message: 'Indica la palabra clave y la categoría interna.', type: 'error' });
+    if (!newKeywordRule.keyword) {
+      addToast({ title: 'Campo requerido', message: 'Indica la palabra clave.', type: 'error' });
+      return;
+    }
+    if (newKeywordRule.rule_type === 'include' && !newKeywordRule.target_category_id) {
+      addToast({ title: 'Campo requerido', message: 'Para reglas de inclusión, selecciona una categoría interna.', type: 'error' });
       return;
     }
     try {
       const { error } = await supabase.from('keyword_mapping_rules').insert({
         keyword: newKeywordRule.keyword.trim().toLowerCase(),
-        target_category_id: newKeywordRule.target_category_id,
-        target_subcategory_id: newKeywordRule.target_subcategory_id || null,
-        priority: Number(newKeywordRule.priority || 10),
+        target_category_id: newKeywordRule.rule_type === 'exclude' ? null : newKeywordRule.target_category_id,
+        target_subcategory_id: newKeywordRule.rule_type === 'exclude' ? null : (newKeywordRule.target_subcategory_id || null),
+        priority: Number(newKeywordRule.priority || (newKeywordRule.rule_type === 'exclude' ? 100 : 10)),
+        rule_type: newKeywordRule.rule_type || 'include',
+        applies_to: newKeywordRule.applies_to || 'title',
+        blocks: newKeywordRule.blocks || 'brand_mapping',
         is_active: true
       });
       if (error) throw error;
-      addToast({ title: 'Regla agregada', message: 'Regla de palabra clave guardada exitosamente.', type: 'success' });
-      setNewKeywordRule({ keyword: '', target_category_id: '', target_subcategory_id: '', priority: 10 });
+      addToast({ title: 'Regla agregada', message: `Regla de ${newKeywordRule.rule_type === 'exclude' ? 'exclusión negativa' : 'inclusión'} guardada exitosamente.`, type: 'success' });
+      setNewKeywordRule({
+        keyword: '',
+        target_category_id: '',
+        target_subcategory_id: '',
+        priority: 10,
+        rule_type: 'include',
+        applies_to: 'title',
+        blocks: 'brand_mapping'
+      });
       fetchRules();
     } catch (err: any) {
       addToast({ title: 'Error', message: err.message, type: 'error' });
@@ -518,6 +685,12 @@ export default function AdminInternationalAmazon() {
       const match = selectedBrands.includes(displayBrand);
       if (!match) return false;
     }
+
+    if (candidateCategoryFilter === 'unmapped') {
+      if (c.suggested_category_id && c.category_mapping_source !== 'unmapped') return false;
+    } else if (candidateCategoryFilter === 'suggested') {
+      if (!c.suggested_category_id || c.category_mapping_source === 'unmapped') return false;
+    }
     
     return true;
   });
@@ -672,52 +845,94 @@ export default function AdminInternationalAmazon() {
 
       {/* Results Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center flex-wrap gap-2">
-          <h3 className="font-bold text-gray-800 flex items-center gap-2">
-            Resultados Enriquecidos ({filteredCandidates.length})
-            <button onClick={fetchCandidates} className="text-gray-500 hover:text-primary-600 ml-2" title="Refrescar">
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-          </h3>
+        <div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center flex-wrap gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <h3 className="font-bold text-gray-800 flex items-center gap-2 text-base">
+              Candidatos ({filteredCandidates.length})
+              <button onClick={fetchCandidates} className="text-gray-500 hover:text-primary-600 ml-1" title="Refrescar">
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              </button>
+            </h3>
+
+            {/* Quick Mapping State Filter */}
+            <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5 shadow-sm text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setCandidateCategoryFilter('all')}
+                className={`px-3 py-1 rounded-md transition-all ${
+                  candidateCategoryFilter === 'all'
+                    ? 'bg-gray-900 text-white shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Todos ({candidates.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setCandidateCategoryFilter('unmapped')}
+                className={`px-3 py-1 rounded-md transition-all flex items-center gap-1 ${
+                  candidateCategoryFilter === 'unmapped'
+                    ? 'bg-rose-600 text-white shadow-xs'
+                    : 'text-rose-700 hover:bg-rose-50'
+                }`}
+              >
+                <AlertCircle className="w-3.5 h-3.5" />
+                Sin Mapping ({candidates.filter(c => !c.suggested_category_id || c.category_mapping_source === 'unmapped').length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setCandidateCategoryFilter('suggested')}
+                className={`px-3 py-1 rounded-md transition-all flex items-center gap-1 ${
+                  candidateCategoryFilter === 'suggested'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-emerald-700 hover:bg-emerald-50'
+                }`}
+              >
+                <Check className="w-3.5 h-3.5" />
+                Con Sugerencia ({candidates.filter(c => c.suggested_category_id && c.category_mapping_source !== 'unmapped').length})
+              </button>
+            </div>
+          </div>
+
           <div className="flex items-center gap-2 flex-wrap">
             <button 
               onClick={() => { setShowRulesModal(true); fetchRules(); }}
-              className="px-3 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm font-medium rounded-lg hover:bg-indigo-100 inline-flex items-center shadow-sm"
+              className="px-3 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold rounded-lg hover:bg-indigo-100 inline-flex items-center shadow-sm"
               title="Administrar reglas automáticas de mapeo"
             >
-              <SlidersHorizontal className="w-4 h-4 mr-1.5" /> Reglas de Mapeo
+              <SlidersHorizontal className="w-3.5 h-3.5 mr-1.5" /> Reglas de Mapeo
             </button>
             <button 
               onClick={handleRecalculateSuggestions}
               disabled={recalculating}
-              className="px-3 py-1.5 bg-sky-50 border border-sky-200 text-sky-700 text-sm font-medium rounded-lg hover:bg-sky-100 disabled:opacity-50 inline-flex items-center shadow-sm"
+              className="px-3 py-1.5 bg-sky-50 border border-sky-200 text-sky-700 text-xs font-semibold rounded-lg hover:bg-sky-100 disabled:opacity-50 inline-flex items-center shadow-sm"
               title="Re-evaluar sugerencias de categoría para candidatos pendientes"
             >
-              <Sparkles className={`w-4 h-4 mr-1.5 ${recalculating ? 'animate-spin' : ''}`} />
-              {recalculating ? 'Recalculando...' : 'Recalcular Sugerencias'}
+              <Sparkles className={`w-3.5 h-3.5 mr-1.5 ${recalculating ? 'animate-spin' : ''}`} />
+              {recalculating ? 'Recalculando...' : 'Recalcular'}
             </button>
             <button 
               onClick={() => {
                 const toSelect = filteredCandidates.filter(c => c.status === 'review' && c.price_usd != null).slice(0, 20).map(c => c.id);
                 setSelectedIds(toSelect);
               }}
-              className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 inline-flex items-center"
+              className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-50 inline-flex items-center"
             >
-              Seleccionar Top 20
+              Top 20
             </button>
             <button 
               onClick={() => setShowImportModal(true)} 
               disabled={selectedIds.length === 0} 
-              className="px-3 py-1.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 inline-flex items-center shadow-sm"
+              className="px-3 py-1.5 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700 disabled:opacity-50 inline-flex items-center shadow-sm"
             >
-              <Import className="w-4 h-4 mr-1.5" /> Importar Seleccionados ({selectedIds.length})
+              <Import className="w-3.5 h-3.5 mr-1.5" /> Importar ({selectedIds.length})
             </button>
             <button 
               onClick={handleReject} 
               disabled={selectedIds.length === 0} 
-              className="px-3 py-1.5 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 inline-flex items-center shadow-sm"
+              className="px-3 py-1.5 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 disabled:opacity-50 inline-flex items-center shadow-sm"
             >
-              <XCircle className="w-4 h-4 mr-1.5" /> Rechazar
+              <XCircle className="w-3.5 h-3.5 mr-1.5" /> Rechazar
             </button>
           </div>
         </div>
@@ -803,31 +1018,75 @@ export default function AdminInternationalAmazon() {
                     )}
                   </td>
                   <td className="px-4 py-4">
-                    {c.suggested_category_id ? (
-                      <div className="space-y-1">
-                        <div className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 inline-flex items-center px-2 py-1 rounded border border-emerald-200">
-                          {getCategoryName(c.suggested_category_id)}
-                          {c.suggested_subcategory_id && <><ArrowRight className="w-3 h-3 inline mx-0.5" />{getCategoryName(c.suggested_subcategory_id)}</>}
+                    <div className="space-y-1.5">
+                      {c.suggested_category_id ? (
+                        <div>
+                          <div className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 inline-flex items-center px-2 py-1 rounded border border-emerald-200">
+                            {getCategoryName(c.suggested_category_id)}
+                            {c.suggested_subcategory_id && <><ArrowRight className="w-3 h-3 inline mx-0.5" />{getCategoryName(c.suggested_subcategory_id)}</>}
+                          </div>
+                          <div className="flex items-center gap-1 mt-1 flex-wrap">
+                            {c.category_mapping_source === 'manual' ? (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-indigo-100 text-indigo-800 border border-indigo-200">MANUAL (100%)</span>
+                            ) : c.category_mapping_source === 'category_mapping' ? (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">Path Exacto ({c.mapping_confidence || 90}%)</span>
+                            ) : c.category_mapping_source === 'category_mapping_leaf' ? (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-teal-100 text-teal-800">Subcategoría ({c.mapping_confidence || 80}%)</span>
+                            ) : c.category_mapping_source === 'brand_mapping' ? (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-800">Marca ({c.mapping_confidence || 70}%)</span>
+                            ) : c.category_mapping_source === 'keyword_mapping' ? (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800">Keyword ({c.mapping_confidence || 50}%)</span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-800">Sugerido ({c.mapping_confidence || 0}%)</span>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {c.category_mapping_source === 'category_mapping' ? (
-                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">Path Exacto ({c.mapping_confidence || 90}%)</span>
-                          ) : c.category_mapping_source === 'category_mapping_leaf' ? (
-                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-teal-100 text-teal-800">Subcategoría ({c.mapping_confidence || 80}%)</span>
-                          ) : c.category_mapping_source === 'brand_mapping' ? (
-                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-800">Marca ({c.mapping_confidence || 70}%)</span>
-                          ) : c.category_mapping_source === 'keyword_mapping' ? (
-                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800">Keyword ({c.mapping_confidence || 50}%)</span>
-                          ) : (
-                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-800">Sugerido ({c.mapping_confidence || 0}%)</span>
-                          )}
+                      ) : (
+                        <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 px-2 py-1 rounded-md inline-flex items-center font-bold">
+                          Sin mapeo (0%)
                         </div>
+                      )}
+
+                      {/* Quick Inspection & Rule Creation Actions */}
+                      <div className="flex items-center gap-1 pt-1 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => handleInspectCandidateResolution(c)}
+                          className="px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded border border-gray-200 inline-flex items-center gap-1 shadow-xs"
+                          title="Inspeccionar paso a paso por qué se asignó o bloqueó esta categoría"
+                        >
+                          <HelpCircle className="w-3 h-3 text-indigo-600" /> Ver por qué
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenCreateRuleFromCandidate(c)}
+                          className="px-1.5 py-0.5 text-[10px] font-medium bg-amber-50 hover:bg-amber-100 text-amber-800 rounded border border-amber-200 inline-flex items-center gap-1 shadow-xs"
+                          title="Crear regla de path, marca o exclusión a partir de este producto"
+                        >
+                          <BookmarkPlus className="w-3 h-3 text-amber-600" /> Crear regla
+                        </button>
                       </div>
-                    ) : (
-                      <div className="text-xs text-gray-500 bg-gray-50 border border-gray-200 px-2 py-1 rounded-md inline-flex items-center">
-                        Sin mapeo
-                      </div>
-                    )}
+
+                      {/* Quick Inline Manual Category Assignment */}
+                      {c.status === 'review' && (
+                        <div className="pt-0.5">
+                          <select
+                            className="w-full text-[10px] rounded border-gray-200 py-0.5 px-1 bg-white text-gray-700 focus:ring-primary-500"
+                            value={c.category_mapping_source === 'manual' ? (c.suggested_category_id || '') : ''}
+                            onChange={e => {
+                              if (e.target.value) {
+                                handleAssignCandidateCategory(c.id, e.target.value);
+                              }
+                            }}
+                          >
+                            <option value="">⚙️ Asignar Manual...</option>
+                            {parentCategories.map(cat => (
+                              <option key={cat.id} value={cat.id}>{cat.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-4">
                     <div className="flex items-start gap-1.5">
@@ -1495,59 +1754,96 @@ export default function AdminInternationalAmazon() {
                 <div className="space-y-6">
                   {/* Add keyword rule form */}
                   <form onSubmit={handleAddKeywordRule} className="bg-amber-50/50 border border-amber-100 p-4 rounded-xl space-y-3">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
-                      <Plus className="w-4 h-4" /> Agregar Nuevo Mapeo por Palabra Clave
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Plus className="w-4 h-4" /> Agregar Nueva Regla por Palabra Clave
+                      </span>
+                      <span className="text-[10px] font-normal text-amber-700">
+                        Soporta Reglas Positivas (Asignar) y Reglas Negativas (Exclusiones)
+                      </span>
                     </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-medium text-gray-700 mb-1">Tipo de Regla *</label>
+                        <select
+                          className="w-full text-xs rounded-lg border-gray-300 p-2 bg-white font-bold"
+                          value={newKeywordRule.rule_type}
+                          onChange={e => setNewKeywordRule({ ...newKeywordRule, rule_type: e.target.value as 'include' | 'exclude' })}
+                        >
+                          <option value="include">🟢 Inclusión (Asignar Categoría)</option>
+                          <option value="exclude">🔴 Exclusión Negativa (Bloquear)</option>
+                        </select>
+                      </div>
+
                       <div>
                         <label className="block text-[11px] font-medium text-gray-700 mb-1">Palabra Clave (en Título) *</label>
                         <input
                           type="text"
-                          placeholder="e.g. action figure, plush, funko pop"
+                          placeholder={newKeywordRule.rule_type === 'exclude' ? 'e.g. display stand, case' : 'e.g. action figure, plush'}
                           className="w-full text-xs rounded-lg border-gray-300 p-2"
                           value={newKeywordRule.keyword}
                           onChange={e => setNewKeywordRule({ ...newKeywordRule, keyword: e.target.value })}
                           required
                         />
                       </div>
-                      <div>
-                        <label className="block text-[11px] font-medium text-gray-700 mb-1">Categoría Collectibles *</label>
-                        <select
-                          className="w-full text-xs rounded-lg border-gray-300 p-2 bg-white"
-                          value={newKeywordRule.target_category_id}
-                          onChange={e => setNewKeywordRule({ ...newKeywordRule, target_category_id: e.target.value, target_subcategory_id: '' })}
-                          required
-                        >
-                          <option value="">-- Seleccionar Categoría --</option>
-                          {parentCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-medium text-gray-700 mb-1">Subcategoría Collectibles</label>
-                        <select
-                          className="w-full text-xs rounded-lg border-gray-300 p-2 bg-white"
-                          value={newKeywordRule.target_subcategory_id}
-                          onChange={e => setNewKeywordRule({ ...newKeywordRule, target_subcategory_id: e.target.value })}
-                          disabled={!newKeywordRule.target_category_id}
-                        >
-                          <option value="">-- Ninguna / Opcional --</option>
-                          {dbCategories.filter(c => c.parent_id === newKeywordRule.target_category_id).map(c => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-medium text-gray-700 mb-1">Prioridad de Evaluación (1-20)</label>
-                        <input
-                          type="number"
-                          className="w-full text-xs rounded-lg border-gray-300 p-2"
-                          value={newKeywordRule.priority}
-                          onChange={e => setNewKeywordRule({ ...newKeywordRule, priority: Number(e.target.value) })}
-                        />
-                      </div>
-                      <div className="md:col-span-2 flex items-end">
-                        <button type="submit" className="w-full py-2 bg-amber-600 text-white font-bold text-xs rounded-lg hover:bg-amber-700 shadow-sm flex items-center justify-center gap-1.5">
-                          <Plus className="w-4 h-4" /> Guardar Mapeo de Palabra Clave
+
+                      {newKeywordRule.rule_type === 'include' ? (
+                        <>
+                          <div>
+                            <label className="block text-[11px] font-medium text-gray-700 mb-1">Categoría Collectibles *</label>
+                            <select
+                              className="w-full text-xs rounded-lg border-gray-300 p-2 bg-white"
+                              value={newKeywordRule.target_category_id}
+                              onChange={e => setNewKeywordRule({ ...newKeywordRule, target_category_id: e.target.value, target_subcategory_id: '' })}
+                              required={newKeywordRule.rule_type === 'include'}
+                            >
+                              <option value="">-- Seleccionar Categoría --</option>
+                              {parentCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-medium text-gray-700 mb-1">Subcategoría (Opcional)</label>
+                            <select
+                              className="w-full text-xs rounded-lg border-gray-300 p-2 bg-white"
+                              value={newKeywordRule.target_subcategory_id}
+                              onChange={e => setNewKeywordRule({ ...newKeywordRule, target_subcategory_id: e.target.value })}
+                              disabled={!newKeywordRule.target_category_id}
+                            >
+                              <option value="">-- Ninguna --</option>
+                              {dbCategories.filter(c => c.parent_id === newKeywordRule.target_category_id).map(c => (
+                                <option key={c.id} value={c.id}>{c.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div>
+                            <label className="block text-[11px] font-medium text-rose-800 mb-1 font-bold">Qué Bloquea *</label>
+                            <select
+                              className="w-full text-xs rounded-lg border-rose-200 p-2 bg-rose-50 font-semibold text-rose-900"
+                              value={newKeywordRule.blocks}
+                              onChange={e => setNewKeywordRule({ ...newKeywordRule, blocks: e.target.value as 'brand_mapping' | 'all' })}
+                            >
+                              <option value="brand_mapping">Bloquea Brand Mapping (Previene falsos positivos)</option>
+                              <option value="all">Bloquea Todo (Fuerza a UNMAPPED)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-medium text-gray-700 mb-1">Prioridad Exclusión</label>
+                            <input
+                              type="number"
+                              className="w-full text-xs rounded-lg border-gray-300 p-2"
+                              value={newKeywordRule.priority || 100}
+                              onChange={e => setNewKeywordRule({ ...newKeywordRule, priority: Number(e.target.value) })}
+                            />
+                          </div>
+                        </>
+                      )}
+
+                      <div className="md:col-span-4 flex justify-end">
+                        <button type="submit" className={`px-6 py-2 text-white font-bold text-xs rounded-lg shadow-sm flex items-center gap-1.5 ${newKeywordRule.rule_type === 'exclude' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-600 hover:bg-amber-700'}`}>
+                          <Plus className="w-4 h-4" /> {newKeywordRule.rule_type === 'exclude' ? 'Guardar Regla de Exclusión' : 'Guardar Mapeo de Palabra Clave'}
                         </button>
                       </div>
                     </div>
@@ -1559,11 +1855,10 @@ export default function AdminInternationalAmazon() {
                       <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px]">
                         <tr>
                           <th className="px-3 py-2.5 text-left">Palabra Clave</th>
-                          <th className="px-3 py-2.5 text-left">Campo</th>
-                          <th className="px-3 py-2.5 text-left">Categoría Collectibles</th>
+                          <th className="px-3 py-2.5 text-center">Tipo</th>
+                          <th className="px-3 py-2.5 text-left">Comportamiento / Categoría</th>
                           <th className="px-3 py-2.5 text-left">Subcategoría</th>
                           <th className="px-3 py-2.5 text-center">Prioridad</th>
-                          <th className="px-3 py-2.5 text-center">Confianza</th>
                           <th className="px-3 py-2.5 text-center">Activa</th>
                           <th className="px-3 py-2.5 text-center">Afectados</th>
                           <th className="px-3 py-2.5 text-center">Riesgo</th>
@@ -1577,7 +1872,7 @@ export default function AdminInternationalAmazon() {
                             if (ruleFilter === 'inactive') return !r.is_active;
                             if (ruleFilter === 'with_affected') return (r.affected_candidates > 0 || r.affected_products > 0);
                             if (ruleFilter === 'without_affected') return (r.affected_candidates === 0 && r.affected_products === 0);
-                            if (ruleFilter === 'review') return r.priority < 10;
+                            if (ruleFilter === 'review') return r.rule_type === 'exclude' || r.priority < 10;
                             return true;
                           })
                           .filter(r => {
@@ -1594,22 +1889,37 @@ export default function AdminInternationalAmazon() {
                           })
                           .map(r => (
                             <tr key={r.id} className={`hover:bg-amber-50/20 transition-colors ${!r.is_active ? 'opacity-50 bg-gray-50' : ''}`}>
-                              <td className="px-3 py-2.5 font-mono font-bold text-amber-900">"{r.keyword}"</td>
-                              <td className="px-3 py-2.5 text-gray-500 font-medium">title</td>
-                              <td className="px-3 py-2.5 font-bold text-amber-700">
-                                {getCategoryName(r.target_category_id)}
+                              <td className="px-3 py-2.5 font-mono font-bold text-gray-900">
+                                "{r.keyword}"
+                              </td>
+                              <td className="px-3 py-2.5 text-center">
+                                {r.rule_type === 'exclude' ? (
+                                  <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[10px] font-extrabold border border-rose-200">
+                                    EXCLUDE
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold border border-emerald-200">
+                                    INCLUDE
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2.5">
+                                {r.rule_type === 'exclude' ? (
+                                  <span className="text-[11px] font-semibold text-rose-700">
+                                    ⛔ {r.blocks === 'all' ? 'Bloquea Todo (Forzar Unmapped)' : 'Bloquea Brand Mapping'}
+                                  </span>
+                                ) : (
+                                  <span className="font-bold text-amber-700">
+                                    {getCategoryName(r.target_category_id)}
+                                  </span>
+                                )}
                               </td>
                               <td className="px-3 py-2.5 text-gray-500">
-                                {r.target_subcategory_id ? getCategoryName(r.target_subcategory_id) : '—'}
+                                {r.rule_type === 'exclude' ? '—' : (r.target_subcategory_id ? getCategoryName(r.target_subcategory_id) : '—')}
                               </td>
                               <td className="px-3 py-2.5 text-center">
                                 <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-800 text-[10px] font-bold">
-                                  {r.priority || 10}
-                                </span>
-                              </td>
-                              <td className="px-3 py-2.5 text-center">
-                                <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
-                                  50%
+                                  {r.priority || (r.rule_type === 'exclude' ? 100 : 10)}
                                 </span>
                               </td>
                               <td className="px-3 py-2.5 text-center">
@@ -1628,7 +1938,11 @@ export default function AdminInternationalAmazon() {
                                 <div className="text-[10px] text-gray-400">{r.affected_products || 0} pub.</div>
                               </td>
                               <td className="px-3 py-2.5 text-center">
-                                {(r.priority || 10) >= 10 ? (
+                                {r.rule_type === 'exclude' ? (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200">
+                                    PROTECCIÓN
+                                  </span>
+                                ) : (r.priority || 10) >= 10 ? (
                                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                     BAJO
                                   </span>
@@ -1804,6 +2118,17 @@ export default function AdminInternationalAmazon() {
               {editingRule.type === 'keyword' && (
                 <>
                   <div>
+                    <label className="block font-medium text-gray-700 mb-1">Tipo de Regla *</label>
+                    <select
+                      className="w-full rounded-lg border-gray-300 p-2 bg-white text-xs font-bold"
+                      value={editingRule.data.rule_type || 'include'}
+                      onChange={e => setEditingRule({ ...editingRule, data: { ...editingRule.data, rule_type: e.target.value } })}
+                    >
+                      <option value="include">🟢 Inclusión (Asignar Categoría)</option>
+                      <option value="exclude">🔴 Exclusión Negativa (Bloquear)</option>
+                    </select>
+                  </div>
+                  <div>
                     <label className="block font-medium text-gray-700 mb-1">Palabra Clave (en Título) *</label>
                     <input
                       type="text"
@@ -1813,33 +2138,52 @@ export default function AdminInternationalAmazon() {
                       required
                     />
                   </div>
+
+                  {editingRule.data.rule_type === 'include' ? (
+                    <>
+                      <div>
+                        <label className="block font-medium text-gray-700 mb-1">Categoría Collectibles *</label>
+                        <select
+                          className="w-full rounded-lg border-gray-300 p-2 bg-white text-xs"
+                          value={editingRule.data.target_category_id || ''}
+                          onChange={e => setEditingRule({ ...editingRule, data: { ...editingRule.data, target_category_id: e.target.value, target_subcategory_id: '' } })}
+                          required
+                        >
+                          <option value="">-- Seleccionar Categoría --</option>
+                          {parentCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block font-medium text-gray-700 mb-1">Subcategoría Collectibles</label>
+                        <select
+                          className="w-full rounded-lg border-gray-300 p-2 bg-white text-xs"
+                          value={editingRule.data.target_subcategory_id || ''}
+                          onChange={e => setEditingRule({ ...editingRule, data: { ...editingRule.data, target_subcategory_id: e.target.value } })}
+                          disabled={!editingRule.data.target_category_id}
+                        >
+                          <option value="">-- Ninguna / Opcional --</option>
+                          {dbCategories.filter(c => c.parent_id === editingRule.data.target_category_id).map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </>
+                  ) : (
+                    <div>
+                      <label className="block font-medium text-rose-800 mb-1 font-bold">Qué Bloquea *</label>
+                      <select
+                        className="w-full rounded-lg border-rose-200 p-2 bg-rose-50 text-xs font-semibold text-rose-900"
+                        value={editingRule.data.blocks || 'brand_mapping'}
+                        onChange={e => setEditingRule({ ...editingRule, data: { ...editingRule.data, blocks: e.target.value } })}
+                      >
+                        <option value="brand_mapping">Bloquea Brand Mapping (Previene falsos positivos)</option>
+                        <option value="all">Bloquea Todo (Fuerza a UNMAPPED)</option>
+                      </select>
+                    </div>
+                  )}
+
                   <div>
-                    <label className="block font-medium text-gray-700 mb-1">Categoría Collectibles *</label>
-                    <select
-                      className="w-full rounded-lg border-gray-300 p-2 bg-white text-xs"
-                      value={editingRule.data.target_category_id}
-                      onChange={e => setEditingRule({ ...editingRule, data: { ...editingRule.data, target_category_id: e.target.value, target_subcategory_id: '' } })}
-                      required
-                    >
-                      {parentCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block font-medium text-gray-700 mb-1">Subcategoría Collectibles</label>
-                    <select
-                      className="w-full rounded-lg border-gray-300 p-2 bg-white text-xs"
-                      value={editingRule.data.target_subcategory_id || ''}
-                      onChange={e => setEditingRule({ ...editingRule, data: { ...editingRule.data, target_subcategory_id: e.target.value } })}
-                      disabled={!editingRule.data.target_category_id}
-                    >
-                      <option value="">-- Ninguna / Opcional --</option>
-                      {dbCategories.filter(c => c.parent_id === editingRule.data.target_category_id).map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block font-medium text-gray-700 mb-1">Prioridad (1-20)</label>
+                    <label className="block font-medium text-gray-700 mb-1">Prioridad (1-100)</label>
                     <input
                       type="number"
                       className="w-full rounded-lg border-gray-300 p-2 text-xs"
@@ -1874,6 +2218,352 @@ export default function AdminInternationalAmazon() {
                   className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-sm"
                 >
                   Guardar Cambios
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Candidate Resolution Trace Inspector Modal ("Ver por qué") */}
+      {candidateTraceModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+              <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                <HelpCircle className="w-5 h-5 text-indigo-600" />
+                Inspección de Mapeo de Categoría ("Ver por qué")
+              </h3>
+              <button onClick={() => setCandidateTraceModal(null)} className="text-gray-400 hover:text-gray-700">
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 text-xs">
+              {/* Product summary card */}
+              <div className="bg-gray-50 border border-gray-200 p-3 rounded-xl space-y-1.5">
+                <div className="font-bold text-gray-900 text-sm line-clamp-2">
+                  {candidateTraceModal.candidate.title}
+                </div>
+                <div className="flex items-center gap-3 text-gray-600 flex-wrap">
+                  <span><strong>Marca:</strong> {candidateTraceModal.candidate.brand || 'Sin Marca'}</span>
+                  <span><strong>ASIN:</strong> {candidateTraceModal.candidate.external_product_id}</span>
+                </div>
+                {candidateTraceModal.candidate.amazon_category_path && (
+                  <div className="text-[11px] text-gray-500 bg-white p-1.5 rounded border border-gray-200">
+                    <strong>Path Amazon:</strong> {candidateTraceModal.candidate.amazon_category_path}
+                  </div>
+                )}
+              </div>
+
+              {/* Resolution Outcome Banner */}
+              <div className={`p-4 rounded-xl border flex items-start gap-3 ${
+                candidateTraceModal.traceResult.source === 'unmapped'
+                  ? 'bg-rose-50 border-rose-200 text-rose-900'
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+              }`}>
+                {candidateTraceModal.traceResult.source === 'unmapped' ? (
+                  <ShieldAlert className="w-6 h-6 text-rose-600 shrink-0 mt-0.5" />
+                ) : (
+                  <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0 mt-0.5" />
+                )}
+                <div>
+                  <div className="font-extrabold text-sm flex items-center gap-2">
+                    <span>Resultado:</span>
+                    {candidateTraceModal.traceResult.source === 'unmapped' ? (
+                      <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-xs uppercase font-extrabold">
+                        UNMAPPED (0%)
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-extrabold">
+                        {getCategoryName(candidateTraceModal.traceResult.category_id)} ({candidateTraceModal.traceResult.confidence}%)
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed opacity-90">
+                    {candidateTraceModal.traceResult.reason}
+                  </p>
+                </div>
+              </div>
+
+              {/* Resolution Steps Trace */}
+              <div className="space-y-2">
+                <h4 className="font-bold text-gray-800 uppercase tracking-wide text-[10px]">
+                  Cascada de Decisión Evaluada
+                </h4>
+                <div className="border border-gray-200 rounded-xl divide-y divide-gray-100 bg-white overflow-hidden shadow-xs">
+                  {candidateTraceModal.traceResult.trace?.map((step: any, index: number) => (
+                    <div key={index} className={`p-3 flex items-start justify-between gap-3 text-xs ${
+                      step.matched
+                        ? step.step.includes('Negative')
+                          ? 'bg-rose-50/70 text-rose-950 font-semibold'
+                          : 'bg-emerald-50/70 text-emerald-950 font-semibold'
+                        : 'text-gray-500'
+                    }`}>
+                      <div className="space-y-0.5">
+                        <div className="font-bold flex items-center gap-1.5">
+                          {step.step}
+                          {step.matched && (
+                            <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                              step.step.includes('Negative') ? 'bg-rose-200 text-rose-800' : 'bg-emerald-200 text-emerald-800'
+                            }`}>
+                              {step.step.includes('Negative') ? 'BLOQUEÓ' : 'COINCIDIÓ'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] opacity-80">{step.detail}</div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        {step.matched ? (
+                          <span className={`font-bold ${step.step.includes('Negative') ? 'text-rose-600' : 'text-emerald-600'}`}>
+                            {step.step.includes('Negative') ? '⛔ Actuó' : '✅ Asignó'}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">Pasa</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const c = candidateTraceModal.candidate;
+                    setCandidateTraceModal(null);
+                    handleOpenCreateRuleFromCandidate(c);
+                  }}
+                  className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-lg border border-amber-200 flex items-center gap-1.5 shadow-xs"
+                >
+                  <BookmarkPlus className="w-4 h-4 text-amber-600" /> Crear regla a partir de este caso
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCandidateTraceModal(null)}
+                  className="px-4 py-2 bg-gray-900 text-white font-bold rounded-lg hover:bg-gray-800"
+                >
+                  Entendido
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Rule From Candidate Modal */}
+      {createRuleCandidate && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+              <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                <BookmarkPlus className="w-5 h-5 text-amber-600" />
+                Crear Regla desde Candidato
+              </h3>
+              <button onClick={() => setCreateRuleCandidate(null)} className="text-gray-400 hover:text-gray-700">
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveRuleFromCandidate} className="p-6 space-y-4 text-xs">
+              <div className="bg-gray-50 border border-gray-200 p-2.5 rounded-lg text-gray-700 line-clamp-2">
+                <strong>Producto:</strong> {createRuleCandidate.candidate.title}
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-800 mb-1.5 uppercase text-[10px] tracking-wide">
+                  Seleccionar Tipo de Regla a Crear
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCreateRuleCandidate({ ...createRuleCandidate, ruleType: 'category' })}
+                    className={`p-2.5 rounded-xl border text-left font-bold transition-all ${
+                      createRuleCandidate.ruleType === 'category'
+                        ? 'bg-emerald-50 border-emerald-400 text-emerald-900 ring-2 ring-emerald-500'
+                        : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    1. Path Exacto (90%)
+                    <div className="text-[10px] font-normal text-gray-500 mt-0.5">Por categoría Amazon</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCreateRuleCandidate({ ...createRuleCandidate, ruleType: 'brand' })}
+                    className={`p-2.5 rounded-xl border text-left font-bold transition-all ${
+                      createRuleCandidate.ruleType === 'brand'
+                        ? 'bg-blue-50 border-blue-400 text-blue-900 ring-2 ring-blue-500'
+                        : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    2. Marca (70%)
+                    <div className="text-[10px] font-normal text-gray-500 mt-0.5">Standalone o contextual</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCreateRuleCandidate({ ...createRuleCandidate, ruleType: 'keyword_include' })}
+                    className={`p-2.5 rounded-xl border text-left font-bold transition-all ${
+                      createRuleCandidate.ruleType === 'keyword_include'
+                        ? 'bg-amber-50 border-amber-400 text-amber-900 ring-2 ring-amber-500'
+                        : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    3. Keyword Inclusión (50%)
+                    <div className="text-[10px] font-normal text-gray-500 mt-0.5">Término en título</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCreateRuleCandidate({ ...createRuleCandidate, ruleType: 'keyword_exclude' })}
+                    className={`p-2.5 rounded-xl border text-left font-bold transition-all ${
+                      createRuleCandidate.ruleType === 'keyword_exclude'
+                        ? 'bg-rose-50 border-rose-400 text-rose-900 ring-2 ring-rose-500'
+                        : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    4. Exclusión Negativa
+                    <div className="text-[10px] font-normal text-gray-500 mt-0.5">Bloquea falsos positivos</div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Dynamic Form fields based on selected ruleType */}
+              {createRuleCandidate.ruleType === 'category' && (
+                <div className="space-y-3 bg-emerald-50/40 border border-emerald-200 p-3 rounded-xl">
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">Path Amazon *</label>
+                    <input
+                      type="text"
+                      className="w-full rounded-lg border-gray-300 p-2 text-xs"
+                      value={createRuleCandidate.amazon_category_path}
+                      onChange={e => setCreateRuleCandidate({ ...createRuleCandidate, amazon_category_path: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">Categoría Collectibles *</label>
+                    <select
+                      className="w-full rounded-lg border-gray-300 p-2 bg-white text-xs"
+                      value={createRuleCandidate.collectibles_category_id}
+                      onChange={e => setCreateRuleCandidate({ ...createRuleCandidate, collectibles_category_id: e.target.value, collectibles_subcategory_id: '' })}
+                      required
+                    >
+                      <option value="">-- Seleccionar Categoría --</option>
+                      {parentCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {createRuleCandidate.ruleType === 'brand' && (
+                <div className="space-y-3 bg-blue-50/40 border border-blue-200 p-3 rounded-xl">
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">Marca *</label>
+                    <input
+                      type="text"
+                      className="w-full rounded-lg border-gray-300 p-2 text-xs"
+                      value={createRuleCandidate.brand_name}
+                      onChange={e => setCreateRuleCandidate({ ...createRuleCandidate, brand_name: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">Categoría Collectibles *</label>
+                    <select
+                      className="w-full rounded-lg border-gray-300 p-2 bg-white text-xs"
+                      value={createRuleCandidate.collectibles_category_id}
+                      onChange={e => setCreateRuleCandidate({ ...createRuleCandidate, collectibles_category_id: e.target.value, collectibles_subcategory_id: '' })}
+                      required
+                    >
+                      <option value="">-- Seleccionar Categoría --</option>
+                      {parentCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="checkbox"
+                      id="brand_standalone_create"
+                      className="rounded text-blue-600 focus:ring-blue-500"
+                      checked={createRuleCandidate.allow_standalone}
+                      onChange={e => setCreateRuleCandidate({ ...createRuleCandidate, allow_standalone: e.target.checked })}
+                    />
+                    <label htmlFor="brand_standalone_create" className="font-semibold text-gray-800">
+                      Permitir Standalone (Autónomo sin contexto de título/path)
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {createRuleCandidate.ruleType === 'keyword_include' && (
+                <div className="space-y-3 bg-amber-50/40 border border-amber-200 p-3 rounded-xl">
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">Palabra Clave en Título *</label>
+                    <input
+                      type="text"
+                      className="w-full rounded-lg border-gray-300 p-2 text-xs"
+                      value={createRuleCandidate.keyword}
+                      onChange={e => setCreateRuleCandidate({ ...createRuleCandidate, keyword: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-gray-700 mb-1">Categoría Collectibles *</label>
+                    <select
+                      className="w-full rounded-lg border-gray-300 p-2 bg-white text-xs"
+                      value={createRuleCandidate.collectibles_category_id}
+                      onChange={e => setCreateRuleCandidate({ ...createRuleCandidate, collectibles_category_id: e.target.value, collectibles_subcategory_id: '' })}
+                      required
+                    >
+                      <option value="">-- Seleccionar Categoría --</option>
+                      {parentCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {createRuleCandidate.ruleType === 'keyword_exclude' && (
+                <div className="space-y-3 bg-rose-50/40 border border-rose-200 p-3 rounded-xl">
+                  <div>
+                    <label className="block font-medium text-rose-900 mb-1">Término de Exclusión (en Título) *</label>
+                    <input
+                      type="text"
+                      className="w-full rounded-lg border-rose-300 p-2 text-xs"
+                      value={createRuleCandidate.keyword}
+                      onChange={e => setCreateRuleCandidate({ ...createRuleCandidate, keyword: e.target.value })}
+                      placeholder="e.g. display stand, protective case"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-rose-900 mb-1">Qué Bloquea *</label>
+                    <select
+                      className="w-full rounded-lg border-rose-200 p-2 bg-rose-50 text-xs font-semibold text-rose-900"
+                      value={createRuleCandidate.blocks}
+                      onChange={e => setCreateRuleCandidate({ ...createRuleCandidate, blocks: e.target.value as 'brand_mapping' | 'all' })}
+                    >
+                      <option value="brand_mapping">Bloquea Brand Mapping (Previene falsos positivos de marca)</option>
+                      <option value="all">Bloquea Todo (Fuerza producto a UNMAPPED)</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <button
+                  type="button"
+                  onClick={() => setCreateRuleCandidate(null)}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-amber-600 text-white font-bold rounded-lg hover:bg-amber-700 shadow-sm"
+                >
+                  Crear y Aplicar Regla
                 </button>
               </div>
             </form>

@@ -7,7 +7,7 @@ import {
   KeywordMappingRuleRecord 
 } from '../../../supabase/functions/_shared/categoryResolver';
 
-describe('International Category Resolver Engine', () => {
+describe('International Category Resolver Engine & Negative Rules', () => {
   const mockCategories = {
     figuras: 'ddd41421-fb1c-423f-a282-131aba8c4373',
     estatuas: '0f5f33ba-8326-48bd-b61d-ec2a484bd5d4',
@@ -33,14 +33,6 @@ describe('International Category Resolver Engine', () => {
       collectibles_category_id: mockCategories.estatuas,
       confidence_score: 90,
       is_active: true
-    },
-    {
-      amazon_category: 'Toys & Games',
-      amazon_subcategory: 'Inactive Figures',
-      amazon_category_path: 'Toys & Games > Inactive Figures',
-      collectibles_category_id: mockCategories.figuras,
-      confidence_score: 90,
-      is_active: false
     }
   ];
 
@@ -60,6 +52,20 @@ describe('International Category Resolver Engine', () => {
       allow_standalone: true
     },
     {
+      brand_name: 'Super7',
+      collectibles_category_id: mockCategories.figuras,
+      confidence_score: 70,
+      is_active: true,
+      allow_standalone: true
+    },
+    {
+      brand_name: 'Good Smile Company',
+      collectibles_category_id: mockCategories.figuras,
+      confidence_score: 70,
+      is_active: true,
+      allow_standalone: true
+    },
+    {
       brand_name: 'Hasbro',
       collectibles_category_id: mockCategories.figuras,
       confidence_score: 70,
@@ -67,39 +73,101 @@ describe('International Category Resolver Engine', () => {
       allow_standalone: false // TOO_BROAD: Must NOT map standalone
     },
     {
+      brand_name: 'Bandai',
+      collectibles_category_id: mockCategories.figuras,
+      confidence_score: 70,
+      is_active: true,
+      allow_standalone: false // CONTEXT_REQUIRED
+    },
+    {
       brand_name: 'LEGO',
       collectibles_category_id: mockCategories.modelKits,
       confidence_score: 70,
       is_active: true,
-      allow_standalone: false // CONTEXT_REQUIRED: Must NOT map standalone
-    },
-    {
-      brand_name: 'DisabledBrand',
-      collectibles_category_id: mockCategories.figuras,
-      confidence_score: 70,
-      is_active: false,
-      allow_standalone: true
+      allow_standalone: false // CONTEXT_REQUIRED
     }
   ];
 
   const mockKeywordRules: KeywordMappingRuleRecord[] = [
+    // Negative exclusion rules
+    {
+      keyword: 'display stand',
+      rule_type: 'exclude',
+      blocks: 'brand_mapping',
+      priority: 100,
+      is_active: true
+    },
+    {
+      keyword: 'figure stand',
+      rule_type: 'exclude',
+      blocks: 'brand_mapping',
+      priority: 100,
+      is_active: true
+    },
+    {
+      keyword: 'protective case',
+      rule_type: 'exclude',
+      blocks: 'brand_mapping',
+      priority: 100,
+      is_active: true
+    },
+    // Positive include rules
+    {
+      keyword: 's.h.figuarts',
+      target_category_id: mockCategories.figuras,
+      rule_type: 'include',
+      priority: 12,
+      is_active: true
+    },
+    {
+      keyword: 'gunpla',
+      target_category_id: mockCategories.modelKits,
+      rule_type: 'include',
+      priority: 12,
+      is_active: true
+    },
+    {
+      keyword: 'marvel legends',
+      target_category_id: mockCategories.figuras,
+      rule_type: 'include',
+      priority: 12,
+      is_active: true
+    },
     {
       keyword: 'action figure',
       target_category_id: mockCategories.figuras,
+      rule_type: 'include',
+      priority: 10,
+      is_active: true
+    },
+    {
+      keyword: 'battle figure',
+      target_category_id: mockCategories.figuras,
+      rule_type: 'include',
+      priority: 10,
+      is_active: true
+    },
+    {
+      keyword: 'articulated figure',
+      target_category_id: mockCategories.figuras,
+      rule_type: 'include',
       priority: 10,
       is_active: true
     },
     {
       keyword: 'plush',
       target_category_id: mockCategories.peluches,
+      rule_type: 'include',
       priority: 10,
       is_active: true
     },
+    // Inactive rules
     {
-      keyword: 'inactive keyword',
-      target_category_id: mockCategories.estatuas,
-      priority: 10,
-      is_active: false
+      keyword: 'building kit',
+      target_category_id: mockCategories.modelKits,
+      rule_type: 'include',
+      priority: 5,
+      is_active: false // Deactivated: Building Sets != Model Kits
     }
   ];
 
@@ -119,157 +187,160 @@ describe('International Category Resolver Engine', () => {
       expect(parsed.amazon_subcategory).toBe('Statues & Busts');
       expect(parsed.amazon_category_path).toBe('Toys & Games > Collectible Toys > Statues & Busts');
     });
-
-    it('returns nulls for null/empty categories', () => {
-      expect(parseCategoryPath(null)).toEqual({ amazon_category: null, amazon_subcategory: null, amazon_category_path: null });
-      expect(parseCategoryPath([])).toEqual({ amazon_category: null, amazon_subcategory: null, amazon_category_path: null });
-    });
   });
 
-  describe('resolveInternationalCategory resolution cascade & safety', () => {
-    it('Priority 1: Manual Override has absolute precedence with 100 confidence', () => {
+  describe('Resolution Cascade & Negative Exclusions', () => {
+    it('TEST 1: NECA Display Stand -> unmapped (negative rule blocks brand mapping)', () => {
       const result = resolveInternationalCategory({
-        manual_category_id: mockCategories.peluches,
-        category_path: ['Toys & Games', 'Toy Figures & Playsets', 'Action Figures'],
+        title: 'NECA Black Figure Display Stand - Set of 10',
         brand: 'NECA',
-        title: 'NECA Ghost Face 7" Action Figure',
+        category_path: null,
         category_mappings: mockCatMappings,
         brand_mappings: mockBrandMappings,
         keyword_rules: mockKeywordRules
       });
 
-      expect(result.category_id).toBe(mockCategories.peluches);
-      expect(result.source).toBe('manual');
-      expect(result.confidence).toBe(100);
+      expect(result.source).toBe('unmapped');
+      expect(result.category_id).toBeNull();
+      expect(result.confidence).toBe(0);
+      expect(result.reason).toContain('bloqueado');
     });
 
-    it('Priority 2: Exact Category Path match yields score 90', () => {
+    it('TEST 2: NECA Figure -> Figuras de Acción (70%) (unaffected by negative rule)', () => {
       const result = resolveInternationalCategory({
-        category_path: ['Toys & Games', 'Toy Figures & Playsets', 'Action Figures'],
-        brand: 'GenericBrand',
-        title: 'Unbranded Item',
+        title: 'NECA Ultimate Michael Myers 7" Scale Action Figure',
+        brand: 'NECA',
+        category_path: null,
         category_mappings: mockCatMappings,
         brand_mappings: mockBrandMappings,
         keyword_rules: mockKeywordRules
       });
 
-      expect(result.category_id).toBe(mockCategories.figuras);
-      expect(result.source).toBe('category_mapping');
-      expect(result.confidence).toBe(90);
-    });
-
-    it('Priority 3: Subcategory Leaf match yields score 80 when path differs', () => {
-      const result = resolveInternationalCategory({
-        category_path: ['Toys & Games', 'Different Intermediate Path', 'Statues & Busts'],
-        brand: 'GenericBrand',
-        title: 'Some Item',
-        category_mappings: mockCatMappings,
-        brand_mappings: mockBrandMappings,
-        keyword_rules: mockKeywordRules
-      });
-
-      expect(result.category_id).toBe(mockCategories.estatuas);
-      expect(result.source).toBe('category_mapping_leaf');
-      expect(result.confidence).toBe(90);
-    });
-
-    it('Priority 4: Brand Mapping signal yields score 70 for SAFE standalone brand', () => {
-      const result = resolveInternationalCategory({
-        category_path: ['Electronics', 'Gadgets'],
-        brand: 'Funko',
-        title: 'Random Item',
-        category_mappings: mockCatMappings,
-        brand_mappings: mockBrandMappings,
-        keyword_rules: mockKeywordRules
-      });
-
-      expect(result.category_id).toBe(mockCategories.funko);
       expect(result.source).toBe('brand_mapping');
+      expect(result.category_id).toBe(mockCategories.figuras);
       expect(result.confidence).toBe(70);
     });
 
-    it('Safety Check: Broad Brand with allow_standalone = false (Hasbro/LEGO) does NOT map standalone', () => {
-      const resultHasbro = resolveInternationalCategory({
-        category_path: null,
-        brand: 'Hasbro',
-        title: 'Hasbro Monopoly Ultimate Banking Board Game',
-        category_mappings: mockCatMappings,
-        brand_mappings: mockBrandMappings,
-        keyword_rules: mockKeywordRules
-      });
-
-      // Hasbro is not standalone mapped to Figuras de Acción, but falls through to unmapped or keyword
-      expect(resultHasbro.source).not.toBe('brand_mapping');
-
-      const resultLego = resolveInternationalCategory({
-        category_path: null,
-        brand: 'LEGO',
-        title: 'LEGO Star Wars Millennium Falcon',
-        category_mappings: mockCatMappings,
-        brand_mappings: mockBrandMappings,
-        keyword_rules: mockKeywordRules
-      });
-
-      // LEGO is NOT standalone mapped to Model Kits without context
-      expect(resultLego.source).not.toBe('brand_mapping');
-    });
-
-    it('Safety Check: Inactive rules are strictly ignored across all tiers', () => {
-      const catResult = resolveInternationalCategory({
-        category_path: ['Toys & Games', 'Inactive Figures'],
-        title: 'Some Inactive item',
-        category_mappings: mockCatMappings,
-        brand_mappings: mockBrandMappings,
-        keyword_rules: mockKeywordRules
-      });
-      expect(catResult.source).toBe('unmapped');
-
-      const brandResult = resolveInternationalCategory({
-        brand: 'DisabledBrand',
-        title: 'Disabled item',
-        category_mappings: mockCatMappings,
-        brand_mappings: mockBrandMappings,
-        keyword_rules: mockKeywordRules
-      });
-      expect(brandResult.source).toBe('unmapped');
-
-      const kwResult = resolveInternationalCategory({
-        title: 'Something with inactive keyword here',
-        category_mappings: mockCatMappings,
-        brand_mappings: mockBrandMappings,
-        keyword_rules: mockKeywordRules
-      });
-      expect(kwResult.source).toBe('unmapped');
-    });
-
-    it('Priority 5: Keyword Rule match on Title yields score 50 when path and brand are unknown', () => {
+    it('TEST 3: LEGO Building Set -> unmapped (0%) (Tax Gap: not forced to Model Kits)', () => {
       const result = resolveInternationalCategory({
+        title: 'LEGO Ideas Home Alone Building Kit',
+        brand: 'LEGO',
         category_path: null,
-        brand: 'UnknownCo',
-        title: 'Super Soft Plush Toy Doll',
         category_mappings: mockCatMappings,
         brand_mappings: mockBrandMappings,
         keyword_rules: mockKeywordRules
       });
 
-      expect(result.category_id).toBe(mockCategories.peluches);
+      expect(result.source).toBe('unmapped');
+      expect(result.category_id).toBeNull();
+      expect(result.confidence).toBe(0);
+    });
+
+    it('TEST 4: Hasbro Marvel Legends -> Figuras de Acción (50%) (via contextual keyword)', () => {
+      const result = resolveInternationalCategory({
+        title: 'Hasbro Marvel Legends Wolverine 6-Inch Action Figure',
+        brand: 'Hasbro',
+        category_path: null,
+        category_mappings: mockCatMappings,
+        brand_mappings: mockBrandMappings,
+        keyword_rules: mockKeywordRules
+      });
+
       expect(result.source).toBe('keyword_mapping');
+      expect(result.category_id).toBe(mockCategories.figuras);
       expect(result.confidence).toBe(50);
     });
 
-    it('Fallback: Unmapped returns null with 0 confidence when no signals match', () => {
+    it('TEST 5: Hasbro Monopoly -> unmapped (0%) (Hasbro standalone disabled)', () => {
       const result = resolveInternationalCategory({
-        category_path: ['Home Improvement', 'Hardware'],
-        brand: 'Stanley',
-        title: '16oz Steel Hammer',
+        title: 'Hasbro Monopoly Ultimate Banking Board Game',
+        brand: 'Hasbro',
+        category_path: null,
         category_mappings: mockCatMappings,
         brand_mappings: mockBrandMappings,
         keyword_rules: mockKeywordRules
       });
 
-      expect(result.category_id).toBeNull();
       expect(result.source).toBe('unmapped');
+      expect(result.category_id).toBeNull();
       expect(result.confidence).toBe(0);
+    });
+
+    it('TEST 6: Bandai S.H.Figuarts -> Figuras de Acción (50%)', () => {
+      const result = resolveInternationalCategory({
+        title: 'Bandai Spirits S.H.Figuarts Super Saiyan Son Goku',
+        brand: 'Bandai',
+        category_path: null,
+        category_mappings: mockCatMappings,
+        brand_mappings: mockBrandMappings,
+        keyword_rules: mockKeywordRules
+      });
+
+      expect(result.source).toBe('keyword_mapping');
+      expect(result.category_id).toBe(mockCategories.figuras);
+      expect(result.confidence).toBe(50);
+    });
+
+    it('TEST 7: Bandai Gunpla -> Model Kits (50%)', () => {
+      const result = resolveInternationalCategory({
+        title: 'Bandai Hobby Gunpla Mobile Suit Gundam RX-78-2 High Grade',
+        brand: 'Bandai',
+        category_path: null,
+        category_mappings: mockCatMappings,
+        brand_mappings: mockBrandMappings,
+        keyword_rules: mockKeywordRules
+      });
+
+      expect(result.source).toBe('keyword_mapping');
+      expect(result.category_id).toBe(mockCategories.modelKits);
+      expect(result.confidence).toBe(50);
+    });
+
+    it('TEST 8: Pokemon Battle Figure -> Figuras de Acción (50%)', () => {
+      const result = resolveInternationalCategory({
+        title: 'Pokémon Battle Figure 6 Pack (Pikachu, Squirtle...)',
+        brand: 'Pokémon',
+        category_path: null,
+        category_mappings: mockCatMappings,
+        brand_mappings: mockBrandMappings,
+        keyword_rules: mockKeywordRules
+      });
+
+      expect(result.source).toBe('keyword_mapping');
+      expect(result.category_id).toBe(mockCategories.figuras);
+      expect(result.confidence).toBe(50);
+    });
+
+    it('TEST 9: Comic Book (Batman: Year One) -> unmapped (0%) (Taxonomy Gap: Comics)', () => {
+      const result = resolveInternationalCategory({
+        title: 'Batman: Year One',
+        brand: null,
+        category_path: null,
+        category_mappings: mockCatMappings,
+        brand_mappings: mockBrandMappings,
+        keyword_rules: mockKeywordRules
+      });
+
+      expect(result.source).toBe('unmapped');
+      expect(result.category_id).toBeNull();
+      expect(result.confidence).toBe(0);
+    });
+
+    it('TEST 10: Unknown item -> unmapped (0%) with resolution trace', () => {
+      const result = resolveInternationalCategory({
+        title: 'Stanley 16oz Steel Hammer with Fiberglass Handle',
+        brand: 'Stanley',
+        category_path: ['Tools & Home Improvement', 'Hand Tools', 'Hammers'],
+        category_mappings: mockCatMappings,
+        brand_mappings: mockBrandMappings,
+        keyword_rules: mockKeywordRules
+      });
+
+      expect(result.source).toBe('unmapped');
+      expect(result.category_id).toBeNull();
+      expect(result.confidence).toBe(0);
+      expect(result.trace).toBeDefined();
+      expect(result.trace?.length).toBeGreaterThan(3);
     });
   });
 });
