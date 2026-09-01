@@ -1,8 +1,24 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Edit, RefreshCw, XCircle, Eye, Loader2, Search, ExternalLink, Code } from 'lucide-react';
+import { 
+  Pencil, RefreshCw, XCircle, Eye, Loader2, Search, ExternalLink, Code, 
+  Info, HelpCircle, CheckCircle2, AlertTriangle, ChevronDown, ChevronUp, DollarSign, Sparkles
+} from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 import { formatUSD, formatUYU, formatPercent, formatDate } from '../../lib/formatters';
+import { FALLBACK_IMAGE } from '../../lib/imageUtils';
+
+function CostTooltip({ text }: { text: string }) {
+  return (
+    <span className="group relative inline-flex items-center ml-1 align-middle cursor-help">
+      <Info className="w-3.5 h-3.5 text-gray-400 group-hover:text-indigo-600 transition-colors" />
+      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden w-56 rounded-lg bg-gray-900 p-2 text-[10px] leading-tight text-white shadow-xl group-hover:block z-40 opacity-0 group-hover:opacity-100 transition-opacity font-normal">
+        {text}
+        <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+      </span>
+    </span>
+  );
+}
 
 export default function AdminInternationalProducts() {
   const { addToast } = useToast();
@@ -13,6 +29,7 @@ export default function AdminInternationalProducts() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showExplainer, setShowExplainer] = useState(true);
 
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [rawModalData, setRawModalData] = useState<any>(null);
@@ -174,28 +191,114 @@ export default function AdminInternationalProducts() {
         </div>
       </div>
 
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col md:flex-row gap-4">
-        <div className="flex-1 relative">
-          <Search className="w-5 h-5 absolute left-3 top-2.5 text-gray-400" />
-          <input 
-            type="text" 
-            placeholder="Buscar por título o marca..." 
-            className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+      {/* Explainer / Educational Pricing Card */}
+      <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-5 shadow-lg border border-indigo-800/40">
+        <div className="flex items-center justify-between cursor-pointer" onClick={() => setShowExplainer(!showExplainer)}>
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-indigo-600/30 rounded-lg border border-indigo-500/40">
+              <Sparkles className="w-5 h-5 text-indigo-300" />
+            </div>
+            <div>
+              <h3 className="font-bold text-sm sm:text-base text-white flex items-center gap-2">
+                ¿Cómo se calculan los precios y costos internacionales?
+              </h3>
+              <p className="text-xs text-indigo-200/80 mt-0.5">
+                Desglose transparente del flujo de costos, rentabilidad neta de Collectibles y flete del courier.
+              </p>
+            </div>
+          </div>
+          <button 
+            type="button" 
+            className="text-indigo-300 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors"
+            title={showExplainer ? 'Contraer' : 'Expandir'}
+          >
+            {showExplainer ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+          </button>
         </div>
-        <select 
-          className="rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
-        >
-          <option value="all">Todos los estados</option>
-          <option value="draft">Borrador (Draft)</option>
-          <option value="published">Publicado</option>
-          <option value="disabled">Desactivado</option>
-          <option value="unavailable">No Disponible</option>
-        </select>
+
+        {showExplainer && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mt-4 pt-4 border-t border-indigo-800/40 text-xs">
+            {/* Column 1: Costos Base y Adquisición */}
+            <div className="bg-white/5 p-3.5 rounded-xl border border-white/10 space-y-2">
+              <div className="font-bold text-indigo-300 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                <span>1. Costos de Adquisición</span>
+              </div>
+              <div className="space-y-1.5 text-slate-300 text-[11px]">
+                <div>
+                  <strong className="text-white block">Precio Amazon:</strong>
+                  Precio del producto en Amazon USA.
+                </div>
+                <div>
+                  <strong className="text-white block">Envío USA:</strong>
+                  Flete doméstico hasta Miami ($0 en Prime).
+                </div>
+                <div>
+                  <strong className="text-indigo-200 block">Costo real Collectibles:</strong>
+                  Amazon + Envío USA + Zinc ($1.00) + Tarjeta Prex internacional con IVA (2.5% + $0.50 + 22% IVA).
+                </div>
+              </div>
+            </div>
+
+            {/* Column 2: Políticas de Rentabilidad */}
+            <div className="bg-white/5 p-3.5 rounded-xl border border-white/10 space-y-2">
+              <div className="font-bold text-amber-300 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                <span>2. Fijación de Precios</span>
+              </div>
+              <div className="space-y-1.5 text-slate-300 text-[11px]">
+                <div>
+                  <strong className="text-white block">Ganancia objetivo:</strong>
+                  Piso mínimo o meta porcentual configurada (Piso $2.00 USD / Meta 15%).
+                </div>
+                <div>
+                  <strong className="text-amber-200 block">Fee aplicado:</strong>
+                  Recargo comercial sobre Amazon para fijar el PVP de la tienda.
+                </div>
+                <div>
+                  <strong className="text-white block">Profit Protection:</strong>
+                  Evita ventas a pérdida asegurando ganancia positiva.
+                </div>
+              </div>
+            </div>
+
+            {/* Column 3: Margen y Ganancia Real */}
+            <div className="bg-white/5 p-3.5 rounded-xl border border-white/10 space-y-2">
+              <div className="font-bold text-emerald-300 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                <span>3. Ingresos de Collectibles</span>
+              </div>
+              <div className="space-y-1.5 text-slate-300 text-[11px]">
+                <div>
+                  <strong className="text-white block">Final Collectibles:</strong>
+                  Importe que el cliente abona a Collectibles por el producto.
+                </div>
+                <div>
+                  <strong className="text-emerald-200 block">Ganancia estimada:</strong>
+                  Beneficio neto real (<span className="text-emerald-300 font-bold">Final - Costo real</span>).
+                </div>
+                <div>
+                  <strong className="text-white block">Margen neto:</strong>
+                  Porcentaje de rentabilidad sobre el precio final.
+                </div>
+              </div>
+            </div>
+
+            {/* Column 4: Courier Urubox */}
+            <div className="bg-white/5 p-3.5 rounded-xl border border-white/10 space-y-2">
+              <div className="font-bold text-sky-300 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                <span>4. Logística Internacional</span>
+              </div>
+              <div className="space-y-1.5 text-slate-300 text-[11px]">
+                <div>
+                  <strong className="text-white block">Flete Courier (Urubox):</strong>
+                  Estimación de flete por peso que el cliente abona directamente al courier.
+                </div>
+                <div>
+                  <strong className="text-sky-200 block">Costo final estimado:</strong>
+                  Final Collectibles + Flete Urubox (Gasto total estimado del cliente).
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -229,97 +332,163 @@ export default function AdminInternationalProducts() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredProducts.map((p) => (
-                <tr key={p.id} className={selectedIds.has(p.id) ? 'bg-blue-50/50' : ''}>
-                  <td className="px-6 py-4">
-                    <input 
-                      type="checkbox" 
-                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                      checked={selectedIds.has(p.id)}
-                      onChange={(e) => {
-                        const newSet = new Set(selectedIds);
-                        if (e.target.checked) newSet.add(p.id);
-                        else newSet.delete(p.id);
-                        setSelectedIds(newSet);
-                      }}
-                    />
-                  </td>
-                  <td className="px-6 py-4">
-                    <img src={p.image_url} alt="" referrerPolicy="no-referrer" loading="lazy" className="w-12 h-12 object-cover rounded" />
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-medium text-gray-900 line-clamp-2" title={p.title}>
-                      <a href={`https://www.amazon.com/dp/${p.id}`} target="_blank" rel="noreferrer" className="hover:text-primary-600 hover:underline flex items-center gap-1">
-                        {p.title}
-                        <ExternalLink className="w-3 h-3 flex-shrink-0" />
-                      </a>
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      <span className="font-bold text-gray-700">{p.brand || 'Sin Marca'}</span> | Disp: {p.availability}
-                    </div>
-                    <div className="text-[11px] text-emerald-700 font-semibold mt-1">
-                      Cat: {p.category_rel?.name || 'Sin asignar'}
-                      {p.category_mapping_source === 'manual' && <span className="ml-1 text-[9px] px-1 py-0.2 bg-purple-100 text-purple-700 rounded font-normal">Manual</span>}
-                    </div>
-                    {p.amazon_category_path && (
-                      <div className="text-[10px] text-gray-400 mt-0.5 truncate max-w-xs" title={p.amazon_category_path}>
-                        Amazon: {p.amazon_category_path}
+              {filteredProducts.map((p) => {
+                const amazonPrice = Number(p.amazon_current_price_usd || p.base_price_usd || 0);
+                const usaShipping = Number(p.usa_domestic_shipping_usd || 0);
+                const prexFee = ((amazonPrice * 0.025) + 0.50) * 1.22;
+                const realCost = Number(p.real_cost_usd) || (amazonPrice + usaShipping + 1.00 + prexFee);
+                const finalPrice = Number(p.final_price_usd || 0);
+                const feeApplied = Number(p.collectibles_fee_usd || 0);
+                const estimatedProfit = finalPrice > 0 && realCost > 0 ? (finalPrice - realCost) : feeApplied;
+                const netMarginPct = finalPrice > 0 ? (estimatedProfit / finalPrice) * 100 : 0;
+                const targetProfit = Number(p.expected_profit_usd || 2.00);
+                const isProfitOk = estimatedProfit >= targetProfit;
+
+                return (
+                  <tr key={p.id} className={selectedIds.has(p.id) ? 'bg-blue-50/50' : ''}>
+                    <td className="px-6 py-4">
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        checked={selectedIds.has(p.id)}
+                        onChange={(e) => {
+                          const newSet = new Set(selectedIds);
+                          if (e.target.checked) newSet.add(p.id);
+                          else newSet.delete(p.id);
+                          setSelectedIds(newSet);
+                        }}
+                      />
+                    </td>
+                    <td className="px-6 py-4">
+                      <img 
+                        src={p.image_url} 
+                        alt={p.title} 
+                        referrerPolicy="no-referrer" 
+                        loading="lazy" 
+                        className="w-12 h-12 object-cover rounded" 
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.onerror = null;
+                          target.src = FALLBACK_IMAGE;
+                        }}
+                      />
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm font-medium text-gray-900 line-clamp-2" title={p.title}>
+                        <a href={`https://www.amazon.com/dp/${p.id}`} target="_blank" rel="noreferrer" className="hover:text-primary-600 hover:underline flex items-center gap-1">
+                          {p.title}
+                          <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                        </a>
                       </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-xs text-gray-600">
-                    <div>Amazon: {formatUSD(p.amazon_current_price_usd || p.base_price_usd)}</div>
-                    {p.amazon_list_price_usd && <div className="line-through text-gray-400">Lista: {formatUSD(p.amazon_list_price_usd)}</div>}
-                    <div>Envío USA: {formatUSD(p.usa_domestic_shipping_usd || 0)}</div>
-                    <div className="font-bold text-gray-700 mt-1 border-t pt-1">Costo Real: {p.real_cost_usd ? formatUSD(p.real_cost_usd) : '?'}</div>
-                  </td>
-                  <td className="px-6 py-4 text-xs text-gray-600">
-                    <div>Margen Esperado: {p.expected_profit_usd ? formatUSD(p.expected_profit_usd) : '?'}</div>
-                    <div className="font-bold text-green-700">Fee Aplicado: {formatUSD(p.collectibles_fee_usd)}</div>
-                    <div className="text-gray-500">{formatPercent(p.final_price_usd > 0 ? ((Number(p.collectibles_fee_usd) / Number(p.final_price_usd)) * 100) : 0)} del Final</div>
-                  </td>
-                  <td className="px-6 py-4 text-sm font-bold">
-                    <div className="text-primary-600">{formatUSD(p.final_price_usd)}</div>
-                    <div className="text-gray-500 text-xs font-normal">{formatUYU(p.final_price_uyu)}</div>
-                  </td>
-                  <td className="px-6 py-4 text-xs text-gray-600">
-                    <div>Flete Urubox: {p.urubox_estimated_cost_usd ? formatUSD(p.urubox_estimated_cost_usd) : '?'}</div>
-                    <div className="font-bold text-red-600 border-t pt-1 mt-1">Total: {p.total_estimated_cost_usd ? formatUSD(p.total_estimated_cost_usd) : '?'}</div>
-                  </td>
-                  <td className="px-6 py-4 text-xs">
-                    <span className={`px-2 py-1 rounded-full font-bold mb-2 inline-block ${
-                      p.status === 'published' ? 'bg-green-100 text-green-800' :
-                      p.status === 'draft' ? 'bg-yellow-100 text-yellow-800' :
-                      p.status === 'unavailable' ? 'bg-red-100 text-red-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {p.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-xs">
-                    <div className="font-semibold text-gray-700">Estado: {p.sync_status || 'N/A'}</div>
-                    <div className="text-gray-500 mt-1">Última vez: {formatDate(p.last_synced_at)}</div>
-                    {p.price_change_percent && (
-                      <div className={`mt-1 font-bold ${p.price_change_percent > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        Dif: {p.price_change_percent > 0 ? '+' : ''}{formatPercent(p.price_change_percent)}
+                      <div className="text-xs text-gray-500 mt-1">
+                        <span className="font-bold text-gray-700">{p.brand || 'Sin Marca'}</span> | Disp: {p.availability}
                       </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-right space-x-2">
-                    <button onClick={() => handleSync(p.id)} title="Sincronizar ahora" className="text-blue-500 hover:text-blue-700">
-                      <RefreshCw className="w-5 h-5 inline" />
-                    </button>
-                    <button onClick={() => setEditingProduct({...p})} title="Editar" className="text-gray-500 hover:text-primary-600">
-                      <Edit className="w-5 h-5 inline" />
-                    </button>
-                    <button onClick={() => setRawModalData(p.raw_data)} title="Ver raw data técnico" className="text-gray-400 hover:text-gray-600">
-                      <Code className="w-5 h-5 inline" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {loading && <tr><td colSpan={7} className="px-6 py-8 text-center text-gray-500"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></td></tr>}
-              {!loading && filteredProducts.length === 0 && <tr><td colSpan={7} className="px-6 py-8 text-center text-gray-500">No hay productos internacionales.</td></tr>}
+                      <div className="text-[11px] text-emerald-700 font-semibold mt-1">
+                        Cat: {p.category_rel?.name || 'Sin asignar'}
+                        {p.category_mapping_source === 'manual' && <span className="ml-1 text-[9px] px-1 py-0.2 bg-purple-100 text-purple-700 rounded font-normal">Manual</span>}
+                      </div>
+                      {p.amazon_category_path && (
+                        <div className="text-[10px] text-gray-400 mt-0.5 truncate max-w-xs" title={p.amazon_category_path}>
+                          Amazon: {p.amazon_category_path}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-xs text-gray-600">
+                      <div>Amazon: {formatUSD(p.amazon_current_price_usd || p.base_price_usd)}</div>
+                      {p.amazon_list_price_usd && <div className="line-through text-gray-400">Lista: {formatUSD(p.amazon_list_price_usd)}</div>}
+                      <div>Envío USA: {formatUSD(p.usa_domestic_shipping_usd || 0)}</div>
+                      <div className="font-bold text-gray-800 mt-1 border-t pt-1 flex items-center">
+                        <span>Costo real Collectibles: {p.real_cost_usd ? formatUSD(p.real_cost_usd) : '?'}</span>
+                        <CostTooltip text="Lo que Collectibles estima que le costará adquirir este producto antes de venderlo (Amazon + Envío USA + Zinc $1 + Tarjeta Prex/IVA)." />
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-xs text-gray-600 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-500 flex items-center">
+                          Ganancia objetivo:
+                          <CostTooltip text="Rentabilidad mínima u objetivo configurada para la operación en las políticas del sistema." />
+                        </span>
+                        <span className="font-medium text-gray-700">{formatUSD(targetProfit)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-500 flex items-center">
+                          Fee aplicado:
+                          <CostTooltip text="Recargo comercial aplicado sobre el costo base para fijar el precio de venta de Collectibles." />
+                        </span>
+                        <span className="font-bold text-indigo-700">{formatUSD(feeApplied)}</span>
+                      </div>
+                      <div className="flex items-center justify-between font-bold text-emerald-800 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
+                        <span className="flex items-center">
+                          Ganancia estimada:
+                          <CostTooltip text="Diferencia neta real entre el precio final de Collectibles y su costo real estimado." />
+                        </span>
+                        <span>{formatUSD(estimatedProfit)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] text-gray-500 pt-0.5">
+                        <span>Margen neto:</span>
+                        <span className="font-semibold text-gray-700">{formatPercent(netMarginPct)} del Final</span>
+                      </div>
+                      <div className="pt-1">
+                        {isProfitOk ? (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Rentabilidad OK
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-200 inline-flex items-center gap-1" title="Ganancia estimada por debajo del objetivo configurado">
+                            <AlertTriangle className="w-3 h-3 text-amber-600" /> ⚠ Debajo de obj.
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm font-bold">
+                      <div className="text-primary-600 text-base">{formatUSD(p.final_price_usd)}</div>
+                      <div className="text-gray-500 text-xs font-normal">{formatUYU(p.final_price_uyu)}</div>
+                    </td>
+                    <td className="px-6 py-4 text-xs text-gray-600 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-500">Flete Urubox:</span>
+                        <span className="font-medium text-gray-700">{p.urubox_estimated_cost_usd ? formatUSD(p.urubox_estimated_cost_usd) : '?'}</span>
+                      </div>
+                      <div className="border-t pt-1 flex items-center justify-between font-bold text-gray-900">
+                        <span>Total Cliente:</span>
+                        <span className="text-sky-700">{p.total_estimated_cost_usd ? formatUSD(p.total_estimated_cost_usd) : '?'}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-xs">
+                      <span className={`px-2 py-1 rounded-full font-bold mb-2 inline-block ${
+                        p.status === 'published' ? 'bg-green-100 text-green-800' :
+                        p.status === 'draft' ? 'bg-yellow-100 text-yellow-800' :
+                        p.status === 'unavailable' ? 'bg-red-100 text-red-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {p.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-xs">
+                      <div className="font-semibold text-gray-700">Estado: {p.sync_status || 'N/A'}</div>
+                      <div className="text-gray-500 mt-1">Última vez: {formatDate(p.last_synced_at)}</div>
+                      {p.price_change_percent && (
+                        <div className={`mt-1 font-bold ${p.price_change_percent > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          Dif: {p.price_change_percent > 0 ? '+' : ''}{formatPercent(p.price_change_percent)}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right space-x-2">
+                      <button onClick={() => handleSync(p.id)} title="Sincronizar ahora" className="text-blue-500 hover:text-blue-700">
+                        <RefreshCw className="w-5 h-5 inline" />
+                      </button>
+                      <button onClick={() => setEditingProduct({...p})} title="Editar" className="text-gray-500 hover:text-primary-600">
+                        <Pencil className="w-5 h-5 inline" />
+                      </button>
+                      <button onClick={() => setRawModalData(p.raw_data)} title="Ver raw data técnico" className="text-gray-400 hover:text-gray-600">
+                        <Code className="w-5 h-5 inline" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+              {loading && <tr><td colSpan={10} className="px-6 py-8 text-center text-gray-500"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></td></tr>}
+              {!loading && filteredProducts.length === 0 && <tr><td colSpan={10} className="px-6 py-8 text-center text-gray-500">No hay productos internacionales.</td></tr>}
             </tbody>
           </table>
         </div>
