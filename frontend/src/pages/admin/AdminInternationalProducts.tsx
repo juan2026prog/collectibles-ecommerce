@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { 
   Pencil, RefreshCw, XCircle, Eye, Loader2, Search, ExternalLink, Code, 
-  Info, HelpCircle, CheckCircle2, AlertTriangle, ChevronDown, ChevronUp, DollarSign, Sparkles
+  Info, HelpCircle, CheckCircle2, AlertTriangle, ChevronDown, ChevronUp, DollarSign, Sparkles, ShieldAlert
 } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 import { formatUSD, formatUYU, formatPercent, formatDate } from '../../lib/formatters';
 import { FALLBACK_IMAGE } from '../../lib/imageUtils';
+import { useInternationalSettings } from '../../hooks/useInternationalSettings';
+import { calculateInternationalPricing } from '../../lib/internationalPricing';
 
 function CostTooltip({ text }: { text: string }) {
   return (
@@ -22,6 +24,7 @@ function CostTooltip({ text }: { text: string }) {
 
 export default function AdminInternationalProducts() {
   const { addToast } = useToast();
+  const { settings } = useInternationalSettings();
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
@@ -335,14 +338,28 @@ export default function AdminInternationalProducts() {
               {filteredProducts.map((p) => {
                 const amazonPrice = Number(p.amazon_current_price_usd || p.base_price_usd || 0);
                 const usaShipping = Number(p.usa_domestic_shipping_usd || 0);
-                const prexFee = ((amazonPrice * 0.025) + 0.50) * 1.22;
-                const realCost = Number(p.real_cost_usd) || (amazonPrice + usaShipping + 1.00 + prexFee);
-                const finalPrice = Number(p.final_price_usd || 0);
-                const feeApplied = Number(p.collectibles_fee_usd || 0);
-                const estimatedProfit = finalPrice > 0 && realCost > 0 ? (finalPrice - realCost) : feeApplied;
-                const netMarginPct = finalPrice > 0 ? (estimatedProfit / finalPrice) * 100 : 0;
-                const targetProfit = Number(p.expected_profit_usd || 2.00);
-                const isProfitOk = estimatedProfit >= targetProfit;
+
+                const calc = calculateInternationalPricing(
+                  {
+                    amazonPrice,
+                    usaShipping
+                  },
+                  {
+                    ...settings,
+                    pricing_mode: p.pricing_mode || settings?.pricing_mode,
+                    min_profit_usd: Number(p.expected_profit_usd || settings?.min_profit_usd || 3.99),
+                    fixed_markup_usd: Number(settings?.fixed_markup_usd || 6.00)
+                  }
+                );
+
+                const finalPrice = Number(p.final_price_usd) > 0 ? Number(p.final_price_usd) : calc.finalPrice;
+                const realCost = Number(p.real_cost_usd) > 0 ? Number(p.real_cost_usd) : calc.realCost;
+                const feeApplied = Number(p.collectibles_fee_usd) > 0 ? Number(p.collectibles_fee_usd) : calc.appliedFee;
+                const estimatedProfit = Number((finalPrice - realCost).toFixed(2));
+                const netMarginPct = finalPrice > 0 ? Number(((estimatedProfit / finalPrice) * 100).toFixed(2)) : 0;
+                const targetProfit = calc.targetProfit;
+                const minFee = calc.minimumCommercialFee;
+                const isProtectionActive = calc.profitProtectionTriggered || (feeApplied > minFee);
 
                 return (
                   <tr key={p.id} className={selectedIds.has(p.id) ? 'bg-blue-50/50' : ''}>
@@ -394,33 +411,40 @@ export default function AdminInternationalProducts() {
                       )}
                     </td>
                     <td className="px-6 py-4 text-xs text-gray-600">
-                      <div>Amazon: {formatUSD(p.amazon_current_price_usd || p.base_price_usd)}</div>
+                      <div>Amazon: {formatUSD(amazonPrice)}</div>
                       {p.amazon_list_price_usd && <div className="line-through text-gray-400">Lista: {formatUSD(p.amazon_list_price_usd)}</div>}
-                      <div>Envío USA: {formatUSD(p.usa_domestic_shipping_usd || 0)}</div>
+                      <div>Envío USA: {formatUSD(usaShipping)}</div>
                       <div className="font-bold text-gray-800 mt-1 border-t pt-1 flex items-center">
-                        <span>Costo real Collectibles: {p.real_cost_usd ? formatUSD(p.real_cost_usd) : '?'}</span>
-                        <CostTooltip text="Lo que Collectibles estima que le costará adquirir este producto antes de venderlo (Amazon + Envío USA + Zinc $1 + Tarjeta Prex/IVA)." />
+                        <span>Costo real Collectibles: {formatUSD(realCost)}</span>
+                        <CostTooltip text={`Amazon (${formatUSD(amazonPrice)}) + Envío USA (${formatUSD(usaShipping)}) + Zinc (${formatUSD(calc.zincFee)}) + Prex/IVA (${formatUSD(calc.financialFeeTotal)}) = ${formatUSD(realCost)}`} />
                       </div>
                     </td>
                     <td className="px-6 py-4 text-xs text-gray-600 space-y-1">
                       <div className="flex items-center justify-between">
                         <span className="text-gray-500 flex items-center">
                           Ganancia objetivo:
-                          <CostTooltip text="Rentabilidad mínima u objetivo configurada para la operación en las políticas del sistema." />
+                          <CostTooltip text={`Rentabilidad mínima neta esperada por Collectibles (${formatUSD(targetProfit)}).`} />
                         </span>
                         <span className="font-medium text-gray-700">{formatUSD(targetProfit)}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-gray-500 flex items-center">
+                          Fee mínimo:
+                          <CostTooltip text={`Fee comercial base (${formatUSD(minFee)}) configurado para el modo de pricing.`} />
+                        </span>
+                        <span className="font-medium text-gray-600">{formatUSD(minFee)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-500 flex items-center">
                           Fee aplicado:
-                          <CostTooltip text="Recargo comercial aplicado sobre el costo base para fijar el precio de venta de Collectibles." />
+                          <CostTooltip text={`Recargo total aplicado sobre el costo base (${formatUSD(feeApplied)}).`} />
                         </span>
                         <span className="font-bold text-indigo-700">{formatUSD(feeApplied)}</span>
                       </div>
                       <div className="flex items-center justify-between font-bold text-emerald-800 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
                         <span className="flex items-center">
                           Ganancia estimada:
-                          <CostTooltip text="Diferencia neta real entre el precio final de Collectibles y su costo real estimado." />
+                          <CostTooltip text={`Ganancia neta real = Precio Final (${formatUSD(finalPrice)}) - Costo Real (${formatUSD(realCost)}) = ${formatUSD(estimatedProfit)}.`} />
                         </span>
                         <span>{formatUSD(estimatedProfit)}</span>
                       </div>
@@ -429,13 +453,13 @@ export default function AdminInternationalProducts() {
                         <span className="font-semibold text-gray-700">{formatPercent(netMarginPct)} del Final</span>
                       </div>
                       <div className="pt-1">
-                        {isProfitOk ? (
-                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Rentabilidad OK
+                        {isProtectionActive ? (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-indigo-100 text-indigo-800 border border-indigo-200 inline-flex items-center gap-1 shadow-sm" title="El sistema aumentó automáticamente el fee porque el fee base no alcanzaba para cubrir todos los costos y conservar la ganancia objetivo.">
+                            <ShieldAlert className="w-3 h-3 text-indigo-600" /> 🛡 Profit Protection aplicado
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-200 inline-flex items-center gap-1" title="Ganancia estimada por debajo del objetivo configurado">
-                            <AlertTriangle className="w-3 h-3 text-amber-600" /> ⚠ Debajo de obj.
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1 shadow-sm" title="El fee base comercial es suficiente para cubrir todos los costos y la ganancia objetivo.">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> ✓ Fee base suficiente
                           </span>
                         )}
                       </div>

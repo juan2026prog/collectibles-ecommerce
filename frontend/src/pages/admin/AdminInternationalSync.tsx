@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Save, RefreshCw, DollarSign, ShieldAlert, Sparkles, Activity, Globe, Check, AlertTriangle } from 'lucide-react';
 import { fetchInternationalSettings } from '../../hooks/useInternationalSettings';
+import { calculateInternationalPricing } from '../../lib/internationalPricing';
 
 export default function AdminInternationalSync() {
   const [settings, setSettings] = useState<any>(null);
@@ -93,7 +94,7 @@ export default function AdminInternationalSync() {
         only_prime: settings.only_prime,
         include_non_prime: settings.include_non_prime,
         pricing_mode: settings.pricing_mode,
-        fixed_markup_usd: settings.fixed_markup_usd,
+        fixed_markup_usd: Number(settings.fixed_markup_usd || 6),
         percentage_markup: settings.percentage_markup,
         tiered_markup_rules: settings.tiered_markup_rules,
         target_margin_percent: targetMargin,
@@ -104,7 +105,11 @@ export default function AdminInternationalSync() {
         price_variation_action: settings.price_variation_action,
         urubox_price_per_kg: settings.urubox_price_per_kg,
         urubox_handling_fee: settings.urubox_handling_fee,
-        zinc_fee_usd: settings.zinc_fee_usd,
+        zinc_fee_usd: Number(settings.zinc_fee_usd || 1),
+        financial_fee_percent: Number(settings.financial_fee_percent ?? 2.5),
+        financial_fee_fixed_usd: Number(settings.financial_fee_fixed_usd ?? 0.5),
+        financial_fee_tax_rate: Number(settings.financial_fee_tax_rate ?? 0.22),
+        florida_sales_tax_percent: Number(settings.florida_sales_tax_percent ?? 0),
         international_operating_limit_usd: operatingLimit,
         international_safety_reserve_usd: safetyReserve,
         international_capacity_enabled: !!settings.international_capacity_enabled,
@@ -389,12 +394,42 @@ export default function AdminInternationalSync() {
         <div className="pt-6 border-t border-gray-100 space-y-4">
           <h3 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2">
             <ShieldAlert className="w-4 h-4 text-primary-600" />
-            Protección de Rentabilidad y Margen
+            Protección de Rentabilidad y Margen Dinámico
           </h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Margen objetivo (%)</label>
+              <label className="block text-xs font-bold text-gray-700">Ganancia objetivo (USD)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0.1"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                value={settings?.min_profit_usd ?? 3.99}
+                onChange={e => setSettings({...settings, min_profit_usd: Number(e.target.value), min_absolute_profit_usd: Number(e.target.value)})}
+              />
+              <p className="text-[10px] text-gray-500 mt-1">
+                Ganancia neta mínima garantizada por compra.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700">Fee Comercial Mínimo (USD)</label>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                value={settings?.fixed_markup_usd ?? 6.0}
+                onChange={e => setSettings({...settings, fixed_markup_usd: Number(e.target.value)})}
+              />
+              <p className="text-[10px] text-gray-500 mt-1">
+                Recargo comercial base sobre Amazon.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700">Margen objetivo (%)</label>
               <input
                 type="number"
                 step="0.5"
@@ -403,28 +438,13 @@ export default function AdminInternationalSync() {
                 value={settings?.target_margin_percent ?? 15.0}
                 onChange={e => setSettings({...settings, target_margin_percent: Number(e.target.value)})}
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Porcentaje de ganancia objetivo calculado sobre el costo total de adquisición.
+              <p className="text-[10px] text-gray-500 mt-1">
+                Margen % calculado sobre el costo real.
               </p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Ganancia mínima por producto (USD)</label>
-              <input
-                type="number"
-                step="0.5"
-                min="0.1"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                value={settings?.min_absolute_profit_usd ?? 2.0}
-                onChange={e => setSettings({...settings, min_absolute_profit_usd: Number(e.target.value)})}
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Ganancia mínima absoluta que debe dejar cualquier compra internacional.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Fee Proveedor de Compra (USD)</label>
+              <label className="block text-xs font-bold text-gray-700">Zinc API Fee (USD)</label>
               <input
                 type="number"
                 step="0.1"
@@ -433,36 +453,103 @@ export default function AdminInternationalSync() {
                 value={settings?.zinc_fee_usd ?? 1.0}
                 onChange={e => setSettings({...settings, zinc_fee_usd: Number(e.target.value)})}
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Costo fijo de ejecución por orden del proveedor automatizado.
+              <p className="text-[10px] text-gray-500 mt-1">
+                Costo fijo de ejecución por orden del proveedor.
+              </p>
+            </div>
+          </div>
+
+          {/* ── PARÁMETROS FINANCIEROS (PREX / PROCESAMIENTO) ── */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+            <div>
+              <label className="block text-xs font-bold text-gray-700">Comisión Tarjeta Prex (%)</label>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                value={settings?.financial_fee_percent ?? 2.5}
+                onChange={e => setSettings({...settings, financial_fee_percent: Number(e.target.value)})}
+              />
+              <p className="text-[10px] text-gray-500 mt-1">
+                Porcentaje por transacción internacional en Prex.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700">Cargo Fijo Prex (USD)</label>
+              <input
+                type="number"
+                step="0.05"
+                min="0"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                value={settings?.financial_fee_fixed_usd ?? 0.50}
+                onChange={e => setSettings({...settings, financial_fee_fixed_usd: Number(e.target.value)})}
+              />
+              <p className="text-[10px] text-gray-500 mt-1">
+                Cargo fijo por operación de tarjeta en el exterior.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700">IVA Financiero Prex (%)</label>
+              <input
+                type="number"
+                step="1"
+                min="0"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                value={Math.round((settings?.financial_fee_tax_rate ?? 0.22) * 100)}
+                onChange={e => setSettings({...settings, financial_fee_tax_rate: Number(e.target.value) / 100})}
+              />
+              <p className="text-[10px] text-gray-500 mt-1">
+                IVA uruguayo aplicado sobre cargos financieros (22%).
               </p>
             </div>
           </div>
 
           {/* ── EJEMPLOS DINÁMICOS DE PRICING EN VIVO ── */}
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mt-4">
-            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
-              Simulación de Precios con los Parámetros Actuales (Margen: {settings?.target_margin_percent || 15}%, Mínimo: ${settings?.min_absolute_profit_usd || 2} USD)
-            </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
-              <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-1">
-                <div className="font-bold text-slate-900 border-b pb-1">Ejemplo 1: Costo Alto ($100 USD)</div>
-                <div className="text-slate-600">Costo de adquisición: <span className="font-bold text-slate-900">$100.00 USD</span></div>
-                <div className="text-slate-600">Margen objetivo ({settings?.target_margin_percent || 15}%): ${(100 * ((settings?.target_margin_percent || 15) / 100)).toFixed(2)} USD</div>
-                <div className="text-slate-600">Ganancia requerida: <span className="font-bold text-emerald-600">${Math.max(100 * ((settings?.target_margin_percent || 15) / 100), settings?.min_absolute_profit_usd || 2).toFixed(2)} USD</span></div>
-                <div className="text-slate-900 font-bold pt-1 border-t">Precio mínimo seguro: ${(100 + Math.max(100 * ((settings?.target_margin_percent || 15) / 100), settings?.min_absolute_profit_usd || 2)).toFixed(2)} USD</div>
-              </div>
+          {(() => {
+            const sim1 = calculateInternationalPricing({ amazonPrice: 34.99, usaShipping: 0 }, settings || {});
+            const sim2 = calculateInternationalPricing({ amazonPrice: 34.99, usaShipping: 0 }, { ...(settings || {}), zinc_fee_usd: 4.00 });
 
-              <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-1">
-                <div className="font-bold text-slate-900 border-b pb-1">Ejemplo 2: Costo Bajo ($5 USD - Aplica Mínimo)</div>
-                <div className="text-slate-600">Costo de adquisición: <span className="font-bold text-slate-900">$5.00 USD</span></div>
-                <div className="text-slate-600">Margen objetivo ({settings?.target_margin_percent || 15}%): ${(5 * ((settings?.target_margin_percent || 15) / 100)).toFixed(2)} USD</div>
-                <div className="text-slate-600">Ganancia requerida: <span className="font-bold text-emerald-600">${Math.max(5 * ((settings?.target_margin_percent || 15) / 100), settings?.min_absolute_profit_usd || 2).toFixed(2)} USD</span> <span className="text-[10px] text-amber-600 font-bold">(piso activo)</span></div>
-                <div className="text-slate-900 font-bold pt-1 border-t">Precio mínimo seguro: ${(5 + Math.max(5 * ((settings?.target_margin_percent || 15) / 100), settings?.min_absolute_profit_usd || 2)).toFixed(2)} USD</div>
+            return (
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mt-4">
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+                  Simulación de Precios Dinámica con Parámetros Actuales
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
+                  <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-1">
+                    <div className="font-bold text-slate-900 border-b pb-1">Ejemplo 1: Amazon $34.99 (Zinc = ${settings?.zinc_fee_usd || 1})</div>
+                    <div className="text-slate-600">Costo real: <span className="font-bold text-slate-900">${sim1.realCost.toFixed(2)} USD</span></div>
+                    <div className="text-slate-600">Precio comercial base ($34.99 + ${sim1.minimumCommercialFee}): ${sim1.commercialPrice.toFixed(2)} USD</div>
+                    <div className="text-slate-600">Precio protegido ($37.67 + ${sim1.targetProfit}): <span className="font-bold text-indigo-700">${sim1.profitProtectedPrice.toFixed(2)} USD</span></div>
+                    <div className="text-slate-900 font-bold pt-1 border-t flex justify-between">
+                      <span>Precio Final: ${sim1.finalPrice.toFixed(2)} USD</span>
+                      <span className={sim1.profitProtectionTriggered ? 'text-indigo-600 font-black' : 'text-emerald-600'}>
+                        {sim1.profitProtectionTriggered ? '🛡 Protegido' : '✓ Base OK'}
+                      </span>
+                    </div>
+                    <div className="text-emerald-700 text-[11px]">Ganancia real: ${sim1.estimatedProfit.toFixed(2)} USD ({sim1.netMarginPercentage.toFixed(1)}%)</div>
+                  </div>
+
+                  <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-1">
+                    <div className="font-bold text-slate-900 border-b pb-1">Ejemplo 2: Amazon $34.99 (Zinc Sube a $4.00)</div>
+                    <div className="text-slate-600">Costo real: <span className="font-bold text-slate-900">${sim2.realCost.toFixed(2)} USD</span></div>
+                    <div className="text-slate-600">Precio comercial base: ${sim2.commercialPrice.toFixed(2)} USD</div>
+                    <div className="text-slate-600">Precio protegido: <span className="font-bold text-indigo-700">${sim2.profitProtectedPrice.toFixed(2)} USD</span></div>
+                    <div className="text-slate-900 font-bold pt-1 border-t flex justify-between">
+                      <span>Precio Final: ${sim2.finalPrice.toFixed(2)} USD</span>
+                      <span className="text-indigo-600 font-black">
+                        🛡 Protegido (+${(sim2.appliedFee - sim2.minimumCommercialFee).toFixed(2)})
+                      </span>
+                    </div>
+                    <div className="text-emerald-700 text-[11px]">Ganancia real: ${sim2.estimatedProfit.toFixed(2)} USD ({sim2.netMarginPercentage.toFixed(1)}%)</div>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            );
+          })()}
         </div>
 
         {/* ── AUTOMATIZACIÓN DE COMPRA Y SINCRONIZACIÓN ── */}

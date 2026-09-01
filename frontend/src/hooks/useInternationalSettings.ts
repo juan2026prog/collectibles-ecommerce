@@ -10,6 +10,11 @@ export interface InternationalSettings {
   min_absolute_profit_usd: number;
   min_profit_usd: number;
   zinc_fee_usd: number;
+  fixed_markup_usd?: number;
+  financial_fee_percent?: number;
+  financial_fee_fixed_usd?: number;
+  financial_fee_tax_rate?: number;
+  florida_sales_tax_percent?: number;
   sales_tax_percent?: number;
   international_operating_limit_usd?: number;
   international_safety_reserve_usd?: number;
@@ -44,9 +49,14 @@ function setupRealtimeSubscription() {
               international_purchases_enabled: data.international_purchases_enabled ?? true,
               international_capacity_enabled: data.international_capacity_enabled ?? true,
               target_margin_percent: Number(data.target_margin_percent || 15),
-              min_absolute_profit_usd: Number(data.min_absolute_profit_usd || 2),
+              min_absolute_profit_usd: Number(data.min_absolute_profit_usd || 3.99),
               min_profit_usd: Number(data.min_profit_usd || 3.99),
               zinc_fee_usd: Number(data.zinc_fee_usd || 1),
+              fixed_markup_usd: Number(data.fixed_markup_usd || 6),
+              financial_fee_percent: Number(data.financial_fee_percent || 2.5),
+              financial_fee_fixed_usd: Number(data.financial_fee_fixed_usd || 0.5),
+              financial_fee_tax_rate: Number(data.financial_fee_tax_rate || 0.22),
+              florida_sales_tax_percent: Number(data.florida_sales_tax_percent || 0),
               never_sell_at_loss: data.never_sell_at_loss ?? true
             };
             _listeners.forEach(fn => fn(_cachedSettings));
@@ -65,11 +75,14 @@ export async function fetchInternationalSettings(forceRefresh = false): Promise<
 
   _pendingPromise = (async () => {
     try {
-      const { data, error } = await supabase
+      const query = supabase
         .from('international_sync_settings')
         .select('*')
-        .eq('id', 1)
-        .maybeSingle();
+        .eq('id', 1);
+
+      const { data, error } = await (typeof (query as any).maybeSingle === 'function' 
+        ? (query as any).maybeSingle() 
+        : (query as any).single());
 
       if (error) {
         console.warn('Could not fetch international settings:', error.message);
@@ -83,9 +96,14 @@ export async function fetchInternationalSettings(forceRefresh = false): Promise<
           international_purchases_enabled: data.international_purchases_enabled ?? true,
           international_capacity_enabled: data.international_capacity_enabled ?? true,
           target_margin_percent: Number(data.target_margin_percent || 15),
-          min_absolute_profit_usd: Number(data.min_absolute_profit_usd || 2),
+          min_absolute_profit_usd: Number(data.min_absolute_profit_usd || 3.99),
           min_profit_usd: Number(data.min_profit_usd || 3.99),
           zinc_fee_usd: Number(data.zinc_fee_usd || 1),
+          fixed_markup_usd: Number(data.fixed_markup_usd || 6),
+          financial_fee_percent: Number(data.financial_fee_percent || 2.5),
+          financial_fee_fixed_usd: Number(data.financial_fee_fixed_usd || 0.5),
+          financial_fee_tax_rate: Number(data.financial_fee_tax_rate || 0.22),
+          florida_sales_tax_percent: Number(data.florida_sales_tax_percent || 0),
           never_sell_at_loss: data.never_sell_at_loss ?? true
         };
         _listeners.forEach(fn => fn(_cachedSettings));

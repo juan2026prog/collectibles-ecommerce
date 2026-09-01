@@ -94,15 +94,14 @@ describe('AJUSTE FINAL DE MARGEN INTERNACIONAL — SUITE DE PRUEBAS DIRECTAS', (
 
   it('Ejecución con calculateCanonicalPricing real: Costo 5, Costo 20, Costo 100, Costo 250', () => {
     const testCases = [
-      { cost: 5.0, shipping: 0, fee: 0.0, expectedAcquisition: 7.15, expectedMinSafe: 9.15, expectedProfit: 2.00 },
-      { cost: 20.0, shipping: 0, fee: 0.0, expectedAcquisition: 23.69, expectedMinSafe: 27.24, expectedProfit: 3.55 },
-      { cost: 100.0, shipping: 0, fee: 0.0, expectedAcquisition: 111.90, expectedMinSafe: 128.69, expectedProfit: 16.79 },
-      { cost: 250.0, shipping: 0, fee: 0.0, expectedAcquisition: 277.30, expectedMinSafe: 318.89, expectedProfit: 41.59 }
+      { cost: 5.0, shipping: 0, fee: 0.0, expectedAcquisition: 6.76, expectedMinSafe: 8.76, expectedProfit: 2.00 },
+      { cost: 20.0, shipping: 0, fee: 0.0, expectedAcquisition: 22.22, expectedMinSafe: 24.22, expectedProfit: 2.00 },
+      { cost: 100.0, shipping: 0, fee: 0.0, expectedAcquisition: 104.66, expectedMinSafe: 106.66, expectedProfit: 2.00 },
+      { cost: 250.0, shipping: 0, fee: 0.0, expectedAcquisition: 259.24, expectedMinSafe: 261.24, expectedProfit: 2.00 }
     ];
 
     for (const tc of testCases) {
       const res = calculateCanonicalPricing(tc.cost, tc.shipping, tc.fee, {
-        target_margin_percent: 15.0,
         min_absolute_profit_usd: 2.00,
         zinc_fee_usd: 1.00,
         never_sell_at_loss: true

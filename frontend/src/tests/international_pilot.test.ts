@@ -20,11 +20,10 @@ describe('International Commerce Pilot - Real Module Unit Tests', () => {
 
     const result = calculateCanonicalPricing(productCost, usaShipping, markup, settings);
 
-    // PrePayment: 50 + 5 + (55 * 0.07 = 3.85) + 1.00 = 59.85
-    // PaymentFee: ((59.85 * 0.025) + 0.50) * 1.22 = 2.435...
-    // AcquisitionCost: 59.85 + 2.44 = 62.29
-    expect(result.acquisition_cost_usd).toBeGreaterThan(60);
-    expect(result.acquisition_cost_usd).toBeLessThan(65);
+    // PaymentFee: ((50 * 0.025) + 0.50) * 1.22 = 2.135...
+    // AcquisitionCost: 50 + 5 + 1.00 + 2.14 = 58.14
+    expect(result.acquisition_cost_usd).toBeGreaterThan(55);
+    expect(result.acquisition_cost_usd).toBeLessThan(60);
 
     // Final price must be at least acquisition + profit
     expect(result.final_price_usd).toBeGreaterThanOrEqual(result.acquisition_cost_usd + result.expected_profit_usd);
