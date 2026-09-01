@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { verifyAdmin } from "../_shared/auth.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
+import { resolveInternationalCategory } from "../_shared/categoryResolver.ts";
 
 serve(async (req) => {
   const optionsResponse = handleOptions(req);
@@ -73,25 +74,13 @@ serve(async (req) => {
     // Update raw response in search
     await supabase.from('international_import_searches').update({ raw_response: rawResponse }).eq('id', searchRecord.id);
 
-    // Fetch Mapping Rules and Categories for Heuristics
-    const [{ data: brandMappings }, { data: keywordMappings }, { data: dbCategories }] = await Promise.all([
+    // Fetch Mapping Rules for Centralized Resolver
+    const [{ data: catMappings }, { data: brandMappings }, { data: keywordMappings }] = await Promise.all([
+      supabase.from('amazon_category_mapping').select('*'),
       supabase.from('amazon_brand_mapping').select('*'),
-      supabase.from('keyword_mapping_rules').select('*').order('priority', { ascending: false }),
-      supabase.from('categories').select('*')
+      supabase.from('keyword_mapping_rules').select('*').order('priority', { ascending: false })
     ]);
 
-    const categories = dbCategories || [];
-    const getCategoryId = (name: string, parentName?: string) => {
-      let cat = categories.find(c => c.name.toLowerCase() === name.toLowerCase());
-      if (cat && parentName) {
-        // optionally check parent if we want to be strict
-        const parent = categories.find(c => c.id === cat.parent_id);
-        if (parent && parent.name.toLowerCase() !== parentName.toLowerCase()) {
-           cat = categories.find(c => c.name.toLowerCase() === name.toLowerCase() && c.parent_id);
-        }
-      }
-      return cat?.id || null;
-    };
     const inferBrandFromTitle = (title: string) => {
       const t = title.toLowerCase();
       if (t.includes('pokemon') || t.includes('pokémon')) return 'Pokémon';
@@ -126,107 +115,17 @@ serve(async (req) => {
       // Normalize Image
       const normalizedImageUrl = p.image_url || p.main_image_url_external || p.image || p.raw_data?.image || p.raw_data?.main_image || p.raw_data?.images?.[0] || null;
 
-      let suggested_category_id = null;
-      let suggested_subcategory_id = null;
-      let mapping_confidence = 0;
-      let category_inferred = false;
+      // Centralized Category Resolution
+      const resolution = resolveInternationalCategory({
+        category_path: p.categories || p.category_path || null,
+        brand: normalizedBrand,
+        title: p.title,
+        category_mappings: catMappings || [],
+        brand_mappings: brandMappings || [],
+        keyword_rules: keywordMappings || []
+      });
 
-      // 1. Check brand mapping
-      if (normalizedBrand) {
-        const bMap = brandMappings?.find(b => b.brand_name.toLowerCase() === normalizedBrand!.toLowerCase());
-        if (bMap) {
-          suggested_category_id = bMap.collectibles_category_id;
-          suggested_subcategory_id = bMap.collectibles_subcategory_id;
-          mapping_confidence = bMap.confidence_score || 90;
-        }
-      }
-
-      // 2. Check keyword mapping
-      if (!suggested_category_id && p.title) {
-        const titleLower = p.title.toLowerCase();
-        for (const kMap of keywordMappings || []) {
-          if (titleLower.includes(kMap.keyword.toLowerCase())) {
-            suggested_category_id = kMap.target_category_id;
-            suggested_subcategory_id = kMap.target_subcategory_id;
-            mapping_confidence = 80;
-            break;
-          }
-        }
-      }
-
-      // 3. Fallback Heuristics
-      if (!suggested_category_id) {
-        const titleL = p.title.toLowerCase();
-        const brandL = (normalizedBrand || '').toLowerCase();
-        
-        const figParent = getCategoryId('Figuras') || getCategoryId('Figuras / Coleccionables');
-        const indParent = getCategoryId('Indumentaria') || getCategoryId('Ropa');
-        const legoParent = getCategoryId('LEGO') || getCategoryId('Bloques');
-        const booksParent = getCategoryId('Libros') || getCategoryId('Literatura');
-
-        if (brandL.includes('pokemon') || titleL.includes('pokemon')) {
-          suggested_category_id = figParent;
-          suggested_subcategory_id = getCategoryId('Pokémon');
-          mapping_confidence = 70;
-          category_inferred = true;
-        } else if (brandL === 'neca') {
-          suggested_category_id = figParent;
-          suggested_subcategory_id = getCategoryId('NECA');
-          mapping_confidence = 70;
-          category_inferred = true;
-        } else if (brandL === 'funko' || titleL.includes('funko pop')) {
-          suggested_category_id = figParent;
-          suggested_subcategory_id = getCategoryId('Funko POP') || getCategoryId('Funko');
-          mapping_confidence = 70;
-          category_inferred = true;
-        } else if (brandL === 'hasbro') {
-          suggested_category_id = figParent;
-          suggested_subcategory_id = getCategoryId('Hasbro');
-          mapping_confidence = 70;
-          category_inferred = true;
-        } else if (titleL.includes('marvel legends')) {
-          suggested_category_id = figParent;
-          suggested_subcategory_id = getCategoryId('Marvel Legends') || getCategoryId('Marvel');
-          mapping_confidence = 70;
-          category_inferred = true;
-        } else if (titleL.includes('black series') && titleL.includes('star wars')) {
-          suggested_category_id = figParent;
-          suggested_subcategory_id = getCategoryId('Star Wars Black Series') || getCategoryId('Star Wars');
-          mapping_confidence = 70;
-          category_inferred = true;
-        } else if (titleL.includes('dc multiverse')) {
-          suggested_category_id = figParent;
-          suggested_subcategory_id = getCategoryId('DC Multiverse') || getCategoryId('DC Comics');
-          mapping_confidence = 70;
-          category_inferred = true;
-        } else if (brandL.includes('lego') || titleL.includes('lego ')) {
-          suggested_category_id = legoParent;
-          mapping_confidence = 70;
-          category_inferred = true;
-        } else if (titleL.includes('t-shirt') || titleL.includes('shirt')) {
-          suggested_category_id = indParent;
-          suggested_subcategory_id = getCategoryId('Remeras');
-          mapping_confidence = 60;
-          category_inferred = true;
-        } else if (titleL.includes('hoodie')) {
-          suggested_category_id = indParent;
-          suggested_subcategory_id = getCategoryId('Buzos');
-          mapping_confidence = 60;
-          category_inferred = true;
-        } else if (titleL.includes('jacket')) {
-          suggested_category_id = indParent;
-          suggested_subcategory_id = getCategoryId('Camperas');
-          mapping_confidence = 60;
-          category_inferred = true;
-        } else if (titleL.includes('artbook') || titleL.includes(' book ')) {
-          suggested_category_id = booksParent;
-          suggested_subcategory_id = getCategoryId('Artbooks') || getCategoryId('Arte');
-          mapping_confidence = 60;
-          category_inferred = true;
-        }
-      }
-
-      // 4. Delivery Information Parsing
+      // Delivery Information Parsing
       let amazon_delivery_type = 'unknown';
       let amazon_delivery_text = 'Tiempo de entrega no informado por Amazon';
 
@@ -250,7 +149,7 @@ serve(async (req) => {
         amazon_delivery_type = 'unknown';
       }
 
-      // 5. Populate _normalized
+      // Populate _normalized
       const enrichedRawData = {
         ...p,
         _normalized: {
@@ -258,7 +157,7 @@ serve(async (req) => {
           manufacturer: p.manufacturer || p.raw_data?.manufacturer || null,
           imageUrl: normalizedImageUrl,
           category_detected: p.categories || null,
-          category_inferred,
+          category_inferred: resolution.source !== 'unmapped',
           amazon_delivery_type,
           amazon_delivery_text
         }
@@ -283,9 +182,10 @@ serve(async (req) => {
         amazon_delivery_type,
         raw_data: enrichedRawData,
         status: 'review',
-        suggested_category_id,
-        suggested_subcategory_id,
-        mapping_confidence
+        suggested_category_id: resolution.category_id,
+        suggested_subcategory_id: resolution.subcategory_id,
+        mapping_confidence: resolution.confidence,
+        category_mapping_source: resolution.source
       });
 
       if (candidates.length >= max_results) break;

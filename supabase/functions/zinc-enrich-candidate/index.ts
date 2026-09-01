@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { verifyAdmin } from "../_shared/auth.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
+import { resolveInternationalCategory } from "../_shared/categoryResolver.ts";
 
 serve(async (req) => {
   const optionsResponse = handleOptions(req);
@@ -26,10 +27,12 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    const { data: candidates, error: dbError } = await supabase
-      .from('international_import_candidates')
-      .select('*')
-      .in('id', candidate_ids);
+    const [{ data: candidates, error: dbError }, { data: catMappings }, { data: brandMappings }, { data: keywordMappings }] = await Promise.all([
+      supabase.from('international_import_candidates').select('*').in('id', candidate_ids),
+      supabase.from('amazon_category_mapping').select('*'),
+      supabase.from('amazon_brand_mapping').select('*'),
+      supabase.from('keyword_mapping_rules').select('*').order('priority', { ascending: false })
+    ]);
 
     if (dbError) throw dbError;
     if (!candidates || candidates.length === 0) {
@@ -69,13 +72,27 @@ serve(async (req) => {
         amazon_category_path = pDetails.categories.join(' > ');
       }
 
+      // Centralized resolution
+      const resolution = resolveInternationalCategory({
+        category_path: pDetails.categories || amazon_category_path,
+        brand: pDetails.brand || c.brand,
+        title: pDetails.title || c.title,
+        category_mappings: catMappings || [],
+        brand_mappings: brandMappings || [],
+        keyword_rules: keywordMappings || []
+      });
+
       const updateData = {
         amazon_category,
         amazon_subcategory,
         amazon_category_path,
+        suggested_category_id: resolution.category_id,
+        suggested_subcategory_id: resolution.subcategory_id,
+        mapping_confidence: resolution.confidence,
+        category_mapping_source: resolution.source,
         main_image_url_external: pDetails.main_image || c.main_image_url_external,
         image_urls_external: pDetails.images || [],
-        video_urls_external: [], // Zinc doesn't reliably provide videos in standard plan, but we prepare the field
+        video_urls_external: [],
         raw_data: { ...c.raw_data, _enriched_details: pDetails }
       };
 
@@ -106,3 +123,4 @@ serve(async (req) => {
     );
   }
 });
+

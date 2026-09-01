@@ -9,6 +9,7 @@ export default function AdminInternationalProducts() {
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
+  const [dbCategories, setDbCategories] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -18,11 +19,17 @@ export default function AdminInternationalProducts() {
 
   useEffect(() => {
     fetchProducts();
+    fetchCategories();
   }, [statusFilter]);
+
+  async function fetchCategories() {
+    const { data } = await supabase.from('categories').select('*').order('name');
+    if (data) setDbCategories(data);
+  }
 
   async function fetchProducts() {
     setLoading(true);
-    let q = supabase.from('international_products').select('*').order('created_at', { ascending: false });
+    let q = supabase.from('international_products').select('*, category_rel:categories!collectibles_category_id(id, name, slug)').order('created_at', { ascending: false });
     if (statusFilter !== 'all') {
       q = q.eq('status', statusFilter);
     }
@@ -75,6 +82,10 @@ export default function AdminInternationalProducts() {
           description: editingProduct.description,
           brand: editingProduct.brand,
           category: editingProduct.category,
+          collectibles_category_id: editingProduct.collectibles_category_id || null,
+          collectibles_subcategory_id: editingProduct.collectibles_subcategory_id || null,
+          category_mapping_source: 'manual',
+          category_mapping_confidence: 100,
           image_url: editingProduct.image_url,
           base_price_usd: Number(editingProduct.base_price_usd),
           usa_domestic_shipping_usd: Number(editingProduct.usa_domestic_shipping_usd),
@@ -89,7 +100,7 @@ export default function AdminInternationalProducts() {
 
       if (error) throw error;
 
-      addToast({ title: 'Guardado', message: 'Producto actualizado.', type: 'success' });
+      addToast({ title: 'Guardado', message: 'Producto actualizado con categoría manual.', type: 'success' });
       setEditingProduct(null);
       fetchProducts();
     } catch (err: any) {
@@ -246,9 +257,15 @@ export default function AdminInternationalProducts() {
                     <div className="text-xs text-gray-500 mt-1">
                       <span className="font-bold text-gray-700">{p.brand || 'Sin Marca'}</span> | Disp: {p.availability}
                     </div>
-                    <div className="text-[10px] text-gray-400 mt-1 truncate max-w-xs" title={p.category || p.raw_data?.categories?.[0] || 'Sin categoría'}>
-                      Cat: {p.category || p.raw_data?.categories?.[0] || 'Sin categoría'}
+                    <div className="text-[11px] text-emerald-700 font-semibold mt-1">
+                      Cat: {p.category_rel?.name || 'Sin asignar'}
+                      {p.category_mapping_source === 'manual' && <span className="ml-1 text-[9px] px-1 py-0.2 bg-purple-100 text-purple-700 rounded font-normal">Manual</span>}
                     </div>
+                    {p.amazon_category_path && (
+                      <div className="text-[10px] text-gray-400 mt-0.5 truncate max-w-xs" title={p.amazon_category_path}>
+                        Amazon: {p.amazon_category_path}
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-xs text-gray-600">
                     <div>Amazon: {formatUSD(p.amazon_current_price_usd || p.base_price_usd)}</div>
@@ -332,8 +349,35 @@ export default function AdminInternationalProducts() {
                     <input type="text" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" value={editingProduct.brand || ''} onChange={e => setEditingProduct({...editingProduct, brand: e.target.value})} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Categoría</label>
-                    <input type="text" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" value={editingProduct.category || ''} onChange={e => setEditingProduct({...editingProduct, category: e.target.value})} />
+                    <label className="block text-sm font-medium text-gray-700">Taxonomía Amazon (Solo Lectura)</label>
+                    <input type="text" readOnly className="mt-1 block w-full rounded-md border-gray-200 bg-gray-50 text-gray-500 shadow-sm text-xs" value={editingProduct.amazon_category_path || editingProduct.amazon_category || editingProduct.category || 'N/A'} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Categoría Collectibles *</label>
+                    <select
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm bg-white"
+                      value={editingProduct.collectibles_category_id || ''}
+                      onChange={e => setEditingProduct({ ...editingProduct, collectibles_category_id: e.target.value, collectibles_subcategory_id: '' })}
+                    >
+                      <option value="">-- Sin Asignar --</option>
+                      {dbCategories.filter(c => !c.parent_id).map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Subcategoría Collectibles</label>
+                    <select
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm bg-white"
+                      value={editingProduct.collectibles_subcategory_id || ''}
+                      onChange={e => setEditingProduct({ ...editingProduct, collectibles_subcategory_id: e.target.value })}
+                      disabled={!editingProduct.collectibles_category_id}
+                    >
+                      <option value="">-- Ninguna / Opcional --</option>
+                      {dbCategories.filter(c => c.parent_id === editingProduct.collectibles_category_id).map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700">Imagen Principal (URL)</label>

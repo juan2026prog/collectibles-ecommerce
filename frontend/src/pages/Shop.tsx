@@ -1,7 +1,7 @@
 import { Link, useSearchParams, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { ChevronRight, ChevronLeft, SlidersHorizontal, X, Search, Store, ExternalLink, Loader2 } from 'lucide-react';
-import { useProducts, useCategories, useBrands, useFilterMappings, useProductGroupMetadata, useBrandFacets } from '../hooks/useData';
+import { useProducts, useCategories, useBrands, useFilterMappings, useProductGroupMetadata, useBrandFacets, useInternationalCategoryFacets } from '../hooks/useData';
 import { usePromotions, getApplicablePromotions } from '../hooks/usePromotions';
 import { useCartContext } from '../contexts/CartContext';
 import { useLocale } from '../contexts/LocaleContext';
@@ -120,7 +120,29 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
 
   const { categories, loading: catsLoading } = useCategories();
   const { brands, loading: brandsLoading } = useBrands();
-  const currentCategory = categories.find(c => c.slug === categorySlug);
+
+  const intlFacetFilters = useMemo(() => ({
+    brand: brandSlug || undefined,
+    search: searchQ || undefined,
+    minPrice: priceMin ? Number(priceMin) : undefined,
+    maxPrice: priceMax ? Number(priceMax) : undefined
+  }), [brandSlug, searchQ, priceMin, priceMax]);
+
+  const { facets: intlCatFacets, loading: intlCatsLoading } = useInternationalCategoryFacets(intlFacetFilters);
+
+  const intlCategories = useMemo(() => {
+    return (intlCatFacets || []).map(f => ({
+      id: f.category_id,
+      parent_id: f.parent_id,
+      name: f.name,
+      slug: f.slug,
+      sort_order: f.sort_order,
+      published_products_count: Number(f.product_count),
+      status: 'approved'
+    }));
+  }, [intlCatFacets]);
+
+  const currentCategory = (isInternational ? intlCategories : categories).find(c => c.slug === categorySlug) || categories.find(c => c.slug === categorySlug);
   const currentBrand = brands.find(b => b.slug === brandSlug);
 
   const brandFacetsFilters = useMemo(() => ({
@@ -135,10 +157,13 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   const mappings = useFilterMappings(currentBrand?.id);
 
   const totalCatalogProducts = useMemo(() => {
+    if (isInternational) {
+      return (intlCatFacets || []).filter(c => c.parent_id === null).reduce((sum, c) => sum + Number(c.product_count || 0), 0);
+    }
     return categories
       .filter(c => c.parent_id === null && c.status === 'approved')
       .reduce((sum, c) => sum + (c.published_products_count || 0), 0);
-  }, [categories]);
+  }, [categories, isInternational, intlCatFacets]);
 
   // Auto-expand active parent category on mount or when category is selected via URL
   useEffect(() => {
@@ -151,9 +176,13 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
     }
   }, [currentCategory]);
 
-  const visibleCategories = currentBrand && mappings.length > 0
-    ? categories.filter(c => mappings.some(m => m.category_id === c.id && m.brand_id === currentBrand.id) || c.id === currentCategory?.id)
-    : categories;
+  const visibleCategories = isInternational
+    ? intlCategories
+    : (currentBrand && mappings.length > 0
+        ? categories.filter(c => mappings.some(m => m.category_id === c.id && m.brand_id === currentBrand.id) || c.id === currentCategory?.id)
+        : categories);
+
+  const effectiveCatsLoading = isInternational ? intlCatsLoading : catsLoading;
 
   const visibleBrands = brands;
   
@@ -224,15 +253,16 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
     return () => window.removeEventListener('scroll', handleScroll);
   }, [location.pathname, location.search, page]);
 
-  // Redirect to /shop if categorySlug is present but not found in categories list (meaning it's empty or inactive)
+  // Redirect to /shop or /intl if categorySlug is present but not found in categories list
   useEffect(() => {
-    if (categorySlug && !catsLoading && categories.length > 0) {
-      const found = categories.some(c => c.slug === categorySlug);
+    if (categorySlug && !effectiveCatsLoading && (isInternational ? intlCategories.length > 0 : categories.length > 0)) {
+      const listToCheck = isInternational ? intlCategories : categories;
+      const found = listToCheck.some(c => c.slug === categorySlug);
       if (!found) {
-        navigate('/shop', { replace: true });
+        navigate(isInternational ? '/intl' : '/shop', { replace: true });
       }
     }
-  }, [categorySlug, catsLoading, categories, navigate]);
+  }, [categorySlug, effectiveCatsLoading, categories, intlCategories, isInternational, navigate]);
 
   // GA4 event: view_item_list & view_search_results (Phase 2)
   useEffect(() => {
@@ -313,6 +343,16 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
     setPage(0);
     const params = new URLSearchParams(searchParams);
     
+    if (isInternational) {
+      if (slug) {
+        params.set('category', slug);
+      } else {
+        params.delete('category');
+      }
+      navigate(`/intl?${params.toString()}`);
+      return;
+    }
+
     if (isBrandRoute && brandParam) {
       if (slug) {
         params.set('category', slug);
@@ -334,6 +374,16 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
     setPage(0);
     const params = new URLSearchParams(searchParams);
     
+    if (isInternational) {
+      if (slug) {
+        params.set('brand', slug);
+      } else {
+        params.delete('brand');
+      }
+      navigate(`/intl?${params.toString()}`);
+      return;
+    }
+
     if (isCategoryRoute && catParam) {
       if (slug) {
         params.set('brand', slug);
@@ -353,6 +403,15 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
 
 
   function clearAllFilters() {
+    if (isInternational) {
+      navigate('/intl');
+      setSearchParams({});
+      setPriceMin('');
+      setPriceMax('');
+      setSearchInput('');
+      setPage(0);
+      return;
+    }
     if (groupSlug || isCategoryRoute || isBrandRoute) {
       navigate('/shop');
     } else {
@@ -388,10 +447,11 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
           <input
+            type="text"
             value={searchInput}
-            onChange={e => setSearchInput(e.target.value)}
-            placeholder="Buscar productos..."
-            className="w-full pl-8 pr-3 py-1.5 text-xs border border-white/10 bg-white/5 text-white focus:outline-none focus:ring-1 focus:ring-[#f00856] placeholder:text-slate-500 rounded-lg transition-all duration-200 focus:bg-white/10"
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Buscar..."
+            className="w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#f00856] transition-colors"
           />
         </div>
       </form>
@@ -413,7 +473,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
             <span className="text-[10px] font-mono shrink-0 ml-2">[{totalCatalogProducts}]</span>
           </button>
 
-          {catsLoading
+          {effectiveCatsLoading
             ? [...Array(5)].map((_, i) => <div key={i} className="h-6 bg-white/5 rounded animate-pulse" />)
             : (() => {
                 const parentCategories = visibleCategories.filter(c => c.parent_id === null && c.published_products_count > 0 && c.status === 'approved');

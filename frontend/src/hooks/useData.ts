@@ -171,7 +171,7 @@ export function useProducts(filters: ProductFilters = {}) {
     if (filters.isInternational) {
       let query = supabase
         .from('international_products')
-        .select('*', { count: 'exact' });
+        .select('*, category_rel:categories!collectibles_category_id(id, name, slug), subcategory_rel:categories!collectibles_subcategory_id(id, name, slug)', { count: 'exact' });
 
       if (!filters.includeDrafts) {
         query = query.eq('status', 'published');
@@ -188,7 +188,21 @@ export function useProducts(filters: ProductFilters = {}) {
       }
 
       if (filters.category) {
-        query = query.ilike('category', `%${filters.category}%`);
+        const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(filters.category);
+        if (isUUID) {
+          query = query.or(`collectibles_category_id.eq.${filters.category},collectibles_subcategory_id.eq.${filters.category}`);
+        } else {
+          // Resolve category slug to category ID
+          const { data: catRecord } = await supabase
+            .from('categories')
+            .select('id')
+            .eq('slug', filters.category)
+            .maybeSingle();
+
+          if (catRecord) {
+            query = query.or(`collectibles_category_id.eq.${catRecord.id},collectibles_subcategory_id.eq.${catRecord.id}`);
+          }
+        }
       }
 
       if (filters.minPrice) {
@@ -223,7 +237,10 @@ export function useProducts(filters: ProductFilters = {}) {
           images: [{ id: item.id, url: item.image_url, is_primary: true }],
           image_url: item.image_url,
           brand: { name: item.brand || 'Importado', slug: item.brand ? item.brand.toLowerCase() : 'importado' },
-          category: { name: item.category || 'Coleccionables', slug: item.category ? item.category.toLowerCase() : 'coleccionables' },
+          category: item.category_rel || { name: item.category || 'Coleccionables', slug: item.category ? item.category.toLowerCase() : 'coleccionables' },
+          subcategory: item.subcategory_rel || null,
+          collectibles_category_id: item.collectibles_category_id,
+          collectibles_subcategory_id: item.collectibles_subcategory_id,
           source_provider: 'zinc',
           is_international: true,
           is_active: true,
@@ -390,7 +407,7 @@ export function useProduct(slug: string | undefined) {
           if (isUUID) {
             const { data: intlData } = await supabase
               .from('international_products')
-              .select('*')
+              .select('*, category_rel:categories!collectibles_category_id(id, name, slug), subcategory_rel:categories!collectibles_subcategory_id(id, name, slug)')
               .eq('id', slug)
               .maybeSingle();
               
@@ -403,8 +420,11 @@ export function useProduct(slug: string | undefined) {
                 base_price: intlData.final_price_usd,
                 compare_at_price: intlData.amazon_list_price_usd || intlData.final_price_usd,
                 images: [{ url: intlData.image_url, is_primary: true }],
-                brand: { name: intlData.brand, slug: intlData.brand },
-                category: { name: intlData.category, slug: intlData.category },
+                brand: { name: intlData.brand, slug: intlData.brand ? intlData.brand.toLowerCase() : 'importado' },
+                category: intlData.category_rel || { name: intlData.category || 'Coleccionables', slug: intlData.category ? intlData.category.toLowerCase() : 'coleccionables' },
+                subcategory: intlData.subcategory_rel || null,
+                collectibles_category_id: intlData.collectibles_category_id,
+                collectibles_subcategory_id: intlData.collectibles_subcategory_id,
                 source_provider: 'zinc',
                 is_active: true,
                 status: intlData.status,
@@ -654,6 +674,58 @@ export function useBrandFacets(filters: BrandFacetFilters = {}) {
   ]);
 
   return { brandFacets, loading };
+}
+
+// ═══ useInternationalCategoryFacets ═══
+interface IntlCategoryFacetFilters {
+  brand?: string;
+  search?: string;
+  minPrice?: number;
+  maxPrice?: number;
+}
+
+export function useInternationalCategoryFacets(filters: IntlCategoryFacetFilters = {}) {
+  const [facets, setFacets] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    async function fetchFacets() {
+      setLoading(true);
+      try {
+        const { data, error } = await supabase.rpc('get_international_category_facets', {
+          p_brand_slug: filters.brand || null,
+          p_search_query: filters.search || null,
+          p_min_price: filters.minPrice != null ? filters.minPrice : null,
+          p_max_price: filters.maxPrice != null ? filters.maxPrice : null
+        });
+
+        if (active) {
+          if (!error && data) {
+            setFacets(data);
+          } else {
+            console.error('Error fetching international category facets:', error);
+            setFacets([]);
+          }
+          setLoading(false);
+        }
+      } catch (e) {
+        console.error('Exception fetching international category facets:', e);
+        if (active) {
+          setFacets([]);
+          setLoading(false);
+        }
+      }
+    }
+
+    fetchFacets();
+
+    return () => {
+      active = false;
+    };
+  }, [filters.brand, filters.search, filters.minPrice, filters.maxPrice]);
+
+  return { facets, loading };
 }
 
 // ═══ useBanners ═══

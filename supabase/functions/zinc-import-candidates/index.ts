@@ -91,6 +91,13 @@ serve(async (req) => {
 
       const categoryToUse = target_category_id || c.suggested_category_id || null;
       const subcategoryToUse = target_subcategory_id || c.suggested_subcategory_id || null;
+      const mappingSourceToUse = target_category_id ? 'manual' : (c.category_mapping_source || 'category_mapping');
+      const mappingConfidenceToUse = target_category_id ? 100 : (c.mapping_confidence || 0);
+
+      const rawCategories = c.raw_data?._enriched_details?.categories || c.raw_data?.categories;
+      const amazonCat = c.amazon_category || (Array.isArray(rawCategories) ? rawCategories[0] : null);
+      const amazonSubcat = c.amazon_subcategory || (Array.isArray(rawCategories) ? rawCategories[rawCategories.length - 1] : null);
+      const amazonPath = c.amazon_category_path || (Array.isArray(rawCategories) ? rawCategories.join(' > ') : null);
 
       const { error: insertError } = await supabase
         .from('international_products')
@@ -101,6 +108,11 @@ serve(async (req) => {
           title: c.title,
           brand: c.brand,
           category: c.category,
+          amazon_category: amazonCat,
+          amazon_subcategory: amazonSubcat,
+          amazon_category_path: amazonPath,
+          category_mapping_source: mappingSourceToUse,
+          category_mapping_confidence: mappingConfidenceToUse,
           image_url: c.image_url,
           product_url_external: c.product_url_external,
           base_price_usd: c.price_usd,
