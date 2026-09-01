@@ -23,6 +23,41 @@ export interface InternationalSettings {
 let _cachedSettings: InternationalSettings | null = null;
 let _pendingPromise: Promise<InternationalSettings | null> | null = null;
 const _listeners = new Set<(s: InternationalSettings | null) => void>();
+let _realtimeSubscribed = false;
+
+function setupRealtimeSubscription() {
+  if (_realtimeSubscribed) return;
+  _realtimeSubscribed = true;
+
+  try {
+    supabase
+      .channel('public:international_sync_settings_changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'international_sync_settings', filter: 'id=eq.1' },
+        (payload: any) => {
+          if (payload.new) {
+            const data = payload.new;
+            _cachedSettings = {
+              ...data,
+              international_public_enabled: !!data.international_public_enabled,
+              international_purchases_enabled: data.international_purchases_enabled ?? true,
+              international_capacity_enabled: data.international_capacity_enabled ?? true,
+              target_margin_percent: Number(data.target_margin_percent || 15),
+              min_absolute_profit_usd: Number(data.min_absolute_profit_usd || 2),
+              min_profit_usd: Number(data.min_profit_usd || 3.99),
+              zinc_fee_usd: Number(data.zinc_fee_usd || 1),
+              never_sell_at_loss: data.never_sell_at_loss ?? true
+            };
+            _listeners.forEach(fn => fn(_cachedSettings));
+          }
+        }
+      )
+      .subscribe();
+  } catch (err) {
+    console.warn('Realtime subscription not available for international settings:', err);
+  }
+}
 
 export async function fetchInternationalSettings(forceRefresh = false): Promise<InternationalSettings | null> {
   if (_cachedSettings && !forceRefresh) return _cachedSettings;
@@ -72,6 +107,8 @@ export function useInternationalSettings() {
   const [loaded, setLoaded] = useState(!!_cachedSettings);
 
   useEffect(() => {
+    setupRealtimeSubscription();
+
     const listener = (s: InternationalSettings | null) => {
       setSettings(s);
       setLoaded(true);

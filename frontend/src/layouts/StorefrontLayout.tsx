@@ -120,14 +120,22 @@ export default function StorefrontLayout() {
     ];
   }, [settings]);
 
-  // Dynamic nav links — re-computed when language changes or settings update
+  // Dynamic nav links — re-computed when language changes, settings update, or international_public_enabled changes
   const NAV_LINKS = useMemo(() => {
+    let links: Array<{
+      name: string;
+      href: string;
+      hasMega?: boolean;
+      megaType?: 'categories' | 'brands';
+      subItems?: any[];
+    }> = [];
+
     const customMenuStr = settings['appearance_menu_json'];
     if (customMenuStr) {
       try {
         const parsed = JSON.parse(customMenuStr);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((item: any) => {
+          links = parsed.map((item: any) => {
             const hasMega = item.url === '/shop' || item.url.includes('/shop');
             let megaType: 'categories' | 'brands' | undefined = undefined;
             if (hasMega) {
@@ -151,20 +159,32 @@ export default function StorefrontLayout() {
       }
     }
 
-    const links = [
-      { name: settings['header_menu_home'] || t('nav.home'), href: '/' },
-      { name: settings['header_menu_categories'] || t('nav.categories'), href: '/shop', hasMega: true, megaType: 'categories' as const },
-      { name: settings['header_menu_brands'] || t('nav.brands'), href: '/shop', hasMega: true, megaType: 'brands' as const },
-    ];
-
-    if (intlPublicEnabled) {
-      links.push({ name: 'Internacional', href: '/intl' });
+    if (links.length === 0) {
+      links = [
+        { name: settings['header_menu_home'] || t('nav.home'), href: '/' },
+        { name: settings['header_menu_categories'] || t('nav.categories'), href: '/shop', hasMega: true, megaType: 'categories' as const },
+        { name: settings['header_menu_brands'] || t('nav.brands'), href: '/shop', hasMega: true, megaType: 'brands' as const },
+        { name: settings['header_menu_about'] || t('nav.about'), href: '/page/nosotros' },
+        { name: settings['header_menu_contact'] || t('nav.contact'), href: '/contact' }
+      ];
     }
 
-    links.push(
-      { name: settings['header_menu_about'] || t('nav.about'), href: '/page/nosotros' },
-      { name: settings['header_menu_contact'] || t('nav.contact'), href: '/contact' }
-    );
+    // Dynamic International Menu Item Injection / Removal based on international_public_enabled
+    if (intlPublicEnabled) {
+      const hasIntl = links.some(l => l.href === '/intl' || l.name?.toUpperCase() === 'INTERNACIONAL');
+      if (!hasIntl) {
+        // Insert right after the catalog / brands link or at position 3
+        const brandsIdx = links.findIndex(l => l.megaType === 'brands' || l.name?.toUpperCase()?.includes('MARCA') || l.href?.includes('brand'));
+        const insertIdx = brandsIdx !== -1 ? brandsIdx + 1 : Math.min(3, links.length);
+        links.splice(insertIdx, 0, {
+          name: 'INTERNACIONAL',
+          href: '/intl'
+        });
+      }
+    } else {
+      // Strictly remove if disabled
+      links = links.filter(l => l.href !== '/intl' && l.href !== '/internacional' && l.name?.toUpperCase() !== 'INTERNACIONAL');
+    }
 
     return links;
   }, [t, settings, intlPublicEnabled]);

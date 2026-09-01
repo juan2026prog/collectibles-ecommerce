@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Save, RefreshCw, DollarSign, ShieldAlert, Sparkles, Activity, Globe, Check, AlertTriangle } from 'lucide-react';
+import { fetchInternationalSettings } from '../../hooks/useInternationalSettings';
 
 export default function AdminInternationalSync() {
   const [settings, setSettings] = useState<any>(null);
@@ -120,6 +121,7 @@ export default function AdminInternationalSync() {
       if (error) throw error;
       setSuccess('Configuración actualizada correctamente. Los cambios aplican de forma inmediata.');
       await fetchSettings();
+      await fetchInternationalSettings(true);
     } catch (err: any) {
       setError(err.message);
     } finally {

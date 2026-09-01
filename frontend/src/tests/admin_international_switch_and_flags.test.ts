@@ -31,13 +31,11 @@ describe('ADMIN INTERNATIONAL SETTINGS — PUBLIC SWITCH AND FLAGS', () => {
   });
 
   it('2. Three separate flags are independent and not intertwined', () => {
-    // Toggling public does not alter purchases or capacity
     const toggledPublic = { ...defaultSettings, international_public_enabled: true };
     expect(toggledPublic.international_public_enabled).toBe(true);
     expect(toggledPublic.international_purchases_enabled).toBe(true);
     expect(toggledPublic.international_capacity_enabled).toBe(true);
 
-    // Toggling purchases does not alter public or capacity
     const toggledPurchases = { ...defaultSettings, international_purchases_enabled: false };
     expect(toggledPurchases.international_public_enabled).toBe(false);
     expect(toggledPurchases.international_purchases_enabled).toBe(false);
@@ -54,28 +52,60 @@ describe('ADMIN INTERNATIONAL SETTINGS — PUBLIC SWITCH AND FLAGS', () => {
     expect(shouldShowWarning({ ...defaultSettings, international_purchases_enabled: false, international_capacity_enabled: false })).toBe(false);
   });
 
-  it('4. Nav menu links react dynamically to international_public_enabled', () => {
-    const getNavLinks = (publicEnabled: boolean) => {
-      const links = [
-        { name: 'Inicio', href: '/' },
-        { name: 'Categorías', href: '/shop' },
-        { name: 'Marcas', href: '/shop' }
-      ];
-      if (publicEnabled) {
-        links.push({ name: 'Internacional', href: '/intl' });
+  it('4. Nav menu links react dynamically with custom appearance_menu_json', () => {
+    const computeNavLinks = (customMenuStr: string | null, intlPublicEnabled: boolean) => {
+      let links: Array<{ name: string; href: string }> = [];
+      if (customMenuStr) {
+        try {
+          const parsed = JSON.parse(customMenuStr);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            links = parsed.map((item: any) => ({
+              name: item.label,
+              href: item.url
+            }));
+          }
+        } catch {}
       }
-      links.push({ name: 'Nosotros', href: '/page/nosotros' });
+
+      if (links.length === 0) {
+        links = [
+          { name: 'INICIO', href: '/' },
+          { name: 'CATEGORÍAS', href: '/shop' },
+          { name: 'MARCAS', href: '/shop' },
+          { name: 'NOSOTROS', href: '/page/nosotros' },
+          { name: 'CONTACTO', href: '/contact' }
+        ];
+      }
+
+      if (intlPublicEnabled) {
+        const hasIntl = links.some(l => l.href === '/intl' || l.name?.toUpperCase() === 'INTERNACIONAL');
+        if (!hasIntl) {
+          const insertIdx = 3;
+          links.splice(insertIdx, 0, { name: 'INTERNACIONAL', href: '/intl' });
+        }
+      } else {
+        links = links.filter(l => l.href !== '/intl' && l.href !== '/internacional' && l.name?.toUpperCase() !== 'INTERNACIONAL');
+      }
+
       return links;
     };
 
-    // When OFF
-    const offLinks = getNavLinks(false);
-    expect(offLinks.some(l => l.name === 'Internacional')).toBe(false);
+    const customMenu = JSON.stringify([
+      { label: 'INICIO', url: '/' },
+      { label: 'CATEGORÍAS', url: '/shop' },
+      { label: 'MARCAS', url: '/shop' },
+      { label: 'NOSOTROS', url: '/about' },
+      { label: 'CONTACTO', url: '/contact' }
+    ]);
 
-    // When ON
-    const onLinks = getNavLinks(true);
-    expect(onLinks.some(l => l.name === 'Internacional')).toBe(true);
-    expect(onLinks.find(l => l.name === 'Internacional')?.href).toBe('/intl');
+    // Test with custom appearance_menu_json: OFF
+    const offLinks = computeNavLinks(customMenu, false);
+    expect(offLinks.some(l => l.name === 'INTERNACIONAL' || l.href === '/intl')).toBe(false);
+
+    // Test with custom appearance_menu_json: ON
+    const onLinks = computeNavLinks(customMenu, true);
+    expect(onLinks.some(l => l.name === 'INTERNACIONAL' && l.href === '/intl')).toBe(true);
+    expect(onLinks.find(l => l.href === '/intl')?.name).toBe('INTERNACIONAL');
   });
 
   it('5. Route access separation between public /intl and Admin laboratory /internacional', () => {
@@ -89,16 +119,36 @@ describe('ADMIN INTERNATIONAL SETTINGS — PUBLIC SWITCH AND FLAGS', () => {
       return 'UNKNOWN_ROUTE';
     };
 
-    // Public user when public flag is OFF
     expect(evaluateRoute('/intl', false, false)).toBe('REDIRECT_TO_HOME');
     expect(evaluateRoute('/internacional', false, false)).toBe('DENY_REQUIRE_ADMIN');
 
-    // Public user when public flag is ON
     expect(evaluateRoute('/intl', false, true)).toBe('RENDER_PUBLIC_CATALOG');
     expect(evaluateRoute('/internacional', false, true)).toBe('DENY_REQUIRE_ADMIN');
 
-    // Admin user in laboratory
     expect(evaluateRoute('/internacional', true, false)).toBe('ALLOW_ADMIN_LABORATORY');
+  });
+
+  it('6. International products mapping: published status products are eligible for /intl (> 0)', () => {
+    const dbRows = [
+      { id: '1', title: 'NECA Ghost Face', status: 'published', final_price_usd: '41.99', image_url: 'http://img.jpg', brand: 'NECA' },
+      { id: '2', title: 'NECA Halloween', status: 'published', final_price_usd: '41.78', image_url: 'http://img2.jpg', brand: 'NECA' },
+      { id: '3', title: 'NECA Draft Only', status: 'draft', final_price_usd: '38.12', image_url: 'http://img3.jpg', brand: 'NECA' }
+    ];
+
+    const publicProducts = dbRows
+      .filter(p => p.status === 'published' && Number(p.final_price_usd) > 0)
+      .map(item => ({
+        id: item.id,
+        slug: item.id,
+        title: item.title,
+        base_price: Number(item.final_price_usd),
+        is_international: true
+      }));
+
+    expect(publicProducts.length).toBe(2);
+    expect(publicProducts.length).toBeGreaterThan(0);
+    expect(publicProducts[0].base_price).toBe(41.99);
+    expect(publicProducts[0].is_international).toBe(true);
   });
 
 });

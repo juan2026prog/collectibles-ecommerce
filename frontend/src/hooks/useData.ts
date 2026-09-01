@@ -180,7 +180,23 @@ export function useProducts(filters: ProductFilters = {}) {
       }
 
       if (filters.search) {
-        query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
+        query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%,brand.ilike.%${filters.search}%`);
+      }
+
+      if (filters.brand) {
+        query = query.ilike('brand', `%${filters.brand}%`);
+      }
+
+      if (filters.category) {
+        query = query.ilike('category', `%${filters.category}%`);
+      }
+
+      if (filters.minPrice) {
+        query = query.gte('final_price_usd', filters.minPrice);
+      }
+
+      if (filters.maxPrice) {
+        query = query.lte('final_price_usd', filters.maxPrice);
       }
 
       switch (filters.sortBy) {
@@ -202,15 +218,18 @@ export function useProducts(filters: ProductFilters = {}) {
           slug: item.id, // we use ID as slug for international products
           title: item.title,
           description: item.description,
-          base_price: item.final_price_usd,
-          compare_at_price: item.amazon_list_price_usd || item.final_price_usd,
-          images: [{ url: item.image_url, is_primary: true }],
-          brand: { name: item.brand, slug: item.brand },
-          category: { name: item.category, slug: item.category },
+          base_price: Number(item.final_price_usd),
+          compare_at_price: Number(item.amazon_list_price_usd || item.final_price_usd),
+          images: [{ id: item.id, url: item.image_url, is_primary: true }],
+          image_url: item.image_url,
+          brand: { name: item.brand || 'Importado', slug: item.brand ? item.brand.toLowerCase() : 'importado' },
+          category: { name: item.category || 'Coleccionables', slug: item.category ? item.category.toLowerCase() : 'coleccionables' },
           source_provider: 'zinc',
+          is_international: true,
           is_active: true,
           status: item.status,
-          raw_international_data: item
+          raw_international_data: item,
+          international_products: [item]
         }));
         setProducts(mappedProducts);
         setCount(totalCount || 0);
