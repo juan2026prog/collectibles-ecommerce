@@ -3,10 +3,11 @@ import { supabase } from '../../lib/supabase';
 import { 
   Search, Loader2, Import, XCircle, Eye, AlertCircle, RefreshCw, Wand2, ArrowRight, 
   ExternalLink, Code, Sparkles, Filter, SlidersHorizontal, Trash2, Plus, CheckCircle2,
-  HelpCircle, BookmarkPlus, Tag, ShieldAlert, Check, ChevronRight, Edit
+  HelpCircle, BookmarkPlus, Tag, ShieldAlert, Check, ChevronRight, Pencil
 } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 import { resolveInternationalCategory } from '../../../../supabase/functions/_shared/categoryResolver';
+import { FALLBACK_IMAGE } from '../../lib/imageUtils';
 
 const QUICK_COLLECTIONS = [
   { name: '🔥 Top Marvel', query: 'marvel', category: 'Action Figures' },
@@ -981,7 +982,11 @@ export default function AdminInternationalAmazon() {
                            className="max-w-full max-h-full object-contain" 
                            loading="lazy" 
                            referrerPolicy="no-referrer" 
-                           onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400?text=Error+Image'; }}
+                           onError={(e) => { 
+                             const target = e.target as HTMLImageElement;
+                             target.onerror = null;
+                             target.src = FALLBACK_IMAGE;
+                           }}
                          />
                       ) : (
                          <span className="text-[10px] text-gray-400 text-center leading-tight">Sin<br/>imagen</span>
@@ -1545,7 +1550,7 @@ export default function AdminInternationalAmazon() {
                                     className="p-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded"
                                     title="Editar regla"
                                   >
-                                    <Edit className="w-3.5 h-3.5" />
+                                    <Pencil className="w-3.5 h-3.5" />
                                   </button>
                                   <button
                                     onClick={() => handleDeleteCatRule(r.id)}
@@ -1733,7 +1738,7 @@ export default function AdminInternationalAmazon() {
                                     className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded"
                                     title="Editar regla"
                                   >
-                                    <Edit className="w-3.5 h-3.5" />
+                                    <Pencil className="w-3.5 h-3.5" />
                                   </button>
                                   <button
                                     onClick={() => handleDeleteBrandRule(r.id)}
@@ -1959,7 +1964,7 @@ export default function AdminInternationalAmazon() {
                                     className="p-1 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded"
                                     title="Editar regla"
                                   >
-                                    <Edit className="w-3.5 h-3.5" />
+                                    <Pencil className="w-3.5 h-3.5" />
                                   </button>
                                   <button
                                     onClick={() => handleDeleteKeywordRule(r.id)}
@@ -2007,7 +2012,7 @@ export default function AdminInternationalAmazon() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
             <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
               <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
-                <Edit className="w-4 h-4 text-indigo-600" />
+                <Pencil className="w-4 h-4 text-indigo-600" />
                 Editar Regla de {editingRule.type === 'category' ? 'Categoría' : editingRule.type === 'brand' ? 'Marca' : 'Palabra Clave'}
               </h3>
               <button onClick={() => setEditingRule(null)} className="text-gray-400 hover:text-gray-700">
