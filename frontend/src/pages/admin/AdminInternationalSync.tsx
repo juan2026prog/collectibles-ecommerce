@@ -433,13 +433,13 @@ export default function AdminInternationalSync() {
               <input
                 type="number"
                 step="0.5"
-                min="0.1"
+                min="0"
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                 value={settings?.target_margin_percent ?? 15.0}
                 onChange={e => setSettings({...settings, target_margin_percent: Number(e.target.value)})}
               />
               <p className="text-[10px] text-gray-500 mt-1">
-                Margen % calculado sobre el costo real.
+                Porcentaje mínimo de ganancia sobre el precio final de venta.
               </p>
             </div>
 
@@ -454,9 +454,19 @@ export default function AdminInternationalSync() {
                 onChange={e => setSettings({...settings, zinc_fee_usd: Number(e.target.value)})}
               />
               <p className="text-[10px] text-gray-500 mt-1">
-                Costo fijo de ejecución por orden del proveedor.
+                Costo fijo por orden de compra automatizada.
               </p>
             </div>
+          </div>
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-900">
+            <p className="font-semibold flex items-center gap-1.5">
+              <ShieldAlert className="w-4 h-4 text-blue-700 flex-shrink-0" />
+              Regla Canónica de Rentabilidad:
+            </p>
+            <p className="text-[11px] text-blue-800 mt-0.5">
+              Profit Protection utiliza siempre la condición más exigente entre el fee comercial base, la ganancia mínima absoluta y el margen mínimo configurado.
+            </p>
           </div>
 
           {/* ── PARÁMETROS FINANCIEROS (PREX / PROCESAMIENTO) ── */}
@@ -520,28 +530,30 @@ export default function AdminInternationalSync() {
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
                   <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-1">
-                    <div className="font-bold text-slate-900 border-b pb-1">Ejemplo 1: Amazon $34.99 (Zinc = ${settings?.zinc_fee_usd || 1})</div>
+                    <div className="font-bold text-slate-900 border-b pb-1">Caso 1: Amazon $34.99 (Zinc = ${settings?.zinc_fee_usd || 1})</div>
                     <div className="text-slate-600">Costo real: <span className="font-bold text-slate-900">${sim1.realCost.toFixed(2)} USD</span></div>
-                    <div className="text-slate-600">Precio comercial base ($34.99 + ${sim1.minimumCommercialFee}): ${sim1.commercialPrice.toFixed(2)} USD</div>
-                    <div className="text-slate-600">Precio protegido ($37.67 + ${sim1.targetProfit}): <span className="font-bold text-indigo-700">${sim1.profitProtectedPrice.toFixed(2)} USD</span></div>
+                    <div className="text-slate-600">1. Comercial Base: ${sim1.commercialPrice.toFixed(2)} USD</div>
+                    <div className="text-slate-600">2. Ganancia Mínima ($3.99): ${sim1.absoluteProtectedPrice.toFixed(2)} USD</div>
+                    <div className="text-slate-600">3. Margen {sim1.targetMarginPercent}%: <span className="font-bold text-indigo-700">${sim1.marginProtectedPrice.toFixed(2)} USD</span></div>
                     <div className="text-slate-900 font-bold pt-1 border-t flex justify-between">
                       <span>Precio Final: ${sim1.finalPrice.toFixed(2)} USD</span>
                       <span className={sim1.profitProtectionTriggered ? 'text-indigo-600 font-black' : 'text-emerald-600'}>
-                        {sim1.profitProtectionTriggered ? '🛡 Protegido' : '✓ Base OK'}
+                        {sim1.pricingProtectionReason === 'target_margin' ? '🛡 Margen 15%' : sim1.pricingProtectionReason === 'absolute_profit' ? '🛡 Mínimo $3.99' : '✓ Base OK'}
                       </span>
                     </div>
                     <div className="text-emerald-700 text-[11px]">Ganancia real: ${sim1.estimatedProfit.toFixed(2)} USD ({sim1.netMarginPercentage.toFixed(1)}%)</div>
                   </div>
 
                   <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-1">
-                    <div className="font-bold text-slate-900 border-b pb-1">Ejemplo 2: Amazon $34.99 (Zinc Sube a $4.00)</div>
+                    <div className="font-bold text-slate-900 border-b pb-1">Caso 2: Amazon $34.99 (Zinc Sube a $4.00)</div>
                     <div className="text-slate-600">Costo real: <span className="font-bold text-slate-900">${sim2.realCost.toFixed(2)} USD</span></div>
-                    <div className="text-slate-600">Precio comercial base: ${sim2.commercialPrice.toFixed(2)} USD</div>
-                    <div className="text-slate-600">Precio protegido: <span className="font-bold text-indigo-700">${sim2.profitProtectedPrice.toFixed(2)} USD</span></div>
+                    <div className="text-slate-600">1. Comercial Base: ${sim2.commercialPrice.toFixed(2)} USD</div>
+                    <div className="text-slate-600">2. Ganancia Mínima ($3.99): ${sim2.absoluteProtectedPrice.toFixed(2)} USD</div>
+                    <div className="text-slate-600">3. Margen {sim2.targetMarginPercent}%: <span className="font-bold text-indigo-700">${sim2.marginProtectedPrice.toFixed(2)} USD</span></div>
                     <div className="text-slate-900 font-bold pt-1 border-t flex justify-between">
                       <span>Precio Final: ${sim2.finalPrice.toFixed(2)} USD</span>
                       <span className="text-indigo-600 font-black">
-                        🛡 Protegido (+${(sim2.appliedFee - sim2.minimumCommercialFee).toFixed(2)})
+                        🛡 Margen 15% (+${(sim2.appliedFee - sim2.minimumCommercialFee).toFixed(2)})
                       </span>
                     </div>
                     <div className="text-emerald-700 text-[11px]">Ganancia real: ${sim2.estimatedProfit.toFixed(2)} USD ({sim2.netMarginPercentage.toFixed(1)}%)</div>

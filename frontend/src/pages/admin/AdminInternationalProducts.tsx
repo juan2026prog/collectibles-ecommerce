@@ -453,12 +453,16 @@ export default function AdminInternationalProducts() {
                         <span className="font-semibold text-gray-700">{formatPercent(netMarginPct)} del Final</span>
                       </div>
                       <div className="pt-1">
-                        {isProtectionActive ? (
-                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-indigo-100 text-indigo-800 border border-indigo-200 inline-flex items-center gap-1 shadow-sm" title="El sistema aumentó automáticamente el fee porque el fee base no alcanzaba para cubrir todos los costos y conservar la ganancia objetivo.">
-                            <ShieldAlert className="w-3 h-3 text-indigo-600" /> 🛡 Profit Protection aplicado
+                        {calc.pricingProtectionReason === 'target_margin' ? (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-indigo-100 text-indigo-800 border border-indigo-200 inline-flex items-center gap-1 shadow-sm" title={`Protegido por Margen Mínimo (${calc.targetMarginPercent}% sobre precio final = ${formatUSD(calc.marginProtectedPrice)}).`}>
+                            <ShieldAlert className="w-3 h-3 text-indigo-600" /> 🛡 Margen mínimo ({calc.targetMarginPercent}%)
+                          </span>
+                        ) : calc.pricingProtectionReason === 'absolute_profit' ? (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-purple-100 text-purple-800 border border-purple-200 inline-flex items-center gap-1 shadow-sm" title={`Protegido por Ganancia Absoluta Mínima (${formatUSD(calc.minAbsoluteProfit)} = ${formatUSD(calc.absoluteProtectedPrice)}).`}>
+                            <ShieldAlert className="w-3 h-3 text-purple-600" /> 🛡 Ganancia mínima ({formatUSD(calc.minAbsoluteProfit)})
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1 shadow-sm" title="El fee base comercial es suficiente para cubrir todos los costos y la ganancia objetivo.">
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1 shadow-sm" title={`El fee base comercial (${formatUSD(minFee)}) es suficiente para cubrir los costos y la rentabilidad exigida.`}>
                             <CheckCircle2 className="w-3 h-3 text-emerald-600" /> ✓ Fee base suficiente
                           </span>
                         )}

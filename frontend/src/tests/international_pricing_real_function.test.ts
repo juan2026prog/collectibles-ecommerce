@@ -32,9 +32,9 @@ describe('REAL PRODUCTION PRICING ENGINE VERIFICATION', () => {
     console.log('RAW RESULT [ProductCost = 20, usaShipping = 0, commercialFee = 0]:\n', JSON.stringify(rawResult, null, 2));
 
     expect(rawResult.acquisition_cost_usd).toBe(22.22);
-    expect(rawResult.expected_profit_usd).toBe(2.00);
-    expect(rawResult.minimum_safe_price_usd).toBe(24.22);
-    expect(rawResult.final_price_usd).toBe(24.22);
+    expect(rawResult.expected_profit_usd).toBe(3.92);
+    expect(rawResult.minimum_safe_price_usd).toBe(26.14);
+    expect(rawResult.final_price_usd).toBe(26.14);
   });
 
   it('3. Execute calculateCanonicalPricing on ProductCost = USD 100', () => {
@@ -42,9 +42,9 @@ describe('REAL PRODUCTION PRICING ENGINE VERIFICATION', () => {
     console.log('RAW RESULT [ProductCost = 100, usaShipping = 0, commercialFee = 0]:\n', JSON.stringify(rawResult, null, 2));
 
     expect(rawResult.acquisition_cost_usd).toBe(104.66);
-    expect(rawResult.expected_profit_usd).toBe(2.00);
-    expect(rawResult.minimum_safe_price_usd).toBe(106.66);
-    expect(rawResult.final_price_usd).toBe(106.66);
+    expect(rawResult.expected_profit_usd).toBe(18.47);
+    expect(rawResult.minimum_safe_price_usd).toBe(123.13);
+    expect(rawResult.final_price_usd).toBe(123.13);
   });
 
   it('4. Execute calculateCanonicalPricing on ProductCost = USD 250', () => {
@@ -52,9 +52,9 @@ describe('REAL PRODUCTION PRICING ENGINE VERIFICATION', () => {
     console.log('RAW RESULT [ProductCost = 250, usaShipping = 0, commercialFee = 0]:\n', JSON.stringify(rawResult, null, 2));
 
     expect(rawResult.acquisition_cost_usd).toBe(259.24);
-    expect(rawResult.expected_profit_usd).toBe(2.00);
-    expect(rawResult.minimum_safe_price_usd).toBe(261.24);
-    expect(rawResult.final_price_usd).toBe(261.24);
+    expect(rawResult.expected_profit_usd).toBe(45.75);
+    expect(rawResult.minimum_safe_price_usd).toBe(304.99);
+    expect(rawResult.final_price_usd).toBe(304.99);
   });
 
   it('5. Execute calculateCanonicalPricing on ProductCost = USD 20 + UsaShipping = USD 5', () => {
@@ -62,9 +62,9 @@ describe('REAL PRODUCTION PRICING ENGINE VERIFICATION', () => {
     console.log('RAW RESULT [ProductCost = 20, usaShipping = 5, commercialFee = 0]:\n', JSON.stringify(rawResult, null, 2));
 
     expect(rawResult.acquisition_cost_usd).toBe(27.22);
-    expect(rawResult.expected_profit_usd).toBe(2.00);
-    expect(rawResult.minimum_safe_price_usd).toBe(29.22);
-    expect(rawResult.final_price_usd).toBe(29.22);
+    expect(rawResult.expected_profit_usd).toBe(4.80);
+    expect(rawResult.minimum_safe_price_usd).toBe(32.02);
+    expect(rawResult.final_price_usd).toBe(32.02);
   });
 
 });

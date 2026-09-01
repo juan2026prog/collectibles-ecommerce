@@ -54,6 +54,7 @@ export interface ProfitSettings {
 export interface InternationalPricingInput {
   amazonPrice: number;
   usaShipping?: number;
+  salesTax?: number;
   otherCosts?: number;
 }
 
@@ -88,6 +89,7 @@ export interface InternationalPricingConfig {
 export interface InternationalPricingOutput {
   amazonPrice: number;
   usaShipping: number;
+  salesTax: number;
   zincFee: number;
   financialFeeBeforeTax: number;
   financialTax: number;
@@ -95,15 +97,20 @@ export interface InternationalPricingOutput {
   otherCosts: number;
   realCost: number;
   targetProfit: number;
+  minAbsoluteProfit: number;
+  targetMarginPercent: number;
   minimumCommercialFee: number;
   requiredFee: number;
   appliedFee: number;
   commercialPrice: number;
+  absoluteProtectedPrice: number;
+  marginProtectedPrice: number;
   profitProtectedPrice: number;
   finalPrice: number;
   estimatedProfit: number;
   netMarginPercentage: number;
   profitProtectionTriggered: boolean;
+  pricingProtectionReason: 'commercial_fee' | 'absolute_profit' | 'target_margin';
   // Aliases for complete backward compatibility
   acquisition_cost_usd: number;
   expected_profit_usd: number;
@@ -162,8 +169,11 @@ export function calculateExpectedProfit(
   const minAbsoluteProfit = Number(
     settings?.targetProfit ?? settings?.min_absolute_profit_usd ?? settings?.min_profit_usd ?? 3.99
   );
-  const percentageProfit = acquisitionCostUsd * (marginPercent / 100);
-  return Number(Math.max(percentageProfit, minAbsoluteProfit).toFixed(2));
+  const marginDecimal = marginPercent > 0 ? marginPercent / 100 : 0;
+  const marginProfit = marginDecimal > 0 && marginDecimal < 1 
+    ? (acquisitionCostUsd / (1 - marginDecimal)) - acquisitionCostUsd
+    : 0;
+  return Number(Math.max(marginProfit, minAbsoluteProfit).toFixed(2));
 }
 
 // Backward-compatible alias
@@ -177,11 +187,11 @@ export type CanonicalPricingResult = InternationalPricingOutput;
  * CANONICAL DYNAMIC PRICING ENGINE
  * Single source of truth for international product pricing and profit protection.
  *
- * REAL_COST = amazon_price + usa_shipping + zinc_fee + financial_fee_total + other_costs
- * TARGET_PROFIT = max(real_cost * target_margin_percent / 100, target_profit_usd)
- * PROFIT_PROTECTED_PRICE = real_cost + target_profit
+ * REAL_COST = amazon_price + usa_shipping + sales_tax + zinc_fee + financial_fee_total + other_costs
+ * ABSOLUTE_PROTECTED_PRICE = REAL_COST + min_absolute_profit
+ * MARGIN_PROTECTED_PRICE = REAL_COST / (1 - target_margin_percent / 100)
  * COMMERCIAL_PRICE = amazon_price + usa_shipping + commercial_fee
- * FINAL_PRICE = max(commercial_price, profit_protected_price)
+ * FINAL_PRICE = max(COMMERCIAL_PRICE, ABSOLUTE_PROTECTED_PRICE, MARGIN_PROTECTED_PRICE)
  * APPLIED_FEE = final_price - amazon_price - usa_shipping
  */
 export function calculateInternationalPricing(
@@ -198,8 +208,14 @@ export function calculateInternationalPricing(
   const prexTax = Number(config?.financialFeeTaxRate ?? config?.financial_fee_tax_rate ?? 0.22);
   const flSalesTaxPct = Number(config?.floridaSalesTaxPercent ?? config?.florida_sales_tax_percent ?? 0.0) / 100;
   
-  const targetProfitCfg = Number(config?.targetProfit ?? config?.min_profit_usd ?? config?.min_absolute_profit_usd ?? 3.99);
-  const targetMarginPct = Number(config?.targetMarginPercent ?? config?.target_margin_percent ?? 15.0);
+  // Real sales tax passed in input takes priority over estimated config percentage
+  const salesTax = input.salesTax != null
+    ? Number(input.salesTax)
+    : Number(((amazonPrice + usaShipping) * flSalesTaxPct).toFixed(6));
+
+  const minAbsoluteProfit = Number(config?.targetProfit ?? config?.min_profit_usd ?? config?.min_absolute_profit_usd ?? 3.99);
+  const targetMarginPercent = Number(config?.targetMarginPercent ?? config?.target_margin_percent ?? 15.0);
+  const targetMarginDecimal = targetMarginPercent > 0 ? (targetMarginPercent / 100) : 0;
   const minCommercialFee = Number(config?.minimumCommercialFee ?? config?.fixed_markup_usd ?? 6.00);
   const pricingMode = config?.pricingMode || config?.pricing_mode || 'amazon_price_plus_fee';
 
@@ -207,28 +223,12 @@ export function calculateInternationalPricing(
   const financialFeeBeforeTax = Number(((amazonPrice * prexPct) + prexFixed).toFixed(6));
   const financialTax = Number((financialFeeBeforeTax * prexTax).toFixed(6));
   const financialFeeTotal = Number((financialFeeBeforeTax * (1 + prexTax)).toFixed(6));
-  const flTax = Number(((amazonPrice + usaShipping) * flSalesTaxPct).toFixed(6));
 
   // 2. Real Cost (Acquisition Cost)
-  const realCostRaw = amazonPrice + usaShipping + zincFee + financialFeeTotal + flTax + otherCosts;
+  const realCostRaw = amazonPrice + usaShipping + salesTax + zincFee + financialFeeTotal + otherCosts;
   const realCost = Number(realCostRaw.toFixed(2));
 
-  // 3. Target Profit
-  let targetProfit = 3.99;
-  if (config?.targetProfit != null) {
-    targetProfit = Number(config.targetProfit);
-  } else {
-    const floor = Number(config?.min_profit_usd ?? config?.min_absolute_profit_usd ?? 3.99);
-    const marginPct = Number(config?.targetMarginPercent ?? config?.target_margin_percent ?? 0);
-    if (marginPct > 0 && (pricingMode === 'fixed_markup' || pricingMode === 'tiered_markup')) {
-      targetProfit = Number(Math.max(realCost * (marginPct / 100), floor).toFixed(2));
-    } else {
-      targetProfit = floor;
-    }
-  }
-  targetProfit = Number(targetProfit.toFixed(2));
-
-  // 4. Commercial Price
+  // 3. Commercial Base Price
   const commercialFee = calculateFee(
     amazonPrice,
     pricingMode,
@@ -238,47 +238,77 @@ export function calculateInternationalPricing(
   );
   const commercialPrice = Number((amazonPrice + usaShipping + commercialFee).toFixed(2));
 
-  // 5. Profit Protected Price
-  const profitProtectedPrice = Number((realCost + targetProfit).toFixed(2));
+  // 4. Absolute Protected Price
+  const absoluteProtectedPrice = Number((realCost + minAbsoluteProfit).toFixed(2));
 
-  // 6. Final Price & Protection Trigger
-  const profitProtectionTriggered = commercialPrice < profitProtectedPrice;
-  let finalPrice = Math.max(commercialPrice, profitProtectedPrice);
+  // 5. Margin Protected Price (Margin on Final Price: realCost / (1 - marginDecimal))
+  const marginProtectedPrice = (targetMarginDecimal > 0 && targetMarginDecimal < 1)
+    ? Number((realCost / (1 - targetMarginDecimal)).toFixed(2))
+    : realCost;
 
-  // Rounding safety check: guarantee finalPrice - realCost >= targetProfit
-  if (Number((finalPrice - realCost).toFixed(2)) < targetProfit) {
-    finalPrice = Number((realCost + targetProfit).toFixed(2));
+  // 6. Combined Protected Price & Winner Rule Selection
+  const profitProtectedPrice = Number(Math.max(absoluteProtectedPrice, marginProtectedPrice).toFixed(2));
+  const finalPriceRaw = Math.max(commercialPrice, absoluteProtectedPrice, marginProtectedPrice);
+
+  let pricingProtectionReason: 'commercial_fee' | 'absolute_profit' | 'target_margin' = 'commercial_fee';
+  let profitProtectionTriggered = false;
+
+  if (marginProtectedPrice > commercialPrice && marginProtectedPrice >= absoluteProtectedPrice) {
+    pricingProtectionReason = 'target_margin';
+    profitProtectionTriggered = true;
+  } else if (absoluteProtectedPrice > commercialPrice) {
+    pricingProtectionReason = 'absolute_profit';
+    profitProtectionTriggered = true;
+  } else {
+    pricingProtectionReason = 'commercial_fee';
+    profitProtectionTriggered = false;
+  }
+
+  // 7. Rounding safety check: guarantee profit >= minAbsoluteProfit AND margin >= targetMarginDecimal
+  let finalPrice = Number(finalPriceRaw.toFixed(2));
+  if (Number((finalPrice - realCost).toFixed(2)) < minAbsoluteProfit) {
+    finalPrice = Number((realCost + minAbsoluteProfit).toFixed(2));
+  }
+  if (targetMarginDecimal > 0 && finalPrice > 0 && ((finalPrice - realCost) / finalPrice) < (targetMarginDecimal - 0.0001)) {
+    finalPrice = Number((realCost / (1 - targetMarginDecimal)).toFixed(2));
   }
   finalPrice = Number(finalPrice.toFixed(2));
 
-  // 7. Results
+  // 8. Results Output
   const appliedFee = Number((finalPrice - amazonPrice - usaShipping).toFixed(2));
   const requiredFee = Number((profitProtectedPrice - amazonPrice - usaShipping).toFixed(2));
   const estimatedProfit = Number((finalPrice - realCost).toFixed(2));
   const netMarginPercentage = finalPrice > 0 ? Number(((estimatedProfit / finalPrice) * 100).toFixed(2)) : 0;
+  const effectiveTargetProfit = Number(Math.max(minAbsoluteProfit, finalPrice - marginProtectedPrice + (marginProtectedPrice - realCost)).toFixed(2));
 
   return {
     amazonPrice,
     usaShipping,
+    salesTax: Number(salesTax.toFixed(2)),
     zincFee,
     financialFeeBeforeTax: Number(financialFeeBeforeTax.toFixed(2)),
     financialTax: Number(financialTax.toFixed(2)),
     financialFeeTotal: Number(financialFeeTotal.toFixed(2)),
     otherCosts,
     realCost,
-    targetProfit,
+    targetProfit: effectiveTargetProfit > minAbsoluteProfit ? Number((marginProtectedPrice - realCost).toFixed(2)) : minAbsoluteProfit,
+    minAbsoluteProfit,
+    targetMarginPercent,
     minimumCommercialFee: minCommercialFee,
     requiredFee,
     appliedFee,
     commercialPrice,
+    absoluteProtectedPrice,
+    marginProtectedPrice,
     profitProtectedPrice,
     finalPrice,
     estimatedProfit,
     netMarginPercentage,
     profitProtectionTriggered,
+    pricingProtectionReason,
     // Aliases
     acquisition_cost_usd: realCost,
-    expected_profit_usd: targetProfit,
+    expected_profit_usd: effectiveTargetProfit > minAbsoluteProfit ? Number((marginProtectedPrice - realCost).toFixed(2)) : minAbsoluteProfit,
     minimum_safe_price_usd: profitProtectedPrice,
     commercial_price_usd: commercialPrice,
     final_price_usd: finalPrice,
