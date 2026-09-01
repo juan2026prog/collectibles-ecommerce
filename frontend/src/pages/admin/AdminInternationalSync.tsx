@@ -61,24 +61,72 @@ export default function AdminInternationalSync() {
     
     // Client-side strict financial validation
     const targetMargin = Number(settings.target_margin_percent);
-    const minProfit = Number(settings.min_absolute_profit_usd);
-    const operatingLimit = Number(settings.international_operating_limit_usd);
-    const safetyReserve = Number(settings.international_safety_reserve_usd);
+    const minProfit = Number(settings.min_absolute_profit_usd ?? settings.min_profit_usd ?? 3.99);
+    const zincFee = Number(settings.zinc_fee_usd ?? 1.00);
+    const prexFeePct = Number(settings.financial_fee_percent ?? 2.50);
+    const prexFeeFixed = Number(settings.financial_fee_fixed_usd ?? 0.50);
+    const prexFeeTax = Number(settings.financial_fee_tax_rate ?? 0.22);
+    const floridaTax = Number(settings.florida_sales_tax_percent ?? 0.0);
+    const fixedMarkup = Number(settings.fixed_markup_usd ?? 6.0);
+    const operatingLimit = Number(settings.international_operating_limit_usd ?? 500);
+    const safetyReserve = Number(settings.international_safety_reserve_usd ?? 50);
 
-    if (isNaN(targetMargin) || targetMargin <= 0) {
-      setError('El margen objetivo debe ser un porcentaje estrictamente positivo (mayor a 0%).');
+    if (isNaN(targetMargin) || targetMargin < 0 || targetMargin >= 100) {
+      setError('El margen objetivo debe estar entre 0% y 99,99%.');
       setSaving(false);
       return;
     }
 
-    if (isNaN(minProfit) || minProfit <= 0) {
-      setError('La ganancia mínima por producto debe ser un monto estrictamente positivo (mayor a USD 0.00).');
+    if (isNaN(minProfit) || minProfit < 0) {
+      setError('La ganancia mínima no puede ser negativa.');
+      setSaving(false);
+      return;
+    }
+
+    if (isNaN(zincFee) || zincFee < 0) {
+      setError('El costo de Zinc no puede ser negativo.');
+      setSaving(false);
+      return;
+    }
+
+    if (isNaN(prexFeePct) || prexFeePct < 0 || prexFeePct >= 100) {
+      setError('El porcentaje financiero debe estar entre 0% y 99,99%.');
+      setSaving(false);
+      return;
+    }
+
+    if (isNaN(prexFeeFixed) || prexFeeFixed < 0) {
+      setError('El fee fijo financiero no puede ser negativo.');
+      setSaving(false);
+      return;
+    }
+
+    if (isNaN(prexFeeTax) || prexFeeTax < 0 || prexFeeTax >= 1) {
+      setError('La tasa de IVA financiero debe ser un valor decimal entre 0 y 0.99 (ej. 0.22 para 22%).');
+      setSaving(false);
+      return;
+    }
+
+    if (isNaN(floridaTax) || floridaTax < 0 || floridaTax >= 100) {
+      setError('El porcentaje de sales tax estimado debe estar entre 0% y 99,99%.');
+      setSaving(false);
+      return;
+    }
+
+    if (isNaN(fixedMarkup) || fixedMarkup < 0) {
+      setError('El markup comercial base no puede ser negativo.');
       setSaving(false);
       return;
     }
 
     if (isNaN(operatingLimit) || operatingLimit <= 0) {
       setError('El límite de capital operativo debe ser un monto estrictamente positivo.');
+      setSaving(false);
+      return;
+    }
+
+    if (isNaN(safetyReserve) || safetyReserve < 0) {
+      setError('La reserva de seguridad no puede ser negativa.');
       setSaving(false);
       return;
     }

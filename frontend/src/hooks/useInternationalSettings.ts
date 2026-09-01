@@ -84,11 +84,6 @@ export async function fetchInternationalSettings(forceRefresh = false): Promise<
         ? (query as any).maybeSingle() 
         : (query as any).single());
 
-      if (error) {
-        console.warn('Could not fetch international settings:', error.message);
-        return _cachedSettings;
-      }
-
       if (data) {
         _cachedSettings = {
           ...data,
@@ -107,10 +102,32 @@ export async function fetchInternationalSettings(forceRefresh = false): Promise<
           never_sell_at_loss: data.never_sell_at_loss ?? true
         };
         _listeners.forEach(fn => fn(_cachedSettings));
+        return _cachedSettings;
       }
+
+      // Non-admin / public context: fetch safe public status RPC (no financial secrets)
+      try {
+        const { data: pubData } = await supabase.rpc('get_international_public_status');
+        if (pubData) {
+          _cachedSettings = {
+            id: 1,
+            international_public_enabled: !!pubData.international_public_enabled,
+            international_purchases_enabled: pubData.international_purchases_enabled ?? true,
+            international_capacity_enabled: true,
+            target_margin_percent: 15,
+            min_absolute_profit_usd: 3.99,
+            min_profit_usd: 3.99,
+            zinc_fee_usd: 1.00,
+            never_sell_at_loss: true
+          };
+          _listeners.forEach(fn => fn(_cachedSettings));
+        }
+      } catch (pubErr) {
+        // Safe fallback
+      }
+
       return _cachedSettings;
     } catch (e) {
-      console.warn('Error fetching international settings:', e);
       return _cachedSettings;
     } finally {
       _pendingPromise = null;

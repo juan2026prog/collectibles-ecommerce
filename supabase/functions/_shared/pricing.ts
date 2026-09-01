@@ -122,6 +122,94 @@ export interface InternationalPricingOutput {
   profit_usd: number;
 }
 
+export interface ConfigValidationResult {
+  valid: boolean;
+  errors: string[];
+}
+
+export function validateInternationalPricingConfig(config?: any): ConfigValidationResult {
+  const errors: string[] = [];
+  if (!config || typeof config !== 'object') {
+    return { valid: true, errors: [] }; // Defaults will be used safely
+  }
+
+  const targetMargin = config.targetMarginPercent ?? config.target_margin_percent;
+  if (targetMargin !== undefined && targetMargin !== null) {
+    const num = Number(targetMargin);
+    if (isNaN(num) || !isFinite(num) || num < 0 || num >= 100) {
+      errors.push(`El margen objetivo debe ser un número entre 0% y 99.99% (recibido: ${targetMargin})`);
+    }
+  }
+
+  const minProfit = config.minAbsoluteProfit ?? config.min_absolute_profit_usd ?? config.min_profit_usd ?? config.targetProfit;
+  if (minProfit !== undefined && minProfit !== null) {
+    const num = Number(minProfit);
+    if (isNaN(num) || !isFinite(num) || num < 0) {
+      errors.push(`La ganancia mínima no puede ser negativa (recibido: ${minProfit})`);
+    }
+  }
+
+  const zincFee = config.zincFee ?? config.zinc_fee_usd;
+  if (zincFee !== undefined && zincFee !== null) {
+    const num = Number(zincFee);
+    if (isNaN(num) || !isFinite(num) || num < 0) {
+      errors.push(`El costo de Zinc no puede ser negativo (recibido: ${zincFee})`);
+    }
+  }
+
+  const financialFeePct = config.financialFeePercent ?? config.financial_fee_percent;
+  if (financialFeePct !== undefined && financialFeePct !== null) {
+    const num = Number(financialFeePct);
+    if (isNaN(num) || !isFinite(num) || num < 0 || num >= 100) {
+      errors.push(`El porcentaje de comisión financiera debe estar entre 0% y 99.99% (recibido: ${financialFeePct})`);
+    }
+  }
+
+  const financialFeeFixed = config.financialFeeFixedUsd ?? config.financial_fee_fixed_usd;
+  if (financialFeeFixed !== undefined && financialFeeFixed !== null) {
+    const num = Number(financialFeeFixed);
+    if (isNaN(num) || !isFinite(num) || num < 0) {
+      errors.push(`El fee fijo financiero no puede ser negativo (recibido: ${financialFeeFixed})`);
+    }
+  }
+
+  const financialTaxRate = config.financialFeeTaxRate ?? config.financial_fee_tax_rate;
+  if (financialTaxRate !== undefined && financialTaxRate !== null) {
+    const num = Number(financialTaxRate);
+    if (isNaN(num) || !isFinite(num) || num < 0 || num >= 1) {
+      errors.push(`La tasa de impuesto financiero debe ser decimal entre 0 y 0.999 (recibido: ${financialTaxRate})`);
+    }
+  }
+
+  const floridaSalesTax = config.floridaSalesTaxPercent ?? config.florida_sales_tax_percent;
+  if (floridaSalesTax !== undefined && floridaSalesTax !== null) {
+    const num = Number(floridaSalesTax);
+    if (isNaN(num) || !isFinite(num) || num < 0 || num >= 100) {
+      errors.push(`El sales tax estimado debe estar entre 0% y 99.99% (recibido: ${floridaSalesTax})`);
+    }
+  }
+
+  const fixedMarkup = config.fixedMarkupUsd ?? config.fixed_markup_usd ?? config.minimumCommercialFee;
+  if (fixedMarkup !== undefined && fixedMarkup !== null) {
+    const num = Number(fixedMarkup);
+    if (isNaN(num) || !isFinite(num) || num < 0) {
+      errors.push(`El markup comercial no puede ser negativo (recibido: ${fixedMarkup})`);
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors
+  };
+}
+
+export function assertValidInternationalPricingConfig(config?: any): void {
+  const result = validateInternationalPricingConfig(config);
+  if (!result.valid) {
+    throw new Error(`INTERNATIONAL_PRICING_CONFIG_INVALID: ${result.errors.join('; ')}`);
+  }
+}
+
 export function calculatePurchasePaymentFee(
   productCostUsd: number,
   config?: InternationalPricingConfig
