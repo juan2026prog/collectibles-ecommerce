@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { verifyAdmin } from "../_shared/auth.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
-import { calculateFee, calculateDiscount, calculateRealCost, calculateProfitEngine, applyProfitProtection, calculateUruboxEstimate } from "../_shared/pricing.ts";
+import { calculateFee, calculateDiscount, calculateCanonicalPricing, calculateUruboxEstimate } from "../_shared/pricing.ts";
 
 serve(async (req) => {
   const optionsResponse = handleOptions(req);
@@ -76,23 +76,18 @@ serve(async (req) => {
       const amazon_list_price_usd = rawListPrice && rawListPrice > amazon_current_price_usd ? rawListPrice : null;
       const amazon_discount_percent = calculateDiscount(amazon_current_price_usd, amazon_list_price_usd);
 
-      // Compute fee
+      // Compute fee & canonical pricing
       const calculated_fee = settings ? calculateFee(amazon_current_price_usd, settings.pricing_mode, settings.fixed_markup_usd, settings.percentage_markup, settings.tiered_markup_rules) : Number(collectibles_fee_usd);
       
       const usaShipping = Number(usa_domestic_shipping_usd);
-      const realCost = settings ? calculateRealCost(amazon_current_price_usd, usaShipping, settings as any) : (amazon_current_price_usd + usaShipping);
-      const expectedProfit = settings ? calculateProfitEngine(realCost, settings as any) : calculated_fee;
-      
-      const protection = settings ? applyProfitProtection(amazon_current_price_usd, calculated_fee, realCost, expectedProfit, settings as any) : { finalPrice: amazon_current_price_usd + usaShipping + calculated_fee, finalFee: calculated_fee, isLoss: false };
+      const canonical = calculateCanonicalPricing(amazon_current_price_usd, usaShipping, calculated_fee, (settings || {}) as any);
 
-      const final_price_usd = protection.finalPrice + usaShipping; // The finalPrice from applyProfitProtection might just be amazon + fee, we need to ensure shipping is handled, actually applyProfitProtection takes currentBasePrice=amazon, currentFee=fee. So the final item price should include shipping.
-      
-      const finalPriceWithShipping = protection.finalPrice + usaShipping;
-      const final_price_uyu = finalPriceWithShipping * Number(exchange_rate);
+      const final_price_usd = canonical.final_price_usd;
+      const final_price_uyu = final_price_usd * Number(exchange_rate);
 
       // Estimate Urubox
       const urubox_estimated_cost_usd = settings ? calculateUruboxEstimate(null, c.category, settings as any) : 0;
-      const total_estimated_cost_usd = finalPriceWithShipping + urubox_estimated_cost_usd;
+      const total_estimated_cost_usd = final_price_usd + urubox_estimated_cost_usd;
 
       const categoryToUse = target_category_id || c.suggested_category_id || null;
       const subcategoryToUse = target_subcategory_id || c.suggested_subcategory_id || null;
@@ -114,14 +109,14 @@ serve(async (req) => {
           amazon_discount_percent,
           pricing_mode: settings?.pricing_mode || 'amazon_price_plus_fee',
           usa_domestic_shipping_usd: usaShipping,
-          collectibles_fee_usd: protection.finalFee,
-          final_price_usd: finalPriceWithShipping,
+          collectibles_fee_usd: canonical.collectibles_fee_usd,
+          final_price_usd: canonical.final_price_usd,
           final_price_uyu,
           currency: c.currency,
-          expected_profit_usd: expectedProfit,
+          expected_profit_usd: canonical.expected_profit_usd,
           urubox_estimated_cost_usd,
           total_estimated_cost_usd,
-          real_cost_usd: realCost,
+          real_cost_usd: canonical.acquisition_cost_usd,
           availability: c.availability,
           rating: c.rating,
           review_count: c.review_count,

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Save, ToggleLeft, ToggleRight, Settings, Store, Truck, Palette, LayoutTemplate, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, FileText, Share2, Link as LinkIcon, ImageIcon, CreditCard, ShieldCheck, Sparkles, Brain, Zap, Search as SearchIcon, Tag, Menu, Bell, RefreshCw, Info, Smartphone, Mail, MessageSquare, BellRing, CheckCircle2, AlertCircle as AlertCircleIcon } from 'lucide-react';
+import { Save, ToggleLeft, ToggleRight, Settings, Store, Truck, Palette, LayoutTemplate, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, FileText, Share2, Link as LinkIcon, ImageIcon, CreditCard, ShieldCheck, Sparkles, Brain, Zap, Search as SearchIcon, Tag, Menu, Bell, RefreshCw, Info, Smartphone, Mail, MessageSquare, BellRing, CheckCircle2, AlertCircle as AlertCircleIcon, Globe } from 'lucide-react';
+import AdminInternationalSync from './AdminInternationalSync';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
 import { useToast } from '../../components/admin/Toast';
 import { useAuth } from '../../contexts/AuthContext';
@@ -869,6 +870,7 @@ export default function AdminSettings() {
             className="w-full bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-900 dark:text-white shadow-2xs focus:ring-2 focus:ring-[#f00856] outline-none min-h-[44px] cursor-pointer"
           >
             <option value="general">Store Details / General</option>
+            <option value="internacional">🌎 Compras Internacionales (Publicación y Cupos)</option>
             <option value="appearance">Theme Builder & Identidad</option>
             <option value="payments">Pasarelas de Pago</option>
             <option value="legal">Términos & Políticas</option>
@@ -883,6 +885,7 @@ export default function AdminSettings() {
           <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none no-scrollbar py-1 text-xs">
             {[
               { key: 'general', label: 'General', icon: Store },
+              { key: 'internacional', label: '🌎 Internacional', icon: Globe },
               { key: 'appearance', label: 'Theme Builder', icon: LayoutTemplate },
               { key: 'payments', label: 'Pasarelas de Pago', icon: CreditCard },
               { key: 'legal', label: 'Términos & Políticas', icon: FileText },
@@ -931,6 +934,36 @@ export default function AdminSettings() {
               />
             </div>
           ))}
+
+          {/* Módulo Internacional Quick Access */}
+          <div className="pt-4 border-t border-gray-200">
+            <div className="bg-gradient-to-r from-emerald-50 to-indigo-50 border border-indigo-100 rounded-xl p-4 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <Globe className="w-5 h-5 text-indigo-600 shrink-0" />
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900">Módulo de Compras Internacionales</h4>
+                  <p className="text-xs text-gray-600">Controlar publicación pública en tienda, cupos y precios.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setTab('internacional' as any);
+                  setSearchParams({ tab: 'internacional' });
+                }}
+                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shrink-0 transition-colors shadow-sm"
+              >
+                Abrir Configuración Internacional
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Internacional Settings Tab */}
+      {currentTab === 'internacional' && (
+        <div className="space-y-6">
+          <AdminInternationalSync />
         </div>
       )}
 

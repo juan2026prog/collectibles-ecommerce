@@ -333,7 +333,14 @@ export async function triggerZincVerificationIfNeeded(
       return;
     }
 
-    console.log(`[Zinc Trigger] Order ${orderId} has international products. Invoking zinc-verify-after-payment...`);
+    console.log(`[Zinc Trigger] Order ${orderId} has international products. Committing capacity and invoking verification...`);
+
+    // Commit reserved capacity for this order
+    try {
+      await supabaseClient.rpc('commit_international_capacity', { p_order_id: orderId });
+    } catch (commitCapErr) {
+      console.warn(`[Zinc Trigger] Error committing international capacity for order ${orderId}:`, commitCapErr);
+    }
 
     const functionHeaders = {
       "Content-Type": "application/json",

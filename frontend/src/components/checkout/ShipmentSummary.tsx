@@ -73,25 +73,35 @@ export const ShipmentSummary: React.FC<ShipmentSummaryProps> = ({
             const isFree = cost === 0;
 
             let methodLabel = 'Envío a domicilio';
-            if (isPickup) methodLabel = 'Retiro en local';
+            if (key === 'international' || method === 'international_courier_direct') methodLabel = 'Entrega en casilla EE.UU.';
+            else if (isPickup) methodLabel = 'Retiro en local';
             else if (method === 'dac_home') methodLabel = 'DAC a domicilio';
             else if (method === 'dac_agency') methodLabel = 'Retiro en agencia DAC';
             else if (method === 'soydelivery') methodLabel = 'Soy Delivery / Flex';
-            else if (method === 'international_courier_direct') methodLabel = 'Casilla Miami';
+
+            const isIntlDirect = key === 'international' || method === 'international_courier_direct';
 
             return (
               <div key={key} className="flex items-center justify-between text-xs py-1.5 border-b border-neutral-900 last:border-none">
                 <div className="flex items-center gap-2 min-w-0 pr-2">
-                  {isPickup ? (
+                  {isIntlDirect ? (
+                    <span className="text-xs flex-shrink-0">🌎</span>
+                  ) : isPickup ? (
                     <Store className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
                   ) : (
                     <Truck className="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" />
                   )}
-                  <span className="text-neutral-300 font-medium truncate">{vName}</span>
+                  <span className="text-neutral-300 font-medium truncate">
+                    {key === 'international' ? 'Collectibles · Internacional' : vName}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <span className="text-[11px] text-neutral-400">{methodLabel}</span>
-                  {isFree ? (
+                  {isIntlDirect ? (
+                    <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">
+                      SIN CARGO
+                    </span>
+                  ) : isFree ? (
                     <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">GRATIS</span>
                   ) : (
                     <span className="font-semibold text-white">${cost.toLocaleString('es-UY')}</span>
@@ -100,6 +110,13 @@ export const ShipmentSummary: React.FC<ShipmentSummaryProps> = ({
               </div>
             );
           })}
+
+          {items.some(i => i.is_international) && (
+            <div className="pt-2 border-t border-neutral-900 text-[10px] text-sky-400 flex items-center justify-between">
+              <span>Courier EE.UU. → Uruguay</span>
+              <span className="font-semibold text-slate-400">No incluido</span>
+            </div>
+          )}
         </div>
       </div>
 

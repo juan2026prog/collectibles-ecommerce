@@ -87,17 +87,14 @@ export default function CustomerPortal() {
         return 1;
       case 'zinc_order_created':
       case 'zinc_processing':
-        return 2;
       case 'purchased':
-        return 3;
-      case 'warehouse_received':
-        return 4;
+        return 2;
       case 'shipped':
       case 'shipped_to_courier':
-        return 5;
+        return 3;
       case 'delivered':
       case 'delivered_to_courier':
-        return 6;
+        return 4;
       default:
         return 1;
     }
@@ -120,7 +117,7 @@ export default function CustomerPortal() {
         <tr>
           <td style="padding: 12px; border-bottom: 1px solid #eee;">
             <div style="font-weight: bold; color: #1e293b;">${item.products?.title || 'Producto'}</div>
-            ${isItemIntl ? `<div style="font-size: 10px; color: #f00856; font-weight: bold; margin-top: 2px;">IMPORTADO (Amazon USA)</div>` : ''}
+            ${isItemIntl ? `<div style="font-size: 10px; color: #0284c7; font-weight: bold; margin-top: 2px;">PRODUCTO INTERNACIONAL</div>` : ''}
           </td>
           <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: center;">${item.quantity}</td>
           <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: right;">${formatCurrencyPrice(item.unit_price)}</td>
@@ -809,18 +806,16 @@ export default function CustomerPortal() {
                       const currentStep = getTrackingMilestoneStep(purchaseStatus);
 
                       const steps = [
-                        { label: 'Recibido', desc: 'Pago confirmado en Collectibles' },
-                        { label: 'Procesando', desc: 'Amazon está preparando la orden' },
-                        { label: 'Comprado', desc: 'Zinc procesó la compra en USA' },
-                        { label: 'En Depósito', desc: 'Recibido en Miami' },
-                        { label: 'En Tránsito', desc: 'Viajando hacia Uruguay' },
-                        { label: 'Entregado', desc: 'Recibido en destino' },
+                        { label: 'Pago Confirmado', desc: 'Confirmado en Collectibles' },
+                        { label: 'Procesando', desc: 'Enviado a despacho en EE.UU.' },
+                        { label: 'En Camino', desc: 'Hacia tu casilla en Miami' },
+                        { label: 'En tu Courier', desc: 'Recibido en tu casilla' },
                       ];
 
                       return (
                         <div className="mb-6 bg-white/5 border border-white/10 p-5 rounded-xl">
                           <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
-                            <Truck className="w-4 h-4 text-[#f00856]" /> Seguimiento de Importación (Amazon USA)
+                            <Truck className="w-4 h-4 text-[#f00856]" /> Seguimiento de Compra Internacional
                           </h3>
 
                           {/* Timeline visualization */}
@@ -856,24 +851,24 @@ export default function CustomerPortal() {
                             <div>
                               <span className="text-slate-400 font-medium">Estado actual:</span>
                               <span className="font-bold text-white ml-1.5 uppercase">
-                                {purchaseStatus === 'pending_purchase' && 'Esperando compra en Amazon'}
-                                {(purchaseStatus === 'zinc_order_created' || purchaseStatus === 'zinc_processing') && 'Comprando en Amazon USA'}
-                                {purchaseStatus === 'purchased' && 'Despachado por Amazon'}
+                                {purchaseStatus === 'pending_purchase' && 'Preparando compra internacional'}
+                                {(purchaseStatus === 'zinc_order_created' || purchaseStatus === 'zinc_processing') && 'Procesando en proveedor internacional'}
+                                {purchaseStatus === 'purchased' && 'Comprado · Preparando despacho a Miami'}
                                 {purchaseStatus === 'warehouse_received' && 'Recibido en depósito Miami'}
-                                {(purchaseStatus === 'shipped' || purchaseStatus === 'shipped_to_courier') && 'Viajando a Uruguay'}
-                                {(purchaseStatus === 'delivered' || purchaseStatus === 'delivered_to_courier') && 'Listo para retirar / Entregado'}
+                                {(purchaseStatus === 'shipped' || purchaseStatus === 'shipped_to_courier') && 'En camino a tu casilla en Miami'}
+                                {(purchaseStatus === 'delivered' || purchaseStatus === 'delivered_to_courier') && 'Entregado a tu courier en EE.UU.'}
                                 {purchaseStatus === 'cancelled' && 'Orden Cancelada'}
                                 {purchaseStatus === 'cancellation_requires_review' && 'Cancelación Pendiente de Revisión'}
-                                {purchaseStatus === 'manual_review' && 'Requiere Revisión Administrativa'}
+                                {purchaseStatus === 'manual_review' && 'En Revisión Administrativa'}
                               </span>
                             </div>
 
                             {trackingNumber && (
                               <div className="sm:text-right">
-                                <span className="text-slate-400 font-medium">Código de rastreo:</span>
-                                <span className="font-mono font-bold text-blue-400 ml-1.5">{trackingNumber} ({carrier || 'Amazon'})</span>
+                                <span className="text-slate-400 font-medium">Código de rastreo en EE.UU.:</span>
+                                <span className="font-mono font-bold text-blue-400 ml-1.5">{trackingNumber} ({carrier || 'Envío terrestre'})</span>
                                 {trackingUrl && (
-                                  <a href={trackingUrl} target="_blank" rel="noreferrer" className="text-primary-500 hover:underline block mt-1 font-bold">Rastrear paquete original</a>
+                                  <a href={trackingUrl} target="_blank" rel="noreferrer" className="text-primary-500 hover:underline block mt-1 font-bold">Rastrear envío en EE.UU.</a>
                                 )}
                               </div>
                             )}

@@ -295,7 +295,7 @@ export default function InternationalLaboratory() {
                             </div>
                             <div className="bg-black/50 p-3 rounded-lg border border-slate-800">
                               <p className="text-slate-500 uppercase font-bold mb-2">Fees & Transacción</p>
-                              <div className="flex justify-between mb-1"><span className="text-slate-400">Zinc API:</span><span className="font-mono">{formatUSD(zincFee)}</span></div>
+                              <div className="flex justify-between mb-1"><span className="text-slate-400">Fee Proveedor:</span><span className="font-mono">{formatUSD(zincFee)}</span></div>
                               <div className="flex justify-between mb-1"><span className="text-slate-400">Prex Tarjeta:</span><span className="font-mono">{formatUSD(prexFee)}</span></div>
                               <div className="flex justify-between pt-1 mt-1 border-t border-white/10"><span className="text-slate-300">Total Fees:</span><span className="font-mono font-bold">{formatUSD(zincFee + prexFee)}</span></div>
                             </div>
@@ -395,7 +395,7 @@ export default function InternationalLaboratory() {
 
                 <div className="bg-black/40 p-6 rounded-xl border border-white/5 font-mono text-sm">
                   <p className="text-blue-400 mb-2">// Cálculo de Costos Variables</p>
-                  <p>Zinc Fee = USD 1.00</p>
+                  <p>Fee Ejecución = USD 1.00</p>
                   <p>Prex Fee = ((AmazonCost * 2.5%) + 0.50) + IVA 22%</p>
                 </div>
 

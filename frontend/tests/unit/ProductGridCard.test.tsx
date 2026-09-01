@@ -1,25 +1,25 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
-import { ProductGridCard } from './ProductGridCard';
+import { ProductGridCard } from '../../src/components/ProductGridCard';
 
 // Mock contexts
-vi.mock('../contexts/WishlistContext', () => ({
+vi.mock('../../src/contexts/WishlistContext', () => ({
   useWishlistContext: () => ({
     toggleWishlist: vi.fn(),
     isInWishlist: () => false,
   }),
 }));
 
-vi.mock('../contexts/AdminModeContext', () => ({
+vi.mock('../../src/contexts/AdminModeContext', () => ({
   useAdminMode: () => ({ isAdminMode: false }),
 }));
 
-vi.mock('../contexts/LocaleContext', () => ({
+vi.mock('../../src/contexts/LocaleContext', () => ({
   useLocale: () => ({ language: 'es' }),
 }));
 
-vi.mock('../lib/analyticsTracker', () => ({
+vi.mock('../../src/lib/analyticsTracker', () => ({
   trackGA4Event: vi.fn(),
   trackClarityEvent: vi.fn(),
 }));

@@ -1805,7 +1805,7 @@ export default function VProducts() {
                              <p className="text-[11px] text-slate-400 mb-3">Identificadores técnicos relacionales del sistema y marketplaces externos (No mostrados como SKU).</p>
                              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs font-mono bg-slate-800/80 p-3 rounded-lg border border-slate-700">
                                 <div><span className="text-slate-400 block text-[10px]">ML Item ID:</span> {editing.ml_item_id || '—'}</div>
-                                <div><span className="text-slate-400 block text-[10px]">Amazon ASIN:</span> {editing.metadata?.amazon_asin || editing.metadata?.external_product_id || '—'}</div>
+                                <div><span className="text-slate-400 block text-[10px]">ID Externo:</span> {editing.metadata?.amazon_asin || editing.metadata?.external_product_id || '—'}</div>
                                 <div><span className="text-slate-400 block text-[10px]">Vendor SKU:</span> {editing.variants?.[0]?.sku_vendedor || '—'}</div>
                                 <div><span className="text-slate-400 block text-[10px]">UUID Interno:</span> {editing.id ? `${editing.id.substring(0, 8)}...` : '—'}</div>
                              </div>

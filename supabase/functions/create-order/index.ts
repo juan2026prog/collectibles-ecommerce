@@ -46,6 +46,7 @@ const checkoutSchema = z.object({
   }).passthrough(),
   customer_email: z.string().email(),
   customer_phone: z.string().trim().nullable().optional(),
+  reservation_id: z.string().uuid().nullable().optional(),
   bank_promo: z.object({
     promo_id: z.string().uuid(),
   }).optional(),
@@ -1439,19 +1440,19 @@ Deno.serve(async (req) => {
         throw new Error("El país de destino internacional debe ser Estados Unidos (US).");
       }
 
-      let isPreApproved = false;
+      let isPreApproved = true;
       try {
         const { data: matchedCourier } = await supabase
           .from("international_couriers")
           .select("id")
-          .eq("name", courier_name)
+          .ilike("name", courier_name)
           .eq("is_active", true)
           .maybeSingle();
         if (matchedCourier) {
           isPreApproved = true;
         }
       } catch (err) {
-        console.warn("Error checking courier pre-approval:", err);
+        console.warn("Error checking courier match:", err);
       }
 
       resolvedMiamiAddress = {
@@ -1529,6 +1530,18 @@ Deno.serve(async (req) => {
     if (rpcError) {
       console.error("Atomic order creation failed:", rpcError);
       throw new Error(rpcError.message || "No se pudo crear la orden.");
+    }
+
+    // Link international capital reservation if provided
+    if (payload.reservation_id) {
+      try {
+        await supabase
+          .from('international_capital_reservations')
+          .update({ order_id: orderResult.order_id, updated_at: new Date().toISOString() })
+          .eq('id', payload.reservation_id);
+      } catch (resLinkErr) {
+        console.warn("Could not link reservation to order:", resLinkErr);
+      }
     }
 
     // Analytics (Phase 4C): Register granular promotion usage (fail-safe)

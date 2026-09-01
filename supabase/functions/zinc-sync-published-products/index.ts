@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
-import { calculateFee, calculateDiscount, calculateRealCost, calculateProfitEngine, applyProfitProtection, calculateUruboxEstimate } from "../_shared/pricing.ts";
+import { calculateFee, calculateDiscount, calculateCanonicalPricing, calculateUruboxEstimate } from "../_shared/pricing.ts";
 import { getEffectiveExchangeRate } from "../_shared/internationalPricing.ts";
 
 serve(async (req) => {
@@ -139,22 +139,18 @@ serve(async (req) => {
             const fee = calculateFee(price, pricing_mode, settings.fixed_markup_usd, settings.percentage_markup, settings.tiered_markup_rules);
             
             const usaShipping = Number(prod.usa_domestic_shipping_usd || 0);
-            const realCost = calculateRealCost(price, usaShipping, settings as any);
-            const expectedProfit = calculateProfitEngine(realCost, settings as any);
-            const protection = applyProfitProtection(price, fee, realCost, expectedProfit, settings as any);
+            const canonical = calculateCanonicalPricing(price, usaShipping, fee, settings as any);
 
-            const finalPriceWithShipping = protection.finalPrice + usaShipping;
-
-            updates.collectibles_fee_usd = protection.finalFee;
-            updates.final_price_usd = finalPriceWithShipping;
-            updates.expected_profit_usd = expectedProfit;
-            updates.real_cost_usd = realCost;
+            updates.collectibles_fee_usd = canonical.collectibles_fee_usd;
+            updates.final_price_usd = canonical.final_price_usd;
+            updates.expected_profit_usd = canonical.expected_profit_usd;
+            updates.real_cost_usd = canonical.acquisition_cost_usd;
             
             const urubox_estimated_cost_usd = calculateUruboxEstimate(prod.weight_grams, prod.category, settings as any);
             updates.urubox_estimated_cost_usd = urubox_estimated_cost_usd;
-            updates.total_estimated_cost_usd = finalPriceWithShipping + urubox_estimated_cost_usd;
+            updates.total_estimated_cost_usd = canonical.final_price_usd + urubox_estimated_cost_usd;
 
-            updates.final_price_uyu = Number((updates.final_price_usd * effective_rate).toFixed(2));
+            updates.final_price_uyu = Number((canonical.final_price_usd * effective_rate).toFixed(2));
 
             updates.price_change_percent = change_percent;
             updates.max_allowed_price_usd = max_price;

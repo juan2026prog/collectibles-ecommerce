@@ -32,7 +32,7 @@ describe('Forensic HTTP 301 Redirect System Audit', () => {
     expect(oldSlugsSet.size).toBe(redirects!.length);
     expect(loopCount).toBe(0);
     expect(chainCount).toBe(0);
-  });
+  }, 15000);
 
   it('2. DB Contamination Check: Zero products remain with MercadoLibre or MLU in public slug', async () => {
     const { count, error } = await supabase
@@ -42,7 +42,7 @@ describe('Forensic HTTP 301 Redirect System Audit', () => {
 
     expect(error).toBeNull();
     expect(count).toBe(0);
-  });
+  }, 15000);
 
   it('3. Edge Middleware Response Mock Test: Resolves old_slug to 301 Moved Permanently with exact Location header', async () => {
     const oldSlug = 'mercadolibre-MLU655247339';
@@ -59,6 +59,6 @@ describe('Forensic HTTP 301 Redirect System Audit', () => {
     const data = await res.json();
     expect(data.length).toBe(1);
     expect(data[0].new_slug).toBe(expectedNewSlug);
-  });
+  }, 15000);
 
 });

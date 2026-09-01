@@ -93,12 +93,16 @@ export const ShippingMethodCard: React.FC<ShippingMethodCardProps> = ({
             <h4 className="font-semibold text-sm md:text-base text-white tracking-tight">{name}</h4>
             
             {/* Badges */}
-            {isActuallyFree && !isDisabled && (
+            {id === 'international_courier_direct' ? (
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 uppercase tracking-wider">
+                SIN CARGO ADICIONAL
+              </span>
+            ) : isActuallyFree && !isDisabled ? (
               <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 uppercase tracking-wider">
                 GRATIS
               </span>
-            )}
-            {!isActuallyFree && badge && !isDisabled && (
+            ) : null}
+            {!isActuallyFree && badge && !isDisabled && id !== 'international_courier_direct' && (
               <span className={`
                 text-[10px] font-extrabold px-2 py-0.5 rounded uppercase tracking-wider border
                 ${badge === 'RECOMENDADO' ? 'bg-[#f00856]/20 text-[#f00856] border-[#f00856]/30' : ''}
@@ -133,6 +137,11 @@ export const ShippingMethodCard: React.FC<ShippingMethodCardProps> = ({
         <div className="flex-shrink-0 text-right">
           {isDisabled ? (
             <span className="text-xs text-neutral-500 font-semibold">—</span>
+          ) : id === 'international_courier_direct' ? (
+            <div className="flex flex-col items-end">
+              <span className="text-xs md:text-sm font-extrabold text-emerald-400">SIN CARGO</span>
+              <span className="text-[9px] text-slate-400 font-medium">En Collectibles</span>
+            </div>
           ) : isActuallyFree ? (
             <div className="flex flex-col items-end">
               <span className="text-sm md:text-base font-extrabold text-emerald-400">GRATIS</span>

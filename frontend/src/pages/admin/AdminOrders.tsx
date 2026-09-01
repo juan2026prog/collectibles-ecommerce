@@ -574,10 +574,10 @@ export default function AdminOrders() {
     setIsProcessingZinc(true);
     try {
       const { data, error } = await supabase.functions.invoke('zinc-verify-after-payment', {
-        body: { order_id: selectedOrder.id }
+        body: { order_id: selectedOrder.id, is_retry: true }
       });
       if (error) throw new Error(error.message);
-      toast.success("Compra en Zinc reintentada con éxito.");
+      toast.success("Compra internacional reintentada con éxito.");
       loadOrderItemsAndSuborders(selectedOrder.id);
     } catch (err: any) {
       console.error(err);
@@ -1363,14 +1363,21 @@ export default function AdminOrders() {
                               <h5 className="font-bold text-sm text-gray-900 leading-tight truncate" title={productName}>{productName}</h5>
                               <p className="text-[10px] text-gray-400 mt-0.5 font-mono">ID: {intlItem.order_item_id.slice(0, 8)}</p>
                             </div>
-                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border shrink-0 ${
-                              intlItem.purchase_status === 'delivered_to_courier' ? 'bg-green-50 text-green-700 border-green-200' :
-                              intlItem.purchase_status === 'manual_review' ? 'bg-amber-50 text-amber-700 border-amber-250 animate-pulse' :
-                              intlItem.purchase_status === 'zinc_failed' ? 'bg-red-50 text-red-700 border-red-200' :
-                              'bg-blue-50 text-blue-700 border-blue-200'
-                            }`}>
-                              {intlItem.purchase_status.replace(/_/g, ' ')}
-                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                              {intlItem.review_reason_code && (
+                                <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-red-100 text-red-800 border border-red-300">
+                                  {intlItem.review_reason_code}
+                                </span>
+                              )}
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border shrink-0 ${
+                                intlItem.purchase_status === 'delivered_to_courier' ? 'bg-green-50 text-green-700 border-green-200' :
+                                intlItem.purchase_status === 'manual_review' ? 'bg-amber-50 text-amber-700 border-amber-250 animate-pulse' :
+                                intlItem.purchase_status === 'zinc_failed' ? 'bg-red-50 text-red-700 border-red-200' :
+                                'bg-blue-50 text-blue-700 border-blue-200'
+                              }`}>
+                                {intlItem.purchase_status.replace(/_/g, ' ')}
+                              </span>
+                            </div>
                           </div>
 
                           {intlItem.zinc_error_message && (
@@ -1381,9 +1388,9 @@ export default function AdminOrders() {
 
                           <div className="grid grid-cols-2 gap-3 text-[11px] bg-gray-50 p-3 rounded-lg border border-gray-150 font-medium">
                             <div>
-                              <span className="text-[9px] font-bold text-gray-400 uppercase block">Zinc Order ID</span>
-                              <span className="font-mono text-gray-900 select-all font-semibold block truncate" title={intlItem.zinc_order_id || 'Sin emitir'}>
-                                {intlItem.zinc_order_id || 'Sin emitir'}
+                              <span className="text-[9px] font-bold text-gray-400 uppercase block">Zinc Order / PO Number</span>
+                              <span className="font-mono text-gray-900 select-all font-semibold block truncate" title={intlItem.zinc_po_number || intlItem.zinc_order_id || 'Sin emitir'}>
+                                {intlItem.zinc_order_id || intlItem.zinc_po_number || 'Sin emitir'}
                               </span>
                             </div>
                             <div>

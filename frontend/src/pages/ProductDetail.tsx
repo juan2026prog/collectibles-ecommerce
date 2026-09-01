@@ -24,8 +24,9 @@ import { calculateUruboxEstimate, getEstimatedWeightKg } from '../lib/urubox';
 import { isValidInternalSku } from '../lib/skuUtils';
 import { ProductGridCard } from '../components/ProductGridCard';
 import { calculateArgentinaShippingStatus } from '../lib/mbeLogisticsUtils';
-import { useImageProtection } from '../hooks/useImageProtection';
 import { getConditionLabel } from '../config/conditionConfig';
+import InternationalCuposBadge from '../components/international/InternationalCuposBadge';
+import InternationalWaitlistModal from '../components/international/InternationalWaitlistModal';
 
 // ── COMPONENTE SECCIÓN PRODUCTOS RELACIONADOS ──
 function RelatedProductsSection({ currentProductId, categorySlug }: { currentProductId: string; categorySlug?: string }) {
@@ -87,6 +88,7 @@ export default function ProductDetail() {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [isHovering, setIsHovering] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
+  const [showWaitlistModal, setShowWaitlistModal] = useState(false);
   const [openMobileTab, setOpenMobileTab] = useState<'description' | 'specs' | null>('description');
   const [showStickyBar, setShowStickyBar] = useState(false);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
@@ -236,16 +238,39 @@ export default function ProductDetail() {
   const addToCart = (customVariant?: any, directCheckout = false) => {
     if (stock <= 0) return;
     const targetVariant = customVariant || selectedVariant;
+    const isIntl = product.source_provider === 'zinc' || product.is_international;
 
-    if (product.source_provider === 'zinc') {
+    if (isIntl) {
       internationalCart.addItem({
-        product,
+        product_id: product.id,
+        variant_id: targetVariant?.id || product.id,
+        title: product.title,
+        price_usd: Number(product.final_price_usd || product.price_usd || (finalPrice / 42)),
+        image_url: displayImage || product.image_url || '',
         quantity,
-        variant_id: targetVariant?.id,
-        variant_name: targetVariant?.name
+        weight_kg: product.weight_kg || 0.5,
+        international_data: product.international_products?.[0] || null
       });
+
+      cart.addItem({
+        id: product.id,
+        product_id: product.id,
+        title: product.title,
+        price: finalPrice,
+        base_price: product.base_price || finalPrice,
+        image_url: displayImage,
+        quantity,
+        variant_id: targetVariant?.id || product.id,
+        variant_name: targetVariant?.name || '',
+        vendor_id: undefined,
+        vendor_name: undefined,
+        is_international: true,
+        weight_kg: product.weight_kg || 0.5,
+        sku: targetVariant?.sku || product.sku
+      });
+
       if (directCheckout) {
-        navigate('/cart');
+        navigate('/checkout');
       } else {
         setAddedToCart(true);
         setTimeout(() => setAddedToCart(false), 2500);
@@ -414,6 +439,12 @@ export default function ProductDetail() {
                 {settings['product_tag_label'] || 'Ficha de producto'}
               </span>
 
+              {(product.is_international || product.source_provider === 'zinc' || product.shipping_type === 'international_courier_direct') && (
+                <span className="text-[10px] uppercase font-black tracking-widest text-sky-400 bg-sky-950/80 px-3 py-1 rounded-full border border-sky-500/30 flex items-center gap-1">
+                  <span>🌎</span> Producto internacional
+                </span>
+              )}
+
               {applicablePromos.map(promo => promo.badge_text && (
                 <span 
                   key={promo.id}
@@ -459,10 +490,11 @@ export default function ProductDetail() {
                 {stockInfo.text}
               </div>
 
-              {product.source_provider === 'zinc' && (
-                <span className="text-xs font-bold px-3 py-1 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-300">
-                  ✈ Importado USA
-                </span>
+              {(product.source_provider === 'zinc' || product.is_international) && (
+                <InternationalCuposBadge 
+                  productCostUsd={product.base_price_usd || (finalPrice / 42)}
+                  onOpenWaitlist={() => setShowWaitlistModal(true)}
+                />
               )}
               {product.brand?.name && (
                 <span className="text-xs font-bold px-3 py-1 rounded-full border border-white/10 bg-white/[0.03] text-slate-300">
@@ -928,6 +960,16 @@ export default function ProductDetail() {
           </div>
         </div>
       )}
+
+      {/* MODAL DE LISTA DE ESPERA / CUPOS INTERNACIONALES */}
+      <InternationalWaitlistModal
+        isOpen={showWaitlistModal}
+        onClose={() => setShowWaitlistModal(false)}
+        productId={product.id}
+        productTitle={product.title}
+        internationalProductId={product.international_products?.[0]?.id}
+        estimatedCostUsd={product.base_price_usd}
+      />
     </div>
   );
 }

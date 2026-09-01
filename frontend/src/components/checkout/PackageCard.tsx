@@ -85,6 +85,8 @@ export const PackageCard: React.FC<PackageCardProps> = ({
           <div className="w-10 h-10 rounded-xl bg-neutral-800 border border-neutral-700/80 flex items-center justify-center overflow-hidden flex-shrink-0">
             {vendorLogo ? (
               <img src={vendorLogo} alt={vendorName} draggable={false} onDragStart={handleDragStart} className="w-full h-full object-cover img-protected" />
+            ) : isInternational ? (
+              <span className="text-xl">🌎</span>
             ) : isPlatform ? (
               <Package className="w-5 h-5 text-[#f00856]" />
             ) : (
@@ -92,9 +94,16 @@ export const PackageCard: React.FC<PackageCardProps> = ({
             )}
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-bold text-base md:text-lg text-white tracking-tight">{vendorName}</h3>
-              {isOfficialStore && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="font-bold text-base md:text-lg text-white tracking-tight">
+                {isInternational ? 'Collectibles · Internacional' : vendorName}
+              </h3>
+              {isInternational && (
+                <span className="text-[10px] font-black px-2 py-0.5 rounded bg-sky-950/80 text-sky-400 border border-sky-500/30 uppercase tracking-wider">
+                  🌎 Producto internacional
+                </span>
+              )}
+              {isOfficialStore && !isInternational && (
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">
                   OFICIAL
                 </span>
@@ -108,7 +117,11 @@ export const PackageCard: React.FC<PackageCardProps> = ({
 
         {/* Selected status summary badge */}
         <div className="flex items-center gap-2">
-          {isPickupSelected ? (
+          {isInternational ? (
+            <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+              Sin cargo adicional
+            </span>
+          ) : isPickupSelected ? (
             <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
               Retiro Gratis
             </span>

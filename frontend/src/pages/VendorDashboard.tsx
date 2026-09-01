@@ -69,7 +69,7 @@ export default function VendorDashboard() {
     return (
       <div className="min-h-[400px] flex flex-col items-center justify-center gap-4">
         <RefreshCw className="w-8 h-8 text-primary-600 animate-spin" />
-        <p className="text-sm font-medium text-gray-500 animate-pulse">Cargando Seller Center...</p>
+        <p className="text-sm font-medium text-gray-500 animate-pulse">Cargando Panel de Vendedores...</p>
       </div>
     );
   }
@@ -102,7 +102,7 @@ export default function VendorDashboard() {
             <Store className="w-10 h-10 text-primary-600" />
           </div>
           
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">Activar Panel Seller</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">Activar Panel de Vendedor</h1>
           <p className="text-gray-500 mb-6 max-w-md mx-auto">
             Tu cuenta ha sido habilitada por un administrador. Haz clic abajo para crear tu tienda en el ecosistema de Collectibles.
           </p>

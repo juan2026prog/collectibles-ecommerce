@@ -28,7 +28,7 @@ export function calculateFee(
     }
   }
 
-  // Default to amazon_price_plus_fee
+  // Default to amazon_price_plus_fee / standard fee
   return Number(fixedMarkupUsd.toFixed(2));
 }
 
@@ -38,55 +38,135 @@ export function calculateDiscount(currentPrice: number, listPrice: number | null
 }
 
 export interface ProfitSettings {
-  target_margin_percent: number;
-  min_profit_usd: number;
-  min_absolute_profit_usd: number;
-  never_sell_at_loss: boolean;
-  zinc_fee_usd: number;
-  urubox_price_per_kg: number;
-  urubox_handling_fee: number;
+  target_margin_percent?: number;
+  min_profit_usd?: number;
+  min_absolute_profit_usd?: number;
+  never_sell_at_loss?: boolean;
+  zinc_fee_usd?: number;
+  urubox_price_per_kg?: number;
+  urubox_handling_fee?: number;
 }
 
+export function calculatePurchasePaymentFee(productCostUsd: number): number {
+  // Purchasing Payment / Card Processing Fee = ((product_cost * 0.025) + 0.50) * 1.22
+  return Number((((productCostUsd * 0.025) + 0.50) * 1.22).toFixed(2));
+}
+
+// Backward-compatible alias
 export function calculateFinancialCostPrex(amazonPrice: number): number {
-  // Costo Financiero Prex = ((amazon_price * 0.025) + 0.50) * 1.22
-  return ((amazonPrice * 0.025) + 0.50) * 1.22;
+  return calculatePurchasePaymentFee(amazonPrice);
 }
 
+export function calculateAcquisitionCost(
+  productCostUsd: number, 
+  usaShippingUsd: number, 
+  settings: ProfitSettings
+): number {
+  const floridaSalesTax = Number(((productCostUsd + usaShippingUsd) * 0.07).toFixed(2));
+  const zincFee = Number(settings.zinc_fee_usd != null ? settings.zinc_fee_usd : 1.00);
+  const prePaymentSubtotal = Number((productCostUsd + usaShippingUsd + floridaSalesTax + zincFee).toFixed(2));
+  const paymentFee = calculatePurchasePaymentFee(prePaymentSubtotal);
+  return Number((prePaymentSubtotal + paymentFee).toFixed(2));
+}
+
+// Backward-compatible alias
 export function calculateRealCost(amazonPrice: number, usaShipping: number, settings: ProfitSettings): number {
-  const costPrex = calculateFinancialCostPrex(amazonPrice);
-  const floridaSalesTax = (amazonPrice + usaShipping) * 0.07;
-  return amazonPrice + usaShipping + floridaSalesTax + settings.zinc_fee_usd + costPrex;
+  return calculateAcquisitionCost(amazonPrice, usaShipping, settings);
 }
 
+export function calculateExpectedProfit(
+  acquisitionCostUsd: number, 
+  settings: ProfitSettings
+): number {
+  const marginPercent = Number(settings.target_margin_percent != null && settings.target_margin_percent > 0 ? settings.target_margin_percent : 15.0);
+  const minAbsoluteProfit = Number(
+    settings.min_absolute_profit_usd != null && settings.min_absolute_profit_usd > 0
+      ? settings.min_absolute_profit_usd 
+      : (settings.min_profit_usd != null && settings.min_profit_usd > 0 ? settings.min_profit_usd : 2.00)
+  );
+  const percentageProfit = acquisitionCostUsd * (marginPercent / 100);
+  return Number(Math.max(percentageProfit, minAbsoluteProfit).toFixed(2));
+}
+
+// Backward-compatible alias
 export function calculateProfitEngine(realCost: number, settings: ProfitSettings): number {
-  const profit = Math.max(realCost * (settings.target_margin_percent / 100), settings.min_profit_usd);
-  return profit;
+  return calculateExpectedProfit(realCost, settings);
 }
 
+export interface CanonicalPricingResult {
+  acquisition_cost_usd: number;
+  expected_profit_usd: number;
+  minimum_safe_price_usd: number;
+  commercial_price_usd: number;
+  final_price_usd: number;
+  collectibles_fee_usd: number;
+  is_loss_adjusted: boolean;
+  profit_usd: number;
+}
+
+/**
+ * CANONICAL PRICING ENGINE
+ * Single source of truth for international product pricing and profit protection.
+ *
+ * ACQUISITION_COST_USD = retailer_product_cost + usa_domestic_shipping + sales_tax + zinc_fee + purchasing_fee
+ * EXPECTED_PROFIT = max(ACQUISITION_COST_USD * target_margin_percent / 100, min_absolute_profit_usd)
+ * MINIMUM_SAFE_PRICE = ACQUISITION_COST_USD + EXPECTED_PROFIT
+ * CUSTOMER_PRICE = max(commercial_price, MINIMUM_SAFE_PRICE)
+ */
+export function calculateCanonicalPricing(
+  productCostUsd: number,
+  usaShippingUsd: number,
+  commercialFeeUsd: number,
+  settings: ProfitSettings
+): CanonicalPricingResult {
+  const acquisitionCost = calculateAcquisitionCost(productCostUsd, usaShippingUsd, settings);
+  const expectedProfit = calculateExpectedProfit(acquisitionCost, settings);
+  const minimumSafePrice = acquisitionCost + expectedProfit;
+  
+  // Commercial price proposed by markup rules
+  const commercialPrice = productCostUsd + usaShippingUsd + commercialFeeUsd;
+
+  let finalPrice = commercialPrice;
+  let isLossAdjusted = false;
+
+  // Never sell at loss is always mandatory for international purchases (always positive margin)
+  if (commercialPrice < minimumSafePrice) {
+    finalPrice = minimumSafePrice;
+    isLossAdjusted = true;
+  }
+
+  const profit = finalPrice - acquisitionCost;
+  const fee = finalPrice - productCostUsd - usaShippingUsd;
+
+  return {
+    acquisition_cost_usd: Number(acquisitionCost.toFixed(2)),
+    expected_profit_usd: Number(expectedProfit.toFixed(2)),
+    minimum_safe_price_usd: Number(minimumSafePrice.toFixed(2)),
+    commercial_price_usd: Number(commercialPrice.toFixed(2)),
+    final_price_usd: Number(finalPrice.toFixed(2)),
+    collectibles_fee_usd: Number(fee.toFixed(2)),
+    is_loss_adjusted: isLossAdjusted,
+    profit_usd: Number(profit.toFixed(2))
+  };
+}
+
+/**
+ * Backward-compatible wrapper for applyProfitProtection that guarantees
+ * usaShipping is NEVER double-added.
+ */
 export function applyProfitProtection(
   currentBasePrice: number, 
   currentFee: number, 
   realCost: number, 
   expectedProfit: number, 
-  settings: ProfitSettings
+  settings: ProfitSettings,
+  usaShipping: number = 0
 ): { finalPrice: number, finalFee: number, isLoss: boolean } {
-  // Final price chosen by config (Fee mode)
-  let proposedFinalPrice = currentBasePrice + currentFee;
-  let proposedProfit = proposedFinalPrice - realCost;
-  let isLoss = false;
-
-  if (proposedProfit < settings.min_absolute_profit_usd) {
-    if (settings.never_sell_at_loss) {
-      // Force minimum profit
-      proposedFinalPrice = realCost + expectedProfit;
-      isLoss = true; // Still marked as loss to allow blocking or review depending on config
-    }
-  }
-
+  const canonical = calculateCanonicalPricing(currentBasePrice, usaShipping, currentFee, settings);
   return {
-    finalPrice: Number(proposedFinalPrice.toFixed(2)),
-    finalFee: Number((proposedFinalPrice - currentBasePrice).toFixed(2)),
-    isLoss: proposedProfit < settings.min_absolute_profit_usd
+    finalPrice: canonical.final_price_usd,
+    finalFee: canonical.collectibles_fee_usd,
+    isLoss: canonical.is_loss_adjusted || (canonical.profit_usd < (settings.min_absolute_profit_usd || 2.00))
   };
 }
 
@@ -98,7 +178,7 @@ export function getEstimatedWeightKg(categoryName?: string | null): number {
   if (cat.includes('hot toys')) return 3.0;
   if (cat.includes('lego')) return 2.0;
   if (cat.includes('libro') || cat.includes('book') || cat.includes('artbook')) return 1.0;
-  return 1.0; // default weight is 1.0 kg according to prompt 8
+  return 1.0; // default weight is 1.0 kg
 }
 
 export interface UruboxEstimateResult {

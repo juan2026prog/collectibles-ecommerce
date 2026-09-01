@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
-import { calculateFee, calculateRealCost, calculateProfitEngine, applyProfitProtection } from "../_shared/pricing.ts";
+import { calculateFee, calculateCanonicalPricing } from "../_shared/pricing.ts";
 import { getEffectiveExchangeRate } from "../_shared/internationalPricing.ts";
 
 serve(async (req) => {
@@ -23,7 +23,8 @@ serve(async (req) => {
     const ZINC_API_KEY = Deno.env.get("ZINC_API_KEY");
     if (!ZINC_API_KEY) throw new Error("ZINC_API_KEY no configurada");
 
-    const { cart_items } = await req.json();
+    const body = await req.json();
+    const { cart_items, reserve_capacity = false, reservation_minutes = 15 } = body;
     if (!cart_items || !Array.isArray(cart_items)) {
        throw new Error("Invalid payload: cart_items is required");
     }
@@ -35,6 +36,7 @@ serve(async (req) => {
     const { effective_rate } = await getEffectiveExchangeRate(serviceClient);
     const results = [];
     let all_ok = true;
+    let total_acquisition_cost_usd = 0;
 
     for (const item of cart_items) {
        const { data: prod } = await serviceClient.from('international_products').select('*').eq('id', item.product_id).single();
@@ -44,7 +46,7 @@ serve(async (req) => {
            const url = `https://api.zinc.com/products/${prod.external_product_id}?retailer=amazon`;
            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${ZINC_API_KEY}` } });
            
-           if (!res.ok) throw new Error(`Zinc API error: ${res.status}`);
+           if (!res.ok) throw new Error(`Retailer API error: ${res.status}`);
            const data = await res.json();
            
            const priceRaw = data.price || (data.offers && data.offers.length > 0 ? data.offers[0].price : null);
@@ -73,17 +75,17 @@ serve(async (req) => {
 
            const pricing_mode = prod.pricing_mode || settings.pricing_mode || 'amazon_price_plus_fee';
            const fee = calculateFee(price, pricing_mode, settings.fixed_markup_usd, settings.percentage_markup, settings.tiered_markup_rules);
-           
            const usaShipping = Number(prod.usa_domestic_shipping_usd || 0);
-           const realCost = calculateRealCost(price, usaShipping, settings as any);
-           const expectedProfit = calculateProfitEngine(realCost, settings as any);
-           const protection = applyProfitProtection(price, fee, realCost, expectedProfit, settings as any);
 
-           const finalPriceWithShipping = protection.finalPrice + usaShipping;
+           // Canonical Pricing: no double US shipping
+           const canonical = calculateCanonicalPricing(price, usaShipping, fee, settings as any);
+           const quantity = Number(item.quantity || 1);
+           total_acquisition_cost_usd += (canonical.acquisition_cost_usd * quantity);
+
            const oldPrice = prod.final_price_usd;
-           const variationPercent = Math.abs((finalPriceWithShipping - oldPrice) / oldPrice) * 100;
+           const variationPercent = oldPrice > 0 ? Math.abs((canonical.final_price_usd - oldPrice) / oldPrice) * 100 : 0;
 
-           if (protection.isLoss) {
+           if (canonical.is_loss_adjusted && settings.never_sell_at_loss === false) {
                results.push({ product_id: prod.id, ok: false, message: `La rentabilidad mínima del producto internacional ya no es válida. Por favor, consulta con soporte.` });
                all_ok = false;
            } else if (variationPercent > (settings.max_price_variation_percent || 5.0)) {
@@ -95,8 +97,8 @@ serve(async (req) => {
                    all_ok = false;
                    await serviceClient.from('international_products').update({ sync_status: 'stale', status: 'unavailable' }).eq('id', prod.id);
                } else {
-                   // recalculate
-                   results.push({ product_id: prod.id, ok: true, price_changed: true, new_price: finalPriceWithShipping });
+                   // Recalculate
+                   results.push({ product_id: prod.id, ok: true, price_changed: true, new_price: canonical.final_price_usd });
                }
            } else {
                results.push({ product_id: prod.id, ok: true });
@@ -104,15 +106,15 @@ serve(async (req) => {
 
            // Update DB with valid_until 10 mins
            const validUntil = new Date(Date.now() + 10 * 60000).toISOString();
-           const finalPriceUyu = Number((finalPriceWithShipping * effective_rate).toFixed(2));
+           const finalPriceUyu = Number((canonical.final_price_usd * effective_rate).toFixed(2));
            await serviceClient.from('international_products').update({
                last_price_usd: price,
                amazon_current_price_usd: price,
-               final_price_usd: finalPriceWithShipping,
+               final_price_usd: canonical.final_price_usd,
                final_price_uyu: finalPriceUyu,
-               collectibles_fee_usd: protection.finalFee,
-               expected_profit_usd: expectedProfit,
-               real_cost_usd: realCost,
+               collectibles_fee_usd: canonical.collectibles_fee_usd,
+               expected_profit_usd: canonical.expected_profit_usd,
+               real_cost_usd: canonical.acquisition_cost_usd,
                price_valid_until: validUntil,
                availability: newAvail,
                sync_status: 'synced',
@@ -120,12 +122,41 @@ serve(async (req) => {
            }).eq('id', prod.id);
 
        } catch (err: any) {
-           results.push({ product_id: prod.id, ok: false, message: "No se pudo verificar el producto con Amazon temporalmente." });
+           results.push({ product_id: prod.id, ok: false, message: "No se pudo verificar el producto internacional temporalmente." });
            all_ok = false;
        }
     }
 
-    return new Response(JSON.stringify({ success: true, all_ok, results }), {
+    let reservationResult = null;
+    // Perform capacity reservation if requested and all items are ok
+    if (all_ok && reserve_capacity && total_acquisition_cost_usd > 0) {
+      const { data: resData, error: resErr } = await serviceClient.rpc('reserve_international_capacity', {
+        p_amount_usd: Number(total_acquisition_cost_usd.toFixed(2)),
+        p_order_id: null,
+        p_user_id: user.id,
+        p_reservation_minutes: reservation_minutes,
+        p_metadata: { source: 'checkout_live_check', items_count: cart_items.length }
+      });
+
+      if (resErr || !resData?.success) {
+        all_ok = false;
+        reservationResult = {
+          success: false,
+          error: resData?.error || 'CAPACITY_RESERVATION_FAILED',
+          message: resData?.message || 'Cupos internacionales temporalmente completos'
+        };
+      } else {
+        reservationResult = resData;
+      }
+    }
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      all_ok, 
+      results,
+      total_acquisition_cost_usd: Number(total_acquisition_cost_usd.toFixed(2)),
+      reservation: reservationResult
+    }), {
       headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       status: 200
     });

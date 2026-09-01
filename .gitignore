@@ -109,3 +109,11 @@ recursos/
 supabase/.temp/
 supabase/.branches/
 supabase/.cache/
+*.csv
+frontend/audit_*
+frontend/*_results.json
+frontend/run_pilot_certification.mjs
+frontend/scratch_*
+frontend/export_csv.js
+**/screenshots/
+**/screenshots_*/

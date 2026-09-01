@@ -74,6 +74,7 @@ serve(async (req) => {
 
         if (zincStatus === 'failed') {
           updates.purchase_status = 'zinc_failed';
+          updates.review_reason_code = 'ZINC_REJECTED';
           updates.zinc_error_message = zincData.failure_reason || (zincData.error && zincData.error.message) || "Zinc order placement failed";
           
           // Mark parent order as manual review

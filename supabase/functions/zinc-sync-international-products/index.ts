@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { verifyAdmin } from "../_shared/auth.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
-import { calculateFee, calculateRealCost, calculateProfitEngine, applyProfitProtection, calculateUruboxEstimate } from "../_shared/pricing.ts";
+import { calculateFee, calculateCanonicalPricing, calculateUruboxEstimate } from "../_shared/pricing.ts";
 import { getEffectiveExchangeRate } from "../_shared/internationalPricing.ts";
 
 serve(async (req) => {
@@ -118,11 +118,9 @@ serve(async (req) => {
         const fee = calculateFee(base_price_usd, pricing_mode, settings.fixed_markup_usd, settings.percentage_markup, settings.tiered_markup_rules);
         
         const usaShipping = Number(p.usa_domestic_shipping_usd || 0);
-        const realCost = calculateRealCost(base_price_usd, usaShipping, settings as any);
-        const expectedProfit = calculateProfitEngine(realCost, settings as any);
-        const protection = applyProfitProtection(base_price_usd, fee, realCost, expectedProfit, settings as any);
+        const canonical = calculateCanonicalPricing(base_price_usd, usaShipping, fee, settings as any);
 
-        const final_price_usd = protection.finalPrice + usaShipping;
+        const final_price_usd = canonical.final_price_usd;
         const final_price_uyu = Number((final_price_usd * effective_rate).toFixed(2));
         
         const urubox_estimated_cost_usd = calculateUruboxEstimate(p.weight_grams, p.category, settings as any);
@@ -131,9 +129,9 @@ serve(async (req) => {
             base_price_usd,
             final_price_usd,
             final_price_uyu,
-            collectibles_fee_usd: protection.finalFee,
-            expected_profit_usd: expectedProfit,
-            real_cost_usd: realCost,
+            collectibles_fee_usd: canonical.collectibles_fee_usd,
+            expected_profit_usd: canonical.expected_profit_usd,
+            real_cost_usd: canonical.acquisition_cost_usd,
             urubox_estimated_cost_usd,
             total_estimated_cost_usd: final_price_usd + urubox_estimated_cost_usd,
             availability,

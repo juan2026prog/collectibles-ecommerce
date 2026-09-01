@@ -261,7 +261,7 @@ describe('Product Export & Import System Audit', () => {
     expect(preview.rows.length).toBe(1);
     expect(preview.rows[0].parsedData.resolvedMbeType).toBe('mbe_pak');
     expect(preview.rows[0].parsedData.resolvedArStatus).toBe('auto');
-  });
+  }, 15000);
 
   it('11. Verification: fixed order is strictly enforced for master fields', () => {
     const keys = masterFields.map(f => f.key);

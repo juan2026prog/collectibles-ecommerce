@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
-import { calculateFee, calculateRealCost, calculateProfitEngine, applyProfitProtection } from "../_shared/pricing.ts";
+import { calculateFee, calculateCanonicalPricing } from "../_shared/pricing.ts";
 import { getEffectiveExchangeRate } from "../_shared/internationalPricing.ts";
 
 serve(async (req) => {
@@ -30,7 +30,7 @@ serve(async (req) => {
     const res = await fetch(url, { headers: { 'Authorization': `Bearer ${ZINC_API_KEY}` } });
 
     if (!res.ok) {
-       throw new Error(`Zinc API error: ${res.status}`);
+       throw new Error(`Retailer API error: ${res.status}`);
     }
 
     const data = await res.json();
@@ -42,27 +42,24 @@ serve(async (req) => {
       return new Response(JSON.stringify({ 
         status: 'unavailable', 
         message: 'Producto sin precio disponible' 
-      }), { headers: getCorsHeaders(), status: 200 });
+      }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }, status: 200 });
     }
 
     const pricing_mode = prod.pricing_mode || settings.pricing_mode || 'amazon_price_plus_fee';
     const fee = calculateFee(newPrice, pricing_mode, settings.fixed_markup_usd, settings.percentage_markup, settings.tiered_markup_rules);
-    
     const usaShipping = Number(prod.usa_domestic_shipping_usd || 0);
-    const realCost = calculateRealCost(newPrice, usaShipping, settings);
-    const expectedProfit = calculateProfitEngine(realCost, settings);
-    const protection = applyProfitProtection(newPrice, fee, realCost, expectedProfit, settings);
 
-    const finalPriceWithShipping = protection.finalPrice + usaShipping;
+    // Canonical Pricing Engine
+    const canonical = calculateCanonicalPricing(newPrice, usaShipping, fee, settings);
 
     // Check if the price changed significantly
     const oldPrice = prod.final_price_usd;
-    const variationPercent = Math.abs((finalPriceWithShipping - oldPrice) / oldPrice) * 100;
+    const variationPercent = oldPrice > 0 ? Math.abs((canonical.final_price_usd - oldPrice) / oldPrice) * 100 : 0;
 
     let action = 'ok';
     let message = 'Precio validado correctamente';
 
-    if (protection.isLoss) {
+    if (canonical.is_loss_adjusted && settings.never_sell_at_loss === false) {
       action = 'manual_review';
       message = 'Rentabilidad por debajo del mínimo absoluto. Requiere revisión.';
     } else if (variationPercent > (settings.max_price_variation_percent || 5.0)) {
@@ -83,14 +80,14 @@ serve(async (req) => {
       action,
       message,
       new_amazon_price: newPrice,
-      new_final_price_usd: finalPriceWithShipping,
-      new_final_price_uyu: Number((finalPriceWithShipping * effective_rate).toFixed(2)),
-      real_cost: realCost,
-      expected_profit: expectedProfit,
-      protection_applied: protection.isLoss
-    }), { headers: getCorsHeaders(), status: 200 });
+      new_final_price_usd: canonical.final_price_usd,
+      new_final_price_uyu: Number((canonical.final_price_usd * effective_rate).toFixed(2)),
+      real_cost: canonical.acquisition_cost_usd,
+      expected_profit: canonical.expected_profit_usd,
+      protection_applied: canonical.is_loss_adjusted
+    }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }, status: 200 });
 
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message }), { headers: getCorsHeaders(), status: 500 });
+    return new Response(JSON.stringify({ error: error.message }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }, status: 500 });
   }
 });

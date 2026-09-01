@@ -225,28 +225,35 @@ export default function CartDrawer() {
               </div>
 
               {/* Free Shipping Promo Banner */}
-              <div className="border border-dashed border-blue-500/50 bg-blue-950/10 rounded-2xl p-4 space-y-3">
-                <div className="flex items-start gap-2.5">
-                  <span className="text-amber-400 text-lg mt-0.5">⚡</span>
-                  <div>
-                    <div className="text-xs font-bold text-white uppercase tracking-wider">
-                      Envíos GRATIS en compras mayores a {formatCurrencyPrice(freeShippingThreshold)}
+              {(() => {
+                const hasInternational = items.some(item => (item as any).is_international || (item as any).source_provider === 'zinc' || (item as any).shipping_type === 'international_courier_direct');
+                return (
+                  <div className="border border-dashed border-blue-500/50 bg-blue-950/10 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-start gap-2.5">
+                      <span className="text-amber-400 text-lg mt-0.5">⚡</span>
+                      <div>
+                        <div className="text-xs font-bold text-white uppercase tracking-wider">
+                          {hasInternational 
+                            ? `Envíos GRATIS en Uruguay en compras mayores a ${formatCurrencyPrice(freeShippingThreshold)}`
+                            : `Envíos GRATIS en compras mayores a ${formatCurrencyPrice(freeShippingThreshold)}`}
+                        </div>
+                        <div className="text-[10px] text-blue-400 mt-0.5">
+                          {hasInternational 
+                            ? 'Aplica a paquetes locales elegibles.' 
+                            : 'Aprovechá esta promoción de verano'}
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-[10px] text-blue-400 mt-0.5">
-                      Aprovechá esta promoción de verano
-                    </div>
-                  </div>
-                </div>
 
-                {/* Progress bar */}
-                <div className="space-y-1.5">
-                  <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-gradient-to-r from-blue-500 to-[#f00856] transition-all duration-500"
-                      style={{ width: `${freeShippingProgress}%` }}
-                    />
-                  </div>
-                  <div className="text-[10px] flex justify-between">
+                    {/* Progress bar */}
+                    <div className="space-y-1.5">
+                      <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-blue-500 to-[#f00856] transition-all duration-500"
+                          style={{ width: `${freeShippingProgress}%` }}
+                        />
+                      </div>
+                      <div className="text-[10px] flex justify-between">
                     {total - autoDiscountAmount >= freeShippingThreshold ? (
                       <span className="text-emerald-400 font-bold flex items-center gap-1">
                         <Sparkles className="w-3 h-3" /> ¡Tenés envío GRATIS!
@@ -266,6 +273,8 @@ export default function CartDrawer() {
                   </div>
                 </div>
               </div>
+              );
+            })()}
 
               {/* Product list header */}
               <div className="flex items-center justify-between text-sm">
@@ -308,10 +317,25 @@ export default function CartDrawer() {
                               {item.variant_name}
                             </p>
                           )}
-                          {item.vendor_name && item.vendor_id !== 'platform' && (
+                          {((item as any).is_international || (item as any).source_provider === 'zinc' || (item as any).shipping_type === 'international_courier_direct') ? (
+                             <div className="mt-1 space-y-0.5">
+                               <div className="flex items-center gap-1.5 flex-wrap">
+                                 <span className="text-[9px] font-black uppercase text-[#f00856]">Tienda Collectibles</span>
+                                 <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-sky-950/80 border border-sky-500/30 text-sky-400">
+                                   🌎 INTERNACIONAL
+                                 </span>
+                               </div>
+                               <p className="text-[10px] text-slate-400">Se entrega en tu casilla de EE.UU.</p>
+                             </div>
+                          ) : item.vendor_name && item.vendor_id !== 'platform' ? (
                              <div className="mt-1">
                                <p className="text-[9px] font-black uppercase text-[#f00856]">Tienda</p>
                                <p className="text-[10px] font-bold text-slate-300">{item.vendor_name}</p>
+                             </div>
+                          ) : (
+                             <div className="mt-1">
+                               <p className="text-[9px] font-black uppercase text-[#f00856]">Tienda</p>
+                               <p className="text-[10px] font-bold text-slate-300">Collectibles</p>
                              </div>
                           )}
                         </div>

@@ -203,11 +203,13 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
           <span className="text-slate-500">({reviewsCount})</span>
         </div>
         
-        {product.source_provider === 'zinc' && (
-          <div className="text-[9px] text-blue-400 font-bold uppercase mb-0.5">Vendido en Amazon</div>
+        {(product.is_international || product.source_provider === 'zinc' || product.shipping_type === 'international_courier_direct') && (
+          <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-950/80 border border-sky-500/30 text-[9px] text-sky-400 font-black tracking-wider uppercase mb-1">
+            <span>🌎</span> INTERNACIONAL
+          </div>
         )}
 
-        {/* COMPACT VENDOR LINE (Replaces heavy box) */}
+        {/* COMPACT VENDOR LINE */}
         <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-1 flex items-center flex-wrap gap-1 leading-tight">
           <span>
             Vendido por{' '}

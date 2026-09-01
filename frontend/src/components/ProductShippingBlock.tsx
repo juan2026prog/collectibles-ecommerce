@@ -35,7 +35,12 @@ export default function ProductShippingBlock({
 }: ProductShippingBlockProps) {
   
   const isPreorder = Boolean(product?.badge?.toLowerCase().includes('preventa') || product?.metadata?.is_preorder || product?.title?.toLowerCase().includes('preventa'));
-  const isInternational = product?.source_provider === 'zinc' || product?.source_provider === 'amazon';
+  const isInternational = Boolean(
+    product?.is_international || 
+    product?.source_provider === 'zinc' || 
+    product?.source_provider === 'amazon' ||
+    product?.shipping_type === 'international_courier_direct'
+  );
   const isPickupOnly = Boolean(product?.metadata?.pickup_only || product?.dimensions?.pickup_only);
 
   const defaultCollectiblesSettings: ShippingSettings = {
@@ -84,18 +89,27 @@ export default function ProductShippingBlock({
   const freeShippingThreshold = settings.free_shipping_from || settings.free_shipping?.min_amount;
 
   if (isInternational) {
+    const weightKg = Number(product?.weight_kg || product?.metadata?.weight_kg || 0.5);
+    const estUruboxUsd = Number(((weightKg * 20.0) + 5.0).toFixed(2));
+
     return (
-      <div className="py-4 border-t border-white/10 space-y-2">
-        <div className="flex items-center gap-2">
-          <PackageCheck className="w-4 h-4 text-indigo-400" />
-          <span className="text-xs font-black uppercase tracking-wider text-white">Importación Amazon USA</span>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 ml-auto">
-            USA ✈ Uruguay
+      <div className="py-4 border-t border-white/10 space-y-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-base">🌎</span>
+            <span className="text-xs font-black uppercase tracking-wider text-white">Entrega en tu casilla de EE.UU.</span>
+          </div>
+          <span className="text-[10px] font-black px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+            SIN CARGO ADICIONAL
           </span>
         </div>
         <p className="text-xs text-slate-300 leading-relaxed">
-          Se envía a tu casilla de courier en EE.UU. Costo internacional estimado según peso al ingresar a casilla.
+          Collectibles envía este producto a la dirección de tu courier en EE.UU. (Urubox, USX, PuntoMio u otro). El traslado Miami → Uruguay se abona directamente a tu courier.
         </p>
+        <div className="bg-sky-950/30 border border-sky-500/20 rounded-xl p-2.5 text-[11px] text-sky-300">
+          <span className="font-bold text-sky-200 block">Envío estimado a Uruguay (Urubox): ~ USD {estUruboxUsd}</span>
+          <span className="text-[10px] text-sky-400/80 block mt-0.5">Estimación informativa referencial. El importe final se paga directamente al courier.</span>
+        </div>
       </div>
     );
   }

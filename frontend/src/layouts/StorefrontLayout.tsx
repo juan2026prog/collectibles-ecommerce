@@ -18,6 +18,7 @@ import CookieConsent from '../components/CookieConsent';
 import CartDrawer from '../components/CartDrawer';
 import { generateTailwindPalette } from '../lib/colorUtils';
 import { useSiteSettings } from '../hooks/useSiteSettings';
+import { useInternationalSettings } from '../hooks/useInternationalSettings';
 import { STORE_ISOLOGO_URL } from '../lib/brand';
 import { sanitizeHeadMarkup, sanitizeRichHtml } from '../lib/sanitize';
 import { FacebookIcon, InstagramIcon, TwitterIcon, YoutubeIcon, TiktokIcon, WhatsappIcon } from '../components/SocialIcons';
@@ -69,6 +70,7 @@ export default function StorefrontLayout() {
   const { categories: allCategories } = useCategories();
   const { brands: allBrands } = useBrands();
   const { settings, loaded: settingsLoaded } = useSiteSettings();
+  const { publicEnabled: intlPublicEnabled } = useInternationalSettings();
   
 
   // Meta Pixel is already tracked globally by MetaPixelTracker in App.tsx
@@ -149,14 +151,23 @@ export default function StorefrontLayout() {
       }
     }
 
-    return [
+    const links = [
       { name: settings['header_menu_home'] || t('nav.home'), href: '/' },
-      { name: settings['header_menu_categories'] || t('nav.categories'), href: '/shop', hasMega: true, megaType: 'categories' },
-      { name: settings['header_menu_brands'] || t('nav.brands'), href: '/shop', hasMega: true, megaType: 'brands' },
-      { name: settings['header_menu_about'] || t('nav.about'), href: '/page/nosotros' },
-      { name: settings['header_menu_contact'] || t('nav.contact'), href: '/contact' },
+      { name: settings['header_menu_categories'] || t('nav.categories'), href: '/shop', hasMega: true, megaType: 'categories' as const },
+      { name: settings['header_menu_brands'] || t('nav.brands'), href: '/shop', hasMega: true, megaType: 'brands' as const },
     ];
-  }, [t, settings]);
+
+    if (intlPublicEnabled) {
+      links.push({ name: 'Internacional', href: '/intl' });
+    }
+
+    links.push(
+      { name: settings['header_menu_about'] || t('nav.about'), href: '/page/nosotros' },
+      { name: settings['header_menu_contact'] || t('nav.contact'), href: '/contact' }
+    );
+
+    return links;
+  }, [t, settings, intlPublicEnabled]);
 
   const FOOTER_LINKS = useMemo(() => {
     const customFooterStr = settings['appearance_footer_menu_json'];

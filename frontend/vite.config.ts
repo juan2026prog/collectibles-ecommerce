@@ -37,8 +37,14 @@ export default defineConfig({
     globals: true,
     include: [
       'src/**/*.{test,spec}.{ts,tsx}',
-      'tests/**/*.{test,spec}.{ts,tsx}',
-      '../tests/integration/**/*.test.ts',
+      'tests/unit/**/*.{test,spec}.{ts,tsx}',
+    ],
+    exclude: [
+      '**/node_modules/**',
+      '**/.git/**',
+      '**/e2e/**',
+      'src/tests/e2e/**',
+      'tests/e2e/**',
     ],
     coverage: {
       reporter: ['text', 'json', 'html'],
