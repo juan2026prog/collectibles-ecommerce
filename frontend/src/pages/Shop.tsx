@@ -224,7 +224,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   const { promotions } = usePromotions();
   const { t } = useLocale();
   const { formatCurrencyPrice, exchangeRates } = useCurrency();
-  const fxRate = (exchangeRates && exchangeRates.USD) ? (1 / exchangeRates.USD) : 40;
+  const fxRate = exchangeRates?.USD ? (1 / exchangeRates.USD) : undefined;
   const navigate = useNavigate();
 
   // ✅ Fully server-side — useProducts now resolves slug → id internally

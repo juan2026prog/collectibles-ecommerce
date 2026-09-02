@@ -322,6 +322,11 @@ export function useProducts(filters: ProductFilters = {}) {
           ${categoryId ? ', product_categories!inner(category_id)' : ''}
       `;
 
+      const limit = filters.limit || 12;
+      const offset = filters.offset || 0;
+      const required = offset + limit;
+      const fxRate = filters.exchangeRate;
+
       let localQuery = supabase
         .from('products')
         .select(selectStr, { count: 'exact' })
@@ -350,8 +355,6 @@ export function useProducts(filters: ProductFilters = {}) {
       if (filters.search) {
         localQuery = localQuery.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
       }
-
-      localQuery = localQuery.order('vendor_id', { ascending: true, nullsFirst: true });
 
       let intlQuery: any = null;
       if (!filters.license && !filters.theme && !filters.vendor_store_id && !filters.badge && (!filters.condition || filters.condition === 'new')) {
@@ -382,16 +385,40 @@ export function useProducts(filters: ProductFilters = {}) {
             }
           }
         }
-        if (filters.minPrice) intlQuery = intlQuery.gte('final_price_usd', filters.minPrice);
-        if (filters.maxPrice) intlQuery = intlQuery.lte('final_price_usd', filters.maxPrice);
+
+        // Convert UYU min/max filter to USD for SQL international products query
+        if (fxRate && fxRate > 0) {
+          if (filters.minPrice) intlQuery = intlQuery.gte('final_price_usd', filters.minPrice / fxRate);
+          if (filters.maxPrice) intlQuery = intlQuery.lte('final_price_usd', filters.maxPrice / fxRate);
+        }
       }
 
-      const limit = filters.limit || 12;
-      const offset = filters.offset || 0;
+      // Order origins in SQL before range slicing to ensure true global page N
+      switch (filters.sortBy) {
+        case 'price-low':
+          localQuery = localQuery.order('base_price', { ascending: true }).order('id', { ascending: true });
+          if (intlQuery) intlQuery = intlQuery.order('final_price_usd', { ascending: true }).order('id', { ascending: true });
+          break;
+        case 'price-high':
+          localQuery = localQuery.order('base_price', { ascending: false }).order('id', { ascending: true });
+          if (intlQuery) intlQuery = intlQuery.order('final_price_usd', { ascending: false }).order('id', { ascending: true });
+          break;
+        case 'newest':
+          localQuery = localQuery.order('created_at', { ascending: false }).order('id', { ascending: true });
+          if (intlQuery) intlQuery = intlQuery.order('id', { ascending: false });
+          break;
+        case 'name':
+          localQuery = localQuery.order('title', { ascending: true }).order('id', { ascending: true });
+          if (intlQuery) intlQuery = intlQuery.order('title', { ascending: true }).order('id', { ascending: true });
+          break;
+        default:
+          localQuery = localQuery.order('vendor_id', { ascending: true, nullsFirst: true }).order('created_at', { ascending: false }).order('id', { ascending: true });
+          if (intlQuery) intlQuery = intlQuery.order('id', { ascending: true });
+      }
 
-      // Range for pagination
-      localQuery = localQuery.range(0, offset + limit + 20);
-      if (intlQuery) intlQuery = intlQuery.range(0, offset + limit + 20);
+      // Range slicing: fetch up to 'required' items from EACH origin
+      localQuery = localQuery.range(0, required - 1);
+      if (intlQuery) intlQuery = intlQuery.range(0, required - 1);
 
       const [localRes, intlRes] = await Promise.all([
         localQuery,
@@ -403,30 +430,32 @@ export function useProducts(filters: ProductFilters = {}) {
       const intlData = intlRes.data || [];
       const intlCount = intlRes.count || 0;
 
-      const fxRate = filters.exchangeRate || 40;
-
-      const mappedIntl = intlData.map((item: any) => ({
-        id: item.id,
-        slug: item.id,
-        title: item.title,
-        description: item.description,
-        base_price: Number(item.final_price_usd),
-        catalog_comparison_price: Number(item.final_price_usd) * fxRate,
-        compare_at_price: Number(item.amazon_list_price_usd || item.final_price_usd),
-        images: [{ id: item.id, url: item.image_url, is_primary: true }],
-        image_url: item.image_url,
-        brand: { name: item.brand || 'Importado', slug: item.brand ? item.brand.toLowerCase() : 'importado' },
-        category: item.category_rel || { name: item.category || 'Coleccionables', slug: item.category ? item.category.toLowerCase() : 'coleccionables' },
-        subcategory: item.subcategory_rel || null,
-        collectibles_category_id: item.collectibles_category_id,
-        collectibles_subcategory_id: item.collectibles_subcategory_id,
-        source_provider: 'zinc',
-        is_international: true,
-        is_active: true,
-        status: item.status,
-        raw_international_data: item,
-        international_products: [item]
-      }));
+      const mappedIntl = intlData.map((item: any) => {
+        const usdPrice = Number(item.final_price_usd);
+        const compPrice = fxRate && fxRate > 0 ? usdPrice * fxRate : usdPrice;
+        return {
+          id: item.id,
+          slug: item.id,
+          title: item.title,
+          description: item.description,
+          base_price: usdPrice,
+          catalog_comparison_price: compPrice,
+          compare_at_price: Number(item.amazon_list_price_usd || item.final_price_usd),
+          images: [{ id: item.id, url: item.image_url, is_primary: true }],
+          image_url: item.image_url,
+          brand: { name: item.brand || 'Importado', slug: item.brand ? item.brand.toLowerCase() : 'importado' },
+          category: item.category_rel || { name: item.category || 'Coleccionables', slug: item.category ? item.category.toLowerCase() : 'coleccionables' },
+          subcategory: item.subcategory_rel || null,
+          collectibles_category_id: item.collectibles_category_id,
+          collectibles_subcategory_id: item.collectibles_subcategory_id,
+          source_provider: 'zinc',
+          is_international: true,
+          is_active: true,
+          status: item.status,
+          raw_international_data: item,
+          international_products: [item]
+        };
+      });
 
       const mappedLocal = localData.map((item: any) => ({
         ...item,
@@ -434,13 +463,6 @@ export function useProducts(filters: ProductFilters = {}) {
       }));
 
       let combined = [...mappedLocal, ...mappedIntl];
-
-      if (filters.minPrice) {
-        combined = combined.filter(p => p.catalog_comparison_price >= filters.minPrice!);
-      }
-      if (filters.maxPrice) {
-        combined = combined.filter(p => p.catalog_comparison_price <= filters.maxPrice!);
-      }
 
       switch (filters.sortBy) {
         case 'price-low':
