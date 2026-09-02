@@ -225,6 +225,7 @@ export default function ProductDetail() {
   const displayImage = resolveImage(currentImgObj?.url || product.image_url, 'detail');
 
   const stock = selectedVariant ? (selectedVariant.stock ?? product.stock) : product.stock;
+  const isIntl = product.source_provider === 'zinc' || Boolean(product.is_international);
 
   const getStockInfo = () => {
     if (stock <= 0) return { text: 'Agotado', className: 'text-red-400 border-red-500/20 bg-red-500/10' };
@@ -240,7 +241,6 @@ export default function ProductDetail() {
   const addToCart = (customVariant?: any, directCheckout = false) => {
     if (stock <= 0) return;
     const targetVariant = customVariant || selectedVariant;
-    const isIntl = product.source_provider === 'zinc' || product.is_international;
 
     if (isIntl) {
       internationalCart.addItem({
