@@ -10,7 +10,7 @@ import { useCartContext } from '../contexts/CartContext';
 import { useWishlistContext } from '../contexts/WishlistContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocale } from '../contexts/LocaleContext';
-import { useCategories, useBrands } from '../hooks/useData';
+import { useCategories, useBrands, useLicenses, useThemes } from '../hooks/useData';
 import LocaleSwitcher from '../components/LocaleSwitcher';
 import WhatsAppFAB from '../components/WhatsAppFAB';
 import { supabase } from '../lib/supabase';
@@ -34,11 +34,11 @@ import { trackClarityEvent } from '../lib/analyticsTracker';
 // NAV_LINKS and MEGA_MENU are built dynamically inside the component
 // using t() for translations and useCategories() for live DB data.
 
-const DesktopDropdownMenu = React.memo(({ items }: { items: Array<{ label: string; url: string }> }) => {
-  if (items.length === 0) return null;
+const DesktopDropdownMenu = React.memo(({ items, footerLink }: { items: Array<{ label: string; url: string }>; footerLink?: { label: string; url: string } }) => {
+  if (items.length === 0 && !footerLink) return null;
   return (
     <div className="absolute top-full left-0 w-64 pt-0 pointer-events-none group-hover:pointer-events-auto z-[110] opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 transition-all duration-200 ease-out">
-      <div className="bg-[#05070f] border-l border-r border-b border-white/10 rounded-b-2xl shadow-2xl shadow-black/80 overflow-hidden flex flex-col py-2 max-h-[400px] overflow-y-auto no-scrollbar">
+      <div className="bg-[#05070f] border-l border-r border-b border-white/10 rounded-b-2xl shadow-2xl shadow-black/80 overflow-hidden flex flex-col py-2 max-h-[420px] overflow-y-auto no-scrollbar">
         {items.map((item) => (
           <Link
             key={item.label + item.url}
@@ -48,6 +48,14 @@ const DesktopDropdownMenu = React.memo(({ items }: { items: Array<{ label: strin
             {item.label}
           </Link>
         ))}
+        {footerLink && (
+          <Link
+            to={footerLink.url}
+            className="px-5 py-3 mt-1 text-[#f00856] bg-white/[0.03] hover:bg-[#f00856]/10 flex items-center justify-between border-t border-white/10 text-[11px] font-black tracking-widest transition-all"
+          >
+            <span>{footerLink.label}</span>
+          </Link>
+        )}
       </div>
     </div>
   );
@@ -69,6 +77,8 @@ export default function StorefrontLayout() {
   const { language, currency, t, formatPrice } = useLocale();
   const { categories: allCategories } = useCategories();
   const { brands: allBrands } = useBrands();
+  const { licenses: activeLicenses } = useLicenses(true);
+  const { themes: activeThemes } = useThemes(true);
   const { settings, loaded: settingsLoaded } = useSiteSettings();
   const { publicEnabled: intlPublicEnabled } = useInternationalSettings();
   
@@ -126,7 +136,7 @@ export default function StorefrontLayout() {
       name: string;
       href: string;
       hasMega?: boolean;
-      megaType?: 'categories' | 'brands';
+      megaType?: 'categories' | 'brands' | 'licenses' | 'themes';
       subItems?: any[];
     }> = [];
 
@@ -136,15 +146,20 @@ export default function StorefrontLayout() {
         const parsed = JSON.parse(customMenuStr);
         if (Array.isArray(parsed) && parsed.length > 0) {
           links = parsed.map((item: any) => {
-            const hasMega = item.url === '/shop' || item.url.includes('/shop');
-            let megaType: 'categories' | 'brands' | undefined = undefined;
-            if (hasMega) {
-              if (item.label.toLowerCase().includes('marca') || item.url.includes('brand')) {
-                megaType = 'brands';
-              } else {
-                megaType = 'categories';
-              }
+            const labelLower = (item.label || '').toLowerCase();
+            const urlLower = (item.url || '').toLowerCase();
+
+            let megaType: 'categories' | 'brands' | 'licenses' | 'themes' | undefined = undefined;
+            if (labelLower.includes('categor') || urlLower.includes('categoria')) {
+              megaType = 'categories';
+            } else if (labelLower.includes('marca') || urlLower.includes('marca') || urlLower.includes('brand')) {
+              megaType = 'brands';
+            } else if (labelLower.includes('licencia') || urlLower.includes('licencia')) {
+              megaType = 'licenses';
+            } else if (labelLower.includes('theme') || labelLower.includes('tema') || urlLower.includes('theme') || urlLower.includes('tema')) {
+              megaType = 'themes';
             }
+
             return {
               name: item.label,
               href: item.url,
@@ -163,19 +178,47 @@ export default function StorefrontLayout() {
       links = [
         { name: settings['header_menu_home'] || t('nav.home'), href: '/' },
         { name: settings['header_menu_categories'] || t('nav.categories'), href: '/shop', hasMega: true, megaType: 'categories' as const },
-        { name: 'LICENCIAS', href: '/licencias' },
-        { name: 'THEMES', href: '/themes' },
+        { name: 'LICENCIAS', href: '/licencias', hasMega: true, megaType: 'licenses' as const },
+        { name: 'THEMES', href: '/themes', hasMega: true, megaType: 'themes' as const },
         { name: settings['header_menu_brands'] || t('nav.brands'), href: '/shop', hasMega: true, megaType: 'brands' as const },
         { name: settings['header_menu_about'] || t('nav.about'), href: '/page/nosotros' },
         { name: settings['header_menu_contact'] || t('nav.contact'), href: '/contact' }
       ];
     }
 
+    // Guarantee Licencias & Themes are present in the navigation bar
+    const hasLicencias = links.some(l => l.href === '/licencias' || l.name?.toUpperCase()?.includes('LICENCIA'));
+    if (!hasLicencias) {
+      const catsIdx = links.findIndex(l => l.megaType === 'categories' || l.name?.toUpperCase()?.includes('CATEGOR') || l.href?.includes('shop'));
+      const insertIdx = catsIdx !== -1 ? catsIdx + 1 : 1;
+      links.splice(insertIdx, 0, {
+        name: 'LICENCIAS',
+        href: '/licencias',
+        hasMega: true,
+        megaType: 'licenses'
+      });
+    } else {
+      links = links.map(l => (l.href === '/licencias' || l.name?.toUpperCase()?.includes('LICENCIA')) ? { ...l, hasMega: true, megaType: 'licenses' as const } : l);
+    }
+
+    const hasThemes = links.some(l => l.href === '/themes' || l.href === '/temas' || l.name?.toUpperCase()?.includes('THEME') || l.name?.toUpperCase()?.includes('TEMA'));
+    if (!hasThemes) {
+      const licsIdx = links.findIndex(l => l.href === '/licencias' || l.megaType === 'licenses');
+      const insertIdx = licsIdx !== -1 ? licsIdx + 1 : 2;
+      links.splice(insertIdx, 0, {
+        name: 'THEMES',
+        href: '/themes',
+        hasMega: true,
+        megaType: 'themes'
+      });
+    } else {
+      links = links.map(l => (l.href === '/themes' || l.href === '/temas' || l.name?.toUpperCase()?.includes('THEME') || l.name?.toUpperCase()?.includes('TEMA')) ? { ...l, hasMega: true, megaType: 'themes' as const } : l);
+    }
+
     // Dynamic International Menu Item Injection / Removal based on international_public_enabled
     if (intlPublicEnabled) {
       const hasIntl = links.some(l => l.href === '/intl' || l.name?.toUpperCase() === 'INTERNACIONAL');
       if (!hasIntl) {
-        // Insert right after the catalog / brands link or at position 3
         const brandsIdx = links.findIndex(l => l.megaType === 'brands' || l.name?.toUpperCase()?.includes('MARCA') || l.href?.includes('brand'));
         const insertIdx = brandsIdx !== -1 ? brandsIdx + 1 : Math.min(3, links.length);
         links.splice(insertIdx, 0, {
@@ -184,7 +227,6 @@ export default function StorefrontLayout() {
         });
       }
     } else {
-      // Strictly remove if disabled
       links = links.filter(l => l.href !== '/intl' && l.href !== '/internacional' && l.name?.toUpperCase() !== 'INTERNACIONAL');
     }
 
@@ -387,7 +429,18 @@ export default function StorefrontLayout() {
                         ? topLevel.map(c => ({ label: c.name, url: `/categoria/${c.slug}` }))
                         : link.hasMega && link.megaType === 'brands'
                           ? allBrands.slice(0, 15).map(b => ({ label: b.name, url: `/marca/${b.slug}` }))
-                          : link.subItems || []
+                          : link.hasMega && link.megaType === 'licenses'
+                            ? activeLicenses.slice(0, 12).map(l => ({ label: l.name, url: `/licencias/${l.slug}` }))
+                            : link.hasMega && link.megaType === 'themes'
+                              ? activeThemes.slice(0, 10).map(t => ({ label: t.name, url: `/themes/${t.slug}` }))
+                              : link.subItems || []
+                    }
+                    footerLink={
+                      link.hasMega && link.megaType === 'licenses'
+                        ? { label: 'Ver todas las licencias →', url: '/licencias' }
+                        : link.hasMega && link.megaType === 'themes'
+                          ? { label: 'Ver todos los themes →', url: '/themes' }
+                          : undefined
                     }
                   />
                 )}
@@ -672,6 +725,44 @@ export default function StorefrontLayout() {
                             {b.name}
                           </Link>
                         ))}
+                        {link.hasMega && link.megaType === 'licenses' && activeLicenses.slice(0, 10).map((l: any) => (
+                          <Link 
+                            key={l.id} 
+                            to={`/licencias/${l.slug}`} 
+                            className="text-lg font-bold text-slate-400 hover:text-white transition-colors py-0.5"
+                            onClick={() => setMobileMenuOpen(false)}
+                          >
+                            {l.name}
+                          </Link>
+                        ))}
+                        {link.hasMega && link.megaType === 'licenses' && (
+                          <Link 
+                            to="/licencias" 
+                            className="text-base font-black text-[#f00856] py-1 underline"
+                            onClick={() => setMobileMenuOpen(false)}
+                          >
+                            Ver todas las licencias →
+                          </Link>
+                        )}
+                        {link.hasMega && link.megaType === 'themes' && activeThemes.slice(0, 7).map((t: any) => (
+                          <Link 
+                            key={t.id} 
+                            to={`/themes/${t.slug}`} 
+                            className="text-lg font-bold text-slate-400 hover:text-white transition-colors py-0.5"
+                            onClick={() => setMobileMenuOpen(false)}
+                          >
+                            {t.name}
+                          </Link>
+                        ))}
+                        {link.hasMega && link.megaType === 'themes' && (
+                          <Link 
+                            to="/themes" 
+                            className="text-base font-black text-[#f00856] py-1 underline"
+                            onClick={() => setMobileMenuOpen(false)}
+                          >
+                            Ver todos los themes →
+                          </Link>
+                        )}
                       </div>
                     )}
                   </div>

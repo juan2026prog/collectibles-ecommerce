@@ -18,6 +18,8 @@ export function escapeHtml(str?: string | null): string {
 export function generateCanonical(type: string, slug?: string): string {
   if (type === 'home' || !type) return BASE_URL;
   if (type === 'shop') return `${BASE_URL}/shop`;
+  if (type === 'licencias' || type === 'license') return slug ? `${BASE_URL}/licencias/${slug}` : `${BASE_URL}/licencias`;
+  if (type === 'themes' || type === 'theme') return slug ? `${BASE_URL}/themes/${slug}` : `${BASE_URL}/themes`;
   if (type === 'producto' || type === 'product') return `${BASE_URL}/producto/${slug}`;
   if (type === 'categoria' || type === 'category') return `${BASE_URL}/categoria/${slug}`;
   if (type === 'marca' || type === 'brand') return `${BASE_URL}/marca/${slug}`;

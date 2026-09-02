@@ -282,20 +282,15 @@ export function BrandGovernanceDashboard() {
       }
 
       // Update Product
+      if (finalLicenseId) {
+        updates.license_id = finalLicenseId;
+      }
+
       const { error: updErr } = await supabase
         .from('products')
         .update(updates)
         .eq('id', productItem.id);
       if (updErr) throw updErr;
-
-      // Update Product License (M:N) if license suggested/selected
-      if (finalLicenseId) {
-        await supabase.from('product_licenses').delete().eq('product_id', productItem.id);
-        await supabase.from('product_licenses').insert({
-          product_id: productItem.id,
-          license_id: finalLicenseId
-        });
-      }
 
       // Audit Log
       await supabase.from('vendor_brand_audit_logs').insert({
@@ -354,16 +349,11 @@ export function BrandGovernanceDashboard() {
         if (targetBrandId) {
           updates.brand_id = targetBrandId;
         }
+        if (targetLicenseId) {
+          updates.license_id = targetLicenseId;
+        }
 
         await supabase.from('products').update(updates).eq('id', p.id);
-
-        if (targetLicenseId) {
-          await supabase.from('product_licenses').delete().eq('product_id', p.id);
-          await supabase.from('product_licenses').insert({
-            product_id: p.id,
-            license_id: targetLicenseId
-          });
-        }
 
         await supabase.from('vendor_brand_audit_logs').insert({
           product_id: p.id,

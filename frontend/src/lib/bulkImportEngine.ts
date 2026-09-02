@@ -601,16 +601,39 @@ export async function parseAndPreviewImportFile(
 
     // 4. Resolve License
     let resolvedLicenseId: string | null = null;
-    if (rowValuesByKey.license_name) {
-      const lName = String(rowValuesByKey.license_name).trim().toLowerCase();
-      const matchedLicense = metadata.licenses.find(l => l.name.toLowerCase().trim() === lName);
+    if (rowValuesByKey.license_name && String(rowValuesByKey.license_name).trim() !== '' && rowValuesByKey.license_name !== '—' && rowValuesByKey.license_name !== '-') {
+      const rawLName = String(rowValuesByKey.license_name).trim();
+      const lNameLower = rawLName.toLowerCase();
+      const lSlug = lNameLower.replace(/[^a-z0-9]+/g, '-');
+
+      const LICENSE_ALIASES: Record<string, string> = {
+        'dc': 'dc-comics',
+        'pokemon': 'pokemon',
+        'pokémon': 'pokemon',
+        'starwars': 'star-wars',
+        'dragonball': 'dragon-ball',
+        'dragon ball z': 'dragon-ball',
+        'dbz': 'dragon-ball',
+        'tmnt': 'teenage-mutant-ninja-turtles',
+        'turtles': 'teenage-mutant-ninja-turtles',
+        'motu': 'masters-of-the-universe'
+      };
+
+      const targetSlug = LICENSE_ALIASES[lNameLower] || LICENSE_ALIASES[lSlug] || lSlug;
+
+      const matchedLicense = metadata.licenses.find(l => 
+        l.name.toLowerCase().trim() === lNameLower || 
+        l.slug === targetSlug || 
+        l.slug === lSlug
+      );
+
       if (matchedLicense) {
         resolvedLicenseId = matchedLicense.id;
       } else if (operation === 'create') {
         rowErrors.push(`La licencia "${rowValuesByKey.license_name}" no existe en Collectibles.uy.`);
       }
     } else if (existingProduct) {
-      resolvedLicenseId = existingProduct.metadata?.license_id || null;
+      resolvedLicenseId = existingProduct.license_id || existingProduct.metadata?.license_id || null;
     }
 
     // 5. Resolve Vendor (Admin only)
@@ -1060,12 +1083,7 @@ export async function executeBulkImport(
             category_id: row.resolvedSubcategoryId
           });
         }
-        if (row.resolvedLicenseId) {
-          await supabase.from('product_licenses').insert({
-            product_id: newProd.id,
-            license_id: row.resolvedLicenseId
-          });
-        }
+
 
         createdCount++;
         successCount++;

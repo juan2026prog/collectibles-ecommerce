@@ -1285,6 +1285,23 @@ export function useLicenses(onlyPublicWithProducts = false) {
       if (onlyPublicWithProducts) {
         list = list.filter((l: any) => l.is_active !== false && (l.published_product_count === undefined || l.published_product_count > 0));
       }
+
+      list.sort((a: any, b: any) => {
+        const featA = a.is_featured ? 1 : 0;
+        const featB = b.is_featured ? 1 : 0;
+        if (featA !== featB) return featB - featA;
+
+        const sortA = a.sort_order ?? 999;
+        const sortB = b.sort_order ?? 999;
+        if (sortA !== sortB) return sortA - sortB;
+
+        const countA = a.published_product_count ?? 0;
+        const countB = b.published_product_count ?? 0;
+        if (countA !== countB) return countB - countA;
+
+        return (a.name || '').localeCompare(b.name || '');
+      });
+
       setLicenses(list);
       setLoading(false);
     }

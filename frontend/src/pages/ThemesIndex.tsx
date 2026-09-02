@@ -19,7 +19,7 @@ export default function ThemesIndex() {
 
   const seoTitle = generateMetaTitle('shop', 'Temáticas y Categorías Comerciales');
   const seoDesc = generateMetaDescription('shop', null, 'Explora coleccionables por temática: Anime & Manga, Cómics, Cine & TV, Videojuegos, Horror, Música y Deportes.');
-  const canonicalUrl = generateCanonical('shop', 'themes');
+  const canonicalUrl = generateCanonical('themes');
 
   return (
     <div className="max-w-[1500px] mx-auto px-4 sm:px-6 py-8 md:py-12 space-y-10">

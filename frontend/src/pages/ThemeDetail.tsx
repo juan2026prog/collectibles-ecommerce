@@ -77,7 +77,7 @@ export default function ThemeDetail() {
 
   const seoTitle = generateMetaTitle('shop', theme.name);
   const seoDesc = generateMetaDescription('shop', theme.description, theme.name);
-  const canonicalUrl = generateCanonical('shop', `themes/${theme.slug}`);
+  const canonicalUrl = generateCanonical('themes', theme.slug);
 
   return (
     <div className="max-w-[1500px] mx-auto px-4 sm:px-6 py-6 md:py-10 space-y-8">

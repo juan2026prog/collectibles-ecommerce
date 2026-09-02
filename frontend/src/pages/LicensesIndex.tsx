@@ -44,7 +44,7 @@ export default function LicensesIndex() {
 
   const seoTitle = generateMetaTitle('shop', 'Licencias y Franquicias');
   const seoDesc = generateMetaDescription('shop', null, 'Explora nuestra colección oficial por licencia: Star Wars, Marvel, Dragon Ball, Pokémon, Disney y más.');
-  const canonicalUrl = generateCanonical('shop', 'licencias');
+  const canonicalUrl = generateCanonical('licencias');
 
   return (
     <div className="max-w-[1500px] mx-auto px-4 sm:px-6 py-8 md:py-12">

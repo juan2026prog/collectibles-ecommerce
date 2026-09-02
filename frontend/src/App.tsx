@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { CartProvider } from './contexts/CartContext';
 import { WishlistProvider } from './contexts/WishlistContext';
@@ -108,6 +108,11 @@ function ReferralTracker() {
   return null;
 }
 
+function NavigateToThemeDetail() {
+  const { slug } = useParams();
+  return <Navigate to={`/themes/${slug || ''}`} replace />;
+}
+
 function App() {
   return (
     <ErrorBoundary>
@@ -136,8 +141,8 @@ function App() {
                     <Route path="/licencias/:slug" element={<LicenseDetail />} />
                     <Route path="/themes" element={<ThemesIndex />} />
                     <Route path="/themes/:slug" element={<ThemeDetail />} />
-                    <Route path="/temas" element={<ThemesIndex />} />
-                    <Route path="/temas/:slug" element={<ThemeDetail />} />
+                    <Route path="/temas" element={<Navigate to="/themes" replace />} />
+                    <Route path="/temas/:slug" element={<NavigateToThemeDetail />} />
                     <Route path="/producto/:slug" element={<ProductDetail />} />
                     <Route path="/p/:slug" element={<ProductDetail />} />
                     <Route path="/store/:slug" element={<MarketplaceGuard><VendorStorefront /></MarketplaceGuard>} />

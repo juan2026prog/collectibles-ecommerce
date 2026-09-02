@@ -594,11 +594,7 @@ export default function AdminProducts() {
 
       if (!productId) return;
 
-      // Handle License Junction
-      await supabase.from('product_licenses').delete().eq('product_id', productId);
-      if (form.license_id) {
-        await supabase.from('product_licenses').insert({ product_id: productId, license_id: form.license_id });
-      }
+
 
       // 📦 Media 📦
       await supabase.from('product_images').delete().eq('product_id', productId);

@@ -76,7 +76,7 @@ export default function LicenseDetail() {
 
   const seoTitle = generateMetaTitle('shop', license.name);
   const seoDesc = generateMetaDescription('shop', license.description, license.name);
-  const canonicalUrl = generateCanonical('shop', `licencias/${license.slug}`);
+  const canonicalUrl = generateCanonical('licencias', license.slug);
 
   return (
     <div className="max-w-[1500px] mx-auto px-4 sm:px-6 py-6 md:py-10 space-y-8">
