@@ -163,6 +163,8 @@ export default function StorefrontLayout() {
       links = [
         { name: settings['header_menu_home'] || t('nav.home'), href: '/' },
         { name: settings['header_menu_categories'] || t('nav.categories'), href: '/shop', hasMega: true, megaType: 'categories' as const },
+        { name: 'LICENCIAS', href: '/licencias' },
+        { name: 'THEMES', href: '/themes' },
         { name: settings['header_menu_brands'] || t('nav.brands'), href: '/shop', hasMega: true, megaType: 'brands' as const },
         { name: settings['header_menu_about'] || t('nav.about'), href: '/page/nosotros' },
         { name: settings['header_menu_contact'] || t('nav.contact'), href: '/contact' }

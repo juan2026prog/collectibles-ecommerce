@@ -29,10 +29,51 @@
       ]
     }
   ],
+  "redirects": [
+    {
+      "source": "/brand/:slug*",
+      "destination": "/marca/:slug*",
+      "permanent": true
+    },
+    {
+      "source": "/product-category/:slug*",
+      "destination": "/categoria/:slug*",
+      "permanent": true
+    },
+    {
+      "source": "/product/:slug*",
+      "destination": "/producto/:slug*",
+      "permanent": true
+    },
+    {
+      "source": "/product-tag/:tag*",
+      "destination": "/shop",
+      "permanent": true
+    },
+    {
+      "source": "/tag/:tag*",
+      "destination": "/shop",
+      "permanent": true
+    },
+    {
+      "source": "/store/:slug*",
+      "destination": "/shop",
+      "permanent": true
+    },
+    {
+      "source": "/wishlist",
+      "destination": "/cart",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/sitemap.xml",
       "destination": "/api/sitemap"
+    },
+    {
+      "source": "/merchant-feed.xml",
+      "destination": "/api/merchant-feed"
     },
     {
       "source": "/meta-catalog.csv",
@@ -41,6 +82,34 @@
     {
       "source": "/catalog-images/(.*)",
       "destination": "/api/catalog-image?path=$1"
+    },
+    {
+      "source": "/producto/:slug",
+      "destination": "/api/seo-prerender?type=producto&slug=:slug"
+    },
+    {
+      "source": "/categoria/:slug",
+      "destination": "/api/seo-prerender?type=categoria&slug=:slug"
+    },
+    {
+      "source": "/marca/:slug",
+      "destination": "/api/seo-prerender?type=marca&slug=:slug"
+    },
+    {
+      "source": "/page/:slug",
+      "destination": "/api/seo-prerender?type=page&slug=:slug"
+    },
+    {
+      "source": "/contact",
+      "destination": "/api/seo-prerender?type=page&slug=contact"
+    },
+    {
+      "source": "/shop",
+      "destination": "/api/seo-prerender?type=shop"
+    },
+    {
+      "source": "/",
+      "destination": "/api/seo-prerender?type=home"
     },
     {
       "source": "/(.*)",

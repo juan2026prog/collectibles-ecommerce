@@ -175,6 +175,8 @@ export default function AdminProducts() {
   const [filterVendor, setFilterVendor] = useState<string>(searchParams.get('vendor') || 'all');
   const [filterMbe, setFilterMbe] = useState<string>(''); // '', 'mbe_pak', 'mbe_caja', 'unclassified'
   const [filterArgentina, setFilterArgentina] = useState<string>(''); // '', 'auto', 'quote'
+  const [filterImageStatus, setFilterImageStatus] = useState<string>(''); // '', 'valid', 'missing', 'broken', 'placeholder', 'merchant_ready', 'not_merchant_ready'
+  const [filterCommercialStatus, setFilterCommercialStatus] = useState<string>(''); // '', 'published', 'draft', 'inactive'
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
 
   const [bulkMbeModalOpen, setBulkMbeModalOpen] = useState(false);
@@ -187,13 +189,14 @@ export default function AdminProducts() {
 
   const [categories, setCategories] = useState<any[]>([]);
   const [brands, setBrands] = useState<any[]>([]);
+  const [licenses, setLicenses] = useState<any[]>([]);
   const [tags, setTags] = useState<any[]>([]);
   const [vendors, setVendors] = useState<VendorOption[]>([]);
 
   const [form, setForm] = useState({
     title: '', slug: '', description: '', short_description: '',
     base_price: '', compare_at_price: '', sku: '', stock: '10', status: 'published',
-    badge: '', is_featured: false, is_active: true, category_id: '', brand_id: '',
+    badge: '', is_featured: false, is_active: true, category_id: '', brand_id: '', license_id: '',
     vendor_id: 'platform',
     condition: '', condition_notes: '',
     image_url: '', video_url: '',
@@ -316,22 +319,24 @@ export default function AdminProducts() {
   }
 
   async function fetchMeta() {
-    const [{ data: cats }, { data: brs }, { data: tgs }, { data: vds }] = await Promise.all([
+    const [{ data: cats }, { data: brs }, { data: tgs }, { data: vds }, { data: lcs }] = await Promise.all([
       supabase.from('categories').select('id, name, slug, parent_id').order('sort_order'),
       supabase.from('brands').select('id, name').order('sort_order'),
       supabase.from('tags').select('id, name').order('name'),
       supabase.from('vendors').select('id, store_name, company_name').order('store_name'),
+      supabase.from('licenses').select('id, name').eq('is_active', true).order('name')
     ]);
     setCategories(cats || []);
     setBrands(brs || []);
     setTags(tgs || []);
     setVendors(vds || []);
+    setLicenses(lcs || []);
   }
 
   function openCreate() {
     setEditing(null);
     setForm({ 
-      title: '', slug: '', description: '', short_description: '', base_price: '', compare_at_price: '', sku: `${Date.now()}`, stock: '10', status: 'published', badge: '', is_featured: false, is_active: true, category_id: '', brand_id: '', vendor_id: 'platform', condition: '', condition_notes: '', image_url: '', video_url: '', 
+      title: '', slug: '', description: '', short_description: '', base_price: '', compare_at_price: '', sku: `${Date.now()}`, stock: '10', status: 'published', badge: '', is_featured: false, is_active: true, category_id: '', brand_id: '', license_id: '', vendor_id: 'platform', condition: '', condition_notes: '', image_url: '', video_url: '', 
       weight_kg: '',
       dimensions_length: '',
       dimensions_width: '',
@@ -378,6 +383,7 @@ export default function AdminProducts() {
       is_active: product.is_active !== false,
       category_id: product.category?.id || '', 
       brand_id: product.brand?.id || '',
+      license_id: (product as any).license_id || (product as any).product_licenses?.[0]?.license_id || (product as any).product_licenses?.[0]?.license?.id || '',
       vendor_id: product.vendor_id || 'platform',
       condition: (product as any).condition || '',
       condition_notes: (product as any).condition_notes || '',
@@ -454,6 +460,21 @@ export default function AdminProducts() {
           }, 100);
         }
         return;
+      }
+
+      // Pre-publication Image Check
+      if (form.status === 'published' && form.is_active) {
+        const imgEval = evaluateProductImageQuality({
+          images: form.image_url ? [{ url: form.image_url, is_primary: true }] : form.gallery,
+          metadata: { image_url: form.image_url },
+          is_active: form.is_active,
+          status: form.status,
+          base_price: form.base_price
+        });
+
+        if (imgEval.status === 'MISSING' || imgEval.status === 'BROKEN' || imgEval.status === 'PLACEHOLDER') {
+          toast.warning(`Advertencia de Merchant Center: El producto se publicará en Collectibles, pero NO estará habilitado para Google Merchant (Estado Imagen: ${imgEval.status}).`);
+        }
       }
 
       // 2. Check Duplicates when Publishing (Admin Warning + Override Modal)
@@ -533,6 +554,7 @@ export default function AdminProducts() {
         is_active: form.is_active,
         brand_id: form.brands[0] || null,
         category_id: form.categories[0] || null,
+        license_id: form.license_id || null,
         vendor_id: targetVendorId,
         condition: normalizedCondition,
         condition_notes: normalizedNotes,
@@ -571,6 +593,12 @@ export default function AdminProducts() {
       }
 
       if (!productId) return;
+
+      // Handle License Junction
+      await supabase.from('product_licenses').delete().eq('product_id', productId);
+      if (form.license_id) {
+        await supabase.from('product_licenses').insert({ product_id: productId, license_id: form.license_id });
+      }
 
       // 📦 Media 📦
       await supabase.from('product_images').delete().eq('product_id', productId);
@@ -1213,6 +1241,59 @@ export default function AdminProducts() {
     }
   };
 
+  const evaluateProductImageQuality = (product: any) => {
+    const images = product.images;
+    let candidateUrl: string | null = null;
+
+    if (Array.isArray(images) && images.length > 0) {
+      const primary = images.find((img: any) => img.is_primary);
+      candidateUrl = primary?.url || images[0]?.url || null;
+    } else if (product.mockup_file_url) {
+      candidateUrl = product.mockup_file_url;
+    } else if (product.print_file_url) {
+      candidateUrl = product.print_file_url;
+    } else if (product.metadata?.image_url || product.metadata?.image || product.metadata?.images?.[0]) {
+      candidateUrl = product.metadata.image_url || product.metadata.image || product.metadata.images?.[0];
+    }
+
+    if (!candidateUrl || !String(candidateUrl).trim()) {
+      return { status: 'MISSING', merchantUsable: false, merchantReady: false };
+    }
+
+    const lower = String(candidateUrl).toLowerCase();
+    if (
+      lower.includes('isologocolle.jpg') ||
+      lower.includes('via.placeholder.com') ||
+      lower.includes('placeholder') ||
+      lower.includes('no-image') ||
+      lower.includes('noimage') ||
+      lower.includes('data:image/svg')
+    ) {
+      return { status: 'PLACEHOLDER', merchantUsable: false, merchantReady: false };
+    }
+
+    const merchantUsable = true;
+    const merchantReady = Boolean(product.is_active) && product.status === 'published' && merchantUsable && Number(product.base_price || 0) > 0;
+
+    return { status: 'VALID', merchantUsable, merchantReady };
+  };
+
+  const handleRevalidateImages = async (scope: 'all' | 'published' | 'inactive' = 'all') => {
+    toast.info(`Revalidando calidad de imágenes (${scope === 'all' ? 'Todo el catálogo' : scope})...`);
+    let validCount = 0;
+    let issueCount = 0;
+    
+    products.forEach((p: any) => {
+      if (scope === 'published' && (p.status !== 'published' || !p.is_active)) return;
+      if (scope === 'inactive' && p.is_active !== false) return;
+      const res = evaluateProductImageQuality(p);
+      if (res.status === 'VALID') validCount++;
+      else issueCount++;
+    });
+
+    toast.success(`Revalidación completada: ${validCount} imágenes válidas, ${issueCount} observaciones.`);
+  };
+
   const filteredProducts = useMemo(() => {
     return products.filter((p: any) => {
       // MBE filter
@@ -1231,9 +1312,30 @@ export default function AdminProducts() {
         if (filterArgentina === 'quote' && arStatus.isEligible) return false;
       }
 
+      // Commercial status filter
+      if (filterCommercialStatus === 'published') {
+        if (p.status !== 'published' || !p.is_active) return false;
+      } else if (filterCommercialStatus === 'draft') {
+        if (p.status !== 'draft') return false;
+      } else if (filterCommercialStatus === 'inactive') {
+        if (p.is_active !== false) return false;
+      }
+
+      // Image status filter
+      if (filterImageStatus) {
+        const evalRes = evaluateProductImageQuality(p);
+        if (filterImageStatus === 'valid' && evalRes.status !== 'VALID') return false;
+        if (filterImageStatus === 'missing' && evalRes.status !== 'MISSING') return false;
+        if (filterImageStatus === 'broken' && evalRes.status !== 'BROKEN') return false;
+        if (filterImageStatus === 'placeholder' && evalRes.status !== 'PLACEHOLDER') return false;
+        if (filterImageStatus === 'merchant_ready' && !evalRes.merchantReady) return false;
+        if (filterImageStatus === 'not_merchant_ready' && evalRes.merchantReady) return false;
+        if (filterImageStatus === 'manual_action_required' && (evalRes.status === 'VALID')) return false;
+      }
+
       return true;
     });
-  }, [products, filterMbe, filterArgentina]);
+  }, [products, filterMbe, filterArgentina, filterCommercialStatus, filterImageStatus]);
 
   const unclassifiedMbeCount = useMemo(() => {
     return products.filter((p: any) => !sanitizeMbePackagingType(p.metadata?.packaging_type || p.metadata?.mbe_service_type)).length;
@@ -1282,6 +1384,14 @@ export default function AdminProducts() {
         <div className="flex items-center gap-2">
           <button
             type="button"
+            onClick={() => handleRevalidateImages('all')}
+            className="bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-300 font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer min-h-[44px]"
+            title="Inspeccionar y revalidar imágenes de todo el catálogo sin modificar productos"
+          >
+            <ImageIcon className="w-4 h-4 text-purple-600" /> Revalidar Imágenes
+          </button>
+          <button
+            type="button"
             onClick={() => setShowExport(true)}
             className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer min-h-[44px]"
           >
@@ -1322,13 +1432,29 @@ export default function AdminProducts() {
                  className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 shadow-2xs min-h-[44px]"
                >
                  <span>Filtros</span>
-                 {(filterCategory || filterBrand || (filterVendor && filterVendor !== 'all') || filterMbe || filterArgentina) && (
+                 {(filterCategory || filterBrand || (filterVendor && filterVendor !== 'all') || filterMbe || filterArgentina || filterCommercialStatus || filterImageStatus) && (
                    <span className="w-2 h-2 rounded-full bg-blue-600"></span>
                  )}
                </button>
 
                {/* Desktop Only Inline Selects */}
                <div className="hidden md:flex gap-2 text-xs font-bold text-gray-500 flex-wrap items-center">
+                  <select className="border-gray-200 border rounded-lg px-2 py-1.5 text-xs outline-none bg-white font-bold text-slate-700" value={filterCommercialStatus} onChange={e => { setFilterCommercialStatus(e.target.value); setCurrentPage(1); }}>
+                    <option value="">Estado: Todos</option>
+                    <option value="published">Publicados</option>
+                    <option value="draft">Borradores</option>
+                    <option value="inactive">Inactivos</option>
+                  </select>
+                  <select className="border-gray-200 border rounded-lg px-2 py-1.5 text-xs outline-none bg-white font-bold text-slate-700" value={filterImageStatus} onChange={e => { setFilterImageStatus(e.target.value); setCurrentPage(1); }}>
+                    <option value="">Imagen: Todas</option>
+                    <option value="valid">Imagen Válida</option>
+                    <option value="missing">Sin Imagen</option>
+                    <option value="broken">Imagen Rota</option>
+                    <option value="placeholder">Placeholder / Logo</option>
+                    <option value="merchant_ready">Merchant Ready</option>
+                    <option value="not_merchant_ready">No Merchant Ready</option>
+                    <option value="manual_action_required">⚠️ Requiere Acción Manual</option>
+                  </select>
                   <select className="border-gray-200 border rounded-lg px-2 py-1.5 text-xs outline-none bg-white" value={filterCategory} onChange={e => { setFilterCategory(e.target.value); setCurrentPage(1); }}>
                     <option value="">Todas las categorías</option>
                     {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -1487,6 +1613,8 @@ export default function AdminProducts() {
                    </th>
                    <th className="px-4 py-4">MBE</th>
                    <th className="px-4 py-4">Argentina</th>
+                   <th className="px-4 py-4">Estado Imagen</th>
+                   <th className="px-4 py-4">Merchant</th>
                    <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleSort('is_active')}>
                      Visible {sortField === 'is_active' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
                    </th>
@@ -1633,6 +1761,36 @@ export default function AdminProducts() {
                        );
                      })()}
                    </td>
+                   <td className="px-4 py-4 whitespace-nowrap">
+                      {(() => {
+                        const imgEval = evaluateProductImageQuality(p);
+                        if (imgEval.status === 'VALID') {
+                          return <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-100 border border-emerald-200">VALID</span>;
+                        }
+                        if (imgEval.status === 'MISSING') {
+                          return <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-red-800 bg-red-100 border border-red-200">MISSING</span>;
+                        }
+                        if (imgEval.status === 'BROKEN') {
+                          return <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-red-800 bg-red-100 border border-red-200">BROKEN</span>;
+                        }
+                        if (imgEval.status === 'PLACEHOLDER') {
+                          return <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-amber-800 bg-amber-100 border border-amber-200">PLACEHOLDER</span>;
+                        }
+                        if (imgEval.status === 'TOO SMALL') {
+                          return <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-yellow-800 bg-yellow-100 border border-yellow-200">TOO SMALL</span>;
+                        }
+                        return <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-purple-800 bg-purple-100 border border-purple-200">REVIEW</span>;
+                      })()}
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      {(() => {
+                        const imgEval = evaluateProductImageQuality(p);
+                        if (imgEval.merchantReady) {
+                          return <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-100 border border-emerald-200">READY</span>;
+                        }
+                        return <span className="px-2 py-0.5 rounded text-[10px] font-bold text-gray-500 bg-gray-100 border border-gray-200">NO READY</span>;
+                      })()}
+                    </td>
                    <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
                      <button
                        onClick={async () => {
@@ -2005,6 +2163,25 @@ export default function AdminProducts() {
                               </div>
                           </div>
                        </SidebarWidget>
+
+                        {/* WIDGET: LICENCIA / FRANQUICIA */}
+                        <SidebarWidget title="Licencia / Franquicia">
+                           <div className="space-y-2">
+                              <select
+                                 value={form.license_id || ''}
+                                 onChange={e => setForm({ ...form, license_id: e.target.value })}
+                                 className="w-full text-xs p-2 border rounded bg-white outline-none focus:border-blue-500 font-semibold text-gray-800"
+                              >
+                                 <option value="">-- Sin Licencia (Opcional) --</option>
+                                 {licenses.map(l => (
+                                    <option key={l.id} value={l.id}>{l.name}</option>
+                                 ))}
+                              </select>
+                              <p className="text-[10px] text-gray-400">
+                                 Indica la franquicia o propiedad intelectual. El Theme deriva automáticamente.
+                              </p>
+                           </div>
+                        </SidebarWidget>
 
                        {/* WIDGET: IMAGEN DESTACADA */}
                        <SidebarWidget title="Imagen del producto">

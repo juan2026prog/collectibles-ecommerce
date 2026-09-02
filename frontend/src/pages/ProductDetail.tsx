@@ -14,6 +14,7 @@ import { analytics } from '../lib/analytics';
 import { trackGA4Event } from '../lib/analyticsTracker';
 import { trackViewContent, generateMetaEventId } from '../lib/meta/metaPixel';
 import SEO from '../components/SEO';
+import { generateProductSchema, generateBreadcrumbs, generateMetaTitle, generateMetaDescription, generateCanonical } from '../utils/seoHelpers';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { formatUSD } from '../lib/formatters';
 import SoldByCard from '../components/SoldByCard';
@@ -310,10 +311,12 @@ export default function ProductDetail() {
 
   const reviews = product.reviews || [];
 
-  const seoTitle = `${product.title} | Collectibles.uy`;
-  const seoDescription = product.description
-    ? sanitizeProductDescription(product.description).slice(0, 155)
-    : `Comprar ${product.title} en Collectibles.uy. Envío a todo Uruguay.`;
+  const productCanonical = generateCanonical('producto', product.slug || product.id);
+  const seoTitle = generateMetaTitle('producto', product.title);
+  const seoDescription = generateMetaDescription('producto', product.description ? sanitizeProductDescription(product.description) : null, product.title);
+
+  const productSchema = generateProductSchema(product, product.brand, product.category, displayImage ? [displayImage] : []);
+  const breadcrumbSchema = generateBreadcrumbs('producto', product);
 
   return (
     <div className="max-w-[1500px] mx-auto px-4 sm:px-6 py-6 md:py-10">
@@ -321,7 +324,9 @@ export default function ProductDetail() {
         title={seoTitle}
         description={seoDescription}
         image={displayImage}
+        url={productCanonical}
         type="product"
+        schema={[productSchema, breadcrumbSchema]}
       />
       <AdminTechnicalPanel product={product} />
 
@@ -687,12 +692,18 @@ export default function ProductDetail() {
               <span className="text-slate-400 font-bold uppercase tracking-wider">Marca / Fabricante</span>
               <b className="text-white font-semibold">{product.brand?.name || 'N/A'}</b>
             </div>
-            {product.product_licenses?.[0]?.license?.name && (
-              <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/5 flex justify-between items-center text-xs">
-                <span className="text-slate-400 font-bold uppercase tracking-wider">Licencia / Franquicia</span>
-                <b className="text-amber-400 font-semibold">{product.product_licenses[0].license.name}</b>
-              </div>
-            )}
+            {(() => {
+              const activeLicense = product.license || product.product_licenses?.[0]?.license;
+              if (!activeLicense?.name) return null;
+              return (
+                <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/5 flex justify-between items-center text-xs">
+                  <span className="text-slate-400 font-bold uppercase tracking-wider">Licencia / Franquicia</span>
+                  <Link to={`/licencias/${activeLicense.slug || activeLicense.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`} className="text-amber-400 font-bold hover:underline transition-colors">
+                    {activeLicense.name}
+                  </Link>
+                </div>
+              );
+            })()}
             {selectedVariant?.sku && isValidInternalSku(selectedVariant.sku) && (
               <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/5 flex justify-between items-center text-xs">
                 <span className="text-slate-400 font-bold uppercase tracking-wider">SKU</span>

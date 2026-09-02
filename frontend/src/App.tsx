@@ -40,6 +40,10 @@ const Callback = lazy(() => import('./pages/Callback'));
 const DynamicPage = lazy(() => import('./pages/DynamicPage'));
 const Contact = lazy(() => import('./pages/Contact'));
 const VendorPrueba = lazy(() => import('./pages/VendorPrueba'));
+const LicensesIndex = lazy(() => import('./pages/LicensesIndex'));
+const LicenseDetail = lazy(() => import('./pages/LicenseDetail'));
+const ThemesIndex = lazy(() => import('./pages/ThemesIndex'));
+const ThemeDetail = lazy(() => import('./pages/ThemeDetail'));
 
 // Auth (Lazy)
 const Login = lazy(() => import('./pages/Login'));
@@ -60,6 +64,8 @@ const AdminProducts = lazy(() => import('./pages/admin/AdminProducts'));
 const AdminOrders = lazy(() => import('./pages/admin/AdminOrders'));
 const AdminPages = lazy(() => import('./pages/admin/AdminPages'));
 const AdminCategories = lazy(() => import('./pages/admin/AdminCategories'));
+const AdminLicenses = lazy(() => import('./pages/admin/AdminLicenses'));
+const AdminThemes = lazy(() => import('./pages/admin/AdminThemes'));
 const AdminCustomers = lazy(() => import('./pages/admin/AdminCustomers'));
 const AdminCoupons = lazy(() => import('./pages/admin/AdminCoupons'));
 const AdminBanners = lazy(() => import('./pages/admin/AdminBanners'));
@@ -126,6 +132,13 @@ function App() {
                     <Route path="/shop" element={<Shop />} />
                     <Route path="/categoria/:categorySlug" element={<Shop />} />
                     <Route path="/marca/:brandSlug" element={<Shop />} />
+                    <Route path="/licencias" element={<LicensesIndex />} />
+                    <Route path="/licencias/:slug" element={<LicenseDetail />} />
+                    <Route path="/themes" element={<ThemesIndex />} />
+                    <Route path="/themes/:slug" element={<ThemeDetail />} />
+                    <Route path="/temas" element={<ThemesIndex />} />
+                    <Route path="/temas/:slug" element={<ThemeDetail />} />
+                    <Route path="/producto/:slug" element={<ProductDetail />} />
                     <Route path="/p/:slug" element={<ProductDetail />} />
                     <Route path="/store/:slug" element={<MarketplaceGuard><VendorStorefront /></MarketplaceGuard>} />
                     <Route path="/page/:slug" element={<DynamicPage />} />
@@ -255,6 +268,8 @@ function App() {
                   <Route path="pages" element={<AdminPages />} />
                   <Route path="orders" element={<AdminOrders />} />
                   <Route path="categories" element={<AdminCategories />} />
+                  <Route path="licenses" element={<AdminLicenses />} />
+                  <Route path="themes" element={<AdminThemes />} />
                   <Route path="customers" element={<AdminCustomers />} />
                   <Route path="coupons" element={<AdminCoupons />} />
                   <Route path="banners" element={<AdminBanners />} />

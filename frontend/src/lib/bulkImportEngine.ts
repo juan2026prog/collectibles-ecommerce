@@ -1022,6 +1022,7 @@ export async function executeBulkImport(
           status: row.dbPayload.status || 'draft',
           brand_id: row.resolvedBrandId || null,
           category_id: row.resolvedCategoryId || null,
+          license_id: row.resolvedLicenseId || null,
           vendor_id: userRole === 'vendor' ? currentVendorId : row.resolvedVendorId,
           badge: row.dbPayload.badge || null,
           weight_kg: row.dbPayload.weight_kg || null,
@@ -1071,6 +1072,9 @@ export async function executeBulkImport(
       } else if (row.operation === 'update' && row.existingProductId) {
         // PARTIAL UPDATE: Send ONLY fields present in row.dbPayload or changed metadata
         const updatePayload: any = { ...row.dbPayload, updated_at: new Date().toISOString() };
+        if (row.resolvedLicenseId) {
+          updatePayload.license_id = row.resolvedLicenseId;
+        }
         
         // Prevent altering product_id or vendor_id for non-admin
         delete updatePayload._product_id;

@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ShoppingBag, FolderTree, Users, Settings, LogOut, Package, 
   Tag, Image, CreditCard, LayoutTemplate, Star, Percent, Megaphone,
   Mail, BarChart3, Search, ShieldCheck, Store, Share2, ExternalLink, Library, FileText,
-  Globe, Download, RefreshCw
+  Globe, Download, RefreshCw, Award, Layers
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LocaleSwitcher from '../components/LocaleSwitcher';
@@ -32,6 +32,8 @@ export default function AdminLayout() {
     { name: 'Home / Banners', path: '/admin/banners', icon: Image },
     { name: 'Productos', path: '/admin/products', icon: Package },
     { name: 'Categorías', path: '/admin/categories', icon: FolderTree },
+    { name: 'Licencias', path: '/admin/licenses', icon: Award },
+    { name: 'Themes', path: '/admin/themes', icon: Layers },
     { name: 'Etiquetas', path: '/admin/tags', icon: Tag },
     { name: 'Páginas Estáticas', path: '/admin/pages', icon: FileText },
     { name: 'Marcas', path: '/admin/brands', icon: Star },

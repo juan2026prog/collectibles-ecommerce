@@ -7,6 +7,7 @@ interface ProductFilters {
   category?: string;
   brand?: string;
   license?: string;
+  theme?: string;
   search?: string;
   badge?: string;
   condition?: string;
@@ -118,13 +119,75 @@ export function useProducts(filters: ProductFilters = {}) {
           .from('product_licenses')
           .select('product_id')
           .eq('license_id', licData.id);
+
+        const { data: directProds } = await supabase
+          .from('products')
+          .select('id')
+          .eq('license_id', licData.id);
         
-        if (licItems && licItems.length > 0) {
-          const licProdIds = licItems.map(x => x.product_id);
+        const directIds = directProds?.map(x => x.id) || [];
+        const licProdIds = Array.from(new Set([...(licItems?.map(x => x.product_id) || []), ...directIds]));
+
+        if (licProdIds.length > 0) {
           if (productIds) {
             productIds = productIds.filter(id => licProdIds.includes(id));
           } else {
             productIds = licProdIds;
+          }
+        } else {
+          setProducts([]);
+          setCount(0);
+          setLoading(false);
+          return;
+        }
+      } else {
+        setProducts([]);
+        setCount(0);
+        setLoading(false);
+        return;
+      }
+    }
+
+    if (filters.theme) {
+      const { data: themeData } = await supabase
+        .from('themes')
+        .select('id')
+        .eq('slug', filters.theme)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (themeData) {
+        const { data: ltItems } = await supabase
+          .from('license_themes')
+          .select('license_id')
+          .eq('theme_id', themeData.id);
+
+        const licIds = ltItems?.map(x => x.license_id) || [];
+        if (licIds.length > 0) {
+          const { data: licProds } = await supabase
+            .from('product_licenses')
+            .select('product_id')
+            .in('license_id', licIds);
+
+          const { data: directProds } = await supabase
+            .from('products')
+            .select('id')
+            .in('license_id', licIds);
+
+          const directIds = directProds?.map(x => x.id) || [];
+          const themeProdIds = Array.from(new Set([...(licProds?.map(x => x.product_id) || []), ...directIds]));
+
+          if (themeProdIds.length > 0) {
+            if (productIds) {
+              productIds = productIds.filter(id => themeProdIds.includes(id));
+            } else {
+              productIds = themeProdIds;
+            }
+          } else {
+            setProducts([]);
+            setCount(0);
+            setLoading(false);
+            return;
           }
         } else {
           setProducts([]);
@@ -1197,23 +1260,72 @@ export function getProductPaymentRestrictions(product: any) {
 }
 
 // ═══ useLicenses ═══
-export function useLicenses() {
+export function useLicenses(onlyPublicWithProducts = false) {
   const [licenses, setLicenses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetch() {
-      const { data } = await supabase
-        .from('licenses')
+      setLoading(true);
+      let res = await supabase
+        .from('licenses_with_counts')
         .select('*')
-        .eq('is_active', true)
         .order('sort_order', { ascending: true })
         .order('name', { ascending: true });
-      setLicenses(data || []);
+
+      if (res.error || !res.data) {
+        res = await supabase
+          .from('licenses')
+          .select('*')
+          .order('sort_order', { ascending: true })
+          .order('name', { ascending: true });
+      }
+
+      let list = res.data || [];
+      if (onlyPublicWithProducts) {
+        list = list.filter((l: any) => l.is_active !== false && (l.published_product_count === undefined || l.published_product_count > 0));
+      }
+      setLicenses(list);
       setLoading(false);
     }
     fetch();
-  }, []);
+  }, [onlyPublicWithProducts]);
 
   return { licenses, loading };
 }
+
+// ═══ useThemes ═══
+export function useThemes(onlyPublicWithProducts = false) {
+  const [themes, setThemes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetch() {
+      setLoading(true);
+      let res = await supabase
+        .from('themes_with_counts')
+        .select('*')
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true });
+
+      if (res.error || !res.data) {
+        res = await supabase
+          .from('themes')
+          .select('*')
+          .order('sort_order', { ascending: true })
+          .order('name', { ascending: true });
+      }
+
+      let list = res.data || [];
+      if (onlyPublicWithProducts) {
+        list = list.filter((t: any) => t.is_active !== false && (t.published_product_count === undefined || t.published_product_count > 0));
+      }
+      setThemes(list);
+      setLoading(false);
+    }
+    fetch();
+  }, [onlyPublicWithProducts]);
+
+  return { themes, loading };
+}
+
