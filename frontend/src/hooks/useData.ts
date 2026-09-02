@@ -1610,27 +1610,65 @@ export function useCatalogFacets(filters: CatalogFacetFilters = {}) {
       setLoading(true);
 
       try {
+        async function fetchAllLocalProducts() {
+          const pageSize = 1000;
+          let from = 0;
+          let all: any[] = [];
+          while (true) {
+            const { data, error } = await supabase
+              .from('products')
+              .select(`
+                id, brand_id, license_id, category_id, condition, title, description, base_price, status, is_active,
+                product_categories(category_id)
+              `)
+              .eq('status', 'published')
+              .eq('is_active', true)
+              .range(from, from + pageSize - 1);
+
+            if (error || !data) break;
+            all.push(...data);
+            if (data.length < pageSize) break;
+            from += pageSize;
+          }
+          return all;
+        }
+
+        async function fetchAllIntlProducts() {
+          if (filters.isInternationalEnabled === false) return [];
+          const pageSize = 1000;
+          let from = 0;
+          let all: any[] = [];
+          while (true) {
+            const { data, error } = await supabase
+              .from('international_products')
+              .select('id, brand, collectibles_category_id, collectibles_subcategory_id, final_price_usd, title, description, status')
+              .eq('status', 'published')
+              .range(from, from + pageSize - 1);
+
+            if (error || !data) break;
+            all.push(...data);
+            if (data.length < pageSize) break;
+            from += pageSize;
+          }
+          return all;
+        }
+
         const [
           { data: categoriesData },
           { data: brandsData },
           { data: licensesData },
           { data: themesData },
           { data: ltData },
-          { data: localProductsData },
-          intlRes
+          localProductsData,
+          intlProductsData
         ] = await Promise.all([
           supabase.from('categories').select('id, name, slug, parent_id, is_active, status').eq('is_active', true),
           supabase.from('brands').select('id, name, slug, is_active, is_public, status').eq('is_active', true).eq('is_public', true),
           supabase.from('licenses').select('id, name, slug, is_active, is_featured, sort_order').eq('is_active', true),
           supabase.from('themes').select('id, name, slug, is_active, sort_order').eq('is_active', true),
           supabase.from('license_themes').select('license_id, theme_id'),
-          supabase.from('products').select(`
-            id, brand_id, license_id, category_id, condition, title, description, base_price, status, is_active,
-            product_categories(category_id)
-          `).eq('status', 'published').eq('is_active', true),
-          filters.isInternationalEnabled !== false
-            ? supabase.from('international_products').select('id, brand, collectibles_category_id, collectibles_subcategory_id, final_price_usd, title, description, status').eq('status', 'published')
-            : Promise.resolve({ data: [] })
+          fetchAllLocalProducts(),
+          fetchAllIntlProducts()
         ]);
 
         if (!active) return;
@@ -1641,7 +1679,7 @@ export function useCatalogFacets(filters: CatalogFacetFilters = {}) {
         const themes = themesData || [];
         const licenseThemes = ltData || [];
         const localProducts = localProductsData || [];
-        const intlProducts = intlRes.data || [];
+        const intlProducts = intlProductsData || [];
 
         const catSlugToIdMap = new Map<string, string>();
         categories.forEach(c => catSlugToIdMap.set(c.slug, c.id));
