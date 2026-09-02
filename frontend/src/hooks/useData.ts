@@ -20,6 +20,7 @@ interface ProductFilters {
   group?: string;
   isInternational?: boolean;
   availability?: 'all' | 'local' | 'international';
+  exchangeRate?: number;
   includeDrafts?: boolean;
   vendor_store_id?: string;
   collection_id?: string;
@@ -402,12 +403,15 @@ export function useProducts(filters: ProductFilters = {}) {
       const intlData = intlRes.data || [];
       const intlCount = intlRes.count || 0;
 
+      const fxRate = filters.exchangeRate || 40;
+
       const mappedIntl = intlData.map((item: any) => ({
         id: item.id,
         slug: item.id,
         title: item.title,
         description: item.description,
         base_price: Number(item.final_price_usd),
+        catalog_comparison_price: Number(item.final_price_usd) * fxRate,
         compare_at_price: Number(item.amazon_list_price_usd || item.final_price_usd),
         images: [{ id: item.id, url: item.image_url, is_primary: true }],
         image_url: item.image_url,
@@ -424,19 +428,39 @@ export function useProducts(filters: ProductFilters = {}) {
         international_products: [item]
       }));
 
-      const combined = [...localData, ...mappedIntl];
+      const mappedLocal = localData.map((item: any) => ({
+        ...item,
+        catalog_comparison_price: Number(item.base_price || 0)
+      }));
+
+      let combined = [...mappedLocal, ...mappedIntl];
+
+      if (filters.minPrice) {
+        combined = combined.filter(p => p.catalog_comparison_price >= filters.minPrice!);
+      }
+      if (filters.maxPrice) {
+        combined = combined.filter(p => p.catalog_comparison_price <= filters.maxPrice!);
+      }
 
       switch (filters.sortBy) {
-        case 'price-low': combined.sort((a, b) => (a.base_price || 0) - (b.base_price || 0)); break;
-        case 'price-high': combined.sort((a, b) => (b.base_price || 0) - (a.base_price || 0)); break;
-        case 'newest': combined.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()); break;
-        case 'name': combined.sort((a, b) => (a.title || '').localeCompare(b.title || '')); break;
+        case 'price-low':
+          combined.sort((a, b) => (a.catalog_comparison_price - b.catalog_comparison_price) || (a.id || '').localeCompare(b.id || ''));
+          break;
+        case 'price-high':
+          combined.sort((a, b) => (b.catalog_comparison_price - a.catalog_comparison_price) || (a.id || '').localeCompare(b.id || ''));
+          break;
+        case 'newest':
+          combined.sort((a, b) => (new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()) || (a.id || '').localeCompare(b.id || ''));
+          break;
+        case 'name':
+          combined.sort((a, b) => (a.title || '').localeCompare(b.title || '') || (a.id || '').localeCompare(b.id || ''));
+          break;
         default:
           combined.sort((a, b) => {
             const intlA = a.is_international ? 1 : 0;
             const intlB = b.is_international ? 1 : 0;
             if (intlA !== intlB) return intlA - intlB;
-            return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+            return (new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()) || (a.id || '').localeCompare(b.id || '');
           });
       }
 
@@ -1545,6 +1569,7 @@ export function useCatalogFacets(filters: CatalogFacetFilters = {}) {
     licenseFacets: any[];
     themeFacets: any[];
     availabilityCounts: { all: number; local: number; international: number };
+    conditionCounts: { all: number; new: number; used: number; loose: number };
     totalCatalogProducts: number;
   }>({
     categoryFacets: {},
@@ -1552,6 +1577,7 @@ export function useCatalogFacets(filters: CatalogFacetFilters = {}) {
     licenseFacets: [],
     themeFacets: [],
     availabilityCounts: { all: 0, local: 0, international: 0 },
+    conditionCounts: { all: 0, new: 0, used: 0, loose: 0 },
     totalCatalogProducts: 0
   });
   const [loading, setLoading] = useState(true);
@@ -1688,7 +1714,7 @@ export function useCatalogFacets(filters: CatalogFacetFilters = {}) {
             }
           }
 
-          if (f.condition) {
+          if (excludeDim !== 'condition' && f.condition) {
             if (isIntl) {
               if (f.condition !== 'new') return false;
             } else {
@@ -1702,31 +1728,46 @@ export function useCatalogFacets(filters: CatalogFacetFilters = {}) {
           return true;
         };
 
-        // Category Facets
+        // Category Facets — Distinct Set Union Logic (COUNT DISTINCT product_id)
         const catCounts: Record<string, number> = {};
-        localProducts.forEach(item => {
-          if (matchItem(item, false, filters, 'category')) {
-            const pCatIds = new Set<string>();
-            if (item.category_id) pCatIds.add(item.category_id);
-            if (item.product_categories) {
-              item.product_categories.forEach((pc: any) => pCatIds.add(pc.category_id));
-            }
-            pCatIds.forEach(cId => { catCounts[cId] = (catCounts[cId] || 0) + 1; });
-          }
-        });
-        intlProducts.forEach(item => {
-          if (matchItem(item, true, filters, 'category')) {
-            if (item.collectibles_category_id) catCounts[item.collectibles_category_id] = (catCounts[item.collectibles_category_id] || 0) + 1;
-            if (item.collectibles_subcategory_id) catCounts[item.collectibles_subcategory_id] = (catCounts[item.collectibles_subcategory_id] || 0) + 1;
-          }
-        });
         categories.forEach(cat => {
+          const familyCatIds = new Set<string>([cat.id]);
           if (!cat.parent_id) {
             const children = categories.filter(c => c.parent_id === cat.id);
-            let childSum = 0;
-            children.forEach(ch => { childSum += (catCounts[ch.id] || 0); });
-            catCounts[cat.id] = (catCounts[cat.id] || 0) + childSum;
+            children.forEach(ch => {
+              familyCatIds.add(ch.id);
+              const grandChildren = categories.filter(g => g.parent_id === ch.id);
+              grandChildren.forEach(g => familyCatIds.add(g.id));
+            });
           }
+
+          const distinctProdIds = new Set<string>();
+
+          localProducts.forEach(item => {
+            if (matchItem(item, false, filters, 'category')) {
+              const pCatIds = new Set<string>();
+              if (item.category_id) pCatIds.add(item.category_id);
+              if (item.product_categories) {
+                item.product_categories.forEach((pc: any) => pCatIds.add(pc.category_id));
+              }
+              for (const cId of pCatIds) {
+                if (familyCatIds.has(cId)) {
+                  distinctProdIds.add(item.id);
+                  break;
+                }
+              }
+            }
+          });
+
+          intlProducts.forEach(item => {
+            if (matchItem(item, true, filters, 'category')) {
+              if (familyCatIds.has(item.collectibles_category_id) || familyCatIds.has(item.collectibles_subcategory_id)) {
+                distinctProdIds.add(`intl_${item.id}`);
+              }
+            }
+          });
+
+          catCounts[cat.id] = distinctProdIds.size;
         });
 
         // Brand Facets
@@ -1801,6 +1842,28 @@ export function useCatalogFacets(filters: CatalogFacetFilters = {}) {
         let intlCount = 0;
         intlProducts.forEach(item => { if (matchItem(item, true, filters, 'availability')) intlCount++; });
 
+        // Condition Counts with Self-Exclusion
+        const condCounts = { all: 0, new: 0, used: 0, loose: 0 };
+        localProducts.forEach(item => {
+          if (matchItem(item, false, filters, 'condition')) {
+            condCounts.all++;
+            const cond = item.condition;
+            if (!cond || cond === 'new_sealed' || cond === 'new_open_box') {
+              condCounts.new++;
+            } else if (cond === 'used_complete' || cond === 'used_incomplete') {
+              condCounts.used++;
+            } else if (cond === 'loose_complete' || cond === 'loose_incomplete') {
+              condCounts.loose++;
+            }
+          }
+        });
+        intlProducts.forEach(item => {
+          if (matchItem(item, true, filters, 'condition')) {
+            condCounts.all++;
+            condCounts.new++;
+          }
+        });
+
         const currentAvail = filters.availability || 'all';
         let totalCombined = 0;
         if (currentAvail === 'local') totalCombined = localCount;
@@ -1817,6 +1880,7 @@ export function useCatalogFacets(filters: CatalogFacetFilters = {}) {
             local: localCount,
             international: intlCount
           },
+          conditionCounts: condCounts,
           totalCatalogProducts: totalCombined
         });
         setLoading(false);

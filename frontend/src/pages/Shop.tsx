@@ -66,6 +66,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
     licenseFacets: activeLicenses,
     themeFacets: activeThemes,
     availabilityCounts,
+    conditionCounts,
     totalCatalogProducts,
     loading: facetsLoading
   } = useCatalogFacets({
@@ -222,7 +223,8 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   const cart = useCartContext();
   const { promotions } = usePromotions();
   const { t } = useLocale();
-  const { formatCurrencyPrice } = useCurrency();
+  const { formatCurrencyPrice, exchangeRates } = useCurrency();
+  const fxRate = (exchangeRates && exchangeRates.USD) ? (1 / exchangeRates.USD) : 40;
   const navigate = useNavigate();
 
   // ✅ Fully server-side — useProducts now resolves slug → id internally
@@ -240,6 +242,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
     sortBy,
     limit,
     availability: effectiveAvailability,
+    exchangeRate: fxRate,
   });
 
   const totalPages = Math.ceil(count / limit);
@@ -1032,7 +1035,9 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
 
       {/* Price Range — functional inputs */}
       <div>
-        <h3 className="font-bold text-slate-400 uppercase text-[10px] tracking-widest mb-2 block">Precio</h3>
+        <h3 className="font-bold text-slate-400 uppercase text-[10px] tracking-widest mb-2 block">
+          Precio ({effectiveAvailability === 'international' ? 'USD' : 'UYU'})
+        </h3>
         <div className="flex gap-2">
           <input
             type="number"
@@ -1062,10 +1067,10 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
         <h3 className="font-bold text-slate-400 uppercase text-[10px] tracking-widest mb-2 block">Estado</h3>
         <div className="flex flex-col gap-1">
           {[
-            { id: '', label: 'Todos' },
-            { id: 'new', label: 'New (Nuevo / Sealed)' },
-            { id: 'used', label: 'Used (Usado)' },
-            { id: 'loose', label: 'Loose (Suelto sin caja)' }
+            { id: '', label: 'Todos', count: conditionCounts?.all || 0 },
+            { id: 'new', label: 'New (Nuevo / Sealed)', count: conditionCounts?.new || 0 },
+            { id: 'used', label: 'Used (Usado)', count: conditionCounts?.used || 0 },
+            { id: 'loose', label: 'Loose (Suelto sin caja)', count: conditionCounts?.loose || 0 }
           ].map(c => {
             const isSelected = (conditionFilter || '') === c.id;
             return (
@@ -1076,8 +1081,10 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                   isSelected ? 'text-[#f00856] font-bold' : 'text-slate-400 hover:text-white font-medium'
                 }`}
               >
-                <span>{c.label}</span>
-                {isSelected && <span className="text-[10px] text-[#f00856]">✓</span>}
+                <span className="truncate pr-2">{c.label}</span>
+                <span className={`text-[10px] font-mono shrink-0 ml-2 ${isSelected ? 'text-[#f00856]' : 'text-slate-500'}`}>
+                  [{c.count}]
+                </span>
               </button>
             );
           })}
