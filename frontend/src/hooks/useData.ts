@@ -19,6 +19,7 @@ interface ProductFilters {
   offset?: number;
   group?: string;
   isInternational?: boolean;
+  availability?: 'all' | 'local' | 'international';
   includeDrafts?: boolean;
   vendor_store_id?: string;
   collection_id?: string;
@@ -1398,5 +1399,352 @@ export function useTheme(slug?: string) {
   }, [slug]);
 
   return { theme, loading };
+}
+
+// ═══ useCatalogFacets ═══
+export interface CatalogFacetFilters {
+  category?: string;
+  brand?: string;
+  license?: string;
+  theme?: string;
+  availability?: string; // 'all' | 'local' | 'international'
+  search?: string;
+  condition?: string;
+  group?: string;
+  isInternationalEnabled?: boolean;
+}
+
+export function useCatalogFacets(filters: CatalogFacetFilters = {}) {
+  const [facets, setFacets] = useState<{
+    categoryFacets: Record<string, number>;
+    brandFacets: any[];
+    licenseFacets: any[];
+    themeFacets: any[];
+    availabilityCounts: { all: number; local: number; international: number };
+    totalCatalogProducts: number;
+  }>({
+    categoryFacets: {},
+    brandFacets: [],
+    licenseFacets: [],
+    themeFacets: [],
+    availabilityCounts: { all: 0, local: 0, international: 0 },
+    totalCatalogProducts: 0
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    async function calculateFacets() {
+      setLoading(true);
+
+      try {
+        const [
+          { data: categoriesData },
+          { data: brandsData },
+          { data: licensesData },
+          { data: themesData },
+          { data: ltData },
+          { data: localProductsData },
+          intlRes
+        ] = await Promise.all([
+          supabase.from('categories').select('id, name, slug, parent_id, is_active, status').eq('is_active', true),
+          supabase.from('brands').select('id, name, slug, is_active, is_public, status').eq('is_active', true).eq('is_public', true),
+          supabase.from('licenses').select('id, name, slug, is_active, is_featured, sort_order').eq('is_active', true),
+          supabase.from('themes').select('id, name, slug, is_active, sort_order').eq('is_active', true),
+          supabase.from('license_themes').select('license_id, theme_id'),
+          supabase.from('products').select(`
+            id, brand_id, license_id, category_id, condition, title, description, base_price, status, is_active,
+            product_categories(category_id),
+            product_licenses(license_id)
+          `).eq('status', 'published').eq('is_active', true),
+          filters.isInternationalEnabled !== false
+            ? supabase.from('international_products').select('id, brand, collectibles_category_id, collectibles_subcategory_id, final_price_usd, title, description, status').eq('status', 'published')
+            : Promise.resolve({ data: [] })
+        ]);
+
+        if (!active) return;
+
+        const categories = categoriesData || [];
+        const brands = brandsData || [];
+        const licenses = licensesData || [];
+        const themes = themesData || [];
+        const licenseThemes = ltData || [];
+        const localProducts = localProductsData || [];
+        const intlProducts = intlRes.data || [];
+
+        const catSlugToIdMap = new Map<string, string>();
+        categories.forEach(c => catSlugToIdMap.set(c.slug, c.id));
+
+        const brandSlugToIdMap = new Map<string, string>();
+        brands.forEach(b => brandSlugToIdMap.set(b.slug, b.id));
+
+        const licSlugToIdMap = new Map<string, string>();
+        licenses.forEach(l => licSlugToIdMap.set(l.slug, l.id));
+
+        const themeSlugToIdMap = new Map<string, string>();
+        themes.forEach(t => themeSlugToIdMap.set(t.slug, t.id));
+
+        const licToThemesMap = new Map<string, Set<string>>();
+        licenseThemes.forEach(lt => {
+          if (!licToThemesMap.has(lt.license_id)) licToThemesMap.set(lt.license_id, new Set());
+          licToThemesMap.get(lt.license_id)!.add(lt.theme_id);
+        });
+
+        const catSubcatMap = new Map<string, Set<string>>();
+        categories.forEach(c => {
+          if (c.parent_id) {
+            if (!catSubcatMap.has(c.parent_id)) catSubcatMap.set(c.parent_id, new Set());
+            catSubcatMap.get(c.parent_id)!.add(c.id);
+          }
+        });
+
+        const matchItem = (item: any, isIntl: boolean, f: CatalogFacetFilters, excludeDim?: string) => {
+          if (excludeDim !== 'availability') {
+            const avail = f.availability || 'all';
+            if (avail === 'local' && isIntl) return false;
+            if (avail === 'international' && !isIntl) return false;
+          }
+
+          if (excludeDim !== 'category' && f.category) {
+            const targetCatId = catSlugToIdMap.get(f.category) || f.category;
+            const validCatIds = new Set<string>([targetCatId]);
+            const children = catSubcatMap.get(targetCatId);
+            if (children) children.forEach(cId => validCatIds.add(cId));
+
+            if (!isIntl) {
+              const pCatIds = new Set<string>();
+              if (item.category_id) pCatIds.add(item.category_id);
+              if (item.product_categories) {
+                item.product_categories.forEach((pc: any) => pCatIds.add(pc.category_id));
+              }
+              let hasCatMatch = false;
+              for (const cId of pCatIds) {
+                if (validCatIds.has(cId)) { hasCatMatch = true; break; }
+              }
+              if (!hasCatMatch) return false;
+            } else {
+              const intlCat1 = item.collectibles_category_id;
+              const intlCat2 = item.collectibles_subcategory_id;
+              if (!validCatIds.has(intlCat1) && !validCatIds.has(intlCat2)) return false;
+            }
+          }
+
+          if (excludeDim !== 'brand' && f.brand) {
+            const targetBrandId = brandSlugToIdMap.get(f.brand) || f.brand;
+            if (!isIntl) {
+              if (item.brand_id !== targetBrandId) return false;
+            } else {
+              const brandObj = brands.find(b => b.id === targetBrandId || b.slug === f.brand);
+              if (!brandObj || !item.brand || !item.brand.toLowerCase().includes(brandObj.name.toLowerCase())) {
+                return false;
+              }
+            }
+          }
+
+          if (excludeDim !== 'license' && f.license) {
+            if (isIntl) return false;
+            const targetLicId = licSlugToIdMap.get(f.license) || f.license;
+            const pLicIds = new Set<string>();
+            if (item.license_id) pLicIds.add(item.license_id);
+            if (item.product_licenses) {
+              item.product_licenses.forEach((pl: any) => pLicIds.add(pl.license_id));
+            }
+            if (!pLicIds.has(targetLicId)) return false;
+          }
+
+          if (excludeDim !== 'theme' && f.theme) {
+            if (isIntl) return false;
+            const targetThemeId = themeSlugToIdMap.get(f.theme) || f.theme;
+            const pLicIds = new Set<string>();
+            if (item.license_id) pLicIds.add(item.license_id);
+            if (item.product_licenses) {
+              item.product_licenses.forEach((pl: any) => pLicIds.add(pl.license_id));
+            }
+            let hasThemeMatch = false;
+            for (const lId of pLicIds) {
+              const themesForLic = licToThemesMap.get(lId);
+              if (themesForLic && themesForLic.has(targetThemeId)) {
+                hasThemeMatch = true;
+                break;
+              }
+            }
+            if (!hasThemeMatch) return false;
+          }
+
+          if (f.search && f.search.trim()) {
+            const q = f.search.toLowerCase().trim();
+            const title = (item.title || '').toLowerCase();
+            const desc = (item.description || '').toLowerCase();
+            const brandName = isIntl ? (item.brand || '').toLowerCase() : '';
+            if (!title.includes(q) && !desc.includes(q) && !brandName.includes(q)) {
+              return false;
+            }
+          }
+
+          if (f.condition) {
+            if (isIntl) {
+              if (f.condition !== 'new') return false;
+            } else {
+              const cond = item.condition;
+              if (f.condition === 'new' && (cond && cond !== 'new_sealed' && cond !== 'new_open_box')) return false;
+              if (f.condition === 'used' && (!cond || (cond !== 'used_complete' && cond !== 'used_incomplete'))) return false;
+              if (f.condition === 'loose' && (!cond || (cond !== 'loose_complete' && cond !== 'loose_incomplete'))) return false;
+            }
+          }
+
+          return true;
+        };
+
+        // Category Facets
+        const catCounts: Record<string, number> = {};
+        localProducts.forEach(item => {
+          if (matchItem(item, false, filters, 'category')) {
+            const pCatIds = new Set<string>();
+            if (item.category_id) pCatIds.add(item.category_id);
+            if (item.product_categories) {
+              item.product_categories.forEach((pc: any) => pCatIds.add(pc.category_id));
+            }
+            pCatIds.forEach(cId => { catCounts[cId] = (catCounts[cId] || 0) + 1; });
+          }
+        });
+        intlProducts.forEach(item => {
+          if (matchItem(item, true, filters, 'category')) {
+            if (item.collectibles_category_id) catCounts[item.collectibles_category_id] = (catCounts[item.collectibles_category_id] || 0) + 1;
+            if (item.collectibles_subcategory_id) catCounts[item.collectibles_subcategory_id] = (catCounts[item.collectibles_subcategory_id] || 0) + 1;
+          }
+        });
+        categories.forEach(cat => {
+          if (!cat.parent_id) {
+            const children = categories.filter(c => c.parent_id === cat.id);
+            let childSum = 0;
+            children.forEach(ch => { childSum += (catCounts[ch.id] || 0); });
+            catCounts[cat.id] = (catCounts[cat.id] || 0) + childSum;
+          }
+        });
+
+        // Brand Facets
+        const brandCounts: Record<string, number> = {};
+        localProducts.forEach(item => {
+          if (matchItem(item, false, filters, 'brand') && item.brand_id) {
+            brandCounts[item.brand_id] = (brandCounts[item.brand_id] || 0) + 1;
+          }
+        });
+        intlProducts.forEach(item => {
+          if (matchItem(item, true, filters, 'brand') && item.brand) {
+            const bObj = brands.find(b => b.name.toLowerCase() === item.brand.toLowerCase() || b.slug === item.brand.toLowerCase());
+            if (bObj) brandCounts[bObj.id] = (brandCounts[bObj.id] || 0) + 1;
+          }
+        });
+        const computedBrandFacets = brands
+          .map(b => ({
+            brand_id: b.id,
+            brand_name: b.name,
+            brand_slug: b.slug,
+            product_count: brandCounts[b.id] || 0
+          }))
+          .filter(b => b.product_count > 0)
+          .sort((a, b) => b.product_count - a.product_count || a.brand_name.localeCompare(b.brand_name));
+
+        // License Facets
+        const licCounts: Record<string, number> = {};
+        localProducts.forEach(item => {
+          if (matchItem(item, false, filters, 'license')) {
+            const pLicIds = new Set<string>();
+            if (item.license_id) pLicIds.add(item.license_id);
+            if (item.product_licenses) {
+              item.product_licenses.forEach((pl: any) => pLicIds.add(pl.license_id));
+            }
+            pLicIds.forEach(lId => { licCounts[lId] = (licCounts[lId] || 0) + 1; });
+          }
+        });
+        const computedLicenseFacets = licenses
+          .map(l => ({
+            id: l.id,
+            name: l.name,
+            slug: l.slug,
+            published_product_count: licCounts[l.id] || 0,
+            is_featured: l.is_featured,
+            sort_order: l.sort_order
+          }))
+          .filter(l => l.published_product_count > 0)
+          .sort((a, b) => {
+            if (b.is_featured !== a.is_featured) return (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0);
+            return b.published_product_count - a.published_product_count || a.name.localeCompare(b.name);
+          });
+
+        // Theme Facets
+        const themeCounts: Record<string, number> = {};
+        localProducts.forEach(item => {
+          if (matchItem(item, false, filters, 'theme')) {
+            const pLicIds = new Set<string>();
+            if (item.license_id) pLicIds.add(item.license_id);
+            if (item.product_licenses) {
+              item.product_licenses.forEach((pl: any) => pLicIds.add(pl.license_id));
+            }
+            const pThemeIds = new Set<string>();
+            pLicIds.forEach(lId => {
+              const ths = licToThemesMap.get(lId);
+              if (ths) ths.forEach(tId => pThemeIds.add(tId));
+            });
+            pThemeIds.forEach(tId => { themeCounts[tId] = (themeCounts[tId] || 0) + 1; });
+          }
+        });
+        const computedThemeFacets = themes
+          .map(t => ({
+            id: t.id,
+            name: t.name,
+            slug: t.slug,
+            published_product_count: themeCounts[t.id] || 0,
+            sort_order: t.sort_order
+          }))
+          .filter(t => t.published_product_count > 0)
+          .sort((a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99) || b.published_product_count - a.published_product_count);
+
+        // Availability Counts
+        let localCount = 0;
+        localProducts.forEach(item => { if (matchItem(item, false, filters, 'availability')) localCount++; });
+        let intlCount = 0;
+        intlProducts.forEach(item => { if (matchItem(item, true, filters, 'availability')) intlCount++; });
+
+        const currentAvail = filters.availability || 'all';
+        let totalCombined = 0;
+        if (currentAvail === 'local') totalCombined = localCount;
+        else if (currentAvail === 'international') totalCombined = intlCount;
+        else totalCombined = localCount + intlCount;
+
+        setFacets({
+          categoryFacets: catCounts,
+          brandFacets: computedBrandFacets,
+          licenseFacets: computedLicenseFacets,
+          themeFacets: computedThemeFacets,
+          availabilityCounts: {
+            all: localCount + intlCount,
+            local: localCount,
+            international: intlCount
+          },
+          totalCatalogProducts: totalCombined
+        });
+        setLoading(false);
+      } catch (err) {
+        console.error('Error calculating catalog facets:', err);
+        if (active) setLoading(false);
+      }
+    }
+
+    calculateFacets();
+    return () => { active = false; };
+  }, [
+    filters.category,
+    filters.brand,
+    filters.license,
+    filters.theme,
+    filters.availability,
+    filters.search,
+    filters.condition,
+    filters.group,
+    filters.isInternationalEnabled
+  ]);
+
+  return { ...facets, loading };
 }
 

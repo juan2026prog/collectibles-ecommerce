@@ -1,7 +1,7 @@
 import { Link, useSearchParams, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { ChevronRight, ChevronLeft, SlidersHorizontal, X, Search, Store, ExternalLink, Loader2 } from 'lucide-react';
-import { useProducts, useCategories, useBrands, useFilterMappings, useProductGroupMetadata, useBrandFacets, useInternationalCategoryFacets, useLicense, useTheme, useLicenses, useThemes } from '../hooks/useData';
+import { useProducts, useCategories, useBrands, useFilterMappings, useProductGroupMetadata, useBrandFacets, useInternationalCategoryFacets, useLicense, useTheme, useLicenses, useThemes, useCatalogFacets } from '../hooks/useData';
 import { useInternationalSettings } from '../hooks/useInternationalSettings';
 import { usePromotions, getApplicablePromotions } from '../hooks/usePromotions';
 import { useCartContext } from '../contexts/CartContext';
@@ -52,13 +52,36 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   const { license: currentLicense } = useLicense(licenseSlug || undefined);
   const { theme: currentTheme } = useTheme(themeSlug || undefined);
   const { publicEnabled: intlPublicEnabled } = useInternationalSettings();
-  const { licenses: activeLicenses, loading: licensesLoading } = useLicenses(true);
-  const { themes: activeThemes, loading: themesLoading } = useThemes(true);
 
   const badge = searchParams.get('badge') || '';
   const searchQ = searchParams.get('q') || '';
   const conditionFilter = searchParams.get('condition') || '';
   const availabilityFilter = searchParams.get('availability') || '';
+
+  const effectiveAvailability = isInternational ? 'international' : (intlPublicEnabled ? (availabilityFilter || 'all') : 'local');
+
+  const {
+    categoryFacets,
+    brandFacets,
+    licenseFacets: activeLicenses,
+    themeFacets: activeThemes,
+    availabilityCounts,
+    totalCatalogProducts,
+    loading: facetsLoading
+  } = useCatalogFacets({
+    category: categorySlug || undefined,
+    brand: brandSlug || undefined,
+    license: licenseSlug || undefined,
+    theme: themeSlug || undefined,
+    availability: effectiveAvailability,
+    search: searchQ || undefined,
+    condition: conditionFilter || undefined,
+    group: groupSlug || undefined,
+    isInternationalEnabled: intlPublicEnabled
+  });
+
+  const licensesLoading = facetsLoading;
+  const themesLoading = facetsLoading;
 
   const [licensesExpanded, setLicensesExpanded] = useState(false);
   const [searchLicenseQuery, setSearchLicenseQuery] = useState('');
@@ -172,25 +195,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   const currentCategory = (isInternational ? intlCategories : categories).find(c => c.slug === categorySlug) || categories.find(c => c.slug === categorySlug);
   const currentBrand = brands.find(b => b.slug === brandSlug);
 
-  const brandFacetsFilters = useMemo(() => ({
-    category: categorySlug || undefined,
-    search: searchQ || undefined,
-    group: groupSlug || undefined,
-    isInternational: isInternational || false
-  }), [categorySlug, searchQ, groupSlug, isInternational]);
-
-  const { brandFacets, loading: facetsLoading } = useBrandFacets(brandFacetsFilters);
-
   const mappings = useFilterMappings(currentBrand?.id);
-
-  const totalCatalogProducts = useMemo(() => {
-    if (isInternational) {
-      return (intlCatFacets || []).filter(c => c.parent_id === null).reduce((sum, c) => sum + Number(c.product_count || 0), 0);
-    }
-    return categories
-      .filter(c => c.parent_id === null && c.status === 'approved')
-      .reduce((sum, c) => sum + (c.published_products_count || 0), 0);
-  }, [categories, isInternational, intlCatFacets]);
 
   // Auto-expand active parent category on mount or when category is selected via URL
   useEffect(() => {
@@ -234,8 +239,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
     maxPrice: priceMax ? Number(priceMax) : undefined,
     sortBy,
     limit,
-    offset: page * limit,
-    isInternational: isInternational || (intlPublicEnabled && availabilityFilter === 'international'),
+    availability: effectiveAvailability,
   });
 
   const totalPages = Math.ceil(count / limit);
@@ -596,10 +600,10 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
           {effectiveCatsLoading
             ? [...Array(5)].map((_, i) => <div key={i} className="h-6 bg-white/5 rounded animate-pulse" />)
             : (() => {
-                const parentCategories = visibleCategories.filter(c => c.parent_id === null && (c.published_products_count === undefined || c.published_products_count > 0) && c.status === 'approved');
+                const parentCategories = visibleCategories.filter(c => c.parent_id === null && c.status === 'approved' && (categoryFacets[c.id] || 0) > 0);
                 return parentCategories.map(parent => {
                   const children = visibleCategories.filter(
-                    sub => sub.parent_id === parent.id && (sub.published_products_count === undefined || sub.published_products_count > 0) && sub.status === 'approved'
+                    sub => sub.parent_id === parent.id && sub.status === 'approved' && (categoryFacets[sub.id] || 0) > 0
                   );
                   const isParentActive = categorySlug === parent.slug;
                   const isAnySubActive = children.some(sub => categorySlug === sub.slug || visibleCategories.some(grand => grand.parent_id === sub.id && categorySlug === grand.slug));
@@ -630,7 +634,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                           )}
                         </div>
                         <span className={`text-[10px] font-mono shrink-0 ml-2 ${isParentActive || isAnySubActive ? 'text-[#f00856]' : 'text-slate-500'}`}>
-                          [{parent.published_products_count ?? 0}]
+                          [{categoryFacets[parent.id] ?? 0}]
                         </span>
                       </button>
 
@@ -641,7 +645,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                             <div className="pl-3 flex flex-col gap-1 border-l border-white/5 ml-1.5 mt-0.5 mb-1">
                               {children.map((sub, index) => {
                                 const isSubActive = categorySlug === sub.slug;
-                                const grandchildren = visibleCategories.filter(g => g.parent_id === sub.id && (g.published_products_count === undefined || g.published_products_count > 0) && g.status === 'approved');
+                                const grandchildren = visibleCategories.filter(g => g.parent_id === sub.id && g.status === 'approved' && (categoryFacets[g.id] || 0) > 0);
                                 const isAnyGrandActive = grandchildren.some(g => categorySlug === g.slug);
 
                                 return (
@@ -657,7 +661,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                                     >
                                       <span className="text-[11px] truncate pr-2">{sub.name}</span>
                                       <span className="text-[10px] font-mono shrink-0">
-                                        [{sub.published_products_count ?? 0}]
+                                        [{categoryFacets[sub.id] ?? 0}]
                                       </span>
                                     </button>
 
@@ -678,7 +682,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                                             >
                                               <span className="truncate pr-2">{grand.name}</span>
                                               <span className="text-[9px] font-mono shrink-0">
-                                                [{grand.published_products_count ?? 0}]
+                                                [{categoryFacets[grand.id] ?? 0}]
                                               </span>
                                             </button>
                                           );
@@ -1002,21 +1006,23 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
           <h3 className="font-bold text-slate-400 uppercase text-[10px] tracking-widest mb-2 block">Disponibilidad</h3>
           <div className="flex flex-col gap-1">
             {[
-              { id: '', label: 'Todos' },
-              { id: 'local', label: 'Stock en Uruguay' },
-              { id: 'international', label: 'Internacional' }
+              { id: 'all', label: 'Todos', count: availabilityCounts.all },
+              { id: 'local', label: 'Stock en Uruguay', count: availabilityCounts.local },
+              { id: 'international', label: 'Internacional', count: availabilityCounts.international }
             ].map(a => {
-              const isSelected = (availabilityFilter || '') === a.id;
+              const isSelected = (availabilityFilter === a.id) || (a.id === 'all' && (!availabilityFilter || availabilityFilter === 'all'));
               return (
                 <button
                   key={a.id}
-                  onClick={() => handleAvailabilitySelect(a.id)}
+                  onClick={() => handleAvailabilitySelect(a.id === 'all' ? '' : a.id)}
                   className={`w-full flex items-center justify-between text-left py-1 text-xs transition-all ${
                     isSelected ? 'text-[#f00856] font-bold' : 'text-slate-400 hover:text-white font-medium'
                   }`}
                 >
-                  <span>{a.label}</span>
-                  {isSelected && <span className="text-[10px] text-[#f00856]">✓</span>}
+                  <span className="truncate pr-2">{a.label}</span>
+                  <span className={`text-[10px] font-mono shrink-0 ml-2 ${isSelected ? 'text-[#f00856]' : 'text-slate-500'}`}>
+                    [{a.count}]
+                  </span>
                 </button>
               );
             })}
