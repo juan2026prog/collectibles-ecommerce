@@ -108,7 +108,7 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
       {/* 1. IMAGEN */}
       <div className="relative">
         <Link 
-          to={`/p/${product.slug}`} 
+          to={`/producto/${product.slug}`} 
           onClick={handleCardClick}
           className={`flex bg-white w-full aspect-square overflow-hidden p-5 items-center justify-center border rounded-xl transition-colors ${
             isInternational 
@@ -248,7 +248,7 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
           )}
         </div>
         
-        <Link to={`/p/${product.slug}`} onClick={handleCardClick}>
+        <Link to={`/producto/${product.slug}`} onClick={handleCardClick}>
           <h3 className="text-xs md:text-sm font-bold leading-snug line-clamp-2 min-h-[32px] text-white hover:text-[#f00856] transition-colors">
             {product.title}
           </h3>

@@ -147,9 +147,9 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     adminOnly: false,
     nullable: true,
     blankBehavior: 'ignore',
-    example: 'https://collectibles.uy/p/figura-batman-legacy',
+    example: 'https://collectibles.uy/producto/figura-batman-legacy',
     synonyms: ['product_url', 'url_producto', 'link', 'enlace'],
-    exportResolver: p => p.slug ? `https://collectibles.uy/p/${p.slug}` : ''
+    exportResolver: p => p.slug ? `https://collectibles.uy/producto/${p.slug}` : ''
   },
 
   // --- CONTENIDO ---

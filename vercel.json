@@ -85,6 +85,10 @@
       "destination": "/api/catalog-image?path=$1"
     },
     {
+      "source": "/p/:slug*",
+      "destination": "/api/seo-prerender"
+    },
+    {
       "source": "/producto/:slug*",
       "destination": "/api/seo-prerender"
     },

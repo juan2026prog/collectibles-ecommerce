@@ -894,7 +894,7 @@ export default function CustomerPortal() {
 
                     {order.order_items.map((item: any, i: number) => (
                       <div key={i} className="flex gap-4 py-3 border-b last:border-0 last:pb-0 items-center">
-                        <Link to={item.products?.slug ? `/p/${item.products.slug}` : '#'}>
+                        <Link to={item.products?.slug ? `/producto/${item.products.slug}` : '#'}>
                           <img 
                             src={getOrderItemImage(item)} 
                             alt=""
@@ -902,7 +902,7 @@ export default function CustomerPortal() {
                           />
                         </Link>
                         <div className="flex-1 min-w-0">
-                          <Link to={item.products?.slug ? `/p/${item.products.slug}` : '#'} className="font-bold text-white hover:text-primary-600 transition-colors line-clamp-1">{item.products?.title}</Link>
+                          <Link to={item.products?.slug ? `/producto/${item.products.slug}` : '#'} className="font-bold text-white hover:text-primary-600 transition-colors line-clamp-1">{item.products?.title}</Link>
                           <p className="text-[10px] font-black text-[#f00856] uppercase tracking-widest mt-0.5">
                             Vendido por: {item.vendor_id ? (item.vendor_store?.display_name || item.vendor_store?.store_name || item.vendor_store?.name || item.vendor?.company_name || item.vendor?.store_name || 'Vendedor') : 'Collectibles.uy'}
                           </p>

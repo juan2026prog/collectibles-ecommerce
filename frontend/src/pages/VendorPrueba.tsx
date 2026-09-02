@@ -295,7 +295,7 @@ export default function VendorPrueba() {
                       </div>
 
                       <Link
-                        to={`/p/${p.slug}`}
+                        to={`/producto/${p.slug}`}
                         className="w-full bg-white/5 hover:bg-[#f00856] hover:text-white border border-white/10 hover:border-transparent py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
                       >
                         <Eye className="w-3.5 h-3.5" /> Ver producto

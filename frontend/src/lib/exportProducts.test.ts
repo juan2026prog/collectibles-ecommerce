@@ -39,7 +39,7 @@ function createMockCatalog(count: number = 456): ExportProductItem[] {
       sku: `SKU-${1000 + i}`,
       title: `Producto Coleccionable ${i}`,
       slug: `producto-coleccionable-${i}`,
-      product_url: `https://collectibles.uy/p/producto-coleccionable-${i}`,
+      product_url: `https://collectibles.uy/producto/producto-coleccionable-${i}`,
       description: `Descripción del producto ${i}`,
       short_description: `Resumen ${i}`,
       content: `<p>Contenido detallado ${i}</p>`,
@@ -78,7 +78,7 @@ const sampleProduct: ExportProductItem = {
   sku: 'SKU-1100',
   title: 'Figura Batman Legacy 6 Pulgadas',
   slug: 'figura-batman-legacy-6-pulgadas',
-  product_url: 'https://collectibles.uy/p/figura-batman-legacy-6-pulgadas',
+  product_url: 'https://collectibles.uy/producto/figura-batman-legacy-6-pulgadas',
   description: 'Descripción detallada de la figura de Batman.',
   short_description: 'Edición coleccionista 15 cm.',
   content: '<p>Especificaciones detalladas de empaque y accesorios.</p>',
@@ -154,7 +154,7 @@ describe('Product Export & Import System Audit', () => {
     expect(record.sku).toBe('SKU-1100');
     expect(record.title).toBe('Figura Batman Legacy 6 Pulgadas');
     expect(record.slug).toBe('figura-batman-legacy-6-pulgadas');
-    expect(record.product_url).toBe('https://collectibles.uy/p/figura-batman-legacy-6-pulgadas');
+    expect(record.product_url).toBe('https://collectibles.uy/producto/figura-batman-legacy-6-pulgadas');
     expect(record.base_price).toBe('2990.00');
     expect(record.compare_at_price).toBe('3500.00');
     expect(record.mbe_packaging_type).toBe('MBE PAK');
@@ -203,7 +203,7 @@ describe('Product Export & Import System Audit', () => {
 
     expect(normalized.sku).toBe('SKU-TEST');
     expect(normalized.slug).toBe('batman-marvel');
-    expect(normalized.product_url).toBe('https://collectibles.uy/p/batman-marvel');
+    expect(normalized.product_url).toBe('https://collectibles.uy/producto/batman-marvel');
     expect(normalized.content).toBe('<p>Rich Content HTML</p>');
     expect(normalized.video_url).toBe('https://www.youtube.com/watch?v=abc1234');
     expect(normalized.weight_kg).toBe(0.650);
@@ -513,7 +513,7 @@ describe('Product Export & Import System Audit', () => {
     expect(urlDef?.importable).toBe(false);
 
     const formatted = formatProductRecordForExport(prod, ['product_url'], 'admin');
-    expect(formatted.product_url).toBe('https://collectibles.uy/p/figura-coleccionable-superman');
+    expect(formatted.product_url).toBe('https://collectibles.uy/producto/figura-coleccionable-superman');
   });
 
   it('23. Native Excel Data Validations & Defined Names Test: Generated XLSX contains valid DataValidation dropdowns on range 2:5000 for all controlled columns', async () => {

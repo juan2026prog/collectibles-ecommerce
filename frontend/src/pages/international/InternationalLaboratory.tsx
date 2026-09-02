@@ -207,7 +207,7 @@ export default function InternationalLaboratory() {
                     
                     <div className="grid grid-cols-2 gap-2 mt-auto">
                       <button 
-                        onClick={() => navigate(`/p/${p.id}`)}
+                        onClick={() => navigate(`/producto/${p.id}`)}
                         className="btn-secondary py-3 text-xs"
                       >
                         Ver Detalle

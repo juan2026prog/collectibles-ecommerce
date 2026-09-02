@@ -196,7 +196,7 @@ export default async function handler(req, res) {
       );
       const availability = totalInventory > 0 ? 'in stock' : 'out of stock';
       const condition = 'new';
-      const productLink = `${BASE_SITE_URL}/p/${p.slug}`;
+      const productLink = `${BASE_SITE_URL}/producto/${p.slug}`;
       const brand = cleanText(p.brand?.name || '');
       const productType = cleanText(p.category?.name || '');
       const description = cleanText(

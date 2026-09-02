@@ -276,6 +276,99 @@ function renderNotFoundPage(res, htmlTemplate, type, slug) {
   return res.status(404).send(renderedHtml);
 }
 
+function extractMluId(rawSlug) {
+  if (!rawSlug) return null;
+  const match = String(rawSlug).match(/(MLU\s*[-_]?\s*\d+)/i);
+  if (match) {
+    return match[1].toUpperCase().replace(/[-_\s]/g, '');
+  }
+  return null;
+}
+
+async function resolveCanonicalProduct(slug) {
+  if (!slug) return null;
+
+  const selectFields = `
+    id,
+    title,
+    slug,
+    description,
+    short_description,
+    base_price,
+    compare_at_price,
+    is_active,
+    status,
+    category_id,
+    brand_id,
+    seo_title,
+    seo_description,
+    meta_title,
+    meta_description,
+    metadata,
+    ml_item_id
+  `;
+
+  // Layer 1: Direct match on products.slug
+  const { data: directProduct } = await supabase
+    .from('products')
+    .select(selectFields)
+    .eq('slug', slug)
+    .maybeSingle();
+
+  if (directProduct && directProduct.is_active && directProduct.status === 'published') {
+    return { product: directProduct, isRedirect: false, canonicalSlug: directProduct.slug };
+  }
+
+  // Layer 2: Match on product_slug_redirects.old_slug
+  const { data: redirect } = await supabase
+    .from('product_slug_redirects')
+    .select('new_slug, product_id')
+    .eq('old_slug', slug)
+    .maybeSingle();
+
+  if (redirect?.new_slug) {
+    const { data: redirectedProduct } = await supabase
+      .from('products')
+      .select(selectFields)
+      .eq('slug', redirect.new_slug)
+      .maybeSingle();
+
+    if (redirectedProduct && redirectedProduct.is_active && redirectedProduct.status === 'published') {
+      return { product: redirectedProduct, isRedirect: true, canonicalSlug: redirectedProduct.slug };
+    }
+  }
+
+  // Layer 3: Match on products.ml_item_id or extracted MLU ID
+  const mluId = extractMluId(slug);
+  if (mluId) {
+    const { data: mluProduct } = await supabase
+      .from('products')
+      .select(selectFields)
+      .eq('ml_item_id', mluId)
+      .maybeSingle();
+
+    if (mluProduct && mluProduct.is_active && mluProduct.status === 'published') {
+      return { product: mluProduct, isRedirect: true, canonicalSlug: mluProduct.slug };
+    }
+  }
+
+  // Layer 4: Match on products.id (UUID)
+  const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(slug);
+  if (isUUID) {
+    const { data: uuidProduct } = await supabase
+      .from('products')
+      .select(selectFields)
+      .eq('id', slug)
+      .maybeSingle();
+
+    if (uuidProduct && uuidProduct.is_active && uuidProduct.status === 'published') {
+      return { product: uuidProduct, isRedirect: true, canonicalSlug: uuidProduct.slug };
+    }
+  }
+
+  return null;
+}
+
 export default async function handler(req, res) {
   try {
     let { type, slug } = req.query || {};
@@ -296,6 +389,14 @@ export default async function handler(req, res) {
       } else if (combinedUri.includes('/producto/')) {
         type = 'producto';
         const match = combinedUri.match(/\/producto\/([^\/\?\s]+)/);
+        if (match) slug = match[1];
+      } else if (combinedUri.includes('/product/')) {
+        type = 'product';
+        const match = combinedUri.match(/\/product\/([^\/\?\s]+)/);
+        if (match) slug = match[1];
+      } else if (combinedUri.includes('/p/')) {
+        type = 'p';
+        const match = combinedUri.match(/\/p\/([^\/\?\s]+)/);
         if (match) slug = match[1];
       } else if (combinedUri.includes('/page/')) {
         type = 'page';
@@ -321,32 +422,20 @@ export default async function handler(req, res) {
     let jsonLdScripts = [];
     let bodyContent = '';
 
-    if (type === 'producto' && slug) {
-      const { data: product } = await supabase
-        .from('products')
-        .select(`
-          id,
-          title,
-          slug,
-          description,
-          short_description,
-          base_price,
-          compare_at_price,
-          is_active,
-          status,
-          category_id,
-          brand_id,
-          seo_title,
-          seo_description,
-          meta_title,
-          meta_description,
-          metadata
-        `)
-        .eq('slug', slug)
-        .maybeSingle();
+    if ((type === 'producto' || type === 'product' || type === 'p') && slug) {
+      const resolved = await resolveCanonicalProduct(slug);
 
-      if (!product || !product.is_active || product.status !== 'published') {
+      if (!resolved || !resolved.product) {
         return renderNotFoundPage(res, htmlTemplate, 'producto', slug);
+      }
+
+      const { product, isRedirect, canonicalSlug } = resolved;
+
+      // Rule: If legacy route (/p/ or /product/) OR if requested slug is different from canonicalSlug -> 301 Redirect!
+      if (type === 'p' || type === 'product' || isRedirect || slug !== canonicalSlug) {
+        res.setHeader('Location', `${BASE_URL}/producto/${canonicalSlug}`);
+        res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400');
+        return res.status(301).end();
       }
 
       const [{ data: images }, { data: category }, { data: brand }, { data: related }] = await Promise.all([

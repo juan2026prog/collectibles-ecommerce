@@ -76,7 +76,7 @@ export function normalizeRawProductForExport(item: any): ExportProductItem {
     sku: String(skuVal),
     title: item.title || '',
     slug: item.slug || null,
-    product_url: item.slug ? `https://collectibles.uy/p/${item.slug}` : null,
+    product_url: item.slug ? `https://collectibles.uy/producto/${item.slug}` : null,
     description: item.description || null,
     short_description: item.short_description || null,
     content: contentVal,
