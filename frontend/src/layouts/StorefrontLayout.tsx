@@ -34,8 +34,97 @@ import { trackClarityEvent } from '../lib/analyticsTracker';
 // NAV_LINKS and MEGA_MENU are built dynamically inside the component
 // using t() for translations and useCategories() for live DB data.
 
-const DesktopDropdownMenu = React.memo(({ items, footerLink }: { items: Array<{ label: string; url: string }>; footerLink?: { label: string; url: string } }) => {
+const DesktopDropdownMenu = React.memo(({
+  type,
+  items,
+  footerLink
+}: {
+  type?: 'categories' | 'brands' | 'licenses' | 'themes';
+  items: Array<{ label: string; url: string; logo_url?: string; image_url?: string }>;
+  footerLink?: { label: string; url: string };
+}) => {
   if (items.length === 0 && !footerLink) return null;
+
+  if (type === 'licenses') {
+    return (
+      <div className="absolute top-full left-0 w-80 pt-0 pointer-events-none group-hover:pointer-events-auto z-[110] opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 transition-all duration-200 ease-out">
+        <div className="bg-[#05070f] border border-white/10 rounded-2xl shadow-2xl shadow-black/80 overflow-hidden flex flex-col p-2">
+          <div className="px-4 py-2 border-b border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-500">
+            Licencias Destacadas
+          </div>
+          <div className="flex flex-col py-1 max-h-[360px] overflow-y-auto no-scrollbar">
+            {items.map((item) => (
+              <Link
+                key={item.label + item.url}
+                to={item.url}
+                className="px-3.5 py-2 text-slate-300 hover:text-white hover:bg-[#f00856]/10 rounded-xl flex items-center gap-3 transition-all duration-150 text-xs font-bold border-l-2 border-transparent hover:border-[#f00856] group/item"
+              >
+                <div className="w-10 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center p-1 shrink-0 overflow-hidden group-hover/item:border-[#f00856]/40 transition-colors">
+                  {item.logo_url ? (
+                    <img src={item.logo_url} alt={item.label} className="w-full h-full object-contain" />
+                  ) : (
+                    <span className="text-[9px] font-black tracking-tighter text-slate-400 group-hover/item:text-white uppercase truncate px-0.5">
+                      {item.label.substring(0, 4)}
+                    </span>
+                  )}
+                </div>
+                <span className="truncate">{item.label}</span>
+              </Link>
+            ))}
+          </div>
+          {footerLink && (
+            <Link
+              to={footerLink.url}
+              className="px-4 py-2.5 mt-1 text-[#f00856] bg-white/[0.03] hover:bg-[#f00856]/10 flex items-center justify-between rounded-xl text-xs font-black tracking-wider transition-all border border-[#f00856]/20"
+            >
+              <span>{footerLink.label}</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (type === 'themes') {
+    return (
+      <div className="absolute top-full left-0 w-80 pt-0 pointer-events-none group-hover:pointer-events-auto z-[110] opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 transition-all duration-200 ease-out">
+        <div className="bg-[#05070f] border border-white/10 rounded-2xl shadow-2xl shadow-black/80 overflow-hidden flex flex-col p-2">
+          <div className="px-4 py-2 border-b border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-500">
+            Explorá por Themes
+          </div>
+          <div className="flex flex-col py-1 max-h-[360px] overflow-y-auto no-scrollbar">
+            {items.map((item) => (
+              <Link
+                key={item.label + item.url}
+                to={item.url}
+                className="px-3.5 py-2 text-slate-300 hover:text-white hover:bg-[#f00856]/10 rounded-xl flex items-center gap-3 transition-all duration-150 text-xs font-bold border-l-2 border-transparent hover:border-[#f00856] group/item"
+              >
+                <div className="w-10 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 overflow-hidden group-hover/item:border-[#f00856]/40 transition-colors">
+                  {item.image_url ? (
+                    <img src={item.image_url} alt={item.label} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-[#f00856]/20 to-indigo-600/20" />
+                  )}
+                </div>
+                <span className="truncate">{item.label}</span>
+              </Link>
+            ))}
+          </div>
+          {footerLink && (
+            <Link
+              to={footerLink.url}
+              className="px-4 py-2.5 mt-1 text-[#f00856] bg-white/[0.03] hover:bg-[#f00856]/10 flex items-center justify-between rounded-xl text-xs font-black tracking-wider transition-all border border-[#f00856]/20"
+            >
+              <span>{footerLink.label}</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="absolute top-full left-0 w-64 pt-0 pointer-events-none group-hover:pointer-events-auto z-[110] opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 transition-all duration-200 ease-out">
       <div className="bg-[#05070f] border-l border-r border-b border-white/10 rounded-b-2xl shadow-2xl shadow-black/80 overflow-hidden flex flex-col py-2 max-h-[420px] overflow-y-auto no-scrollbar">
@@ -422,22 +511,23 @@ export default function StorefrontLayout() {
 
                 {(link.hasMega || (link.subItems && link.subItems.length > 0)) && (
                   <DesktopDropdownMenu 
+                    type={link.megaType}
                     items={
                       link.hasMega && link.megaType === 'categories'
                         ? topLevel.map(c => ({ label: c.name, url: `/categoria/${c.slug}` }))
                         : link.hasMega && link.megaType === 'brands'
                           ? allBrands.slice(0, 15).map(b => ({ label: b.name, url: `/marca/${b.slug}` }))
                           : link.hasMega && link.megaType === 'licenses'
-                            ? activeLicenses.slice(0, 12).map(l => ({ label: l.name, url: `/licencias/${l.slug}` }))
+                            ? activeLicenses.slice(0, 8).map(l => ({ label: l.name, url: `/licencias/${l.slug}`, logo_url: l.logo_url }))
                             : link.hasMega && link.megaType === 'themes'
-                              ? activeThemes.slice(0, 10).map(t => ({ label: t.name, url: `/themes/${t.slug}` }))
+                              ? activeThemes.slice(0, 7).map(t => ({ label: t.name, url: `/themes/${t.slug}`, image_url: t.image_url }))
                               : link.subItems || []
                     }
                     footerLink={
                       link.hasMega && link.megaType === 'licenses'
-                        ? { label: 'Ver todas las licencias →', url: '/licencias' }
+                        ? { label: 'VER TODAS LAS LICENCIAS →', url: '/licencias' }
                         : link.hasMega && link.megaType === 'themes'
-                          ? { label: 'Ver todos los themes →', url: '/themes' }
+                          ? { label: 'VER TODOS LOS THEMES →', url: '/themes' }
                           : undefined
                     }
                   />

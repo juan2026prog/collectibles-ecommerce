@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Plus, Pencil, Trash2, Save, X, Image as ImageIcon, List, Grid3X3, Search, Star, Eye, EyeOff, Check, ShieldCheck } from 'lucide-react';
+import { Plus, Pencil, Trash2, Save, X, Image as ImageIcon, List, Grid3X3, Search, Star, Eye, EyeOff, Check, ShieldCheck, Upload, Info, ChevronRight } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
+import { MediaPickerModal } from '../../components/MediaPickerModal';
 
 export default function AdminLicenses() {
   const [licenses, setLicenses] = useState<any[]>([]);
@@ -14,12 +15,15 @@ export default function AdminLicenses() {
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [sortBy, setSortBy] = useState<'sort_order' | 'name' | 'published_desc'>('sort_order');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [activeMediaTarget, setActiveMediaTarget] = useState<'logo' | 'banner' | null>(null);
 
   const [form, setForm] = useState({
     name: '',
     slug: '',
     description: '',
     logo_url: '',
+    logo_alt: '',
     banner_url: '',
     is_active: true,
     is_featured: false,
@@ -89,6 +93,7 @@ export default function AdminLicenses() {
       slug: '',
       description: '',
       logo_url: '',
+      logo_alt: '',
       banner_url: '',
       is_active: true,
       is_featured: false,
@@ -105,6 +110,7 @@ export default function AdminLicenses() {
       slug: l.slug,
       description: l.description || '',
       logo_url: l.logo_url || '',
+      logo_alt: l.logo_alt || '',
       banner_url: l.banner_url || '',
       is_active: l.is_active ?? true,
       is_featured: l.is_featured ?? false,
@@ -122,6 +128,7 @@ export default function AdminLicenses() {
       slug: form.slug || form.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
       description: form.description || null,
       logo_url: form.logo_url || null,
+      logo_alt: form.logo_alt?.trim() || `Logo de ${form.name.trim()}`,
       banner_url: form.banner_url || null,
       is_active: form.is_active,
       is_featured: form.is_featured,
@@ -454,10 +461,94 @@ export default function AdminLicenses() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Logo URL</label>
-                <input className="form-input w-full text-xs" value={form.logo_url} onChange={e => setForm({ ...form, logo_url: e.target.value })} placeholder="https://..." />
+              {/* Logo Upload & Management */}
+              <div className="space-y-2 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black text-gray-700 uppercase tracking-widest flex items-center gap-1.5">
+                    <ImageIcon className="w-3.5 h-3.5 text-primary-600" /> Logo Oficial de la Licencia
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => { setActiveMediaTarget('logo'); setShowMediaPicker(true); }}
+                    className="px-3 py-1 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5 text-blue-600" /> Biblioteca de Medios
+                  </button>
+                </div>
+
+                <div className="flex gap-2">
+                  <input
+                    className="form-input flex-1 text-xs font-mono"
+                    value={form.logo_url}
+                    onChange={e => setForm({ ...form, logo_url: e.target.value })}
+                    placeholder="https://..."
+                  />
+                  {form.logo_url && (
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, logo_url: '' })}
+                      className="px-2.5 py-1 text-xs text-red-600 hover:bg-red-50 rounded-lg font-bold border border-red-200"
+                    >
+                      Quitar
+                    </button>
+                  )}
+                </div>
+
+                {/* Specs Notice */}
+                <div className="bg-blue-50/80 border border-blue-200/80 rounded-lg p-2.5 text-[11px] text-blue-900 space-y-1">
+                  <div className="font-bold flex items-center gap-1">
+                    <Info className="w-3.5 h-3.5 text-blue-600 shrink-0" /> Medidas y Especificaciones Recomendadas:
+                  </div>
+                  <ul className="list-disc list-inside pl-1 text-[10px] space-y-0.5 text-blue-800">
+                    <li><strong className="font-bold">Tamaño ideal:</strong> 1200 × 600 px (Relación 2:1)</li>
+                    <li><strong className="font-bold">Formato:</strong> WebP o PNG transparente (Fondo oscuro)</li>
+                    <li><strong className="font-bold">Mínimo:</strong> 600 × 300 px | <strong className="font-bold">Peso:</strong> &lt; 250 KB</li>
+                    <li><strong className="font-bold">Safe Area:</strong> Dejar ~10% de margen alrededor del logo.</li>
+                  </ul>
+                </div>
+
+                {/* ALT Text Input */}
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Texto Alternativo (ALT Text SEO)</label>
+                  <input
+                    className="form-input w-full text-xs"
+                    value={form.logo_alt}
+                    onChange={e => setForm({ ...form, logo_alt: e.target.value })}
+                    placeholder={`Logo de ${form.name || 'Licencia'}`}
+                  />
+                </div>
               </div>
+
+              {/* STOREFRONT PREVIEWS (DARK MODE) */}
+              {form.logo_url && (
+                <div className="bg-[#05070f] p-4 rounded-2xl border border-white/10 space-y-3">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-white/10 pb-2">
+                    Vista Previa en Storefront (Fondo Oscuro)
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Card Preview */}
+                    <div className="bg-[#090d18] border border-white/10 rounded-xl p-3 flex flex-col items-center text-center">
+                      <div className="text-[9px] font-bold text-slate-500 mb-2 uppercase">Card /licencias</div>
+                      <div className="w-full h-16 bg-white/5 rounded-lg p-2 flex items-center justify-center border border-white/5 mb-2">
+                        <img src={form.logo_url} alt={form.logo_alt || form.name} className="max-h-full max-w-full object-contain" />
+                      </div>
+                      <span className="text-xs font-bold text-white truncate max-w-full">{form.name || 'Nombre Licencia'}</span>
+                    </div>
+
+                    {/* Dropdown Item Preview */}
+                    <div className="bg-[#05070f] border border-white/10 rounded-xl p-3 flex flex-col justify-center">
+                      <div className="text-[9px] font-bold text-slate-500 mb-2 uppercase">Dropdown Menú</div>
+                      <div className="px-2.5 py-1.5 bg-[#f00856]/10 rounded-lg flex items-center gap-2 border border-[#f00856]/30">
+                        <div className="w-8 h-5 rounded bg-white/5 border border-white/10 flex items-center justify-center p-0.5 shrink-0 overflow-hidden">
+                          <img src={form.logo_url} alt="" className="w-full h-full object-contain" />
+                        </div>
+                        <span className="text-xs font-bold text-white truncate">{form.name || 'Nombre Licencia'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Banner URL (opcional)</label>
@@ -495,6 +586,23 @@ export default function AdminLicenses() {
           </div>
         </>
       )}
+
+      {/* Media Picker Modal Integration */}
+      <MediaPickerModal
+        isOpen={showMediaPicker}
+        onClose={() => { setShowMediaPicker(false); setActiveMediaTarget(null); }}
+        multiple={false}
+        rootPath="licenses"
+        onSelect={(url) => {
+          if (activeMediaTarget === 'logo') {
+            setForm(prev => ({ ...prev, logo_url: url }));
+          } else if (activeMediaTarget === 'banner') {
+            setForm(prev => ({ ...prev, banner_url: url }));
+          }
+          setShowMediaPicker(false);
+          setActiveMediaTarget(null);
+        }}
+      />
     </div>
   );
 }

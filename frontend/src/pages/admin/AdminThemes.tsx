@@ -1,19 +1,23 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Plus, Pencil, Trash2, Save, X, Eye, EyeOff, LayoutTemplate, Layers } from 'lucide-react';
+import { Plus, Pencil, Trash2, Save, X, Eye, EyeOff, LayoutTemplate, Layers, Image as ImageIcon, Info, ChevronRight } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
+import { MediaPickerModal } from '../../components/MediaPickerModal';
 
 export default function AdminThemes() {
   const [themes, setThemes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
 
   const [form, setForm] = useState({
     name: '',
     slug: '',
     description: '',
+    image_url: '',
+    image_alt: '',
     is_active: true,
     sort_order: 0
   });
@@ -44,7 +48,15 @@ export default function AdminThemes() {
 
   function openCreate() {
     setEditing(null);
-    setForm({ name: '', slug: '', description: '', is_active: true, sort_order: themes.length + 1 });
+    setForm({
+      name: '',
+      slug: '',
+      description: '',
+      image_url: '',
+      image_alt: '',
+      is_active: true,
+      sort_order: themes.length + 1
+    });
     setShowForm(true);
   }
 
@@ -54,6 +66,8 @@ export default function AdminThemes() {
       name: t.name,
       slug: t.slug,
       description: t.description || '',
+      image_url: t.image_url || '',
+      image_alt: t.image_alt || '',
       is_active: t.is_active ?? true,
       sort_order: t.sort_order || 0
     });
@@ -67,6 +81,8 @@ export default function AdminThemes() {
       name: form.name.trim(),
       slug: form.slug || form.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
       description: form.description || null,
+      image_url: form.image_url || null,
+      image_alt: form.image_alt?.trim() || `Coleccionables de ${form.name.trim()}`,
       is_active: form.is_active,
       sort_order: form.sort_order,
       updated_at: new Date().toISOString()
@@ -103,7 +119,7 @@ export default function AdminThemes() {
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
         <div className="flex items-center gap-3">
-          <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">Themes (Temáticas Comercial)</h2>
+          <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">Themes (Temáticas Comerciales)</h2>
           <span className="bg-purple-100 text-purple-700 text-xs font-bold px-2.5 py-1 rounded-full border border-purple-200">
             {themes.length} {themes.length === 1 ? 'theme' : 'themes'}
           </span>
@@ -118,10 +134,11 @@ export default function AdminThemes() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
+              <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Imagen</th>
               <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Nombre</th>
               <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Slug / Ruta</th>
-              <th className="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase">Licencias Asociadas</th>
-              <th className="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase">Productos Publicados</th>
+              <th className="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase">Licencias</th>
+              <th className="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase">Productos</th>
               <th className="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase">Orden</th>
               <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Estado</th>
               <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">Acciones</th>
@@ -129,11 +146,20 @@ export default function AdminThemes() {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {loading ? (
-              <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400">Cargando Themes...</td></tr>
+              <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-400">Cargando Themes...</td></tr>
             ) : themes.length === 0 ? (
-              <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400">No hay Themes configurados</td></tr>
+              <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-400">No hay Themes configurados</td></tr>
             ) : themes.map(t => (
               <tr key={t.id} className="hover:bg-gray-50">
+                <td className="px-4 py-3">
+                  <div className="w-12 h-8 rounded-lg bg-gray-100 border overflow-hidden flex items-center justify-center">
+                    {t.image_url ? (
+                      <img src={t.image_url} alt={t.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <ImageIcon className="w-4 h-4 text-gray-300" />
+                    )}
+                  </div>
+                </td>
                 <td className="px-6 py-4 font-bold text-gray-900 flex items-center gap-2">
                   <Layers className="w-4 h-4 text-purple-600 shrink-0" />
                   <span>{t.name}</span>
@@ -167,10 +193,11 @@ export default function AdminThemes() {
         </table>
       </div>
 
+      {/* CREATE / EDIT MODAL */}
       {showForm && (
         <>
           <div className="fixed inset-0 bg-black/50 z-40 backdrop-blur-sm" onClick={() => setShowForm(false)} />
-          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white z-50 rounded-2xl shadow-2xl p-6">
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg max-h-[90vh] overflow-y-auto bg-white z-50 rounded-2xl shadow-2xl p-6">
             <div className="flex items-center justify-between mb-6 pb-4 border-b">
               <h3 className="text-xl font-bold">{editing ? 'Editar Theme' : 'Nuevo Theme'}</h3>
               <button onClick={() => setShowForm(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-900"><X className="w-5 h-5" /></button>
@@ -200,6 +227,95 @@ export default function AdminThemes() {
                 </div>
               </div>
 
+              {/* Main Image Upload & Specs */}
+              <div className="space-y-2 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black text-gray-700 uppercase tracking-widest flex items-center gap-1.5">
+                    <ImageIcon className="w-3.5 h-3.5 text-purple-600" /> Imagen Principal del Theme
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowMediaPicker(true)}
+                    className="px-3 py-1 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5 text-purple-600" /> Biblioteca de Medios
+                  </button>
+                </div>
+
+                <div className="flex gap-2">
+                  <input
+                    className="form-input flex-1 text-xs font-mono"
+                    value={form.image_url}
+                    onChange={e => setForm({ ...form, image_url: e.target.value })}
+                    placeholder="https://..."
+                  />
+                  {form.image_url && (
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, image_url: '' })}
+                      className="px-2.5 py-1 text-xs text-red-600 hover:bg-red-50 rounded-lg font-bold border border-red-200"
+                    >
+                      Quitar
+                    </button>
+                  )}
+                </div>
+
+                {/* Specs Notice */}
+                <div className="bg-purple-50/80 border border-purple-200/80 rounded-lg p-2.5 text-[11px] text-purple-900 space-y-1">
+                  <div className="font-bold flex items-center gap-1">
+                    <Info className="w-3.5 h-3.5 text-purple-600 shrink-0" /> Medidas y Especificaciones Recomendadas:
+                  </div>
+                  <ul className="list-disc list-inside pl-1 text-[10px] space-y-0.5 text-purple-800">
+                    <li><strong className="font-bold">Tamaño ideal:</strong> 1600 × 900 px (Relación 16:9)</li>
+                    <li><strong className="font-bold">Formato:</strong> WebP, AVIF o JPG optimizado</li>
+                    <li><strong className="font-bold">Mínimo:</strong> 1200 × 675 px | <strong className="font-bold">Peso:</strong> &lt; 350 KB</li>
+                    <li><strong className="font-bold">Contenido:</strong> Arte temático genérico (no posters específicos).</li>
+                  </ul>
+                </div>
+
+                {/* ALT Text Input */}
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Texto Alternativo (ALT Text SEO)</label>
+                  <input
+                    className="form-input w-full text-xs"
+                    value={form.image_alt}
+                    onChange={e => setForm({ ...form, image_alt: e.target.value })}
+                    placeholder={`Coleccionables de ${form.name || 'Theme'}`}
+                  />
+                </div>
+              </div>
+
+              {/* STOREFRONT PREVIEWS (DARK MODE) */}
+              {form.image_url && (
+                <div className="bg-[#05070f] p-4 rounded-2xl border border-white/10 space-y-3">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-white/10 pb-2">
+                    Vista Previa en Storefront (Fondo Oscuro)
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Card Preview */}
+                    <div className="bg-[#090d18] border border-white/10 rounded-xl p-3 flex flex-col justify-between">
+                      <div className="text-[9px] font-bold text-slate-500 mb-2 uppercase">Card /themes</div>
+                      <div className="w-full aspect-video rounded-lg overflow-hidden border border-white/10 mb-2">
+                        <img src={form.image_url} alt={form.image_alt || form.name} className="w-full h-full object-cover" />
+                      </div>
+                      <span className="text-xs font-black text-white truncate">{form.name || 'Nombre Theme'}</span>
+                    </div>
+
+                    {/* Dropdown Item Preview */}
+                    <div className="bg-[#05070f] border border-white/10 rounded-xl p-3 flex flex-col justify-center">
+                      <div className="text-[9px] font-bold text-slate-500 mb-2 uppercase">Dropdown Menú</div>
+                      <div className="px-2.5 py-1.5 bg-[#f00856]/10 rounded-lg flex items-center gap-2 border border-[#f00856]/30">
+                        <div className="w-8 h-5 rounded bg-white/5 border border-white/10 flex items-center justify-center shrink-0 overflow-hidden">
+                          <img src={form.image_url} alt="" className="w-full h-full object-cover" />
+                        </div>
+                        <span className="text-xs font-bold text-white truncate">{form.name || 'Nombre Theme'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Descripción</label>
                 <textarea rows={3} className="form-input w-full text-xs resize-none" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Breve resumen del Theme comercial..." />
@@ -223,6 +339,18 @@ export default function AdminThemes() {
           </div>
         </>
       )}
+
+      {/* Media Picker Modal */}
+      <MediaPickerModal
+        isOpen={showMediaPicker}
+        onClose={() => setShowMediaPicker(false)}
+        multiple={false}
+        rootPath="themes"
+        onSelect={(url) => {
+          setForm(prev => ({ ...prev, image_url: url }));
+          setShowMediaPicker(false);
+        }}
+      />
     </div>
   );
 }

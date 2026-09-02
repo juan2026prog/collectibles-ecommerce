@@ -1,18 +1,8 @@
 import { Link } from 'react-router-dom';
-import { Layers, Film, Gamepad2, Tv, Skull, Music2, Trophy, BookOpen } from 'lucide-react';
+import { Layers, ChevronRight } from 'lucide-react';
 import { useThemes } from '../hooks/useData';
 import SEO from '../components/SEO';
 import { generateMetaTitle, generateMetaDescription, generateCanonical } from '../utils/seoHelpers';
-
-const THEME_ICONS: Record<string, any> = {
-  'anime-manga': Tv,
-  'comics': BookOpen,
-  'cine-tv': Film,
-  'videojuegos': Gamepad2,
-  'horror': Skull,
-  'musica': Music2,
-  'deportes': Trophy,
-};
 
 export default function ThemesIndex() {
   const { themes, loading } = useThemes(true); // only active with published products
@@ -27,7 +17,7 @@ export default function ThemesIndex() {
 
       {/* Header Banner */}
       <div className="text-center max-w-3xl mx-auto space-y-3">
-        <span className="text-xs uppercase font-black tracking-[0.2em] text-purple-400 bg-purple-950/60 px-3.5 py-1.5 rounded-full border border-purple-500/30 inline-flex items-center gap-1.5">
+        <span className="text-xs uppercase font-black tracking-[0.2em] text-[#f00856] bg-[#f00856]/10 px-3.5 py-1.5 rounded-full border border-[#f00856]/20 inline-flex items-center gap-1.5">
           <Layers className="w-3.5 h-3.5" /> Temáticas Comerciales
         </span>
         <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight">
@@ -40,7 +30,7 @@ export default function ThemesIndex() {
 
       {loading ? (
         <div className="py-20 text-center">
-          <div className="w-10 h-10 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <div className="w-10 h-10 border-4 border-[#f00856] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
           <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Cargando temáticas...</p>
         </div>
       ) : themes.length === 0 ? (
@@ -49,42 +39,51 @@ export default function ThemesIndex() {
           <Link to="/shop" className="btn-primary text-xs py-2 px-4 rounded-xl">Ir al catálogo general</Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {themes.map(t => {
-            const Icon = THEME_ICONS[t.slug] || Layers;
-            return (
-              <Link
-                key={t.id}
-                to={`/themes/${t.slug}`}
-                className="group relative rounded-3xl bg-white/[0.03] border border-white/10 hover:border-purple-500/50 p-6 sm:p-8 flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-purple-500/10 overflow-hidden"
-              >
-                <div className="space-y-4 relative z-10">
-                  <div className="w-14 h-14 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center group-hover:scale-110 group-hover:bg-purple-600 group-hover:text-white transition-all shadow-lg">
-                    <Icon className="w-7 h-7" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {themes.map(t => (
+            <Link
+              key={t.id}
+              to={`/themes/${t.slug}`}
+              className="group relative rounded-3xl bg-[#090d18] border border-white/10 hover:border-[#f00856]/60 p-5 flex flex-col justify-between transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-[#f00856]/15 overflow-hidden"
+            >
+              {/* 16:9 Hero Image Container */}
+              <div className="w-full aspect-video rounded-2xl bg-white/5 border border-white/10 overflow-hidden mb-4 relative">
+                {t.image_url ? (
+                  <img
+                    src={t.image_url}
+                    alt={t.image_alt || `Coleccionables de ${t.name}`}
+                    loading="lazy"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-[#f00856]/20 to-purple-900/40 flex items-center justify-center">
+                    <Layers className="w-10 h-10 text-white/30" />
                   </div>
-                  <div>
-                    <h2 className="text-2xl font-black text-white group-hover:text-purple-300 transition-colors tracking-tight">
-                      {t.name}
-                    </h2>
-                    {t.description && (
-                      <p className="text-slate-400 text-xs mt-2 line-clamp-2 leading-relaxed">
-                        {t.description}
-                      </p>
-                    )}
-                  </div>
-                </div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-[#090d18] via-transparent to-transparent opacity-60" />
+              </div>
 
-                <div className="pt-6 border-t border-white/5 flex items-center justify-between mt-6 relative z-10">
-                  <span className="text-xs font-mono font-bold text-slate-400">
-                    {t.published_product_count ?? 0} {(t.published_product_count === 1 ? 'producto' : 'productos')}
-                  </span>
-                  <span className="text-xs font-bold text-purple-400 group-hover:translate-x-1 transition-transform flex items-center gap-1">
-                    Ver colección →
-                  </span>
-                </div>
-              </Link>
-            );
-          })}
+              <div className="space-y-2">
+                <h2 className="text-xl font-black text-white group-hover:text-[#f00856] transition-colors tracking-tight">
+                  {t.name}
+                </h2>
+                {t.description && (
+                  <p className="text-slate-400 text-xs line-clamp-2 leading-relaxed">
+                    {t.description}
+                  </p>
+                )}
+              </div>
+
+              <div className="pt-4 border-t border-white/5 flex items-center justify-between mt-4">
+                <span className="text-xs font-mono font-bold text-slate-400">
+                  {t.published_product_count ?? 0} {(t.published_product_count === 1 ? 'producto' : 'productos')}
+                </span>
+                <span className="text-xs font-bold text-[#f00856] group-hover:translate-x-1 transition-transform flex items-center gap-1">
+                  Explorar <ChevronRight className="w-3.5 h-3.5" />
+                </span>
+              </div>
+            </Link>
+          ))}
         </div>
       )}
     </div>
