@@ -535,15 +535,19 @@ export function useCategories() {
     if (!hasValidCache && !_categoriesPromise) {
       _categoriesPromise = supabase
         .from('categories')
-        .select('id, name, slug, parent_id, sort_order, status, is_active, metadata, image_url')
+        .select('id, name, slug, parent_id, sort_order, status, is_active, metadata, image_url, products(count)')
         .eq('is_active', true)
         .eq('status', 'approved')
         .order('sort_order')
         .order('name')
         .then(({ data, error }) => {
           if (!error && data) {
-            _categoriesCache = data;
-            writeSessionCache('app_categories_cache', data);
+            const formatted = data.map((cat: any) => ({
+              ...cat,
+              published_products_count: cat.products?.[0]?.count ?? 0
+            }));
+            _categoriesCache = formatted;
+            writeSessionCache('app_categories_cache', formatted);
           } else {
             console.error('[useCategories] fetch error:', error);
           }

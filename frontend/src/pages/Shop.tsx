@@ -14,6 +14,7 @@ import { supabase } from '../lib/supabase';
 import { trackSearch, generateMetaEventId } from '../lib/meta/metaPixel';
 import { trackGA4Event, trackClarityEvent, mapCartItemsToGA4 } from '../lib/analyticsTracker';
 import SEO from '../components/SEO';
+import { generateBreadcrumbs, generateMetaTitle, generateMetaDescription, generateCanonical } from '../utils/seoHelpers';
 import { resolveCartItemPrice } from '../lib/priceResolver';
 import { useImageProtection } from '../hooks/useImageProtection';
 
@@ -476,10 +477,10 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
           {effectiveCatsLoading
             ? [...Array(5)].map((_, i) => <div key={i} className="h-6 bg-white/5 rounded animate-pulse" />)
             : (() => {
-                const parentCategories = visibleCategories.filter(c => c.parent_id === null && c.published_products_count > 0 && c.status === 'approved');
+                const parentCategories = visibleCategories.filter(c => c.parent_id === null && (c.published_products_count === undefined || c.published_products_count > 0) && c.status === 'approved');
                 return parentCategories.map(parent => {
                   const children = visibleCategories.filter(
-                    sub => sub.parent_id === parent.id && sub.published_products_count > 0 && sub.status === 'approved'
+                    sub => sub.parent_id === parent.id && (sub.published_products_count === undefined || sub.published_products_count > 0) && sub.status === 'approved'
                   );
                   const isParentActive = categorySlug === parent.slug;
                   const isAnySubActive = children.some(sub => categorySlug === sub.slug || visibleCategories.some(grand => grand.parent_id === sub.id && categorySlug === grand.slug));
@@ -510,7 +511,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                           )}
                         </div>
                         <span className={`text-[10px] font-mono shrink-0 ml-2 ${isParentActive || isAnySubActive ? 'text-[#f00856]' : 'text-slate-500'}`}>
-                          [{parent.published_products_count}]
+                          [{parent.published_products_count ?? 0}]
                         </span>
                       </button>
 
@@ -521,7 +522,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                             <div className="pl-3 flex flex-col gap-1 border-l border-white/5 ml-1.5 mt-0.5 mb-1">
                               {children.map((sub, index) => {
                                 const isSubActive = categorySlug === sub.slug;
-                                const grandchildren = visibleCategories.filter(g => g.parent_id === sub.id && g.published_products_count > 0 && g.status === 'approved');
+                                const grandchildren = visibleCategories.filter(g => g.parent_id === sub.id && (g.published_products_count === undefined || g.published_products_count > 0) && g.status === 'approved');
                                 const isAnyGrandActive = grandchildren.some(g => categorySlug === g.slug);
 
                                 return (
@@ -537,7 +538,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                                     >
                                       <span className="text-[11px] truncate pr-2">{sub.name}</span>
                                       <span className="text-[10px] font-mono shrink-0">
-                                        [{sub.published_products_count}]
+                                        [{sub.published_products_count ?? 0}]
                                       </span>
                                     </button>
 
@@ -558,7 +559,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                                             >
                                               <span className="truncate pr-2">{grand.name}</span>
                                               <span className="text-[9px] font-mono shrink-0">
-                                                [{grand.published_products_count}]
+                                                [{grand.published_products_count ?? 0}]
                                               </span>
                                             </button>
                                           );
@@ -779,65 +780,29 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
 
   const pageTitle = group?.name || currentCategory?.name || currentBrand?.name || (searchQ ? `"${searchQ}"` : t('shop.title'));
 
-  const breadcrumbElements = [
-    { "@type": "ListItem", "position": 1, "name": "Inicio", "item": "https://collectibles.uy/" }
-  ];
-  if (isCategoryRoute && currentCategory) {
-    breadcrumbElements.push({
-      "@type": "ListItem",
-      "position": 2,
-      "name": "Categorías"
-    });
-    breadcrumbElements.push({
-      "@type": "ListItem",
-      "position": 3,
-      "name": currentCategory.name,
-      "item": `https://collectibles.uy/categoria/${currentCategory.slug}`
-    });
-  } else if (isBrandRoute && currentBrand) {
-    breadcrumbElements.push({
-      "@type": "ListItem",
-      "position": 2,
-      "name": "Marcas"
-    });
-    breadcrumbElements.push({
-      "@type": "ListItem",
-      "position": 3,
-      "name": currentBrand.name,
-      "item": `https://collectibles.uy/marca/${currentBrand.slug}`
-    });
-  } else if (group) {
-    breadcrumbElements.push({
-      "@type": "ListItem",
-      "position": 2,
-      "name": "Colecciones"
-    });
-    breadcrumbElements.push({
-      "@type": "ListItem",
-      "position": 3,
-      "name": group.name,
-      "item": `https://collectibles.uy/shop/${group.slug}` // Assumed URL format
-    });
-  } else {
-    breadcrumbElements.push({
-      "@type": "ListItem",
-      "position": 2,
-      "name": "Catálogo",
-      "item": "https://collectibles.uy/shop"
-    });
-  }
+  const seoType = isCategoryRoute && currentCategory
+    ? 'categoria'
+    : isBrandRoute && currentBrand
+    ? 'marca'
+    : 'shop';
 
-  const breadcrumbSchema = {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    "itemListElement": breadcrumbElements
-  };
+  const entityObj = isCategoryRoute && currentCategory
+    ? currentCategory
+    : isBrandRoute && currentBrand
+    ? currentBrand
+    : group;
+
+  const breadcrumbSchema = generateBreadcrumbs(seoType, entityObj);
+  const shopSeoTitle = generateMetaTitle(seoType, pageTitle);
+  const shopSeoDesc = generateMetaDescription(seoType, group?.description || currentCategory?.description || currentBrand?.description, pageTitle);
+  const shopSeoUrl = generateCanonical(seoType, entityObj?.slug);
 
   return (
     <div className="bg-[#05070f] text-white">
       <SEO
-        title={group ? `${group.name} — Collectibles` : isCategoryRoute && currentCategory ? `${currentCategory.name} — Collectibles` : isBrandRoute && currentBrand ? `${currentBrand.name} — Collectibles` : "Catálogo — Collectibles"}
-        description={group?.description || currentCategory?.description || currentBrand?.description || "Explora nuestro catálogo de figuras, coleccionables y productos oficiales de las mejores marcas."}
+        title={shopSeoTitle}
+        description={shopSeoDesc}
+        url={shopSeoUrl}
         schema={[breadcrumbSchema]}
       />
 
