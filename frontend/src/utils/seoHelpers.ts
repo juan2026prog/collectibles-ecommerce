@@ -148,6 +148,7 @@ export function generateProductSchema(product: any, brand?: any, category?: any,
     : [mainImage];
 
   const currency = product.currency || 'UYU';
+  const price = Number(product.base_price || 0);
 
   let availability = 'https://schema.org/InStock';
   if (product.stock_quantity === 0 || product.is_out_of_stock) {
@@ -164,6 +165,8 @@ export function generateProductSchema(product: any, brand?: any, category?: any,
     }
   }
 
+  const shippingPrice = price >= 4000 ? 0 : 350;
+
   const schema: Record<string, any> = {
     '@context': 'https://schema.org/',
     '@type': 'Product',
@@ -174,11 +177,48 @@ export function generateProductSchema(product: any, brand?: any, category?: any,
     'url': canonicalUrl,
     'offers': {
       '@type': 'Offer',
-      'price': Number(product.base_price || 0),
+      'price': price,
       'priceCurrency': currency,
       'availability': availability,
       'itemCondition': condition,
-      'url': canonicalUrl
+      'url': canonicalUrl,
+      'shippingDetails': {
+        '@type': 'OfferShippingDetails',
+        'shippingDestination': {
+          '@type': 'DefinedRegion',
+          'addressCountry': 'UY'
+        },
+        'shippingRate': {
+          '@type': 'MonetaryAmount',
+          'value': shippingPrice,
+          'currency': currency
+        },
+        'deliveryTime': {
+          '@type': 'ShippingDeliveryTime',
+          'handlingTime': {
+            '@type': 'QuantitativeValue',
+            'minValue': 0,
+            'maxValue': 1,
+            'unitCode': 'DAY'
+          },
+          'transitTime': {
+            '@type': 'QuantitativeValue',
+            'minValue': 1,
+            'maxValue': 3,
+            'unitCode': 'DAY'
+          }
+        }
+      },
+      'hasMerchantReturnPolicy': {
+        '@type': 'MerchantReturnPolicy',
+        'applicableCountry': 'UY',
+        'returnPolicyCategory': 'https://schema.org/MerchantReturnFiniteReturnWindow',
+        'merchantReturnDays': 5,
+        'returnMethod': 'https://schema.org/ReturnByMail',
+        'returnFees': 'https://schema.org/ReturnShippingFees',
+        'refundType': 'https://schema.org/FullRefund',
+        'merchantReturnLink': `${BASE_URL}/page/envios-devoluciones`
+      }
     }
   };
 

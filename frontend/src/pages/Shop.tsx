@@ -34,6 +34,7 @@ function normalizeText(str: string): string {
 }
 
 export default function Shop({ isInternational }: { isInternational?: boolean } = {}) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { handleDragStart } = useImageProtection({ isProduct: false });
   const lastTrackedProductsRef = useRef<string>('');
   const { categorySlug: catParam, brandSlug: brandParam, licenseSlug: licParam, themeSlug: themeParam, slug: groupSlug } = useParams<{ categorySlug?: string; brandSlug?: string; licenseSlug?: string; themeSlug?: string; slug?: string }>();
