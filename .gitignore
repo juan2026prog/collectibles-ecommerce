@@ -117,3 +117,6 @@ frontend/scratch_*
 frontend/export_csv.js
 **/screenshots/
 **/screenshots_*/
+
+.vercel
+.env*

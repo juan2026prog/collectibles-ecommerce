@@ -143,20 +143,20 @@ export default function StorefrontLayout() {
     const customMenuStr = settings['appearance_menu_json'];
     if (customMenuStr) {
       try {
-        const parsed = JSON.parse(customMenuStr);
+        const parsed = typeof customMenuStr === 'string' ? JSON.parse(customMenuStr) : customMenuStr;
         if (Array.isArray(parsed) && parsed.length > 0) {
           links = parsed.map((item: any) => {
-            const labelLower = (item.label || '').toLowerCase();
-            const urlLower = (item.url || '').toLowerCase();
+            const labelUpper = (item.label || '').toUpperCase().trim();
+            const urlLower = (item.url || '').toLowerCase().trim();
 
             let megaType: 'categories' | 'brands' | 'licenses' | 'themes' | undefined = undefined;
-            if (labelLower.includes('categor') || urlLower.includes('categoria')) {
+            if (labelUpper.includes('CATEGOR') || urlLower.includes('categoria')) {
               megaType = 'categories';
-            } else if (labelLower.includes('marca') || urlLower.includes('marca') || urlLower.includes('brand')) {
+            } else if (labelUpper.includes('MARCA') || urlLower.includes('marca') || urlLower.includes('brand')) {
               megaType = 'brands';
-            } else if (labelLower.includes('licencia') || urlLower.includes('licencia')) {
+            } else if (labelUpper.includes('LICENCIA') || urlLower.includes('licencia')) {
               megaType = 'licenses';
-            } else if (labelLower.includes('theme') || labelLower.includes('tema') || urlLower.includes('theme') || urlLower.includes('tema')) {
+            } else if (labelUpper.includes('THEME') || labelUpper.includes('TEMA') || urlLower.includes('theme') || urlLower.includes('tema')) {
               megaType = 'themes';
             }
 
@@ -186,10 +186,10 @@ export default function StorefrontLayout() {
       ];
     }
 
-    // Guarantee Licencias & Themes are present in the navigation bar
-    const hasLicencias = links.some(l => l.href === '/licencias' || l.name?.toUpperCase()?.includes('LICENCIA'));
+    // MANDATORY INJECTION: Guarantee LICENCIAS & THEMES are present in the nav bar even if appearance_menu_json is set
+    const hasLicencias = links.some(l => l.href === '/licencias' || (l.name || '').toUpperCase().includes('LICENCIA'));
     if (!hasLicencias) {
-      const catsIdx = links.findIndex(l => l.megaType === 'categories' || l.name?.toUpperCase()?.includes('CATEGOR') || l.href?.includes('shop'));
+      const catsIdx = links.findIndex(l => l.megaType === 'categories' || (l.name || '').toUpperCase().includes('CATEGOR') || l.href === '/shop');
       const insertIdx = catsIdx !== -1 ? catsIdx + 1 : 1;
       links.splice(insertIdx, 0, {
         name: 'LICENCIAS',
@@ -198,10 +198,10 @@ export default function StorefrontLayout() {
         megaType: 'licenses'
       });
     } else {
-      links = links.map(l => (l.href === '/licencias' || l.name?.toUpperCase()?.includes('LICENCIA')) ? { ...l, hasMega: true, megaType: 'licenses' as const } : l);
+      links = links.map(l => (l.href === '/licencias' || (l.name || '').toUpperCase().includes('LICENCIA')) ? { ...l, hasMega: true, megaType: 'licenses' as const } : l);
     }
 
-    const hasThemes = links.some(l => l.href === '/themes' || l.href === '/temas' || l.name?.toUpperCase()?.includes('THEME') || l.name?.toUpperCase()?.includes('TEMA'));
+    const hasThemes = links.some(l => l.href === '/themes' || l.href === '/temas' || (l.name || '').toUpperCase().includes('THEME') || (l.name || '').toUpperCase().includes('TEMA'));
     if (!hasThemes) {
       const licsIdx = links.findIndex(l => l.href === '/licencias' || l.megaType === 'licenses');
       const insertIdx = licsIdx !== -1 ? licsIdx + 1 : 2;
@@ -212,16 +212,14 @@ export default function StorefrontLayout() {
         megaType: 'themes'
       });
     } else {
-      links = links.map(l => (l.href === '/themes' || l.href === '/temas' || l.name?.toUpperCase()?.includes('THEME') || l.name?.toUpperCase()?.includes('TEMA')) ? { ...l, hasMega: true, megaType: 'themes' as const } : l);
+      links = links.map(l => (l.href === '/themes' || l.href === '/temas' || (l.name || '').toUpperCase().includes('THEME') || (l.name || '').toUpperCase().includes('TEMA')) ? { ...l, hasMega: true, megaType: 'themes' as const } : l);
     }
 
     // Dynamic International Menu Item Injection / Removal based on international_public_enabled
     if (intlPublicEnabled) {
       const hasIntl = links.some(l => l.href === '/intl' || l.name?.toUpperCase() === 'INTERNACIONAL');
       if (!hasIntl) {
-        const brandsIdx = links.findIndex(l => l.megaType === 'brands' || l.name?.toUpperCase()?.includes('MARCA') || l.href?.includes('brand'));
-        const insertIdx = brandsIdx !== -1 ? brandsIdx + 1 : Math.min(3, links.length);
-        links.splice(insertIdx, 0, {
+        links.push({
           name: 'INTERNACIONAL',
           href: '/intl'
         });
