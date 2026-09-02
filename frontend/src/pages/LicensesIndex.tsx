@@ -4,6 +4,7 @@ import { Search, Sparkles, Award, ChevronRight } from 'lucide-react';
 import { useLicenses } from '../hooks/useData';
 import SEO from '../components/SEO';
 import { generateMetaTitle, generateMetaDescription, generateCanonical } from '../utils/seoHelpers';
+import { getResponsiveMediaProps } from '../utils/responsiveMedia';
 
 const ALPHABET = '#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
@@ -117,12 +118,21 @@ export default function LicensesIndex() {
                     {/* Hero Logo Container */}
                     <div className="w-full h-24 bg-white/[0.03] rounded-xl p-3 mb-4 flex items-center justify-center border border-white/5 group-hover:border-[#f00856]/30 transition-colors">
                       {l.logo_url ? (
-                        <img
-                          src={l.logo_url}
-                          alt={l.logo_alt || `Logo de ${l.name}`}
-                          loading="lazy"
-                          className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-300"
-                        />
+                        (() => {
+                          const media = getResponsiveMediaProps(l.logo_url, 'license', l.logo_alt || `Logo de ${l.name}`);
+                          return (
+                            <img
+                              src={media.src}
+                              srcSet={media.srcSet}
+                              sizes={media.sizes}
+                              alt={media.alt}
+                              width={media.width}
+                              height={media.height}
+                              loading="lazy"
+                              className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-300"
+                            />
+                          );
+                        })()
                       ) : (
                         <div className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-black text-slate-300 tracking-wider uppercase">
                           {l.name}

@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Plus, Pencil, Trash2, Save, X, Eye, EyeOff, LayoutTemplate, Layers, Image as ImageIcon, Info, ChevronRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, Save, X, Eye, EyeOff, LayoutTemplate, Layers, Image as ImageIcon, Info, ChevronRight, Upload } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
+import { validateImageFile, uploadOptimizedMedia } from '../../utils/responsiveMedia';
 
 export default function AdminThemes() {
   const [themes, setThemes] = useState<any[]>([]);
@@ -11,6 +12,8 @@ export default function AdminThemes() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [processingImage, setProcessingImage] = useState(false);
+  const themeFileInputRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState({
     name: '',
@@ -44,6 +47,35 @@ export default function AdminThemes() {
 
     setThemes(data || []);
     setLoading(false);
+  }
+
+  async function handleDirectThemeUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setProcessingImage(true);
+    try {
+      const specs = await validateImageFile(file, 'theme');
+      if (!specs.isValid) {
+        toast.error(`Imagen no válida: ${specs.errors.join(' ')}`);
+        setProcessingImage(false);
+        return;
+      }
+
+      if (specs.warnings.length > 0) {
+        toast.warning(specs.warnings.join(' '));
+      }
+
+      toast.info('Optimizando y generando derivados responsive en WebP...');
+      const { mainUrl } = await uploadOptimizedMedia(file, 'theme', form.slug || form.name);
+      setForm(prev => ({ ...prev, image_url: mainUrl }));
+      toast.success('Imagen del Theme optimizada y subida con éxito.');
+    } catch (err: any) {
+      toast.error('Error al procesar la imagen: ' + err.message);
+    } finally {
+      setProcessingImage(false);
+      if (e.target) e.target.value = '';
+    }
   }
 
   function openCreate() {
@@ -229,17 +261,34 @@ export default function AdminThemes() {
 
               {/* Main Image Upload & Specs */}
               <div className="space-y-2 bg-gray-50 p-4 rounded-xl border border-gray-200">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <label className="text-xs font-black text-gray-700 uppercase tracking-widest flex items-center gap-1.5">
                     <ImageIcon className="w-3.5 h-3.5 text-purple-600" /> Imagen Principal del Theme
                   </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowMediaPicker(true)}
-                    className="px-3 py-1 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                  >
-                    <ImageIcon className="w-3.5 h-3.5 text-purple-600" /> Biblioteca de Medios
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="file"
+                      ref={themeFileInputRef}
+                      accept="image/png,image/jpeg,image/webp,image/avif"
+                      onChange={handleDirectThemeUpload}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      disabled={processingImage}
+                      onClick={() => themeFileInputRef.current?.click()}
+                      className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg flex items-center gap-1 shadow-2xs cursor-pointer disabled:opacity-50"
+                    >
+                      <Upload className="w-3.5 h-3.5" /> Subir Imagen
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowMediaPicker(true)}
+                      className="px-2.5 py-1 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 text-xs font-bold rounded-lg flex items-center gap-1 shadow-2xs cursor-pointer"
+                    >
+                      <ImageIcon className="w-3.5 h-3.5 text-purple-600" /> Biblioteca
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex gap-2">

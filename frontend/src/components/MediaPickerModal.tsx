@@ -73,7 +73,7 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
     return supabase.storage.from(BUCKET_NAME).getPublicUrl(fullPath).data.publicUrl;
   }
 
-  const isImage = (name: string) => /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(name);
+  const isImage = (name: string) => /\.(jpg|jpeg|png|gif|webp|svg|avif)$/i.test(name);
 
   // Drag & Drop handlers
   function handleDragOver(e: React.DragEvent) {

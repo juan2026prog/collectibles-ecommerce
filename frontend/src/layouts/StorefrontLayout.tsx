@@ -26,6 +26,7 @@ import { CurrencySelector } from '../components/CurrencySelector';
 import AdminModeToggle from '../components/AdminModeToggle';
 import { ToastProvider } from '../components/admin/Toast';
 import { ImageProtectionGlobalListener } from '../hooks/useImageProtection';
+import { getDropdownMediaUrl } from '../utils/responsiveMedia';
 import React from 'react';
 
 import { trackContact, trackFindLocation, generateMetaEventId } from '../lib/meta/metaPixel';
@@ -518,9 +519,9 @@ export default function StorefrontLayout() {
                         : link.hasMega && link.megaType === 'brands'
                           ? allBrands.slice(0, 15).map(b => ({ label: b.name, url: `/marca/${b.slug}` }))
                           : link.hasMega && link.megaType === 'licenses'
-                            ? activeLicenses.slice(0, 8).map(l => ({ label: l.name, url: `/licencias/${l.slug}`, logo_url: l.logo_url }))
+                            ? activeLicenses.slice(0, 8).map(l => ({ label: l.name, url: `/licencias/${l.slug}`, logo_url: getDropdownMediaUrl(l.logo_url, 300) }))
                             : link.hasMega && link.megaType === 'themes'
-                              ? activeThemes.slice(0, 7).map(t => ({ label: t.name, url: `/themes/${t.slug}`, image_url: t.image_url }))
+                              ? activeThemes.slice(0, 7).map(t => ({ label: t.name, url: `/themes/${t.slug}`, image_url: getDropdownMediaUrl(t.image_url, 400) }))
                               : link.subItems || []
                     }
                     footerLink={

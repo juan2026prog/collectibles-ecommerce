@@ -3,6 +3,7 @@ import { Layers, ChevronRight } from 'lucide-react';
 import { useThemes } from '../hooks/useData';
 import SEO from '../components/SEO';
 import { generateMetaTitle, generateMetaDescription, generateCanonical } from '../utils/seoHelpers';
+import { getResponsiveMediaProps } from '../utils/responsiveMedia';
 
 export default function ThemesIndex() {
   const { themes, loading } = useThemes(true); // only active with published products
@@ -49,12 +50,21 @@ export default function ThemesIndex() {
               {/* 16:9 Hero Image Container */}
               <div className="w-full aspect-video rounded-2xl bg-white/5 border border-white/10 overflow-hidden mb-4 relative">
                 {t.image_url ? (
-                  <img
-                    src={t.image_url}
-                    alt={t.image_alt || `Coleccionables de ${t.name}`}
-                    loading="lazy"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
+                  (() => {
+                    const media = getResponsiveMediaProps(t.image_url, 'theme', t.image_alt || `Coleccionables de ${t.name}`);
+                    return (
+                      <img
+                        src={media.src}
+                        srcSet={media.srcSet}
+                        sizes={media.sizes}
+                        alt={media.alt}
+                        width={media.width}
+                        height={media.height}
+                        loading="lazy"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                    );
+                  })()
                 ) : (
                   <div className="w-full h-full bg-gradient-to-br from-[#f00856]/20 to-purple-900/40 flex items-center justify-center">
                     <Layers className="w-10 h-10 text-white/30" />
