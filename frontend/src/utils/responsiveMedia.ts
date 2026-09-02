@@ -213,7 +213,7 @@ export function getResponsiveMediaProps(
     };
   }
 
-  const baseUrl = url.replace(/-\d+\.webp$/i, '.webp').replace(/\.webp$/i, '');
+  const baseUrl = url.replace(/-(300|400|600|800|1200|1600)\.webp$/i, '').replace(/\.webp$/i, '');
 
   let srcSet = '';
   let sizes = '';
@@ -250,6 +250,6 @@ export function getDropdownMediaUrl(
   if (!url) return '';
   if (!url.includes('.webp')) return url;
 
-  const baseUrl = url.replace(/-\d+\.webp$/i, '.webp').replace(/\.webp$/i, '');
+  const baseUrl = url.replace(/-(300|400|600|800|1200|1600)\.webp$/i, '').replace(/\.webp$/i, '');
   return `${baseUrl}-${targetWidth}.webp`;
 }
