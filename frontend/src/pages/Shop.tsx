@@ -1,7 +1,7 @@
 import { Link, useSearchParams, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { ChevronRight, ChevronLeft, SlidersHorizontal, X, Search, Store, ExternalLink, Loader2 } from 'lucide-react';
-import { useProducts, useCategories, useBrands, useFilterMappings, useProductGroupMetadata, useBrandFacets, useInternationalCategoryFacets } from '../hooks/useData';
+import { useProducts, useCategories, useBrands, useFilterMappings, useProductGroupMetadata, useBrandFacets, useInternationalCategoryFacets, useLicense, useTheme } from '../hooks/useData';
 import { usePromotions, getApplicablePromotions } from '../hooks/usePromotions';
 import { useCartContext } from '../contexts/CartContext';
 import { useLocale } from '../contexts/LocaleContext';
@@ -35,14 +35,20 @@ function normalizeText(str: string): string {
 export default function Shop({ isInternational }: { isInternational?: boolean } = {}) {
   const { handleDragStart } = useImageProtection({ isProduct: false });
   const lastTrackedProductsRef = useRef<string>('');
-  const [searchParams, setSearchParams] = useSearchParams();
-  const { categorySlug: catParam, brandSlug: brandParam, slug: groupSlug } = useParams<{ categorySlug?: string; brandSlug?: string; slug?: string }>();
+  const { categorySlug: catParam, brandSlug: brandParam, licenseSlug: licParam, themeSlug: themeParam, slug: groupSlug } = useParams<{ categorySlug?: string; brandSlug?: string; licenseSlug?: string; themeSlug?: string; slug?: string }>();
   const location = useLocation();
   const isCategoryRoute = location.pathname.startsWith('/categoria');
   const isBrandRoute = location.pathname.startsWith('/marca');
+  const isLicenseRoute = location.pathname.startsWith('/licencias/');
+  const isThemeRoute = location.pathname.startsWith('/themes/');
 
   const categorySlug = isCategoryRoute ? catParam : (searchParams.get('category') || '');
   const brandSlug = isBrandRoute ? brandParam : (searchParams.get('brand') || '');
+  const licenseSlug = isLicenseRoute ? licParam : (searchParams.get('license') || '');
+  const themeSlug = isThemeRoute ? themeParam : (searchParams.get('theme') || '');
+
+  const { license: currentLicense } = useLicense(licenseSlug || undefined);
+  const { theme: currentTheme } = useTheme(themeSlug || undefined);
   const badge = searchParams.get('badge') || '';
   const searchQ = searchParams.get('q') || '';
   const conditionFilter = searchParams.get('condition') || '';
@@ -198,6 +204,8 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   const { products, count, loading } = useProducts({
     category: categorySlug || undefined,
     brand: brandSlug || undefined,
+    license: licenseSlug || undefined,
+    theme: themeSlug || undefined,
     badge: badge || undefined,
     condition: conditionFilter || undefined,
     search: searchQ || undefined,
@@ -354,7 +362,21 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
       return;
     }
 
-    if (isBrandRoute && brandParam) {
+    if (isLicenseRoute && licParam) {
+      if (slug) {
+        params.set('category', slug);
+      } else {
+        params.delete('category');
+      }
+      navigate(`/licencias/${licParam}?${params.toString()}`);
+    } else if (isThemeRoute && themeParam) {
+      if (slug) {
+        params.set('category', slug);
+      } else {
+        params.delete('category');
+      }
+      navigate(`/themes/${themeParam}?${params.toString()}`);
+    } else if (isBrandRoute && brandParam) {
       if (slug) {
         params.set('category', slug);
       } else {
@@ -385,7 +407,21 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
       return;
     }
 
-    if (isCategoryRoute && catParam) {
+    if (isLicenseRoute && licParam) {
+      if (slug) {
+        params.set('brand', slug);
+      } else {
+        params.delete('brand');
+      }
+      navigate(`/licencias/${licParam}?${params.toString()}`);
+    } else if (isThemeRoute && themeParam) {
+      if (slug) {
+        params.set('brand', slug);
+      } else {
+        params.delete('brand');
+      }
+      navigate(`/themes/${themeParam}?${params.toString()}`);
+    } else if (isCategoryRoute && catParam) {
       if (slug) {
         params.set('brand', slug);
       } else {
@@ -413,7 +449,21 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
       setPage(0);
       return;
     }
-    if (groupSlug || isCategoryRoute || isBrandRoute) {
+    if (isLicenseRoute && licParam) {
+      navigate(`/licencias/${licParam}`);
+      setSearchParams({});
+      setPriceMin('');
+      setPriceMax('');
+      setSearchInput('');
+      setPage(0);
+    } else if (isThemeRoute && themeParam) {
+      navigate(`/themes/${themeParam}`);
+      setSearchParams({});
+      setPriceMin('');
+      setPriceMax('');
+      setSearchInput('');
+      setPage(0);
+    } else if (groupSlug || isCategoryRoute || isBrandRoute) {
       navigate('/shop');
     } else {
       setSearchParams({});
@@ -778,24 +828,53 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
     </div>
   );
 
-  const pageTitle = group?.name || currentCategory?.name || currentBrand?.name || (searchQ ? `"${searchQ}"` : t('shop.title'));
+  const pageTitle = isInternational
+    ? "Catálogo Internacional"
+    : group?.name ||
+      (isLicenseRoute && (currentLicense?.name || licParam) ? currentLicense?.name || licParam : null) ||
+      (isThemeRoute && (currentTheme?.name || themeParam) ? currentTheme?.name || themeParam : null) ||
+      currentCategory?.name ||
+      currentBrand?.name ||
+      (searchQ ? `"${searchQ}"` : t('shop.title'));
 
-  const seoType = isCategoryRoute && currentCategory
+  const seoType = isLicenseRoute
+    ? 'licencia'
+    : isThemeRoute
+    ? 'theme'
+    : isCategoryRoute && currentCategory
     ? 'categoria'
     : isBrandRoute && currentBrand
     ? 'marca'
     : 'shop';
 
-  const entityObj = isCategoryRoute && currentCategory
+  const entityObj = isLicenseRoute
+    ? currentLicense
+    : isThemeRoute
+    ? currentTheme
+    : isCategoryRoute && currentCategory
     ? currentCategory
     : isBrandRoute && currentBrand
     ? currentBrand
     : group;
 
-  const breadcrumbSchema = generateBreadcrumbs(seoType, entityObj);
-  const shopSeoTitle = generateMetaTitle(seoType, pageTitle);
-  const shopSeoDesc = generateMetaDescription(seoType, group?.description || currentCategory?.description || currentBrand?.description, pageTitle);
-  const shopSeoUrl = generateCanonical(seoType, entityObj?.slug);
+  const breadcrumbSchema = generateBreadcrumbs(seoType as any, entityObj);
+  const shopSeoTitle = isLicenseRoute && (currentLicense?.name || licParam)
+    ? `${currentLicense?.name || licParam} | Collectibles Uruguay`
+    : isThemeRoute && (currentTheme?.name || themeParam)
+    ? `${currentTheme?.name || themeParam} | Collectibles Uruguay`
+    : generateMetaTitle(seoType, pageTitle);
+
+  const shopSeoDesc = isLicenseRoute && currentLicense
+    ? (currentLicense.description || `Explorá figuras y coleccionables de ${currentLicense.name} en Collectibles Uruguay.`)
+    : isThemeRoute && currentTheme
+    ? (currentTheme.description || `Explorá productos del theme ${currentTheme.name} en Collectibles Uruguay.`)
+    : generateMetaDescription(seoType, group?.description || currentCategory?.description || currentBrand?.description, pageTitle);
+
+  const shopSeoUrl = isLicenseRoute && licParam
+    ? `https://collectibles.uy/licencias/${licParam}`
+    : isThemeRoute && themeParam
+    ? `https://collectibles.uy/themes/${themeParam}`
+    : generateCanonical(seoType, entityObj?.slug);
 
   return (
     <div className="bg-[#05070f] text-white">
@@ -810,7 +889,19 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
       <div className="max-w-7xl mx-auto px-6 pt-6 pb-2 text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
         <Link to="/" className="hover:text-white transition-colors">Inicio</Link>
         <ChevronRight className="w-3 h-3" />
-        {isCategoryRoute && currentCategory ? (
+        {isLicenseRoute && (currentLicense || licParam) ? (
+          <>
+            <Link to="/licencias" className="hover:text-white transition-colors">Licencias</Link>
+            <ChevronRight className="w-3 h-3" />
+            <span className="text-[#f00856]">{currentLicense?.name || licParam}</span>
+          </>
+        ) : isThemeRoute && (currentTheme || themeParam) ? (
+          <>
+            <Link to="/themes" className="hover:text-white transition-colors">Themes</Link>
+            <ChevronRight className="w-3 h-3" />
+            <span className="text-[#f00856]">{currentTheme?.name || themeParam}</span>
+          </>
+        ) : isCategoryRoute && currentCategory ? (
           <>
             <span className="text-slate-500">Categorías</span>
             <ChevronRight className="w-3 h-3" />
@@ -838,11 +929,42 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
         <div className={`absolute -right-40 top-0 w-[560px] h-[560px] blur-3xl rounded-full ${isInternational ? 'bg-sky-500/20' : 'bg-[#f00856]/20'}`}></div>
         <div className="relative max-w-7xl mx-auto px-6 py-6 md:py-10">
           <div className={`label-tag ${isInternational ? 'bg-sky-950/80 border border-sky-500/40 text-sky-300' : ''}`}>
-            {isInternational ? "🌎 Catálogo Internacional" : group ? "Colección" : isCategoryRoute ? "Categoría" : isBrandRoute ? "Marca" : "Catálogo"}
+            {isInternational
+              ? "🌎 Catálogo Internacional"
+              : isLicenseRoute
+              ? "Licencia"
+              : isThemeRoute
+              ? "Theme"
+              : group
+              ? "Colección"
+              : isCategoryRoute
+              ? "Categoría"
+              : isBrandRoute
+              ? "Marca"
+              : "Catálogo"}
           </div>
           <div className="flex items-center gap-4 mt-3 flex-wrap">
+            {isLicenseRoute && currentLicense?.logo_url && (
+              <img
+                src={currentLicense.logo_url}
+                alt={currentLicense.name}
+                className="h-12 md:h-16 object-contain max-w-[200px]"
+              />
+            )}
             <h1 className="text-5xl md:text-7xl font-black leading-[.9] tracking-tighter">
-              {isInternational ? "Collectibles Internacional" : group ? group.name : isCategoryRoute && currentCategory ? currentCategory.name : isBrandRoute && currentBrand ? currentBrand.name : "Productos"}
+              {isInternational
+                ? "Collectibles Internacional"
+                : isLicenseRoute && (currentLicense || licParam)
+                ? currentLicense?.name || licParam
+                : isThemeRoute && (currentTheme || themeParam)
+                ? currentTheme?.name || themeParam
+                : group
+                ? group.name
+                : isCategoryRoute && currentCategory
+                ? currentCategory.name
+                : isBrandRoute && currentBrand
+                ? currentBrand.name
+                : "Productos"}
             </h1>
             {group?.badge_image_url && (
               <img
@@ -853,7 +975,15 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
             )}
           </div>
           <p className="text-slate-300 text-lg mt-5 max-w-3xl leading-relaxed">
-            {isInternational ? "Explorá figuras y coleccionables importados a pedido. Precios en USD con entrega directa en tu casilla de EE.UU." : group ? group.description || "Explora esta colección exclusiva de productos curados." : ""}
+            {isInternational
+              ? "Explorá figuras y coleccionables importados a pedido. Precios en USD con entrega directa en tu casilla de EE.UU."
+              : isLicenseRoute && currentLicense?.description
+              ? currentLicense.description
+              : isThemeRoute && currentTheme?.description
+              ? currentTheme.description
+              : group
+              ? group.description || "Explora esta colección exclusiva de productos curados."
+              : ""}
           </p>
         </div>
       </section>

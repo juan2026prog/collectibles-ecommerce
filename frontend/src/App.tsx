@@ -41,9 +41,7 @@ const DynamicPage = lazy(() => import('./pages/DynamicPage'));
 const Contact = lazy(() => import('./pages/Contact'));
 const VendorPrueba = lazy(() => import('./pages/VendorPrueba'));
 const LicensesIndex = lazy(() => import('./pages/LicensesIndex'));
-const LicenseDetail = lazy(() => import('./pages/LicenseDetail'));
 const ThemesIndex = lazy(() => import('./pages/ThemesIndex'));
-const ThemeDetail = lazy(() => import('./pages/ThemeDetail'));
 
 // Auth (Lazy)
 const Login = lazy(() => import('./pages/Login'));
@@ -138,9 +136,9 @@ function App() {
                     <Route path="/categoria/:categorySlug" element={<Shop />} />
                     <Route path="/marca/:brandSlug" element={<Shop />} />
                     <Route path="/licencias" element={<LicensesIndex />} />
-                    <Route path="/licencias/:slug" element={<LicenseDetail />} />
+                    <Route path="/licencias/:licenseSlug" element={<Shop />} />
                     <Route path="/themes" element={<ThemesIndex />} />
-                    <Route path="/themes/:slug" element={<ThemeDetail />} />
+                    <Route path="/themes/:themeSlug" element={<Shop />} />
                     <Route path="/temas" element={<Navigate to="/themes" replace />} />
                     <Route path="/temas/:slug" element={<NavigateToThemeDetail />} />
                     <Route path="/producto/:slug" element={<ProductDetail />} />

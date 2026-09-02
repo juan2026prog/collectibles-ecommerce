@@ -1346,3 +1346,57 @@ export function useThemes(onlyPublicWithProducts = false) {
   return { themes, loading };
 }
 
+// ═══ useLicense (single item by slug) ═══
+export function useLicense(slug?: string) {
+  const [license, setLicense] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!slug) {
+      setLicense(null);
+      setLoading(false);
+      return;
+    }
+    async function fetch() {
+      setLoading(true);
+      const { data } = await supabase
+        .from('licenses')
+        .select('*')
+        .eq('slug', slug)
+        .maybeSingle();
+      setLicense(data || null);
+      setLoading(false);
+    }
+    fetch();
+  }, [slug]);
+
+  return { license, loading };
+}
+
+// ═══ useTheme (single item by slug) ═══
+export function useTheme(slug?: string) {
+  const [theme, setTheme] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!slug) {
+      setTheme(null);
+      setLoading(false);
+      return;
+    }
+    async function fetch() {
+      setLoading(true);
+      const { data } = await supabase
+        .from('themes')
+        .select('*')
+        .eq('slug', slug)
+        .maybeSingle();
+      setTheme(data || null);
+      setLoading(false);
+    }
+    fetch();
+  }, [slug]);
+
+  return { theme, loading };
+}
+
