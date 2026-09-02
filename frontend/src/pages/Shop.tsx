@@ -1,7 +1,8 @@
 import { Link, useSearchParams, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { ChevronRight, ChevronLeft, SlidersHorizontal, X, Search, Store, ExternalLink, Loader2 } from 'lucide-react';
-import { useProducts, useCategories, useBrands, useFilterMappings, useProductGroupMetadata, useBrandFacets, useInternationalCategoryFacets, useLicense, useTheme } from '../hooks/useData';
+import { useProducts, useCategories, useBrands, useFilterMappings, useProductGroupMetadata, useBrandFacets, useInternationalCategoryFacets, useLicense, useTheme, useLicenses, useThemes } from '../hooks/useData';
+import { useInternationalSettings } from '../hooks/useInternationalSettings';
 import { usePromotions, getApplicablePromotions } from '../hooks/usePromotions';
 import { useCartContext } from '../contexts/CartContext';
 import { useLocale } from '../contexts/LocaleContext';
@@ -49,9 +50,27 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
 
   const { license: currentLicense } = useLicense(licenseSlug || undefined);
   const { theme: currentTheme } = useTheme(themeSlug || undefined);
+  const { publicEnabled: intlPublicEnabled } = useInternationalSettings();
+  const { licenses: activeLicenses, loading: licensesLoading } = useLicenses(true);
+  const { themes: activeThemes, loading: themesLoading } = useThemes(true);
+
   const badge = searchParams.get('badge') || '';
   const searchQ = searchParams.get('q') || '';
   const conditionFilter = searchParams.get('condition') || '';
+  const availabilityFilter = searchParams.get('availability') || '';
+
+  const [licensesExpanded, setLicensesExpanded] = useState(false);
+  const [searchLicenseQuery, setSearchLicenseQuery] = useState('');
+
+  // Safeguard: If international is disabled, clear any availability parameter
+  useEffect(() => {
+    if (intlPublicEnabled === false && availabilityFilter) {
+      const params = new URLSearchParams(searchParams);
+      params.delete('availability');
+      setSearchParams(params, { replace: true });
+    }
+  }, [intlPublicEnabled, availabilityFilter]);
+
   const [sortBy, setSortBy] = useState('default');
   const [mobileFilters, setMobileFilters] = useState(false);
   const [gridCols, setGridCols] = useState<number>(() => {
@@ -215,7 +234,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
     sortBy,
     limit,
     offset: page * limit,
-    isInternational,
+    isInternational: isInternational || (intlPublicEnabled && availabilityFilter === 'international'),
   });
 
   const totalPages = Math.ceil(count / limit);
@@ -438,6 +457,55 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
     }
   }
 
+  function handleLicenseSelect(slug: string) {
+    setPage(0);
+    const params = new URLSearchParams(searchParams);
+    if (isLicenseRoute) {
+      if (slug) {
+        navigate(`/licencias/${slug}?${params.toString()}`);
+      } else {
+        navigate(`/shop?${params.toString()}`);
+      }
+    } else {
+      if (slug) {
+        params.set('license', slug);
+      } else {
+        params.delete('license');
+      }
+      setSearchParams(params);
+    }
+  }
+
+  function handleThemeSelect(slug: string) {
+    setPage(0);
+    const params = new URLSearchParams(searchParams);
+    if (isThemeRoute) {
+      if (slug) {
+        navigate(`/themes/${slug}?${params.toString()}`);
+      } else {
+        navigate(`/shop?${params.toString()}`);
+      }
+    } else {
+      if (slug) {
+        params.set('theme', slug);
+      } else {
+        params.delete('theme');
+      }
+      setSearchParams(params);
+    }
+  }
+
+  function handleAvailabilitySelect(val: string) {
+    setPage(0);
+    const params = new URLSearchParams(searchParams);
+    if (val) {
+      params.set('availability', val);
+    } else {
+      params.delete('availability');
+    }
+    setSearchParams(params);
+  }
+
 
   function clearAllFilters() {
     if (isInternational) {
@@ -631,6 +699,171 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
         </div>
       </div>
 
+      {/* Licencias */}
+      <div>
+        <h3 className="font-bold text-slate-400 uppercase text-[10px] tracking-widest mb-2 block">Licencia</h3>
+        <div className="flex flex-col gap-1">
+          <button
+            onClick={() => handleLicenseSelect('')}
+            className={`w-full flex items-center justify-between text-left py-1 text-xs transition-all ${
+              !licenseSlug
+                ? 'text-[#f00856] font-bold'
+                : 'text-slate-400 hover:text-white font-medium'
+            }`}
+          >
+            <span>Todas las licencias</span>
+          </button>
+
+          {licensesLoading ? (
+            [...Array(4)].map((_, i) => <div key={i} className="h-6 bg-white/5 rounded animate-pulse" />)
+          ) : (
+            (() => {
+              const activeLic = activeLicenses.find(l => l.slug === licenseSlug);
+              let topLic = activeLicenses.slice(0, 8);
+              if (activeLic && !topLic.some(l => l.id === activeLic.id)) {
+                topLic.push(activeLic);
+              }
+
+              const normalizedSearch = normalizeText(searchLicenseQuery);
+              const filteredLicenses = activeLicenses.filter(l => 
+                normalizeText(l.name).includes(normalizedSearch)
+              );
+
+              return (
+                <div className="flex flex-col">
+                  {!licensesExpanded ? (
+                    <div className="flex flex-col gap-1">
+                      {topLic.map(l => {
+                        const isLicActive = licenseSlug === l.slug;
+                        return (
+                          <button
+                            key={l.id}
+                            onClick={() => handleLicenseSelect(l.slug)}
+                            className={`w-full flex items-center justify-between text-left py-1 text-xs transition-all ${
+                              isLicActive
+                                ? 'text-[#f00856] font-bold'
+                                : 'text-slate-400 hover:text-white font-medium'
+                            }`}
+                          >
+                            <span className="truncate pr-2">{l.name}</span>
+                            <span className={`text-[10px] font-mono shrink-0 ml-2 ${isLicActive ? 'text-[#f00856]' : 'text-slate-500'}`}>
+                              [{l.published_product_count ?? 0}]
+                            </span>
+                          </button>
+                        );
+                      })}
+                      
+                      {activeLicenses.length > 8 && (
+                        <button
+                          onClick={() => setLicensesExpanded(true)}
+                          className="text-[11px] font-bold text-[#f00856] hover:underline text-left mt-1 py-0.5"
+                        >
+                          Ver todas las licencias ({activeLicenses.length})
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col">
+                      <div className="relative mb-2 mt-1">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500" />
+                        <input
+                          type="text"
+                          placeholder="Buscar licencia..."
+                          value={searchLicenseQuery}
+                          onChange={e => setSearchLicenseQuery(e.target.value)}
+                          className="w-full pl-7 pr-3 py-1.5 text-[11px] border border-white/10 bg-white/5 text-white focus:outline-none focus:ring-1 focus:ring-[#f00856] placeholder:text-slate-500 rounded-lg transition-all duration-200 focus:bg-white/10"
+                        />
+                      </div>
+
+                      <div className="license-accordion-wrapper license-accordion-wrapper--open">
+                        <div className="license-accordion-content">
+                          <div className="max-h-[320px] overflow-y-auto pr-1 flex flex-col gap-1 premium-scrollbar">
+                            {filteredLicenses.length === 0 ? (
+                              <span className="text-[11px] text-slate-500 py-2 block">No se encontraron licencias</span>
+                            ) : (
+                              filteredLicenses.map(l => {
+                                const isLicActive = licenseSlug === l.slug;
+                                return (
+                                  <button
+                                    key={l.id}
+                                    onClick={() => handleLicenseSelect(l.slug)}
+                                    className={`w-full flex items-center justify-between text-left py-1 text-xs transition-all ${
+                                      isLicActive
+                                        ? 'text-[#f00856] font-bold'
+                                        : 'text-slate-400 hover:text-white font-medium'
+                                    }`}
+                                  >
+                                    <span className="truncate pr-2">{l.name}</span>
+                                    <span className={`text-[10px] font-mono shrink-0 ml-2 ${isLicActive ? 'text-[#f00856]' : 'text-slate-500'}`}>
+                                      [{l.published_product_count ?? 0}]
+                                    </span>
+                                  </button>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setLicensesExpanded(false);
+                          setSearchLicenseQuery('');
+                        }}
+                        className="text-[11px] font-bold text-slate-500 hover:text-white text-left mt-2 py-0.5"
+                      >
+                        Mostrar menos
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()
+          )}
+        </div>
+      </div>
+
+      {/* Themes */}
+      <div>
+        <h3 className="font-bold text-slate-400 uppercase text-[10px] tracking-widest mb-2 block">Theme</h3>
+        <div className="flex flex-col gap-1">
+          <button
+            onClick={() => handleThemeSelect('')}
+            className={`w-full flex items-center justify-between text-left py-1 text-xs transition-all ${
+              !themeSlug
+                ? 'text-[#f00856] font-bold'
+                : 'text-slate-400 hover:text-white font-medium'
+            }`}
+          >
+            <span>Todos los themes</span>
+          </button>
+
+          {themesLoading ? (
+            [...Array(4)].map((_, i) => <div key={i} className="h-6 bg-white/5 rounded animate-pulse" />)
+          ) : (
+            activeThemes.map(t => {
+              const isThActive = themeSlug === t.slug;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => handleThemeSelect(t.slug)}
+                  className={`w-full flex items-center justify-between text-left py-1 text-xs transition-all ${
+                    isThActive
+                      ? 'text-[#f00856] font-bold'
+                      : 'text-slate-400 hover:text-white font-medium'
+                  }`}
+                >
+                  <span className="truncate pr-2">{t.name}</span>
+                  <span className={`text-[10px] font-mono shrink-0 ml-2 ${isThActive ? 'text-[#f00856]' : 'text-slate-500'}`}>
+                    [{t.published_product_count ?? 0}]
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </div>
+
       {/* Brands */}
       <div>
         <h3 className="font-bold text-slate-400 uppercase text-[10px] tracking-widest mb-2 block">Marca</h3>
@@ -762,6 +995,34 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
         </div>
       </div>
 
+      {/* Disponibilidad (Solo si international_public_enabled === true) */}
+      {intlPublicEnabled && (
+        <div>
+          <h3 className="font-bold text-slate-400 uppercase text-[10px] tracking-widest mb-2 block">Disponibilidad</h3>
+          <div className="flex flex-col gap-1">
+            {[
+              { id: '', label: 'Todos' },
+              { id: 'local', label: 'Stock en Uruguay' },
+              { id: 'international', label: 'Internacional' }
+            ].map(a => {
+              const isSelected = (availabilityFilter || '') === a.id;
+              return (
+                <button
+                  key={a.id}
+                  onClick={() => handleAvailabilitySelect(a.id)}
+                  className={`w-full flex items-center justify-between text-left py-1 text-xs transition-all ${
+                    isSelected ? 'text-[#f00856] font-bold' : 'text-slate-400 hover:text-white font-medium'
+                  }`}
+                >
+                  <span>{a.label}</span>
+                  {isSelected && <span className="text-[10px] text-[#f00856]">✓</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Price Range — functional inputs */}
       <div>
         <h3 className="font-bold text-slate-400 uppercase text-[10px] tracking-widest mb-2 block">Precio</h3>
@@ -817,7 +1078,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
       </div>
 
       {/* Clear filters */}
-      {(categorySlug || brandSlug || searchQ || priceMin || priceMax || groupSlug || conditionFilter) && (
+      {(categorySlug || brandSlug || licenseSlug || themeSlug || searchQ || priceMin || priceMax || groupSlug || conditionFilter || availabilityFilter) && (
         <button
           onClick={clearAllFilters}
           className="w-full py-1.5 text-xs font-bold text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/5 transition-colors"

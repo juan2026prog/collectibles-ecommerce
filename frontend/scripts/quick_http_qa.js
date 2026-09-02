@@ -15,8 +15,8 @@ async function runQA() {
   
   const root = await fetchUrl('https://collectibles.uy');
   console.log(`GET / -> Status: ${root.statusCode}`);
-  const hasIndexJs = root.body.includes('/assets/index-DLHDLxKF.js');
-  console.log(`Latest Production JS Bundle Served: ${hasIndexJs ? 'YES (index-DLHDLxKF.js)' : 'NO'}`);
+  const hasIndexJs = root.body.includes('/assets/index-Cb1R7zBL.js');
+  console.log(`Latest Production JS Bundle Served: ${hasIndexJs ? 'YES (index-Cb1R7zBL.js)' : 'NO'}`);
 
   const licenciasPage = await fetchUrl('https://collectibles.uy/licencias');
   console.log(`GET /licencias -> Status: ${licenciasPage.statusCode}`);
