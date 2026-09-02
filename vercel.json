@@ -84,32 +84,32 @@
       "destination": "/api/catalog-image?path=$1"
     },
     {
-      "source": "/producto/:slug",
-      "destination": "/api/seo-prerender?type=producto&slug=:slug"
+      "source": "/producto/:slug*",
+      "destination": "/api/seo-prerender"
     },
     {
-      "source": "/categoria/:slug",
-      "destination": "/api/seo-prerender?type=categoria&slug=:slug"
+      "source": "/categoria/:slug*",
+      "destination": "/api/seo-prerender"
     },
     {
-      "source": "/marca/:slug",
-      "destination": "/api/seo-prerender?type=marca&slug=:slug"
+      "source": "/marca/:slug*",
+      "destination": "/api/seo-prerender"
     },
     {
-      "source": "/page/:slug",
-      "destination": "/api/seo-prerender?type=page&slug=:slug"
+      "source": "/page/:slug*",
+      "destination": "/api/seo-prerender"
     },
     {
       "source": "/contact",
-      "destination": "/api/seo-prerender?type=page&slug=contact"
+      "destination": "/api/seo-prerender"
     },
     {
       "source": "/shop",
-      "destination": "/api/seo-prerender?type=shop"
+      "destination": "/api/seo-prerender"
     },
     {
       "source": "/",
-      "destination": "/api/seo-prerender?type=home"
+      "destination": "/api/seo-prerender"
     },
     {
       "source": "/(.*)",
