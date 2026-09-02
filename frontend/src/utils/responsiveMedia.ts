@@ -12,6 +12,9 @@ export interface ImageSpecsResult {
 
 /**
  * Reads real width, height, file size and MIME type of a local File object before uploading.
+ * Minimum dimensions enforced for complete responsive pipeline generation:
+ * - License: 1200 x 600 px (2:1)
+ * - Theme: 1600 x 900 px (16:9)
  */
 export async function validateImageFile(
   file: File,
@@ -32,23 +35,17 @@ export async function validateImageFile(
       URL.revokeObjectURL(url);
 
       if (entityType === 'license') {
-        // License specs: Min 600x300. Rec 1200x600. Max rec weight 250 KB
-        if (width < 600 || height < 300) {
-          errors.push(`La dimensión (${width}×${height}px) es inferior al mínimo requerido para Licencias (600×300px).`);
-        }
+        // License specs: Min 1200x600 px for full responsive derivatives set (300, 600, 1200)
         if (width < 1200 || height < 600) {
-          warnings.push(`La dimensión (${width}×${height}px) es menor a la recomendada (1200×600px).`);
+          errors.push(`La dimensión (${width}×${height}px) es inferior al mínimo requerido para Licencias (1200×600px).`);
         }
         if (size > 250 * 1024) {
           warnings.push(`El peso (${(size / 1024).toFixed(0)} KB) supera el recomendado de 250 KB.`);
         }
       } else {
-        // Theme specs: Min 1200x675. Rec 1600x900. Max rec weight 350 KB
-        if (width < 1200 || height < 675) {
-          errors.push(`La dimensión (${width}×${height}px) es inferior al mínimo requerido para Themes (1200×675px).`);
-        }
+        // Theme specs: Min 1600x900 px for full responsive derivatives set (400, 800, 1200, 1600)
         if (width < 1600 || height < 900) {
-          warnings.push(`La dimensión (${width}×${height}px) es menor a la recomendada (1600×900px).`);
+          errors.push(`La dimensión (${width}×${height}px) es inferior al mínimo requerido para Themes (1600×900px).`);
         }
         if (size > 350 * 1024) {
           warnings.push(`El peso (${(size / 1024).toFixed(0)} KB) supera el recomendado de 350 KB.`);
@@ -93,7 +90,7 @@ export async function uploadOptimizedMedia(
   file: File,
   entityType: 'license' | 'theme',
   slug: string
-): Promise<{ mainUrl: string; derivativeUrls: string[] }> {
+): Promise<{ mainUrl: string; derivativeUrls: string[]; availableWidths: number[] }> {
   const BUCKET_NAME = 'public-assets';
   const folder = entityType === 'license' ? 'licenses/' : 'themes/';
   const cleanSlug = (slug || 'media').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -132,6 +129,7 @@ export async function uploadOptimizedMedia(
   const timestamp = Date.now();
   const mainFileName = `${folder}${baseName}-${timestamp}.webp`;
   const derivativeUrls: string[] = [];
+  const availableWidths: number[] = [];
 
   for (const targetWidth of targetWidths) {
     const scaleFactor = targetWidth / originalWidth;
@@ -168,23 +166,34 @@ export async function uploadOptimizedMedia(
         const publicUrl = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName).data.publicUrl;
         if (isStandardSize) {
           derivativeUrls.push(`${publicUrl} ${targetWidth}w`);
+          availableWidths.push(targetWidth);
         }
       }
     }
   }
 
   const mainPublicUrl = supabase.storage.from(BUCKET_NAME).getPublicUrl(mainFileName).data.publicUrl;
-  return { mainUrl: mainPublicUrl, derivativeUrls };
+  return { mainUrl: mainPublicUrl, derivativeUrls, availableWidths };
+}
+
+/**
+ * Checks if a given image URL belongs to an optimized pipeline asset containing a 13-digit timestamp.
+ * Example: logo-1788377399000.webp or logo-1788377399000-300.webp
+ */
+export function isPipelineOptimizedUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  return /-\d{13}(-(300|400|600|800|1200|1600))?\.webp$/i.test(url);
 }
 
 /**
  * Generates responsive srcset & sizes attributes for storefront images.
- * Supports legacy image fallbacks seamlessly.
+ * Legacy images (including legacy WebP without pipeline timestamp) return undefined srcSet.
  */
 export function getResponsiveMediaProps(
   url: string | null | undefined,
   entityType: 'license' | 'theme',
-  altText?: string
+  altText?: string,
+  availableWidths?: number[]
 ) {
   if (!url) {
     return {
@@ -199,10 +208,9 @@ export function getResponsiveMediaProps(
 
   const alt = altText || (entityType === 'license' ? 'Logo oficial' : 'Imagen temática');
 
-  const isDerivativePattern = /-(logo|theme)-?\d*/i.test(url) || url.includes('.webp');
-
-  if (!isDerivativePattern) {
-    // Legacy fallback image without derivatives
+  // Check strict pipeline asset pattern with timestamp
+  if (!isPipelineOptimizedUrl(url)) {
+    // Legacy fallback image without derivatives (including legacy WebP)
     return {
       src: url,
       srcSet: undefined,
@@ -215,18 +223,11 @@ export function getResponsiveMediaProps(
 
   const baseUrl = url.replace(/-(300|400|600|800|1200|1600)\.webp$/i, '').replace(/\.webp$/i, '');
 
-  let srcSet = '';
-  let sizes = '';
-
-  if (entityType === 'license') {
-    const widths = [300, 600, 1200];
-    srcSet = widths.map(w => `${baseUrl}-${w}.webp ${w}w`).join(', ') + `, ${baseUrl}.webp 1200w`;
-    sizes = '(max-width: 640px) 150px, (max-width: 1024px) 300px, 600px';
-  } else {
-    const widths = [400, 800, 1200, 1600];
-    srcSet = widths.map(w => `${baseUrl}-${w}.webp ${w}w`).join(', ') + `, ${baseUrl}.webp 1600w`;
-    sizes = '(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw';
-  }
+  const standardWidths = availableWidths || (entityType === 'license' ? [300, 600, 1200] : [400, 800, 1200, 1600]);
+  const srcSet = standardWidths.map(w => `${baseUrl}-${w}.webp ${w}w`).join(', ');
+  const sizes = entityType === 'license'
+    ? '(max-width: 640px) 150px, (max-width: 1024px) 300px, 600px'
+    : '(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw';
 
   return {
     src: url,
@@ -240,15 +241,16 @@ export function getResponsiveMediaProps(
 
 /**
  * Gets an optimized small asset variant URL for dropdown thumbnails.
- * Dropdown License: ~300w
- * Dropdown Theme: ~400w
+ * License: ~300w
+ * Theme: ~400w
+ * Returns original URL for legacy images or legacy WebP without timestamp.
  */
 export function getDropdownMediaUrl(
   url: string | null | undefined,
   targetWidth: 300 | 400
 ): string {
   if (!url) return '';
-  if (!url.includes('.webp')) return url;
+  if (!isPipelineOptimizedUrl(url)) return url;
 
   const baseUrl = url.replace(/-(300|400|600|800|1200|1600)\.webp$/i, '').replace(/\.webp$/i, '');
   return `${baseUrl}-${targetWidth}.webp`;
