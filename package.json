@@ -2,7 +2,7 @@
   "name": "collectibles-ecommerce-root",
   "private": true,
   "scripts": {
-    "build": "cd frontend && npm install && npm run build",
+    "build": "cd frontend && npm run build",
     "analytics:diagnose-sales": "npx tsx scripts/analytics/diagnose-sales.ts"
   },
   "dependencies": {
