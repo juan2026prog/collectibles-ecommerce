@@ -116,18 +116,12 @@ export function useProducts(filters: ProductFilters = {}) {
         .maybeSingle();
 
       if (licData) {
-        const { data: licItems } = await supabase
-          .from('product_licenses')
-          .select('product_id')
-          .eq('license_id', licData.id);
-
         const { data: directProds } = await supabase
           .from('products')
           .select('id')
           .eq('license_id', licData.id);
         
-        const directIds = directProds?.map(x => x.id) || [];
-        const licProdIds = Array.from(new Set([...(licItems?.map(x => x.product_id) || []), ...directIds]));
+        const licProdIds = directProds?.map(x => x.id) || [];
 
         if (licProdIds.length > 0) {
           if (productIds) {
@@ -165,18 +159,12 @@ export function useProducts(filters: ProductFilters = {}) {
 
         const licIds = ltItems?.map(x => x.license_id) || [];
         if (licIds.length > 0) {
-          const { data: licProds } = await supabase
-            .from('product_licenses')
-            .select('product_id')
-            .in('license_id', licIds);
-
           const { data: directProds } = await supabase
             .from('products')
             .select('id')
             .in('license_id', licIds);
 
-          const directIds = directProds?.map(x => x.id) || [];
-          const themeProdIds = Array.from(new Set([...(licProds?.map(x => x.product_id) || []), ...directIds]));
+          const themeProdIds = directProds?.map(x => x.id) || [];
 
           if (themeProdIds.length > 0) {
             if (productIds) {
@@ -231,8 +219,10 @@ export function useProducts(filters: ProductFilters = {}) {
       }
     }
 
-    // ── Step 2: main product query ──
-    if (filters.isInternational) {
+    // ── Step 2: main product query based on availability ──
+    const availMode = filters.availability || (filters.isInternational ? 'international' : 'local');
+
+    if (availMode === 'international') {
       let query = supabase
         .from('international_products')
         .select('*, category_rel:categories!collectibles_category_id(id, name, slug), subcategory_rel:categories!collectibles_subcategory_id(id, name, slug)', { count: 'exact' });
@@ -256,7 +246,6 @@ export function useProducts(filters: ProductFilters = {}) {
         if (isUUID) {
           query = query.or(`collectibles_category_id.eq.${filters.category},collectibles_subcategory_id.eq.${filters.category}`);
         } else {
-          // Resolve category slug to category ID
           const { data: catRecord } = await supabase
             .from('categories')
             .select('id')
@@ -293,7 +282,7 @@ export function useProducts(filters: ProductFilters = {}) {
       if (!error && data) {
         const mappedProducts = data.map((item: any) => ({
           id: item.id,
-          slug: item.id, // we use ID as slug for international products
+          slug: item.id,
           title: item.title,
           description: item.description,
           base_price: Number(item.final_price_usd),
@@ -315,6 +304,144 @@ export function useProducts(filters: ProductFilters = {}) {
         setProducts(mappedProducts);
         setCount(totalCount || 0);
       }
+      setLoading(false);
+      return;
+    }
+
+    if (availMode === 'all') {
+      const selectStr = `
+          id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, condition_notes, created_at,
+          category:categories(id, name, slug),
+          brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
+          images:product_images(id, url, alt_text, is_primary),
+          variants:product_variants(id, sku, price_adjustment, inventory_count),
+          vendor:vendors(id, store_name, slug, logo_url),
+          vendor_store:vendor_stores(id, store_name, slug, logo_url, is_official),
+          product_group_items(group_id, group:product_groups(id, name, slug, is_active, sort_order, badge_image_url, badge_storage_path, badge_alt_text, allowed_payment_providers, payment_method_restriction))
+          ${categoryId ? ', product_categories!inner(category_id)' : ''}
+      `;
+
+      let localQuery = supabase
+        .from('products')
+        .select(selectStr, { count: 'exact' })
+        .eq('status', 'published')
+        .eq('is_active', true);
+
+      if (categoryIds && categoryIds.length > 0) localQuery = localQuery.in('product_categories.category_id', categoryIds);
+      if (brandId) localQuery = localQuery.eq('brand_id', brandId);
+      if (productIds) localQuery = localQuery.in('id', productIds);
+      if (filters.vendor_store_id) localQuery = localQuery.eq('vendor_store_id', filters.vendor_store_id);
+      if (filters.badge) localQuery = localQuery.eq('badge', filters.badge);
+      if (filters.featured) localQuery = localQuery.eq('is_featured', true);
+
+      if (filters.condition) {
+        if (filters.condition === 'new') {
+          localQuery = localQuery.or('condition.eq.new_sealed,condition.eq.new_open_box,condition.is.null');
+        } else if (filters.condition === 'used') {
+          localQuery = localQuery.in('condition', ['used_complete', 'used_incomplete']);
+        } else if (filters.condition === 'loose') {
+          localQuery = localQuery.in('condition', ['loose_complete', 'loose_incomplete']);
+        }
+      }
+
+      if (filters.minPrice) localQuery = localQuery.gte('base_price', filters.minPrice);
+      if (filters.maxPrice) localQuery = localQuery.lte('base_price', filters.maxPrice);
+      if (filters.search) {
+        localQuery = localQuery.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
+      }
+
+      localQuery = localQuery.order('vendor_id', { ascending: true, nullsFirst: true });
+
+      let intlQuery: any = null;
+      if (!filters.license && !filters.theme && !filters.vendor_store_id && !filters.badge && (!filters.condition || filters.condition === 'new')) {
+        intlQuery = supabase
+          .from('international_products')
+          .select('*, category_rel:categories!collectibles_category_id(id, name, slug), subcategory_rel:categories!collectibles_subcategory_id(id, name, slug)', { count: 'exact' })
+          .eq('status', 'published');
+
+        if (filters.search) {
+          intlQuery = intlQuery.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%,brand.ilike.%${filters.search}%`);
+        }
+        if (filters.brand) {
+          intlQuery = intlQuery.ilike('brand', `%${filters.brand}%`);
+        }
+        if (filters.category) {
+          const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(filters.category);
+          if (isUUID) {
+            intlQuery = intlQuery.or(`collectibles_category_id.eq.${filters.category},collectibles_subcategory_id.eq.${filters.category}`);
+          } else {
+            const { data: catRecord } = await supabase
+              .from('categories')
+              .select('id')
+              .eq('slug', filters.category)
+              .maybeSingle();
+
+            if (catRecord) {
+              intlQuery = intlQuery.or(`collectibles_category_id.eq.${catRecord.id},collectibles_subcategory_id.eq.${catRecord.id}`);
+            }
+          }
+        }
+        if (filters.minPrice) intlQuery = intlQuery.gte('final_price_usd', filters.minPrice);
+        if (filters.maxPrice) intlQuery = intlQuery.lte('final_price_usd', filters.maxPrice);
+      }
+
+      const limit = filters.limit || 12;
+      const offset = filters.offset || 0;
+
+      // Range for pagination
+      localQuery = localQuery.range(0, offset + limit + 20);
+      if (intlQuery) intlQuery = intlQuery.range(0, offset + limit + 20);
+
+      const [localRes, intlRes] = await Promise.all([
+        localQuery,
+        intlQuery ? intlQuery : Promise.resolve({ data: [], count: 0, error: null })
+      ]);
+
+      const localData = localRes.data || [];
+      const localCount = localRes.count || 0;
+      const intlData = intlRes.data || [];
+      const intlCount = intlRes.count || 0;
+
+      const mappedIntl = intlData.map((item: any) => ({
+        id: item.id,
+        slug: item.id,
+        title: item.title,
+        description: item.description,
+        base_price: Number(item.final_price_usd),
+        compare_at_price: Number(item.amazon_list_price_usd || item.final_price_usd),
+        images: [{ id: item.id, url: item.image_url, is_primary: true }],
+        image_url: item.image_url,
+        brand: { name: item.brand || 'Importado', slug: item.brand ? item.brand.toLowerCase() : 'importado' },
+        category: item.category_rel || { name: item.category || 'Coleccionables', slug: item.category ? item.category.toLowerCase() : 'coleccionables' },
+        subcategory: item.subcategory_rel || null,
+        collectibles_category_id: item.collectibles_category_id,
+        collectibles_subcategory_id: item.collectibles_subcategory_id,
+        source_provider: 'zinc',
+        is_international: true,
+        is_active: true,
+        status: item.status,
+        raw_international_data: item,
+        international_products: [item]
+      }));
+
+      const combined = [...localData, ...mappedIntl];
+
+      switch (filters.sortBy) {
+        case 'price-low': combined.sort((a, b) => (a.base_price || 0) - (b.base_price || 0)); break;
+        case 'price-high': combined.sort((a, b) => (b.base_price || 0) - (a.base_price || 0)); break;
+        case 'newest': combined.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()); break;
+        case 'name': combined.sort((a, b) => (a.title || '').localeCompare(b.title || '')); break;
+        default:
+          combined.sort((a, b) => {
+            const intlA = a.is_international ? 1 : 0;
+            const intlB = b.is_international ? 1 : 0;
+            if (intlA !== intlB) return intlA - intlB;
+            return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+          });
+      }
+
+      setProducts(combined.slice(offset, offset + limit));
+      setCount(localCount + intlCount);
       setLoading(false);
       return;
     }
@@ -359,14 +486,11 @@ export function useProducts(filters: ProductFilters = {}) {
     if (filters.minPrice) query = query.gte('base_price', filters.minPrice);
     if (filters.maxPrice) query = query.lte('base_price', filters.maxPrice);
     if (filters.search) {
-      // Use ilike for simple search, fallback from textSearch if vector unavailable
       query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
     }
 
-    // Muestra los productos publicados por Collectibles (vendor_id IS NULL) primero
     query = query.order('vendor_id', { ascending: true, nullsFirst: true });
 
-    // Sort
     switch (filters.sortBy) {
       case 'price-low': query = query.order('base_price', { ascending: true }); break;
       case 'price-high': query = query.order('base_price', { ascending: false }); break;
@@ -1454,8 +1578,7 @@ export function useCatalogFacets(filters: CatalogFacetFilters = {}) {
           supabase.from('license_themes').select('license_id, theme_id'),
           supabase.from('products').select(`
             id, brand_id, license_id, category_id, condition, title, description, base_price, status, is_active,
-            product_categories(category_id),
-            product_licenses(license_id)
+            product_categories(category_id)
           `).eq('status', 'published').eq('is_active', true),
           filters.isInternationalEnabled !== false
             ? supabase.from('international_products').select('id, brand, collectibles_category_id, collectibles_subcategory_id, final_price_usd, title, description, status').eq('status', 'published')
@@ -1544,31 +1667,15 @@ export function useCatalogFacets(filters: CatalogFacetFilters = {}) {
           if (excludeDim !== 'license' && f.license) {
             if (isIntl) return false;
             const targetLicId = licSlugToIdMap.get(f.license) || f.license;
-            const pLicIds = new Set<string>();
-            if (item.license_id) pLicIds.add(item.license_id);
-            if (item.product_licenses) {
-              item.product_licenses.forEach((pl: any) => pLicIds.add(pl.license_id));
-            }
-            if (!pLicIds.has(targetLicId)) return false;
+            if (item.license_id !== targetLicId) return false;
           }
 
           if (excludeDim !== 'theme' && f.theme) {
             if (isIntl) return false;
             const targetThemeId = themeSlugToIdMap.get(f.theme) || f.theme;
-            const pLicIds = new Set<string>();
-            if (item.license_id) pLicIds.add(item.license_id);
-            if (item.product_licenses) {
-              item.product_licenses.forEach((pl: any) => pLicIds.add(pl.license_id));
-            }
-            let hasThemeMatch = false;
-            for (const lId of pLicIds) {
-              const themesForLic = licToThemesMap.get(lId);
-              if (themesForLic && themesForLic.has(targetThemeId)) {
-                hasThemeMatch = true;
-                break;
-              }
-            }
-            if (!hasThemeMatch) return false;
+            if (!item.license_id) return false;
+            const themesForLic = licToThemesMap.get(item.license_id);
+            if (!themesForLic || !themesForLic.has(targetThemeId)) return false;
           }
 
           if (f.search && f.search.trim()) {
@@ -1645,16 +1752,11 @@ export function useCatalogFacets(filters: CatalogFacetFilters = {}) {
           .filter(b => b.product_count > 0)
           .sort((a, b) => b.product_count - a.product_count || a.brand_name.localeCompare(b.brand_name));
 
-        // License Facets
+        // License Facets (rely ONLY on products.license_id)
         const licCounts: Record<string, number> = {};
         localProducts.forEach(item => {
-          if (matchItem(item, false, filters, 'license')) {
-            const pLicIds = new Set<string>();
-            if (item.license_id) pLicIds.add(item.license_id);
-            if (item.product_licenses) {
-              item.product_licenses.forEach((pl: any) => pLicIds.add(pl.license_id));
-            }
-            pLicIds.forEach(lId => { licCounts[lId] = (licCounts[lId] || 0) + 1; });
+          if (matchItem(item, false, filters, 'license') && item.license_id) {
+            licCounts[item.license_id] = (licCounts[item.license_id] || 0) + 1;
           }
         });
         const computedLicenseFacets = licenses
@@ -1672,21 +1774,14 @@ export function useCatalogFacets(filters: CatalogFacetFilters = {}) {
             return b.published_product_count - a.published_product_count || a.name.localeCompare(b.name);
           });
 
-        // Theme Facets
+        // Theme Facets (products.license_id -> license_themes -> theme)
         const themeCounts: Record<string, number> = {};
         localProducts.forEach(item => {
-          if (matchItem(item, false, filters, 'theme')) {
-            const pLicIds = new Set<string>();
-            if (item.license_id) pLicIds.add(item.license_id);
-            if (item.product_licenses) {
-              item.product_licenses.forEach((pl: any) => pLicIds.add(pl.license_id));
+          if (matchItem(item, false, filters, 'theme') && item.license_id) {
+            const ths = licToThemesMap.get(item.license_id);
+            if (ths) {
+              ths.forEach(tId => { themeCounts[tId] = (themeCounts[tId] || 0) + 1; });
             }
-            const pThemeIds = new Set<string>();
-            pLicIds.forEach(lId => {
-              const ths = licToThemesMap.get(lId);
-              if (ths) ths.forEach(tId => pThemeIds.add(tId));
-            });
-            pThemeIds.forEach(tId => { themeCounts[tId] = (themeCounts[tId] || 0) + 1; });
           }
         });
         const computedThemeFacets = themes
