@@ -549,9 +549,10 @@ export default function AdminLicenses() {
                     <Info className="w-3.5 h-3.5 text-blue-600 shrink-0" /> Medidas y Especificaciones Recomendadas:
                   </div>
                   <ul className="list-disc list-inside pl-1 text-[10px] space-y-0.5 text-blue-800">
-                    <li><strong className="font-bold">Tamaño ideal:</strong> 1200 × 600 px (Relación 2:1)</li>
+                    <li><strong className="font-bold">Tamaño mínimo requerido:</strong> 1200 × 600 px</li>
+                    <li><strong className="font-bold">Relación recomendada:</strong> 2:1</li>
+                    <li><strong className="font-bold">Peso recomendado:</strong> &lt; 250 KB</li>
                     <li><strong className="font-bold">Formato:</strong> WebP o PNG transparente (Fondo oscuro)</li>
-                    <li><strong className="font-bold">Mínimo:</strong> 600 × 300 px | <strong className="font-bold">Peso:</strong> &lt; 250 KB</li>
                     <li><strong className="font-bold">Safe Area:</strong> Dejar ~10% de margen alrededor del logo.</li>
                   </ul>
                 </div>

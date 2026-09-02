@@ -315,9 +315,10 @@ export default function AdminThemes() {
                     <Info className="w-3.5 h-3.5 text-purple-600 shrink-0" /> Medidas y Especificaciones Recomendadas:
                   </div>
                   <ul className="list-disc list-inside pl-1 text-[10px] space-y-0.5 text-purple-800">
-                    <li><strong className="font-bold">Tamaño ideal:</strong> 1600 × 900 px (Relación 16:9)</li>
+                    <li><strong className="font-bold">Tamaño mínimo requerido:</strong> 1600 × 900 px</li>
+                    <li><strong className="font-bold">Relación recomendada:</strong> 16:9</li>
+                    <li><strong className="font-bold">Peso recomendado:</strong> &lt; 350 KB</li>
                     <li><strong className="font-bold">Formato:</strong> WebP, AVIF o JPG optimizado</li>
-                    <li><strong className="font-bold">Mínimo:</strong> 1200 × 675 px | <strong className="font-bold">Peso:</strong> &lt; 350 KB</li>
                     <li><strong className="font-bold">Contenido:</strong> Arte temático genérico (no posters específicos).</li>
                   </ul>
                 </div>

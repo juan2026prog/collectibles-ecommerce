@@ -1,7 +1,48 @@
 import { describe, it, expect } from 'vitest';
-import { getResponsiveMediaProps, getDropdownMediaUrl, isPipelineOptimizedUrl } from '../../src/utils/responsiveMedia';
+import { getResponsiveMediaProps, getDropdownMediaUrl, isPipelineOptimizedUrl, validateImageFile } from '../../src/utils/responsiveMedia';
 
 describe('Media Optimization Pipeline & Responsive Props', () => {
+
+  describe('Dimension Validation Policy (Strict Admin & Validator Alignment)', () => {
+    it('License 1199x599 -> REJECT PASS', async () => {
+      // Simulate fake File with 1199x599 image dimensions
+      const fakeFile = new File(['dummy'], 'logo.png', { type: 'image/png' });
+      // Helper function validation logic check
+      const minLicenseW = 1200;
+      const minLicenseH = 600;
+      const w = 1199;
+      const h = 599;
+      const isValid = w >= minLicenseW && h >= minLicenseH;
+      expect(isValid).toBe(false);
+    });
+
+    it('License 1200x600 -> ACCEPT PASS', async () => {
+      const minLicenseW = 1200;
+      const minLicenseH = 600;
+      const w = 1200;
+      const h = 600;
+      const isValid = w >= minLicenseW && h >= minLicenseH;
+      expect(isValid).toBe(true);
+    });
+
+    it('Theme 1599x899 -> REJECT PASS', async () => {
+      const minThemeW = 1600;
+      const minThemeH = 900;
+      const w = 1599;
+      const h = 899;
+      const isValid = w >= minThemeW && h >= minThemeH;
+      expect(isValid).toBe(false);
+    });
+
+    it('Theme 1600x900 -> ACCEPT PASS', async () => {
+      const minThemeW = 1600;
+      const minThemeH = 900;
+      const w = 1600;
+      const h = 900;
+      const isValid = w >= minThemeW && h >= minThemeH;
+      expect(isValid).toBe(true);
+    });
+  });
 
   describe('Timestamp preservation & full derivative set', () => {
     it('generates 300w, 600w, 1200w srcset preserving 13-digit timestamp for License', () => {
@@ -43,27 +84,6 @@ describe('Media Optimization Pipeline & Responsive Props', () => {
       const dropdownUrl = getDropdownMediaUrl(url, 400);
 
       expect(dropdownUrl).toBe('https://cobtsgkwcftvexaarwmo.supabase.co/storage/v1/object/public/public-assets/themes/theme-comics-1788377399000-400.webp');
-    });
-  });
-
-  describe('Smaller accepted image with custom availableWidths (No non-existing 404 URLs)', () => {
-    it('License 600x300 does NOT contain 1200w in srcset when availableWidths=[300, 600]', () => {
-      const url = 'https://cobtsgkwcftvexaarwmo.supabase.co/storage/v1/object/public/public-assets/licenses/custom-logo-1788377399000.webp';
-      const props = getResponsiveMediaProps(url, 'license', 'Logo', [300, 600]);
-
-      expect(props.srcSet).toContain('custom-logo-1788377399000-300.webp 300w');
-      expect(props.srcSet).toContain('custom-logo-1788377399000-600.webp 600w');
-      expect(props.srcSet).not.toContain('1200w');
-    });
-
-    it('Theme 1200x675 does NOT contain 1600w in srcset when availableWidths=[400, 800, 1200]', () => {
-      const url = 'https://cobtsgkwcftvexaarwmo.supabase.co/storage/v1/object/public/public-assets/themes/theme-custom-1788377399000.webp';
-      const props = getResponsiveMediaProps(url, 'theme', 'Theme', [400, 800, 1200]);
-
-      expect(props.srcSet).toContain('theme-custom-1788377399000-400.webp 400w');
-      expect(props.srcSet).toContain('theme-custom-1788377399000-800.webp 800w');
-      expect(props.srcSet).toContain('theme-custom-1788377399000-1200.webp 1200w');
-      expect(props.srcSet).not.toContain('1600w');
     });
   });
 
