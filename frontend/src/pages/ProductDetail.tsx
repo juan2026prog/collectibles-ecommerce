@@ -10,6 +10,7 @@ import { usePromotions, getApplicablePromotions, evaluateItemDiscountDetailed } 
 import { useCurrency } from '../contexts/CurrencyContext';
 import { useLocale } from '../contexts/LocaleContext';
 import { resolveImage, FALLBACK_IMAGE } from '../lib/imageUtils';
+import { useImageProtection } from '../hooks/useImageProtection';
 import { analytics } from '../lib/analytics';
 import { trackGA4Event } from '../lib/analyticsTracker';
 import { trackViewContent, generateMetaEventId } from '../lib/meta/metaPixel';
