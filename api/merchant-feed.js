@@ -34,30 +34,36 @@ function resolveMerchantImageUrl(imgUrl) {
   const trimmed = imgUrl.trim();
   if (!trimmed) return '';
 
-  if (trimmed.startsWith('https://collectibles.uy/catalog-images/')) {
-    return trimmed;
-  }
-
+  // 1. Direct stable Supabase Storage URLs (preferred for performance and reliability)
   if (trimmed.includes('cobtsgkwcftvexaarwmo.supabase.co/storage/v1/object/public/')) {
-    const pathPart = trimmed.split('/storage/v1/object/public/')[1];
-    return `https://collectibles.uy/catalog-images/${pathPart}`;
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+    return `https://${trimmed.replace(/^\/+/, '')}`;
   }
 
+  if (trimmed.startsWith('/storage/v1/object/public/')) {
+    return `https://cobtsgkwcftvexaarwmo.supabase.co${trimmed}`;
+  }
+
+  // 2. MercadoLibre static image URLs (proxied to add headers/extension consistency)
   if (trimmed.includes('http2.mlstatic.com/')) {
     const pathPart = trimmed.split('http2.mlstatic.com/')[1];
     return `https://collectibles.uy/catalog-images/external/http2.mlstatic.com/${pathPart}`;
   }
 
+  // 3. Other external image URLs
   if (/^(https?:\/\/)/.test(trimmed)) {
     const withoutProtocol = trimmed.replace(/^https?:\/\//, '');
     return `https://collectibles.uy/catalog-images/external/${withoutProtocol}`;
   }
 
+  // 4. Relative paths or product image filenames
   if (trimmed.startsWith('/')) {
-    return `https://collectibles.uy/catalog-images/product-images${trimmed}`;
+    return `https://cobtsgkwcftvexaarwmo.supabase.co/storage/v1/object/public/product-images${trimmed}`;
   }
 
-  return `https://collectibles.uy/catalog-images/product-images/${trimmed}`;
+  return `https://cobtsgkwcftvexaarwmo.supabase.co/storage/v1/object/public/product-images/${trimmed}`;
 }
 
 export default async function handler(req, res) {
