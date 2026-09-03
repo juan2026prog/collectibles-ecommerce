@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -20,12 +20,27 @@ function cleanText(str) {
   return str.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+function validateGtin(gtin) {
+  if (!gtin) return null;
+  const str = String(gtin).trim();
+  if (/^\d{8}$|^\d{12}$|^\d{13}$|^\d{14}$/.test(str)) {
+    return str;
+  }
+  return null;
+}
+
 export default async function handler(req, res) {
   try {
     const baseUrl = 'https://collectibles.uy';
 
-    const [{ data: products }, { data: images }, { data: brands }] = await Promise.all([
-      supabase
+    // 1. Paginated fetch for ALL published active products
+    let allProducts = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
+
+    while (hasMore) {
+      const { data: batch, error } = await supabase
         .from('products')
         .select(`
           id,
@@ -39,20 +54,86 @@ export default async function handler(req, res) {
           metadata
         `)
         .eq('is_active', true)
-        .eq('status', 'published'),
-      supabase
+        .eq('status', 'published')
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+      if (error) {
+        console.error('Supabase query error in merchant-feed products:', error);
+        throw error;
+      }
+
+      if (batch && batch.length > 0) {
+        allProducts = allProducts.concat(batch);
+        if (batch.length < pageSize) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      } else {
+        hasMore = false;
+      }
+    }
+
+    // 2. Paginated fetch for ALL product images
+    let allImages = [];
+    page = 0;
+    hasMore = true;
+
+    while (hasMore) {
+      const { data: batch, error } = await supabase
         .from('product_images')
         .select('product_id, url, is_primary')
-        .order('sort_order', { ascending: true }),
-      supabase
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+      if (error) {
+        console.error('Supabase query error in merchant-feed images:', error);
+        throw error;
+      }
+
+      if (batch && batch.length > 0) {
+        allImages = allImages.concat(batch);
+        if (batch.length < pageSize) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      } else {
+        hasMore = false;
+      }
+    }
+
+    // 3. Paginated fetch for ALL active brands
+    let allBrands = [];
+    page = 0;
+    hasMore = true;
+
+    while (hasMore) {
+      const { data: batch, error } = await supabase
         .from('brands')
         .select('id, name')
         .eq('is_active', true)
-    ]);
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+      if (error) {
+        console.error('Supabase query error in merchant-feed brands:', error);
+        throw error;
+      }
+
+      if (batch && batch.length > 0) {
+        allBrands = allBrands.concat(batch);
+        if (batch.length < pageSize) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      } else {
+        hasMore = false;
+      }
+    }
 
     const imageMap = {};
-    if (images) {
-      images.forEach(img => {
+    if (allImages) {
+      allImages.forEach(img => {
         if (!imageMap[img.product_id] || img.is_primary) {
           imageMap[img.product_id] = img.url;
         }
@@ -60,8 +141,8 @@ export default async function handler(req, res) {
     }
 
     const brandMap = {};
-    if (brands) {
-      brands.forEach(b => {
+    if (allBrands) {
+      allBrands.forEach(b => {
         brandMap[b.id] = b.name;
       });
     }
@@ -73,8 +154,8 @@ export default async function handler(req, res) {
     xml += `    <link>${baseUrl}</link>\n`;
     xml += `    <description>Feed dinámico oficial de productos de Collectibles Uruguay</description>\n`;
 
-    if (products && products.length > 0) {
-      products.forEach(p => {
+    if (allProducts && allProducts.length > 0) {
+      allProducts.forEach(p => {
         if (!p.slug || !p.title) return;
 
         const link = `${baseUrl}/producto/${p.slug}`;
@@ -92,7 +173,8 @@ export default async function handler(req, res) {
         }
 
         const priceFormatted = `${Number(p.base_price || 0).toFixed(2)} UYU`;
-        const gtin = p.metadata?.gtin || p.metadata?.ean || '';
+        const rawGtin = p.metadata?.gtin || p.metadata?.ean || p.gtin || p.ean;
+        const validGtin = validateGtin(rawGtin);
         const mpn = p.metadata?.mpn || p.id;
 
         xml += `    <item>\n`;
@@ -104,8 +186,8 @@ export default async function handler(req, res) {
         xml += `      <g:availability>in_stock</g:availability>\n`;
         xml += `      <g:price>${escapeXml(priceFormatted)}</g:price>\n`;
         xml += `      <g:brand>${escapeXml(brandName)}</g:brand>\n`;
-        if (gtin) {
-          xml += `      <g:gtin>${escapeXml(gtin)}</g:gtin>\n`;
+        if (validGtin) {
+          xml += `      <g:gtin>${escapeXml(validGtin)}</g:gtin>\n`;
         } else {
           xml += `      <g:identifier_exists>no</g:identifier_exists>\n`;
         }
