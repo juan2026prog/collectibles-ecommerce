@@ -29,6 +29,37 @@ function validateGtin(gtin) {
   return null;
 }
 
+function resolveMerchantImageUrl(imgUrl) {
+  if (!imgUrl || typeof imgUrl !== 'string') return '';
+  const trimmed = imgUrl.trim();
+  if (!trimmed) return '';
+
+  if (trimmed.startsWith('https://collectibles.uy/catalog-images/')) {
+    return trimmed;
+  }
+
+  if (trimmed.includes('cobtsgkwcftvexaarwmo.supabase.co/storage/v1/object/public/')) {
+    const pathPart = trimmed.split('/storage/v1/object/public/')[1];
+    return `https://collectibles.uy/catalog-images/${pathPart}`;
+  }
+
+  if (trimmed.includes('http2.mlstatic.com/')) {
+    const pathPart = trimmed.split('http2.mlstatic.com/')[1];
+    return `https://collectibles.uy/catalog-images/external/http2.mlstatic.com/${pathPart}`;
+  }
+
+  if (/^(https?:\/\/)/.test(trimmed)) {
+    const withoutProtocol = trimmed.replace(/^https?:\/\//, '');
+    return `https://collectibles.uy/catalog-images/external/${withoutProtocol}`;
+  }
+
+  if (trimmed.startsWith('/')) {
+    return `https://collectibles.uy/catalog-images/product-images${trimmed}`;
+  }
+
+  return `https://collectibles.uy/catalog-images/product-images/${trimmed}`;
+}
+
 export default async function handler(req, res) {
   try {
     const baseUrl = 'https://collectibles.uy';
@@ -156,10 +187,17 @@ export default async function handler(req, res) {
 
     if (allProducts && allProducts.length > 0) {
       allProducts.forEach(p => {
+        // STRICT MERCHANT ELIGIBILITY FILTERS
         if (!p.slug || !p.title) return;
 
+        const priceNum = Number(p.base_price || 0);
+        if (isNaN(priceNum) || priceNum <= 0) return;
+
+        const rawImg = imageMap[p.id];
+        if (!rawImg) return;
+
         const link = `${baseUrl}/producto/${p.slug}`;
-        const imageLink = imageMap[p.id] || 'https://cobtsgkwcftvexaarwmo.supabase.co/storage/v1/object/public/public-assets/1775828705619-isologocolle.jpg';
+        const imageLink = resolveMerchantImageUrl(rawImg);
         const rawDesc = p.description || p.short_description || p.title;
         const description = cleanText(rawDesc);
         const brandName = (p.brand_id && brandMap[p.brand_id]) ? brandMap[p.brand_id] : 'Collectibles';
@@ -172,7 +210,7 @@ export default async function handler(req, res) {
           }
         }
 
-        const priceFormatted = `${Number(p.base_price || 0).toFixed(2)} UYU`;
+        const priceFormatted = `${priceNum.toFixed(2)} UYU`;
         const rawGtin = p.metadata?.gtin || p.metadata?.ean || p.gtin || p.ean;
         const validGtin = validateGtin(rawGtin);
         const mpn = p.metadata?.mpn || p.id;
