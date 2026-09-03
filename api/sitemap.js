@@ -109,11 +109,14 @@ export default async function handler(req, res) {
     // Real Commercial & Static Base Pages (200 OK)
     const mainPages = [
       '/shop',
+      '/licencias',
+      '/themes',
+      '/contact',
       '/page/nosotros',
       '/page/terminos',
       '/page/pol-ticas-de-privacidad',
       '/page/condiciones-de-compra',
-      '/contact'
+      '/page/envios-devoluciones'
     ];
     mainPages.forEach(p => {
       xml += `  <url>\n    <loc>${baseUrl}${p}</loc>\n    <priority>0.8</priority>\n    <changefreq>weekly</changefreq>\n  </url>\n`;

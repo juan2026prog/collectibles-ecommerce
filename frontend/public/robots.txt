@@ -4,9 +4,10 @@ Allow: /shop
 Allow: /producto/
 Allow: /categoria/
 Allow: /marca/
-Allow: /about
+Allow: /licencias
+Allow: /themes
+Allow: /page/
 Allow: /contact
-Allow: /faq
 
 # Rutas privadas / técnicas protegidas
 Disallow: /admin

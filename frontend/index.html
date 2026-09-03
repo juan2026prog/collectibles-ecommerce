@@ -74,12 +74,68 @@
       fbq('track', 'PageView', {}, { eventID: initialEventId });
     </script>
     <!-- End Meta Pixel Code -->
+    <!-- Structured Data (WebSite & Organization) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "@id": "https://collectibles.uy/#website",
+          "url": "https://collectibles.uy",
+          "name": "Collectibles Uruguay",
+          "description": "Tu tienda N°1 de juguetes retro en Uruguay, figuras vintage, cartas de colección, merchandising geek y figuras de acción.",
+          "inLanguage": "es"
+        },
+        {
+          "@type": "Organization",
+          "@id": "https://collectibles.uy/#organization",
+          "name": "Collectibles Store Uruguay",
+          "url": "https://collectibles.uy",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://cobtsgkwcftvexaarwmo.supabase.co/storage/v1/object/public/public-assets/1775828705619-isologocolle.jpg"
+          },
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "contactType": "customer service",
+            "areaServed": "UY",
+            "availableLanguage": "es"
+          }
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
     <noscript><img height="1" width="1" style="display:none"
       src="https://www.facebook.com/tr?id=1623445247816011&ev=PageView&noscript=1"
     /></noscript>
-    <div id="root"></div>
+    <div id="root">
+      <header>
+        <h1>Juguetes Retro Uruguay &amp; Coleccionables | Collectibles Store</h1>
+        <p>Tu tienda N°1 de juguetes retro en Uruguay, figuras vintage, cartas de colección, merchandising geek y figuras de acción. Envíos a todo el país.</p>
+        <nav aria-label="Navegación principal">
+          <ul>
+            <li><a href="/shop">Catálogo Completo</a></li>
+            <li><a href="/licencias">Licencias Oficiales</a></li>
+            <li><a href="/themes">Temas y Universos</a></li>
+            <li><a href="/categoria/funko-pop">Funko Pop</a></li>
+            <li><a href="/categoria/tcg">TCG y Cartas</a></li>
+            <li><a href="/categoria/figuras">Figuras de Acción</a></li>
+            <li><a href="/marca/mcfarlane">McFarlane Toys</a></li>
+            <li><a href="/marca/funko">Funko</a></li>
+            <li><a href="/marca/neca">NECA</a></li>
+            <li><a href="/contact">Contacto</a></li>
+            <li><a href="/page/nosotros">Nosotros</a></li>
+            <li><a href="/page/terminos">Términos y Condiciones</a></li>
+            <li><a href="/page/pol-ticas-de-privacidad">Políticas de Privacidad</a></li>
+            <li><a href="/page/condiciones-de-compra">Condiciones de Compra</a></li>
+            <li><a href="/page/envios-devoluciones">Envíos y Devoluciones</a></li>
+          </ul>
+        </nav>
+      </header>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

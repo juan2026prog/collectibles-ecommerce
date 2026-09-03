@@ -22,6 +22,8 @@ function escapeHtml(str) {
 function generateCanonical(type, slug) {
   if (type === 'home' || !type) return BASE_URL;
   if (type === 'shop') return `${BASE_URL}/shop`;
+  if (type === 'licencias' || type === 'licenses') return `${BASE_URL}/licencias`;
+  if (type === 'themes' || type === 'temas') return `${BASE_URL}/themes`;
   if (type === 'producto' || type === 'product') return `${BASE_URL}/producto/${slug}`;
   if (type === 'categoria' || type === 'category') return `${BASE_URL}/categoria/${slug}`;
   if (type === 'marca' || type === 'brand') return `${BASE_URL}/marca/${slug}`;
@@ -33,6 +35,8 @@ function generateCanonical(type, slug) {
 function generateMetaTitle(type, name) {
   if (type === 'home' || !type) return 'Juguetes Retro Uruguay & Coleccionables | Collectibles Store';
   if (type === 'shop') return 'Catálogo de Coleccionables en Uruguay | Collectibles';
+  if (type === 'licencias') return 'Licencias Oficiales de Coleccionables | Collectibles Uruguay';
+  if (type === 'themes') return 'Universos y Temas Geek | Collectibles Uruguay';
   if (type === 'producto' || type === 'product') return `${name} | Collectibles Uruguay`;
   if (type === 'marca' || type === 'brand') return `${name} en Uruguay | Collectibles`;
   if (type === 'categoria' || type === 'category') return `${name} en Uruguay | Collectibles`;
@@ -51,6 +55,12 @@ function generateMetaDescription(type, rawDesc, name) {
   }
   if (type === 'shop') {
     return 'Explora nuestro catálogo completo de figuras de acción, Funkos, cómics y coleccionables en Uruguay.';
+  }
+  if (type === 'licencias') {
+    return 'Explora todas las franquicias y licencias oficiales disponibles en Collectibles Uruguay: Marvel, Star Wars, DC Comics, Funko, Disney y más.';
+  }
+  if (type === 'themes') {
+    return 'Descubre coleccionables por universo, temática y sagas: Anime, Terror, Cine, Series, Deportes y Gaming en Collectibles Uruguay.';
   }
   if (type === 'producto' || type === 'product') {
     return `Comprar ${name} en Collectibles Uruguay. Envíos a todo el país.`;
@@ -442,6 +452,10 @@ export default async function handler(req, res) {
         type = 'page';
         const match = combinedUri.match(/\/page\/([^\/\?\s]+)/);
         if (match) slug = match[1];
+      } else if (combinedUri.includes('/licencias')) {
+        type = 'licencias';
+      } else if (combinedUri.includes('/themes') || combinedUri.includes('/temas')) {
+        type = 'themes';
       } else if (combinedUri.includes('/contact')) {
         type = 'page';
         slug = 'contact';
@@ -635,6 +649,7 @@ export default async function handler(req, res) {
         'terminos': 'Términos y Condiciones',
         'pol-ticas-de-privacidad': 'Políticas de Privacidad',
         'condiciones-de-compra': 'Condiciones de Compra',
+        'envios-devoluciones': 'Envíos y Devoluciones',
         'contact': 'Contacto'
       };
       const pageName = pageTitles[pageSlug] || pageSlug || 'Página';
@@ -652,6 +667,72 @@ export default async function handler(req, res) {
           </nav>
           <h1 style="font-size: 28px; font-weight: bold; margin-bottom: 10px;">${escapeHtml(pageName)}</h1>
           <p>${escapeHtml(description)}</p>
+        </div>
+      `;
+
+    } else if (type === 'licencias') {
+      title = generateMetaTitle('licencias');
+      description = generateMetaDescription('licencias');
+      canonical = generateCanonical('licencias');
+
+      const breadcrumbSchema = generateBreadcrumbs('static', { name: 'Licencias Oficiales', path: 'licencias' });
+      jsonLdScripts.push(breadcrumbSchema);
+
+      const { data: allLicenses } = await supabase
+        .from('licenses')
+        .select('name, slug')
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+
+      bodyContent = `
+        <div style="padding: 20px; font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto;">
+          <nav style="font-size: 14px; margin-bottom: 15px;">
+            <a href="${BASE_URL}/">Inicio</a> &gt; <span>Licencias Oficiales</span>
+          </nav>
+          <h1 style="font-size: 28px; font-weight: bold; margin-bottom: 10px;">Licencias y Franquicias Oficiales</h1>
+          <p>${escapeHtml(description)}</p>
+          ${allLicenses && allLicenses.length > 0 ? `
+            <ul style="list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-top: 20px;">
+              ${allLicenses.map(l => `
+                <li style="border: 1px solid #eee; padding: 12px; border-radius: 6px;">
+                  <a href="${BASE_URL}/licencias/${l.slug}" style="text-decoration: none; color: #2563eb; font-weight: 600;">${escapeHtml(l.name)}</a>
+                </li>
+              `).join('')}
+            </ul>
+          ` : ''}
+        </div>
+      `;
+
+    } else if (type === 'themes') {
+      title = generateMetaTitle('themes');
+      description = generateMetaDescription('themes');
+      canonical = generateCanonical('themes');
+
+      const breadcrumbSchema = generateBreadcrumbs('static', { name: 'Temas y Universos', path: 'themes' });
+      jsonLdScripts.push(breadcrumbSchema);
+
+      const { data: allThemes } = await supabase
+        .from('themes')
+        .select('name, slug')
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+
+      bodyContent = `
+        <div style="padding: 20px; font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto;">
+          <nav style="font-size: 14px; margin-bottom: 15px;">
+            <a href="${BASE_URL}/">Inicio</a> &gt; <span>Temas y Universos</span>
+          </nav>
+          <h1 style="font-size: 28px; font-weight: bold; margin-bottom: 10px;">Temas y Universos Geek</h1>
+          <p>${escapeHtml(description)}</p>
+          ${allThemes && allThemes.length > 0 ? `
+            <ul style="list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-top: 20px;">
+              ${allThemes.map(t => `
+                <li style="border: 1px solid #eee; padding: 12px; border-radius: 6px;">
+                  <a href="${BASE_URL}/themes/${t.slug}" style="text-decoration: none; color: #2563eb; font-weight: 600;">${escapeHtml(t.name)}</a>
+                </li>
+              `).join('')}
+            </ul>
+          ` : ''}
         </div>
       `;
 

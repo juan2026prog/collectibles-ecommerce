@@ -109,6 +109,14 @@
       "destination": "/api/seo-prerender"
     },
     {
+      "source": "/licencias",
+      "destination": "/api/seo-prerender"
+    },
+    {
+      "source": "/themes",
+      "destination": "/api/seo-prerender"
+    },
+    {
       "source": "/shop",
       "destination": "/api/seo-prerender"
     },
