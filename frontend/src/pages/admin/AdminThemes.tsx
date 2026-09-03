@@ -109,9 +109,15 @@ export default function AdminThemes() {
   async function handleSave() {
     if (!form.name.trim()) return;
 
+    const cleanSlug = (form.slug || form.name)
+      .toLowerCase()
+      .replace(/^(https?:\/\/[^\/]+)?\/?themes\//i, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+
     const payload = {
       name: form.name.trim(),
-      slug: form.slug || form.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+      slug: cleanSlug,
       description: form.description || null,
       image_url: form.image_url || null,
       image_alt: form.image_alt?.trim() || `Coleccionables de ${form.name.trim()}`,
@@ -123,14 +129,22 @@ export default function AdminThemes() {
     if (editing) {
       const { error } = await supabase.from('themes').update(payload).eq('id', editing.id);
       if (error) {
-        toast.error('Error al actualizar el Theme: ' + error.message);
+        if (error.code === '23505' || (error as any).status === 409 || error.message.includes('unique') || error.message.includes('duplicate')) {
+          toast.error(`Ya existe un Theme registrado con el slug "${cleanSlug}". Por favor elegí un slug diferente.`);
+        } else {
+          toast.error('Error al actualizar el Theme: ' + error.message);
+        }
         return;
       }
       toast.success('Theme actualizado');
     } else {
       const { error } = await supabase.from('themes').insert(payload);
       if (error) {
-        toast.error('Error al crear el Theme: ' + error.message);
+        if (error.code === '23505' || (error as any).status === 409 || error.message.includes('unique') || error.message.includes('duplicate')) {
+          toast.error(`Ya existe un Theme registrado con el slug "${cleanSlug}". Por favor elegí un slug diferente.`);
+        } else {
+          toast.error('Error al crear el Theme: ' + error.message);
+        }
         return;
       }
       toast.success('Theme creado');
@@ -253,7 +267,7 @@ export default function AdminThemes() {
                   <input
                     className="form-input flex-1 rounded-l-none font-mono text-xs"
                     value={form.slug}
-                    onChange={e => setForm({ ...form, slug: e.target.value })}
+                    onChange={e => setForm({ ...form, slug: e.target.value.toLowerCase().replace(/^(https?:\/\/[^\/]+)?\/?themes\//i, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') })}
                     placeholder="cine-tv"
                   />
                 </div>

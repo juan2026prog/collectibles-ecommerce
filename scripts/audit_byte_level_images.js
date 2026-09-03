@@ -23,9 +23,33 @@ function detectRealFormat(buffer) {
   return 'UNKNOWN';
 }
 
-async function runByteLevelAudit() {
+function getUrlExtension(urlString) {
+  try {
+    const parsed = new URL(urlString);
+    const pathname = parsed.pathname;
+    const lastPart = pathname.split('/').pop() || '';
+    if (!lastPart.includes('.')) return '';
+    const ext = lastPart.split('.').pop() || '';
+    return ext.toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function isExtensionMatchingFormat(ext, realFormat) {
+  if (!ext) return false;
+  if (realFormat === 'JPEG' && (ext === 'jpg' || ext === 'jpeg')) return true;
+  if (realFormat === 'WEBP' && ext === 'webp') return true;
+  if (realFormat === 'PNG' && ext === 'png') return true;
+  if (realFormat === 'GIF' && ext === 'gif') return true;
+  if (realFormat === 'BMP' && ext === 'bmp') return true;
+  if (realFormat === 'TIFF' && (ext === 'tif' || ext === 'tiff')) return true;
+  return false;
+}
+
+async function runFullAudit() {
   console.log('================================================================');
-  console.log(`AUDITORÍA BYTE-LEVEL COMPLETA DE 1.207 IMÁGENES`);
+  console.log(`AUDITORÍA STRICT: MAGIC BYTES + EXTENSIONES + MIME (1.207 ITEMS)`);
   console.log(`Target Feed: ${targetFeedUrl}`);
   console.log('================================================================\n');
 
@@ -35,15 +59,14 @@ async function runByteLevelAudit() {
   const itemMatches = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
   console.log(`Total <item> en feed: ${itemMatches.length}\n`);
 
-  let jpegReal = 0;
-  let webpReal = 0;
-  let pngReal = 0;
-  let otherSupported = 0;
-  let avifCount = 0;
-  let mimeMismatchCount = 0;
-  let brokenCount = 0;
+  let valid = 0;
+  let noExtension = 0;
+  let wrongExtension = 0;
+  let mimeMismatch = 0;
+  let broken = 0;
+  let unsupported = 0;
 
-  const CONCURRENCY = 50;
+  const CONCURRENCY = 60;
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
   for (let i = 0; i < itemMatches.length; i += CONCURRENCY) {
@@ -53,11 +76,12 @@ async function runByteLevelAudit() {
       const itemXml = itemMatch[1];
       const imgMatch = itemXml.match(/<g:image_link>(.*?)<\/g:image_link>/);
       if (!imgMatch) {
-        brokenCount++;
+        broken++;
         return;
       }
 
       const imgUrl = imgMatch[1];
+      const extension = getUrlExtension(imgUrl);
 
       try {
         const controller = new AbortController();
@@ -75,40 +99,41 @@ async function runByteLevelAudit() {
         const realFmt = detectRealFormat(buf);
 
         if (status !== 200) {
-          brokenCount++;
+          broken++;
           return;
         }
 
-        if (realFmt === 'AVIF' || contentType.includes('avif')) {
-          avifCount++;
+        if (['AVIF', 'HTML', 'UNKNOWN'].includes(realFmt)) {
+          unsupported++;
           return;
         }
 
-        if (realFmt === 'JPEG') {
-          if (contentType.includes('jpeg') || contentType.includes('jpg')) {
-            jpegReal++;
-          } else {
-            mimeMismatchCount++;
-          }
-        } else if (realFmt === 'PNG') {
-          if (contentType.includes('png')) {
-            pngReal++;
-          } else {
-            mimeMismatchCount++;
-          }
-        } else if (realFmt === 'WEBP') {
-          if (contentType.includes('webp')) {
-            webpReal++;
-          } else {
-            mimeMismatchCount++;
-          }
-        } else if (['GIF', 'BMP', 'TIFF'].includes(realFmt)) {
-          otherSupported++;
-        } else {
-          brokenCount++;
+        if (!extension) {
+          noExtension++;
+          return;
         }
+
+        if (!isExtensionMatchingFormat(extension, realFmt)) {
+          wrongExtension++;
+          return;
+        }
+
+        if (realFmt === 'JPEG' && !contentType.includes('jpeg') && !contentType.includes('jpg')) {
+          mimeMismatch++;
+          return;
+        }
+        if (realFmt === 'PNG' && !contentType.includes('png')) {
+          mimeMismatch++;
+          return;
+        }
+        if (realFmt === 'WEBP' && !contentType.includes('webp')) {
+          mimeMismatch++;
+          return;
+        }
+
+        valid++;
       } catch (err) {
-        brokenCount++;
+        broken++;
       }
     }));
 
@@ -116,27 +141,27 @@ async function runByteLevelAudit() {
     console.log(`Progreso: ${Math.min(i + CONCURRENCY, itemMatches.length)} / ${itemMatches.length}`);
   }
 
-  const totalEvaluated = jpegReal + webpReal + pngReal + otherSupported + avifCount + mimeMismatchCount + brokenCount;
+  const totalEvaluated = valid + noExtension + wrongExtension + mimeMismatch + broken + unsupported;
 
   console.log('\n\n================================================================');
-  console.log('RESULTADO FINAL DE LA AUDITORÍA BYTE-LEVEL (1.207 ITEMS)');
+  console.log('RESULTADO FINAL DE LA AUDITORÍA DE EXTENSIÓN Y FORMATO');
   console.log('================================================================');
-  console.log(`JPEG REAL:         ${jpegReal}`);
-  console.log(`WEBP REAL:         ${webpReal}`);
-  console.log(`PNG REAL:          ${pngReal}`);
-  console.log(`OTHER SUPPORTED:   ${otherSupported}`);
-  console.log(`AVIF:              ${avifCount}`);
-  console.log(`MIME MISMATCH:     ${mimeMismatchCount}`);
-  console.log(`BROKEN:            ${brokenCount}`);
-  console.log(`TOTAL EVALUATED:   ${totalEvaluated}`);
+  console.log(`TOTAL:              ${itemMatches.length}`);
+  console.log(`VALID:              ${valid}`);
+  console.log(`NO_EXTENSION:       ${noExtension}`);
+  console.log(`WRONG_EXTENSION:    ${wrongExtension}`);
+  console.log(`MIME_MISMATCH:      ${mimeMismatch}`);
+  console.log(`BROKEN:             ${broken}`);
+  console.log(`UNSUPPORTED:        ${unsupported}`);
+  console.log(`TOTAL EVALUATED:    ${totalEvaluated}`);
   console.log('================================================================\n');
 
-  if (avifCount === 0 && mimeMismatchCount === 0 && brokenCount === 0 && totalEvaluated === itemMatches.length) {
-    console.log('CERTIFICACIÓN INTERNA TECNOLÓGICA 100% PASS ✅');
+  if (valid === itemMatches.length && noExtension === 0 && wrongExtension === 0 && mimeMismatch === 0 && broken === 0 && unsupported === 0) {
+    console.log('AUDITORÍA STRICT EXTENSIONS PASS ✅');
   } else {
-    console.error('CERTIFICACIÓN FALLIDA ❌');
+    console.error('AUDITORÍA STRICT EXTENSIONS FALLIDA ❌');
     process.exit(1);
   }
 }
 
-runByteLevelAudit();
+runFullAudit();
