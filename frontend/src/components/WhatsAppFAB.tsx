@@ -66,10 +66,12 @@ export default function WhatsAppFAB() {
         {/* Dismiss button */}
         <button
           onClick={() => setShown(false)}
-          className="w-6 h-6 md:w-7 md:h-7 bg-white/80 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center text-slate-500 hover:text-gray-700 hover:bg-white transition-all opacity-0 group-hover/fab:opacity-100"
+          className="relative min-w-[44px] min-h-[44px] w-11 h-11 flex items-center justify-center p-0 text-slate-500 hover:text-gray-700 transition-all opacity-0 group-hover/fab:opacity-100 cursor-pointer"
           aria-label="Cerrar WhatsApp"
         >
-          <X className="w-3.5 h-3.5" />
+          <span className="w-6 h-6 md:w-7 md:h-7 bg-white/80 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center hover:bg-white transition-all">
+            <X className="w-3.5 h-3.5" />
+          </span>
         </button>
 
         {/* Main button */}

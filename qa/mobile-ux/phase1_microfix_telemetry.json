@@ -1,0 +1,24 @@
+{
+  "quantityPlusRestored": true,
+  "quantitySeq1232": true,
+  "maxStockRespected": true,
+  "twoUnitsToCartDrawer": true,
+  "twoUnitsCartSubtotalCorrect": true,
+  "twoUnitsBuyNowCheckout": true,
+  "twoUnitsStickyBuyCheckout": true,
+  "trackingAddToCartOnQtyChange": 0,
+  "trackingAddToCartOnActualAdd": 0,
+  "whatsAppTouchTarget44px": true,
+  "pageErrorsCount": 9,
+  "reactErrorsCount": 0,
+  "viewportsTested": [
+    "iPhone_390x844",
+    "Android_360x740"
+  ],
+  "productsTested": [
+    "Collectibles Local: /producto/frazada-1-plaza-my-hero-academia-deku-3",
+    "Vendor Product: /producto/ariel-la-sirenita-classic-doll-princesas-disney-store-3781",
+    "Collectibles Local: /producto/frazada-1-plaza-my-hero-academia-deku-3",
+    "Vendor Product: /producto/ariel-la-sirenita-classic-doll-princesas-disney-store-3781"
+  ]
+}

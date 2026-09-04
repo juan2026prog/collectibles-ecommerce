@@ -236,7 +236,8 @@ export default function ProductDetail() {
   const currentImgObj = images[selectedImage] || images[0];
   const displayImage = resolveImage(currentImgObj?.url || product.image_url, 'detail');
 
-  const stock = selectedVariant ? (selectedVariant.stock ?? product.stock) : product.stock;
+  const rawStock = selectedVariant ? (selectedVariant.stock ?? product.stock) : product.stock;
+  const stock = typeof rawStock === 'number' && !isNaN(rawStock) ? rawStock : 99;
   const isIntl = product.source_provider === 'zinc' || Boolean(product.is_international);
 
   const getStockInfo = () => {
@@ -588,7 +589,8 @@ export default function ProductDetail() {
                 </button>
                 <span className="font-black text-base text-white">{quantity}</span>
                 <button
-              className="w-11 h-full flex items-center justify-center hover:bg-white/10 transition-colors text-slate-300 hover:text-white"
+                  onClick={() => setQuantity(Math.min(stock, quantity + 1))}
+                  className="w-11 h-full flex items-center justify-center hover:bg-white/10 transition-colors text-slate-300 hover:text-white"
                   disabled={quantity >= stock || (!product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined ? false : true)}
                 >
                   <Plus className="w-4 h-4" />

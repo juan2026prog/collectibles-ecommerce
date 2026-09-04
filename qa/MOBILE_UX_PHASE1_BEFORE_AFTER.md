@@ -167,10 +167,26 @@ Todas las capturas de pantalla de validación fueron generadas mediante la suite
 
 ---
 
-## 7. DECLARACIÓN FINAL DE INTEGRIDAD Y SEGURIDAD
+---
+
+## 7. PRE-MERGE MICRO-FIX VERIFICATION
+
+Se realizaron pruebas automatizadas específicas solicitadas previo a merge:
+- **Quantity Selector (+)**: Restaurado `onClick={() => setQuantity(Math.min(stock, quantity + 1))}` con salvaguarda numérica para stocks no definidos.
+- **Secuencia 1→2→3→2**: Verificada con éxito en dispositivos reales emulados (390×844 y 360×740).
+- **Límite de Stock Máximo**: Respetado en productos con stock finito.
+- **2 Unidades a Carrito**: CartDrawer recibe cantidad 2 y calcula subtotal unitario × 2.
+- **2 Unidades a Comprar Ahora**: Flujo directo a `/checkout` preserva cantidad 2.
+- **2 Unidades a Sticky Buy Bar**: Disparo directo desde barra flotante preserva cantidad 2.
+- **Regresión de Tracking**: 0 eventos `AddToCart` disparados durante modificaciones de cantidad (+ / -).
+- **WhatsApp Dismiss Hit Area**: Área táctil ampliada a 44×44px manteniendo el círculo visual de 24–28px.
+
+---
+
+## 8. DECLARACIÓN FINAL DE INTEGRIDAD Y SEGURIDAD
 
 - **Rama Git:** `mobile-ux-phase1`
-- **Código compilado:** Vite build en 2.27s (0 errores, 0 warnings de sintaxis)
+- **Código compilado:** Vite build (0 errores, 0 warnings de sintaxis)
 - **Base de datos Supabase:** Sin alteraciones
 - **Sistemas de pago / Calculadoras de envío / SEO:** 100% intactos
 
