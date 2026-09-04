@@ -2,6 +2,13 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { calculateFee, calculateCanonicalPricing } from "../_shared/pricing.ts";
+import { 
+  resolveZincApiKey, 
+  buildZincAddress, 
+  dollarsToCents, 
+  assertProductionGate,
+  ZincOrderCreatePayload 
+} from "../_shared/zinc/index.ts";
 
 serve(async (req) => {
   const optionsResponse = handleOptions(req);
@@ -13,31 +20,29 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     
     // Auth client
     const supabase = createClient(supabaseUrl, supabaseKey, { global: { headers: { Authorization: authHeader } } });
+    const serviceClient = createClient(supabaseUrl, serviceRoleKey);
     
-    // Check if user is authenticated or it's a service role call
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    // Authorization check: service role, admin, or customer ownership
     let isServiceCall = false;
     if (authHeader.includes(serviceRoleKey)) {
       isServiceCall = true;
     }
 
-    let userObj = null;
+    let userObj: any = null;
+    let isAdmin = false;
     if (!isServiceCall) {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) throw new Error("Unauthorized");
       userObj = user;
+      isAdmin = user.app_metadata?.role === 'admin' || user.user_metadata?.role === 'admin';
     }
-
-    const ZINC_API_KEY = Deno.env.get("ZINC_API_KEY");
-    if (!ZINC_API_KEY) throw new Error("ZINC_API_KEY no configurada");
 
     const { order_id, is_auto, is_retry = false } = await req.json();
     if (!order_id) throw new Error("Invalid payload: order_id is required");
-
-    const serviceClient = createClient(supabaseUrl, serviceRoleKey);
     
     const { data: order, error: orderFetchErr } = await serviceClient
       .from('orders')
@@ -47,61 +52,32 @@ serve(async (req) => {
 
     if (orderFetchErr || !order) throw new Error("Order not found");
 
+    // Enforce authorization: only service role, admin, or order owner can trigger purchase verification
+    if (!isServiceCall && !isAdmin) {
+      if (order.user_id !== userObj.id) {
+        throw new Error("Forbidden: caller is not authorized for this order");
+      }
+    }
+
     const { data: settings } = await serviceClient.from('international_sync_settings').select('*').eq('id', 1).single();
     if (!settings) throw new Error("International sync settings not found");
+
+    // Resolve explicit Zinc environment (no generic fallback)
+    const targetEnv: "sandbox" | "production" = settings.zinc_production_enabled === true ? "production" : "sandbox";
+    const ZINC_API_KEY = await resolveZincApiKey(serviceClient, targetEnv);
 
     let finalOrderStatus = order.status;
     let allOk = true;
 
     const shipping = order.shipping_address || {};
-    const isIntlResolved = shipping.is_international_address_resolved === true;
 
-    // Address verification helper (Rule 3 & 4: Strict validation without generic fallback)
-    const isAddressValid = () => {
-      return isIntlResolved && 
-             !!shipping.international_courier_name && 
-             !!shipping.international_recipient_name && 
-             !!shipping.international_address_line_1 && 
-             !!shipping.international_city && 
-             !!shipping.international_state && 
-             !!shipping.international_postal_code && 
-             !!shipping.international_phone;
-    };
-
-    let first_name = '';
-    let last_name = '';
-    let address_line1 = '';
-    let address_line2 = '';
-    let city = '';
-    let state = '';
-    let zip_code = '';
-    let phone_number = '';
-
-    if (isAddressValid()) {
-      first_name = shipping.international_recipient_name?.split(' ')[0] || '';
-      last_name = shipping.international_recipient_name?.split(' ').slice(1).join(' ') || '.';
-      address_line1 = shipping.international_address_line_1;
-      
-      const line2Parts = [shipping.international_address_line_2, shipping.international_customer_code].filter(Boolean);
-      address_line2 = line2Parts.join(' ') || '';
-      
-      city = shipping.international_city;
-      state = shipping.international_state;
-      zip_code = shipping.international_postal_code;
-      phone_number = shipping.international_phone;
+    // Strict address validation (throws descriptive error on missing fields; no fake placeholders)
+    let zincShippingAddress;
+    try {
+      zincShippingAddress = buildZincAddress(shipping);
+    } catch (addrErr: any) {
+      zincShippingAddress = null;
     }
-
-    const zincShippingAddress = {
-      first_name,
-      last_name,
-      address_line1,
-      address_line2,
-      city,
-      state,
-      zip_code,
-      country: 'US',
-      phone_number
-    };
 
     for (const item of order.order_items) {
       if (!item.product_id) continue;
@@ -165,8 +141,8 @@ serve(async (req) => {
         reasonCode = "UNKNOWN_ERROR";
       }
 
-      // 5. Strict address validation (NO generic Urubox fallback)
-      if (!failureMessage && !isAddressValid()) {
+      // 5. Strict address check
+      if (!failureMessage && !zincShippingAddress) {
         failureMessage = "La dirección del courier en USA está incompleta en el snapshot de la orden.";
         reasonCode = "INVALID_ADDRESS_SNAPSHOT";
       }
@@ -240,20 +216,60 @@ serve(async (req) => {
 
       // 7. Place Order in Zinc with Deterministic PO Number
       if (settings.auto_purchase_enabled || isServiceCall || (userObj && order.status === 'paid')) {
-        const maxPriceCents = Math.max(1, Math.round(maxAmazonPrice * 100));
+        // Enforce Server-Side Hard Production Safety Gate
+        try {
+          assertProductionGate(ZINC_API_KEY, settings.zinc_production_enabled === true);
+        } catch (gateErr: any) {
+          console.warn("[ZINC PRODUCTION GATE BLOCKED]", gateErr.message);
+          await serviceClient.from('international_order_items').update({
+            purchase_status: 'zinc_failed',
+            review_reason_code: 'ZINC_GATE_BLOCKED',
+            zinc_error_message: gateErr.message,
+            updated_at: new Date().toISOString()
+          }).eq('id', intlOrderItem.id);
+          allOk = false;
+          finalOrderStatus = 'manual_review';
+          continue;
+        }
+
+        const maxPriceCents = dollarsToCents(maxAmazonPrice);
         const stablePoNumber = `${order.order_number || order.id}-${intlOrderItem.id.slice(0, 8)}`;
         
-        const zincRequestPayload = {
-          retailer: 'amazon',
+        // 1. Official V2 Idempotency: single key per logical purchase, persisted in DB BEFORE first POST
+        let idempotencyKey = intlOrderItem.idempotency_key;
+        if (!idempotencyKey) {
+          idempotencyKey = intlOrderItem.id ? String(intlOrderItem.id) : crypto.randomUUID();
+          
+          // CRITICAL: Persist in database BEFORE sending the POST request, and inspect error
+          const { error: idempPersistErr } = await serviceClient.from('international_order_items').update({
+            idempotency_key: idempotencyKey,
+            zinc_po_number: stablePoNumber,
+            updated_at: new Date().toISOString()
+          }).eq('id', intlOrderItem.id);
+
+          if (idempPersistErr) {
+            console.error("[ZINC IDEMPOTENCY PERSISTENCE FAILED]", idempPersistErr.message);
+            await serviceClient.from('international_order_items').update({
+              purchase_status: 'manual_review',
+              review_reason_code: 'IDEMPOTENCY_PERSISTENCE_FAILED',
+              zinc_error_message: `No se pudo persistir la clave de idempotencia: ${idempPersistErr.message}`,
+              updated_at: new Date().toISOString()
+            }).eq('id', intlOrderItem.id);
+            allOk = false;
+            finalOrderStatus = 'manual_review';
+            continue;
+          }
+          intlOrderItem.idempotency_key = idempotencyKey;
+        }
+
+        const zincRequestPayload: ZincOrderCreatePayload = {
           products: [{
             url: prod.product_url_external,
-            quantity: item.quantity
+            quantity: Math.max(1, item.quantity || 1)
           }],
-          shipping_address: zincShippingAddress,
+          shipping_address: zincShippingAddress!,
           max_price: maxPriceCents,
-          payment_method: {
-            use_zinc_card: true
-          },
+          idempotency_key: idempotencyKey,
           po_number: stablePoNumber,
           metadata: {
             collectibles_order_id: order.id,
@@ -275,10 +291,46 @@ serve(async (req) => {
           });
 
           const zincData = await zincRes.json();
+          const isAlreadyExists = zincRes.status === 409 || zincData?.code === 'already_exists';
 
-          if (!zincRes.ok || zincData.error || (zincData.status && zincData.status === 'failed')) {
-            const errStr = zincData.error?.message || zincData.error || "Zinc orders creation failed";
-            await serviceClient.from('international_order_items').update({
+          if (isAlreadyExists) {
+            // Official V2 Idempotency: already_exists on retry means original order got through.
+            let existingOrderId: string | null = null;
+            const cand = zincData?.details?.identifier;
+            if (typeof cand === "string" && cand.trim().length > 0 && cand !== stablePoNumber) {
+              existingOrderId = cand.trim();
+            } else if (typeof zincData?.id === "string" && zincData.id.trim().length > 0 && zincData.id !== stablePoNumber) {
+              existingOrderId = zincData.id.trim();
+            } else if (intlOrderItem.zinc_order_id && intlOrderItem.zinc_order_id !== stablePoNumber) {
+              existingOrderId = intlOrderItem.zinc_order_id;
+            }
+            // CRITICAL: NEVER store stablePoNumber in zinc_order_id
+
+            const { error: itemUpdErr } = await serviceClient.from('international_order_items').update({
+              purchase_status: 'zinc_order_created',
+              zinc_order_id: existingOrderId,
+              zinc_po_number: stablePoNumber,
+              zinc_request_payload: zincRequestPayload,
+              zinc_response_payload: zincData,
+              zinc_error_message: null,
+              review_reason_code: null,
+              updated_at: new Date().toISOString()
+            }).eq('id', intlOrderItem.id);
+
+            if (itemUpdErr) {
+              console.error("[zinc-verify-after-payment] Error updating item on already_exists:", itemUpdErr.message);
+            }
+
+            const { error: spendErr } = await serviceClient.rpc('spend_international_capacity', {
+              p_reservation_id: intlOrderItem.reservation_id || null,
+              p_order_id: order.id
+            });
+            if (spendErr) {
+              console.error("[zinc-verify-after-payment] Error spending capacity on already_exists:", spendErr.message);
+            }
+          } else if (!zincRes.ok || zincData.error || (zincData.status && zincData.status === 'failed')) {
+            const errStr = zincData.message || zincData.error?.message || zincData.error || "Zinc orders creation failed";
+            const { error: itemUpdErr } = await serviceClient.from('international_order_items').update({
               purchase_status: 'zinc_failed',
               review_reason_code: 'ZINC_REJECTED',
               zinc_po_number: stablePoNumber,
@@ -287,12 +339,16 @@ serve(async (req) => {
               zinc_error_message: errStr,
               updated_at: new Date().toISOString()
             }).eq('id', intlOrderItem.id);
+
+            if (itemUpdErr) {
+              console.error("[zinc-verify-after-payment] Error updating item on reject:", itemUpdErr.message);
+            }
             allOk = false;
             finalOrderStatus = 'manual_review';
           } else {
             // Success - Zinc order request accepted
-            const zincOrderId = zincData.request_id || zincData.id;
-            await serviceClient.from('international_order_items').update({
+            const zincOrderId = zincData.id || zincData.request_id || null;
+            const { error: itemUpdErr } = await serviceClient.from('international_order_items').update({
               purchase_status: 'zinc_order_created',
               zinc_order_id: zincOrderId,
               zinc_po_number: stablePoNumber,
@@ -303,19 +359,30 @@ serve(async (req) => {
               updated_at: new Date().toISOString()
             }).eq('id', intlOrderItem.id);
 
+            if (itemUpdErr) {
+              console.error("[zinc-verify-after-payment] Error updating item on success:", itemUpdErr.message);
+            }
+
             // Transition capital reservation to SPENT
-            await serviceClient.rpc('spend_international_capacity', {
+            const { error: spendErr } = await serviceClient.rpc('spend_international_capacity', {
               p_reservation_id: intlOrderItem.reservation_id || null,
               p_order_id: order.id
             });
+            if (spendErr) {
+              console.error("[zinc-verify-after-payment] Error spending capacity on success:", spendErr.message);
+            }
           }
         } catch (zincCallErr: any) {
-          await serviceClient.from('international_order_items').update({
+          const { error: itemUpdErr } = await serviceClient.from('international_order_items').update({
             purchase_status: 'zinc_failed',
             review_reason_code: 'ZINC_TIMEOUT',
             zinc_error_message: "Error de conexión con API de compras: " + zincCallErr.message,
             updated_at: new Date().toISOString()
           }).eq('id', intlOrderItem.id);
+
+          if (itemUpdErr) {
+            console.error("[zinc-verify-after-payment] Error updating item on timeout:", itemUpdErr.message);
+          }
           allOk = false;
           finalOrderStatus = 'manual_review';
         }
@@ -323,7 +390,10 @@ serve(async (req) => {
     }
 
     if (!allOk) {
-      await serviceClient.from('orders').update({ status: finalOrderStatus }).eq('id', order_id);
+      const { error: orderUpdErr } = await serviceClient.from('orders').update({ status: finalOrderStatus }).eq('id', order_id);
+      if (orderUpdErr) {
+        console.error("[zinc-verify-after-payment] Error updating parent order status:", orderUpdErr.message);
+      }
     }
 
     return new Response(JSON.stringify({ success: true, orderStatus: finalOrderStatus, allOk }), {
@@ -334,7 +404,7 @@ serve(async (req) => {
   } catch (error: any) {
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-      status: 500
+      status: error.message?.includes("Forbidden") ? 403 : error.message?.includes("Unauthorized") ? 401 : 500
     });
   }
 });

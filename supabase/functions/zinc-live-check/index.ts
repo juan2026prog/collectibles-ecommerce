@@ -13,12 +13,17 @@ serve(async (req) => {
 
     if (!product_id) throw new Error("product_id es requerido");
 
-    const ZINC_API_KEY = Deno.env.get("ZINC_API_KEY");
-    if (!ZINC_API_KEY) throw new Error("ZINC_API_KEY no configurada");
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const { resolveZincApiKey } = await import("../_shared/zinc/index.ts");
+    let ZINC_API_KEY = "";
+    try {
+      ZINC_API_KEY = await resolveZincApiKey(supabase, "production");
+    } catch {
+      ZINC_API_KEY = await resolveZincApiKey(supabase, "sandbox");
+    }
 
     const { data: prod } = await supabase.from('international_products').select('*').eq('id', product_id).single();
     if (!prod) throw new Error("Producto no encontrado");

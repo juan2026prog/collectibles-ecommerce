@@ -58,11 +58,16 @@ export default function AdminZincConfig() {
   const [sandboxTestResult, setSandboxTestResult] = useState<TestResult | null>(null);
   const [productionTestResult, setProductionTestResult] = useState<TestResult | null>(null);
   
+  const [sandboxWebhookSecretInput, setSandboxWebhookSecretInput] = useState<string>('');
+  const [productionWebhookSecretInput, setProductionWebhookSecretInput] = useState<string>('');
+  const [savingWebhookEnv, setSavingWebhookEnv] = useState<'sandbox' | 'production' | null>(null);
+  const [webhookValidationErr, setWebhookValidationErr] = useState<string>('');
+
   const [copiedWebhook, setCopiedWebhook] = useState<boolean>(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [globalSuccess, setGlobalSuccess] = useState<string | null>(null);
 
-  const isBusy = loading || savingEnv !== null || testingEnv !== null;
+  const isBusy = loading || savingEnv !== null || testingEnv !== null || savingWebhookEnv !== null;
 
   useEffect(() => {
     fetchStatus();
@@ -104,12 +109,8 @@ export default function AdminZincConfig() {
       }
       setSandboxValidationErr('');
     } else {
-      if (!keyVal.startsWith('zn_')) {
-        setProductionValidationErr("La API Key de Producción debe comenzar con 'zn_'");
-        return;
-      }
-      if (keyVal.startsWith('zn_test_')) {
-        setProductionValidationErr("Una credencial de producción no puede comenzar con 'zn_test_'");
+      if (!keyVal.startsWith('zn_live_')) {
+        setProductionValidationErr("La API Key de Producción debe comenzar estrictamente con 'zn_live_'");
         return;
       }
       setProductionValidationErr('');
@@ -169,7 +170,7 @@ export default function AdminZincConfig() {
       } else if (data) {
         const res: TestResult = {
           ok: !!data.ok,
-          status: data.status || (data.ok ? 'pass' : 'fail'),
+          status: data.ok ? 'pass' : 'fail',
           message: data.message || (data.ok ? 'Conexión verificada exitosamente.' : 'La verificación de conexión falló.'),
           elapsed_ms: data.elapsed_ms,
           test_products_count: data.test_products_count
@@ -188,6 +189,44 @@ export default function AdminZincConfig() {
       else setProductionTestResult(res);
     } finally {
       setTestingEnv(null);
+    }
+  }
+
+  async function handleSaveWebhookSecret(environment: 'sandbox' | 'production') {
+    setGlobalError(null);
+    setGlobalSuccess(null);
+    setWebhookValidationErr('');
+
+    const secretVal = environment === 'sandbox' ? sandboxWebhookSecretInput.trim() : productionWebhookSecretInput.trim();
+    if (!secretVal.startsWith('zn_whsec_')) {
+      setWebhookValidationErr("El Signing Secret del webhook debe comenzar estrictamente con 'zn_whsec_'");
+      return;
+    }
+
+    setSavingWebhookEnv(environment);
+    try {
+      const { data, error } = await supabase.functions.invoke('zinc-config', {
+        body: {
+          action: 'save_webhook_secret',
+          environment,
+          webhook_secret: secretVal,
+        },
+      });
+
+      if (error) {
+        setGlobalError(`Error al almacenar el secreto en Vault: ${error.message}`);
+      } else if (!data?.ok) {
+        setGlobalError(data?.error || 'No se pudo guardar el secreto en Vault.');
+      } else {
+        if (environment === 'sandbox') setSandboxWebhookSecretInput('');
+        else setProductionWebhookSecretInput('');
+        setGlobalSuccess(`Signing Secret de ${environment === 'sandbox' ? 'Sandbox' : 'Producción'} almacenado en Vault.`);
+        await fetchStatus();
+      }
+    } catch {
+      setGlobalError('Ocurrió un error inesperado al guardar el secreto del webhook.');
+    } finally {
+      setSavingWebhookEnv(null);
     }
   }
 
@@ -632,7 +671,7 @@ export default function AdminZincConfig() {
       </div>
 
       {/* ── SECCIÓN 3: WEBHOOK ZINC ── */}
-      <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
+      <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
@@ -640,29 +679,30 @@ export default function AdminZincConfig() {
             </div>
             <div>
               <h3 className="text-base font-bold text-gray-900 dark:text-white">
-                Webhook Zinc
+                Webhook Zinc API 2.0
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Punto de recepción para notificaciones asíncronas de órdenes y tracking.
+                Punto de recepción para notificaciones asíncronas de órdenes y tracking firmadas con HMAC-SHA256.
               </p>
             </div>
           </div>
 
           <div>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/40 text-indigo-800 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800">
-              <Clock className="w-3.5 h-3.5 text-indigo-500" />
-              PENDIENTE DE DESPLIEGUE
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+              ENDPOINT ACTIVO
             </span>
           </div>
         </div>
 
+        {/* Webhook URL Display */}
         <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="space-y-1">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                URL prevista del Webhook
+                URL del Webhook (Configurar en Zinc Dashboard)
               </span>
-              <div className="font-mono text-xs text-slate-800 dark:text-slate-200 break-all select-all">
+              <div className="font-mono text-xs text-slate-800 dark:text-slate-200 break-all select-all font-semibold">
                 {ZINC_WEBHOOK_URL}
               </div>
             </div>
@@ -687,7 +727,111 @@ export default function AdminZincConfig() {
           </div>
 
           <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed border-t border-slate-200 dark:border-slate-700/60 pt-2.5">
-            La URL está reservada para la certificación E2E. El webhook todavía debe desplegarse y certificarse.
+            Configura esta misma URL en Zinc Dashboard tanto para Test Mode como para Production. El endpoint verifica la firma digital de forma segura y aísla los entornos automáticamente.
+          </p>
+        </div>
+
+        {/* Webhook Secrets Form Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Sandbox Webhook Secret */}
+          <div className="p-4 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                Signing Secret (Sandbox / Test Mode)
+              </span>
+              <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800">
+                zn_whsec_...
+              </span>
+            </div>
+
+            <div className="text-xs">
+              {sandboxSetting?.webhook_secret_prefix ? (
+                <div className="flex items-center gap-2 p-2.5 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 font-mono text-xs text-slate-700 dark:text-slate-300">
+                  <Lock className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  <span>{sandboxSetting.webhook_secret_prefix}••••••••{sandboxSetting.webhook_secret_last4}</span>
+                </div>
+              ) : (
+                <div className="p-2.5 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 italic text-xs">
+                  Ningún secreto de webhook configurado en Vault
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                type="password"
+                placeholder="zn_whsec_..."
+                value={sandboxWebhookSecretInput}
+                onChange={(e) => setSandboxWebhookSecretInput(e.target.value)}
+                className="flex-1 px-3 py-1.5 text-xs font-mono rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                disabled={isBusy}
+              />
+              <button
+                type="button"
+                onClick={() => handleSaveWebhookSecret('sandbox')}
+                disabled={isBusy || !sandboxWebhookSecretInput.trim()}
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 transition-colors"
+              >
+                {savingWebhookEnv === 'sandbox' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Guardar'}
+              </button>
+            </div>
+          </div>
+
+          {/* Production Webhook Secret */}
+          <div className="p-4 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                Signing Secret (Production)
+              </span>
+              <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800">
+                zn_whsec_...
+              </span>
+            </div>
+
+            <div className="text-xs">
+              {productionSetting?.webhook_secret_prefix ? (
+                <div className="flex items-center gap-2 p-2.5 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 font-mono text-xs text-slate-700 dark:text-slate-300">
+                  <Lock className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  <span>{productionSetting.webhook_secret_prefix}••••••••{productionSetting.webhook_secret_last4}</span>
+                </div>
+              ) : (
+                <div className="p-2.5 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 italic text-xs">
+                  Ningún secreto de webhook configurado en Vault
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                type="password"
+                placeholder="zn_whsec_..."
+                value={productionWebhookSecretInput}
+                onChange={(e) => setProductionWebhookSecretInput(e.target.value)}
+                className="flex-1 px-3 py-1.5 text-xs font-mono rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                disabled={isBusy}
+              />
+              <button
+                type="button"
+                onClick={() => handleSaveWebhookSecret('production')}
+                disabled={isBusy || !productionWebhookSecretInput.trim()}
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 transition-colors"
+              >
+                {savingWebhookEnv === 'production' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {webhookValidationErr && (
+          <p className="text-xs font-medium text-rose-600 dark:text-rose-400">
+            {webhookValidationErr}
+          </p>
+        )}
+
+        <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-xl text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2.5">
+          <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <p>
+            <strong>Aviso de Seguridad:</strong> Cada webhook enviado por Zinc está firmado mediante HMAC-SHA256. El secreto vive exclusivamente en Supabase Vault. Si un secreto estuvo visible en capturas o logs externos, debe rotarse en el panel de Zinc antes de ingresar el nuevo valor aquí.
           </p>
         </div>
       </div>

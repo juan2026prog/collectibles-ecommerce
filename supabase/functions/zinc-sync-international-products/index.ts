@@ -12,9 +12,17 @@ serve(async (req) => {
   try {
     await verifyAdmin(req);
     
-    const ZINC_API_KEY = Deno.env.get("ZINC_API_KEY");
-    if (!ZINC_API_KEY) {
-      throw new Error("ZINC_API_KEY no configurada");
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
+
+    const { resolveZincApiKey } = await import("../_shared/zinc/index.ts");
+    let ZINC_API_KEY = "";
+    try {
+      ZINC_API_KEY = await resolveZincApiKey(supabase, "production");
+    } catch {
+      ZINC_API_KEY = await resolveZincApiKey(supabase, "sandbox");
     }
 
     const { product_ids } = await req.json();
@@ -22,11 +30,6 @@ serve(async (req) => {
     if (!Array.isArray(product_ids) || product_ids.length === 0) {
       throw new Error("No hay productos seleccionados para sincronizar");
     }
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
 
     const { data: settings } = await supabase.from('international_sync_settings').select('*').eq('id', 1).single();
     if (!settings) throw new Error("Configuración internacional no encontrada");

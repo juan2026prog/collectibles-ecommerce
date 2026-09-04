@@ -10,10 +10,18 @@ serve(async (req) => {
 
   try {
     const user = await verifyAdmin(req);
-    
-    const ZINC_API_KEY = Deno.env.get("ZINC_API_KEY");
-    if (!ZINC_API_KEY) {
-      throw new Error("ZINC_API_KEY no configurada");
+
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
+
+    const { resolveZincApiKey } = await import("../_shared/zinc/index.ts");
+    let ZINC_API_KEY = "";
+    try {
+      ZINC_API_KEY = await resolveZincApiKey(supabase, "production");
+    } catch {
+      ZINC_API_KEY = await resolveZincApiKey(supabase, "sandbox");
     }
 
     const { candidate_ids } = await req.json();
@@ -21,11 +29,6 @@ serve(async (req) => {
     if (!candidate_ids || !Array.isArray(candidate_ids) || candidate_ids.length === 0) {
       throw new Error("Faltan candidate_ids en el body");
     }
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
 
     const [{ data: candidates, error: dbError }, { data: catMappings }, { data: brandMappings }, { data: keywordMappings }] = await Promise.all([
       supabase.from('international_import_candidates').select('*').in('id', candidate_ids),

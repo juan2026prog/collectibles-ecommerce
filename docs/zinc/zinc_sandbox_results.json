@@ -1,0 +1,79 @@
+{
+  "timestamp": "2026-09-04T20:39:59.178Z",
+  "environment": "sandbox",
+  "official_docs_checked": "PASS",
+  "openapi_latest_checked": "PASS",
+  "auth_bearer_tested": "PASS",
+  "test_products_dynamic": true,
+  "scenarios": {
+    "invalid_address": {
+      "type": "synchronous_error",
+      "status": 400,
+      "code": null,
+      "passed": true,
+      "elapsed_ms": 756
+    },
+    "url_unreachable": {
+      "type": "synchronous_error",
+      "status": 400,
+      "code": null,
+      "passed": true,
+      "elapsed_ms": 207
+    },
+    "insufficient_funds": {
+      "type": "synchronous_error",
+      "status": 402,
+      "code": null,
+      "passed": true,
+      "elapsed_ms": 193
+    },
+    "success": {
+      "type": "success_lifecycle",
+      "status": 201,
+      "order_id": "081f4c67-bf3d-447d-ac77-34ee96c13c73",
+      "order_status": "pending",
+      "passed": true,
+      "elapsed_ms": 356
+    },
+    "price_exceeded": {
+      "type": "asynchronous_error",
+      "status": 201,
+      "order_id": "8314b67d-84a2-4b77-a6e6-4978a9faf80c",
+      "passed": true
+    },
+    "out_of_stock": {
+      "type": "asynchronous_error",
+      "status": 201,
+      "order_id": "daaa83fc-611f-43a1-9272-b86c8367aa69",
+      "passed": true
+    },
+    "invalid_variant": {
+      "type": "asynchronous_error",
+      "status": 201,
+      "order_id": "238b5fed-01d6-4dde-8ced-17cc2d131e41",
+      "passed": true
+    },
+    "shipping_unavailable": {
+      "type": "asynchronous_error",
+      "status": 201,
+      "order_id": "6e810dd3-71ed-4084-9b6b-ad2558b69507",
+      "passed": true
+    }
+  },
+  "idempotency_tested": true,
+  "production_hard_gate_verified": "PASS",
+  "real_production_orders": 0,
+  "production_enabled": false,
+  "webhook_secret_status": "ROTATED_AND_VERIFIED",
+  "webhook_tests": {
+    "missing_signature": "PASS",
+    "invalid_signature": "PASS",
+    "valid_signature_placed": "PASS",
+    "deduplication": "PASS",
+    "tracking_received": "PASS",
+    "delivered": "PASS",
+    "return_event_isolation": "PASS",
+    "database_persistence": "PASS"
+  },
+  "dynamic_products_count": 8
+}
