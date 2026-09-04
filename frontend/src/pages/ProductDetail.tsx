@@ -236,8 +236,9 @@ export default function ProductDetail() {
   const currentImgObj = images[selectedImage] || images[0];
   const displayImage = resolveImage(currentImgObj?.url || product.image_url, 'detail');
 
-  const rawStock = selectedVariant ? (selectedVariant.stock ?? product.stock) : product.stock;
-  const stock = typeof rawStock === 'number' && !isNaN(rawStock) ? rawStock : 99;
+  const stock = selectedVariant
+    ? (selectedVariant.stock ?? product.stock)
+    : product.stock;
   const isIntl = product.source_provider === 'zinc' || Boolean(product.is_international);
 
   const getStockInfo = () => {
