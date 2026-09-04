@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { MessageCircle, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useCartContext } from '../contexts/CartContext';
 
 /**
  * WhatsApp Floating Action Button
@@ -14,6 +16,8 @@ export default function WhatsAppFAB() {
   const [url, setUrl] = useState('');
   const [shown, setShown] = useState(true);
   const [pulsing, setPulsing] = useState(true);
+  const location = useLocation();
+  const { isDrawerOpen } = useCartContext();
 
   useEffect(() => {
     supabase
@@ -43,10 +47,15 @@ export default function WhatsAppFAB() {
     return () => clearTimeout(t);
   }, []);
 
-  if (!url || !shown) return null;
+  const isCheckout = location.pathname.startsWith('/checkout');
+  const isPDP = location.pathname.startsWith('/producto/') || location.pathname.startsWith('/product/');
+
+  if (!url || !shown || isCheckout || isDrawerOpen) return null;
 
   return (
-    <div className="fixed bottom-6 right-4 md:right-6 z-40 flex flex-col items-end gap-3 group/fab pb-[env(safe-area-inset-bottom,0px)]">
+    <div className={`fixed right-4 md:right-6 z-40 flex flex-col items-end gap-3 group/fab pb-[env(safe-area-inset-bottom,0px)] transition-all duration-300 ${
+      isPDP ? 'bottom-24 lg:bottom-6' : 'bottom-6'
+    }`}>
       {/* Tooltip bubble */}
       <div className="bg-white text-gray-800 text-xs md:text-sm font-semibold px-3 py-1.5 md:px-4 md:py-2 shadow-xl border border-white/10 opacity-0 translate-y-2 group-hover/fab:opacity-100 group-hover/fab:translate-y-0 transition-all duration-200 whitespace-nowrap">
         💬 ¿Necesitás ayuda?
@@ -57,10 +66,12 @@ export default function WhatsAppFAB() {
         {/* Dismiss button */}
         <button
           onClick={() => setShown(false)}
-          className="w-6 h-6 md:w-7 md:h-7 bg-white/80 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center text-slate-500 hover:text-gray-700 hover:bg-white transition-all opacity-0 group-hover/fab:opacity-100"
+          className="relative min-w-[44px] min-h-[44px] w-11 h-11 flex items-center justify-center p-0 text-slate-500 hover:text-gray-700 transition-all opacity-0 group-hover/fab:opacity-100 cursor-pointer"
           aria-label="Cerrar WhatsApp"
         >
-          <X className="w-3.5 h-3.5" />
+          <span className="w-6 h-6 md:w-7 md:h-7 bg-white/80 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center hover:bg-white transition-all">
+            <X className="w-3.5 h-3.5" />
+          </span>
         </button>
 
         {/* Main button */}

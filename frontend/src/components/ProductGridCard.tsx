@@ -98,19 +98,19 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
   const isCollectibles = !product.vendor_id;
 
   return (
-    <article className={`grid-card group relative p-3 bg-[#0a0f1d]/40 rounded-[16px] transition-all duration-200 ${
+    <article className={`grid-card group relative p-2.5 sm:p-3 bg-[#0a0f1d]/40 rounded-[16px] transition-all duration-200 ${
       isInternational
-        ? 'border-2 border-sky-500/40 hover:border-sky-400 shadow-lg shadow-sky-950/20'
+        ? 'border border-sky-500/40 md:border-2 hover:border-sky-400 shadow-lg shadow-sky-950/20'
         : isCollectibles 
-          ? 'border-2 border-[#f00856]' 
-          : 'border-2 border-white/5 hover:border-white/20'
+          ? 'border border-[#f00856]/35 md:border-2 md:border-[#f00856]/70 hover:border-[#f00856] shadow-sm shadow-[#f00856]/10' 
+          : 'border border-white/5 hover:border-white/20'
     }`}>
       {/* 1. IMAGEN */}
       <div className="relative">
         <Link 
           to={`/producto/${product.slug}`} 
           onClick={handleCardClick}
-          className={`flex bg-white w-full aspect-square overflow-hidden p-5 items-center justify-center border rounded-xl transition-colors ${
+          className={`flex bg-white w-full aspect-square overflow-hidden p-3 sm:p-5 items-center justify-center border rounded-xl transition-colors ${
             isInternational 
               ? 'border-sky-500/10 group-hover:border-sky-500/30' 
               : 'border-white/5 group-hover:border-[#f00856]/20'
@@ -133,7 +133,7 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
             e.stopPropagation();
             toggleWishlist(product);
           }}
-          className="absolute top-1 left-1 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-[#05070f]/60 backdrop-blur-md border border-white/10 hover:bg-[#05070f]/80 transition-all z-30 group"
+          className="absolute top-1 left-1 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full bg-[#05070f]/60 backdrop-blur-md border border-white/10 hover:bg-[#05070f]/80 transition-all z-30 group cursor-pointer"
           title={isInWishlist(product.id) ? "Quitar de favoritos" : "Agregar a favoritos"}
           aria-label={isInWishlist(product.id) ? "Quitar de favoritos" : "Agregar a favoritos"}
         >
@@ -145,9 +145,9 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
           const groupBadges = getAllProductGroupBadges(product);
           if (groupBadges.length === 0) return null;
           return (
-            <div className="absolute top-12 left-2 z-20 flex flex-col gap-1 pointer-events-none drop-shadow-md select-none">
+            <div className="absolute top-11 left-1.5 z-20 flex flex-col gap-1 pointer-events-none drop-shadow-md select-none scale-90 md:scale-100 origin-top-left">
               {groupBadges.map((gb, idx) => (
-                <div key={`${gb.url}-${idx}`} className="w-10 h-10 md:w-12 md:h-12">
+                <div key={`${gb.url}-${idx}`} className="w-9 h-9 md:w-12 md:h-12">
                   <img
                     src={gb.url}
                     alt={gb.alt}
@@ -205,15 +205,17 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
       </div>
 
       {/* 2. INFORMACIÓN */}
-      <div className="pt-2.5">
-        <div className="flex items-center gap-1 text-[10px] text-yellow-400 mb-1">
-          <div className="flex">
-            {[...Array(5)].map((_, i) => (
-               <Star key={i} className={`w-3 h-3 ${i < Math.round(product.rating || 5) ? 'fill-yellow-400 text-yellow-400' : 'fill-transparent text-slate-600'}`} />
-            ))}
+      <div className="pt-2">
+        {reviewsCount > 0 && (
+          <div className="flex items-center gap-1 text-[10px] text-yellow-400 mb-1">
+            <div className="flex">
+              {[...Array(5)].map((_, i) => (
+                 <Star key={i} className={`w-3 h-3 ${i < Math.round(product.rating || 0) ? 'fill-yellow-400 text-yellow-400' : 'fill-transparent text-slate-600'}`} />
+              ))}
+            </div>
+            <span className="text-slate-400">({reviewsCount})</span>
           </div>
-          <span className="text-slate-500">({reviewsCount})</span>
-        </div>
+        )}
         
         {isInternational && (
           <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-sky-950/60 border border-sky-500/40 text-[9px] text-sky-300 font-black tracking-wider uppercase mb-1.5 shadow-sm">

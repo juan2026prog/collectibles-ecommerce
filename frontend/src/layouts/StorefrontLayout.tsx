@@ -485,13 +485,13 @@ export default function StorefrontLayout() {
           location.pathname === '/' ? 'bg-[#05070f]/80 backdrop-blur-xl' : 'bg-[#05070f] shadow-lg shadow-black/40'
         }`}
       >
-        <div className="max-w-[1500px] mx-auto px-6 w-full h-20 md:h-24 flex items-center justify-between gap-6">
+        <div className="max-w-[1500px] mx-auto px-4 sm:px-6 w-full h-14 md:h-20 lg:h-24 flex items-center justify-between gap-3 md:gap-6">
           {/* LOGO */}
-          <Link to="/" className="shrink-0 group">
+          <Link to="/" className="shrink-0 group flex items-center">
             <img 
               src="/logo-horizontal.png" 
               alt="Collectibles" 
-              className="h-10 md:h-12 object-contain transition-transform group-hover:scale-105" 
+              className="h-7 sm:h-8 md:h-10 lg:h-12 object-contain transition-transform group-hover:scale-105" 
             />
           </Link>
 
@@ -537,27 +537,38 @@ export default function StorefrontLayout() {
             ))}
           </nav>
 
-
           {/* SEARCH BOX (DESKTOP) */}
           <div className="hidden lg:flex flex-1 max-w-sm relative">
-             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-             <input 
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+            <input 
               type="text" 
-              placeholder="Buscar figuras, sellers, drops..."
-              className="w-full bg-white/5 border border-white/10 rounded-full pl-11 pr-5 py-3 text-sm font-medium focus:border-[#f00856] focus:ring-1 focus:ring-[#f00856] transition-all outline-none"
-              onKeyDown={e => e.key === 'Enter' && navigate(`/shop?q=${(e.target as HTMLInputElement).value}`)}
-             />
+              placeholder="Buscar figuras, marcas, categorías..."
+              className="w-full bg-white/5 border border-white/10 rounded-full pl-11 pr-5 py-2.5 text-xs font-medium focus:border-[#f00856] focus:ring-1 focus:ring-[#f00856] transition-all outline-none"
+              onKeyDown={e => e.key === 'Enter' && runSearch((e.target as HTMLInputElement).value)}
+            />
           </div>
 
           {/* ACTIONS */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <div className="hidden xl:block">
               <CurrencySelector />
             </div>
+            
+            {/* Quick search link on mobile header */}
+            <Link
+              to="/shop"
+              className="xl:hidden w-11 h-11 flex items-center justify-center rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-slate-300 hover:text-white"
+              title="Buscar productos"
+              aria-label="Buscar productos"
+            >
+              <Search className="w-4 h-4" />
+            </Link>
+
             <Link 
               to="/wishlist" 
-              className="w-11 h-11 hidden md:flex items-center justify-center rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors relative group"
+              className="w-11 h-11 hidden sm:flex items-center justify-center rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors relative group"
               title="Favoritos"
+              aria-label="Favoritos"
             >
               <Heart className={`w-4 h-4 transition-colors ${wishlist.length > 0 ? 'text-[#f00856] fill-[#f00856]' : 'text-slate-300 group-hover:text-white'}`} />
               {wishlist.length > 0 && (
@@ -570,6 +581,7 @@ export default function StorefrontLayout() {
               <button 
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
                 className="w-11 h-11 flex items-center justify-center rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                aria-label="Menú de usuario"
               >
                 <User className="w-4 h-4" />
               </button>
@@ -613,8 +625,9 @@ export default function StorefrontLayout() {
             </div>
             <button 
               onClick={() => setIsDrawerOpen(true)}
-              className="w-11 h-11 flex items-center justify-center rounded-full bg-[#f00856] text-white shadow-lg shadow-[#f00856]/30 relative group transition-transform hover:scale-105 active:scale-95"
+              className="w-11 h-11 flex items-center justify-center rounded-full bg-[#f00856] text-white shadow-lg shadow-[#f00856]/30 relative group transition-transform hover:scale-105 active:scale-95 cursor-pointer"
               title="Ver Carrito"
+              aria-label="Ver Carrito"
             >
               <ShoppingCart className="w-4 h-4" />
               {cartCount > 0 && (
@@ -625,7 +638,8 @@ export default function StorefrontLayout() {
             </button>
             <button 
               onClick={() => setMobileMenuOpen(true)}
-              className="xl:hidden w-11 h-11 flex items-center justify-center rounded-full bg-white/5 border border-white/10"
+              className="xl:hidden w-11 h-11 flex items-center justify-center rounded-full bg-white/5 border border-white/10 text-white"
+              aria-label="Abrir menú"
             >
               <Menu className="w-5 h-5" />
             </button>
@@ -633,9 +647,9 @@ export default function StorefrontLayout() {
         </div>
       </header>
 
-      {/* ═══ MOBILE HOME SEARCH BAR VISIBLE ═══ */}
+      {/* ═══ MOBILE HOME SEARCH BAR (NATURAL SCROLL, NOT STICKY) ═══ */}
       {isHome && (
-        <div className="lg:hidden bg-[#05070f] border-b border-white/10 px-4 py-2.5 sticky top-20 z-[95]">
+        <div className="lg:hidden bg-[#05070f] border-b border-white/10 px-4 py-2 relative z-[20]">
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -652,7 +666,7 @@ export default function StorefrontLayout() {
               type="text"
               placeholder="🔍 Buscar Funko, Pokémon, Marvel, Hot Wheels..."
               defaultValue={searchQuery}
-              className="w-full bg-white/5 border border-white/15 rounded-full pl-11 pr-4 py-2.5 text-xs font-semibold text-white placeholder-slate-400 focus:border-[#f00856] focus:ring-1 focus:ring-[#f00856] transition-all outline-none"
+              className="w-full h-11 bg-white/5 border border-white/15 rounded-full pl-11 pr-4 py-2 text-xs font-semibold text-white placeholder-slate-400 focus:border-[#f00856] focus:ring-1 focus:ring-[#f00856] transition-all outline-none"
             />
           </form>
         </div>
@@ -662,37 +676,137 @@ export default function StorefrontLayout() {
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-[200] xl:hidden">
            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
-           <div className="absolute inset-y-0 left-0 w-[85%] max-w-sm bg-[#05070f] p-8 flex flex-col animate-slide-right">
-              <div className="flex items-center justify-between mb-10">
-                 <img src="/logo-horizontal.png" alt="Collectibles" className="h-8 object-contain" />
-                 <button onClick={() => setMobileMenuOpen(false)}><X className="w-6 h-6 text-white" /></button>
-              </div>
-              
-              <div className="mb-6 flex flex-col gap-4">
-                 <CurrencySelector />
-                 
-                 {/* Mobile Menu Search */}
-                 <div className="relative">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                    <input 
-                      type="text" 
-                      placeholder="Buscar figuras, brands, drops..."
-                      className="w-full bg-white/5 border border-white/10 rounded-full pl-11 pr-5 py-2.5 text-sm font-medium focus:border-[#f00856] focus:ring-1 focus:ring-[#f00856] transition-all outline-none text-white"
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') {
-                          runSearch(searchQuery);
-                        }
-                      }}
-                    />
-                 </div>
+           <div className="absolute inset-y-0 left-0 w-[85%] max-w-sm bg-[#05070f] p-6 sm:p-8 flex flex-col animate-slide-right overflow-y-auto">
+              {/* Drawer Header */}
+              <div className="flex items-center justify-between mb-6 shrink-0">
+                 <img src="/logo-horizontal.png" alt="Collectibles" className="h-7 sm:h-8 object-contain" />
+                 <button 
+                   onClick={() => setMobileMenuOpen(false)}
+                   className="w-11 h-11 flex items-center justify-center rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                   aria-label="Cerrar menú"
+                 >
+                   <X className="w-5 h-5 text-white" />
+                 </button>
               </div>
 
-              {/* Mobile Menu User Status */}
-              <div className="mb-6 border-b border-white/5 pb-6">
+              {/* 1. PRIMARY NAVIGATION (PROMINENT AT TOP) */}
+              <nav className="flex flex-col gap-2 overflow-y-auto flex-1 no-scrollbar pb-4">
+                {NAV_LINKS.map(link => (
+                  <div key={link.name} className="flex flex-col gap-1 border-b border-white/5 pb-2 last:border-0 last:pb-0">
+                    <div className="flex items-center justify-between min-h-[44px]">
+                      <Link 
+                       to={link.href} 
+                       className="text-xl sm:text-2xl font-black text-white hover:text-[#f00856] transition-colors flex-grow py-2"
+                       onClick={() => setMobileMenuOpen(false)}
+                      >
+                       {link.name}
+                      </Link>
+                      {((link.subItems && link.subItems.length > 0) || link.hasMega) && (
+                        <button 
+                          onClick={() => setExpandedMobileGroup(expandedMobileGroup === link.name ? null : link.name)}
+                          className="w-11 h-11 flex items-center justify-center rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all active:scale-95 ml-2"
+                          aria-label={`Desplegar ${link.name}`}
+                        >
+                          <ChevronDown 
+                            className={`w-4 h-4 text-slate-400 transition-transform duration-300 ${
+                              expandedMobileGroup === link.name ? 'rotate-180 text-white' : ''
+                            }`} 
+                          />
+                        </button>
+                      )}
+                    </div>
+                    {((link.subItems && link.subItems.length > 0) || link.hasMega) && expandedMobileGroup === link.name && (
+                      <div className="pl-4 border-l border-[#f00856]/40 flex flex-col gap-2.5 mt-1 mb-2 animate-fade-in">
+                        {link.subItems && link.subItems.map((sub: any) => (
+                          <Link 
+                            key={sub.label} 
+                            to={sub.url} 
+                            className="text-base font-bold text-slate-300 hover:text-white transition-colors py-1 min-h-[36px] flex items-center"
+                            onClick={() => setMobileMenuOpen(false)}
+                          >
+                            {sub.label}
+                          </Link>
+                        ))}
+                        {link.hasMega && link.megaType === 'categories' && topLevel.map((cat: any) => (
+                          <Link 
+                            key={cat.id} 
+                            to={`/categoria/${cat.slug}`} 
+                            className="text-base font-bold text-slate-300 hover:text-white transition-colors py-1 min-h-[36px] flex items-center"
+                            onClick={() => setMobileMenuOpen(false)}
+                          >
+                            {cat.name}
+                          </Link>
+                        ))}
+                        {link.hasMega && link.megaType === 'brands' && allBrands.slice(0, 8).map((b: any) => (
+                          <Link 
+                            key={b.id} 
+                            to={`/marca/${b.slug}`} 
+                            className="text-base font-bold text-slate-300 hover:text-white transition-colors py-1 min-h-[36px] flex items-center"
+                            onClick={() => setMobileMenuOpen(false)}
+                          >
+                            {b.name}
+                          </Link>
+                        ))}
+                        {link.hasMega && link.megaType === 'licenses' && activeLicenses.slice(0, 10).map((l: any) => (
+                          <Link 
+                            key={l.id} 
+                            to={`/licencias/${l.slug}`} 
+                            className="text-base font-bold text-slate-300 hover:text-white transition-colors py-1 min-h-[36px] flex items-center"
+                            onClick={() => setMobileMenuOpen(false)}
+                          >
+                            {l.name}
+                          </Link>
+                        ))}
+                        {link.hasMega && link.megaType === 'licenses' && (
+                          <Link 
+                            to="/licencias" 
+                            className="text-sm font-black text-[#f00856] py-1 underline min-h-[36px] flex items-center"
+                            onClick={() => setMobileMenuOpen(false)}
+                          >
+                            Ver todas las licencias →
+                          </Link>
+                        )}
+                        {link.hasMega && link.megaType === 'themes' && activeThemes.slice(0, 7).map((t: any) => (
+                          <Link 
+                            key={t.id} 
+                            to={`/themes/${t.slug}`} 
+                            className="text-base font-bold text-slate-300 hover:text-white transition-colors py-1 min-h-[36px] flex items-center"
+                            onClick={() => setMobileMenuOpen(false)}
+                          >
+                            {t.name}
+                          </Link>
+                        ))}
+                        {link.hasMega && link.megaType === 'themes' && (
+                          <Link 
+                            to="/themes" 
+                            className="text-sm font-black text-[#f00856] py-1 underline min-h-[36px] flex items-center"
+                            onClick={() => setMobileMenuOpen(false)}
+                          >
+                            Ver todos los themes →
+                          </Link>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                 {/* Help / Contact */}
+                 <div className="mt-4 pt-4 border-t border-white/10">
+                    <div className="text-[10px] text-[#f00856] font-black uppercase tracking-[0.2em] mb-2">Soporte y contacto</div>
+                    <Link to="/centro-ayuda" className="flex items-center gap-3 text-slate-400 hover:text-white font-bold py-1.5" onClick={() => setMobileMenuOpen(false)}>Centro de ayuda</Link>
+                    <Link to="/contact" className="flex items-center gap-3 text-slate-400 hover:text-white font-bold py-1.5" onClick={() => setMobileMenuOpen(false)}>Contactanos</Link>
+                 </div>
+              </nav>
+
+              {/* 2. SECONDARY ZONE: ACCOUNT & CURRENCY (BELOW NAV) */}
+              <div className="shrink-0 pt-4 border-t border-white/10 space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Moneda</span>
+                  <CurrencySelector />
+                </div>
+
                 {user ? (
-                  <div className="space-y-3">
+                  <div className="space-y-3 bg-white/[0.02] p-3 rounded-2xl border border-white/5">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-[#f00856] flex items-center justify-center font-black text-white text-sm shadow-md shrink-0">
                         {profile?.first_name ? profile.first_name[0].toUpperCase() : user.email?.[0].toUpperCase()}
@@ -708,7 +822,7 @@ export default function StorefrontLayout() {
                       <Link 
                         to="/account" 
                         onClick={() => setMobileMenuOpen(false)}
-                        className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/5 border border-white/5 text-[10px] font-black uppercase text-slate-300 hover:text-white transition-colors"
+                        className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-white/5 border border-white/5 text-xs font-bold text-slate-300 hover:text-white transition-colors min-h-[44px]"
                       >
                         <Package className="w-3.5 h-3.5" /> Mis Pedidos
                       </Link>
@@ -716,7 +830,7 @@ export default function StorefrontLayout() {
                         <Link 
                           to="/admin" 
                           onClick={() => setMobileMenuOpen(false)}
-                          className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/5 border border-white/5 text-[10px] font-black uppercase text-slate-300 hover:text-white transition-colors"
+                          className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-white/5 border border-white/5 text-xs font-bold text-slate-300 hover:text-white transition-colors min-h-[44px]"
                         >
                           <LayoutDashboard className="w-3.5 h-3.5" /> Admin
                         </Link>
@@ -725,14 +839,14 @@ export default function StorefrontLayout() {
                         <Link 
                           to="/vendor" 
                           onClick={() => setMobileMenuOpen(false)}
-                          className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/5 border border-white/5 text-[10px] font-black uppercase text-slate-300 hover:text-white transition-colors"
+                          className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-white/5 border border-white/5 text-xs font-bold text-slate-300 hover:text-white transition-colors min-h-[44px]"
                         >
                           <Store className="w-3.5 h-3.5" /> Vendedor
                         </Link>
                       )}
                       <button 
                         onClick={() => { handleSignOut(); setMobileMenuOpen(false); }}
-                        className="col-span-2 flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-[10px] font-black uppercase text-red-500 transition-colors"
+                        className="col-span-2 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-xs font-bold uppercase text-red-500 transition-colors min-h-[44px]"
                       >
                         <LogOut className="w-3.5 h-3.5" /> Cerrar sesión
                       </button>
@@ -743,128 +857,23 @@ export default function StorefrontLayout() {
                     <Link 
                       to="/login" 
                       onClick={() => setMobileMenuOpen(false)}
-                      className="btn-primary py-2.5 rounded-xl flex items-center justify-center gap-2 text-xs font-black uppercase tracking-wider"
+                      className="btn-primary min-h-[44px] rounded-xl flex items-center justify-center gap-2 text-xs font-black uppercase tracking-wider"
                     >
                       <LogIn className="w-4 h-4" /> Iniciar Sesión
                     </Link>
                     <Link 
                       to="/login?signup=true" 
                       onClick={() => setMobileMenuOpen(false)}
-                      className="btn-secondary py-2.5 rounded-xl flex items-center justify-center gap-2 text-xs font-black uppercase tracking-wider"
+                      className="btn-secondary min-h-[44px] rounded-xl flex items-center justify-center gap-2 text-xs font-black uppercase tracking-wider"
                     >
                       Crear Cuenta
                     </Link>
                   </div>
                 )}
               </div>
-              
-              <nav className="flex flex-col gap-4 overflow-y-auto flex-1 no-scrollbar">
-                {NAV_LINKS.map(link => (
-                  <div key={link.name} className="flex flex-col gap-2 border-b border-white/5 pb-2 last:border-0 last:pb-0">
-                    <div className="flex items-center justify-between">
-                      <Link 
-                       to={link.href} 
-                       className="text-2xl font-black text-white hover:text-[#f00856] transition-colors flex-grow py-1"
-                       onClick={() => setMobileMenuOpen(false)}
-                      >
-                       {link.name}
-                      </Link>
-                      {((link.subItems && link.subItems.length > 0) || link.hasMega) && (
-                        <button 
-                          onClick={() => setExpandedMobileGroup(expandedMobileGroup === link.name ? null : link.name)}
-                          className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-all hover:scale-105 active:scale-95 ml-2"
-                        >
-                          <ChevronDown 
-                            className={`w-4 h-4 text-slate-400 transition-transform duration-300 ${
-                              expandedMobileGroup === link.name ? 'rotate-180 text-white' : ''
-                            }`} 
-                          />
-                        </button>
-                      )}
-                    </div>
-                    {((link.subItems && link.subItems.length > 0) || link.hasMega) && expandedMobileGroup === link.name && (
-                      <div className="pl-4 border-l border-[#f00856]/40 flex flex-col gap-3.5 mt-2 mb-2 animate-fade-in">
-                        {link.subItems && link.subItems.map((sub: any) => (
-                          <Link 
-                            key={sub.label} 
-                            to={sub.url} 
-                            className="text-lg font-bold text-slate-400 hover:text-white transition-colors py-0.5"
-                            onClick={() => setMobileMenuOpen(false)}
-                          >
-                            {sub.label}
-                          </Link>
-                        ))}
-                        {link.hasMega && link.megaType === 'categories' && topLevel.map((cat: any) => (
-                          <Link 
-                            key={cat.id} 
-                            to={`/categoria/${cat.slug}`} 
-                            className="text-lg font-bold text-slate-400 hover:text-white transition-colors py-0.5"
-                            onClick={() => setMobileMenuOpen(false)}
-                          >
-                            {cat.name}
-                          </Link>
-                        ))}
-                        {link.hasMega && link.megaType === 'brands' && allBrands.slice(0, 8).map((b: any) => (
-                          <Link 
-                            key={b.id} 
-                            to={`/marca/${b.slug}`} 
-                            className="text-lg font-bold text-slate-400 hover:text-white transition-colors py-0.5"
-                            onClick={() => setMobileMenuOpen(false)}
-                          >
-                            {b.name}
-                          </Link>
-                        ))}
-                        {link.hasMega && link.megaType === 'licenses' && activeLicenses.slice(0, 10).map((l: any) => (
-                          <Link 
-                            key={l.id} 
-                            to={`/licencias/${l.slug}`} 
-                            className="text-lg font-bold text-slate-400 hover:text-white transition-colors py-0.5"
-                            onClick={() => setMobileMenuOpen(false)}
-                          >
-                            {l.name}
-                          </Link>
-                        ))}
-                        {link.hasMega && link.megaType === 'licenses' && (
-                          <Link 
-                            to="/licencias" 
-                            className="text-base font-black text-[#f00856] py-1 underline"
-                            onClick={() => setMobileMenuOpen(false)}
-                          >
-                            Ver todas las licencias →
-                          </Link>
-                        )}
-                        {link.hasMega && link.megaType === 'themes' && activeThemes.slice(0, 7).map((t: any) => (
-                          <Link 
-                            key={t.id} 
-                            to={`/themes/${t.slug}`} 
-                            className="text-lg font-bold text-slate-400 hover:text-white transition-colors py-0.5"
-                            onClick={() => setMobileMenuOpen(false)}
-                          >
-                            {t.name}
-                          </Link>
-                        ))}
-                        {link.hasMega && link.megaType === 'themes' && (
-                          <Link 
-                            to="/themes" 
-                            className="text-base font-black text-[#f00856] py-1 underline"
-                            onClick={() => setMobileMenuOpen(false)}
-                          >
-                            Ver todos los themes →
-                          </Link>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-                 <div className="mt-8 pt-8 border-t border-white/10">
-                    <div className="text-[10px] text-[#f00856] font-black uppercase tracking-[0.2em] mb-4">Soporte y contacto</div>
-                    <Link to="/centro-ayuda" className="flex items-center gap-3 text-slate-400 font-bold mb-4" onClick={() => setMobileMenuOpen(false)}>Centro de ayuda</Link>
-                    <Link to="/contact" className="flex items-center gap-3 text-slate-400 font-bold" onClick={() => setMobileMenuOpen(false)}>Contactanos</Link>
-                 </div>
-              </nav>
 
               {activeSocials.length > 0 && (
-                <div className="mt-auto pt-8 border-t border-white/10">
+                <div className="shrink-0 pt-4 border-t border-white/10 mt-3">
                    <div className="flex items-center gap-4">
                       {activeSocials.map(social => {
                         const Icon = social.Icon;
@@ -876,7 +885,8 @@ export default function StorefrontLayout() {
                             target="_blank" 
                             rel="noopener noreferrer" 
                             onClick={() => trackContact(generateMetaEventId(), { contact_method: social.key })}
-                            className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white hover:bg-[#f00856] transition-all"
+                            className="w-11 h-11 rounded-full bg-white/5 flex items-center justify-center text-white hover:bg-[#f00856] transition-all"
+                            aria-label={`Visitar ${social.key}`}
                           >
                             <Icon />
                           </a>

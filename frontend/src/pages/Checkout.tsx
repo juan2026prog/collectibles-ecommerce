@@ -2882,7 +2882,7 @@ export default function Checkout() {
 
       {/* ═══ SUGGESTIONS GALLERY ═══ */}
       {suggestions.length > 0 && (
-        <div className="mb-8 relative group">
+        <div className="hidden lg:block mb-8 relative group">
           <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300 mb-4 px-1 flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-primary-500 animate-pulse" />
             Sugerencias para tu compra
