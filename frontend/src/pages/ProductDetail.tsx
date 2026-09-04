@@ -102,13 +102,18 @@ export default function ProductDetail() {
     if (!product) return;
     const vars = product.variants && product.variants.length > 0 ? product.variants : [];
     const v = vars[selectedVariantIdx] || null;
-    const resolvedStock = resolveProductInventory(product, v).availableQuantity;
-    if (resolvedStock <= 0) {
+    const resolution = resolveProductInventory(product, v);
+    const isIntl = product.source_provider === 'zinc' || Boolean(product.is_international);
+    const maxQty = resolution.availableQuantity !== null 
+      ? resolution.availableQuantity 
+      : (resolution.isAvailable && isIntl ? 1 : 0);
+
+    if (!resolution.isAvailable || maxQty <= 0) {
       if (quantity !== 0) setQuantity(0);
     } else if (quantity === 0) {
       setQuantity(1);
-    } else if (quantity > resolvedStock) {
-      setQuantity(resolvedStock);
+    } else if (quantity > maxQty) {
+      setQuantity(maxQty);
     }
   }, [product, selectedVariantIdx, quantity]);
 
@@ -204,17 +209,18 @@ export default function ProductDetail() {
     );
   }
 
-  const bbWinner = buyBox?.winner;
+  const variants = product.variants && product.variants.length > 0 ? product.variants : [];
+  const selectedVariant = variants[selectedVariantIdx] || null;
+
+  const currentVariantBuyBox = selectedVariant ? (buyBox as any)?.[selectedVariant.id] : null;
+  const bbWinner = currentVariantBuyBox?.winner || (buyBox as any)?.winner || (buyBox ? Object.values(buyBox as any)[0] as any : null)?.winner;
   const winnerIsCollectibles = bbWinner 
     ? (bbWinner.vendor_id === 'platform' || !bbWinner.vendor_id)
     : (!product.vendor_id || product.vendor_id === 'platform');
   const winnerVendorName = winnerIsCollectibles 
     ? 'Collectibles.uy' 
-    : (bbWinner?.vendor_store_name || product.vendor_store?.store_name || product.vendor_store?.name || product.vendor?.company_name || product.vendor?.store_name || product.vendor?.name || 'Vendedor Oficial');
+    : (bbWinner?.vendor_store_name || bbWinner?.vendor_name || product.vendor_store?.store_name || product.vendor_store?.name || product.vendor?.company_name || product.vendor?.store_name || product.vendor?.name || 'Vendedor Oficial');
   const winnerVendorId = winnerIsCollectibles ? null : (bbWinner?.vendor_id || product.vendor_id);
-
-  const variants = product.variants && product.variants.length > 0 ? product.variants : [];
-  const selectedVariant = variants[selectedVariantIdx] || null;
 
   const rawBasePrice = Number(product.base_price || 0);
   const variantAdjustment = Number(selectedVariant?.price_adjustment || 0);
@@ -253,22 +259,40 @@ export default function ProductDetail() {
   const displayImage = resolveImage(currentImgObj?.url || product.image_url, 'detail');
 
   const inventoryResolution = resolveProductInventory(product, selectedVariant);
-  const stock = inventoryResolution.availableQuantity;
   const isIntl = product.source_provider === 'zinc' || Boolean(product.is_international);
   const isVendorActive = !product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined;
+  const isAvailable = inventoryResolution.isAvailable;
+  const isPurchasable = isAvailable && isVendorActive;
+  const maxPurchasableStock = inventoryResolution.availableQuantity !== null
+    ? inventoryResolution.availableQuantity
+    : (isAvailable && isIntl ? 1 : 0);
+  const stock = maxPurchasableStock;
 
   const getStockInfo = () => {
-    if (stock <= 0) return { text: 'Agotado', className: 'text-red-400 border-red-500/20 bg-red-500/10' };
+    if (!isVendorActive) {
+      return { text: 'Vendedor no disponible', className: 'text-amber-400 border-amber-500/20 bg-amber-500/10' };
+    }
+    if (!isAvailable) {
+      if (inventoryResolution.availableQuantity === 0) {
+        return { text: 'Agotado', className: 'text-red-400 border-red-500/20 bg-red-500/10' };
+      }
+      return { text: 'Disponibilidad no confirmada', className: 'text-slate-400 border-slate-500/20 bg-slate-500/10' };
+    }
     if (product.badge?.toLowerCase().includes('preventa') || product.title?.toLowerCase().includes('preventa')) {
       return { text: 'Preventa', className: 'text-amber-400 border-amber-500/20 bg-amber-500/10' };
     }
-    if (stock <= 3) return { text: `¡Últimas ${stock} unidades!`, className: 'text-amber-400 border-amber-500/20 bg-amber-500/10' };
+    if (inventoryResolution.availableQuantity === null) {
+      return { text: 'Disponible bajo pedido', className: 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' };
+    }
+    if (maxPurchasableStock <= 3) {
+      return { text: `¡Últimas ${maxPurchasableStock} unidades!`, className: 'text-amber-400 border-amber-500/20 bg-amber-500/10' };
+    }
     return { text: 'Disponible en stock', className: 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' };
   };
 
   const stockInfo = getStockInfo();
   const addToCart = (customVariant?: any, directCheckout = false) => {
-    if (stock <= 0 || !isVendorActive) return;
+    if (!isPurchasable) return;
     const targetVariant = customVariant || selectedVariant;
 
     if (isIntl) {
@@ -566,8 +590,11 @@ export default function ProductDetail() {
                     key={v.id}
                     onClick={() => {
                       setSelectedVariantIdx(idx);
-                      const nextStock = resolveProductInventory(product, v).availableQuantity;
-                      setQuantity(nextStock > 0 ? 1 : 0);
+                      const nextResolution = resolveProductInventory(product, v);
+                      const nextMax = nextResolution.availableQuantity !== null 
+                        ? nextResolution.availableQuantity 
+                        : (nextResolution.isAvailable && isIntl ? 1 : 0);
+                      setQuantity(nextMax > 0 ? 1 : 0);
                     }}
                     className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
                       selectedVariantIdx === idx
@@ -599,7 +626,7 @@ export default function ProductDetail() {
                   id="qty-minus"
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
                   className="w-11 h-full flex items-center justify-center hover:bg-white/10 transition-colors text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                  disabled={quantity <= 1 || stock <= 0 || !isVendorActive}
+                  disabled={quantity <= 1 || !isPurchasable}
                   aria-label="Disminuir cantidad"
                 >
                   <Minus className="w-4 h-4" />
@@ -607,9 +634,9 @@ export default function ProductDetail() {
                 <span id="qty-display" className="font-black text-base text-white">{quantity}</span>
                 <button
                   id="qty-plus"
-                  onClick={() => setQuantity(Math.min(stock, quantity + 1))}
+                  onClick={() => setQuantity(Math.min(maxPurchasableStock, quantity + 1))}
                   className="w-11 h-full flex items-center justify-center hover:bg-white/10 transition-colors text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                  disabled={quantity >= stock || stock <= 0 || !isVendorActive}
+                  disabled={quantity >= maxPurchasableStock || !isPurchasable}
                   aria-label="Aumentar cantidad"
                 >
                   <Plus className="w-4 h-4" />
@@ -621,26 +648,34 @@ export default function ProductDetail() {
             <button
               id="main-buy-now"
               onClick={() => addToCart(undefined, true)}
-              disabled={stock <= 0 || !isVendorActive}
+              disabled={!isPurchasable}
               className={`w-full py-3.5 sm:py-4.5 rounded-2xl flex items-center justify-center gap-2.5 text-sm sm:text-base uppercase tracking-widest font-black transition-all bg-[#f00856] text-white shadow-xl shadow-[#f00856]/30 hover:bg-[#d00749] hover:shadow-[#f00856]/50 hover:-translate-y-0.5 cursor-pointer min-h-[48px] ${
-                stock <= 0 || !isVendorActive ? 'opacity-50 cursor-not-allowed bg-slate-800 shadow-none' : ''
+                !isPurchasable ? 'opacity-50 cursor-not-allowed bg-slate-800 shadow-none' : ''
               }`}
             >
               <Zap className="w-4 h-4 sm:w-5 sm:h-5" />
-              {!isVendorActive ? 'Vendedor inactivo' : stock <= 0 ? 'Agotado' : 'Comprar ahora'}
+              {!isVendorActive 
+                ? 'Vendedor inactivo' 
+                : !isAvailable 
+                  ? (inventoryResolution.availableQuantity === 0 ? 'Agotado' : 'No disponible') 
+                  : 'Comprar ahora'}
             </button>
 
             {/* BOTÓN AGREGAR AL CARRITO (CTA SECUNDARIO) */}
             <button
               id="main-add-to-cart"
               onClick={() => addToCart()}
-              disabled={stock <= 0 || !isVendorActive}
+              disabled={!isPurchasable}
               className={`w-full py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl flex items-center justify-center gap-2 text-xs uppercase tracking-wider font-bold transition-all border border-white/20 text-slate-200 bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/40 cursor-pointer min-h-[44px] ${
-                stock <= 0 || !isVendorActive ? 'opacity-50 cursor-not-allowed border-white/5 text-slate-500' : ''
+                !isPurchasable ? 'opacity-50 cursor-not-allowed border-white/5 text-slate-500' : ''
               } ${addedToCart ? 'bg-green-500/20 border-green-500 text-green-400' : ''}`}
             >
               <ShoppingCart className="w-4 h-4" />
-              {stock <= 0 ? 'Sin stock' : addedToCart ? '✓ Agregado al carrito' : 'Agregar al carrito'}
+              {!isPurchasable 
+                ? (inventoryResolution.availableQuantity === 0 ? 'Sin stock' : 'No disponible')
+                : addedToCart 
+                  ? '✓ Agregado al carrito' 
+                  : 'Agregar al carrito'}
             </button>
 
             {/* FAVORITOS */}
@@ -972,7 +1007,7 @@ export default function ProductDetail() {
       </section>
 
       {/* MOBILE STICKY BUY BAR */}
-      {showStickyBar && stock > 0 && isVendorActive && (
+      {showStickyBar && isPurchasable && (
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#05070f]/95 backdrop-blur-md border-t border-white/10 px-4 py-2.5 pb-[calc(0.6rem+env(safe-area-inset-bottom,0px))] animate-slide-up lg:hidden shadow-[0_-10px_30px_rgba(0,0,0,0.8)]">
           <div className="flex items-center justify-between gap-3 max-w-7xl mx-auto">
             <div className="flex items-center gap-2.5 overflow-hidden min-w-0 flex-1">
@@ -992,7 +1027,7 @@ export default function ProductDetail() {
             <button
               id="sticky-buy-btn"
               onClick={() => addToCart(undefined, true)}
-              disabled={stock <= 0 || !isVendorActive}
+              disabled={!isPurchasable}
               className="btn-primary rounded-xl px-5 py-2.5 flex items-center justify-center gap-1.5 text-xs uppercase tracking-wider font-black transition-all shadow-lg shadow-[#f00856]/20 cursor-pointer shrink-0 min-h-[44px]"
             >
               <Zap className="w-4 h-4" />

@@ -379,7 +379,7 @@ export default function CartDrawer() {
                           >
                             <Minus className="w-3.5 h-3.5" />
                           </button>
-                          <span className="px-2.5 text-xs font-bold text-white">
+                          <span data-testid="cart-drawer-item-qty" className="px-2.5 text-xs font-bold text-white">
                             {item.quantity}
                           </span>
                           <button 
@@ -392,7 +392,7 @@ export default function CartDrawer() {
 
                         {/* Price */}
                         <div className="flex flex-col items-end">
-                          <span className={`text-sm font-black ${isItemIntl ? 'text-sky-400' : 'text-emerald-400'}`}>
+                          <span data-testid="cart-drawer-item-subtotal" className={`text-sm font-black ${isItemIntl ? 'text-sky-400' : 'text-emerald-400'}`}>
                             {isItemIntl ? formatUSD(displayPrice) : formatCurrencyPrice(displayPrice)}
                           </span>
                           {itemDiscount > 0 && (
