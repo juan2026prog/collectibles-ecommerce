@@ -386,7 +386,7 @@ export default function ProductDetail() {
       <AdminTechnicalPanel product={product} />
 
       {/* BREADCRUMB */}
-      <nav className="flex items-center text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 sm:mb-6 flex-wrap gap-2">
+      <nav className="flex items-center text-xs font-medium text-slate-400 mb-3 sm:mb-6 flex-wrap gap-2">
         <Link to="/" className="hover:text-white transition-colors">Inicio</Link>
         <span className="text-slate-600">/</span>
         {product.category && (
@@ -395,7 +395,7 @@ export default function ProductDetail() {
             <span className="text-slate-600">/</span>
           </>
         )}
-        <span className="text-white line-clamp-1">{product.title}</span>
+        <span className="text-slate-200 line-clamp-1">{product.title}</span>
       </nav>
 
       <div className="grid lg:grid-cols-[1.25fr_1fr] gap-6 lg:gap-14 items-start">
@@ -508,24 +508,24 @@ export default function ProductDetail() {
               ))}
             </div>
 
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black leading-[1.15] tracking-tight text-white mt-2">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold leading-[1.2] tracking-tight text-white mt-2">
               {product.title}
             </h1>
           </div>
 
           {/* 1. BLOQUE DE PRECIO (PRIORIDAD MÁXIMA - Requirement 1 & 13) */}
           <div className="pt-4 border-t border-white/10 space-y-3">
-            <div className="text-[10px] uppercase text-slate-400 font-black tracking-widest">Precio actual</div>
+            <div className="text-[11px] uppercase text-slate-400 font-bold tracking-wider">Precio actual</div>
             <div className="flex items-baseline gap-4 flex-wrap">
-              <span className={`text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight ${isIntl ? 'text-sky-400' : 'text-white'}`}>
+              <span className={`text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight ${isIntl ? 'text-sky-400' : 'text-white'}`}>
                 {isIntl ? formatUSD(product.final_price_usd || product.base_price || displayPrice) : formatCurrencyPrice(displayPrice)}
               </span>
               {hasDiscount && (
                 <div className="flex items-center gap-2">
-                  <span className="text-xl sm:text-2xl text-slate-500 line-through font-bold">
+                  <span className="text-lg sm:text-xl text-slate-500 line-through font-semibold">
                     {isIntl ? formatUSD(product.amazon_list_price_usd || displayOldPrice) : formatCurrencyPrice(displayOldPrice)}
                   </span>
-                  <span className="bg-[#f00856]/15 text-[#f00856] text-xs font-black px-2.5 py-1 rounded-md uppercase border border-[#f00856]/30">
+                  <span className="bg-[#f00856]/15 text-[#f00856] text-xs font-bold px-2.5 py-0.5 rounded-md uppercase border border-[#f00856]/30">
                     {discountPercent}% OFF
                   </span>
                 </div>
@@ -534,13 +534,13 @@ export default function ProductDetail() {
 
             {/* BADGES DE CONFIANZA Y ATRIBUTOS REALES (Requirement 13) */}
             <div className="flex items-center gap-2 flex-wrap pt-1">
-              <div className={`text-xs font-bold px-3 py-1 rounded-full border bg-white/[0.03] flex items-center gap-2 ${stockInfo.className}`}>
+              <div className={`text-xs font-semibold px-3 py-1 rounded-full border bg-white/[0.03] flex items-center gap-2 ${stockInfo.className}`}>
                 <span className="w-2 h-2 rounded-full bg-current shadow-[0_0_8px_currentColor]" />
                 {stockInfo.text}
               </div>
 
               {isIntl && (
-                <span className="text-xs font-bold px-3 py-1 rounded-full border border-sky-500/40 bg-sky-950/60 text-sky-300 flex items-center gap-1.5 shadow-sm">
+                <span className="text-xs font-semibold px-3 py-1 rounded-full border border-sky-500/40 bg-sky-950/60 text-sky-300 flex items-center gap-1.5 shadow-sm">
                   <span>🌎</span> Producto Internacional
                 </span>
               )}
@@ -552,27 +552,27 @@ export default function ProductDetail() {
                 />
               )}
               {product.brand?.name && (
-                <span className="text-xs font-bold px-3 py-1 rounded-full border border-white/10 bg-white/[0.03] text-slate-300">
+                <span className="text-xs font-medium px-3 py-1 rounded-full border border-white/10 bg-white/[0.03] text-slate-300">
                   Original · {product.brand.name}
                 </span>
               )}
               {product.condition && (
-                <span className="text-xs font-bold px-3 py-1 rounded-full border border-purple-500/30 bg-purple-500/10 text-purple-300">
+                <span className="text-xs font-medium px-3 py-1 rounded-full border border-purple-500/30 bg-purple-500/10 text-purple-300">
                   🏷️ {getConditionLabel(product.condition)}
                 </span>
               )}
 
               {selectedCurrency === 'ARS' && (
                 arShippingStatus.reasonCode === 'VENDOR_ARGENTINA_DISABLED' ? (
-                  <span className="text-xs font-bold px-3 py-1 rounded-full border border-slate-700 bg-slate-800 text-slate-400 flex items-center gap-1.5" title="Este vendedor no realiza envíos a Argentina">
+                  <span className="text-xs font-medium px-3 py-1 rounded-full border border-slate-700 bg-slate-800 text-slate-400 flex items-center gap-1.5" title="Este vendedor no realiza envíos a Argentina">
                     Este vendedor no realiza envíos a Argentina
                   </span>
                 ) : arShippingStatus.isEligible ? (
-                  <span className="text-xs font-bold px-3 py-1 rounded-full border border-sky-500/30 bg-sky-500/10 text-sky-300 flex items-center gap-1.5">
+                  <span className="text-xs font-medium px-3 py-1 rounded-full border border-sky-500/30 bg-sky-500/10 text-sky-300 flex items-center gap-1.5">
                     🇦🇷 Envío a Argentina disponible
                   </span>
                 ) : (
-                  <span className="text-xs font-bold px-3 py-1 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300 flex items-center gap-1.5" title={arShippingStatus.reason}>
+                  <span className="text-xs font-medium px-3 py-1 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300 flex items-center gap-1.5" title={arShippingStatus.reason}>
                     🇦🇷 Consultar envío a Argentina
                   </span>
                 )
@@ -613,7 +613,7 @@ export default function ProductDetail() {
           {/* 2. BOTONES DE COMPRA (Requirement 2) */}
           <div className="space-y-3 pt-3 border-t border-white/10">
             {!isVendorActive && (
-              <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-200 text-xs font-bold flex items-center gap-2">
+              <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-200 text-xs font-medium flex items-center gap-2">
                 <span>⚠️ Este vendedor se encuentra temporalmente inactivo o suspendido. Los productos no están disponibles para la compra.</span>
               </div>
             )}
@@ -631,7 +631,7 @@ export default function ProductDetail() {
                 >
                   <Minus className="w-4 h-4" />
                 </button>
-                <span id="qty-display" className="font-black text-base text-white">{quantity}</span>
+                <span id="qty-display" className="font-bold text-base text-white">{quantity}</span>
                 <button
                   id="qty-plus"
                   onClick={() => setQuantity(Math.min(maxPurchasableStock, quantity + 1))}
@@ -649,7 +649,7 @@ export default function ProductDetail() {
               id="main-buy-now"
               onClick={() => addToCart(undefined, true)}
               disabled={!isPurchasable}
-              className={`w-full py-3.5 sm:py-4.5 rounded-2xl flex items-center justify-center gap-2.5 text-sm sm:text-base uppercase tracking-widest font-black transition-all bg-[#f00856] text-white shadow-xl shadow-[#f00856]/30 hover:bg-[#d00749] hover:shadow-[#f00856]/50 hover:-translate-y-0.5 cursor-pointer min-h-[48px] ${
+              className={`w-full py-3.5 sm:py-4 rounded-xl flex items-center justify-center gap-2.5 text-sm sm:text-base uppercase tracking-wider font-bold transition-all bg-[#f00856] text-white shadow-lg shadow-[#f00856]/25 hover:bg-[#ff2c68] hover:shadow-[#f00856]/40 hover:-translate-y-0.5 cursor-pointer min-h-[48px] ${
                 !isPurchasable ? 'opacity-50 cursor-not-allowed bg-slate-800 shadow-none' : ''
               }`}
             >
@@ -666,9 +666,9 @@ export default function ProductDetail() {
               id="main-add-to-cart"
               onClick={() => addToCart()}
               disabled={!isPurchasable}
-              className={`w-full py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl flex items-center justify-center gap-2 text-xs uppercase tracking-wider font-bold transition-all border border-white/20 text-slate-200 bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/40 cursor-pointer min-h-[44px] ${
+              className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 text-xs uppercase tracking-wider font-bold transition-all border border-white/15 text-slate-200 bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/30 cursor-pointer min-h-[44px] ${
                 !isPurchasable ? 'opacity-50 cursor-not-allowed border-white/5 text-slate-500' : ''
-              } ${addedToCart ? 'bg-green-500/20 border-green-500 text-green-400' : ''}`}
+              } ${addedToCart ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : ''}`}
             >
               <ShoppingCart className="w-4 h-4" />
               {!isPurchasable 
@@ -1008,7 +1008,7 @@ export default function ProductDetail() {
 
       {/* MOBILE STICKY BUY BAR */}
       {showStickyBar && isPurchasable && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#05070f]/95 backdrop-blur-md border-t border-white/10 px-4 py-2.5 pb-[calc(0.6rem+env(safe-area-inset-bottom,0px))] animate-slide-up lg:hidden shadow-[0_-10px_30px_rgba(0,0,0,0.8)]">
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#05070f]/95 backdrop-blur-lg border-t border-white/10 px-4 py-2.5 pb-[calc(0.6rem+env(safe-area-inset-bottom,0px))] animate-slide-up lg:hidden shadow-[0_-8px_30px_rgba(0,0,0,0.8)]">
           <div className="flex items-center justify-between gap-3 max-w-7xl mx-auto">
             <div className="flex items-center gap-2.5 overflow-hidden min-w-0 flex-1">
               <img
@@ -1018,8 +1018,8 @@ export default function ProductDetail() {
                 {...getImageProps("w-10 h-10 rounded-lg object-contain bg-white p-1 flex-shrink-0")}
               />
               <div className="overflow-hidden min-w-0">
-                <p className="text-white font-black text-xs truncate uppercase tracking-tight">{product.title}</p>
-                <p className={`font-black text-sm leading-tight ${isIntl ? 'text-sky-400' : 'text-[#f00856]'}`}>
+                <p className="text-white font-bold text-xs truncate">{product.title}</p>
+                <p className={`font-extrabold text-sm leading-tight ${isIntl ? 'text-sky-400' : 'text-[#f00856]'}`}>
                   {isIntl ? formatUSD(product.final_price_usd || product.base_price || finalPrice) : formatCurrencyPrice(finalPrice)}
                 </p>
               </div>
@@ -1028,7 +1028,7 @@ export default function ProductDetail() {
               id="sticky-buy-btn"
               onClick={() => addToCart(undefined, true)}
               disabled={!isPurchasable}
-              className="btn-primary rounded-xl px-5 py-2.5 flex items-center justify-center gap-1.5 text-xs uppercase tracking-wider font-black transition-all shadow-lg shadow-[#f00856]/20 cursor-pointer shrink-0 min-h-[44px]"
+              className="btn-primary rounded-xl px-5 py-2.5 flex items-center justify-center gap-1.5 text-xs uppercase tracking-wide font-bold transition-all shadow-md shadow-[#f00856]/20 cursor-pointer shrink-0 min-h-[44px]"
             >
               <Zap className="w-4 h-4" />
               Comprar

@@ -56,42 +56,41 @@
   .label-tag {
     color: var(--red2);
     font-size: 11px;
-    letter-spacing: 0.25em;
-    font-weight: 900;
+    letter-spacing: 0.12em;
+    font-weight: 700;
     text-transform: uppercase;
   }
 
   /* ═══ BUTTONS ═══ */
   .btn-primary {
-    @apply inline-flex items-center justify-center px-7 py-4 text-white font-black uppercase tracking-wider text-sm transition-all duration-300 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none;
+    @apply inline-flex items-center justify-center px-6 py-3.5 text-white font-bold text-sm tracking-wide transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none;
     background: var(--red);
-    box-shadow: 0 0 40px rgba(240, 8, 86, 0.35);
-    border-radius: 9999px;
+    box-shadow: 0 4px 20px rgba(240, 8, 86, 0.28);
+    border-radius: 12px;
   }
   .btn-primary:hover {
     background: #ff2c68;
-    box-shadow: 0 0 50px rgba(240, 8, 86, 0.5);
+    box-shadow: 0 6px 24px rgba(240, 8, 86, 0.4);
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center px-7 py-4 font-black uppercase tracking-wider text-sm transition-all duration-300 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none;
-    background: rgba(14, 21, 37, 0.78);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    @apply inline-flex items-center justify-center px-6 py-3.5 font-bold text-sm tracking-wide transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none;
+    background: rgba(14, 21, 37, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     backdrop-filter: blur(20px);
     color: white;
-    border-radius: 9999px;
+    border-radius: 12px;
   }
   .btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.22);
   }
 
   .btn-accent {
-    @apply inline-flex items-center justify-center px-6 py-3 text-dark-900 font-bold transition-all duration-300 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none;
+    @apply inline-flex items-center justify-center px-6 py-3 text-white font-bold text-sm tracking-wide transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none;
     background: var(--red);
-    box-shadow: 0 0 40px rgba(240, 8, 86, 0.35);
-    border-radius: 9999px;
-    color: white;
+    box-shadow: 0 4px 20px rgba(240, 8, 86, 0.28);
+    border-radius: 12px;
   }
 
   .btn-ghost {
@@ -104,30 +103,30 @@
 
   /* ═══ PRODUCT CARD ═══ */
   .product-card {
-    @apply relative overflow-hidden transition-all duration-300;
-    background: rgba(14, 21, 37, 0.78);
+    @apply relative overflow-hidden transition-all duration-200 rounded-2xl;
+    background: rgba(14, 21, 37, 0.75);
     border: 1px solid rgba(255, 255, 255, 0.08);
     backdrop-filter: blur(20px);
   }
   .product-card:hover {
-    transform: translateY(-6px);
-    border-color: rgba(255, 44, 104, 0.45);
-    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.45);
+    transform: translateY(-4px);
+    border-color: rgba(255, 44, 104, 0.35);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
   }
 
   .product-card-image {
-    @apply relative aspect-square overflow-hidden;
-    background: rgba(0, 0, 0, 0.3);
+    @apply relative aspect-square overflow-hidden rounded-t-2xl;
+    background: rgba(0, 0, 0, 0.25);
   }
 
   .product-card-body {
-    @apply p-4;
+    @apply p-3.5 sm:p-4;
   }
 
   /* ═══ BADGES ═══ */
   .badge {
-    @apply inline-flex items-center px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-white;
-    border-radius: 9999px;
+    @apply inline-flex items-center px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white;
+    border-radius: 6px;
     background: rgba(255, 255, 255, 0.1);
   }
   .badge-hot {
@@ -140,13 +139,13 @@
 
   /* ═══ SECTION TITLE ═══ */
   .section-title {
-    @apply text-3xl sm:text-4xl font-black;
+    @apply text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight;
     color: var(--text);
   }
 
   /* ═══ FORM INPUTS ═══ */
   .form-input {
-    @apply w-full px-4 py-3.5 text-sm font-medium outline-none transition-all;
+    @apply w-full px-4 py-3 min-h-[44px] text-sm font-medium outline-none transition-all rounded-xl;
     background: rgba(0, 0, 0, 0.35);
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: white;

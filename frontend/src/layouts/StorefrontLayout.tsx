@@ -496,7 +496,7 @@ export default function StorefrontLayout() {
           </Link>
 
           {/* MAIN NAV (DESKTOP) */}
-          <nav className="hidden xl:flex items-center h-full gap-8 text-xs font-black uppercase tracking-widest text-slate-400">
+          <nav className="hidden xl:flex items-center h-full gap-8 text-xs font-bold uppercase tracking-wider text-slate-400">
             {NAV_LINKS.map(link => (
               <div 
                 key={link.name}
@@ -543,7 +543,7 @@ export default function StorefrontLayout() {
             <input 
               type="text" 
               placeholder="Buscar figuras, marcas, categorías..."
-              className="w-full bg-white/5 border border-white/10 rounded-full pl-11 pr-5 py-2.5 text-xs font-medium focus:border-[#f00856] focus:ring-1 focus:ring-[#f00856] transition-all outline-none"
+              className="w-full bg-white/5 border border-white/10 rounded-xl pl-11 pr-5 py-2.5 text-xs font-medium focus:border-[#f00856] focus:ring-1 focus:ring-[#f00856] transition-all outline-none"
               onKeyDown={e => e.key === 'Enter' && runSearch((e.target as HTMLInputElement).value)}
             />
           </div>

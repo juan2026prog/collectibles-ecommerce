@@ -1266,12 +1266,12 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
 
       {/* MOBILE FILTER BUTTON & TOOLBAR */}
       <div className="lg:hidden sticky top-14 z-30 bg-[#05070f]/95 backdrop-blur-lg border-b border-white/10 px-4 sm:px-6 py-2.5 flex items-center justify-between">
-        <span className="text-xs sm:text-sm font-bold text-slate-400">{count} productos</span>
+        <span className="text-xs sm:text-sm font-semibold text-slate-400">{count} productos</span>
         <div className="flex items-center gap-2 sm:gap-3">
           <select
             value={sortBy}
             onChange={e => { setSortBy(e.target.value); setPage(0); }}
-            className="bg-[#0e1525] border border-white/10 rounded-full px-3 py-2 text-xs font-bold text-white focus:outline-none cursor-pointer min-h-[40px]"
+            className="bg-[#0e1525] border border-white/10 rounded-xl px-3 py-2 text-xs font-semibold text-white focus:outline-none cursor-pointer min-h-[44px]"
           >
             <option value="default" className="bg-[#0e1525] text-white">Recomendados</option>
             <option value="newest" className="bg-[#0e1525] text-white">Más nuevos</option>
@@ -1284,7 +1284,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
               trackClarityEvent('filter_open');
               setMobileFilters(true);
             }}
-            className="flex items-center gap-2 bg-[#f00856] text-white rounded-full px-4 sm:px-5 py-2 text-xs font-black uppercase tracking-wider shadow-lg shadow-[#f00856]/30 min-h-[40px] cursor-pointer"
+            className="flex items-center gap-2 bg-[#f00856] text-white rounded-xl px-4 sm:px-5 py-2 text-xs font-bold uppercase tracking-wide shadow-md shadow-[#f00856]/25 min-h-[44px] cursor-pointer"
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
             Filtros
@@ -1300,22 +1300,22 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
         <div className="fixed inset-0 z-[200] lg:hidden">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileFilters(false)} />
           <div className="absolute inset-y-0 right-0 w-[85%] max-w-sm bg-[#05070f] border-l border-white/10 flex flex-col animate-slide-in-right">
-            <div className="flex items-center justify-between p-6 border-b border-white/10">
-              <h2 className="font-black text-xl text-white">Filtros</h2>
-              <button onClick={() => setMobileFilters(false)} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
+            <div className="flex items-center justify-between p-5 sm:p-6 border-b border-white/10">
+              <h2 className="font-bold text-lg text-white">Filtros</h2>
+              <button onClick={() => setMobileFilters(false)} className="w-11 h-11 rounded-full bg-white/5 flex items-center justify-center cursor-pointer" aria-label="Cerrar filtros">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-5 sm:p-6">
               <FilterContent />
             </div>
-            <div className="p-6 border-t border-white/10">
+            <div className="p-5 sm:p-6 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] border-t border-white/10">
               <button
                 onClick={() => {
                   trackClarityEvent('filter_apply');
                   setMobileFilters(false);
                 }}
-                className="btn-primary w-full rounded-full py-4 text-sm font-black uppercase"
+                className="btn-primary w-full rounded-xl py-3.5 text-sm font-bold uppercase min-h-[44px]"
               >
                 Ver {count} resultados
               </button>
