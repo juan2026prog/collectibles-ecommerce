@@ -1271,7 +1271,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
           <select
             value={sortBy}
             onChange={e => { setSortBy(e.target.value); setPage(0); }}
-            className="bg-[#0e1525] border border-white/10 rounded-xl px-3 py-2 text-xs font-semibold text-white focus:outline-none cursor-pointer min-h-[44px]"
+            className="bg-[#0e1525] border border-white/12 rounded-store-md px-3 py-2 text-xs font-bold text-white focus:outline-none cursor-pointer min-h-[44px]"
           >
             <option value="default" className="bg-[#0e1525] text-white">Recomendados</option>
             <option value="newest" className="bg-[#0e1525] text-white">Más nuevos</option>
@@ -1284,7 +1284,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
               trackClarityEvent('filter_open');
               setMobileFilters(true);
             }}
-            className="flex items-center gap-2 bg-[#f00856] text-white rounded-xl px-4 sm:px-5 py-2 text-xs font-bold uppercase tracking-wide shadow-md shadow-[#f00856]/25 min-h-[44px] cursor-pointer"
+            className="flex items-center gap-2 bg-[#f00856] text-white rounded-store-md px-4 sm:px-5 py-2 text-xs font-bold uppercase tracking-wide shadow-md shadow-[#f00856]/25 min-h-[44px] cursor-pointer"
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
             Filtros
@@ -1315,7 +1315,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                   trackClarityEvent('filter_apply');
                   setMobileFilters(false);
                 }}
-                className="btn-primary w-full rounded-xl py-3.5 text-sm font-bold uppercase min-h-[44px]"
+                className="btn-primary w-full rounded-store-md py-3.5 text-sm font-bold uppercase min-h-[44px]"
               >
                 Ver {count} resultados
               </button>
@@ -1326,7 +1326,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
 
       <main className="max-w-[1500px] mx-auto px-4 sm:px-6 py-4 md:py-10 grid lg:grid-cols-[260px_1fr] gap-8">
         {/* FILTERS ASIDE — hidden on mobile, shown on desktop */}
-        <aside className="hidden lg:block glass rounded-none p-5 h-[calc(100vh-120px)] max-h-[calc(100vh-120px)] min-h-0 sticky top-24 z-10 flex flex-col overflow-hidden">
+        <aside className="hidden lg:block glass rounded-store-xl p-5 h-[calc(100vh-120px)] max-h-[calc(100vh-120px)] min-h-0 sticky top-24 z-10 flex flex-col overflow-hidden">
           <div className="flex items-center justify-between mb-4 shrink-0">
             <h2 className="font-black text-xl tracking-tight">Filtros</h2>
             {(categorySlug || brandSlug || searchQ || groupSlug) && (

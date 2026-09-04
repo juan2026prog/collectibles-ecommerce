@@ -621,7 +621,7 @@ export default function ProductDetail() {
             {/* QUANTITY SELECTOR */}
             <div className="flex items-center justify-between">
               <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Cantidad</span>
-              <div className="flex items-center justify-between border border-white/10 bg-white/[0.03] rounded-xl h-11 w-36">
+              <div className="flex items-center justify-between border border-white/10 bg-white/[0.03] rounded-store-md h-11 w-36">
                 <button
                   id="qty-minus"
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
@@ -649,7 +649,7 @@ export default function ProductDetail() {
               id="main-buy-now"
               onClick={() => addToCart(undefined, true)}
               disabled={!isPurchasable}
-              className={`w-full py-3.5 sm:py-4 rounded-xl flex items-center justify-center gap-2.5 text-sm sm:text-base uppercase tracking-wider font-bold transition-all bg-[#f00856] text-white shadow-lg shadow-[#f00856]/25 hover:bg-[#ff2c68] hover:shadow-[#f00856]/40 hover:-translate-y-0.5 cursor-pointer min-h-[48px] ${
+              className={`w-full py-3.5 sm:py-4 rounded-store-lg flex items-center justify-center gap-2.5 text-sm sm:text-base uppercase tracking-wider font-bold transition-all bg-[#f00856] text-white shadow-lg shadow-[#f00856]/25 hover:bg-[#ff2c68] hover:shadow-[#f00856]/40 hover:-translate-y-0.5 cursor-pointer min-h-[48px] ${
                 !isPurchasable ? 'opacity-50 cursor-not-allowed bg-slate-800 shadow-none' : ''
               }`}
             >
@@ -666,7 +666,7 @@ export default function ProductDetail() {
               id="main-add-to-cart"
               onClick={() => addToCart()}
               disabled={!isPurchasable}
-              className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 text-xs uppercase tracking-wider font-bold transition-all border border-white/15 text-slate-200 bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/30 cursor-pointer min-h-[44px] ${
+              className={`w-full py-3 rounded-store-md flex items-center justify-center gap-2 text-xs uppercase tracking-wider font-bold transition-all border border-white/15 text-slate-200 bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/30 cursor-pointer min-h-[44px] ${
                 !isPurchasable ? 'opacity-50 cursor-not-allowed border-white/5 text-slate-500' : ''
               } ${addedToCart ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : ''}`}
             >
