@@ -75,6 +75,12 @@ export default {
         '2xl': '0',
         '3xl': '0',
         'full': '9999px',
+        'store-sm': '8px',
+        'store-md': '12px',
+        'store-lg': '16px',
+        'store-xl': '20px',
+        'store-2xl': '24px',
+        'store-full': '9999px',
       },
       boxShadow: {
         'glow-sm': '0 0 15px rgba(240, 8, 86, 0.15)',

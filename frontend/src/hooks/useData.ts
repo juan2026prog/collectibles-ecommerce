@@ -967,19 +967,59 @@ export function useInternationalCategoryFacets(filters: IntlCategoryFacetFilters
 }
 
 // ═══ useBanners ═══
+export const DEFAULT_HERO_BANNER = {
+  id: '06763338-4843-4b88-978b-2162f916fd63',
+  title: 'Figuras que cuentan historias.',
+  subtitle: 'No vendemos solo productos. Vendemos recuerdos, nostalgia y personajes que siguen viviendo con vos.',
+  image_url: '/images/banners/vitrina_desktop.png',
+  mobile_image_url: '/images/banners/vitrina_mobile.png',
+  link_url: '/shop',
+  badge_text: 'Collectibles Uruguay',
+  button_text: 'Ver Catálogo',
+  sort_order: 1,
+  is_active: true,
+  content_position: 'center',
+  content_align: 'left',
+  overlay_opacity: 0.4
+};
+
+let _bannersCache: any[] | null = null;
+try {
+  const local = localStorage.getItem('collectibles_banners_cache');
+  if (local) {
+    const parsed = JSON.parse(local);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      _bannersCache = parsed;
+    }
+  }
+} catch (e) {}
+
 export function useBanners() {
-  const [banners, setBanners] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [banners, setBanners] = useState<any[]>(_bannersCache || [DEFAULT_HERO_BANNER]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     async function fetch() {
-      const { data } = await supabase
-        .from('banners')
-        .select('*')
-        .eq('is_active', true)
-        .order('sort_order');
-      setBanners(data || []);
-      setLoading(false);
+      try {
+        const { data, error } = await supabase
+          .from('banners')
+          .select('*')
+          .eq('is_active', true)
+          .order('sort_order');
+        if (!error && data && data.length > 0) {
+          _bannersCache = data;
+          try {
+            localStorage.setItem('collectibles_banners_cache', JSON.stringify(data));
+          } catch (e) {}
+          setBanners(data);
+        } else if (!_bannersCache) {
+          setBanners([DEFAULT_HERO_BANNER]);
+        }
+      } catch (err) {
+        if (!_bannersCache) setBanners([DEFAULT_HERO_BANNER]);
+      } finally {
+        setLoading(false);
+      }
     }
     fetch();
   }, []);

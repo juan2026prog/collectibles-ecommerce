@@ -13,21 +13,24 @@ import { PageSkeleton } from './components/Skeletons';
 import ScrollToTop from './components/ScrollToTop';
 import { AdminModeProvider } from './contexts/AdminModeContext';
 import { InternationalCartProvider } from './contexts/InternationalCartContext';
-import InternationalLaboratory from './pages/international/InternationalLaboratory';
-import InternationalStorefront from './pages/InternationalStorefront';
-import InternationalCart from './pages/international/InternationalCart';
-import InternationalCourier from './pages/international/InternationalCourier';
-import InternationalReview from './pages/international/InternationalReview';
-import InternationalOrderPreview from './pages/international/InternationalOrderPreview';
+import Home from './pages/Home';
 
 import StorefrontLayout from './layouts/StorefrontLayout';
+
+// International (Lazy)
+const InternationalLaboratory = lazy(() => import('./pages/international/InternationalLaboratory'));
+const InternationalStorefront = lazy(() => import('./pages/InternationalStorefront'));
+const InternationalCart = lazy(() => import('./pages/international/InternationalCart'));
+const InternationalCourier = lazy(() => import('./pages/international/InternationalCourier'));
+const InternationalReview = lazy(() => import('./pages/international/InternationalReview'));
+const InternationalOrderPreview = lazy(() => import('./pages/international/InternationalOrderPreview'));
 
 const AdminLayout = lazy(() => import('./layouts/AdminLayout'));
 const PortalLayout = lazy(() => import('./layouts/PortalLayout'));
 const VendorLayout = lazy(() => import('./layouts/VendorLayout'));
 
 // Public Storefront (Lazy)
-const Home = lazy(() => import('./pages/Home'));
+
 const Shop = lazy(() => import('./pages/Shop'));
 const ProductDetail = lazy(() => import('./pages/ProductDetail'));
 const VendorStorefront = lazy(() => import('./pages/VendorStorefront'));

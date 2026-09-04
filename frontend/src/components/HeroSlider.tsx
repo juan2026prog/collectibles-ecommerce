@@ -35,7 +35,27 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
   const { getImageProps } = useImageProtection({ isProduct: false });
 
   // Filter active banners (memoized to prevent render loops)
-  const activeBanners = useMemo(() => banners.filter(b => b.image_url), [banners]);
+  const activeBanners = useMemo(() => {
+    const filtered = banners.filter(b => b.image_url);
+    if (filtered.length > 0) return filtered;
+    return [{
+      id: '06763338-4843-4b88-978b-2162f916fd63',
+      title: 'Figuras que cuentan historias.',
+      subtitle: 'No vendemos solo productos. Vendemos recuerdos, nostalgia y personajes que siguen viviendo con vos.',
+      image_url: '/images/banners/vitrina_desktop.png',
+      mobile_image_url: '/images/banners/vitrina_mobile.png',
+      link_url: '/shop',
+      badge_text: 'Collectibles Uruguay',
+      button_text: 'Ver Catálogo',
+      secondary_button_text: null,
+      secondary_button_url: null,
+      sort_order: 1,
+      is_active: true,
+      content_position: 'center',
+      content_align: 'left',
+      overlay_opacity: 0.4
+    }];
+  }, [banners]);
 
   // Programmatic image preloading to prevent flickers/flashes during slide transitions
   // Only preload the NEXT banner to avoid massive network requests
@@ -126,19 +146,6 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
     touchEndX.current = null;
   };
 
-  if (loading) {
-    // Render a stable dark cinematic background container of exactly the same size without any fake text/buttons
-    return (
-      <section className="relative h-[380px] sm:h-[420px] md:h-screen w-full bg-[#05070f] overflow-hidden">
-        <div className="absolute inset-0 bg-[#05070f]" />
-        <div className="absolute -right-40 -top-40 w-[800px] h-[800px] bg-[#f00856]/[.05] blur-[180px] rounded-full pointer-events-none" />
-        <div className="absolute inset-0 opacity-[0.025] pointer-events-none" style={{
-          backgroundImage: 'linear-gradient(rgba(255,255,255,.15) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.15) 1px, transparent 1px)',
-          backgroundSize: '60px 60px'
-        }} />
-      </section>
-    );
-  }
 
   // Fallback if no banners are present
   if (activeBanners.length === 0) {

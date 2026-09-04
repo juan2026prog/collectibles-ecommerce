@@ -900,8 +900,8 @@ export default function StorefrontLayout() {
       )}
 
       {/* ═══ MAIN CONTENT ═══ */}
-      <main className="flex-grow">
-        <Suspense fallback={null}>
+      <main className="flex-grow min-h-[calc(100vh-80px)]">
+        <Suspense fallback={<div className="min-h-[calc(100vh-80px)] w-full bg-[#05070f]" />}>
           <Outlet />
         </Suspense>
       </main>

@@ -11,6 +11,16 @@ export default defineConfig({
     },
   },
   build: {
+    modulePreload: {
+      resolveDependencies: (filename, deps) => {
+        // Strip heavy non-storefront chunks from initial index.html preload
+        return deps.filter(dep => 
+          !dep.includes('admin-chunk') && 
+          !dep.includes('portal-chunk') && 
+          !dep.includes('auth-chunk')
+        );
+      },
+    },
     rollupOptions: {
       output: {
         manualChunks: (id) => {
@@ -21,6 +31,7 @@ export default defineConfig({
             if (id.includes('xlsx') || id.includes('exceljs')) return 'vendor-excel';
             return 'vendor-libs';
           }
+          if (id.includes('/src/components/admin/Toast')) return 'storefront-chunk';
           if (id.includes('/src/pages/admin/') || id.includes('/src/components/admin/') || id.includes('/src/layouts/AdminLayout')) return 'admin-chunk';
           if (id.includes('/src/pages/Vendor') || id.includes('/src/components/vendor/') || id.includes('/src/pages/Artist') || id.includes('/src/pages/Affiliate') || id.includes('/src/pages/Star2Fan')) return 'portal-chunk';
           if (id.includes('/src/pages/Login') || id.includes('/src/pages/Auth')) return 'auth-chunk';

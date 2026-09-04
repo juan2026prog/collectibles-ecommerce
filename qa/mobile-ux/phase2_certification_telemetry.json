@@ -46,164 +46,95 @@
     "runtimeErrors": 0,
     "appBackendErrors": 0,
     "pageErrors": [],
-    "thirdPartyErrors": [
-      {
-        "viewport": "Android_360x740",
-        "text": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://127.0.0.1:4225' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value."
-      },
-      {
-        "viewport": "iPhone_390x844",
-        "text": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://127.0.0.1:4225' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value."
-      },
-      {
-        "viewport": "iPhoneProMax_430x932",
-        "text": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://127.0.0.1:4225' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value."
-      },
-      {
-        "viewport": "iPhoneProMax_430x932",
-        "text": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://127.0.0.1:4225' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value."
-      },
-      {
-        "viewport": "iPad_768x1024",
-        "text": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://127.0.0.1:4225' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value."
-      },
-      {
-        "viewport": "Desktop_1440x900",
-        "text": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://127.0.0.1:4225' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value."
-      },
-      {
-        "viewport": "Desktop_1440x900",
-        "text": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://127.0.0.1:4225' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value."
-      }
-    ],
+    "thirdPartyErrors": [],
     "consoleErrors": [
       {
         "viewport": "Android_360x740",
-        "text": "[useBrands] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-D1WWkNV3.js:26:37026, hint: , code: }"
+        "text": "[useBrands] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-BuR3zzm2.js:26:37026, hint: , code: }"
       },
       {
         "viewport": "Android_360x740",
-        "text": "[useCategories] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-D1WWkNV3.js:26:37026, hint: , code: }"
+        "text": "[useCategories] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-BuR3zzm2.js:26:37026, hint: , code: }"
       },
       {
         "viewport": "Android_360x740",
-        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BBxEYtxn.js:21:1290, hint: }"
       },
       {
         "viewport": "Android_360x740",
-        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BBxEYtxn.js:21:1290, hint: }"
       },
       {
         "viewport": "Android_360x740",
-        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
-      },
-      {
-        "viewport": "Android_360x740",
-        "text": "Failed to load resource: net::ERR_FAILED"
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BBxEYtxn.js:21:1290, hint: }"
       },
       {
         "viewport": "iPhone_390x844",
-        "text": "[useCategories] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-D1WWkNV3.js:26:37026, hint: , code: }"
+        "text": "[useBrands] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-BuR3zzm2.js:26:37026, hint: , code: }"
       },
       {
         "viewport": "iPhone_390x844",
-        "text": "[useBrands] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-D1WWkNV3.js:26:37026, hint: , code: }"
+        "text": "[useCategories] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-BuR3zzm2.js:26:37026, hint: , code: }"
       },
       {
         "viewport": "iPhone_390x844",
-        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BBxEYtxn.js:21:1290, hint: }"
       },
       {
         "viewport": "iPhone_390x844",
-        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BBxEYtxn.js:21:1290, hint: }"
       },
       {
         "viewport": "iPhone_390x844",
-        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
-      },
-      {
-        "viewport": "iPhone_390x844",
-        "text": "Failed to load resource: net::ERR_FAILED"
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BBxEYtxn.js:21:1290, hint: }"
       },
       {
         "viewport": "iPhoneProMax_430x932",
-        "text": "Failed to load resource: net::ERR_FAILED"
+        "text": "[useBrands] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-BuR3zzm2.js:26:37026, hint: , code: }"
       },
       {
         "viewport": "iPhoneProMax_430x932",
-        "text": "[useCategories] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-D1WWkNV3.js:26:37026, hint: , code: }"
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BBxEYtxn.js:21:1290, hint: }"
       },
       {
         "viewport": "iPhoneProMax_430x932",
-        "text": "[useBrands] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-D1WWkNV3.js:26:37026, hint: , code: }"
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BBxEYtxn.js:21:1290, hint: }"
       },
       {
         "viewport": "iPhoneProMax_430x932",
-        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
-      },
-      {
-        "viewport": "iPhoneProMax_430x932",
-        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
-      },
-      {
-        "viewport": "iPhoneProMax_430x932",
-        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
-      },
-      {
-        "viewport": "iPhoneProMax_430x932",
-        "text": "Failed to load resource: net::ERR_FAILED"
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BBxEYtxn.js:21:1290, hint: }"
       },
       {
         "viewport": "iPad_768x1024",
-        "text": "[useBrands] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-D1WWkNV3.js:26:37026, hint: , code: }"
+        "text": "[useBrands] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-BuR3zzm2.js:26:37026, hint: , code: }"
       },
       {
         "viewport": "iPad_768x1024",
-        "text": "[useCategories] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-D1WWkNV3.js:26:37026, hint: , code: }"
+        "text": "[useCategories] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-BuR3zzm2.js:26:37026, hint: , code: }"
       },
       {
         "viewport": "iPad_768x1024",
-        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BBxEYtxn.js:21:1290, hint: }"
       },
       {
         "viewport": "iPad_768x1024",
-        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BBxEYtxn.js:21:1290, hint: }"
       },
       {
         "viewport": "iPad_768x1024",
-        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
-      },
-      {
-        "viewport": "iPad_768x1024",
-        "text": "Failed to load resource: net::ERR_FAILED"
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BBxEYtxn.js:21:1290, hint: }"
       },
       {
         "viewport": "Desktop_1440x900",
-        "text": "Failed to load resource: net::ERR_FAILED"
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BBxEYtxn.js:21:1290, hint: }"
       },
       {
         "viewport": "Desktop_1440x900",
-        "text": "[useCategories] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-D1WWkNV3.js:26:37026, hint: , code: }"
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BBxEYtxn.js:21:1290, hint: }"
       },
       {
         "viewport": "Desktop_1440x900",
-        "text": "[useBrands] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-D1WWkNV3.js:26:37026, hint: , code: }"
-      },
-      {
-        "viewport": "Desktop_1440x900",
-        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
-      },
-      {
-        "viewport": "Desktop_1440x900",
-        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
-      },
-      {
-        "viewport": "Desktop_1440x900",
-        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
-      },
-      {
-        "viewport": "Desktop_1440x900",
-        "text": "Failed to load resource: net::ERR_FAILED"
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BBxEYtxn.js:21:1290, hint: }"
       }
     ]
   },

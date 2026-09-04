@@ -98,22 +98,22 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
   const isCollectibles = !product.vendor_id;
 
   return (
-    <article className={`grid-card group relative p-2.5 sm:p-3 bg-[#0a0f1d]/40 rounded-[16px] transition-all duration-200 ${
+    <article className={`grid-card group relative p-3 bg-[#0c1322] rounded-store-xl transition-all duration-300 ${
       isInternational
-        ? 'border border-sky-500/40 md:border-2 hover:border-sky-400 shadow-lg shadow-sky-950/20'
+        ? 'border border-sky-500/30 hover:border-sky-400/80 shadow-md shadow-sky-950/30'
         : isCollectibles 
-          ? 'border border-[#f00856]/35 md:border-2 md:border-[#f00856]/70 hover:border-[#f00856] shadow-sm shadow-[#f00856]/10' 
-          : 'border border-white/5 hover:border-white/20'
+          ? 'border border-[#f00856]/40 hover:border-[#f00856] shadow-md shadow-[#f00856]/15' 
+          : 'border border-white/10 hover:border-white/25 shadow-sm'
     }`}>
       {/* 1. IMAGEN */}
       <div className="relative">
         <Link 
           to={`/producto/${product.slug}`} 
           onClick={handleCardClick}
-          className={`flex bg-white w-full aspect-square overflow-hidden p-3 sm:p-5 items-center justify-center border rounded-xl transition-colors ${
+          className={`flex bg-white w-full aspect-square overflow-hidden p-3 sm:p-4 items-center justify-center rounded-store-lg transition-all ${
             isInternational 
-              ? 'border-sky-500/10 group-hover:border-sky-500/30' 
-              : 'border-white/5 group-hover:border-[#f00856]/20'
+              ? 'border border-sky-500/15 group-hover:border-sky-500/40' 
+              : 'border border-slate-100 group-hover:border-[#f00856]/30'
           }`}
         >
           <img
