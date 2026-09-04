@@ -83,7 +83,12 @@ export function mapZincEventToInternalStatus(eventType: string, zincStatus?: str
       return { purchase_status: "purchased" };
 
     case "order.tracking_received":
+    case "order.tracking":
     case "order.shipped":
+      return { purchase_status: "shipped_to_courier" };
+
+    case "order.estimated_delivery_updated":
+      // Non-degrading progress update
       return { purchase_status: "shipped_to_courier" };
 
     case "order.delivered":
@@ -94,6 +99,14 @@ export function mapZincEventToInternalStatus(eventType: string, zincStatus?: str
 
     case "order.failed":
       return { purchase_status: "zinc_failed", order_status: "manual_review", is_terminal: true };
+
+    // Return events from API Reference & Changelog: persisted durable in DB without breaking order status
+    case "return.created":
+    case "return.approved":
+    case "return.denied":
+    case "return.credited":
+    case "return.label_uploaded":
+      return { purchase_status: "delivered_to_courier" };
 
     default:
       if (st === "failed") {

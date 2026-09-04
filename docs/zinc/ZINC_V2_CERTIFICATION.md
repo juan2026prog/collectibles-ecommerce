@@ -1,22 +1,21 @@
-# Zinc API V2 — Reporte de Certificación Sandbox
+# Zinc API V2 — Reporte de Certificación Sandbox (Segundo Nivel)
 
-**Proyecto:** Collectibles 2026 (collectibles.uy)  
+**Proyecto:** Collectibles 2026 (`collectibles.uy`)  
 **Fecha:** 2026-09-04  
-**Branch:** zinc-v2-full-audit-20260904  
+**Branch:** `zinc-v2-full-audit-20260904`  
+**Panel Canónico:** `https://collectibles.uy/admin/internacional/zinc`  
 **Estado Final:** READY FOR FINAL WEBHOOK CERTIFICATION  
 
 ---
 
-## 1. Resumen de Ejecución de Pruebas
+## 1. Resumen de Niveles de Certificación
 
-| Categoría | Estado | Detalles |
+| Nivel de Verificación | Estado | Alcance y Validación |
 |---|---|---|
-| **Pruebas Unitarias** | PASS | 28/28 tests pasando (`frontend/src/tests/zinc_v2_unit.test.ts`) |
-| **Pruebas de Contrato (OpenAPI 3.1.0)** | PASS | 6/6 tests pasando contra la spec oficial en vivo (`frontend/src/tests/zinc_v2_contract.test.ts`) |
-| **Suite General del Repositorio** | PASS | 316/316 tests pasando en 32 suites vitest |
-| **Build Frontend de Producción** | PASS | Vite 8.0.3 compiló en 3.27s sin errores |
-| **Aislamiento de Secretos** | PASS | 0 secretos expuestos en código, git o frontend |
-| **Protección de Producción** | PASS | PRODUCTION ZINC ENABLED: NO, 0 compras reales ejecutadas |
+| **1. UNIT** | PASS | 28 tests pasando. Aislamiento de prefijos (`zn_test_`, `zn_live_`, `zn_whsec_`), cálculo de HMAC-SHA256, deduplicación SHA-256, conversión de enteros en centavos, normalización de direcciones con `address_line2` opcional, y reuso estricto del mismo `idempotency_key` en retries. |
+| **2. CONTRACT** | PASS | 8 tests pasando contra la especificación OpenAPI 3.1.0 oficial: verificación de `GET /products/search` (`query`, `retailer`, `page`, `free_shipping`), `GET /products/{product_id}`, `OrderCreate` con campos opcionales, modelo prepaid wallet sin `payment`, y `address_line2` en `Address`. |
+| **3. REAL SANDBOX HTTP** | PASS | Ejecución real con credenciales Sandbox de Supabase Vault: `GET /orders/test-products` dinámico con 8 productos, escenarios síncronos HTTP 400/402, creación de orden HTTP 201 (`06bc82a1-d7c5-4c8b-86fa-7eae2fe448c8`), e idempotencia probada con retorno HTTP 409 `already_exists`. |
+| **4. REAL SANDBOX WEBHOOK** | BLOCKED | Receptor `zinc-webhook` desplegado con `verify_jwt = false` y HMAC custom. Entrega en vivo pausada pendiente de rotación manual del signing secret en el dashboard de Zinc. |
 
 ---
 

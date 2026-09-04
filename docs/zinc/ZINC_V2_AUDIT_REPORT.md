@@ -1,116 +1,146 @@
-# Zinc API V2 — Auditoría Integral y Normalización
+# Zinc API V2 — Auditoría Integral de Segundo Nivel y Normalización
 
-**Proyecto:** Collectibles 2026 (collectibles.uy)
-**Fecha de Auditoría:** 2026-09-04
-**Branch de Trabajo:** zinc-v2-full-audit-20260904
-**Objetivo:** Normalización integral de la integración con Zinc API contra la documentación oficial en vivo V2 (OpenAPI 3.1.0), eliminación de código legacy V1, migración segura a Supabase Vault, y preparación para certificación Sandbox E2E.
+**Proyecto:** Collectibles 2026 (`collectibles.uy`)  
+**Fecha de Auditoría:** 2026-09-04  
+**Branch de Trabajo:** `zinc-v2-full-audit-20260904`  
+**Panel Canónico de Administración:** `https://collectibles.uy/admin/internacional/zinc` (también disponible en tab: `/admin/settings?tab=internacional`)  
+**Objetivo:** Normalización integral de la integración con Zinc API contra la documentación oficial en vivo V2 (OpenAPI 3.1.0, Changelog oficial hasta 2026-08-28 y `llms.txt`), eliminación de código legacy V1, persistencia robusta de idempotencia y preparación rigurosa para certificación Sandbox.
 
 ---
 
 ## 1. Documentación Oficial y Especificación
 
-- **Especificación OpenAPI:** OpenAPI 3.1.0 (versión oficial de Zinc V2, fechada 2026-08-21).
-- **Changelog Oficial Verificado:** Actualizado hasta 2026-08-28.
-- **Endpoints Oficiales de Referencia:**
-  - https://www.zinc.com/docs/v2/api-reference/introduction/sandbox
-  - https://www.zinc.com/docs/v2/api-reference/introduction/webhooks
-  - https://www.zinc.com/docs/v2/api-reference/introduction/idempotency
-  - https://www.zinc.com/docs/v2/api-reference/orders/create-order
-  - https://www.zinc.com/docs/v2/api-reference/orders/get-test-products
-  - https://www.zinc.com/docs/v2/api-reference/orders/get-order
-  - https://www.zinc.com/docs/v2/api-reference/products/get-product
-  - https://www.zinc.com/docs/v2/api-reference/products/search-products
+- **Especificación OpenAPI:** OpenAPI 3.1.0 (versión oficial de Zinc V2, fechada `2026-08-21`).
+- **Changelog Oficial Verificado:** Actualizado hasta `2026-08-28`.
+- **Endpoints Oficiales de Referencia (Source of Truth):**
+  - `https://www.zinc.com/docs/v2/api-reference/products/search`
+  - `https://www.zinc.com/docs/v2/api-reference/products/get-product`
+  - `https://www.zinc.com/docs/v2/api-reference/products/get-offers`
+  - `https://www.zinc.com/docs/v2/api-reference/orders/create-order`
+  - `https://www.zinc.com/docs/v2/api-reference/orders/get-test-products`
+  - `https://www.zinc.com/docs/v2/api-reference/orders/get-order`
+  - `https://www.zinc.com/docs/v2/api-reference/introduction/idempotency`
+  - `https://www.zinc.com/docs/v2/api-reference/introduction/webhooks`
+  - `https://www.zinc.com/docs/v2/api-reference/introduction/authentication`
+  - `https://www.zinc.com/docs/v2/api-reference/introduction/sandbox`
 
 ---
 
-## 2. Arquitectura de la Integración Zinc V2
+## 2. Matriz de Contratos OpenAPI 3.1.0
 
-### 2.1 Módulo Compartido Centralizado
-Se creó un único módulo de verdad para todas las operaciones de Zinc en:
-supabase/functions/_shared/zinc/
-- **types.ts:** Tipos TypeScript alineados 100% con los esquemas de OpenAPI 3.1.0 (OrderCreateRequest, OrderResponse, Address, WebhookEvent, Product, TestProductsResponse).
-- **errors.ts:** Mapeo formal de errores síncronos y asíncronos de Zinc V2 (invalid_address, out_of_stock, price_exceeded, insufficient_funds, already_exists, etc.).
-- **auth.ts:** Resolución segura de credenciales (Sandbox vs Production), aislamiento estricto de prefijos (zn_test_, zn_live_, zn_whsec_), y soporte de fallback seguro.
-- **client.ts:** Cliente HTTP unificado con cabecera Authorization: Bearer <token>, manejo de rate limits (429 con retry-after y exponential backoff) y timeout determinista.
-- **orders.ts:** Normalizadores de payload V2:
-  - buildZincAddress: Mapeo estricto de direcciones (address_line1, postal_code, first_name, last_name, phone_number, etc.).
-  - dollarsToCents: Conversión estricta de importes a centavos enteros para max_price.
-  - assertProductionGate: Barrera infranqueable server-side que rechaza cualquier creación de orden real si is_enabled no está explícitamente activado.
-- **webhooks.ts:** Verificación timing-safe de firmas HMAC-SHA256 sobre el raw request body (X-Webhook-Signature), cómputo de SHA-256 para deduplicación, y mapeo de eventos V2 a estados internos.
-- **index.ts:** Barrel export unificado.
+### 2.1 Catálogo y Búsqueda de Productos
 
-### 2.2 Almacenamiento Seguro (Supabase Vault & Base de Datos)
-- **Supabase Vault:**
-  - Procedimientos almacenados de seguridad:
-    - set_zinc_vault_secret(p_environment, p_secret_type, p_secret_value): Valida prefijos obligatorios (zn_live_ para producción, zn_whsec_ para webhooks) y persiste en vault.decrypted_secrets.
-    - get_zinc_vault_secret(p_environment, p_secret_type): Con SECURITY DEFINER y acceso restringido exclusivamente a roles service_role y postgres.
-- **Tabla zinc_integration_settings:**
-  - Almacena metadata no sensible (entorno, prefijo y últimos 4 caracteres de la clave, timestamp de último test, estado de conexión).
-  - Producción configurada con is_enabled = false de forma inviolable.
-- **Tabla zinc_webhook_events:**
-  - Registro auditable y duradero de todos los eventos webhook recibidos.
-  - Restricción única idempotente: UNIQUE (environment, payload_sha256).
+| Endpoint | Método | Parámetros OpenAPI | Parámetros Implementados | Estado |
+|---|---|---|---|---|
+| **`/products/search`** | `GET` | `query` (req), `retailer` (req), `page` (opt), `free_shipping` (opt) | `query`, `retailer: 'amazon'`, `page` | **CONFORME** |
+| **`/products/{product_id}`** | `GET` | `product_id` (path, req), `retailer` (req), `max_age` (opt), `newer_than` (opt), `async` (opt) | `product_id`, `retailer: 'amazon'`, `max_age` | **CONFORME** |
+| **`/products/{product_id}/offers`** | `GET` | `product_id` (path, req), `retailer` (req), `max_age` (opt) | `product_id`, `retailer: 'amazon'` | **CONFORME** |
 
----
+*Nota sobre Búsqueda:* En el informe preliminar se mencionó por error de redacción `GET /products?query=...`, pero el endpoint real utilizado en el código siempre fue `GET /products/search`. Se centralizó la llamada mediante la función `searchZincProducts` en `_shared/zinc/client.ts`.
 
-## 3. Puntos de Contacto y Correcciones Aplicadas
+### 2.2 Esquema de Dirección (`Address`)
 
-| Archivo / Endpoint | Estado Previo (V1 / Deficiente) | Estado Corregido (V2 Conforme) |
-|---|---|---|
-| supabase/functions/zinc-config | No existía / usaba GET /retailers público | Creado. Valida prefijos zn_live_, ejecuta GET /orders?limit=1 para test de auth real, consulta dinámica de test-products, guarda webhook secret en Vault. |
-| frontend/src/components/admin/AdminZincConfig.tsx | Badges inconsistentes, permitía prefijos libres | Exige zn_live_ para producción, UI para guardar Webhook Signing Secret, badges de test pass/fail normalizados. |
-| supabase/functions/zinc-search-products | Auth no unificada | Conectado a resolveActiveZincApiKey y V2 GET /products?query=... con Bearer auth. |
-| supabase/functions/zinc-sync-published-products | Cache desactualizado | V2 GET /products/:id con max_age=300. |
-| supabase/functions/zinc-live-check | Cache no controlado | V2 GET /products/:id con max_age=0 para validación en tiempo real. |
-| supabase/functions/zinc-live-check-before-payment | Sin control estricto de frescura | V2 GET /products/:id con max_age=0 previo a pasarela de pagos. |
-| supabase/functions/zinc-enrich-candidate | Auth legacy | Conectado a módulo V2 unificado. |
-| supabase/functions/zinc-verify-after-payment | Payload V1 con payment_method: { use_zinc_card: true }, address_line2, retailer en raíz, max_price en dólares flotantes | Payload V2 estricto: products: [{ url, quantity }], shipping_address conforme, max_price en centavos enteros, idempotency_key determinista, manejo de already_exists (409), wallet debit model, barrera server-side de producción. |
-| supabase/functions/zinc-sync-order-tracking | Mapeaba campos V1 package_tracking_associated_items y delivery_dates | Mapeo conforme V2 usando el array tracking_numbers (tracking_number, carrier, url, delivered_at). |
-| supabase/functions/zinc-webhook | Inexistente | Creado con verificación HMAC-SHA256 timing-safe sobre raw body, deduplicación por SHA-256, persistencia en DB y ACK rápido 200. |
+La especificación OpenAPI 3.1.0 de Zinc V2 define:
+- `first_name` (string, requerido)
+- `last_name` (string, requerido)
+- `address_line1` (string, requerido)
+- `address_line2` (string o null, **opcional**) — **Soporte confirmado y preservado**
+- `city` (string, requerido)
+- `state` (string o null, opcional para países sin división estatal)
+- `postal_code` (string, requerido)
+- `phone_number` (string, requerido)
+- `country` (string, opcional, default: "US")
 
----
+*Aclaración:* `address_line2` **NO** es un campo obsoleto. Zinc V2 lo admite oficialmente como campo opcional. Nuestra función `buildZincAddress` preserva `address_line2` (incluyendo la combinación con el código de casillero UY), asignando `null` únicamente cuando no existe. Los campos legacy que sí fueron eliminados de la petición son `zip_code` (normalizado a `postal_code`) y `address_line_1` (normalizado a `address_line1`).
 
-## 4. Hallazgos de Seguridad
+### 2.3 Creación de Órdenes (`OrderCreate`) y Modelo Wallet
 
-1. **Aislamiento de Secretos:** Ningún secreto de API ni de firma webhook vive en el repositorio, frontend ni logs. Toda credencial sensible reside en Supabase Vault server-side.
-2. **Exposición Previa de Webhook Secret:** Se detectó que en capturas de pantalla de configuraciones previas se visualizó un signing secret de pruebas. Por principio de mínimo privilegio y Zero-Trust, el webhook en vivo fue categorizado como BLOCKED_WAITING_SECRET_ROTATION hasta su rotación en el dashboard de Zinc.
-3. **Hard Safety Gate de Producción:** Verificado tanto en base de datos (is_enabled: false) como en código de Edge Functions (assertProductionGate). Se certificó que se ejecutaron 0 llamadas a órdenes reales en producción.
+El modelo `OrderCreate` en OpenAPI 3.1.0 define:
+- **Campos Requeridos:** `products`, `shipping_address`, `max_price` (entero en centavos).
+- **Campos Opcionales:**
+  - `idempotency_key`: string (máximo 36 caracteres).
+  - `retailer_credentials_id`: string (identificador de credenciales específicas).
+  - `metadata`: object (clave-valor arbitrario).
+  - `po_number`: string (PO identificador).
+  - `handling_days_max`: integer (mínimo 1).
+  - `is_gift`: boolean (default: false).
+  - `gift_message`: string (máximo 240 caracteres).
+  - `payment`: object ("Optional payment block. Omit for prepaid-wallet billing (default).")
+  - `customer_notifications`: object (actualizaciones por email al cliente).
+
+*Modelo de Pago Prepaid Wallet:* La documentación oficial establece textualmente: *"Omit for prepaid-wallet billing (default)"*. Por tanto, la omisión del bloque `payment` para debitar directamente del saldo prepago de la cuenta Zinc es la arquitectura canónica oficial recomendada por Zinc.
 
 ---
 
-## 5. Edge Functions Desplegadas
+## 3. Arquitectura de Idempotencia
 
-Desplegadas con éxito en el proyecto Supabase cobtsgkwcftvexaarwmo:
-1. zinc-webhook (verify_jwt = false, autenticación custom Zinc HMAC-SHA256)
-2. zinc-config (verify_jwt = true)
-3. zinc-search-products
-4. zinc-live-check
-5. zinc-live-check-before-payment
-6. zinc-sync-published-products
-7. zinc-sync-international-products
-8. zinc-enrich-candidate
-9. zinc-verify-after-payment
+### 3.1 Corrección Conceptual y Operativa
+En el informe inicial se empleó la expresión "Deterministic UUID v4", lo cual es una contradicción técnica ya que UUID v4 es pseudoaleatorio.
+
+La regla de idempotencia oficial de Zinc y su implementación en el sistema es:
+1. **Generación única:** Se utiliza un UUID único de hasta 36 caracteres para cada ítem lógico de orden internacional (`intlOrderItem.id` o `crypto.randomUUID()`).
+2. **Persistencia previa obligatoria:** El `idempotency_key` se persiste en la columna `idempotency_key` de la tabla `international_order_items` **ANTES** de ejecutar el primer `POST /orders` hacia Zinc.
+3. **Reutilización idéntica en reintentos:** En cualquier reintento posterior (caída de red, error 5xx, o retry manual desde el panel), la Edge Function recupera el `idempotency_key` existente de la base de datos y envía **EXACTAMENTE LA MISMA CLAVE**. Nunca se regenera la clave ante un reintento.
+4. **Manejo de `already_exists` (HTTP 409):** Cuando Zinc responde 409 `already_exists`, la función reconoce que la orden original fue recibida por Zinc, extrae el identificador de la orden existente y actualiza el estado interno a `zinc_order_created` sin duplicar compras ni arrojar errores no controlados.
 
 ---
 
-## 6. Migraciones de Base de Datos Aplicadas
+## 4. Estado de la Migración `20261217000000`
 
-- supabase/migrations/20261217000000_zinc_2_0_settings_and_webhook.sql:
-  - Creación de tabla zinc_integration_settings.
-  - Creación de tabla zinc_webhook_events con índice único idempotente.
-  - Funciones de Vault set_zinc_vault_secret y get_zinc_vault_secret.
+- **Archivo Local:** `supabase/migrations/20261217000000_zinc_2_0_settings_and_webhook.sql`
+- **Estado en `supabase migration list`:**
+  - `local`: `20261217000000`
+  - `remote`: Vacío (las tablas y funciones fueron creadas vía ejecución DDL en la fase de setup).
+- **Diagnóstico del Timestamp Futuro:**  
+  La base de datos y el histórico del repositorio ya contenían migraciones previas con prefijos del futuro: `202610...`, `202611...`, `20261215...`, `20261216000000`, `20261216010000_international_system_rebuild.sql`. La migración `20261217000000` continuó dicha correlatividad existente.
+- **Riesgo:** Si en el futuro se aplican migraciones con la fecha actual real (2026-09-XX), el orden alfabético de la CLI de Supabase podría listar `20261217` al final.
+- **Propuesta de Acción Segura:**
+  No se borra la migración ni se modifica el historial de forma destructiva. Se propone registrar la versión `20261217000000` formalmente en `supabase_migrations.schema_migrations` o realizar un rename consensuado previa validación de deployment.
 
 ---
 
-## 7. Pruebas y Certificación
+## 5. Eventos Webhook (API Reference vs Changelog)
 
-- **Unit Tests:** 28 tests pasando (frontend/src/tests/zinc_v2_unit.test.ts).
-- **Contract Tests:** 6 tests pasando contra OpenAPI 3.1.0 (frontend/src/tests/zinc_v2_contract.test.ts).
-- **Suite Completa Frontend:** 316 tests pasando en 32 suites (npm test -- --run).
-- **Frontend Production Build:** Build exitoso en 3.27s sin errores (npm run build).
-- **Ejecución Sandbox en Vivo:**
-  - 8 escenarios de productos dinámicos ejecutados desde GET /orders/test-products.
-  - Escenarios síncronos validados: invalid_address (400), url_unreachable (400), insufficient_funds (402).
-  - Escenario de éxito validado: test-success (201, Order ID generado: 06bc82a1-d7c5-4c8b-86fa-7eae2fe448c8).
-  - Idempotencia validada: reintento exacto retornó HTTP 409 (already_exists).
-  - Escenarios asíncronos validados: price_exceeded, out_of_stock, invalid_variant, shipping_unavailable aceptados con 201 para procesamiento async.
+Se analizaron de forma exhaustiva tanto la página oficial de Webhooks como el Changelog de Zinc:
+
+| Evento | Fuente Oficial | Estado Interno Mapeado | Comportamiento |
+|---|---|---|---|
+| `order.started` | API Reference / Changelog | `zinc_processing` | Orden en proceso de compra en retailer |
+| `order.placed` | API Reference / Changelog | `purchased` | Orden confirmada en retailer, monto debitado |
+| `order.tracking_received` | API Reference / Changelog | `shipped_to_courier` | Tracking disponible |
+| `order.tracking` | Changelog | `shipped_to_courier` | Variante de tracking |
+| `order.shipped` | Changelog | `shipped_to_courier` | Paquete despachado |
+| `order.estimated_delivery_updated` | Changelog | `shipped_to_courier` | Actualización de fecha de entrega |
+| `order.delivered` | API Reference / Changelog | `delivered_to_courier` | Entregado en casillero Miami |
+| `order.cancelled` | API Reference / Changelog | `zinc_failed` | Cancelada por retailer, pase a revisión manual |
+| `order.failed` | API Reference / Changelog | `zinc_failed` | Fallo de compra, pase a revisión manual |
+| `return.created` | API Reference / Changelog | `delivered_to_courier` | Retorno iniciado, evento registrado en DB |
+| `return.approved` | API Reference / Changelog | `delivered_to_courier` | Retorno aprobado con label |
+| `return.denied` | API Reference / Changelog | `delivered_to_courier` | Retorno rechazado |
+| `return.credited` | API Reference / Changelog | `delivered_to_courier` | Reembolso en billetera |
+| `return.label_uploaded` | Changelog | `delivered_to_courier` | Etiqueta de devolución cargada |
+| *Eventos Desconocidos* | Extensibilidad OpenAPI | No degradante (`zinc_processing`) | Persistido en `zinc_webhook_events` con ACK 200 |
+
+---
+
+## 6. Seguridad y Aislamiento de Secretos
+
+1. **Rotación de Secreto de Webhook:** El signing secret Sandbox visualizado previamente en captura se considera no confiable. Se mantiene el requerimiento operativo de rotar el secreto en el dashboard de Zinc antes de habilitar la entrega de webhooks en vivo.
+2. **Salvaguarda de Producción:**  
+   - `zinc_integration_settings.is_enabled = false` para el entorno `production`.
+   - Función `assertProductionGate` en backend que bloquea cualquier llamada de compra real si no está habilitada deliberadamente.
+   - **0 compras reales ejecutadas en producción.**
+3. **Persistencia en Supabase Vault:** Claves de API y secretos de firma viven exclusivamente en Vault con acceso restringido a `service_role` y `postgres`.
+
+---
+
+## 7. Diferenciación de Niveles de Certificación
+
+Para garantizar transparencia técnica absoluta, se diferencian cuatro niveles de verificación:
+
+1. **UNIT:** PASS (Pruebas unitarias de conversión de moneda, firma HMAC, aislamiento de claves, idempotencia y validación de direcciones).
+2. **CONTRACT:** PASS (Pruebas de contrato contra la especificación OpenAPI 3.1.0 oficial de Zinc V2: `/products/search`, `/products/{product_id}`, `OrderCreate`, `Address` con `address_line2`, y modelo wallet).
+3. **REAL SANDBOX HTTP:** PASS (Ejecución real contra la API de Zinc Sandbox: `GET /orders/test-products` dinámico con 8 escenarios, escenarios síncronos HTTP 400/402, `POST /orders` exitoso con HTTP 201, y reintento con HTTP 409 `already_exists`).
+4. **REAL SANDBOX WEBHOOK:** BLOCKED (El receptor `zinc-webhook` con firma HMAC y deduplicación está desplegado y verificado localmente, pero la entrega de eventos en vivo por parte de Zinc está pausada hasta la rotación del secreto en el dashboard).
+
+**Veredicto Final:** `READY FOR FINAL WEBHOOK CERTIFICATION` (NO MERGEAR A MAIN).

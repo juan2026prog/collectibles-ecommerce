@@ -119,3 +119,50 @@ export async function resolveActiveZincApiKey(supabaseClient: any): Promise<stri
   throw new Error("No hay credencial de Zinc configurada en Vault ni en variables de entorno.");
 }
 
+/**
+ * Searches products on Zinc API conforming to OpenAPI 3.1.0 GET /products/search.
+ * Parameters:
+ * - query (required string)
+ * - retailer (required string, default 'amazon')
+ * - page (optional integer)
+ * - free_shipping (optional boolean)
+ */
+export async function searchZincProducts(
+  apiKey: string,
+  params: {
+    query: string;
+    retailer?: string;
+    page?: number | null;
+    free_shipping?: boolean;
+  }
+): Promise<any> {
+  const url = new URL(`${ZINC_BASE_URL}/products/search`);
+  url.searchParams.set("query", params.query);
+  url.searchParams.set("retailer", params.retailer || "amazon");
+
+  if (params.page !== undefined && params.page !== null) {
+    url.searchParams.set("page", String(params.page));
+  }
+  if (params.free_shipping !== undefined && params.free_shipping !== null) {
+    url.searchParams.set("free_shipping", String(params.free_shipping));
+  }
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: getZincAuthHeaders(apiKey),
+  });
+
+  if (!res.ok) {
+    let errBody: any = null;
+    try {
+      errBody = await res.json();
+    } catch {
+      errBody = null;
+    }
+    const message = errBody?.message || errBody?.error || res.statusText;
+    throw new Error(`Zinc search responded HTTP ${res.status}: ${message}`);
+  }
+
+  return await res.json();
+}
+

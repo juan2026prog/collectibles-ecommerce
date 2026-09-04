@@ -225,9 +225,23 @@ serve(async (req) => {
 
         const maxPriceCents = dollarsToCents(maxAmazonPrice);
         const stablePoNumber = `${order.order_number || order.id}-${intlOrderItem.id.slice(0, 8)}`;
-        const idempotencyKey = intlOrderItem.id; // Stable UUID (max 36 chars) per logical item
         
-        const zincRequestPayload = {
+        // 1. Official V2 Idempotency: single key per logical purchase, persisted in DB BEFORE first POST
+        let idempotencyKey = intlOrderItem.idempotency_key;
+        if (!idempotencyKey) {
+          // Stable UUID (max 36 chars) per logical international order item
+          idempotencyKey = intlOrderItem.id ? String(intlOrderItem.id) : crypto.randomUUID();
+          
+          // Persist in database BEFORE sending the POST request
+          await serviceClient.from('international_order_items').update({
+            idempotency_key: idempotencyKey,
+            zinc_po_number: stablePoNumber,
+            updated_at: new Date().toISOString()
+          }).eq('id', intlOrderItem.id);
+          intlOrderItem.idempotency_key = idempotencyKey;
+        }
+
+        const zincRequestPayload: ZincOrderCreatePayload = {
           products: [{
             url: prod.product_url_external,
             quantity: Math.max(1, item.quantity || 1)

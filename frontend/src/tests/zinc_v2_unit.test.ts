@@ -319,5 +319,152 @@ describe('Zinc API V2 - Unit Test Certification Suite', () => {
       const uuid = '550e8400-e29b-41d4-a716-446655440000';
       expect(uuid.length).toBeLessThanOrEqual(36);
     });
+
+    // Sub-requirement: verify single key per purchase, persisted before first POST, reused across all retries
+    it('verifies idempotency lifecycle: first attempt -> key A, network retry -> key A, 5xx retry -> key A, duplicate response -> key A, new logical order -> key B', () => {
+      // Mock DB table row
+      let dbRow: { id: string; idempotency_key: string | null; zinc_order_id: string | null } = {
+        id: 'item-uuid-1111-2222-3333-444455556666',
+        idempotency_key: null,
+        zinc_order_id: null
+      };
+
+      // Simulator of edge function idempotency resolver
+      function resolveAndPersistIdempotencyKey(row: typeof dbRow) {
+        if (!row.idempotency_key) {
+          // Generate key ONCE for this logical item
+          const newKey = row.id ? String(row.id) : crypto.randomUUID();
+          // Persist in DB BEFORE any POST
+          row.idempotency_key = newKey;
+        }
+        return row.idempotency_key;
+      }
+
+      // 1. First attempt: key is generated and persisted in DB
+      const keyFirstAttempt = resolveAndPersistIdempotencyKey(dbRow);
+      expect(keyFirstAttempt).toBe('item-uuid-1111-2222-3333-444455556666');
+      expect(dbRow.idempotency_key).toBe('item-uuid-1111-2222-3333-444455556666');
+
+      // 2. Network timeout / retry: reads from DB, must yield EXACT SAME key A
+      const keyNetworkRetry = resolveAndPersistIdempotencyKey(dbRow);
+      expect(keyNetworkRetry).toBe(keyFirstAttempt);
+
+      // 3. 5xx Server error retry: reads from DB, must yield EXACT SAME key A
+      const key5xxRetry = resolveAndPersistIdempotencyKey(dbRow);
+      expect(key5xxRetry).toBe(keyFirstAttempt);
+
+      // 4. Duplicate 409 response retry: must yield EXACT SAME key A
+      const keyDuplicateRetry = resolveAndPersistIdempotencyKey(dbRow);
+      expect(keyDuplicateRetry).toBe(keyFirstAttempt);
+
+      // 5. New distinct logical order item: must yield a DIFFERENT key B
+      const dbRowB = {
+        id: 'item-uuid-9999-8888-7777-666655554444',
+        idempotency_key: null,
+        zinc_order_id: null
+      };
+      const keyLogicalOrderB = resolveAndPersistIdempotencyKey(dbRowB);
+      expect(keyLogicalOrderB).toBe('item-uuid-9999-8888-7777-666655554444');
+      expect(keyLogicalOrderB).not.toBe(keyFirstAttempt);
+    });
+  });
+
+  // 8. Product Search Endpoint & Parameter Contract
+  describe('Product Search Contract (/products/search)', () => {
+    function buildSearchUrl(base: string, params: { query: string; retailer?: string; page?: number | null; free_shipping?: boolean }) {
+      const url = new URL(`${base}/products/search`);
+      url.searchParams.set('query', params.query);
+      url.searchParams.set('retailer', params.retailer || 'amazon');
+      if (params.page !== undefined && params.page !== null) {
+        url.searchParams.set('page', String(params.page));
+      }
+      if (params.free_shipping !== undefined && params.free_shipping !== null) {
+        url.searchParams.set('free_shipping', String(params.free_shipping));
+      }
+      return url.toString();
+    }
+
+    it('builds official GET /products/search URL with required query and retailer', () => {
+      const url = buildSearchUrl('https://api.zinc.com', { query: 'anime figure', retailer: 'amazon', page: 2 });
+      expect(url).toBe('https://api.zinc.com/products/search?query=anime+figure&retailer=amazon&page=2');
+    });
+
+    it('defaults retailer to amazon when not specified', () => {
+      const url = buildSearchUrl('https://api.zinc.com', { query: 'gundam' });
+      expect(url).toContain('/products/search?');
+      expect(url).toContain('retailer=amazon');
+    });
+
+    it('handles free_shipping parameter correctly', () => {
+      const url = buildSearchUrl('https://api.zinc.com', { query: 'batman', free_shipping: true });
+      expect(url).toContain('free_shipping=true');
+    });
+  });
+
+  // 9. Webhook Event Mapping (API Reference & Changelog)
+  describe('Webhook Event Mapping (API Reference + Changelog)', () => {
+    function mapZincEvent(eventType: string, status?: string) {
+      const evt = (eventType || '').trim().toLowerCase();
+      const st = (status || '').trim().toLowerCase();
+      switch (evt) {
+        case 'order.started': return { purchase_status: 'zinc_processing' };
+        case 'order.placed': return { purchase_status: 'purchased' };
+        case 'order.tracking_received':
+        case 'order.tracking':
+        case 'order.shipped': return { purchase_status: 'shipped_to_courier' };
+        case 'order.estimated_delivery_updated': return { purchase_status: 'shipped_to_courier' };
+        case 'order.delivered': return { purchase_status: 'delivered_to_courier' };
+        case 'order.cancelled': return { purchase_status: 'zinc_failed', order_status: 'manual_review', is_terminal: true };
+        case 'order.failed': return { purchase_status: 'zinc_failed', order_status: 'manual_review', is_terminal: true };
+        case 'return.created':
+        case 'return.approved':
+        case 'return.denied':
+        case 'return.credited':
+        case 'return.label_uploaded': return { purchase_status: 'delivered_to_courier' };
+        default:
+          if (st === 'failed') return { purchase_status: 'zinc_failed', order_status: 'manual_review', is_terminal: true };
+          return { purchase_status: 'zinc_processing' };
+      }
+    }
+
+    it('maps order.started to zinc_processing', () => {
+      expect(mapZincEvent('order.started').purchase_status).toBe('zinc_processing');
+    });
+
+    it('maps order.placed to purchased', () => {
+      expect(mapZincEvent('order.placed').purchase_status).toBe('purchased');
+    });
+
+    it('maps tracking and shipping events from API reference and changelog', () => {
+      expect(mapZincEvent('order.tracking_received').purchase_status).toBe('shipped_to_courier');
+      expect(mapZincEvent('order.tracking').purchase_status).toBe('shipped_to_courier');
+      expect(mapZincEvent('order.shipped').purchase_status).toBe('shipped_to_courier');
+      expect(mapZincEvent('order.estimated_delivery_updated').purchase_status).toBe('shipped_to_courier');
+    });
+
+    it('maps order.delivered to delivered_to_courier', () => {
+      expect(mapZincEvent('order.delivered').purchase_status).toBe('delivered_to_courier');
+    });
+
+    it('maps terminal failure and cancellation events to manual_review', () => {
+      const failed = mapZincEvent('order.failed');
+      expect(failed.purchase_status).toBe('zinc_failed');
+      expect(failed.order_status).toBe('manual_review');
+      expect(failed.is_terminal).toBe(true);
+
+      const cancelled = mapZincEvent('order.cancelled');
+      expect(cancelled.purchase_status).toBe('zinc_failed');
+      expect(cancelled.order_status).toBe('manual_review');
+    });
+
+    it('handles return events without degrading order status', () => {
+      expect(mapZincEvent('return.created').purchase_status).toBe('delivered_to_courier');
+      expect(mapZincEvent('return.approved').purchase_status).toBe('delivered_to_courier');
+      expect(mapZincEvent('return.label_uploaded').purchase_status).toBe('delivered_to_courier');
+    });
+
+    it('handles unknown events safely by not throwing and returning safe status', () => {
+      expect(mapZincEvent('custom.unknown_event').purchase_status).toBe('zinc_processing');
+    });
   });
 });

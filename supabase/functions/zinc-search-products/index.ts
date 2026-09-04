@@ -16,7 +16,7 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    const { resolveActiveZincApiKey } = await import("../_shared/zinc/index.ts");
+    const { resolveActiveZincApiKey, searchZincProducts } = await import("../_shared/zinc/index.ts");
     const ZINC_API_KEY = await resolveActiveZincApiKey(supabase);
 
     const { 
@@ -54,20 +54,12 @@ serve(async (req) => {
 
     if (searchError) throw searchError;
 
-    // Call Zinc API
-    let zincUrl = `https://api.zinc.com/products/search?query=${encodeURIComponent(query)}&retailer=amazon&page=${page}`;
-    if (sort_by) zincUrl += `&sort=${sort_by}`;
-    const zincRes = await fetch(zincUrl, {
-      headers: {
-        'Authorization': `Bearer ${ZINC_API_KEY}`
-      }
+    // Call Zinc API strictly via GET /products/search conforming to OpenAPI 3.1.0
+    const rawResponse = await searchZincProducts(ZINC_API_KEY, {
+      query,
+      retailer: 'amazon',
+      page: Number(page) || 1,
     });
-
-    if (!zincRes.ok) {
-      throw new Error(`Error de Zinc API: ${zincRes.statusText}`);
-    }
-
-    const rawResponse = await zincRes.json();
     
     // Update raw response in search
     await supabase.from('international_import_searches').update({ raw_response: rawResponse }).eq('id', searchRecord.id);
