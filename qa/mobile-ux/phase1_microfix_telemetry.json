@@ -1,9 +1,9 @@
 {
   "metadata": {
-    "testedAt": "2026-09-04T06:20:32.990Z",
-    "targetUrl": "http://localhost:4173",
-    "deploymentId": "local_pre_validation",
-    "commitSha": "mobile-ux-phase1",
+    "testedAt": "2026-09-04T06:32:32.318Z",
+    "targetUrl": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app",
+    "deploymentId": "dpl_bzcPczvsqx5nMmd4dTb1bazH5Hrc",
+    "commitSha": "95056db",
     "branch": "mobile-ux-phase1"
   },
   "verificationSummary": {
@@ -46,854 +46,826 @@
   "categorizedErrors": [
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/",
-      "message": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://localhost…host:4173/assets/portal-chunk-BbmVnEgu.js:21:1290, hint: }",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/shop",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
+      "category": "THIRD_PARTY_ERROR"
+    },
+    {
+      "viewport": "iPhone_390x844",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/shop",
+      "message": "Failed to load resource: net::ERR_FAILED",
+      "source": "Preview Origin vs External Service CORS",
+      "category": "EXPECTED_TEST_ENV_ERROR"
+    },
+    {
+      "viewport": "iPhone_390x844",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/funko-pop-halloween-michael-myers",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
+      "category": "THIRD_PARTY_ERROR"
+    },
+    {
+      "viewport": "iPhone_390x844",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/funko-pop-halloween-michael-myers",
+      "message": "Failed to load resource: net::ERR_FAILED",
+      "source": "Preview Origin vs External Service CORS",
+      "category": "EXPECTED_TEST_ENV_ERROR"
+    },
+    {
+      "viewport": "iPhone_390x844",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/funko-pop-halloween-michael-myers",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
+      "category": "THIRD_PARTY_ERROR"
+    },
+    {
+      "viewport": "iPhone_390x844",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/funko-pop-halloween-michael-myers",
+      "message": "Failed to load resource: net::ERR_FAILED",
+      "source": "Preview Origin vs External Service CORS",
+      "category": "EXPECTED_TEST_ENV_ERROR"
+    },
+    {
+      "viewport": "iPhone_390x844",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/funko-games-puzzle-de-500-pcs-jurassic-park",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
+      "category": "THIRD_PARTY_ERROR"
+    },
+    {
+      "viewport": "iPhone_390x844",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/funko-games-puzzle-de-500-pcs-jurassic-park",
+      "message": "Failed to load resource: net::ERR_FAILED",
+      "source": "Preview Origin vs External Service CORS",
+      "category": "EXPECTED_TEST_ENV_ERROR"
+    },
+    {
+      "viewport": "iPhone_390x844",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/funko-games-puzzle-de-500-pcs-jurassic-park",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
+      "category": "THIRD_PARTY_ERROR"
+    },
+    {
+      "viewport": "iPhone_390x844",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/funko-games-puzzle-de-500-pcs-jurassic-park",
+      "message": "Failed to load resource: net::ERR_FAILED",
+      "source": "Preview Origin vs External Service CORS",
+      "category": "EXPECTED_TEST_ENV_ERROR"
+    },
+    {
+      "viewport": "iPhone_390x844",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
+      "category": "THIRD_PARTY_ERROR"
+    },
+    {
+      "viewport": "iPhone_390x844",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "message": "Failed to load resource: net::ERR_FAILED",
+      "source": "Preview Origin vs External Service CORS",
+      "category": "EXPECTED_TEST_ENV_ERROR"
+    },
+    {
+      "viewport": "iPhone_390x844",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
+      "category": "THIRD_PARTY_ERROR"
+    },
+    {
+      "viewport": "iPhone_390x844",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "message": "Failed to load resource: net::ERR_FAILED",
+      "source": "Preview Origin vs External Service CORS",
+      "category": "EXPECTED_TEST_ENV_ERROR"
+    },
+    {
+      "viewport": "iPhone_390x844",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/captain-carter-stealth-suit-what-if-marvel-legends-hasbro-iq855",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
+      "category": "THIRD_PARTY_ERROR"
+    },
+    {
+      "viewport": "iPhone_390x844",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/captain-carter-stealth-suit-what-if-marvel-legends-hasbro-iq855",
+      "message": "Failed to load resource: net::ERR_FAILED",
+      "source": "Preview Origin vs External Service CORS",
+      "category": "EXPECTED_TEST_ENV_ERROR"
+    },
+    {
+      "viewport": "iPhone_390x844",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/captain-carter-stealth-suit-what-if-marvel-legends-hasbro-iq855",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
+      "category": "THIRD_PARTY_ERROR"
+    },
+    {
+      "viewport": "iPhone_390x844",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/captain-carter-stealth-suit-what-if-marvel-legends-hasbro-iq855",
+      "message": "Failed to load resource: net::ERR_FAILED",
+      "source": "Preview Origin vs External Service CORS",
+      "category": "EXPECTED_TEST_ENV_ERROR"
+    },
+    {
+      "viewport": "iPhone_390x844",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/44d1b413-721f-4ecd-9225-e37d7413768e",
+      "message": "Failed to load resource: the server responded with a status of 404 ()",
       "source": "Third-party Network / External Asset",
       "category": "NETWORK_EXTERNAL_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/",
-      "message": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://localhost…host:4173/assets/portal-chunk-BbmVnEgu.js:21:1290, hint: }",
-      "source": "Third-party Network / External Asset",
-      "category": "NETWORK_EXTERNAL_ERROR"
-    },
-    {
-      "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/",
-      "message": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://localhost…host:4173/assets/portal-chunk-BbmVnEgu.js:21:1290, hint: }",
-      "source": "Third-party Network / External Asset",
-      "category": "NETWORK_EXTERNAL_ERROR"
-    },
-    {
-      "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/shop",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/44d1b413-721f-4ecd-9225-e37d7413768e",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/shop",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/44d1b413-721f-4ecd-9225-e37d7413768e",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/funko-pop-halloween-michael-myers",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/44d1b413-721f-4ecd-9225-e37d7413768e",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/funko-pop-halloween-michael-myers",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/44d1b413-721f-4ecd-9225-e37d7413768e",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/funko-pop-halloween-michael-myers",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/iron-man-proton-cannon-marvel-legends-hasbro-2z9eg",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/funko-pop-halloween-michael-myers",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/iron-man-proton-cannon-marvel-legends-hasbro-2z9eg",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/funko-games-puzzle-de-500-pcs-jurassic-park",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/iron-man-proton-cannon-marvel-legends-hasbro-2z9eg",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/funko-games-puzzle-de-500-pcs-jurassic-park",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/iron-man-proton-cannon-marvel-legends-hasbro-2z9eg",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/funko-games-puzzle-de-500-pcs-jurassic-park",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/funko-games-puzzle-de-500-pcs-jurassic-park",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/captain-carter-stealth-suit-what-if-marvel-legends-hasbro-iq855",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/captain-carter-stealth-suit-what-if-marvel-legends-hasbro-iq855",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/captain-carter-stealth-suit-what-if-marvel-legends-hasbro-iq855",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/captain-carter-stealth-suit-what-if-marvel-legends-hasbro-iq855",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/44d1b413-721f-4ecd-9225-e37d7413768e",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/checkout",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/44d1b413-721f-4ecd-9225-e37d7413768e",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/checkout",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/44d1b413-721f-4ecd-9225-e37d7413768e",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/checkout",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/44d1b413-721f-4ecd-9225-e37d7413768e",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/checkout",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/iron-man-proton-cannon-marvel-legends-hasbro-2z9eg",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/checkout",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/iron-man-proton-cannon-marvel-legends-hasbro-2z9eg",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/checkout",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/iron-man-proton-cannon-marvel-legends-hasbro-2z9eg",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/iron-man-proton-cannon-marvel-legends-hasbro-2z9eg",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/checkout",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/checkout",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/checkout",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/checkout",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/checkout",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/checkout",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/shop",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/shop",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/checkout",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/shop",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/checkout",
-      "message": "Failed to load resource: net::ERR_FAILED",
-      "source": "Preview Origin vs External Service CORS",
-      "category": "EXPECTED_TEST_ENV_ERROR"
-    },
-    {
-      "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/checkout",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
-      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
-      "category": "THIRD_PARTY_ERROR"
-    },
-    {
-      "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/checkout",
-      "message": "Failed to load resource: net::ERR_FAILED",
-      "source": "Preview Origin vs External Service CORS",
-      "category": "EXPECTED_TEST_ENV_ERROR"
-    },
-    {
-      "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/checkout",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
-      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
-      "category": "THIRD_PARTY_ERROR"
-    },
-    {
-      "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/checkout",
-      "message": "Failed to load resource: net::ERR_FAILED",
-      "source": "Preview Origin vs External Service CORS",
-      "category": "EXPECTED_TEST_ENV_ERROR"
-    },
-    {
-      "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
-      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
-      "category": "THIRD_PARTY_ERROR"
-    },
-    {
-      "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
-      "message": "Failed to load resource: net::ERR_FAILED",
-      "source": "Preview Origin vs External Service CORS",
-      "category": "EXPECTED_TEST_ENV_ERROR"
-    },
-    {
-      "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
-      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
-      "category": "THIRD_PARTY_ERROR"
-    },
-    {
-      "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
-      "message": "Failed to load resource: net::ERR_FAILED",
-      "source": "Preview Origin vs External Service CORS",
-      "category": "EXPECTED_TEST_ENV_ERROR"
-    },
-    {
-      "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/checkout",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
-      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
-      "category": "THIRD_PARTY_ERROR"
-    },
-    {
-      "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/checkout",
-      "message": "Failed to load resource: net::ERR_FAILED",
-      "source": "Preview Origin vs External Service CORS",
-      "category": "EXPECTED_TEST_ENV_ERROR"
-    },
-    {
-      "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/checkout",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
-      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
-      "category": "THIRD_PARTY_ERROR"
-    },
-    {
-      "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/checkout",
-      "message": "Failed to load resource: net::ERR_FAILED",
-      "source": "Preview Origin vs External Service CORS",
-      "category": "EXPECTED_TEST_ENV_ERROR"
-    },
-    {
-      "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/checkout",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
-      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
-      "category": "THIRD_PARTY_ERROR"
-    },
-    {
-      "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/checkout",
-      "message": "Failed to load resource: net::ERR_FAILED",
-      "source": "Preview Origin vs External Service CORS",
-      "category": "EXPECTED_TEST_ENV_ERROR"
-    },
-    {
-      "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/shop",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
-      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
-      "category": "THIRD_PARTY_ERROR"
-    },
-    {
-      "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/shop",
-      "message": "Failed to load resource: net::ERR_FAILED",
-      "source": "Preview Origin vs External Service CORS",
-      "category": "EXPECTED_TEST_ENV_ERROR"
-    },
-    {
-      "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/shop",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
-      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
-      "category": "THIRD_PARTY_ERROR"
-    },
-    {
-      "viewport": "iPhone_390x844",
-      "route": "http://localhost:4173/shop",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/shop",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/",
-      "message": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://localhost…host:4173/assets/portal-chunk-BbmVnEgu.js:21:1290, hint: }",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/shop",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
+      "category": "THIRD_PARTY_ERROR"
+    },
+    {
+      "viewport": "Android_360x740",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/shop",
+      "message": "Failed to load resource: net::ERR_FAILED",
+      "source": "Preview Origin vs External Service CORS",
+      "category": "EXPECTED_TEST_ENV_ERROR"
+    },
+    {
+      "viewport": "Android_360x740",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/funko-pop-halloween-michael-myers",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
+      "category": "THIRD_PARTY_ERROR"
+    },
+    {
+      "viewport": "Android_360x740",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/funko-pop-halloween-michael-myers",
+      "message": "Failed to load resource: net::ERR_FAILED",
+      "source": "Preview Origin vs External Service CORS",
+      "category": "EXPECTED_TEST_ENV_ERROR"
+    },
+    {
+      "viewport": "Android_360x740",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/funko-pop-halloween-michael-myers",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
+      "category": "THIRD_PARTY_ERROR"
+    },
+    {
+      "viewport": "Android_360x740",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/funko-pop-halloween-michael-myers",
+      "message": "Failed to load resource: net::ERR_FAILED",
+      "source": "Preview Origin vs External Service CORS",
+      "category": "EXPECTED_TEST_ENV_ERROR"
+    },
+    {
+      "viewport": "Android_360x740",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/funko-games-puzzle-de-500-pcs-jurassic-park",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
+      "category": "THIRD_PARTY_ERROR"
+    },
+    {
+      "viewport": "Android_360x740",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/funko-games-puzzle-de-500-pcs-jurassic-park",
+      "message": "Failed to load resource: net::ERR_FAILED",
+      "source": "Preview Origin vs External Service CORS",
+      "category": "EXPECTED_TEST_ENV_ERROR"
+    },
+    {
+      "viewport": "Android_360x740",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/funko-games-puzzle-de-500-pcs-jurassic-park",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
+      "category": "THIRD_PARTY_ERROR"
+    },
+    {
+      "viewport": "Android_360x740",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/funko-games-puzzle-de-500-pcs-jurassic-park",
+      "message": "Failed to load resource: net::ERR_FAILED",
+      "source": "Preview Origin vs External Service CORS",
+      "category": "EXPECTED_TEST_ENV_ERROR"
+    },
+    {
+      "viewport": "Android_360x740",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
+      "category": "THIRD_PARTY_ERROR"
+    },
+    {
+      "viewport": "Android_360x740",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "message": "Failed to load resource: net::ERR_FAILED",
+      "source": "Preview Origin vs External Service CORS",
+      "category": "EXPECTED_TEST_ENV_ERROR"
+    },
+    {
+      "viewport": "Android_360x740",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
+      "category": "THIRD_PARTY_ERROR"
+    },
+    {
+      "viewport": "Android_360x740",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "message": "Failed to load resource: net::ERR_FAILED",
+      "source": "Preview Origin vs External Service CORS",
+      "category": "EXPECTED_TEST_ENV_ERROR"
+    },
+    {
+      "viewport": "Android_360x740",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/captain-carter-stealth-suit-what-if-marvel-legends-hasbro-iq855",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
+      "category": "THIRD_PARTY_ERROR"
+    },
+    {
+      "viewport": "Android_360x740",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/captain-carter-stealth-suit-what-if-marvel-legends-hasbro-iq855",
+      "message": "Failed to load resource: net::ERR_FAILED",
+      "source": "Preview Origin vs External Service CORS",
+      "category": "EXPECTED_TEST_ENV_ERROR"
+    },
+    {
+      "viewport": "Android_360x740",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/captain-carter-stealth-suit-what-if-marvel-legends-hasbro-iq855",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
+      "category": "THIRD_PARTY_ERROR"
+    },
+    {
+      "viewport": "Android_360x740",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/captain-carter-stealth-suit-what-if-marvel-legends-hasbro-iq855",
+      "message": "Failed to load resource: net::ERR_FAILED",
+      "source": "Preview Origin vs External Service CORS",
+      "category": "EXPECTED_TEST_ENV_ERROR"
+    },
+    {
+      "viewport": "Android_360x740",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/44d1b413-721f-4ecd-9225-e37d7413768e",
+      "message": "Failed to load resource: the server responded with a status of 404 ()",
       "source": "Third-party Network / External Asset",
       "category": "NETWORK_EXTERNAL_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/",
-      "message": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://localhost…host:4173/assets/portal-chunk-BbmVnEgu.js:21:1290, hint: }",
-      "source": "Third-party Network / External Asset",
-      "category": "NETWORK_EXTERNAL_ERROR"
-    },
-    {
-      "viewport": "Android_360x740",
-      "route": "http://localhost:4173/",
-      "message": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://localhost…host:4173/assets/portal-chunk-BbmVnEgu.js:21:1290, hint: }",
-      "source": "Third-party Network / External Asset",
-      "category": "NETWORK_EXTERNAL_ERROR"
-    },
-    {
-      "viewport": "Android_360x740",
-      "route": "http://localhost:4173/shop",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/44d1b413-721f-4ecd-9225-e37d7413768e",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/shop",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/44d1b413-721f-4ecd-9225-e37d7413768e",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/funko-pop-halloween-michael-myers",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/44d1b413-721f-4ecd-9225-e37d7413768e",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/funko-pop-halloween-michael-myers",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/44d1b413-721f-4ecd-9225-e37d7413768e",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/funko-pop-halloween-michael-myers",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/iron-man-proton-cannon-marvel-legends-hasbro-2z9eg",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/funko-pop-halloween-michael-myers",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/iron-man-proton-cannon-marvel-legends-hasbro-2z9eg",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/funko-games-puzzle-de-500-pcs-jurassic-park",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/iron-man-proton-cannon-marvel-legends-hasbro-2z9eg",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/funko-games-puzzle-de-500-pcs-jurassic-park",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/iron-man-proton-cannon-marvel-legends-hasbro-2z9eg",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/funko-games-puzzle-de-500-pcs-jurassic-park",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/funko-games-puzzle-de-500-pcs-jurassic-park",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/captain-carter-stealth-suit-what-if-marvel-legends-hasbro-iq855",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/captain-carter-stealth-suit-what-if-marvel-legends-hasbro-iq855",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/captain-carter-stealth-suit-what-if-marvel-legends-hasbro-iq855",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/captain-carter-stealth-suit-what-if-marvel-legends-hasbro-iq855",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/44d1b413-721f-4ecd-9225-e37d7413768e",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/checkout",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/44d1b413-721f-4ecd-9225-e37d7413768e",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/checkout",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/44d1b413-721f-4ecd-9225-e37d7413768e",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/checkout",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/44d1b413-721f-4ecd-9225-e37d7413768e",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/checkout",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/iron-man-proton-cannon-marvel-legends-hasbro-2z9eg",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/checkout",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/iron-man-proton-cannon-marvel-legends-hasbro-2z9eg",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/checkout",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/iron-man-proton-cannon-marvel-legends-hasbro-2z9eg",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/iron-man-proton-cannon-marvel-legends-hasbro-2z9eg",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/producto/frazada-1-plaza-my-hero-academia-deku-3",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/checkout",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/checkout",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/checkout",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/checkout",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/checkout",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/checkout",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/shop",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/shop",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/checkout",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/shop",
+      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app' has been blocked by CORS policy: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
       "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
       "category": "THIRD_PARTY_ERROR"
     },
     {
       "viewport": "Android_360x740",
-      "route": "http://localhost:4173/checkout",
-      "message": "Failed to load resource: net::ERR_FAILED",
-      "source": "Preview Origin vs External Service CORS",
-      "category": "EXPECTED_TEST_ENV_ERROR"
-    },
-    {
-      "viewport": "Android_360x740",
-      "route": "http://localhost:4173/checkout",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
-      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
-      "category": "THIRD_PARTY_ERROR"
-    },
-    {
-      "viewport": "Android_360x740",
-      "route": "http://localhost:4173/checkout",
-      "message": "Failed to load resource: net::ERR_FAILED",
-      "source": "Preview Origin vs External Service CORS",
-      "category": "EXPECTED_TEST_ENV_ERROR"
-    },
-    {
-      "viewport": "Android_360x740",
-      "route": "http://localhost:4173/checkout",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
-      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
-      "category": "THIRD_PARTY_ERROR"
-    },
-    {
-      "viewport": "Android_360x740",
-      "route": "http://localhost:4173/checkout",
-      "message": "Failed to load resource: net::ERR_FAILED",
-      "source": "Preview Origin vs External Service CORS",
-      "category": "EXPECTED_TEST_ENV_ERROR"
-    },
-    {
-      "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
-      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
-      "category": "THIRD_PARTY_ERROR"
-    },
-    {
-      "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
-      "message": "Failed to load resource: net::ERR_FAILED",
-      "source": "Preview Origin vs External Service CORS",
-      "category": "EXPECTED_TEST_ENV_ERROR"
-    },
-    {
-      "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
-      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
-      "category": "THIRD_PARTY_ERROR"
-    },
-    {
-      "viewport": "Android_360x740",
-      "route": "http://localhost:4173/producto/frazada-1-plaza-my-hero-academia-deku-3",
-      "message": "Failed to load resource: net::ERR_FAILED",
-      "source": "Preview Origin vs External Service CORS",
-      "category": "EXPECTED_TEST_ENV_ERROR"
-    },
-    {
-      "viewport": "Android_360x740",
-      "route": "http://localhost:4173/checkout",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
-      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
-      "category": "THIRD_PARTY_ERROR"
-    },
-    {
-      "viewport": "Android_360x740",
-      "route": "http://localhost:4173/checkout",
-      "message": "Failed to load resource: net::ERR_FAILED",
-      "source": "Preview Origin vs External Service CORS",
-      "category": "EXPECTED_TEST_ENV_ERROR"
-    },
-    {
-      "viewport": "Android_360x740",
-      "route": "http://localhost:4173/checkout",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
-      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
-      "category": "THIRD_PARTY_ERROR"
-    },
-    {
-      "viewport": "Android_360x740",
-      "route": "http://localhost:4173/checkout",
-      "message": "Failed to load resource: net::ERR_FAILED",
-      "source": "Preview Origin vs External Service CORS",
-      "category": "EXPECTED_TEST_ENV_ERROR"
-    },
-    {
-      "viewport": "Android_360x740",
-      "route": "http://localhost:4173/checkout",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
-      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
-      "category": "THIRD_PARTY_ERROR"
-    },
-    {
-      "viewport": "Android_360x740",
-      "route": "http://localhost:4173/checkout",
-      "message": "Failed to load resource: net::ERR_FAILED",
-      "source": "Preview Origin vs External Service CORS",
-      "category": "EXPECTED_TEST_ENV_ERROR"
-    },
-    {
-      "viewport": "Android_360x740",
-      "route": "http://localhost:4173/shop",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
-      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
-      "category": "THIRD_PARTY_ERROR"
-    },
-    {
-      "viewport": "Android_360x740",
-      "route": "http://localhost:4173/shop",
-      "message": "Failed to load resource: net::ERR_FAILED",
-      "source": "Preview Origin vs External Service CORS",
-      "category": "EXPECTED_TEST_ENV_ERROR"
-    },
-    {
-      "viewport": "Android_360x740",
-      "route": "http://localhost:4173/shop",
-      "message": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://localhost:4173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value.",
-      "source": "Meta CAPI (CORS restricted to collectibles.uy production origin)",
-      "category": "THIRD_PARTY_ERROR"
-    },
-    {
-      "viewport": "Android_360x740",
-      "route": "http://localhost:4173/shop",
+      "route": "https://collectibles-ecommerce-a5qgtabi9-juans-projects-05818af2.vercel.app/shop",
       "message": "Failed to load resource: net::ERR_FAILED",
       "source": "Preview Origin vs External Service CORS",
       "category": "EXPECTED_TEST_ENV_ERROR"
