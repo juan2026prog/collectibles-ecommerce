@@ -85,3 +85,37 @@ export async function testZincConnection(apiKey: string, env: ZincEnvironment): 
     test_products_count,
   };
 }
+
+/**
+ * Resolves the active Zinc API key from Supabase Vault (checking production first, then sandbox)
+ * or falls back to environment variable ZINC_API_KEY.
+ */
+export async function resolveActiveZincApiKey(supabaseClient: any): Promise<string> {
+  try {
+    const { data: prodKey } = await supabaseClient.rpc("get_zinc_vault_secret", {
+      p_environment: "production",
+      p_secret_type: "api_key",
+    });
+    if (prodKey && typeof prodKey === "string" && prodKey.startsWith("zn_live_")) {
+      return prodKey;
+    }
+
+    const { data: sandKey } = await supabaseClient.rpc("get_zinc_vault_secret", {
+      p_environment: "sandbox",
+      p_secret_type: "api_key",
+    });
+    if (sandKey && typeof sandKey === "string" && sandKey.startsWith("zn_test_")) {
+      return sandKey;
+    }
+  } catch {
+    // Fallback to env
+  }
+
+  const envKey = Deno.env.get("ZINC_API_KEY");
+  if (envKey && typeof envKey === "string" && envKey.trim().startsWith("zn_")) {
+    return envKey.trim();
+  }
+
+  throw new Error("No hay credencial de Zinc configurada en Vault ni en variables de entorno.");
+}
+

@@ -10,11 +10,14 @@ serve(async (req) => {
 
   try {
     const user = await verifyAdmin(req);
-    
-    const ZINC_API_KEY = Deno.env.get("ZINC_API_KEY");
-    if (!ZINC_API_KEY) {
-      throw new Error("ZINC_API_KEY no configurada");
-    }
+
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
+
+    const { resolveActiveZincApiKey } = await import("../_shared/zinc/index.ts");
+    const ZINC_API_KEY = await resolveActiveZincApiKey(supabase);
 
     const { 
       query, 
@@ -31,11 +34,6 @@ serve(async (req) => {
     if (!query) {
       throw new Error("Falta el término de búsqueda (query)");
     }
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
 
     // Save search history
     const { data: searchRecord, error: searchError } = await supabase
