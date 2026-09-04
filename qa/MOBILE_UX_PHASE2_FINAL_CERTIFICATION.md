@@ -5,16 +5,16 @@
 ---
 
 ### Branch:
-`mobile-ux-phase2`
+`mobile-ux-phase2b`
 
 ### Final Commit SHA:
-`301b31b97c98a0cd644fdbb763430ae762039353`
+`64cdeee099793f7035a0ec4b5d1a0c58baf07da3`
 
 ### Vercel Deployment ID:
-`dpl_334pfdZQW2cz6MTZ6yUzdDiqiR3Y`
+`dpl_J7mAN6VPf6nRtojcNuKnpXazyA9M`
 
 ### Preview URL:
-`https://collectibles-ecommerce-ha6e8vdug-juans-projects-05818af2.vercel.app`
+`https://collectibles-ecommerce-ig2bh890b-juans-projects-05818af2.vercel.app`
 
 ---
 
@@ -46,6 +46,7 @@
 ---
 
 ```
+FINAL VISUAL VERDICT: GO
 PHASE 2 BUILD: PASS
 PHASE 2 QA: PASS
 PHASE 2 PREVIEW: READY
