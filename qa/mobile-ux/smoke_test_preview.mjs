@@ -2,7 +2,7 @@ import path from 'path';
 import fs from 'fs';
 import { chromium } from '../../frontend/node_modules/playwright/index.mjs';
 
-const PREVIEW_URL = 'https://collectibles-ecommerce-cqc6npek2-juans-projects-05818af2.vercel.app';
+const PREVIEW_URL = 'https://collectibles-ecommerce-j75005r6d-juans-projects-05818af2.vercel.app';
 const BYPASS_SECRET = 'yqwhOKDnQvezSNJoyYEJuF4LLCzZwgdi';
 
 async function runSmokeSuite() {
@@ -13,8 +13,8 @@ async function runSmokeSuite() {
     metadata: {
       testedAt: new Date().toISOString(),
       previewUrl: PREVIEW_URL,
-      deploymentId: 'dpl_6cYVH4j2uCsHdiz4NbBjBuqd9ThR',
-      commitSha: '23bf6487e41b9d4e5fca9f086385f0efceaa7502',
+      deploymentId: 'dpl_FCwacibpXfucV8neND2xTNczueQJ',
+      commitSha: '7c9ed03d7cbf5727fa1e57c6b8c8d88e6be01369',
       branch: 'mobile-ux-phase1',
       deploymentStatus: 'READY'
     },
@@ -39,7 +39,7 @@ async function runSmokeSuite() {
       productVariantsSchemaHasStockColumn: false,
       productVariantsUsesInventoryCount: true,
       mainCodeLogicRestored: "const stock = selectedVariant ? (selectedVariant.stock ?? product.stock) : product.stock;",
-      upstreamEvaluationInMain: "undefined (since neither selectedVariant.stock nor product.stock exists)",
+      upstreamEvaluationInMain: "undefined (since neither selectedVariant.stock nor product.stock exists in database schema)",
       observedProductionBehavior: "Clicking Plus on collectibles.uy evaluates Math.min(undefined, 2) which sets quantity to NaN",
       observedPreviewBehavior: "Identical to main and production (Math.min(undefined, 2) = NaN)",
       syntheticStockInvented: false,
@@ -279,7 +279,7 @@ async function runSmokeSuite() {
   telemetry.verificationSummary.unexplainedPageErrors = telemetry.verificationSummary.runtimeAppErrors;
 
   console.log('\n======================================================');
-  console.log('FINAL CERTIFICATION RESULTS:');
+  console.log('FINAL CERTIFICATION RESULTS (j75005r6d):');
   console.log('======================================================');
   console.log(JSON.stringify(telemetry.verificationSummary, null, 2));
 
