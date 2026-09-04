@@ -31,13 +31,13 @@ serve(async (req) => {
       userObj = user;
     }
 
-    const ZINC_API_KEY = Deno.env.get("ZINC_API_KEY");
-    if (!ZINC_API_KEY) throw new Error("ZINC_API_KEY no configurada");
+    const serviceClient = createClient(supabaseUrl, serviceRoleKey);
+
+    const { resolveActiveZincApiKey, buildZincAddress, dollarsToCents, assertProductionGate } = await import("../_shared/zinc/index.ts");
+    const ZINC_API_KEY = await resolveActiveZincApiKey(serviceClient);
 
     const { order_id, is_auto, is_retry = false } = await req.json();
     if (!order_id) throw new Error("Invalid payload: order_id is required");
-
-    const serviceClient = createClient(supabaseUrl, serviceRoleKey);
     
     const { data: order, error: orderFetchErr } = await serviceClient
       .from('orders')
@@ -68,40 +68,7 @@ serve(async (req) => {
              !!shipping.international_phone;
     };
 
-    let first_name = '';
-    let last_name = '';
-    let address_line1 = '';
-    let address_line2 = '';
-    let city = '';
-    let state = '';
-    let zip_code = '';
-    let phone_number = '';
-
-    if (isAddressValid()) {
-      first_name = shipping.international_recipient_name?.split(' ')[0] || '';
-      last_name = shipping.international_recipient_name?.split(' ').slice(1).join(' ') || '.';
-      address_line1 = shipping.international_address_line_1;
-      
-      const line2Parts = [shipping.international_address_line_2, shipping.international_customer_code].filter(Boolean);
-      address_line2 = line2Parts.join(' ') || '';
-      
-      city = shipping.international_city;
-      state = shipping.international_state;
-      zip_code = shipping.international_postal_code;
-      phone_number = shipping.international_phone;
-    }
-
-    const zincShippingAddress = {
-      first_name,
-      last_name,
-      address_line1,
-      address_line2,
-      city,
-      state,
-      zip_code,
-      country: 'US',
-      phone_number
-    };
+    const zincShippingAddress = buildZincAddress(shipping);
 
     for (const item of order.order_items) {
       if (!item.product_id) continue;
@@ -240,20 +207,48 @@ serve(async (req) => {
 
       // 7. Place Order in Zinc with Deterministic PO Number
       if (settings.auto_purchase_enabled || isServiceCall || (userObj && order.status === 'paid')) {
-        const maxPriceCents = Math.max(1, Math.round(maxAmazonPrice * 100));
+        // Enforce Server-Side Hard Production Safety Gate
+        try {
+          assertProductionGate(ZINC_API_KEY, settings.zinc_production_enabled === true);
+        } catch (gateErr: any) {
+          console.warn("[ZINC PRODUCTION GATE BLOCKED]", gateErr.message);
+          await serviceClient.from('international_order_items').update({
+            purchase_status: 'zinc_failed',
+            review_reason_code: 'ZINC_GATE_BLOCKED',
+            zinc_error_message: gateErr.message,
+            updated_at: new Date().toISOString()
+          }).eq('id', intlOrderItem.id);
+          allOk = false;
+          finalOrderStatus = 'manual_review';
+          continue;
+        }
+
+        const maxPriceCents = dollarsToCents(maxAmazonPrice);
         const stablePoNumber = `${order.order_number || order.id}-${intlOrderItem.id.slice(0, 8)}`;
         
-        const zincRequestPayload = {
-          retailer: 'amazon',
+        // 1. Official V2 Idempotency: single key per logical purchase, persisted in DB BEFORE first POST
+        let idempotencyKey = intlOrderItem.idempotency_key;
+        if (!idempotencyKey) {
+          // Stable UUID (max 36 chars) per logical international order item
+          idempotencyKey = intlOrderItem.id ? String(intlOrderItem.id) : crypto.randomUUID();
+          
+          // Persist in database BEFORE sending the POST request
+          await serviceClient.from('international_order_items').update({
+            idempotency_key: idempotencyKey,
+            zinc_po_number: stablePoNumber,
+            updated_at: new Date().toISOString()
+          }).eq('id', intlOrderItem.id);
+          intlOrderItem.idempotency_key = idempotencyKey;
+        }
+
+        const zincRequestPayload: ZincOrderCreatePayload = {
           products: [{
             url: prod.product_url_external,
-            quantity: item.quantity
+            quantity: Math.max(1, item.quantity || 1)
           }],
           shipping_address: zincShippingAddress,
           max_price: maxPriceCents,
-          payment_method: {
-            use_zinc_card: true
-          },
+          idempotency_key: idempotencyKey,
           po_number: stablePoNumber,
           metadata: {
             collectibles_order_id: order.id,
@@ -275,9 +270,28 @@ serve(async (req) => {
           });
 
           const zincData = await zincRes.json();
+          const isAlreadyExists = zincRes.status === 409 || zincData?.code === 'already_exists';
 
-          if (!zincRes.ok || zincData.error || (zincData.status && zincData.status === 'failed')) {
-            const errStr = zincData.error?.message || zincData.error || "Zinc orders creation failed";
+          if (isAlreadyExists) {
+            // Official V2 Idempotency: already_exists on retry means original order got through.
+            const existingOrderId = zincData?.details?.identifier || zincData?.id || intlOrderItem.zinc_order_id || stablePoNumber;
+            await serviceClient.from('international_order_items').update({
+              purchase_status: 'zinc_order_created',
+              zinc_order_id: existingOrderId,
+              zinc_po_number: stablePoNumber,
+              zinc_request_payload: zincRequestPayload,
+              zinc_response_payload: zincData,
+              zinc_error_message: null,
+              review_reason_code: null,
+              updated_at: new Date().toISOString()
+            }).eq('id', intlOrderItem.id);
+
+            await serviceClient.rpc('spend_international_capacity', {
+              p_reservation_id: intlOrderItem.reservation_id || null,
+              p_order_id: order.id
+            });
+          } else if (!zincRes.ok || zincData.error || (zincData.status && zincData.status === 'failed')) {
+            const errStr = zincData.message || zincData.error?.message || zincData.error || "Zinc orders creation failed";
             await serviceClient.from('international_order_items').update({
               purchase_status: 'zinc_failed',
               review_reason_code: 'ZINC_REJECTED',
@@ -291,7 +305,7 @@ serve(async (req) => {
             finalOrderStatus = 'manual_review';
           } else {
             // Success - Zinc order request accepted
-            const zincOrderId = zincData.request_id || zincData.id;
+            const zincOrderId = zincData.id || zincData.request_id;
             await serviceClient.from('international_order_items').update({
               purchase_status: 'zinc_order_created',
               zinc_order_id: zincOrderId,

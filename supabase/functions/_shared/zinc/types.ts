@@ -56,6 +56,35 @@ export interface ZincOrderCreatePayload {
   handling_days_max?: number | null;
   is_gift?: boolean;
   gift_message?: string | null;
+  payment?: Record<string, unknown> | null; // Optional: omit for prepaid-wallet billing (default)
+  customer_notifications?: Record<string, unknown> | null; // Optional: customer email updates & tracking page
+}
+
+export interface ZincProductSearchParams {
+  query: string;
+  retailer?: string; // Default: 'amazon'
+  page?: number | null;
+  free_shipping?: boolean;
+}
+
+export interface ZincProductSearchResult {
+  product_id: string;
+  title: string;
+  price: number | null;
+  stars?: number | null;
+  reviews_count?: number | null;
+  image_url?: string | null;
+  brand?: string | null;
+  availability?: string | null;
+  url?: string;
+  raw_data?: Record<string, unknown>;
+}
+
+export interface ZincProductSearchResponse {
+  results?: ZincProductSearchResult[];
+  page?: number;
+  next_page?: number | null;
+  total_results?: number;
 }
 
 export interface ZincPriceComponents {

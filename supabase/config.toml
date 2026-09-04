@@ -74,3 +74,8 @@ verify_jwt = false
 enabled = true
 verify_jwt = false
 
+[functions.zinc-webhook]
+enabled = true
+verify_jwt = false
+
+

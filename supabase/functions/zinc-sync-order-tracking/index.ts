@@ -28,11 +28,11 @@ serve(async (req) => {
       if (!profile || !profile.is_admin) throw new Error("Forbidden: Admin access required");
     }
 
-    const ZINC_API_KEY = Deno.env.get("ZINC_API_KEY");
-    if (!ZINC_API_KEY) throw new Error("ZINC_API_KEY no configurada");
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const serviceClient = createClient(supabaseUrl, serviceRoleKey);
+
+    const { resolveActiveZincApiKey } = await import("../_shared/zinc/index.ts");
+    const ZINC_API_KEY = await resolveActiveZincApiKey(serviceClient);
 
     // Fetch active international order items
     const activeStatuses = ['zinc_order_created', 'zinc_processing', 'purchased', 'shipped_to_courier'];
@@ -83,18 +83,22 @@ serve(async (req) => {
           }
         } else if (zincStatus === 'processing') {
           updates.purchase_status = 'zinc_processing';
-        } else if (zincStatus === 'completed' || zincStatus === 'shipped' || zincStatus === 'delivered') {
-          // Defaults to purchased
-          updates.purchase_status = 'purchased';
+        } else if (zincStatus === 'completed' || zincStatus === 'shipped' || zincStatus === 'delivered' || zincStatus === 'order_placed') {
+          updates.purchase_status = zincStatus === 'order_placed' ? 'purchased' : (zincStatus === 'delivered' ? 'delivered_to_courier' : 'shipped_to_courier');
 
-          // Extract tracking info if available
-          const trackingList = zincData.package_tracking_associated_items || [];
-          if (trackingList.length > 0) {
-            const track = trackingList[0];
+          // Extract V2 tracking numbers
+          const trackingNumbers = Array.isArray(zincData.tracking_numbers) ? zincData.tracking_numbers : [];
+          if (trackingNumbers.length > 0) {
+            const track = trackingNumbers[0];
             updates.purchase_status = 'shipped_to_courier';
             updates.tracking_number = track.tracking_number || item.tracking_number;
             updates.carrier = track.carrier || item.carrier;
-            updates.tracking_url = track.tracking_url || item.tracking_url;
+            updates.tracking_url = track.url || item.tracking_url;
+
+            if (track.delivered_at || zincStatus === 'delivered') {
+              updates.purchase_status = 'delivered_to_courier';
+              updates.delivered_to_courier_at = track.delivered_at || new Date().toISOString();
+            }
           } else if (zincData.tracking_number) {
             updates.purchase_status = 'shipped_to_courier';
             updates.tracking_number = zincData.tracking_number;
@@ -102,17 +106,7 @@ serve(async (req) => {
             updates.tracking_url = zincData.tracking_url;
           }
 
-          // Extract delivery dates
-          if (zincData.delivery_dates && zincData.delivery_dates.length > 0) {
-            updates.estimated_delivery_to_courier = zincData.delivery_dates[0];
-          }
-
-          // Check if delivered
-          const isDelivered = zincData.delivery_status === 'delivered' || 
-                              zincStatus === 'delivered' || 
-                              (zincData.shipped_packages && zincData.shipped_packages.some((p: any) => p.delivery_status === 'delivered'));
-
-          if (isDelivered) {
+          if (zincStatus === 'delivered' && updates.purchase_status !== 'delivered_to_courier') {
             updates.purchase_status = 'delivered_to_courier';
             updates.delivered_to_courier_at = new Date().toISOString();
           }
