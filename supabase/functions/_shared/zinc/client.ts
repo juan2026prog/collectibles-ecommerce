@@ -87,36 +87,75 @@ export async function testZincConnection(apiKey: string, env: ZincEnvironment): 
 }
 
 /**
- * Resolves the active Zinc API key from Supabase Vault (checking production first, then sandbox)
- * or falls back to environment variable ZINC_API_KEY.
+ * Resolves the explicit Zinc API key for a specified environment from Supabase Vault
+ * or environment-specific variables (ZINC_SANDBOX_API_KEY, ZINC_PRODUCTION_API_KEY).
+ * 
+ * Strict Isolation:
+ * - Sandbox never returns a zn_live_ key.
+ * - Production never returns a zn_test_ key.
+ * - Generic ZINC_API_KEY fallback is permanently eliminated.
  */
-export async function resolveActiveZincApiKey(supabaseClient: any): Promise<string> {
+export async function resolveZincApiKey(
+  supabaseClient: any,
+  env: ZincEnvironment
+): Promise<string> {
+  if (env !== "sandbox" && env !== "production") {
+    throw new Error(`Entorno Zinc inválido: '${env}'. Debe ser 'sandbox' o 'production'.`);
+  }
+
+  // 1. Resolve from Supabase Vault with explicit environment
   try {
-    const { data: prodKey } = await supabaseClient.rpc("get_zinc_vault_secret", {
-      p_environment: "production",
+    const { data: key, error } = await supabaseClient.rpc("get_zinc_vault_secret", {
+      p_environment: env,
       p_secret_type: "api_key",
     });
-    if (prodKey && typeof prodKey === "string" && prodKey.startsWith("zn_live_")) {
-      return prodKey;
-    }
 
-    const { data: sandKey } = await supabaseClient.rpc("get_zinc_vault_secret", {
-      p_environment: "sandbox",
-      p_secret_type: "api_key",
-    });
-    if (sandKey && typeof sandKey === "string" && sandKey.startsWith("zn_test_")) {
-      return sandKey;
+    if (!error && key && typeof key === "string") {
+      const trimmed = key.trim();
+      if (env === "sandbox") {
+        if (trimmed.startsWith("zn_live_")) {
+          throw new Error("[SECURITY FATAL] Clave de producción (zn_live_) configurada en entorno sandbox.");
+        }
+        if (trimmed.startsWith("zn_test_")) {
+          return trimmed;
+        }
+      } else if (env === "production") {
+        if (trimmed.startsWith("zn_test_")) {
+          throw new Error("[SECURITY FATAL] Clave de test (zn_test_) configurada en entorno producción.");
+        }
+        if (trimmed.startsWith("zn_live_")) {
+          return trimmed;
+        }
+      }
     }
-  } catch {
-    // Fallback to env
+  } catch (e: any) {
+    if (e.message?.includes("[SECURITY FATAL]")) throw e;
   }
 
-  const envKey = Deno.env.get("ZINC_API_KEY");
-  if (envKey && typeof envKey === "string" && envKey.trim().startsWith("zn_")) {
-    return envKey.trim();
+  // 2. Fallback strictly to environment-specific variables (NO generic ZINC_API_KEY fallback)
+  const envVarName = env === "sandbox" ? "ZINC_SANDBOX_API_KEY" : "ZINC_PRODUCTION_API_KEY";
+  const getEnv = (name: string): string | undefined => {
+    try {
+      if (typeof Deno !== "undefined" && Deno.env) return Deno.env.get(name);
+      if (typeof process !== "undefined" && process.env) return process.env[name];
+    } catch {
+      return undefined;
+    }
+    return undefined;
+  };
+
+  const envKey = getEnv(envVarName);
+  if (envKey && typeof envKey === "string") {
+    const trimmed = envKey.trim();
+    if (env === "sandbox" && trimmed.startsWith("zn_test_")) {
+      return trimmed;
+    }
+    if (env === "production" && trimmed.startsWith("zn_live_")) {
+      return trimmed;
+    }
   }
 
-  throw new Error("No hay credencial de Zinc configurada en Vault ni en variables de entorno.");
+  throw new Error(`No hay credencial Zinc válida configurada para el entorno '${env}'.`);
 }
 
 /**

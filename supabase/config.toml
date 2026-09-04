@@ -41,14 +41,9 @@ entrypoint = "./functions/send-whatsapp-notification/index.ts"
 
 [functions.zinc-enrich-candidate]
 enabled = true
-verify_jwt = false
+verify_jwt = true
 import_map = "./functions/zinc-enrich-candidate/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
 entrypoint = "./functions/zinc-enrich-candidate/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/zinc-enrich-candidate/*.html" ]
 
 [functions.mercadolibre-sync]
 enabled = true
@@ -68,7 +63,7 @@ verify_jwt = false
 
 [functions.zinc-sync-published-products]
 enabled = true
-verify_jwt = false
+verify_jwt = true
 
 [functions.ml-import-worker]
 enabled = true
@@ -77,5 +72,42 @@ verify_jwt = false
 [functions.zinc-webhook]
 enabled = true
 verify_jwt = false
+
+[functions.zinc-config]
+enabled = true
+verify_jwt = true
+
+[functions.zinc-search-products]
+enabled = true
+verify_jwt = true
+
+[functions.zinc-import-candidates]
+enabled = true
+verify_jwt = true
+
+[functions.zinc-create-category]
+enabled = true
+verify_jwt = true
+
+[functions.zinc-live-check]
+enabled = true
+verify_jwt = true
+
+[functions.zinc-live-check-before-payment]
+enabled = true
+verify_jwt = true
+
+[functions.zinc-sync-international-products]
+enabled = true
+verify_jwt = true
+
+[functions.zinc-sync-order-tracking]
+enabled = true
+verify_jwt = true
+
+[functions.zinc-verify-after-payment]
+enabled = true
+verify_jwt = true
+
 
 

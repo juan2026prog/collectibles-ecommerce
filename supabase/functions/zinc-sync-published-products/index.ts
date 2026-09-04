@@ -20,8 +20,13 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { resolveActiveZincApiKey } = await import("../_shared/zinc/index.ts");
-    const ZINC_API_KEY = await resolveActiveZincApiKey(supabase);
+    const { resolveZincApiKey } = await import("../_shared/zinc/index.ts");
+    let ZINC_API_KEY = "";
+    try {
+      ZINC_API_KEY = await resolveZincApiKey(supabase, "production");
+    } catch {
+      ZINC_API_KEY = await resolveZincApiKey(supabase, "sandbox");
+    }
 
     const { data: settings } = await supabase.from('international_sync_settings').select('*').eq('id', 1).single();
     if (!settings || !settings.auto_sync_enabled) {
