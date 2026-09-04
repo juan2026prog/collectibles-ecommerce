@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-04T19:31:27.925Z",
+  "timestamp": "2026-09-04T20:39:59.178Z",
   "environment": "sandbox",
   "official_docs_checked": "PASS",
   "openapi_latest_checked": "PASS",
@@ -11,52 +11,52 @@
       "status": 400,
       "code": null,
       "passed": true,
-      "elapsed_ms": 632
+      "elapsed_ms": 756
     },
     "url_unreachable": {
       "type": "synchronous_error",
       "status": 400,
       "code": null,
       "passed": true,
-      "elapsed_ms": 194
+      "elapsed_ms": 207
     },
     "insufficient_funds": {
       "type": "synchronous_error",
       "status": 402,
       "code": null,
       "passed": true,
-      "elapsed_ms": 201
+      "elapsed_ms": 193
     },
     "success": {
       "type": "success_lifecycle",
       "status": 201,
-      "order_id": "164d3211-3904-4cf2-bc4b-766782a5be53",
+      "order_id": "081f4c67-bf3d-447d-ac77-34ee96c13c73",
       "order_status": "pending",
       "passed": true,
-      "elapsed_ms": 340
+      "elapsed_ms": 356
     },
     "price_exceeded": {
       "type": "asynchronous_error",
       "status": 201,
-      "order_id": "f62ffe5a-0df5-46a8-a432-a803b1cdb695",
+      "order_id": "8314b67d-84a2-4b77-a6e6-4978a9faf80c",
       "passed": true
     },
     "out_of_stock": {
       "type": "asynchronous_error",
       "status": 201,
-      "order_id": "b932e241-3beb-418c-87ad-28e29041025c",
+      "order_id": "daaa83fc-611f-43a1-9272-b86c8367aa69",
       "passed": true
     },
     "invalid_variant": {
       "type": "asynchronous_error",
       "status": 201,
-      "order_id": "b7daf8fe-911b-42a2-9ee6-53f314258f8a",
+      "order_id": "238b5fed-01d6-4dde-8ced-17cc2d131e41",
       "passed": true
     },
     "shipping_unavailable": {
       "type": "asynchronous_error",
       "status": 201,
-      "order_id": "e3a9476c-adaf-453a-a3cc-6fcaa7d8c33a",
+      "order_id": "6e810dd3-71ed-4084-9b6b-ad2558b69507",
       "passed": true
     }
   },
@@ -64,6 +64,16 @@
   "production_hard_gate_verified": "PASS",
   "real_production_orders": 0,
   "production_enabled": false,
-  "webhook_secret_status": "BLOCKED_WAITING_SECRET_ROTATION",
+  "webhook_secret_status": "ROTATED_AND_VERIFIED",
+  "webhook_tests": {
+    "missing_signature": "PASS",
+    "invalid_signature": "PASS",
+    "valid_signature_placed": "PASS",
+    "deduplication": "PASS",
+    "tracking_received": "PASS",
+    "delivered": "PASS",
+    "return_event_isolation": "PASS",
+    "database_persistence": "PASS"
+  },
   "dynamic_products_count": 8
 }

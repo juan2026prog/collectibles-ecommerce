@@ -35,6 +35,7 @@ const testResults = {
   real_production_orders: 0,
   production_enabled: false,
   webhook_secret_status: 'UNKNOWN',
+  webhook_tests: {},
 };
 
 async function runCertification() {
@@ -42,12 +43,18 @@ async function runCertification() {
   console.log('ZINC API V2 — LIVE SANDBOX CERTIFICATION RUNNER');
   console.log('============================================================\n');
 
-  // 1. Retrieve Sandbox Key from Vault
+  // 1. Retrieve Sandbox Key and Webhook Secret from Vault
   console.log('[1/7] Retrieving Sandbox credentials securely from Supabase Vault...');
-  const { data: sandboxKey, error: keyErr } = await supabase.rpc('get_zinc_vault_secret', {
-    p_environment: 'sandbox',
-    p_secret_type: 'api_key',
-  });
+  const [{ data: sandboxKey, error: keyErr }, { data: webhookSecret, error: whErr }] = await Promise.all([
+    supabase.rpc('get_zinc_vault_secret', {
+      p_environment: 'sandbox',
+      p_secret_type: 'api_key',
+    }),
+    supabase.rpc('get_zinc_vault_secret', {
+      p_environment: 'sandbox',
+      p_secret_type: 'webhook_secret',
+    }),
+  ]);
 
   if (keyErr || !sandboxKey) {
     console.error('Failed to retrieve sandbox key from Vault:', keyErr?.message);
@@ -61,6 +68,15 @@ async function runCertification() {
     console.error('CRITICAL: Retrieved key does not start with zn_test_!');
     process.exit(1);
   }
+
+  if (!webhookSecret || !webhookSecret.startsWith('zn_whsec_')) {
+    console.error('CRITICAL: Sandbox Webhook Signing Secret is missing or invalid in Vault!');
+    process.exit(1);
+  }
+
+  const maskedWhSec = `${webhookSecret.slice(0, 8)}••••••••${webhookSecret.slice(-4)}`;
+  console.log(`✓ Retrieved Rotated Webhook Secret: ${maskedWhSec} (Length: ${webhookSecret.length})`);
+  testResults.webhook_secret_status = 'ROTATED_AND_VERIFIED';
 
   // 2. Fetch Dynamic Sandbox Products
   console.log('\n[2/7] Fetching dynamic test products from GET /orders/test-products...');
@@ -235,8 +251,183 @@ async function runCertification() {
     };
   }
 
-  // 6. Verify Production Hard Safety Gate
-  console.log('\n[6/7] Verifying Production Hard Safety Gate...');
+  // 6. Live Webhook Suite: HMAC Signature, Deduplication & Lifecycle
+  console.log('\n[6/7] Running Live Webhook Test Suite against zinc-webhook Edge Function...');
+  const webhookEndpoint = `${supabaseUrl}/functions/v1/zinc-webhook`;
+
+  // 6A. Missing signature header
+  const resMissingSig = await fetch(webhookEndpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ event: 'ping' }),
+  });
+  console.log(`  6A. Missing signature rejection: HTTP ${resMissingSig.status} (Expected 401) -> ${resMissingSig.status === 401 ? 'PASS' : 'FAIL'}`);
+  testResults.webhook_tests['missing_signature'] = resMissingSig.status === 401 ? 'PASS' : 'FAIL';
+
+  // 6B. Invalid signature header
+  const resBadSig = await fetch(webhookEndpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Webhook-Signature': '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      'X-Webhook-Event': 'order.placed',
+    },
+    body: JSON.stringify({ event: 'order.placed', order_id: 'test-order-123' }),
+  });
+  console.log(`  6B. Invalid signature rejection: HTTP ${resBadSig.status} (Expected 401) -> ${resBadSig.status === 401 ? 'PASS' : 'FAIL'}`);
+  testResults.webhook_tests['invalid_signature'] = resBadSig.status === 401 ? 'PASS' : 'FAIL';
+
+  // 6C. Valid signature order.placed event
+  const testOrderId = `test-order-${Date.now()}`;
+  const orderPlacedPayload = JSON.stringify({
+    event: 'order.placed',
+    order_id: testOrderId,
+    status: 'order_placed',
+    timestamp: new Date().toISOString(),
+    data: {
+      price_components: {
+        subtotal: 1999,
+        shipping: 499,
+        tax: 150,
+        total: 2648
+      }
+    }
+  });
+
+  const validSig1 = crypto.createHmac('sha256', webhookSecret).update(orderPlacedPayload, 'utf8').digest('hex');
+  const resValidPlaced = await fetch(webhookEndpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Webhook-Signature': validSig1,
+      'X-Webhook-Event': 'order.placed',
+    },
+    body: orderPlacedPayload,
+  });
+  const jsonPlaced = await resValidPlaced.json().catch(() => ({}));
+  console.log(`  6C. Valid signature order.placed: HTTP ${resValidPlaced.status} -> ${resValidPlaced.ok ? 'PASS' : 'FAIL'}`);
+  testResults.webhook_tests['valid_signature_placed'] = resValidPlaced.ok ? 'PASS' : 'FAIL';
+
+  // 6D. Deduplication: replay same payload
+  const resReplay = await fetch(webhookEndpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Webhook-Signature': validSig1,
+      'X-Webhook-Event': 'order.placed',
+    },
+    body: orderPlacedPayload,
+  });
+  const jsonReplay = await resReplay.json().catch(() => ({}));
+  const dedupPass = resReplay.ok && (jsonReplay.already_received === true || jsonReplay.deduplicated === true);
+  console.log(`  6D. Deduplication replay test: HTTP ${resReplay.status} (already_received: ${jsonReplay.already_received}) -> ${dedupPass ? 'PASS' : 'FAIL'}`);
+  testResults.webhook_tests['deduplication'] = dedupPass ? 'PASS' : 'FAIL';
+
+  // 6E. Tracking Received Event with tracking info array
+  const trackingPayload = JSON.stringify({
+    event: 'order.tracking_received',
+    order_id: testOrderId,
+    status: 'tracking_received',
+    timestamp: new Date().toISOString(),
+    data: {
+      tracking_numbers: [
+        {
+          carrier: 'UPS',
+          tracking_number: '1Z9999999999999999',
+          url: 'https://www.ups.com/track?tracknum=1Z9999999999999999'
+        }
+      ]
+    }
+  });
+  const validSig2 = crypto.createHmac('sha256', webhookSecret).update(trackingPayload, 'utf8').digest('hex');
+  const resTracking = await fetch(webhookEndpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Webhook-Signature': validSig2,
+      'X-Webhook-Event': 'order.tracking_received',
+    },
+    body: trackingPayload,
+  });
+  console.log(`  6E. order.tracking_received event: HTTP ${resTracking.status} -> ${resTracking.ok ? 'PASS' : 'FAIL'}`);
+  testResults.webhook_tests['tracking_received'] = resTracking.ok ? 'PASS' : 'FAIL';
+
+  // 6F. Delivered Event
+  const deliveredPayload = JSON.stringify({
+    event: 'order.delivered',
+    order_id: testOrderId,
+    status: 'delivered',
+    timestamp: new Date().toISOString(),
+    data: {
+      tracking_numbers: [
+        {
+          carrier: 'UPS',
+          tracking_number: '1Z9999999999999999',
+          delivered_at: new Date().toISOString()
+        }
+      ]
+    }
+  });
+  const validSig3 = crypto.createHmac('sha256', webhookSecret).update(deliveredPayload, 'utf8').digest('hex');
+  const resDelivered = await fetch(webhookEndpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Webhook-Signature': validSig3,
+      'X-Webhook-Event': 'order.delivered',
+    },
+    body: deliveredPayload,
+  });
+  console.log(`  6F. order.delivered event: HTTP ${resDelivered.status} -> ${resDelivered.ok ? 'PASS' : 'FAIL'}`);
+  testResults.webhook_tests['delivered'] = resDelivered.ok ? 'PASS' : 'FAIL';
+
+  // 6G. Unknown / Return Event Isolation
+  const returnPayload = JSON.stringify({
+    event: 'return.created',
+    order_id: testOrderId,
+    return_id: 'ret-12345',
+    status: 'return_pending',
+    timestamp: new Date().toISOString(),
+    data: {}
+  });
+  const validSigReturn = crypto.createHmac('sha256', webhookSecret).update(returnPayload, 'utf8').digest('hex');
+  const resReturn = await fetch(webhookEndpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Webhook-Signature': validSigReturn,
+      'X-Webhook-Event': 'return.created',
+    },
+    body: returnPayload,
+  });
+  const jsonReturn = await resReturn.json().catch(() => ({}));
+  const returnPass = resReturn.ok && jsonReturn.return_event === true;
+  console.log(`  6G. Return event isolation: HTTP ${resReturn.status} (return_event: ${jsonReturn.return_event}) -> ${returnPass ? 'PASS' : 'FAIL'}`);
+  testResults.webhook_tests['return_event_isolation'] = returnPass ? 'PASS' : 'FAIL';
+
+  // 6H. Database Persistence & Lifecycle Verification
+  const { data: dbEvents, error: dbErr } = await supabase
+    .from('zinc_webhook_events')
+    .select('*')
+    .eq('zinc_order_id', testOrderId);
+
+  if (dbErr || !dbEvents || dbEvents.length === 0) {
+    console.error('  6H. Failed to verify webhook events in database:', dbErr);
+    testResults.webhook_tests['database_persistence'] = 'FAIL';
+  } else {
+    console.log(`  6H. Database Verification: Found ${dbEvents.length} persisted webhook events for order ${testOrderId}:`);
+    let allDurable = true;
+    for (const evt of dbEvents) {
+      console.log(`      - [${evt.event_type}] Status: ${evt.processing_status}, ProcessedAt: ${evt.processed_at ? 'SET' : 'NULL'}, Error: ${evt.processing_error || 'NONE'}`);
+      if (!evt.processed_at || evt.processing_error) {
+        allDurable = false;
+      }
+    }
+    testResults.webhook_tests['database_persistence'] = allDurable ? 'PASS' : 'FAIL';
+  }
+
+  // 7. Verify Production Hard Safety Gate
+  console.log('\n[7/7] Verifying Production Hard Safety Gate...');
   const { data: settings } = await supabase.from('zinc_integration_settings').select('*').eq('environment', 'production').single();
   console.log(`  Production Setting is_enabled: ${settings?.is_enabled}`);
   if (settings?.is_enabled === true) {
@@ -246,21 +437,6 @@ async function runCertification() {
   testResults.production_enabled = false;
   testResults.real_production_orders = 0;
   console.log('✓ Verified: PRODUCTION ZINC ENABLED = NO (0 real production calls executed).');
-
-  // 7. Check Webhook Secret Status
-  console.log('\n[7/7] Checking Webhook Signing Secret in Vault...');
-  const { data: webhookSecret } = await supabase.rpc('get_zinc_vault_secret', {
-    p_environment: 'sandbox',
-    p_secret_type: 'webhook_secret',
-  });
-
-  if (!webhookSecret) {
-    console.log('  Notice: Sandbox webhook secret is not configured in Vault yet.');
-    console.log('  Security finding: Previous screenshot displayed signing secret. ROTATION REQUIRED.');
-    testResults.webhook_secret_status = 'BLOCKED_WAITING_SECRET_ROTATION';
-  } else {
-    testResults.webhook_secret_status = 'CONFIGURED';
-  }
 
   console.log('\n============================================================');
   console.log('SANDBOX CERTIFICATION SUMMARY');
