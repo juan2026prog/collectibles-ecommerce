@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Save, ToggleLeft, ToggleRight, Settings, Store, Truck, Palette, LayoutTemplate, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, FileText, Share2, Link as LinkIcon, ImageIcon, CreditCard, ShieldCheck, Sparkles, Brain, Zap, Search as SearchIcon, Tag, Menu, Bell, RefreshCw, Info, Smartphone, Mail, MessageSquare, BellRing, CheckCircle2, AlertCircle as AlertCircleIcon, Globe } from 'lucide-react';
+import { Save, ToggleLeft, ToggleRight, Settings, Store, Truck, Palette, LayoutTemplate, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, FileText, Share2, Link as LinkIcon, ImageIcon, CreditCard, ShieldCheck, Sparkles, Brain, Zap, Search as SearchIcon, Tag, Menu, Bell, RefreshCw, Info, Smartphone, Mail, MessageSquare, BellRing, CheckCircle2, AlertCircle as AlertCircleIcon, Globe, KeyRound } from 'lucide-react';
 import AdminInternationalSync from './AdminInternationalSync';
+import AdminZincConfig from '../../components/admin/AdminZincConfig';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
 import { useToast } from '../../components/admin/Toast';
 import { useAuth } from '../../contexts/AuthContext';
@@ -442,9 +443,14 @@ function AiUsageStats({ period }: { period: string }) {
 export default function AdminSettings() {
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTab = (searchParams.get('tab') as any) || 'general';
+  const currentSubtab = searchParams.get('subtab') || 'zinc';
   
   const setTab = (tab: string) => {
     setSearchParams({ tab });
+  };
+  
+  const setSubtab = (subtab: string) => {
+    setSearchParams({ tab: 'internacional', subtab });
   };
   
   const [settings, setSettings] = useState<Record<string, string>>({});
@@ -963,7 +969,43 @@ export default function AdminSettings() {
       {/* Internacional Settings Tab */}
       {currentTab === 'internacional' && (
         <div className="space-y-6">
-          <AdminInternationalSync />
+          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setSubtab('zinc')}
+                className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all min-h-[44px] ${
+                  currentSubtab !== 'sync'
+                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                    : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                <KeyRound className="w-4 h-4" />
+                <span>Zinc API 2.0 (Credenciales & Conexión)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSubtab('sync')}
+                className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all min-h-[44px] ${
+                  currentSubtab === 'sync'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                <Globe className="w-4 h-4" />
+                <span>Configuración y Cupos</span>
+              </button>
+            </div>
+            <span className="text-xs text-gray-400 font-medium hidden sm:inline">
+              Módulo Internacional Collectibles
+            </span>
+          </div>
+
+          {currentSubtab === 'sync' ? (
+            <AdminInternationalSync />
+          ) : (
+            <AdminZincConfig />
+          )}
         </div>
       )}
 
