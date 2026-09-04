@@ -71,17 +71,9 @@ async function runSmokeSuite() {
       telemetry.viewportsTested.push(vp.name);
 
       const context = await browser.newContext({
-        viewport: { width: vp.width, height: vp.height }
-      });
-
-      // Inject bypass header for Vercel preview environments
-      await context.route('**/*', (route, request) => {
-        const url = request.url();
-        if (url.includes('vercel.app')) {
-          const headers = { ...request.headers(), 'x-vercel-protection-bypass': BYPASS_SECRET };
-          route.continue({ headers });
-        } else {
-          route.continue();
+        viewport: { width: vp.width, height: vp.height },
+        extraHTTPHeaders: {
+          'x-vercel-protection-bypass': BYPASS_SECRET
         }
       });
 
