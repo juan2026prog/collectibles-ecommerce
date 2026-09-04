@@ -93,6 +93,7 @@ const AdminMarketplace = lazy(() => import('./pages/admin/AdminMarketplace'));
 const AdminInternationalAmazon = lazy(() => import('./pages/admin/AdminInternationalAmazon'));
 const AdminInternationalProducts = lazy(() => import('./pages/admin/AdminInternationalProducts'));
 const AdminInternationalSync = lazy(() => import('./pages/admin/AdminInternationalSync'));
+const AdminZinc = lazy(() => import('./pages/admin/AdminZinc'));
 const AdminRefunds = lazy(() => import('./pages/admin/AdminRefunds'));
 
 // GodMode removed from production — SEC-CRIT-01 (hardcoded credentials)
@@ -303,6 +304,7 @@ function App() {
                   <Route path="internacional/amazon" element={<AdminInternationalAmazon />} />
                   <Route path="internacional/productos" element={<AdminInternationalProducts />} />
                   <Route path="internacional/sync" element={<AdminInternationalSync />} />
+                  <Route path="internacional/zinc" element={<AdminZinc />} />
                 </Route>
                   </Routes>
                 </Suspense>
