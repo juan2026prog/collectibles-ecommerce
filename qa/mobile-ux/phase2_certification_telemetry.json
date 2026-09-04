@@ -1,0 +1,224 @@
+{
+  "branch": "mobile-ux-phase2",
+  "commitSha": "301b31b97c98a0cd644fdbb763430ae762039353",
+  "vercelDeploymentId": "dpl_334pfdZQW2cz6MTZ6yUzdDiqiR3Y",
+  "vercelPreviewUrl": "https://collectibles-ecommerce-ha6e8vdug-juans-projects-05818af2.vercel.app",
+  "viewportsTested": [
+    "Android_360x740",
+    "iPhone_390x844",
+    "iPhoneProMax_430x932",
+    "iPad_768x1024",
+    "Desktop_1440x900"
+  ],
+  "pages": {
+    "home": true,
+    "mobileMenu": true,
+    "search": true,
+    "shop": true,
+    "filters": true,
+    "licencias": true,
+    "themes": true,
+    "pdpStock0": true,
+    "pdpStock1": true,
+    "pdpStock3": true,
+    "pdpVendor": true,
+    "pdpInternational": true,
+    "cartDrawer": true,
+    "cart": true,
+    "checkout": true,
+    "stickyBuy": true
+  },
+  "businessLogic": {
+    "stockSequence1232": true,
+    "maxStockEnforced": true,
+    "qty2ToCart": true,
+    "qty2ToBuyNow": true,
+    "qty2ToStickyBuy": true,
+    "vendorBuyBox": true,
+    "internationalLimit1": true
+  },
+  "tracking": {
+    "clicksPlusMinusDoNotTriggerAddToCart": true,
+    "addToCartFiresOncePerAction": true
+  },
+  "errors": {
+    "reactErrors": 0,
+    "runtimeErrors": 0,
+    "appBackendErrors": 0,
+    "pageErrors": [],
+    "thirdPartyErrors": [
+      {
+        "viewport": "Android_360x740",
+        "text": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://127.0.0.1:4225' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value."
+      },
+      {
+        "viewport": "iPhone_390x844",
+        "text": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://127.0.0.1:4225' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value."
+      },
+      {
+        "viewport": "iPhoneProMax_430x932",
+        "text": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://127.0.0.1:4225' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value."
+      },
+      {
+        "viewport": "iPhoneProMax_430x932",
+        "text": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://127.0.0.1:4225' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value."
+      },
+      {
+        "viewport": "iPad_768x1024",
+        "text": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://127.0.0.1:4225' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value."
+      },
+      {
+        "viewport": "Desktop_1440x900",
+        "text": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://127.0.0.1:4225' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value."
+      },
+      {
+        "viewport": "Desktop_1440x900",
+        "text": "Access to fetch at 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/meta-capi' from origin 'http://127.0.0.1:4225' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: The 'Access-Control-Allow-Origin' header has a value 'https://collectibles.uy' that is not equal to the supplied origin. Have the server send the header with a valid value."
+      }
+    ],
+    "consoleErrors": [
+      {
+        "viewport": "Android_360x740",
+        "text": "[useBrands] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-D1WWkNV3.js:26:37026, hint: , code: }"
+      },
+      {
+        "viewport": "Android_360x740",
+        "text": "[useCategories] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-D1WWkNV3.js:26:37026, hint: , code: }"
+      },
+      {
+        "viewport": "Android_360x740",
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
+      },
+      {
+        "viewport": "Android_360x740",
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
+      },
+      {
+        "viewport": "Android_360x740",
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
+      },
+      {
+        "viewport": "Android_360x740",
+        "text": "Failed to load resource: net::ERR_FAILED"
+      },
+      {
+        "viewport": "iPhone_390x844",
+        "text": "[useCategories] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-D1WWkNV3.js:26:37026, hint: , code: }"
+      },
+      {
+        "viewport": "iPhone_390x844",
+        "text": "[useBrands] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-D1WWkNV3.js:26:37026, hint: , code: }"
+      },
+      {
+        "viewport": "iPhone_390x844",
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
+      },
+      {
+        "viewport": "iPhone_390x844",
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
+      },
+      {
+        "viewport": "iPhone_390x844",
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
+      },
+      {
+        "viewport": "iPhone_390x844",
+        "text": "Failed to load resource: net::ERR_FAILED"
+      },
+      {
+        "viewport": "iPhoneProMax_430x932",
+        "text": "Failed to load resource: net::ERR_FAILED"
+      },
+      {
+        "viewport": "iPhoneProMax_430x932",
+        "text": "[useCategories] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-D1WWkNV3.js:26:37026, hint: , code: }"
+      },
+      {
+        "viewport": "iPhoneProMax_430x932",
+        "text": "[useBrands] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-D1WWkNV3.js:26:37026, hint: , code: }"
+      },
+      {
+        "viewport": "iPhoneProMax_430x932",
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
+      },
+      {
+        "viewport": "iPhoneProMax_430x932",
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
+      },
+      {
+        "viewport": "iPhoneProMax_430x932",
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
+      },
+      {
+        "viewport": "iPhoneProMax_430x932",
+        "text": "Failed to load resource: net::ERR_FAILED"
+      },
+      {
+        "viewport": "iPad_768x1024",
+        "text": "[useBrands] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-D1WWkNV3.js:26:37026, hint: , code: }"
+      },
+      {
+        "viewport": "iPad_768x1024",
+        "text": "[useCategories] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-D1WWkNV3.js:26:37026, hint: , code: }"
+      },
+      {
+        "viewport": "iPad_768x1024",
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
+      },
+      {
+        "viewport": "iPad_768x1024",
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
+      },
+      {
+        "viewport": "iPad_768x1024",
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
+      },
+      {
+        "viewport": "iPad_768x1024",
+        "text": "Failed to load resource: net::ERR_FAILED"
+      },
+      {
+        "viewport": "Desktop_1440x900",
+        "text": "Failed to load resource: net::ERR_FAILED"
+      },
+      {
+        "viewport": "Desktop_1440x900",
+        "text": "[useCategories] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-D1WWkNV3.js:26:37026, hint: , code: }"
+      },
+      {
+        "viewport": "Desktop_1440x900",
+        "text": "[useBrands] fetch error: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/admin-chunk-D1WWkNV3.js:26:37026, hint: , code: }"
+      },
+      {
+        "viewport": "Desktop_1440x900",
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
+      },
+      {
+        "viewport": "Desktop_1440x900",
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
+      },
+      {
+        "viewport": "Desktop_1440x900",
+        "text": "[USE_PRODUCTS_QUERY_ERROR] {code: , message: TypeError: Failed to fetch, details: TypeError: Failed to fetch\n    at http://127.0.0.1….0.1:4225/assets/portal-chunk-BkZqPTUM.js:21:1290, hint: }"
+      },
+      {
+        "viewport": "Desktop_1440x900",
+        "text": "Failed to load resource: net::ERR_FAILED"
+      }
+    ]
+  },
+  "seoSmoke": {
+    "home200": true,
+    "shop200": true,
+    "pdp200": true,
+    "licencias200": true,
+    "themes200": true,
+    "canonicalPresent": true,
+    "sitemapAccessible": true
+  },
+  "visualCheck": {
+    "noHorizontalOverflow": true,
+    "noCutoffElements": true,
+    "noStickyBuyWhatsAppOverlap": true
+  }
+}
