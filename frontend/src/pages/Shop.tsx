@@ -1160,8 +1160,8 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
         schema={[breadcrumbSchema]}
       />
 
-      {/* BREADCRUMB */}
-      <div className="max-w-7xl mx-auto px-6 pt-6 pb-2 text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+      {/* BREADCRUMB (Hidden on mobile to prioritize products) */}
+      <div className="hidden md:flex max-w-7xl mx-auto px-6 pt-6 pb-2 text-xs font-bold text-slate-500 uppercase tracking-widest items-center gap-2">
         <Link to="/" className="hover:text-white transition-colors">Inicio</Link>
         <ChevronRight className="w-3 h-3" />
         {isLicenseRoute && (currentLicense || licParam) ? (
@@ -1199,11 +1199,11 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
         )}
       </div>
 
-      {/* EDITORIAL HERO SECTION */}
+      {/* EDITORIAL HERO SECTION (COMPACT ON MOBILE) */}
       <section className="relative hero-noise overflow-hidden border-b border-white/10">
         <div className={`absolute -right-40 top-0 w-[560px] h-[560px] blur-3xl rounded-full ${isInternational ? 'bg-sky-500/20' : 'bg-[#f00856]/20'}`}></div>
-        <div className="relative max-w-7xl mx-auto px-6 py-6 md:py-10">
-          <div className={`label-tag ${isInternational ? 'bg-sky-950/80 border border-sky-500/40 text-sky-300' : ''}`}>
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-3.5 md:py-10">
+          <div className={`label-tag hidden sm:inline-block ${isInternational ? 'bg-sky-950/80 border border-sky-500/40 text-sky-300' : ''}`}>
             {isInternational
               ? "🌎 Catálogo Internacional"
               : isLicenseRoute
@@ -1218,15 +1218,16 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
               ? "Marca"
               : "Catálogo"}
           </div>
-          <div className="flex items-center gap-4 mt-3 flex-wrap">
+          <div className="flex items-center gap-3 md:gap-4 mt-0.5 md:mt-3 flex-wrap">
             {isLicenseRoute && currentLicense?.logo_url && (
               <img
                 src={currentLicense.logo_url}
                 alt={currentLicense.name}
-                className="h-12 md:h-16 object-contain max-w-[200px]"
+                className="h-8 md:h-16 object-contain max-w-[140px] md:max-w-[200px]"
+                onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
               />
             )}
-            <h1 className="text-5xl md:text-7xl font-black leading-[.9] tracking-tighter">
+            <h1 className="text-2xl sm:text-4xl md:text-7xl font-black leading-tight md:leading-[.9] tracking-tight md:tracking-tighter text-white">
               {isInternational
                 ? "Collectibles Internacional"
                 : isLicenseRoute && (currentLicense || licParam)
@@ -1245,11 +1246,11 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
               <img
                 src={group.badge_image_url}
                 alt={group.badge_alt_text || `Cocarda de ${group.name}`}
-                className="w-12 h-12 md:w-16 md:h-16 object-contain pointer-events-none drop-shadow-md select-none"
+                className="w-8 h-8 md:w-16 md:h-16 object-contain pointer-events-none drop-shadow-md select-none"
               />
             )}
           </div>
-          <p className="text-slate-300 text-lg mt-5 max-w-3xl leading-relaxed">
+          <p className="hidden md:block text-slate-300 text-lg mt-5 max-w-3xl leading-relaxed">
             {isInternational
               ? "Explorá figuras y coleccionables importados a pedido. Precios en USD con entrega directa en tu casilla de EE.UU."
               : isLicenseRoute && currentLicense?.description
@@ -1263,14 +1264,14 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
         </div>
       </section>
 
-      {/* MOBILE FILTER BUTTON */}
-      <div className="lg:hidden sticky top-20 z-30 bg-[#05070f]/90 backdrop-blur-lg border-b border-white/10 px-6 py-3 flex items-center justify-between">
-        <span className="text-sm font-bold text-slate-400">{count} productos</span>
-        <div className="flex items-center gap-3">
+      {/* MOBILE FILTER BUTTON & TOOLBAR */}
+      <div className="lg:hidden sticky top-14 z-30 bg-[#05070f]/95 backdrop-blur-lg border-b border-white/10 px-4 sm:px-6 py-2.5 flex items-center justify-between">
+        <span className="text-xs sm:text-sm font-bold text-slate-400">{count} productos</span>
+        <div className="flex items-center gap-2 sm:gap-3">
           <select
             value={sortBy}
             onChange={e => { setSortBy(e.target.value); setPage(0); }}
-            className="bg-[#0e1525] border border-white/10 rounded-full px-4 py-2 text-xs font-bold text-white focus:outline-none cursor-pointer"
+            className="bg-[#0e1525] border border-white/10 rounded-full px-3 py-2 text-xs font-bold text-white focus:outline-none cursor-pointer min-h-[40px]"
           >
             <option value="default" className="bg-[#0e1525] text-white">Recomendados</option>
             <option value="newest" className="bg-[#0e1525] text-white">Más nuevos</option>
@@ -1283,9 +1284,9 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
               trackClarityEvent('filter_open');
               setMobileFilters(true);
             }}
-            className="flex items-center gap-2 bg-[#f00856] text-white rounded-full px-5 py-2.5 text-xs font-black uppercase tracking-wider shadow-lg shadow-[#f00856]/30"
+            className="flex items-center gap-2 bg-[#f00856] text-white rounded-full px-4 sm:px-5 py-2 text-xs font-black uppercase tracking-wider shadow-lg shadow-[#f00856]/30 min-h-[40px] cursor-pointer"
           >
-            <SlidersHorizontal className="w-4 h-4" />
+            <SlidersHorizontal className="w-3.5 h-3.5" />
             Filtros
             {(categorySlug || brandSlug || priceMin || priceMax) && (
               <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
@@ -1323,7 +1324,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
         </div>
       )}
 
-      <main className="max-w-[1500px] mx-auto px-6 py-10 grid lg:grid-cols-[260px_1fr] gap-8">
+      <main className="max-w-[1500px] mx-auto px-4 sm:px-6 py-4 md:py-10 grid lg:grid-cols-[260px_1fr] gap-8">
         {/* FILTERS ASIDE — hidden on mobile, shown on desktop */}
         <aside className="hidden lg:block glass rounded-none p-5 h-[calc(100vh-120px)] max-h-[calc(100vh-120px)] min-h-0 sticky top-24 z-10 flex flex-col overflow-hidden">
           <div className="flex items-center justify-between mb-4 shrink-0">
@@ -1339,8 +1340,8 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
 
         {/* PRODUCTS GRID */}
         <section className="min-w-0">
-          {/* Header: título + controles */}
-          <div className="mb-8">
+          {/* Header: título + controles (Desktop only, mobile has it in compact header) */}
+          <div className="hidden md:block mb-8">
             <div className="flex items-end justify-between gap-4 flex-wrap">
               <div>
                 <div className="label-tag">{group ? "Colección" : "Marketplace integrado"}</div>
@@ -1366,6 +1367,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                 ))}
               </div>
             </div>
+          </div>
 
           {matchedStore && (
             <div className="mt-6 glass p-6 rounded-3xl border border-[#f00856]/20 bg-gradient-to-r from-[#f00856]/10 to-indigo-500/5 flex flex-col md:flex-row items-center justify-between gap-6 hover:border-[#f00856]/40 transition-colors animate-fade-in">
@@ -1423,7 +1425,6 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                 <option value="name" className="bg-[#0e1525] text-white">A-Z</option>
               </select>
             </div>
-          </div>
 
           {loading && page === 0 ? (
             <div className={`grid gap-x-6 gap-y-12 grid-cols-2 ${

@@ -1,6 +1,6 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
-import { ShoppingCart, Minus, Plus, Star, ChevronDown, Heart, Zap } from 'lucide-react';
+import { ShoppingCart, Minus, Plus, Star, ChevronDown, Heart, Zap, ZoomIn } from 'lucide-react';
 import { useProduct, useProductBuyBox, useProducts, getProductGroupBadge, getAllProductGroupBadges } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
 import { useInternationalCartContext } from '../contexts/InternationalCartContext';
@@ -117,15 +117,27 @@ export default function ProductDetail() {
 
   useEffect(() => {
     const handleScroll = () => {
-      const mainBtn = document.getElementById('main-add-to-cart');
-      if (mainBtn) {
-        const rect = mainBtn.getBoundingClientRect();
-        setShowStickyBar(rect.bottom < 0);
-      }
+      const mainBtn = document.getElementById('main-buy-now') || document.getElementById('main-add-to-cart');
+      const footer = document.querySelector('footer');
+      if (!mainBtn) return;
+
+      const rect = mainBtn.getBoundingClientRect();
+      const footerRect = footer ? footer.getBoundingClientRect() : null;
+
+      // CTA is visible in the viewport
+      const isCtaInViewport = rect.top < window.innerHeight && rect.bottom > 0;
+      // Reached footer
+      const isFooterReached = footerRect ? footerRect.top <= (window.innerHeight - 30) : false;
+
+      // Show when user scrolled enough, CTA is out of view, and footer is not covered
+      const shouldShow = window.scrollY > 350 && !isCtaInViewport && !isFooterReached;
+      setShowStickyBar(shouldShow);
     };
-    window.addEventListener('scroll', handleScroll);
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [product]);
 
 
 
@@ -237,7 +249,6 @@ export default function ProductDetail() {
   };
 
   const stockInfo = getStockInfo();
-
   const addToCart = (customVariant?: any, directCheckout = false) => {
     if (stock <= 0) return;
     const targetVariant = customVariant || selectedVariant;
@@ -260,6 +271,7 @@ export default function ProductDetail() {
         title: product.title,
         price: finalPrice,
         base_price: product.base_price || finalPrice,
+        image: displayImage,
         image_url: displayImage,
         quantity,
         variant_id: targetVariant?.id || product.id,
@@ -269,7 +281,7 @@ export default function ProductDetail() {
         is_international: true,
         weight_kg: product.weight_kg || 0.5,
         sku: targetVariant?.sku || product.sku
-      });
+      } as any);
 
       if (directCheckout) {
         navigate('/checkout');
@@ -286,6 +298,7 @@ export default function ProductDetail() {
       title: product.title,
       price: finalPrice,
       base_price: product.base_price,
+      image: displayImage,
       image_url: displayImage,
       quantity,
       variant_id: targetVariant?.id,
@@ -293,7 +306,7 @@ export default function ProductDetail() {
       vendor_id: winnerVendorId,
       vendor_name: winnerVendorName,
       sku: targetVariant?.sku || product.sku
-    });
+    } as any);
 
     setAddedToCart(true);
     setTimeout(() => setAddedToCart(false), 2500);
@@ -320,7 +333,7 @@ export default function ProductDetail() {
   const breadcrumbSchema = generateBreadcrumbs('producto', product);
 
   return (
-    <div className="max-w-[1500px] mx-auto px-4 sm:px-6 py-6 md:py-10">
+    <div className="max-w-[1500px] mx-auto px-4 sm:px-6 py-3 sm:py-6 md:py-10 pb-28 lg:pb-10">
       <SEO
         title={seoTitle}
         description={seoDescription}
@@ -330,8 +343,8 @@ export default function ProductDetail() {
       />
       <AdminTechnicalPanel product={product} />
 
-      {/* BREADCRUMB (Requirement 12) */}
-      <nav className="flex items-center text-xs font-bold uppercase tracking-wider text-slate-400 mb-8 flex-wrap gap-2.5">
+      {/* BREADCRUMB */}
+      <nav className="flex items-center text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 sm:mb-6 flex-wrap gap-2">
         <Link to="/" className="hover:text-white transition-colors">Inicio</Link>
         <span className="text-slate-600">/</span>
         {product.category && (
@@ -343,11 +356,11 @@ export default function ProductDetail() {
         <span className="text-white line-clamp-1">{product.title}</span>
       </nav>
 
-      <div className="grid lg:grid-cols-[1.25fr_1fr] gap-8 lg:gap-14 items-start">
-        {/* GALLERY SECTION (Requirement 10 & 11) */}
-        <section className="flex flex-col gap-4 lg:sticky lg:top-28">
+      <div className="grid lg:grid-cols-[1.25fr_1fr] gap-6 lg:gap-14 items-start">
+        {/* GALLERY SECTION */}
+        <section className="flex flex-col gap-3 sm:gap-4 lg:sticky lg:top-28">
           <div
-            className="w-full aspect-square max-h-[660px] rounded-3xl bg-white flex items-center justify-center relative overflow-hidden group cursor-crosshair border border-white/10 shadow-2xl p-3 sm:p-6 transition-all duration-300 img-protected"
+            className="w-full aspect-square max-h-[360px] sm:max-h-[500px] md:max-h-[660px] rounded-2xl sm:rounded-3xl bg-white flex items-center justify-center relative overflow-hidden group cursor-crosshair border border-white/10 shadow-2xl p-2.5 sm:p-6 transition-all duration-300 img-protected"
             data-protected-image="true"
             data-product-image="true"
             onMouseMove={handleMouseMove}
@@ -361,9 +374,9 @@ export default function ProductDetail() {
               const groupBadges = getAllProductGroupBadges(product);
               if (groupBadges.length === 0) return null;
               return (
-                <div className="absolute top-5 left-5 z-20 flex flex-col gap-2 pointer-events-none drop-shadow-md select-none">
+                <div className="absolute top-3 left-3 sm:top-5 sm:left-5 z-20 flex flex-col gap-2 pointer-events-none drop-shadow-md select-none scale-90 sm:scale-100 origin-top-left">
                   {groupBadges.map((gb, idx) => (
-                    <div key={`${gb.url}-${idx}`} className="w-16 h-16">
+                    <div key={`${gb.url}-${idx}`} className="w-12 h-12 sm:w-16 sm:h-16">
                       <img
                         src={gb.url}
                         alt={gb.alt}
@@ -380,43 +393,32 @@ export default function ProductDetail() {
               src={displayImage}
               alt={product.title}
               referrerPolicy="no-referrer"
-              fetchPriority="high"
-              loading="eager"
-              {...getImageProps(`w-full h-full max-h-[580px] object-contain mix-blend-multiply transition-all duration-500 ease-out ${isHovering ? 'scale-105' : 'scale-100'}`)}
+              className={`max-w-full max-h-full object-contain transition-transform duration-200 pointer-events-none ${isHovering ? 'scale-150' : 'scale-100'}`}
+              style={isHovering ? {
+                transformOrigin: `${mousePos.x}% ${mousePos.y}%`
+              } : undefined}
             />
-            
-            {/* Magnifier Lens */}
+
             {isHovering && (
-              <div
-                className="absolute pointer-events-none border border-slate-200 shadow-2xl bg-no-repeat z-20 rounded-full bg-white hidden lg:block"
-                style={{
-                  left: `${mousePos.x}%`,
-                  top: `${mousePos.y}%`,
-                  width: '300px',
-                  height: '300px',
-                  transform: 'translate(-50%, -50%)',
-                  backgroundImage: `url(${displayImage})`,
-                  backgroundSize: '250%',
-                  backgroundPosition: `${mousePos.x}% ${mousePos.y}%`,
-                }}
-              />
+              <div className="absolute bottom-4 right-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full text-[10px] font-bold text-white flex items-center gap-1.5 pointer-events-none border border-white/10">
+                <ZoomIn className="w-3 h-3 text-[#f00856]" />
+                <span>Zoom activo</span>
+              </div>
             )}
           </div>
 
-          {/* GALLERY THUMBNAILS (Requirement 11) */}
+          {/* THUMBNAILS ROW */}
           {images.length > 1 && (
-            <div className="grid grid-cols-5 gap-3 mt-1">
-              {images.map((img: any, i: number) => {
+            <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 no-scrollbar">
+              {images.map((img: any, index: number) => {
                 const src = resolveImage(img.url);
+                const activeImage = selectedImage;
                 return (
                   <button
-                    key={img.id || i}
-                    onClick={() => setSelectedImage(i)}
-                    onMouseEnter={() => setSelectedImage(i)}
-                    data-protected-image="true"
-                    data-product-image="true"
-                    className={`relative rounded-2xl aspect-square overflow-hidden transition-all duration-200 bg-white cursor-pointer hover:scale-105 img-protected ${
-                      i === selectedImage
+                    key={img.id || index}
+                    onClick={() => setSelectedImage(index)}
+                    className={`w-14 h-14 sm:w-20 sm:h-20 rounded-lg sm:rounded-xl overflow-hidden bg-white/5 p-1 transition-all duration-300 flex-shrink-0 cursor-pointer ${
+                      activeImage === index
                         ? 'ring-2 ring-[#f00856] ring-offset-2 ring-offset-[#05070f] scale-[0.98] opacity-100 shadow-md'
                         : 'border border-white/10 opacity-60 hover:opacity-100 hover:border-white/30'
                     }`}
@@ -426,7 +428,7 @@ export default function ProductDetail() {
                       alt="" 
                       referrerPolicy="no-referrer" 
                       loading="lazy" 
-                      {...getImageProps("w-full h-full object-contain p-2 mix-blend-multiply")}
+                      {...getImageProps("w-full h-full object-contain p-1 sm:p-2 mix-blend-multiply")}
                     />
                   </button>
                 );
@@ -586,8 +588,7 @@ export default function ProductDetail() {
                 </button>
                 <span className="font-black text-base text-white">{quantity}</span>
                 <button
-                  onClick={() => setQuantity(Math.min(stock, quantity + 1))}
-                  className="w-11 h-full flex items-center justify-center hover:bg-white/10 transition-colors text-slate-300 hover:text-white"
+              className="w-11 h-full flex items-center justify-center hover:bg-white/10 transition-colors text-slate-300 hover:text-white"
                   disabled={quantity >= stock || (!product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined ? false : true)}
                 >
                   <Plus className="w-4 h-4" />
@@ -600,11 +601,11 @@ export default function ProductDetail() {
               id="main-buy-now"
               onClick={() => addToCart(undefined, true)}
               disabled={stock <= 0 || (!product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined ? false : true)}
-              className={`w-full py-4 sm:py-4.5 rounded-2xl flex items-center justify-center gap-2.5 text-base uppercase tracking-widest font-black transition-all bg-[#f00856] text-white shadow-xl shadow-[#f00856]/30 hover:bg-[#d00749] hover:shadow-[#f00856]/50 hover:-translate-y-0.5 cursor-pointer ${
+              className={`w-full py-3.5 sm:py-4.5 rounded-2xl flex items-center justify-center gap-2.5 text-sm sm:text-base uppercase tracking-widest font-black transition-all bg-[#f00856] text-white shadow-xl shadow-[#f00856]/30 hover:bg-[#d00749] hover:shadow-[#f00856]/50 hover:-translate-y-0.5 cursor-pointer min-h-[48px] ${
                 stock <= 0 || (!product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined ? false : true) ? 'opacity-50 cursor-not-allowed bg-slate-800 shadow-none' : ''
               }`}
             >
-              <Zap className="w-5 h-5" />
+              <Zap className="w-4 h-4 sm:w-5 sm:h-5" />
               {(!product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined ? true : false) === false ? 'Vendedor inactivo' : stock <= 0 ? 'Sin Stock' : 'Comprar ahora'}
             </button>
 
@@ -613,7 +614,7 @@ export default function ProductDetail() {
               id="main-add-to-cart"
               onClick={() => addToCart()}
               disabled={stock <= 0 || (!product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined ? false : true)}
-              className={`w-full py-3.5 rounded-2xl flex items-center justify-center gap-2 text-xs uppercase tracking-widest font-bold transition-all border border-white/20 text-white bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/40 cursor-pointer ${
+              className={`w-full py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl flex items-center justify-center gap-2 text-xs uppercase tracking-wider font-bold transition-all border border-white/20 text-slate-200 bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/40 cursor-pointer min-h-[44px] ${
                 stock <= 0 || (!product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined ? false : true) ? 'opacity-50 cursor-not-allowed border-white/5' : ''
               } ${addedToCart ? 'bg-green-500/20 border-green-500 text-green-400' : ''}`}
             >
@@ -698,9 +699,7 @@ export default function ProductDetail() {
               return (
                 <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/5 flex justify-between items-center text-xs">
                   <span className="text-slate-400 font-bold uppercase tracking-wider">Licencia / Franquicia</span>
-                  <Link to={`/licencias/${activeLicense.slug || activeLicense.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`} className="text-amber-400 font-bold hover:underline transition-colors">
-                    {activeLicense.name}
-                  </Link>
+                  <b className="text-white font-semibold">{activeLicense.name}</b>
                 </div>
               );
             })()}
@@ -952,26 +951,26 @@ export default function ProductDetail() {
       </section>
 
       {/* MOBILE STICKY BUY BAR */}
-      {showStickyBar && stock > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#05070f]/95 backdrop-blur-md border-t border-white/10 p-4 animate-slide-up lg:hidden">
-          <div className="flex items-center justify-between gap-4 max-w-7xl mx-auto">
-            <div className="flex items-center gap-3 overflow-hidden">
+      {showStickyBar && !(stock <= 0) && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#05070f]/95 backdrop-blur-md border-t border-white/10 px-4 py-2.5 pb-[calc(0.6rem+env(safe-area-inset-bottom,0px))] animate-slide-up lg:hidden shadow-[0_-10px_30px_rgba(0,0,0,0.8)]">
+          <div className="flex items-center justify-between gap-3 max-w-7xl mx-auto">
+            <div className="flex items-center gap-2.5 overflow-hidden min-w-0 flex-1">
               <img
                 src={displayImage}
                 alt={product.title}
                 referrerPolicy="no-referrer"
-                {...getImageProps("w-12 h-12 rounded-lg object-contain bg-white p-1 flex-shrink-0")}
+                {...getImageProps("w-10 h-10 rounded-lg object-contain bg-white p-1 flex-shrink-0")}
               />
-              <div className="overflow-hidden">
-                <p className="text-white font-black text-sm truncate uppercase tracking-tight">{product.title}</p>
-                <p className={`font-black text-sm ${isIntl ? 'text-sky-400' : 'text-[#f00856]'}`}>
+              <div className="overflow-hidden min-w-0">
+                <p className="text-white font-black text-xs truncate uppercase tracking-tight">{product.title}</p>
+                <p className={`font-black text-sm leading-tight ${isIntl ? 'text-sky-400' : 'text-[#f00856]'}`}>
                   {isIntl ? formatUSD(product.final_price_usd || product.base_price || finalPrice) : formatCurrencyPrice(finalPrice)}
                 </p>
               </div>
             </div>
             <button
               onClick={() => addToCart(undefined, true)}
-              className="btn-primary rounded-full px-6 py-3 flex items-center justify-center gap-2 text-xs uppercase tracking-widest font-black transition-all shadow-lg shadow-[#f00856]/20 hover:shadow-[#f00856]/40 cursor-pointer"
+              className="btn-primary rounded-xl px-5 py-2.5 flex items-center justify-center gap-1.5 text-xs uppercase tracking-wider font-black transition-all shadow-lg shadow-[#f00856]/20 cursor-pointer shrink-0 min-h-[44px]"
             >
               <Zap className="w-4 h-4" />
               Comprar

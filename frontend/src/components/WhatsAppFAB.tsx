@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { MessageCircle, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useCartContext } from '../contexts/CartContext';
 
 /**
  * WhatsApp Floating Action Button
@@ -14,6 +16,8 @@ export default function WhatsAppFAB() {
   const [url, setUrl] = useState('');
   const [shown, setShown] = useState(true);
   const [pulsing, setPulsing] = useState(true);
+  const location = useLocation();
+  const { isDrawerOpen } = useCartContext();
 
   useEffect(() => {
     supabase
@@ -43,10 +47,15 @@ export default function WhatsAppFAB() {
     return () => clearTimeout(t);
   }, []);
 
-  if (!url || !shown) return null;
+  const isCheckout = location.pathname.startsWith('/checkout');
+  const isPDP = location.pathname.startsWith('/producto/') || location.pathname.startsWith('/product/');
+
+  if (!url || !shown || isCheckout || isDrawerOpen) return null;
 
   return (
-    <div className="fixed bottom-6 right-4 md:right-6 z-40 flex flex-col items-end gap-3 group/fab pb-[env(safe-area-inset-bottom,0px)]">
+    <div className={`fixed right-4 md:right-6 z-40 flex flex-col items-end gap-3 group/fab pb-[env(safe-area-inset-bottom,0px)] transition-all duration-300 ${
+      isPDP ? 'bottom-24 lg:bottom-6' : 'bottom-6'
+    }`}>
       {/* Tooltip bubble */}
       <div className="bg-white text-gray-800 text-xs md:text-sm font-semibold px-3 py-1.5 md:px-4 md:py-2 shadow-xl border border-white/10 opacity-0 translate-y-2 group-hover/fab:opacity-100 group-hover/fab:translate-y-0 transition-all duration-200 whitespace-nowrap">
         💬 ¿Necesitás ayuda?

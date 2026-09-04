@@ -500,14 +500,17 @@
 .checkout-btn-back {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
+  min-height: 48px;
   padding: 0.75rem 1.5rem;
   font-size: 13px;
   font-weight: 700;
   color: var(--muted);
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 9999px;
+  border-radius: 0.75rem;
+  white-space: nowrap;
   cursor: pointer;
   transition: all 0.25s ease;
 }
@@ -520,7 +523,9 @@
 .checkout-btn-next {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
+  min-height: 48px;
   padding: 0.75rem 2rem;
   font-size: 13px;
   font-weight: 900;
@@ -529,7 +534,8 @@
   color: #fff;
   background: var(--red);
   border: none;
-  border-radius: 9999px;
+  border-radius: 0.75rem;
+  white-space: nowrap;
   cursor: pointer;
   transition: all 0.25s ease;
   box-shadow: 0 0 30px rgba(240, 8, 86, 0.3);

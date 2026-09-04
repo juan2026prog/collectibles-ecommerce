@@ -1,0 +1,692 @@
+{
+  "consoleErrors": [
+    {
+      "text": "Failed to load resource: the server responded with a status of 404 ()",
+      "location": {
+        "url": "https://collectibles.uy/categoria/figuras-de-accion",
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 406 ()",
+      "location": {
+        "url": "https://cobtsgkwcftvexaarwmo.supabase.co/rest/v1/categories?select=id&slug=eq.figuras-de-accion&is_active=eq.true",
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    }
+  ],
+  "consoleWarns": [],
+  "pageErrors": [],
+  "failedRequests": [
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475799552&gcd=13l3l3l3l1l1&npa=0&dma=0&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=3&sr=390x844&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=1&tag_exp=115616986~115938465~115938469~118012008~118897920~118897930~119404698~120213116~120385423~120469145~120469153~120474862&sid=1788475800&sct=1&seg=0&dl=https%3A%2F%2Fcollectibles.uy%2F&dt=Juguetes%20Retro%20Uruguay%20%26%20Coleccionables%20%7C%20Collectibles%20Store&en=page_view&_fv=1&_nsi=1&_ss=1&_ee=1&tfd=1167",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://mpc-prod-23-s6uit34pua-ue.a.run.app/events?cee=no",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/1/1c/DC_Comics_logo.svg",
+      "failure": {
+        "errorText": "net::ERR_BLOCKED_BY_ORB"
+      }
+    },
+    {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/c/c9/Dragon_Ball_Z_Logo.svg",
+      "failure": {
+        "errorText": "net::ERR_BLOCKED_BY_ORB"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475799552&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AEAAAAQ&ae=a&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=3&sr=390x844&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=2&tag_exp=115616986~115938465~115938469~118012008~118897920~118897930~119404698~120213116~120385423~120469145~120469153~120474862&sid=1788475800&sct=1&seg=0&dl=https%3A%2F%2Fcollectibles.uy%2F&dt=Juguetes%20Retro%20Uruguay%20%26%20Coleccionables%20%7C%20Collectibles%20Store&en=scroll&epn.percent_scrolled=90&_et=6&tfd=6194",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475799552&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAAQ&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=3&sr=390x844&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=3&tag_exp=115616986~115938465~115938469~118012008~118897920~118897930~119404698~120213116~120385423~120469145~120469153~120474862&sid=1788475800&sct=1&seg=1&dl=https%3A%2F%2Fcollectibles.uy%2F&dt=Juguetes%20Retro%20Uruguay%20%26%20Coleccionables%20%7C%20Collectibles&en=user_engagement&_et=11622&tfd=12807",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://e.clarity.ms/collect",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://e.clarity.ms/collect",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://mpc-prod-23-s6uit34pua-ue.a.run.app/events?cee=no",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/1/1c/DC_Comics_logo.svg",
+      "failure": {
+        "errorText": "net::ERR_BLOCKED_BY_ORB"
+      }
+    },
+    {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/c/c9/Dragon_Ball_Z_Logo.svg",
+      "failure": {
+        "errorText": "net::ERR_BLOCKED_BY_ORB"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475811944&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAAQ&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=17&sr=390x844&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=1&tag_exp=115938466~115938468~118897920~118897930~120213116~120385422~120469145~120469153&sid=1788475800&sct=1&seg=1&dl=https%3A%2F%2Fcollectibles.uy%2Fshop&dt=Cat%C3%A1logo%20de%20Coleccionables%20en%20Uruguay%20%7C%20Collectibles&en=page_view&_ee=1&tfd=1387",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://mpc-prod-23-s6uit34pua-ue.a.run.app/events?cee=no",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://cobtsgkwcftvexaarwmo.supabase.co/rest/v1/products?select=id%2Cbrand_id%2Clicense_id%2Ccategory_id%2Ccondition%2Ctitle%2Cdescription%2Cbase_price%2Cstatus%2Cis_active%2Cproduct_categories%28category_id%29&status=eq.published&is_active=eq.true&offset=0&limit=1000",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://e.clarity.ms/collect",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475811944&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AEAAAAQ&ae=a&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=17&sr=390x844&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=3&tag_exp=115938466~115938468~118897920~118897930~120213116~120385422~120469145~120469153&dl=https%3A%2F%2Fcollectibles.uy%2Fcategoria%2Fllaveros&dr=https%3A%2F%2Fcollectibles.uy%2Fshop&sid=1788475800&sct=1&seg=1&dt=Llaveros%20en%20Uruguay%20%7C%20Collectibles&en=page_view&_et=4488&tfd=6463",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://e.clarity.ms/collect",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://cobtsgkwcftvexaarwmo.supabase.co/rest/v1/categories?select=id&slug=eq.llaveros&is_active=eq.true",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475811944&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAAQ&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=17&sr=390x844&tt=commercial&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=2&tag_exp=115938466~115938468~118897920~118897930~120213116~120385422~120469145~120469153&sid=1788475800&sct=1&seg=1&dl=https%3A%2F%2Fcollectibles.uy%2Fshop&dt=Cat%C3%A1logo%20de%20Coleccionables%20en%20Uruguay%20%7C%20Collectibles&tfd=5877",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://e.clarity.ms/collect",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://mpc-prod-23-s6uit34pua-ue.a.run.app/events?cee=no",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/c/c9/Dragon_Ball_Z_Logo.svg",
+      "failure": {
+        "errorText": "net::ERR_BLOCKED_BY_ORB"
+      }
+    },
+    {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/1/1c/DC_Comics_logo.svg",
+      "failure": {
+        "errorText": "net::ERR_BLOCKED_BY_ORB"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475818309&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAAQ&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=6&sr=390x844&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&tag_exp=115616986~115938466~115938469~118897920~118897930~120213116~120385423~120469145~120469153&sid=1788475800&sct=1&seg=1&dl=https%3A%2F%2Fcollectibles.uy%2Flicencias&dt=Licencias%20Oficiales%20de%20Coleccionables%20%7C%20Collectibles%20Uruguay&_s=1&tfd=3350",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475820709&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAAQ&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=11&sr=390x844&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=1&tag_exp=115616985~115938466~115938468~118897920~118897930~120213116~120385422~120469145~120469153&sid=1788475800&sct=1&seg=1&dl=https%3A%2F%2Fcollectibles.uy%2Fthemes&dt=Universos%20y%20Temas%20Geek%20%7C%20Collectibles%20Uruguay&en=page_view&_ee=1&tfd=124",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://mpc-prod-23-s6uit34pua-ue.a.run.app/events?cee=no",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/1/1c/DC_Comics_logo.svg",
+      "failure": {
+        "errorText": "net::ERR_BLOCKED_BY_ORB"
+      }
+    },
+    {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/c/c9/Dragon_Ball_Z_Logo.svg",
+      "failure": {
+        "errorText": "net::ERR_BLOCKED_BY_ORB"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475820709&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAAQ&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=11&sr=390x844&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=3&tag_exp=115616985~115938466~115938468~118897920~118897930~120213116~120385422~120469145~120469153&sid=1788475800&sct=1&seg=1&dl=https%3A%2F%2Fcollectibles.uy%2Fthemes&dt=Cat%C3%A1logo%20de%20Coleccionables%20en%20Uruguay%20%7C%20Collectibles&en=user_engagement&_et=2895&tfd=3020",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475820709&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AEAAAAQ&ae=a&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=11&sr=390x844&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=2&tag_exp=115616985~115938466~115938468~118897920~118897930~120213116~120385422~120469145~120469153&sid=1788475800&sct=1&seg=1&dl=https%3A%2F%2Fcollectibles.uy%2Fthemes&dt=Universos%20y%20Temas%20Geek%20%7C%20Collectibles%20Uruguay&en=scroll&epn.percent_scrolled=90&_et=3&tfd=3020",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://e.clarity.ms/collect",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475823657&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAAQ&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=10&sr=390x844&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=1&tag_exp=115616986~115938465~115938468~118897920~118897930~120213116~120385422~120469145~120469153&sid=1788475800&sct=1&seg=1&dl=https%3A%2F%2Fcollectibles.uy%2Fcategoria%2Ffiguras-de-accion&dt=P%C3%A1gina%20no%20encontrada%20%7C%20Collectibles%20Uruguay&en=page_view&_ee=1&tfd=598",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://mpc-prod-23-s6uit34pua-ue.a.run.app/events?cee=no",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://mpc-prod-23-s6uit34pua-ue.a.run.app/events?cee=no",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475823657&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AEAAAAQ&ae=a&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=10&sr=390x844&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=2&tag_exp=115616986~115938465~115938468~118897920~118897930~120213116~120385422~120469145~120469153&sid=1788475800&sct=1&seg=1&dl=https%3A%2F%2Fcollectibles.uy%2Fcategoria%2Ffiguras-de-accion&dt=P%C3%A1gina%20no%20encontrada%20%7C%20Collectibles%20Uruguay&en=scroll&epn.percent_scrolled=90&_et=5&tfd=1105",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475823657&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAAQ&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=10&sr=390x844&tt=commercial&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=3&tag_exp=115616986~115938465~115938468~118897920~118897930~120213116~120385422~120469145~120469153&sid=1788475800&sct=1&seg=1&dl=https%3A%2F%2Fcollectibles.uy%2Fshop&dt=Cat%C3%A1logo%20de%20Coleccionables%20en%20Uruguay%20%7C%20Collectibles&tfd=1663",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/1/1c/DC_Comics_logo.svg",
+      "failure": {
+        "errorText": "net::ERR_BLOCKED_BY_ORB"
+      }
+    },
+    {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/c/c9/Dragon_Ball_Z_Logo.svg",
+      "failure": {
+        "errorText": "net::ERR_BLOCKED_BY_ORB"
+      }
+    },
+    {
+      "url": "https://www.clarity.ms/tag/x2n71yquay",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475823657&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AEAAAAQ&ae=a&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=10&sr=390x844&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=4&tag_exp=115616986~115938465~115938468~118897920~118897930~120213116~120385422~120469145~120469153&dl=https%3A%2F%2Fcollectibles.uy%2Fshop&dr=https%3A%2F%2Fcollectibles.uy%2Fcategoria%2Ffiguras-de-accion&sid=1788475800&sct=1&seg=1&dt=Cat%C3%A1logo%20de%20Coleccionables%20en%20Uruguay%20%7C%20Collectibles&en=page_view&_et=555&tfd=4934",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://cobtsgkwcftvexaarwmo.supabase.co/rest/v1/products?select=id%2Cbrand_id%2Clicense_id%2Ccategory_id%2Ccondition%2Ctitle%2Cdescription%2Cbase_price%2Cstatus%2Cis_active%2Cproduct_categories%28category_id%29&status=eq.published&is_active=eq.true&offset=1000&limit=1000",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475823657&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAAQ&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=10&sr=390x844&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=5&tag_exp=115616986~115938465~115938468~118897920~118897930~120213116~120385422~120469145~120469153&sid=1788475800&sct=1&seg=1&dl=https%3A%2F%2Fcollectibles.uy%2Fshop&dr=https%3A%2F%2Fcollectibles.uy%2Fcategoria%2Ffiguras-de-accion&dt=Cat%C3%A1logo%20de%20Coleccionables%20en%20Uruguay%20%7C%20Collectibles&en=user_engagement&_et=3268&tfd=4934",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://mpc-prod-23-s6uit34pua-ue.a.run.app/events?cee=no",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475828029&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAAQ&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=4&sr=390x844&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=1&tag_exp=115938465~115938468~118897920~118897930~119404699~120213116~120385423~120469145~120469153&sid=1788475800&sct=1&seg=1&dl=https%3A%2F%2Fcollectibles.uy%2Fshop&dt=Cat%C3%A1logo%20de%20Coleccionables%20en%20Uruguay%20%7C%20Collectibles&en=page_view&_ee=1&tfd=4154",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/1/1c/DC_Comics_logo.svg",
+      "failure": {
+        "errorText": "net::ERR_BLOCKED_BY_ORB"
+      }
+    },
+    {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/c/c9/Dragon_Ball_Z_Logo.svg",
+      "failure": {
+        "errorText": "net::ERR_BLOCKED_BY_ORB"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475828029&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAAQ&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=4&sr=390x844&tt=commercial&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=2&tag_exp=115938465~115938468~118897920~118897930~119404699~120213116~120385423~120469145~120469153&sid=1788475800&sct=1&seg=1&dl=https%3A%2F%2Fcollectibles.uy%2Fshop&dt=Cat%C3%A1logo%20de%20Coleccionables%20en%20Uruguay%20%7C%20Collectibles&tfd=7121",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://e.clarity.ms/collect",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475828029&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAAQ&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=4&sr=390x844&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=3&tag_exp=115938465~115938468~118897920~118897930~119404699~120213116~120385423~120469145~120469153&sid=1788475800&sct=1&seg=1&dl=https%3A%2F%2Fcollectibles.uy%2Fshop&dt=Cat%C3%A1logo%20de%20Coleccionables%20en%20Uruguay%20%7C%20Collectibles&en=user_engagement&_et=2965&tfd=7121",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://e.clarity.ms/collect",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475833171&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAAQ&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=3&sr=390x844&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=1&tag_exp=115616986~115938466~115938468~118897920~118897930~120213116~120385423~120469145~120469153&sid=1788475800&sct=1&seg=1&dl=https%3A%2F%2Fcollectibles.uy%2Fcart&dt=Juguetes%20Retro%20Uruguay%20%26%20Coleccionables%20%7C%20Collectibles%20Store&en=page_view&_ee=1&tfd=141",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://mpc-prod-23-s6uit34pua-ue.a.run.app/events?cee=no",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://mpc-prod-23-s6uit34pua-ue.a.run.app/events?cee=no",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/c/c9/Dragon_Ball_Z_Logo.svg",
+      "failure": {
+        "errorText": "net::ERR_BLOCKED_BY_ORB"
+      }
+    },
+    {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/1/1c/DC_Comics_logo.svg",
+      "failure": {
+        "errorText": "net::ERR_BLOCKED_BY_ORB"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475833171&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AEAAAAQ&ae=a&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=3&sr=390x844&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=2&tag_exp=115616986~115938466~115938468~118897920~118897930~120213116~120385423~120469145~120469153&sid=1788475800&sct=1&seg=1&dl=https%3A%2F%2Fcollectibles.uy%2Fcart&dt=Juguetes%20Retro%20Uruguay%20%26%20Coleccionables%20%7C%20Collectibles%20Store&en=scroll&epn.percent_scrolled=90&_et=6&tfd=903",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475833171&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAAQ&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=3&sr=390x844&tt=commercial&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=3&tag_exp=115616986~115938466~115938468~118897920~118897930~120213116~120385423~120469145~120469153&sid=1788475800&sct=1&seg=1&dl=https%3A%2F%2Fcollectibles.uy%2Fshop&dt=Cat%C3%A1logo%20de%20Coleccionables%20en%20Uruguay%20%7C%20Collectibles&tfd=1496",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://e.clarity.ms/collect",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://e.clarity.ms/collect",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475833171&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAAQ&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=3&sr=390x844&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=5&tag_exp=115616986~115938466~115938468~118897920~118897930~120213116~120385423~120469145~120469153&sid=1788475800&sct=1&seg=1&dl=https%3A%2F%2Fcollectibles.uy%2Fshop&dr=https%3A%2F%2Fcollectibles.uy%2Fcart&dt=Cat%C3%A1logo%20de%20Coleccionables%20en%20Uruguay%20%7C%20Collectibles&en=user_engagement&_et=3356&tfd=4855",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475833171&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AEAAAAQ&ae=a&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=3&sr=390x844&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=4&tag_exp=115616986~115938466~115938468~118897920~118897930~120213116~120385423~120469145~120469153&dl=https%3A%2F%2Fcollectibles.uy%2Fshop&dr=https%3A%2F%2Fcollectibles.uy%2Fcart&sid=1788475800&sct=1&seg=1&dt=Cat%C3%A1logo%20de%20Coleccionables%20en%20Uruguay%20%7C%20Collectibles&en=page_view&_et=590&tfd=4855",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475837923&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAAQ&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=14&sr=390x844&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=1&tag_exp=115938465~115938468~118897920~118897930~120213116~120385423~120469145~120469153&sid=1788475800&sct=1&seg=1&dl=https%3A%2F%2Fcollectibles.uy%2Fcheckout&dt=Juguetes%20Retro%20Uruguay%20%26%20Coleccionables%20%7C%20Collectibles%20Store&en=page_view&_ee=1&tfd=1801",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://mpc-prod-23-s6uit34pua-ue.a.run.app/events?cee=no",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/c/c9/Dragon_Ball_Z_Logo.svg",
+      "failure": {
+        "errorText": "net::ERR_BLOCKED_BY_ORB"
+      }
+    },
+    {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/1/1c/DC_Comics_logo.svg",
+      "failure": {
+        "errorText": "net::ERR_BLOCKED_BY_ORB"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475837923&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AEAAAAQ&ae=a&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=14&sr=390x844&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=2&tag_exp=115938465~115938468~118897920~118897930~120213116~120385423~120469145~120469153&sid=1788475800&sct=1&seg=1&dl=https%3A%2F%2Fcollectibles.uy%2Fcheckout&dt=Juguetes%20Retro%20Uruguay%20%26%20Coleccionables%20%7C%20Collectibles%20Store&en=scroll&epn.percent_scrolled=90&tfd=6193",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475837923&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAAQ&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=14&sr=390x844&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=3&tag_exp=115938465~115938468~118897920~118897930~120213116~120385423~120469145~120469153&sid=1788475800&sct=1&seg=1&dl=https%3A%2F%2Fcollectibles.uy%2Fcheckout&dt=Juguetes%20Retro%20Uruguay%20%26%20Coleccionables%20%7C%20Collectibles%20Store&en=user_engagement&_et=4390&tfd=6193",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://e.clarity.ms/collect",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://e.clarity.ms/collect",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475842339&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAAQ&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=2&sr=390x844&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=1&tag_exp=115938465~115938468~118897920~118897930~120213116~120385423~120469145~120469153&sid=1788475800&sct=1&seg=1&dl=https%3A%2F%2Fcollectibles.uy%2Fcart&dt=Juguetes%20Retro%20Uruguay%20%26%20Coleccionables%20%7C%20Collectibles%20Store&en=page_view&_ee=1&tfd=236",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://mpc-prod-23-s6uit34pua-ue.a.run.app/events?cee=no",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://mpc-prod-23-s6uit34pua-ue.a.run.app/events?cee=no",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475842339&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AEAAAAQ&ae=a&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=2&sr=390x844&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=2&tag_exp=115938465~115938468~118897920~118897930~120213116~120385423~120469145~120469153&sid=1788475800&sct=1&seg=1&dl=https%3A%2F%2Fcollectibles.uy%2Fcart&dt=Juguetes%20Retro%20Uruguay%20%26%20Coleccionables%20%7C%20Collectibles%20Store&en=scroll&epn.percent_scrolled=90&_et=1&tfd=753",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/1/1c/DC_Comics_logo.svg",
+      "failure": {
+        "errorText": "net::ERR_BLOCKED_BY_ORB"
+      }
+    },
+    {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/c/c9/Dragon_Ball_Z_Logo.svg",
+      "failure": {
+        "errorText": "net::ERR_BLOCKED_BY_ORB"
+      }
+    },
+    {
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-JGVY58K11H&gtm=45je6921v9254699865za200zd9254699865&_p=1788475842339&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAAQ&are=1&cid=456960361.1788475800&frm=0&ngs=1&pscdl=noapi&rcb=2&sr=390x844&tt=commercial&uaa=arm&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.7632.6&uam=&uamb=1&uap=iOS&uapv=17_0&uaw=0&ul=es-uy&_s=3&tag_exp=115938465~115938468~118897920~118897930~120213116~120385423~120469145~120469153&sid=1788475800&sct=1&seg=1&dl=https%3A%2F%2Fcollectibles.uy%2Fshop&dt=Cat%C3%A1logo%20de%20Coleccionables%20en%20Uruguay%20%7C%20Collectibles&tfd=1305",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    }
+  ],
+  "touchTargetIssues": [
+    {
+      "page": "Home",
+      "targets": [
+        {
+          "tag": "A",
+          "text": "",
+          "width": 139,
+          "height": 40,
+          "className": "shrink-0 group"
+        },
+        {
+          "tag": "INPUT",
+          "text": "",
+          "width": 358,
+          "height": 38,
+          "className": "w-full bg-white/5 border border-white/15 rounded-full pl-11 "
+        },
+        {
+          "tag": "A",
+          "text": "VER TODAS",
+          "width": 93,
+          "height": 16,
+          "className": "inline-flex items-center gap-1 text-xs md:text-sm font-black"
+        },
+        {
+          "tag": "BUTTON",
+          "text": "Cerrar WhatsApp",
+          "width": 24,
+          "height": 24,
+          "className": "w-6 h-6 md:w-7 md:h-7 bg-white/80 backdrop-blur-sm rounded-f"
+        },
+        {
+          "tag": "BUTTON",
+          "text": "SOLO ESENCIALES",
+          "width": 308,
+          "height": 40,
+          "className": "btn-secondary flex-1 text-sm py-2.5 px-4 whitespace-nowrap b"
+        },
+        {
+          "tag": "BUTTON",
+          "text": "ACEPTAR TODAS",
+          "width": 308,
+          "height": 40,
+          "className": "btn-primary flex-1 text-sm py-2.5 px-4 whitespace-nowrap sha"
+        },
+        {
+          "tag": "BUTTON",
+          "text": "",
+          "width": 32,
+          "height": 32,
+          "className": "p-1.5 rounded-full hover:bg-white/10 text-slate-400 hover:te"
+        },
+        {
+          "tag": "BUTTON",
+          "text": "SEGUIR COMPRANDO",
+          "width": 210,
+          "height": 40,
+          "className": "btn-primary mt-6 text-sm px-6 py-2.5 rounded-full"
+        }
+      ]
+    }
+  ],
+  "overflowIssues": [
+    {
+      "viewport": "360x740_Android",
+      "overflow": {
+        "scrollWidth": 360,
+        "clientWidth": 360,
+        "hasOverflow": false
+      }
+    },
+    {
+      "viewport": "375x667_iPhoneSE",
+      "overflow": {
+        "scrollWidth": 375,
+        "clientWidth": 375,
+        "hasOverflow": false
+      }
+    },
+    {
+      "viewport": "430x932_iPhoneProMax",
+      "overflow": {
+        "scrollWidth": 430,
+        "clientWidth": 430,
+        "hasOverflow": false
+      }
+    },
+    {
+      "viewport": "768x1024_iPad",
+      "overflow": {
+        "scrollWidth": 768,
+        "clientWidth": 768,
+        "hasOverflow": false
+      }
+    }
+  ],
+  "stickyHeights": {
+    "home_390x844": {
+      "windowHeight": 844,
+      "announcementHeight": 40,
+      "headerHeight": 81,
+      "searchBarHeight": 59,
+      "totalStickyTopOccupied": 180
+    }
+  },
+  "pdpAudit": {
+    "title": "Productos",
+    "viewportHeight": 844,
+    "galleryHeight": 0,
+    "ctaFound": false,
+    "ctaTop": null,
+    "ctaVisibleAboveFold": false,
+    "isCtaSticky": false
+  },
+  "cardAnalysis": {
+    "cardCount": 90,
+    "firstCardWidth": 0,
+    "firstCardHeight": 0,
+    "aspectRatio": "NaN",
+    "badges": [],
+    "buttons": [
+      "Agregar a favoritos",
+      "Agregar al carrito"
+    ],
+    "hasWishlist": true,
+    "hasCartBtn": true,
+    "allText": [
+      "(0)Vendido por CollectiblesFRAZADA 1 PLAZA MY HERO ACADEMIA - DEKU$ 2.500"
+    ]
+  },
+  "checkoutAudit": {
+    "inputsCount": 1,
+    "inputs": [
+      {
+        "tag": "INPUT",
+        "type": "text",
+        "name": "Buscar figuras, sellers, drops...",
+        "width": 0,
+        "height": 0,
+        "fontSize": "14px"
+      }
+    ],
+    "hasStickyFooter": true
+  },
+  "cartDrawerAudit": {},
+  "menuAudit": {
+    "drawerWidth": 332,
+    "linksCount": 13,
+    "links": [
+      {
+        "text": "INICIAR SESIÓN",
+        "href": "/login"
+      },
+      {
+        "text": "CREAR CUENTA",
+        "href": "/login?signup=true"
+      },
+      {
+        "text": "INICIO",
+        "href": "/"
+      },
+      {
+        "text": "CATEGORÍAS",
+        "href": "/shop"
+      },
+      {
+        "text": "LICENCIAS",
+        "href": "/licencias"
+      },
+      {
+        "text": "THEMES",
+        "href": "/themes"
+      },
+      {
+        "text": "MARCAS",
+        "href": "/shop"
+      },
+      {
+        "text": "NOSOTROS",
+        "href": "/about"
+      },
+      {
+        "text": "CONTACTO",
+        "href": "/contact"
+      },
+      {
+        "text": "Centro de ayuda",
+        "href": "/centro-ayuda"
+      },
+      {
+        "text": "Contactanos",
+        "href": "/contact"
+      },
+      {
+        "text": "",
+        "href": "https://instagram.com/collectibles.uy"
+      },
+      {
+        "text": "",
+        "href": "https://wa.me/59896889596"
+      }
+    ],
+    "buttons": [
+      "",
+      "UYU",
+      "",
+      "",
+      "",
+      ""
+    ]
+  }
+}

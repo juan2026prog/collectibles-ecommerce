@@ -179,14 +179,15 @@ export default function CartDrawer() {
         }`}
       >
         {/* Header */}
-        <div className="p-5 border-b border-white/10 flex items-center justify-between bg-[#0e1424]">
+        <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between bg-[#0e1424]">
           <div className="flex items-center gap-2.5 text-white">
             <ShoppingCart className="w-5 h-5 text-[#f00856]" />
             <h2 className="text-lg font-black tracking-wider uppercase">Carrito</h2>
           </div>
           <button 
             onClick={() => setIsDrawerOpen(false)}
-            className="p-1.5 rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+            className="w-11 h-11 flex items-center justify-center rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            aria-label="Cerrar carrito"
           >
             <X className="w-5 h-5" />
           </button>
@@ -310,11 +311,22 @@ export default function CartDrawer() {
                         : 'border border-white/5 hover:border-white/10'
                     }`}
                   >
-                    <img 
-                      src={resolveImage(item.image) || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect fill="%230f172a" width="80" height="80" rx="8"/></svg>'} 
-                      alt="" 
-                      {...getImageProps("w-20 h-20 object-contain rounded-xl bg-white/5 p-1 shrink-0")}
-                    />
+                    {(() => {
+                      const itemImageRaw = (item as any).image_url || item.image || (item as any).img || (item as any).image_path || (item as any).product?.image_url || (item as any).product?.image;
+                      const resolved = resolveImage(itemImageRaw);
+                      return (
+                        <div className="w-20 h-20 rounded-xl bg-white p-1.5 shrink-0 flex items-center justify-center border border-white/10 overflow-hidden">
+                          <img 
+                            src={resolved || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect fill="%23ffffff" width="80" height="80" rx="8"/></svg>'} 
+                            alt={item.title} 
+                            className="w-full h-full object-contain"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect fill="%23ffffff" width="80" height="80" rx="8"/></svg>';
+                            }}
+                          />
+                        </div>
+                      );
+                    })()}
                     
                     <div className="flex-1 min-w-0 flex flex-col justify-between">
                       <div className="flex items-start justify-between gap-2">
@@ -461,7 +473,7 @@ export default function CartDrawer() {
 
         {/* Footer (Fixed at bottom) */}
         {items.length > 0 && (
-          <div className="p-5 border-t border-white/10 bg-[#0e1424]">
+          <div className="p-5 border-t border-white/10 bg-[#0e1424] pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]">
             <div className="space-y-2.5 mb-5 text-sm">
               <div className="flex justify-between items-center text-slate-400">
                 <span>Subtotal ({count} {count === 1 ? 'item' : 'items'})</span>
@@ -504,7 +516,7 @@ export default function CartDrawer() {
             {/* Main checkout button */}
             <button
               onClick={handleCheckoutRedirect}
-              className="w-full bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white font-extrabold text-sm uppercase py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/10 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+              className="w-full bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white font-extrabold text-sm uppercase py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/10 transition-all transform hover:-translate-y-0.5 active:translate-y-0 min-h-[48px]"
             >
               Finalizar Pago
               <ArrowRight className="w-4 h-4" />
@@ -512,7 +524,7 @@ export default function CartDrawer() {
 
             <button
               onClick={() => setIsDrawerOpen(false)}
-              className="w-full text-center text-xs text-slate-400 hover:text-white mt-3 font-semibold transition-colors"
+              className="w-full text-center text-xs text-slate-400 hover:text-white mt-3 font-semibold transition-colors min-h-[44px] flex items-center justify-center"
             >
               ← Continuar comprando
             </button>

@@ -1,0 +1,19 @@
+{
+  "metrics": {
+    "headerHeightMobile": 57,
+    "shopFirstProductY": null,
+    "pdpMainCtaY": 962
+  },
+  "checks": [
+    {
+      "name": "pdp_sticky_buy_bar_visible_on_scroll",
+      "passed": true,
+      "details": "Sticky buy bar appears at bottom-0 when CTA is scrolled out of viewport"
+    },
+    {
+      "name": "checkout_suggestions_hidden_on_mobile",
+      "passed": true,
+      "details": "Suggestions are cleanly hidden on mobile checkout (hidden lg:block)"
+    }
+  ]
+}
