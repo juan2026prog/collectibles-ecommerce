@@ -22,8 +22,13 @@ serve(async (req) => {
 
     const serviceClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "");
 
-    const { resolveActiveZincApiKey } = await import("../_shared/zinc/index.ts");
-    const ZINC_API_KEY = await resolveActiveZincApiKey(serviceClient);
+    const { resolveZincApiKey } = await import("../_shared/zinc/index.ts");
+    let ZINC_API_KEY = "";
+    try {
+      ZINC_API_KEY = await resolveZincApiKey(serviceClient, "production");
+    } catch {
+      ZINC_API_KEY = await resolveZincApiKey(serviceClient, "sandbox");
+    }
 
     const body = await req.json();
     const { cart_items, reserve_capacity = false, reservation_minutes = 15 } = body;

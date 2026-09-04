@@ -16,8 +16,13 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    const { resolveActiveZincApiKey, searchZincProducts } = await import("../_shared/zinc/index.ts");
-    const ZINC_API_KEY = await resolveActiveZincApiKey(supabase);
+    const { resolveZincApiKey, searchZincProducts } = await import("../_shared/zinc/index.ts");
+    let ZINC_API_KEY = "";
+    try {
+      ZINC_API_KEY = await resolveZincApiKey(supabase, "production");
+    } catch {
+      ZINC_API_KEY = await resolveZincApiKey(supabase, "sandbox");
+    }
 
     const { 
       query, 

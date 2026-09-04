@@ -29,45 +29,96 @@ export function centsToDollars(cents: number): number {
  * Adapts internal shipping address into Zinc V2 Address schema.
  * Replaces legacy zip_code with postal_code, address_line_1 with address_line1.
  */
+/**
+ * Adapts and strictly validates internal shipping address into Zinc V2 Address schema.
+ * 
+ * Strict Validation:
+ * - Eliminates fake fallbacks (no "Cliente", no ".", no "206-555-0100").
+ * - Requires first_name, last_name, address_line1, city, postal_code, phone_number.
+ * - Requires state for US shipments.
+ * - Throws descriptive error if any required component is missing.
+ */
 export function buildZincAddress(shipping: Record<string, any>): ZincAddress {
-  const recipientName = String(shipping.international_recipient_name || shipping.full_name || shipping.name || "").trim();
-  const nameParts = recipientName.split(" ").filter(Boolean);
-  const firstName = nameParts[0] || "Cliente";
-  const lastName = nameParts.slice(1).join(" ") || ".";
+  if (!shipping || typeof shipping !== "object") {
+    throw new Error("Dirección de envío no provista o inválida.");
+  }
 
-  const line1 = String(shipping.international_address_line_1 || shipping.address_line1 || shipping.address || "").trim();
+  const recipientName = String(
+    shipping.international_recipient_name || 
+    shipping.full_name || 
+    shipping.name || 
+    ""
+  ).trim();
+  
+  const nameParts = recipientName.split(/\s+/).filter(Boolean);
+  const firstName = (shipping.first_name || nameParts[0] || "").trim();
+  const lastName = (shipping.last_name || nameParts.slice(1).join(" ") || "").trim();
+
+  if (!firstName) {
+    throw new Error("Dirección de envío inválida: nombre del destinatario faltante (first_name requerido).");
+  }
+  if (!lastName) {
+    throw new Error("Dirección de envío inválida: apellido del destinatario faltante (last_name requerido).");
+  }
+
+  const line1 = String(
+    shipping.international_address_line_1 || 
+    shipping.address_line1 || 
+    shipping.address || 
+    ""
+  ).trim();
+
+  if (!line1) {
+    throw new Error("Dirección de envío inválida: línea 1 de dirección faltante (address_line1 requerido).");
+  }
   
   const line2Parts = [
     shipping.international_address_line_2 || shipping.address_line2,
     shipping.international_customer_code || shipping.customer_code
   ].filter(Boolean);
-  const line2 = line2Parts.join(" ").trim() || undefined;
+  const line2 = line2Parts.join(" ").trim() || null;
 
   const city = String(shipping.international_city || shipping.city || "").trim();
-  const state = String(shipping.international_state || shipping.state || "").trim() || undefined;
+  if (!city) {
+    throw new Error("Dirección de envío inválida: ciudad faltante (city requerida).");
+  }
+
+  const country = String(shipping.international_country || shipping.country || "US").trim().toUpperCase();
+  const state = String(shipping.international_state || shipping.state || "").trim() || null;
+
+  if (country === "US" && !state) {
+    throw new Error("Dirección de envío inválida: estado/provincia faltante para envíos dentro de Estados Unidos (state requerido para US).");
+  }
+
   const postalCode = String(
     shipping.international_postal_code || 
     shipping.postal_code || 
     shipping.zip_code || 
     ""
   ).trim();
+
+  if (!postalCode) {
+    throw new Error("Dirección de envío inválida: código postal faltante (postal_code requerido).");
+  }
   
   const phone = String(
     shipping.international_phone || 
     shipping.phone_number || 
     shipping.phone || 
-    "206-555-0100"
+    ""
   ).trim();
 
-  const country = String(shipping.international_country || shipping.country || "US").trim().toUpperCase();
+  if (!phone) {
+    throw new Error("Dirección de envío inválida: teléfono de contacto faltante (phone_number requerido).");
+  }
 
   return {
     first_name: firstName,
     last_name: lastName,
     address_line1: line1,
-    address_line2: line2 || null,
+    address_line2: line2,
     city,
-    state: state || null,
+    state,
     postal_code: postalCode,
     phone_number: phone,
     country: country || "US",

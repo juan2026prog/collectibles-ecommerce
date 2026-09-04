@@ -31,8 +31,13 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const serviceClient = createClient(supabaseUrl, serviceRoleKey);
 
-    const { resolveActiveZincApiKey } = await import("../_shared/zinc/index.ts");
-    const ZINC_API_KEY = await resolveActiveZincApiKey(serviceClient);
+    const { resolveZincApiKey } = await import("../_shared/zinc/index.ts");
+    let ZINC_API_KEY = "";
+    try {
+      ZINC_API_KEY = await resolveZincApiKey(serviceClient, "production");
+    } catch {
+      ZINC_API_KEY = await resolveZincApiKey(serviceClient, "sandbox");
+    }
 
     // Fetch active international order items
     const activeStatuses = ['zinc_order_created', 'zinc_processing', 'purchased', 'shipped_to_courier'];
