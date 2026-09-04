@@ -29,6 +29,7 @@ import { calculateArgentinaShippingStatus } from '../lib/mbeLogisticsUtils';
 import { getConditionLabel } from '../config/conditionConfig';
 import InternationalCuposBadge from '../components/international/InternationalCuposBadge';
 import InternationalWaitlistModal from '../components/international/InternationalWaitlistModal';
+import { resolveProductInventory } from '../lib/canonicalStock';
 
 // ── COMPONENTE SECCIÓN PRODUCTOS RELACIONADOS ──
 function RelatedProductsSection({ currentProductId, categorySlug }: { currentProductId: string; categorySlug?: string }) {
@@ -95,6 +96,21 @@ export default function ProductDetail() {
   const [showStickyBar, setShowStickyBar] = useState(false);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [touchEndX, setTouchEndX] = useState<number | null>(null);
+
+  // Synchronize quantity with canonical inventory at top-level before early returns
+  useEffect(() => {
+    if (!product) return;
+    const vars = product.variants && product.variants.length > 0 ? product.variants : [];
+    const v = vars[selectedVariantIdx] || null;
+    const resolvedStock = resolveProductInventory(product, v).availableQuantity;
+    if (resolvedStock <= 0) {
+      if (quantity !== 0) setQuantity(0);
+    } else if (quantity === 0) {
+      setQuantity(1);
+    } else if (quantity > resolvedStock) {
+      setQuantity(resolvedStock);
+    }
+  }, [product, selectedVariantIdx, quantity]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     setTouchStartX(e.targetTouches[0].clientX);
@@ -236,10 +252,10 @@ export default function ProductDetail() {
   const currentImgObj = images[selectedImage] || images[0];
   const displayImage = resolveImage(currentImgObj?.url || product.image_url, 'detail');
 
-  const stock = selectedVariant
-    ? (selectedVariant.stock ?? product.stock)
-    : product.stock;
+  const inventoryResolution = resolveProductInventory(product, selectedVariant);
+  const stock = inventoryResolution.availableQuantity;
   const isIntl = product.source_provider === 'zinc' || Boolean(product.is_international);
+  const isVendorActive = !product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined;
 
   const getStockInfo = () => {
     if (stock <= 0) return { text: 'Agotado', className: 'text-red-400 border-red-500/20 bg-red-500/10' };
@@ -252,7 +268,7 @@ export default function ProductDetail() {
 
   const stockInfo = getStockInfo();
   const addToCart = (customVariant?: any, directCheckout = false) => {
-    if (stock <= 0) return;
+    if (stock <= 0 || !isVendorActive) return;
     const targetVariant = customVariant || selectedVariant;
 
     if (isIntl) {
@@ -548,7 +564,11 @@ export default function ProductDetail() {
                 {variants.map((v: any, idx: number) => (
                   <button
                     key={v.id}
-                    onClick={() => { setSelectedVariantIdx(idx); setQuantity(1); }}
+                    onClick={() => {
+                      setSelectedVariantIdx(idx);
+                      const nextStock = resolveProductInventory(product, v).availableQuantity;
+                      setQuantity(nextStock > 0 ? 1 : 0);
+                    }}
                     className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
                       selectedVariantIdx === idx
                         ? 'border-[#f00856] bg-[#f00856]/10 text-white'
@@ -565,34 +585,32 @@ export default function ProductDetail() {
 
           {/* 2. BOTONES DE COMPRA (Requirement 2) */}
           <div className="space-y-3 pt-3 border-t border-white/10">
-            {(() => {
-              const isVendorActive = !product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined;
-              if (!isVendorActive) {
-                return (
-                  <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-200 text-xs font-bold flex items-center gap-2">
-                    <span>⚠️ Este vendedor se encuentra temporalmente inactivo o suspendido. Los productos no están disponibles para la compra.</span>
-                  </div>
-                );
-              }
-              return null;
-            })()}
+            {!isVendorActive && (
+              <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-200 text-xs font-bold flex items-center gap-2">
+                <span>⚠️ Este vendedor se encuentra temporalmente inactivo o suspendido. Los productos no están disponibles para la compra.</span>
+              </div>
+            )}
 
             {/* QUANTITY SELECTOR */}
             <div className="flex items-center justify-between">
               <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Cantidad</span>
               <div className="flex items-center justify-between border border-white/10 bg-white/[0.03] rounded-xl h-11 w-36">
                 <button
+                  id="qty-minus"
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="w-11 h-full flex items-center justify-center hover:bg-white/10 transition-colors text-slate-300 hover:text-white"
-                  disabled={quantity <= 1 || (!product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined ? false : true)}
+                  className="w-11 h-full flex items-center justify-center hover:bg-white/10 transition-colors text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                  disabled={quantity <= 1 || stock <= 0 || !isVendorActive}
+                  aria-label="Disminuir cantidad"
                 >
                   <Minus className="w-4 h-4" />
                 </button>
-                <span className="font-black text-base text-white">{quantity}</span>
+                <span id="qty-display" className="font-black text-base text-white">{quantity}</span>
                 <button
+                  id="qty-plus"
                   onClick={() => setQuantity(Math.min(stock, quantity + 1))}
-                  className="w-11 h-full flex items-center justify-center hover:bg-white/10 transition-colors text-slate-300 hover:text-white"
-                  disabled={quantity >= stock || (!product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined ? false : true)}
+                  className="w-11 h-full flex items-center justify-center hover:bg-white/10 transition-colors text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                  disabled={quantity >= stock || stock <= 0 || !isVendorActive}
+                  aria-label="Aumentar cantidad"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -603,26 +621,26 @@ export default function ProductDetail() {
             <button
               id="main-buy-now"
               onClick={() => addToCart(undefined, true)}
-              disabled={stock <= 0 || (!product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined ? false : true)}
+              disabled={stock <= 0 || !isVendorActive}
               className={`w-full py-3.5 sm:py-4.5 rounded-2xl flex items-center justify-center gap-2.5 text-sm sm:text-base uppercase tracking-widest font-black transition-all bg-[#f00856] text-white shadow-xl shadow-[#f00856]/30 hover:bg-[#d00749] hover:shadow-[#f00856]/50 hover:-translate-y-0.5 cursor-pointer min-h-[48px] ${
-                stock <= 0 || (!product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined ? false : true) ? 'opacity-50 cursor-not-allowed bg-slate-800 shadow-none' : ''
+                stock <= 0 || !isVendorActive ? 'opacity-50 cursor-not-allowed bg-slate-800 shadow-none' : ''
               }`}
             >
               <Zap className="w-4 h-4 sm:w-5 sm:h-5" />
-              {(!product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined ? true : false) === false ? 'Vendedor inactivo' : stock <= 0 ? 'Sin Stock' : 'Comprar ahora'}
+              {!isVendorActive ? 'Vendedor inactivo' : stock <= 0 ? 'Agotado' : 'Comprar ahora'}
             </button>
 
             {/* BOTÓN AGREGAR AL CARRITO (CTA SECUNDARIO) */}
             <button
               id="main-add-to-cart"
               onClick={() => addToCart()}
-              disabled={stock <= 0 || (!product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined ? false : true)}
+              disabled={stock <= 0 || !isVendorActive}
               className={`w-full py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl flex items-center justify-center gap-2 text-xs uppercase tracking-wider font-bold transition-all border border-white/20 text-slate-200 bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/40 cursor-pointer min-h-[44px] ${
-                stock <= 0 || (!product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined ? false : true) ? 'opacity-50 cursor-not-allowed border-white/5' : ''
+                stock <= 0 || !isVendorActive ? 'opacity-50 cursor-not-allowed border-white/5 text-slate-500' : ''
               } ${addedToCart ? 'bg-green-500/20 border-green-500 text-green-400' : ''}`}
             >
               <ShoppingCart className="w-4 h-4" />
-              {addedToCart ? '✓ Agregado al carrito' : 'Agregar al carrito'}
+              {stock <= 0 ? 'Sin stock' : addedToCart ? '✓ Agregado al carrito' : 'Agregar al carrito'}
             </button>
 
             {/* FAVORITOS */}
@@ -954,7 +972,7 @@ export default function ProductDetail() {
       </section>
 
       {/* MOBILE STICKY BUY BAR */}
-      {showStickyBar && !(stock <= 0) && (
+      {showStickyBar && stock > 0 && isVendorActive && (
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#05070f]/95 backdrop-blur-md border-t border-white/10 px-4 py-2.5 pb-[calc(0.6rem+env(safe-area-inset-bottom,0px))] animate-slide-up lg:hidden shadow-[0_-10px_30px_rgba(0,0,0,0.8)]">
           <div className="flex items-center justify-between gap-3 max-w-7xl mx-auto">
             <div className="flex items-center gap-2.5 overflow-hidden min-w-0 flex-1">
@@ -972,7 +990,9 @@ export default function ProductDetail() {
               </div>
             </div>
             <button
+              id="sticky-buy-btn"
               onClick={() => addToCart(undefined, true)}
+              disabled={stock <= 0 || !isVendorActive}
               className="btn-primary rounded-xl px-5 py-2.5 flex items-center justify-center gap-1.5 text-xs uppercase tracking-wider font-black transition-all shadow-lg shadow-[#f00856]/20 cursor-pointer shrink-0 min-h-[44px]"
             >
               <Zap className="w-4 h-4" />
