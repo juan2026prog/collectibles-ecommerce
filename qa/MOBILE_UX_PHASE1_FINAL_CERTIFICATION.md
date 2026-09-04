@@ -109,7 +109,7 @@ La función original `public.get_product_buybox(p_product_id uuid)` fallaba en t
 - `vpv.status` (el estado vive en `vendor_products.status`)
 
 ### Corrección Aplicada
-Se creó la migración [20261230000000_fix_get_product_buybox_vendor_schema.sql](file:///c:/Projects/Collectibles2026/supabase/migrations/20261230000000_fix_get_product_buybox_vendor_schema.sql) y se aplicó al motor Supabase con las siguientes mejoras:
+Se creó la migración [20260904070510_fix_get_product_buybox_vendor_schema.sql](file:///c:/Projects/Collectibles2026/supabase/migrations/20260904070510_fix_get_product_buybox_vendor_schema.sql) y se aplicó al motor Supabase con las siguientes mejoras:
 1. Join relacional correcto: `vendor_product_variants vpv JOIN vendor_products vp ON vp.id = vpv.vendor_product_id JOIN vendors v ON v.id = vp.vendor_id LEFT JOIN vendor_stores vs ON vs.vendor_id = v.id`.
 2. Verificación de estado activo del vendor y de la tienda (`v.status = 'active' AND vp.status = 'active'`).
 3. Algoritmo de puntuación equilibrado: 70% precio + 30% stock disponible.
@@ -181,7 +181,7 @@ Durante la ejecución en el entorno Vercel Preview se capturó la totalidad del 
 - [`frontend/src/lib/canonicalStock.test.ts`](file:///c:/Projects/Collectibles2026/frontend/src/lib/canonicalStock.test.ts): 15 tests unitarios cubriendo todas las ramas de inventario.
 - [`frontend/src/pages/ProductDetail.tsx`](file:///c:/Projects/Collectibles2026/frontend/src/pages/ProductDetail.tsx): Integración del resolver canónico, selector de cantidad libre de regresiones, Buy Box de vendors y badges honestos.
 - [`frontend/src/components/CartDrawer.tsx`](file:///c:/Projects/Collectibles2026/frontend/src/components/CartDrawer.tsx): Identificadores de test para cantidad y subtotal.
-- [`supabase/migrations/20261230000000_fix_get_product_buybox_vendor_schema.sql`](file:///c:/Projects/Collectibles2026/supabase/migrations/20261230000000_fix_get_product_buybox_vendor_schema.sql): Fix de esquema en RPC `get_product_buybox` y grant para checkout anónimo.
+- [`supabase/migrations/20260904070510_fix_get_product_buybox_vendor_schema.sql`](file:///c:/Projects/Collectibles2026/supabase/migrations/20260904070510_fix_get_product_buybox_vendor_schema.sql): Fix de esquema en RPC `get_product_buybox` y grant para checkout anónimo.
 - [`qa/mobile-ux/smoke_test_preview.mjs`](file:///c:/Projects/Collectibles2026/qa/mobile-ux/smoke_test_preview.mjs): Suite de smoke testing automatizada con Playwright para Vercel Preview.
 - [`qa/mobile-ux/phase1_microfix_telemetry.json`](file:///c:/Projects/Collectibles2026/qa/mobile-ux/phase1_microfix_telemetry.json): Telemetría completa generada en vivo.
 
