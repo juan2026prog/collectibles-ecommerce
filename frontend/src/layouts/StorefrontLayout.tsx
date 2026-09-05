@@ -530,7 +530,7 @@ export default function StorefrontLayout() {
           </Link>
 
           {/* MAIN NAV (DESKTOP) */}
-          <nav className="hidden xl:flex items-center h-full gap-8 text-xs font-bold uppercase tracking-wider text-slate-400">
+          <nav className="hidden lg:flex items-center h-full gap-4 xl:gap-6 text-[11px] xl:text-xs font-bold uppercase tracking-wider text-slate-400">
             {NAV_LINKS.map(link => (
               <div 
                 key={link.name}
@@ -688,7 +688,7 @@ export default function StorefrontLayout() {
             </button>
             <button 
               onClick={() => setMobileMenuOpen(true)}
-              className="xl:hidden w-11 h-11 flex items-center justify-center rounded-full bg-white/5 border border-white/10 text-white"
+              className="lg:hidden w-11 h-11 flex items-center justify-center rounded-full bg-white/5 border border-white/10 text-white"
               aria-label="Abrir menú"
             >
               <Menu className="w-5 h-5" />
@@ -712,8 +712,8 @@ export default function StorefrontLayout() {
             className="relative flex items-center w-full"
           >
             <Search className="absolute left-4 w-4 h-4 text-[#f00856] pointer-events-none" />
-            <input
-              type="text"
+            <input 
+              type="text" 
               placeholder={features.aiSearchEnabled ? "🔍 Buscar figuras... o prueba IA ✨" : "🔍 Buscar figuras, marcas..."}
               defaultValue={searchQuery}
               className="w-full h-11 bg-white/5 border border-white/15 rounded-full pl-11 pr-12 py-2 text-xs font-semibold text-white placeholder-slate-400 focus:border-[#f00856] focus:ring-1 focus:ring-[#f00856] transition-all outline-none"
@@ -733,7 +733,7 @@ export default function StorefrontLayout() {
 
       {/* MOBILE MENU DRAWER */}
       {mobileMenuOpen && (
-        <div className="fixed inset-0 z-[200] xl:hidden">
+        <div className="fixed inset-0 z-[200] lg:hidden">
            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
            <div className="absolute inset-y-0 left-0 w-[85%] max-w-sm bg-[#05070f] p-6 sm:p-8 flex flex-col animate-slide-right overflow-y-auto">
               {/* Drawer Header */}
