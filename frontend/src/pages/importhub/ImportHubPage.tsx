@@ -35,7 +35,7 @@ import {
   Sparkles
 } from 'lucide-react';
 
-export const ImportHubPage: React.FC = () => {
+const ImportHubPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialTab = searchParams.get('tab') || 'dashboard';
 
@@ -313,3 +313,4 @@ export const ImportHubPage: React.FC = () => {
     </div>
   );
 };
+export default ImportHubPage;

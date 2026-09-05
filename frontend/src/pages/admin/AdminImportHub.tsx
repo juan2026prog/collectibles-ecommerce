@@ -15,7 +15,7 @@ import {
   Save 
 } from 'lucide-react';
 
-export const AdminImportHub: React.FC = () => {
+const AdminImportHub: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<'couriers' | 'rules'>('couriers');
   const [couriers, setCouriers] = useState<ImportCourier[]>(DEFAULT_COURIERS);
   const [customsRule, setCustomsRule] = useState<CustomsRule>(DEFAULT_URUGUAY_2026_RULE);
@@ -253,3 +253,5 @@ export const AdminImportHub: React.FC = () => {
     </div>
   );
 };
+
+export default AdminImportHub;
