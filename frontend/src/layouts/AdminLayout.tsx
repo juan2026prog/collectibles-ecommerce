@@ -63,6 +63,7 @@ export default function AdminLayout() {
     { name: 'Comparador', path: '/admin/compare', icon: Scale },
     { name: 'Collector Vault', path: '/admin/vault', icon: Archive },
     { name: 'Collector Academy', path: '/admin/academy', icon: GraduationCap },
+    { name: 'Import Hub', path: '/admin/import-hub', icon: Truck },
     { name: 'Usuarios & Auditoria', path: '/admin/users', icon: ShieldCheck },
   ];
 

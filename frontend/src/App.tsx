@@ -124,6 +124,10 @@ const AcademyHome = lazy(() => import('./pages/academy/AcademyHome'));
 const AcademyArticlePage = lazy(() => import('./pages/academy/AcademyArticlePage'));
 const AdminAcademy = lazy(() => import('./pages/admin/AdminAcademy'));
 
+// 06. Collectibles Import Hub
+const ImportHubPage = lazy(() => import('./pages/importhub/ImportHubPage'));
+const AdminImportHub = lazy(() => import('./pages/admin/AdminImportHub'));
+
 // GodMode removed from production — SEC-CRIT-01 (hardcoded credentials)
 import { useReferralTracking } from './hooks/useReferralTracking';
 import MetaPixelTracker from './components/MetaPixelTracker';
@@ -227,6 +231,12 @@ function App() {
                     {/* 05. Collector Academy */}
                     <Route path="/academy" element={<AcademyHome />} />
                     <Route path="/academy/:slug" element={<AcademyArticlePage />} />
+
+                    {/* 06. Collectibles Import Hub */}
+                    <Route path="/import-hub" element={<ImportHubPage />} />
+                    <Route path="/importaciones" element={<Navigate to="/import-hub" replace />} />
+                    <Route path="/franquicia" element={<Navigate to="/import-hub?tab=franchise" replace />} />
+                    <Route path="/franquicias" element={<Navigate to="/import-hub?tab=franchise" replace />} />
                   </Route>
 
                 {/* Isolated Portals with Lateral Navigation */}
@@ -325,6 +335,7 @@ function App() {
                   <Route path="radar" element={<AdminRadar />} />
                   <Route path="vault" element={<AdminVault />} />
                   <Route path="academy" element={<AdminAcademy />} />
+                  <Route path="import-hub" element={<AdminImportHub />} />
                   <Route path="products" element={<AdminProducts />} />
                   <Route path="pages" element={<AdminPages />} />
                   <Route path="orders" element={<AdminOrders />} />

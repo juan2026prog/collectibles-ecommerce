@@ -13,6 +13,7 @@ export interface FeatureToggles {
   collectorCompareEnabled: boolean;
   collectorAcademyEnabled: boolean;
   customsFranchiseEnabled: boolean;
+  importHubEnabled: boolean;
 }
 
 const defaultFeatures: FeatureToggles = {
@@ -27,6 +28,7 @@ const defaultFeatures: FeatureToggles = {
   collectorCompareEnabled: true,
   collectorAcademyEnabled: true,
   customsFranchiseEnabled: true,
+  importHubEnabled: true,
 };
 
 interface FeatureToggleContextType {
@@ -69,6 +71,7 @@ export function FeatureToggleProvider({ children }: { children: React.ReactNode 
           collectorCompareEnabled: toggleMap.get('compare') ?? defaultFeatures.collectorCompareEnabled,
           collectorAcademyEnabled: toggleMap.get('academy') ?? defaultFeatures.collectorAcademyEnabled,
           customsFranchiseEnabled: toggleMap.get('customs') ?? defaultFeatures.customsFranchiseEnabled,
+          importHubEnabled: toggleMap.get('import_hub') ?? defaultFeatures.importHubEnabled,
         });
       } else {
         // Fallback: try store_settings for backward compatibility

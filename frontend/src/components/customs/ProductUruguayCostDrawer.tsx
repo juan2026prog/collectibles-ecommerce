@@ -170,7 +170,15 @@ export const ProductUruguayCostDrawer: React.FC<ProductUruguayCostDrawerProps> =
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-white/10 bg-zinc-900/60 flex justify-end">
+        <div className="p-4 border-t border-white/10 bg-zinc-900/60 flex items-center justify-between gap-3">
+          <a
+            href={`/import-hub?tab=simulator&price=${productPriceUsd}&weight=${physicalWeight}&category=${encodeURIComponent(categoryName || '')}&title=${encodeURIComponent(productTitle || '')}`}
+            className="text-xs font-bold text-sky-400 hover:text-sky-300 flex items-center gap-1 transition"
+          >
+            <span>Ver simulación completa en Import Hub</span>
+            <ChevronRight size={14} />
+          </a>
+
           <button
             onClick={onClose}
             className="px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition"

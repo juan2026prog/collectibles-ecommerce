@@ -352,8 +352,15 @@ export default function StorefrontLayout() {
       });
     }
 
+    if (features.importHubEnabled && !links.some(l => l.href === '/import-hub' || l.name?.toUpperCase().includes('IMPORT HUB'))) {
+      links.push({
+        name: 'IMPORT HUB',
+        href: '/import-hub'
+      });
+    }
+
     return links;
-  }, [t, settings, intlPublicEnabled, features.radarEnabled, features.collectorAcademyEnabled, features.comparatorEnabled, features.collectorVaultEnabled]);
+  }, [t, settings, intlPublicEnabled, features.radarEnabled, features.collectorAcademyEnabled, features.comparatorEnabled, features.collectorVaultEnabled, features.importHubEnabled]);
 
   const FOOTER_LINKS = useMemo(() => {
     const customFooterStr = settings['appearance_footer_menu_json'];
