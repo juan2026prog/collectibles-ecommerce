@@ -192,6 +192,7 @@ export default function AcademyHome() {
         { scale_key: '1:10', label: 'Escala 1:10 (7 pulgadas)', approx_height_cm: '18 – 22 cm', description: 'Muy utilizada en estatuas premium. Mayor libertad de escultura sin articulaciones complejas.' },
         { scale_key: '1:6', label: 'Escala 1:6 (Sixth Scale)', approx_height_cm: '28 – 32 cm', description: 'Alta gama con ropa de tela real y máximo realismo facial: Hot Toys, Sideshow, Damtoys.' },
         { scale_key: '1:4', label: 'Escala 1:4 (Quarter Scale)', approx_height_cm: '45 – 55 cm', description: 'Grandes piezas de museo y estatuas premium de alto impacto visual.' },
+        { scale_key: '1:1', label: 'Escala 1:1 (Life-Size / Busto)', approx_height_cm: '160 – 190 cm (Bustos: 60 – 90 cm)', description: 'Réplicas a tamaño real 1:1 y bustos de museo con ojos de silicona, pelo injertado y máximo impacto.' },
       ]);
 
       setGlossary(gloRes.data && gloRes.data.length > 0 ? gloRes.data : DEFAULT_GLOSSARY);
@@ -213,7 +214,7 @@ export default function AcademyHome() {
     <div className="min-h-screen bg-[#0d0f12] text-white py-10 px-4 sm:px-6 lg:px-8 space-y-20">
       <SEO
         title="Collector Academy | Guías de Coleccionismo, Escalas y Autenticidad"
-        description="Aprende sobre escalas (1:18 a 1:4), autenticidad de figuras, materiales PVC/resina/die-cast, cómo empezar tu colección, glosario MISB/MIB/Loose y mucho más."
+        description="Aprende sobre escalas (1:18 a 1:1 Life-Size), autenticidad de figuras, materiales PVC/resina/die-cast, cómo empezar tu colección, glosario MISB/MIB/Loose y mucho más."
       />
 
       {/* ── HERO ─────────────────────────────────────────────────────────────── */}
@@ -234,7 +235,7 @@ export default function AcademyHome() {
           {[
             { icon: <BookOpen size={13} />, label: '8 guías disponibles' },
             { icon: <HelpCircle size={13} />, label: '12 términos en el glosario' },
-            { icon: <Layers size={13} />, label: '5 escalas documentadas' },
+            { icon: <Layers size={13} />, label: '6 escalas documentadas' },
           ].map((s, i) => (
             <span key={i} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 text-xs font-medium">
               {s.icon}
@@ -432,7 +433,7 @@ export default function AcademyHome() {
         {loading ? (
           <div className="py-12 text-center text-zinc-500 text-sm">Cargando tabla de escalas...</div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {scales.map((s, idx) => (
               <div key={idx} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex flex-col justify-between hover:border-sky-500/40 transition">
                 <div>

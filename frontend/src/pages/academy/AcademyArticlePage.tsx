@@ -236,6 +236,17 @@ Estas figuras generan mucho impacto visual, pero requieren bastante espacio y so
         warning: 'Una estatua 1:4 puede pesar entre 3 y 8 kg. Asegúrate de que tu estantería o vitrina soporte el peso antes de ubicarla.'
       },
       {
+        heading: 'Escala 1:1 — Life-Size (Tamaño Real y Bustos)',
+        content: `La cúspide absoluta del coleccionismo de museo. Réplicas a escala real 1:1 de personajes, bustos hiperrealistas (Queen Studios, Infinity Studio, Sideshow) y réplicas de utilería de películas (cascos, armaduras, sables de luz).
+
+Altura y dimensiones:
+• Bustos 1:1: 60 a 90 cm de altura
+• Figuras completas 1:1: 1,60 a 2,00 m
+
+Suelen incorporar materiales hiperrealistas como silicona médica de grado platino, ojos de prótesis de vidrio y cabello natural insertado mechón por mechón.`,
+        tip: 'Las piezas 1:1 son consideradas obras de arte de exhibición central y requieren espacios amplios dedicados o pedestales reforzados.'
+      },
+      {
         heading: '¿Puedo mezclar escalas?',
         content: `Sí. No existe ninguna regla que obligue a mantener toda una colección dentro de la misma escala.
 
