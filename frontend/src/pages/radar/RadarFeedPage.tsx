@@ -35,13 +35,12 @@ const STATIC_RADAR_ITEMS: RadarItem[] = [
     line: 'Marvel Legends',
     radar_signal: 'PREVENTA_CERRANDO',
     radar_why:
-      'Una de las piezas Marvel Legends más llamativas del momento — y la ventana de preventa cierra en días.',
-    radar_context: '28 cm · Preventa hasta 7 SEP · Marvel',
+      'Una de las piezas Marvel Legends más llamativas del momento y con ventana de preventa a punto de cerrar.',
+    radar_context: '28 cm · Pre-order hasta 7 SEP · Marvel',
     cta_label: 'Ver por qué está en Radar',
-    official_image_url:
-      'https://hasbropulse.com/cdn/shop/files/G40975L00_main.jpg',
+    official_image_url: '/images/radar/sentinel.jpg',
     category: 'Marvel',
-    date_label: 'Preventa hasta 7 SEP',
+    date_label: 'Pre-order hasta 7 SEP',
   },
   {
     id: 'lego-star-trek-enterprise-bridge',
@@ -51,11 +50,10 @@ const STATIC_RADAR_ITEMS: RadarItem[] = [
     line: 'Icons',
     radar_signal: 'ACABA_DE_SALIR',
     radar_why:
-      'Franquicia histórica + 60° aniversario + lanzamiento grande dirigido a coleccionistas adultos.',
+      'Franquicia histórica + 60.° aniversario + set grande dirigido a coleccionistas adultos.',
     radar_context: '1.701 piezas · Disponible desde 1 SEP · Star Trek',
     cta_label: 'Explorar lanzamiento',
-    official_image_url:
-      'https://www.lego.com/cdn/cs/set/assets/blt9a42f7c0dd50f5a6/76390.jpg',
+    official_image_url: '/images/radar/lego-star-trek.jpg',
     category: 'LEGO · Star Trek',
     date_label: 'Lanzado 1 SEP',
     msrp: 'USD 199,99',
@@ -68,11 +66,10 @@ const STATIC_RADAR_ITEMS: RadarItem[] = [
     line: 'S.H.MonsterArts',
     radar_signal: 'NUEVO_ANUNCIO',
     radar_why:
-      'Nueva interpretación de Godzilla basada en el arte promocional de la película — acaba de aparecer en el mercado.',
+      'Nueva interpretación para coleccionistas de Godzilla basada en el arte promocional de la película.',
     radar_context: 'Preventa desde 3 SEP · Lanzamiento FEB 2027 · Godzilla',
     cta_label: 'Ver novedad',
-    official_image_url:
-      'https://tamashiinations.com/na/asset/product/2024/10/BDMK-66009_main.jpg',
+    official_image_url: '/images/radar/godzilla.jpg',
     category: 'Godzilla',
     date_label: 'Feb 2027',
   },
@@ -84,11 +81,10 @@ const STATIC_RADAR_ITEMS: RadarItem[] = [
     line: 'S.H.Figuarts',
     radar_signal: 'PREVENTA_ABIERTA',
     radar_why:
-      'Bandai abrió en tanda simultánea Trunks, Vegeta, Naruto y múltiples reediciones — movimiento de línea, no producto aislado.',
+      'Nueva incorporación de Dragon Ball a una de las líneas articuladas más coleccionadas de Bandai.',
     radar_context: 'Preventa desde 1 SEP · ABR 2027 · Dragon Ball',
     cta_label: 'Seguir en Radar',
-    official_image_url:
-      'https://tamashiinations.com/na/asset/product/2024/09/BDMK-67001_main.jpg',
+    official_image_url: '/images/radar/vegeta.jpg',
     category: 'Dragon Ball',
     date_label: 'Abr 2027',
   },
@@ -100,11 +96,10 @@ const STATIC_RADAR_ITEMS: RadarItem[] = [
     line: 'Mattel Creations',
     radar_signal: 'EXCLUSIVO',
     radar_why:
-      'Exclusivo de Mattel Creations con límite de 3 unidades por cliente, transformación serpiente y 30 puntos de articulación.',
+      'Nueva exclusiva para coleccionistas de MOTU, con transformación y 30 puntos de articulación.',
     radar_context: 'Creations Exclusive · 6,5" · MOTU · Envío SEP 2026',
     cta_label: 'Ver exclusiva',
-    official_image_url:
-      'https://cdn.creations.mattel.com/images/mattel-creations/products/2024/king-hiss-main.jpg',
+    official_image_url: '/images/radar/king-hiss.jpg',
     category: 'MOTU',
     date_label: 'Envío SEP 2026',
   },
@@ -116,11 +111,10 @@ const STATIC_RADAR_ITEMS: RadarItem[] = [
     line: 'HasLab',
     radar_signal: 'ALTA_DEMANDA',
     radar_why:
-      '23.553 backers sobre una meta de 10.000 — la campaña más exitosa de la tanda. Las entregas arrancan ahora.',
+      'Un crowdfunding que superó ampliamente su objetivo (23.553 backers / meta 10.000) y empieza su entrega.',
     radar_context: '23.553 backers · Meta: 10.000 · Entrega SEP 2026',
     cta_label: 'Ver fenómeno',
-    official_image_url:
-      'https://hasbropulse.com/cdn/shop/files/haslab-liokaiser-main.jpg',
+    official_image_url: '/images/radar/liokaiser.jpg',
     category: 'Transformers · HasLab',
     date_label: 'Entrega SEP 2026',
   },
@@ -132,13 +126,12 @@ const STATIC_RADAR_ITEMS: RadarItem[] = [
     line: 'Movie Masterpiece Series',
     radar_signal: 'AGOTADO',
     radar_why:
-      'La versión hiperrealista de Stitch llegó al mercado después de meses de expectativa — y ya aparece sin disponibilidad.',
+      'La versión hiperrealista de Stitch llegó al mercado después de meses de expectativa — actualmente sin disponibilidad.',
     radar_context: '39 cm · USD 215 · Disney · Difícil de conseguir',
     cta_label: 'Ver en Radar',
-    official_image_url:
-      'https://www.sideshowtoy.com/wp-content/uploads/2024/05/LMS016-stitch-hot-toys-main.jpg',
+    official_image_url: '/images/radar/stitch.jpg',
     category: 'Disney',
-    date_label: 'Disponibilidad limitada',
+    date_label: 'Difícil de conseguir',
     msrp: 'USD 215',
   },
 ];
@@ -167,7 +160,7 @@ function RadarSignalBadge({ signal }: { signal: RadarSignal | null | undefined }
 }
 
 // ---------------------------------------------------------------------------
-// Hero Card — 2 columnas en desktop
+// Hero Card (Columna izquierda principal)
 // ---------------------------------------------------------------------------
 
 function HeroRadarCard({ item }: { item: RadarItem }) {
@@ -175,10 +168,9 @@ function HeroRadarCard({ item }: { item: RadarItem }) {
   return (
     <Link
       to={`/radar/${item.slug}`}
-      className="group col-span-1 md:col-span-2 rounded-2xl overflow-hidden border border-white/10 hover:border-red-500/40 transition-all duration-300 shadow-2xl flex flex-col bg-zinc-950"
+      className="group flex flex-col h-full rounded-2xl overflow-hidden border border-white/10 hover:border-red-500/40 transition-all duration-300 shadow-2xl bg-zinc-950"
     >
-      {/* Image */}
-      <div className="relative w-full aspect-[16/9] md:aspect-[21/9] bg-zinc-900 overflow-hidden">
+      <div className="relative w-full aspect-[16/10] sm:aspect-[16/9] lg:aspect-auto lg:flex-1 min-h-[260px] bg-zinc-900 overflow-hidden">
         {!imgError ? (
           <img
             src={item.official_image_url}
@@ -189,10 +181,10 @@ function HeroRadarCard({ item }: { item: RadarItem }) {
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center text-zinc-700">
             <Radio size={48} className="opacity-30 mb-2" />
-            <span className="text-xs font-mono opacity-40">Imagen oficial pendiente</span>
+            <span className="text-xs font-mono opacity-40">Imagen oficial</span>
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/20 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/25 to-transparent" />
         <div className="absolute top-4 left-4">
           <RadarSignalBadge signal={item.radar_signal} />
         </div>
@@ -202,8 +194,8 @@ function HeroRadarCard({ item }: { item: RadarItem }) {
           </div>
         )}
       </div>
-      {/* Body */}
-      <div className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+
+      <div className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4 bg-zinc-950 border-t border-white/5">
         <div className="space-y-1.5 flex-1 min-w-0">
           <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">
             {item.brand} · {item.line}
@@ -212,7 +204,7 @@ function HeroRadarCard({ item }: { item: RadarItem }) {
             {item.title}
           </h2>
           <p className="text-sm text-zinc-300 leading-relaxed line-clamp-2">{item.radar_why}</p>
-          <p className="text-[11px] text-zinc-500">{item.radar_context}</p>
+          <p className="text-[11px] text-zinc-500 font-medium mt-1">{item.radar_context}</p>
         </div>
         <div className="shrink-0">
           <span className="px-4 py-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 font-bold text-xs flex items-center gap-1.5 group-hover:bg-red-500/20 transition">
@@ -225,18 +217,15 @@ function HeroRadarCard({ item }: { item: RadarItem }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Medium Card — columna individual
-// ---------------------------------------------------------------------------
-
+// Medium Card (Apiladas a la derecha)
 function MediumRadarCard({ item }: { item: RadarItem }) {
   const [imgError, setImgError] = useState(false);
   return (
     <Link
       to={`/radar/${item.slug}`}
-      className="group rounded-2xl overflow-hidden border border-white/10 hover:border-white/25 transition-all duration-300 shadow-xl flex flex-col bg-zinc-950"
+      className="group flex flex-col sm:flex-row lg:flex-row flex-1 rounded-2xl overflow-hidden border border-white/10 hover:border-white/25 transition-all duration-300 shadow-xl bg-zinc-950"
     >
-      <div className="relative w-full aspect-[4/3] bg-zinc-900 overflow-hidden">
+      <div className="relative w-full sm:w-2/5 lg:w-2/5 aspect-[16/10] sm:aspect-auto bg-zinc-900 overflow-hidden shrink-0 min-h-[140px]">
         {!imgError ? (
           <img
             src={item.official_image_url}
@@ -249,17 +238,18 @@ function MediumRadarCard({ item }: { item: RadarItem }) {
             <Radio size={32} className="opacity-30" />
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/20 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t sm:bg-gradient-to-r from-zinc-950/60 to-transparent" />
         <div className="absolute top-3 left-3">
           <RadarSignalBadge signal={item.radar_signal} />
         </div>
       </div>
-      <div className="p-4 flex flex-col gap-2 flex-1 justify-between">
+
+      <div className="p-4 sm:p-5 flex flex-col justify-between gap-2 flex-1 min-w-0">
         <div>
           <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">
             {item.brand} · {item.line}
           </p>
-          <h3 className="text-sm font-black text-white leading-snug group-hover:text-white/80 transition line-clamp-2">
+          <h3 className="text-sm font-black text-white leading-snug group-hover:text-sky-300 transition line-clamp-2">
             {item.title}
           </h3>
           <p className="text-[11px] text-zinc-400 mt-1.5 line-clamp-2 leading-relaxed">
@@ -267,8 +257,8 @@ function MediumRadarCard({ item }: { item: RadarItem }) {
           </p>
         </div>
         <div className="flex items-center justify-between pt-2 border-t border-white/5">
-          <span className="text-[10px] text-zinc-500">{item.date_label}</span>
-          <span className="text-[10px] font-bold text-zinc-300 flex items-center gap-1 group-hover:text-white transition">
+          <span className="text-[10px] text-zinc-500 font-medium truncate max-w-[140px]">{item.date_label}</span>
+          <span className="text-[10px] font-bold text-zinc-300 flex items-center gap-1 group-hover:text-white transition shrink-0">
             {item.cta_label} <ArrowRight size={10} />
           </span>
         </div>
@@ -277,60 +267,59 @@ function MediumRadarCard({ item }: { item: RadarItem }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Secondary Card — grilla de 4
-// ---------------------------------------------------------------------------
-
+// Secondary Card (Grilla inferior de 4)
 function SecondaryRadarCard({ item }: { item: RadarItem }) {
   const [imgError, setImgError] = useState(false);
   const cfg = getRadarSignalConfig(item.radar_signal);
   return (
     <Link
       to={`/radar/${item.slug}`}
-      className="group rounded-2xl overflow-hidden border border-white/10 hover:border-white/20 transition-all duration-300 shadow-lg flex flex-col bg-zinc-900/60 hover:bg-zinc-900"
+      className="group rounded-2xl overflow-hidden border border-white/10 hover:border-white/20 transition-all duration-300 shadow-lg flex flex-col bg-zinc-900/60 hover:bg-zinc-900 h-full justify-between"
     >
-      <div className="relative w-full aspect-[3/2] bg-zinc-950 overflow-hidden">
-        {!imgError ? (
-          <img
-            src={item.official_image_url}
-            alt={item.title}
-            className="w-full h-full object-cover object-center group-hover:scale-105 transition duration-500"
-            onError={() => setImgError(true)}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-zinc-700">
-            <Radio size={24} className="opacity-30" />
+      <div>
+        <div className="relative w-full aspect-[16/10] bg-zinc-950 overflow-hidden">
+          {!imgError ? (
+            <img
+              src={item.official_image_url}
+              alt={item.title}
+              className="w-full h-full object-cover object-center group-hover:scale-105 transition duration-500"
+              onError={() => setImgError(true)}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-zinc-700">
+              <Radio size={24} className="opacity-30" />
+            </div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-transparent to-transparent" />
+          <div className="absolute top-2.5 left-2.5">
+            <RadarSignalBadge signal={item.radar_signal} />
           </div>
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-transparent to-transparent" />
-        <div className="absolute top-2.5 left-2.5">
-          <RadarSignalBadge signal={item.radar_signal} />
         </div>
-      </div>
-      <div className="p-3.5 flex flex-col gap-2 flex-1 justify-between">
-        <div>
+
+        <div className="p-3.5 space-y-1.5">
           <p className={`text-[9px] font-bold uppercase tracking-widest mb-0.5 ${cfg.text}`}>
             {item.brand} · {item.line}
           </p>
-          <h4 className="text-xs font-black text-white leading-snug line-clamp-2">
+          <h4 className="text-xs font-black text-white leading-snug line-clamp-2 group-hover:text-zinc-200 transition">
             {item.title}
           </h4>
-          <p className="text-[10px] text-zinc-400 mt-1 line-clamp-2 leading-relaxed">
+          <p className="text-[10px] text-zinc-400 line-clamp-2 leading-relaxed">
             {item.radar_why}
           </p>
         </div>
-        <div className="pt-2 border-t border-white/5">
-          <p className="text-[10px] text-zinc-500">{item.radar_context}</p>
-        </div>
+      </div>
+
+      <div className="p-3.5 pt-2 border-t border-white/5 flex items-center justify-between">
+        <p className="text-[10px] text-zinc-500 truncate mr-2">{item.radar_context}</p>
+        <span className="text-[10px] font-bold text-zinc-400 group-hover:text-white flex items-center gap-0.5 shrink-0 transition">
+          {item.cta_label} <ArrowRight size={9} />
+        </span>
       </div>
     </Link>
   );
 }
 
-// ---------------------------------------------------------------------------
 // Página principal
-// ---------------------------------------------------------------------------
-
 export default function RadarFeedPage() {
   const [dbItems, setDbItems] = useState<ReleaseEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -377,8 +366,8 @@ export default function RadarFeedPage() {
   });
 
   const useStatic = !loading && dbItems.length === 0;
-  const heroItem   = useStatic ? STATIC_RADAR_ITEMS[0]       : (dbItems[0] ? toRadarItem(dbItems[0]) : null);
-  const mediumItems  = useStatic ? STATIC_RADAR_ITEMS.slice(1, 3)  : dbItems.slice(1, 3).map(toRadarItem);
+  const heroItem     = useStatic ? STATIC_RADAR_ITEMS[0]        : (dbItems[0] ? toRadarItem(dbItems[0]) : null);
+  const mediumItems  = useStatic ? STATIC_RADAR_ITEMS.slice(1, 3) : dbItems.slice(1, 3).map(toRadarItem);
   const secondaryItems = useStatic ? STATIC_RADAR_ITEMS.slice(3, 7) : dbItems.slice(3, 7).map(toRadarItem);
 
   return (
@@ -396,12 +385,15 @@ export default function RadarFeedPage() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
             </span>
-            <span className="text-[11px] font-black uppercase tracking-widest text-red-400">Ahora en el Radar</span>
+            <span className="text-[11px] font-black uppercase tracking-widest text-red-400">
+              Ahora en el Radar
+            </span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white">Collectibles Radar</h1>
+          <h1 className="text-2xl sm:text-3xl font-black text-white">
+            Collectibles Radar
+          </h1>
           <p className="text-xs sm:text-sm text-zinc-400 mt-1 max-w-lg">
-            No solo cuándo sale —{' '}
-            <em>por qué hay que prestarle atención</em>.
+            No solo cuándo sale — <em>por qué hay que prestarle atención</em>.
             Preventas cerrando, anuncios nuevos, alta demanda y exclusivos.
           </p>
         </div>
@@ -435,18 +427,22 @@ export default function RadarFeedPage() {
         </div>
       )}
 
-      {/* Layout principal */}
+      {/* Layout Principal Parejo y Equilibrado */}
       {!loading && heroItem && (
         <>
-          {/* Fila 1: Hero (2 cols) + 2 medium */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <HeroRadarCard item={heroItem} />
-            {mediumItems.map((item) => (
-              <MediumRadarCard key={item.id} item={item} />
-            ))}
+          {/* Top Section: Hero (izquierda 7 cols) + 2 Medium Cards apiladas (derecha 5 cols) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+            <div className="lg:col-span-7 xl:col-span-7 flex flex-col">
+              <HeroRadarCard item={heroItem} />
+            </div>
+            <div className="lg:col-span-5 xl:col-span-5 flex flex-col gap-5 justify-between">
+              {mediumItems.map((item) => (
+                <MediumRadarCard key={item.id} item={item} />
+              ))}
+            </div>
           </div>
 
-          {/* Sección 2: grilla de 4 */}
+          {/* Sección 2: Grilla inferior de 4 cards perfectamente balanceadas */}
           {secondaryItems.length > 0 && (
             <div>
               <div className="flex items-center gap-3 mb-5">
@@ -456,7 +452,7 @@ export default function RadarFeedPage() {
                 </p>
                 <div className="h-px flex-1 bg-white/5" />
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
                 {secondaryItems.map((item) => (
                   <SecondaryRadarCard key={item.id} item={item} />
                 ))}
@@ -474,9 +470,16 @@ export default function RadarFeedPage() {
         <div className="flex flex-wrap gap-2">
           {(
             [
-              'PREVENTA_CERRANDO', 'NUEVO_ANUNCIO', 'ACABA_DE_SALIR',
-              'PREVENTA_ABIERTA', 'ALTA_DEMANDA', 'EXCLUSIVO',
-              'REEDICION', 'AGOTADO', 'VUELVE_A_STOCK', 'MERECE_ATENCION',
+              'PREVENTA_CERRANDO',
+              'NUEVO_ANUNCIO',
+              'ACABA_DE_SALIR',
+              'PREVENTA_ABIERTA',
+              'ALTA_DEMANDA',
+              'EXCLUSIVO',
+              'REEDICION',
+              'AGOTADO',
+              'VUELVE_A_STOCK',
+              'MERECE_ATENCION',
             ] as RadarSignal[]
           ).map((s) => (
             <RadarSignalBadge key={s} signal={s} />

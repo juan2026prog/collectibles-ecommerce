@@ -21,7 +21,7 @@ const PUBLIC_DEMO_ITEMS: Record<string, ShareItemData> = {
     is_favorite: true,
     is_featured: true,
     notes: 'Una de las piezas centrales de mi colección Star Wars.',
-    official_image_url: 'https://images.unsplash.com/photo-1585676623547-a006c6460114?auto=format&fit=crop&w=800&q=80',
+    official_image_url: 'https://images.unsplash.com/photo-1608889825205-eebdb9fc5806?auto=format&fit=crop&w=800&q=80',
     slug: 'darth-vader-hot-toys'
   },
   'son-goku-sh-figuarts': {
@@ -222,7 +222,14 @@ export default function PublicCollectorProfile() {
             <div className="md:col-span-5">
               <div className="w-full aspect-square bg-zinc-950 rounded-2xl border border-white/10 p-3 flex items-center justify-center overflow-hidden relative shadow-inner">
                 {itemImage ? (
-                  <img src={itemImage} alt={singleItem.custom_name} className="w-full h-full object-contain drop-shadow-2xl" />
+                  <img
+                    src={itemImage}
+                    alt={singleItem.custom_name}
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1608889825205-eebdb9fc5806?auto=format&fit=crop&w=800&q=80';
+                    }}
+                    className="w-full h-full object-contain drop-shadow-2xl"
+                  />
                 ) : (
                   <ImageIcon size={48} className="text-zinc-600" />
                 )}
@@ -230,6 +237,12 @@ export default function PublicCollectorProfile() {
                 <div className="absolute top-3 left-3 bg-black/80 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] font-bold text-zinc-300 border border-white/10 flex items-center gap-1">
                   <ShieldCheck size={12} className="text-emerald-400" />
                   <span>{singleItem.condition}</span>
+                </div>
+
+                {/* Watermark badge overlay */}
+                <div className="absolute top-3 right-3 bg-black/75 backdrop-blur-md px-2 py-0.5 rounded-full text-[9px] font-mono font-bold text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                  <Sparkles size={10} className="text-amber-400" />
+                  <span>Collectibles.uy</span>
                 </div>
               </div>
             </div>
@@ -377,10 +390,22 @@ export default function PublicCollectorProfile() {
                 <div>
                   <div className="w-full aspect-square bg-zinc-950 rounded-2xl border border-white/10 p-3 mb-4 flex items-center justify-center overflow-hidden relative">
                     {cardImg ? (
-                      <img src={cardImg} alt={piece.custom_name} className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300" />
+                      <img
+                        src={cardImg}
+                        alt={piece.custom_name}
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1608889825205-eebdb9fc5806?auto=format&fit=crop&w=800&q=80';
+                        }}
+                        className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
+                      />
                     ) : (
                       <ImageIcon size={36} className="text-zinc-600" />
                     )}
+
+                    {/* Watermark Mini Badge */}
+                    <div className="absolute bottom-2.5 left-2.5 bg-black/75 backdrop-blur-md px-2 py-0.5 rounded-md text-[8px] font-mono font-bold text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                      <span>⚡ Collectibles</span>
+                    </div>
 
                     {piece.is_favorite && (
                       <div className="absolute top-3 right-3 bg-rose-500/20 border border-rose-500/30 text-rose-300 px-2.5 py-1 rounded-full text-[10px] font-black flex items-center gap-1 shadow">

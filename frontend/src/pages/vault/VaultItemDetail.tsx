@@ -29,8 +29,8 @@ const DEMO_ITEMS_MAP: Record<string, any> = {
     is_featured: true,
     visibility: 'PUBLIC',
     notes: 'Una de las piezas centrales de mi colección Star Wars.',
-    official_image_url: 'https://images.unsplash.com/photo-1585676623547-a006c6460114?auto=format&fit=crop&w=800&q=80',
-    custom_image_url: 'https://images.unsplash.com/photo-1585676623547-a006c6460114?auto=format&fit=crop&w=800&q=80',
+    official_image_url: 'https://images.unsplash.com/photo-1608889825205-eebdb9fc5806?auto=format&fit=crop&w=800&q=80',
+    custom_image_url: 'https://images.unsplash.com/photo-1608889825205-eebdb9fc5806?auto=format&fit=crop&w=800&q=80',
     slug: 'darth-vader-hot-toys'
   },
   'demo-goku': {
@@ -258,6 +258,9 @@ export default function VaultItemDetail() {
                   <img
                     src={currentDisplayImage}
                     alt={form.custom_name}
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1608889825205-eebdb9fc5806?auto=format&fit=crop&w=800&q=80';
+                    }}
                     className="w-full h-full object-contain drop-shadow-2xl"
                   />
                 ) : (
@@ -270,6 +273,12 @@ export default function VaultItemDetail() {
                 <div className="absolute top-3 left-3 bg-black/80 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] font-bold text-zinc-300 border border-white/10 flex items-center gap-1">
                   <ShieldCheck size={12} className="text-emerald-400" />
                   <span>{form.condition}</span>
+                </div>
+
+                {/* Watermark overlay on preview */}
+                <div className="absolute top-3 right-3 bg-black/75 backdrop-blur-md px-2 py-0.5 rounded-full text-[9px] font-mono font-bold text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                  <Sparkles size={10} className="text-amber-400" />
+                  <span>Collectibles.uy</span>
                 </div>
               </div>
 
@@ -591,22 +600,107 @@ export default function VaultItemDetail() {
             </div>
           </div>
 
-          {/* User's Custom Photo Upload / URL */}
-          <div>
-            <label className="block text-zinc-400 font-semibold mb-1 flex items-center gap-1.5">
-              <ImageIcon size={14} className="text-amber-400" />
-              <span>Mi Foto Real / Galería Personal (URL de foto en mano o vitrina)</span>
-            </label>
-            <input
-              type="url"
-              value={form.custom_image_url}
-              onChange={(e) => setForm({ ...form, custom_image_url: e.target.value })}
-              placeholder="https://ejemplo.com/mi-foto-real.jpg"
-              className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white font-mono text-xs"
-            />
-            <p className="text-[11px] text-zinc-500 mt-1">
-              Al compartir en Instagram o WhatsApp, podrás elegir si mostrar la foto oficial de catálogo o tu propia foto real en vitrina.
-            </p>
+          {/* User's Custom Photo Upload / URL + Photo Guidelines */}
+          <div className="space-y-4 pt-2 border-t border-white/5">
+            <div>
+              <label className="block text-zinc-300 font-bold mb-1.5 flex items-center justify-between text-xs">
+                <span className="flex items-center gap-1.5">
+                  <ImageIcon size={15} className="text-amber-400" />
+                  <span>Foto Real de tu Vitrina / Galería Personal</span>
+                </span>
+                <span className="text-[11px] font-mono text-amber-400/90 font-normal">
+                  Marca de agua Collectibles.uy automática al compartir
+                </span>
+              </label>
+
+              {/* Upload or URL selector */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* File picker button */}
+                <div className="relative border-2 border-dashed border-white/15 hover:border-amber-500/40 rounded-2xl p-4 bg-zinc-950/60 flex flex-col items-center justify-center text-center transition group">
+                  <input
+                    type="file"
+                    accept="image/png, image/jpeg, image/webp"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        if (file.size > 10 * 1024 * 1024) {
+                          alert('La imagen excede el límite recomendado de 10 MB.');
+                          return;
+                        }
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          if (event.target?.result) {
+                            setForm({ ...form, custom_image_url: event.target.result as string });
+                            setActivePhotoTab('custom');
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                  />
+                  <ImageIcon size={24} className="text-zinc-500 group-hover:text-amber-400 transition mb-1.5" />
+                  <span className="text-xs font-bold text-zinc-300 group-hover:text-white">
+                    {form.custom_image_url ? 'Cambiar foto de vitrina' : 'Subir foto desde tu dispositivo'}
+                  </span>
+                  <span className="text-[10px] text-zinc-500 mt-0.5">
+                    JPG, PNG o WEBP (Máx 10 MB)
+                  </span>
+                </div>
+
+                {/* Direct Image URL fallback */}
+                <div className="flex flex-col justify-center space-y-1.5 bg-zinc-950/40 border border-white/10 rounded-2xl p-4">
+                  <span className="text-[11px] font-bold text-zinc-400">O pegar enlace directo de imagen:</span>
+                  <input
+                    type="url"
+                    value={form.custom_image_url}
+                    onChange={(e) => {
+                      setForm({ ...form, custom_image_url: e.target.value });
+                      if (e.target.value) setActivePhotoTab('custom');
+                    }}
+                    placeholder="https://ejemplo.com/mi-foto-real.jpg"
+                    className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white font-mono text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* GUÍA OFICIAL DE TAMAÑO Y CALIDAD DE FOTOS */}
+            <div className="bg-gradient-to-r from-amber-500/10 via-zinc-900/80 to-zinc-950 border border-amber-500/25 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center gap-2 text-amber-400 font-bold text-xs">
+                <Sparkles size={15} />
+                <span>Guía Oficial de Tamaño & Calidad para Fotos de Vitrina</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11px] text-zinc-300">
+                <div className="bg-zinc-950/60 p-2.5 rounded-xl border border-white/5 space-y-1">
+                  <div className="font-bold text-white flex items-center gap-1">
+                    <span>📐 Dimensiones recomendadas</span>
+                  </div>
+                  <p className="text-zinc-400 text-[10px] leading-relaxed">
+                    <strong>1:1 Cuadrado</strong> (1200×1200 px) o <strong>4:5 Vertical</strong> (1080×1350 px). Excelente para Instagram Feed y Stories.
+                  </p>
+                </div>
+
+                <div className="bg-zinc-950/60 p-2.5 rounded-xl border border-white/5 space-y-1">
+                  <div className="font-bold text-white flex items-center gap-1">
+                    <span>💡 Iluminación & Fondo</span>
+                  </div>
+                  <p className="text-zinc-400 text-[10px] leading-relaxed">
+                    Luz blanca difusa. Evitar reflejos directos en acrílicos o cajas. Figura centrada con espacio en los márgenes.
+                  </p>
+                </div>
+
+                <div className="bg-zinc-950/60 p-2.5 rounded-xl border border-white/5 space-y-1">
+                  <div className="font-bold text-white flex items-center gap-1">
+                    <span>🛡️ Marca de agua protegida</span>
+                  </div>
+                  <p className="text-zinc-400 text-[10px] leading-relaxed">
+                    Tus fotos compartidas integran el sello y marca de agua oficial <strong>Collectibles.uy</strong> para certificar la autoría de tu colección.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div>

@@ -24,7 +24,7 @@ const DEMO_VAULT_PIECES: ShareItemData[] = [
     is_featured: true,
     purchase_date: 'Agosto 2026',
     notes: 'Una de las piezas centrales de mi colección Star Wars.',
-    official_image_url: 'https://images.unsplash.com/photo-1585676623547-a006c6460114?auto=format&fit=crop&w=800&q=80',
+    official_image_url: 'https://images.unsplash.com/photo-1608889825205-eebdb9fc5806?auto=format&fit=crop&w=800&q=80',
     slug: 'darth-vader-hot-toys'
   },
   {
@@ -378,6 +378,9 @@ export default function VaultDashboard() {
                     <img
                       src={cardImage}
                       alt={piece.custom_name}
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1608889825205-eebdb9fc5806?auto=format&fit=crop&w=800&q=80';
+                      }}
                       className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
                     />
                   ) : (
@@ -386,6 +389,11 @@ export default function VaultDashboard() {
                       <span className="text-[10px] font-mono">Sin foto</span>
                     </div>
                   )}
+
+                  {/* Watermark Mini Badge */}
+                  <div className="absolute bottom-2.5 left-2.5 bg-black/75 backdrop-blur-md px-2 py-0.5 rounded-md text-[8px] font-mono font-bold text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                    <span>⚡ Collectibles</span>
+                  </div>
 
                   {/* Top-Right Favorite / Featured Badge */}
                   {piece.is_favorite && (

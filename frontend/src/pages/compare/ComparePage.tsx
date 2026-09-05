@@ -136,39 +136,52 @@ const HeroCompareSection: React.FC<HeroSectionProps> = ({ products, onSwap }) =>
   const [p0, p1] = products;
 
   const Card = ({ p, idx }: { p: ComparedProduct; idx: number }) => (
-    <div className="flex-1 flex flex-col items-center gap-3 p-5 sm:p-6 rounded-2xl bg-zinc-900/80 border border-zinc-800 hover:border-zinc-700 transition group">
-      <div className="w-full max-w-[200px] aspect-square rounded-xl bg-zinc-950 border border-zinc-800 overflow-hidden flex items-center justify-center p-3 shadow-xl">
-        {p.primary_image
-          ? <img src={p.primary_image} alt={p.title} className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300" loading="lazy" />
-          : <Scale size={40} className="text-zinc-700" />
-        }
+    <div className="flex-1 flex flex-col items-center gap-3.5 p-5 sm:p-6 rounded-2xl bg-[#0c1322] border border-amber-500/40 hover:border-amber-500 shadow-xl shadow-amber-500/10 hover:shadow-amber-500/20 transition-all duration-300 group relative">
+      {/* Product Image Container: white frame with amber border like store items */}
+      <div className="w-full max-w-[210px] aspect-square rounded-xl bg-white border border-amber-500/30 group-hover:border-amber-500/60 overflow-hidden flex items-center justify-center p-3 shadow-md transition-all">
+        {p.primary_image ? (
+          <img
+            src={p.primary_image}
+            alt={p.title}
+            className="max-w-full max-h-full object-contain group-hover:scale-105 transition-transform duration-300"
+            loading="lazy"
+          />
+        ) : (
+          <Scale size={40} className="text-zinc-400" />
+        )}
       </div>
 
       <div className="flex flex-wrap gap-1.5 justify-center">
-        <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20">{p.brand_name}</span>
-        <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-zinc-800 text-zinc-400 border border-zinc-700">
+        <span className="px-2.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-400 border border-amber-500/30">
+          {p.brand_name}
+        </span>
+        <span className="px-2.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-zinc-800 text-zinc-300 border border-zinc-700">
           {p.normalized_attributes?.product_line?.display || 'Ultimate'}
         </span>
       </div>
 
-      <div className="text-center space-y-0.5">
-        <Link to={`/producto/${p.slug}`} className="text-sm font-black text-white hover:text-amber-400 transition leading-snug line-clamp-2">
+      <div className="text-center space-y-1">
+        <Link
+          to={`/producto/${p.slug}`}
+          className="text-sm sm:text-base font-black text-white hover:text-amber-400 transition leading-snug line-clamp-2"
+        >
           {p.title}
         </Link>
-        <p className="text-[11px] text-zinc-500">{p.license_name}</p>
+        <p className="text-xs text-zinc-400">{p.license_name}</p>
       </div>
 
       <StarRating rating={4} />
 
-      <div className="text-xl font-black text-amber-400">
+      <div className="text-2xl font-black text-amber-400 tracking-tight">
         {p.normalized_attributes?.price?.display || `$ ${p.base_price.toLocaleString('es-UY')} UYU`}
       </div>
 
       <button
         onClick={() => onSwap(idx)}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] font-bold transition border border-zinc-700"
+        className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-zinc-900/90 hover:bg-amber-500/10 text-zinc-200 hover:text-amber-400 text-xs font-bold transition-all border border-zinc-700 hover:border-amber-500/50"
       >
-        <RefreshCw size={11} /> Cambiar producto
+        <RefreshCw size={12} />
+        <span>Cambiar producto</span>
       </button>
     </div>
   );
@@ -177,11 +190,11 @@ const HeroCompareSection: React.FC<HeroSectionProps> = ({ products, onSwap }) =>
     <div className="flex flex-col sm:flex-row items-stretch gap-4">
       <Card p={p0} idx={0} />
       <div className="flex sm:flex-col items-center justify-center gap-3 py-2 sm:py-0 sm:px-2 flex-shrink-0">
-        <div className="hidden sm:block w-px flex-1 bg-gradient-to-b from-transparent via-zinc-700 to-transparent" />
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20 flex-shrink-0">
+        <div className="hidden sm:block w-px flex-1 bg-gradient-to-b from-transparent via-amber-500/40 to-transparent" />
+        <div className="w-11 h-11 rounded-full bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/30 flex-shrink-0 border-2 border-black">
           <span className="text-black font-black text-xs">VS</span>
         </div>
-        <div className="hidden sm:block w-px flex-1 bg-gradient-to-b from-transparent via-zinc-700 to-transparent" />
+        <div className="hidden sm:block w-px flex-1 bg-gradient-to-b from-transparent via-amber-500/40 to-transparent" />
       </div>
       <Card p={p1} idx={1} />
     </div>
@@ -391,18 +404,35 @@ export const ComparePage: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => setShowDifferencesOnly(!showDifferencesOnly)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition border ${
-                showDifferencesOnly
-                  ? 'bg-amber-500 text-black border-amber-500'
-                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-zinc-700'
-              }`}
-            >
-              <Filter size={14} />
-              <span>{showDifferencesOnly ? 'Solo Diferencias' : 'Ver Todas'}</span>
-            </button>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Control Segmentado Claro: Ver todas las filas vs Solo diferencias */}
+            <div className="flex items-center p-1 bg-zinc-900 border border-zinc-700/80 rounded-xl shadow-inner">
+              <button
+                type="button"
+                onClick={() => setShowDifferencesOnly(false)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  !showDifferencesOnly
+                    ? 'bg-amber-500 text-black shadow-md font-black'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+                title="Mostrar todas las especificaciones y atributos"
+              >
+                <span>Todas las filas</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDifferencesOnly(true)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  showDifferencesOnly
+                    ? 'bg-amber-500 text-black shadow-md font-black'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+                title="Ocultar atributos donde ambas figuras son iguales"
+              >
+                <Filter size={13} />
+                <span>Solo diferencias</span>
+              </button>
+            </div>
 
             <button
               onClick={handleShare}
@@ -479,10 +509,10 @@ export const ComparePage: React.FC = () => {
                           : <button onClick={() => handleRemove(p.id)} className="w-5 h-5 rounded-full bg-zinc-800 hover:bg-red-500/20 text-zinc-400 hover:text-red-400 flex items-center justify-center transition border border-zinc-700" title="Quitar"><X size={11} /></button>
                         }
                       </div>
-                      <div className="w-full aspect-square max-h-32 rounded-xl bg-zinc-900 border border-zinc-800 overflow-hidden flex items-center justify-center">
+                      <div className="w-full aspect-square max-h-32 rounded-xl bg-white border border-amber-500/30 overflow-hidden flex items-center justify-center p-2 shadow-sm">
                         {p.primary_image
-                          ? <img src={p.primary_image} alt={p.title} className="w-full h-full object-contain p-1" />
-                          : <Scale size={20} className="text-zinc-700" />
+                          ? <img src={p.primary_image} alt={p.title} className="max-w-full max-h-full object-contain" />
+                          : <Scale size={20} className="text-zinc-400" />
                         }
                       </div>
                       <Link to={`/producto/${p.slug}`} className="text-xs font-bold text-white hover:text-amber-400 line-clamp-2 transition leading-snug">{p.title}</Link>
@@ -680,8 +710,8 @@ export const ComparePage: React.FC = () => {
                 return (
                   <div key={p.id} onClick={() => handleSelectProduct(p)} className="p-3 flex items-center justify-between hover:bg-zinc-800/60 cursor-pointer rounded-xl transition">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-zinc-950 border border-zinc-800 overflow-hidden flex-shrink-0 flex items-center justify-center">
-                        {img ? <img src={img} alt="" className="w-full h-full object-contain" /> : <Scale size={16} className="text-zinc-600" />}
+                      <div className="w-11 h-11 rounded-lg bg-white border border-amber-500/20 overflow-hidden flex-shrink-0 flex items-center justify-center p-1 shadow-sm">
+                        {img ? <img src={img} alt="" className="max-w-full max-h-full object-contain" /> : <Scale size={16} className="text-zinc-400" />}
                       </div>
                       <span className="text-xs font-bold text-zinc-200 line-clamp-1">{p.title}</span>
                     </div>
