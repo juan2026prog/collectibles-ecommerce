@@ -966,22 +966,70 @@ export function useInternationalCategoryFacets(filters: IntlCategoryFacetFilters
   return { facets, loading };
 }
 
-// ═══ useBanners ═══
+// ═══ useBanners (Instant Cache + Stale-While-Revalidate) ═══
+export const DEFAULT_BANNERS = [
+  {
+    id: '06763338-4843-4b88-978b-2162f916fd63',
+    title: 'Figuras que cuentan historias.',
+    subtitle: 'No vendemos solo productos. Vendemos recuerdos, nostalgia y personajes que siguen viviendo con vos.',
+    image_url: '/images/banners/vitrina_desktop.png',
+    mobile_image_url: '/images/banners/vitrina_mobile.png',
+    link_url: '/shop',
+    badge_text: 'Collectibles Uruguay',
+    button_text: 'Ver Catálogo',
+    secondary_button_text: 'Ver PROMOS',
+    secondary_button_url: '/collection/ofertas',
+    content_position: 'center',
+    content_align: 'left',
+    overlay_opacity: 0.4,
+    is_active: true,
+    sort_order: 1
+  }
+];
+
+const _initialBanners = readSessionCache('app_banners_cache');
+let _bannersCache: any[] = (_initialBanners?.data && _initialBanners.data.length > 0) ? _initialBanners.data : DEFAULT_BANNERS;
+let _bannersPromise: Promise<any[]> | null = null;
+const _bannerListeners = new Set<(banners: any[]) => void>();
+
 export function useBanners() {
-  const [banners, setBanners] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [banners, setBanners] = useState<any[]>(_bannersCache);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    async function fetch() {
-      const { data } = await supabase
+    const listener = (newBanners: any[]) => {
+      setBanners(newBanners);
+      setLoading(false);
+    };
+    _bannerListeners.add(listener);
+
+    const cacheObj = readSessionCache('app_banners_cache');
+    const hasValidCache = cacheObj && !cacheObj.isStale && cacheObj.data.length > 0;
+
+    if (!hasValidCache && !_bannersPromise) {
+      _bannersPromise = supabase
         .from('banners')
         .select('*')
         .eq('is_active', true)
-        .order('sort_order');
-      setBanners(data || []);
-      setLoading(false);
+        .order('sort_order')
+        .then(({ data, error }) => {
+          if (!error && data && data.length > 0) {
+            _bannersCache = data;
+            writeSessionCache('app_banners_cache', data);
+            _bannerListeners.forEach(fn => fn(data));
+          }
+          _bannersPromise = null;
+          return _bannersCache;
+        })
+        .catch(() => {
+          _bannersPromise = null;
+          return _bannersCache;
+        });
     }
-    fetch();
+
+    return () => {
+      _bannerListeners.delete(listener);
+    };
   }, []);
 
   return { banners, loading };

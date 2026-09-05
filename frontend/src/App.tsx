@@ -21,13 +21,13 @@ import InternationalReview from './pages/international/InternationalReview';
 import InternationalOrderPreview from './pages/international/InternationalOrderPreview';
 
 import StorefrontLayout from './layouts/StorefrontLayout';
+import Home from './pages/Home';
 
 const AdminLayout = lazy(() => import('./layouts/AdminLayout'));
 const PortalLayout = lazy(() => import('./layouts/PortalLayout'));
 const VendorLayout = lazy(() => import('./layouts/VendorLayout'));
 
 // Public Storefront (Lazy)
-const Home = lazy(() => import('./pages/Home'));
 const Shop = lazy(() => import('./pages/Shop'));
 const ProductDetail = lazy(() => import('./pages/ProductDetail'));
 const VendorStorefront = lazy(() => import('./pages/VendorStorefront'));

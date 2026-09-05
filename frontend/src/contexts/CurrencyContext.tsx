@@ -29,7 +29,7 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
   });
 
   const [exchangeRates, setExchangeRates] = useState<Record<Currency, number>>(FALLBACK_RATES);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const CACHE_KEY = 'collectibles_exchange_rates';

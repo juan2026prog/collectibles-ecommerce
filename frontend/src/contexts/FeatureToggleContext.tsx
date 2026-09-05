@@ -48,6 +48,7 @@ export function FeatureToggleProvider({ children }: { children: React.ReactNode 
           // Build a map from id -> is_enabled
           const toggleMap = new Map(toggleData.map((t: any) => [t.id, t.is_enabled]));
           setFeatures({
+            ...defaultFeatures,
             marketplaceEnabled: toggleMap.get('marketplace') ?? defaultFeatures.marketplaceEnabled,
             affiliatesEnabled: toggleMap.get('affiliates') ?? defaultFeatures.affiliatesEnabled,
             artistCameoEnabled: toggleMap.get('cameo') ?? defaultFeatures.artistCameoEnabled,
@@ -63,6 +64,7 @@ export function FeatureToggleProvider({ children }: { children: React.ReactNode 
 
           if (!error && data) {
             setFeatures({
+              ...defaultFeatures,
               marketplaceEnabled: data.marketplace_enabled ?? true,
               affiliatesEnabled: data.affiliates_enabled ?? true,
               artistCameoEnabled: data.artist_cameo_enabled ?? false,

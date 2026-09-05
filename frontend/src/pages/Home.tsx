@@ -240,7 +240,6 @@ export default function Home() {
   const { categories, loading: catsLoading } = useCategories();
   const { country } = useLocale();
 
-
   const { products: featured, loading: featuredLoading } = useProducts({ featured: true, limit: 10, skipCount: true });
   const { products: newArrivals, loading: newArrivalsLoading } = useProducts({ badge: 'new', limit: 8, skipCount: true });
   const { brands, loading: brandsLoading } = useBrands();

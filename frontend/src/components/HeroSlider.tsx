@@ -126,7 +126,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
     touchEndX.current = null;
   };
 
-  if (loading) {
+  if (loading && activeBanners.length === 0) {
     // Render a stable dark cinematic background container of exactly the same size without any fake text/buttons
     return (
       <section className="relative h-[380px] sm:h-[420px] md:h-screen w-full bg-[#05070f] overflow-hidden">
