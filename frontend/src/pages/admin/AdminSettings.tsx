@@ -860,9 +860,9 @@ export default function AdminSettings() {
         <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">Configuración Global</h2>
       </div>
 
-      {/* Section Navigation: Mobile Dropdown (< md) & Desktop Horizontal Pills (>= md) */}
+      {/* Section Navigation: Mobile Dropdown (< sm) & Desktop 2-Row Grid (>= sm) */}
       <div>
-        <div className="md:hidden">
+        <div className="sm:hidden">
           <label htmlFor="admin-settings-tab-select" className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
             Sección de configuración
           </label>
@@ -876,8 +876,8 @@ export default function AdminSettings() {
             className="w-full bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-900 dark:text-white shadow-2xs focus:ring-2 focus:ring-[#f00856] outline-none min-h-[44px] cursor-pointer"
           >
             <option value="general">Store Details / General</option>
-            <option value="modules">🧩 Módulos & Plugins (On/Off)</option>
-            <option value="internacional">🌎 Compras Internacionales (Publicación y Cupos)</option>
+            <option value="modules">Módulos & Plugins (On/Off)</option>
+            <option value="internacional">Compras Internacionales (Publicación y Cupos)</option>
             <option value="appearance">Theme Builder & Identidad</option>
             <option value="payments">Pasarelas de Pago</option>
             <option value="legal">Términos & Políticas</option>
@@ -888,35 +888,39 @@ export default function AdminSettings() {
           </select>
         </div>
 
-        <div className="hidden md:block border-b border-gray-200 dark:border-slate-800 pb-1">
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none no-scrollbar py-1 text-xs">
-            {[
-              { key: 'general', label: 'General', icon: Store },
-              { key: 'modules', label: 'Módulos & Plugins', icon: Sliders },
-              { key: 'internacional', label: '🌎 Internacional', icon: Globe },
-              { key: 'appearance', label: 'Theme Builder', icon: LayoutTemplate },
-              { key: 'payments', label: 'Pasarelas de Pago', icon: CreditCard },
-              { key: 'legal', label: 'Términos & Políticas', icon: FileText },
-              { key: 'menus', label: 'Menú Navegación', icon: Menu },
-              { key: 'notifications', label: 'Notificaciones & Push', icon: Bell },
-              { key: 'banners', label: 'Mini Banners HP', icon: ImageIcon },
-              { key: 'ai', label: 'IA & Integraciones (Gemini)', icon: Brain },
-            ].map(t => (
+        <div className="hidden sm:grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 bg-gray-50 dark:bg-slate-900/60 p-2 rounded-2xl border border-gray-200 dark:border-slate-800">
+          {[
+            { key: 'general', label: 'General', icon: Store },
+            { key: 'modules', label: 'Módulos & Plugins', icon: Sliders },
+            { key: 'internacional', label: 'Internacional', icon: Globe },
+            { key: 'appearance', label: 'Theme Builder', icon: LayoutTemplate },
+            { key: 'payments', label: 'Pasarelas de Pago', icon: CreditCard },
+            { key: 'legal', label: 'Términos & Políticas', icon: FileText },
+            { key: 'menus', label: 'Menú Navegación', icon: Menu },
+            { key: 'notifications', label: 'Notificaciones & Push', icon: Bell },
+            { key: 'banners', label: 'Mini Banners HP', icon: ImageIcon },
+            { key: 'ai', label: 'IA & Integraciones', icon: Brain },
+          ].map(t => {
+            const isActive = currentTab === t.key;
+            return (
               <button
                 key={t.key}
+                type="button"
                 onClick={() => {
                   setTab(t.key as any);
                   setSearchParams({ tab: t.key });
                 }}
-                className={`whitespace-nowrap flex items-center px-3 py-2 rounded-xl font-bold text-xs transition-all min-h-[44px] shrink-0 ${
-                  currentTab === t.key ? 'bg-[#f00856] text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+                className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all border text-left min-h-[42px] ${
+                  isActive
+                    ? 'bg-[#f00856] text-white border-[#f00856] shadow-sm ring-2 ring-[#f00856]/20'
+                    : 'bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-slate-700 hover:bg-gray-100 dark:hover:bg-slate-700 hover:border-gray-300'
                 }`}
               >
-                <t.icon className="w-4 h-4 mr-1.5 shrink-0" />
-                {t.label}
+                <t.icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-gray-500 dark:text-gray-400'}`} />
+                <span className="truncate">{t.label}</span>
               </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
       </div>
 
@@ -1790,18 +1794,6 @@ export default function AdminSettings() {
       {/* Modules Settings */}
       {currentTab === 'modules' && (
         <div className="space-y-6 max-w-3xl">
-          <div className="bg-gradient-to-r from-slate-900 to-indigo-950 border border-white/10 p-5 rounded-2xl shadow-sm text-white">
-             <div className="flex items-center gap-3">
-               <div className="p-2.5 bg-indigo-500/20 border border-indigo-500/30 rounded-xl text-indigo-400">
-                 <Sliders className="w-5 h-5" />
-               </div>
-               <div>
-                 <h4 className="font-black text-base text-white">Controladores de Arquitectura Modular</h4>
-                 <p className="text-xs text-slate-300 mt-0.5">Activa o apaga funcionalidades completas en tiempo real. Los cambios se propagan de inmediato al catálogo, cabezal, menús y fichas de producto.</p>
-               </div>
-             </div>
-          </div>
-
           {/* Seccion 1: Plugins de Coleccionista */}
           <div className="space-y-3">
             <div className="flex items-center gap-2">
