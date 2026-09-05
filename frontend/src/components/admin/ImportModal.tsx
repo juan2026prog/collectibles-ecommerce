@@ -494,7 +494,7 @@ export default function ImportModal({
         </div>
 
       </div>
-    < />,
+    </>,
     document.body
   );
 }

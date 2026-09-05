@@ -95,6 +95,7 @@ const AdminInternationalAmazon = lazy(() => import('./pages/admin/AdminInternati
 const AdminInternationalProducts = lazy(() => import('./pages/admin/AdminInternationalProducts'));
 const AdminInternationalSync = lazy(() => import('./pages/admin/AdminInternationalSync'));
 const AdminRefunds = lazy(() => import('./pages/admin/AdminRefunds'));
+const AdminZinc = lazy(() => import('./pages/admin/AdminZinc'));
 
 // Collector Plugins (6 official modules)
 // 01. AI Search
