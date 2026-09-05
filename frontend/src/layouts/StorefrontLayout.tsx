@@ -4,7 +4,8 @@ import { Helmet } from 'react-helmet-async';
 import {
   ShoppingCart, Menu, Search, User, Heart, X, ChevronDown, ChevronRight,
   Truck, Shield, RotateCcw, Headphones, MapPin, Phone, Mail, LogIn,
-  LayoutDashboard, Store, Star, Share2, Package, LogOut, Video
+  LayoutDashboard, Store, Star, Share2, Package, LogOut, Video,
+  Sparkles, Radio, Scale, Archive, GraduationCap
 } from 'lucide-react';
 import { useCartContext } from '../contexts/CartContext';
 import { useWishlistContext } from '../contexts/WishlistContext';
@@ -319,6 +320,21 @@ export default function StorefrontLayout() {
       links = links.filter(l => l.href !== '/intl' && l.href !== '/internacional' && l.name?.toUpperCase() !== 'INTERNACIONAL');
     }
 
+    // Mandatory Plugin Navigation links: RADAR and ACADEMY
+    if (!links.some(l => l.href === '/radar' || l.name?.toUpperCase() === 'RADAR')) {
+      links.push({
+        name: 'RADAR',
+        href: '/radar'
+      });
+    }
+
+    if (!links.some(l => l.href === '/academy' || l.name?.toUpperCase() === 'ACADEMY')) {
+      links.push({
+        name: 'ACADEMY',
+        href: '/academy'
+      });
+    }
+
     return links;
   }, [t, settings, intlPublicEnabled]);
 
@@ -539,14 +555,21 @@ export default function StorefrontLayout() {
           </nav>
 
           {/* SEARCH BOX (DESKTOP) */}
-          <div className="hidden lg:flex flex-1 max-w-sm relative">
+          <div className="hidden lg:flex flex-1 max-w-sm relative items-center">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
             <input 
               type="text" 
-              placeholder="Buscar figuras, marcas, categorías..."
-              className="w-full bg-white/5 border border-white/10 rounded-xl pl-11 pr-5 py-2.5 text-xs font-medium focus:border-[#f00856] focus:ring-1 focus:ring-[#f00856] transition-all outline-none"
+              placeholder="Buscar figuras, marcas... o prueba IA ✨"
+              className="w-full bg-white/5 border border-white/10 rounded-xl pl-11 pr-12 py-2.5 text-xs font-medium focus:border-[#f00856] focus:ring-1 focus:ring-[#f00856] transition-all outline-none"
               onKeyDown={e => e.key === 'Enter' && runSearch((e.target as HTMLInputElement).value)}
             />
+            <Link
+              to="/ai-search"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-lg bg-[#f00856]/20 text-[#f00856] hover:bg-[#f00856]/30 transition"
+              title="Búsqueda Inteligente con IA"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+            </Link>
           </div>
 
           {/* ACTIONS */}
@@ -557,12 +580,12 @@ export default function StorefrontLayout() {
             
             {/* Quick search link on mobile header */}
             <Link
-              to="/shop"
-              className="xl:hidden w-11 h-11 flex items-center justify-center rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-slate-300 hover:text-white"
-              title="Buscar productos"
-              aria-label="Buscar productos"
+              to="/ai-search"
+              className="xl:hidden w-11 h-11 flex items-center justify-center rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-[#f00856]"
+              title="Búsqueda Inteligente con IA"
+              aria-label="Búsqueda Inteligente"
             >
-              <Search className="w-4 h-4" />
+              <Sparkles className="w-4 h-4" />
             </Link>
 
             <Link 
@@ -594,6 +617,9 @@ export default function StorefrontLayout() {
                            <div className="text-xs font-black text-[#f00856] uppercase tracking-widest">Collector</div>
                            <div className="text-sm font-black text-white truncate">{profile?.first_name ? `${profile.first_name} ${profile.last_name || ''}`.trim() : user.email}</div>
                         </div>
+                        <Link to="/vault" className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 text-sm font-bold text-amber-400">
+                           <Archive className="w-4 h-4" /> Mi Vault (Colección)
+                        </Link>
                         <Link to="/account" className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 text-sm font-bold text-slate-300">
                            <Package className="w-4 h-4" /> Mis pedidos
                         </Link>
@@ -665,10 +691,17 @@ export default function StorefrontLayout() {
             <Search className="absolute left-4 w-4 h-4 text-[#f00856] pointer-events-none" />
             <input
               type="text"
-              placeholder="🔍 Buscar Funko, Pokémon, Marvel, Hot Wheels..."
+              placeholder="🔍 Buscar figuras... o prueba IA ✨"
               defaultValue={searchQuery}
-              className="w-full h-11 bg-white/5 border border-white/15 rounded-full pl-11 pr-4 py-2 text-xs font-semibold text-white placeholder-slate-400 focus:border-[#f00856] focus:ring-1 focus:ring-[#f00856] transition-all outline-none"
+              className="w-full h-11 bg-white/5 border border-white/15 rounded-full pl-11 pr-12 py-2 text-xs font-semibold text-white placeholder-slate-400 focus:border-[#f00856] focus:ring-1 focus:ring-[#f00856] transition-all outline-none"
             />
+            <Link
+              to="/ai-search"
+              className="absolute right-2 p-1.5 rounded-full bg-[#f00856]/20 text-[#f00856] hover:bg-[#f00856]/30 transition"
+              title="Búsqueda Inteligente con IA"
+            >
+              <Sparkles className="w-4 h-4" />
+            </Link>
           </form>
         </div>
       )}
@@ -821,6 +854,13 @@ export default function StorefrontLayout() {
                     </div>
                     <div className="grid grid-cols-2 gap-2 mt-2">
                       <Link 
+                        to="/vault" 
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs font-bold text-amber-400 hover:text-white transition-colors min-h-[44px]"
+                      >
+                        <Archive className="w-3.5 h-3.5" /> Mi Vault
+                      </Link>
+                      <Link 
                         to="/account" 
                         onClick={() => setMobileMenuOpen(false)}
                         className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-white/5 border border-white/5 text-xs font-bold text-slate-300 hover:text-white transition-colors min-h-[44px]"
@@ -951,6 +991,11 @@ export default function StorefrontLayout() {
              <ul className="space-y-3">
                 {[
                   { label: 'Catálogo completo', href: '/shop' },
+                  { label: 'Radar & Lanzamientos', href: '/radar' },
+                  { label: 'Collector Academy', href: '/academy' },
+                  { label: 'Comparador', href: '/compare' },
+                  { label: 'Búsqueda IA', href: '/ai-search' },
+                  { label: 'Mi Vault (Colección)', href: '/vault' },
                   { label: 'Novedades', href: '/shop?badge=new' },
                   { label: 'Sobre nosotros', href: '/page/nosotros' },
                   { label: 'Contacto', href: '/contact' },

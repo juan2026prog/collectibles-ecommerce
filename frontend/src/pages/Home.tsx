@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Truck, Shield, Package, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Truck, Shield, Package, ShoppingCart, Sparkles, Radio, GraduationCap, Archive, Scale } from 'lucide-react';
 import { useState, useEffect, useMemo, lazy, Suspense, useRef } from 'react';
 import { useProducts, useCategories, useBrands, useBanners, useProductGroups } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
@@ -489,10 +489,10 @@ export default function Home() {
         );
       }
 
-      /* ━━━━━━━━━━━ TRUST BAR COMPACTA ━━━━━━━━━━━ */
+      /* ━━━━━━━━━━━ TRUST BAR COMPACTA + EXPERIENCIAS DEL COLECCIONISTA ━━━━━━━━━━━ */
       case 'trust':
         return (
-          <section className="max-w-[1500px] mx-auto px-4 md:px-6 my-4 md:-mt-8 relative z-20">
+          <section className="max-w-[1500px] mx-auto px-4 md:px-6 my-4 md:-mt-8 relative z-20 space-y-3 md:space-y-4">
             <div className="rounded-xl md:rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-sm p-3 md:p-8 flex md:grid overflow-x-auto md:overflow-visible grid-cols-1 md:grid-cols-3 gap-3 md:gap-6 no-scrollbar">
               {[
                 { icon: Truck, title: 'Envíos a todo Uruguay', desc: 'Entregas rápidas y seguras' },
@@ -509,6 +509,74 @@ export default function Home() {
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* COLLECTOR EXPERIENCE BAR (5 PLUGINS ACCESS) */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 md:gap-3">
+              <Link
+                to="/ai-search"
+                className="group flex items-center gap-2.5 p-2.5 md:p-3 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-[#f00856]/10 hover:border-[#f00856]/40 transition shadow-sm"
+              >
+                <div className="w-8 h-8 rounded-lg bg-[#f00856]/20 border border-[#f00856]/30 flex items-center justify-center shrink-0 text-[#f00856]">
+                  <Sparkles size={16} />
+                </div>
+                <div className="min-w-0">
+                  <span className="block text-[11px] md:text-xs font-black text-white group-hover:text-[#f00856] transition truncate">Búsqueda IA</span>
+                  <span className="text-[9px] text-zinc-400 hidden sm:block truncate">Buscador semántico</span>
+                </div>
+              </Link>
+
+              <Link
+                to="/radar"
+                className="group flex items-center gap-2.5 p-2.5 md:p-3 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-rose-500/10 hover:border-rose-500/40 transition shadow-sm"
+              >
+                <div className="w-8 h-8 rounded-lg bg-rose-500/20 border border-rose-500/30 flex items-center justify-center shrink-0 text-rose-400">
+                  <Radio size={16} />
+                </div>
+                <div className="min-w-0">
+                  <span className="block text-[11px] md:text-xs font-black text-white group-hover:text-rose-400 transition truncate">Radar Drops</span>
+                  <span className="text-[9px] text-zinc-400 hidden sm:block truncate">Calendario 2026/27</span>
+                </div>
+              </Link>
+
+              <Link
+                to="/vault"
+                className="group flex items-center gap-2.5 p-2.5 md:p-3 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-amber-500/10 hover:border-amber-500/40 transition shadow-sm"
+              >
+                <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center shrink-0 text-amber-400">
+                  <Archive size={16} />
+                </div>
+                <div className="min-w-0">
+                  <span className="block text-[11px] md:text-xs font-black text-white group-hover:text-amber-400 transition truncate">Mi Vault</span>
+                  <span className="text-[9px] text-zinc-400 hidden sm:block truncate">Mi colección personal</span>
+                </div>
+              </Link>
+
+              <Link
+                to="/compare"
+                className="group flex items-center gap-2.5 p-2.5 md:p-3 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-sky-500/10 hover:border-sky-500/40 transition shadow-sm"
+              >
+                <div className="w-8 h-8 rounded-lg bg-sky-500/20 border border-sky-500/30 flex items-center justify-center shrink-0 text-sky-400">
+                  <Scale size={16} />
+                </div>
+                <div className="min-w-0">
+                  <span className="block text-[11px] md:text-xs font-black text-white group-hover:text-sky-400 transition truncate">Comparador</span>
+                  <span className="text-[9px] text-zinc-400 hidden sm:block truncate">Escalas y specs</span>
+                </div>
+              </Link>
+
+              <Link
+                to="/academy"
+                className="col-span-2 sm:col-span-1 group flex items-center gap-2.5 p-2.5 md:p-3 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-emerald-500/10 hover:border-emerald-500/40 transition shadow-sm"
+              >
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0 text-emerald-400">
+                  <GraduationCap size={16} />
+                </div>
+                <div className="min-w-0">
+                  <span className="block text-[11px] md:text-xs font-black text-white group-hover:text-emerald-400 transition truncate">Academy</span>
+                  <span className="text-[9px] text-zinc-400 hidden sm:block truncate">Guías y conservación</span>
+                </div>
+              </Link>
             </div>
           </section>
         );
