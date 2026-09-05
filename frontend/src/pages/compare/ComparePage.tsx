@@ -249,35 +249,48 @@ export const ComparePage: React.FC = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Búsqueda en vivo en modal
+  // Búsqueda en vivo en modal conectada al catálogo real de Supabase
   useEffect(() => {
-    if (!searchQuery.trim()) {
-      setSearchResults([]);
-      return;
-    }
-    const timer = setTimeout(async () => {
+    if (!isSearchOpen) return;
+
+    let isCancelled = false;
+    const fetchCatalog = async () => {
       try {
         setSearching(true);
-        const { data } = await supabase
+        let query = supabase
           .from('products')
-          .select('id, title, slug, base_price, status, brand:brands(name), license:licenses(name), product_images(url, is_primary)')
-          .ilike('title', `%${searchQuery.trim()}%`)
-          .limit(8);
+          .select('id, title, slug, base_price, status, brand:brands!products_brand_id_fkey(name), product_images(url, is_primary)')
+          .in('status', ['published', 'ACTIVE', 'active']);
 
-        if (data) {
+        if (searchQuery.trim()) {
+          query = query.or(`title.ilike.%${searchQuery.trim()}%,description.ilike.%${searchQuery.trim()}%`);
+        }
+
+        const { data, error } = await query.limit(10);
+
+        if (error) {
+          console.error('Supabase query error in compare modal:', error);
+        }
+
+        if (!isCancelled && data) {
           const currentIds = products.map(p => p.id);
           const filtered = data.filter(p => !currentIds.includes(p.id));
           setSearchResults(filtered);
         }
       } catch (err) {
-        console.error('Search error:', err);
+        console.error('Search error in compare modal:', err);
       } finally {
-        setSearching(false);
+        if (!isCancelled) setSearching(false);
       }
-    }, 280);
+    };
 
-    return () => clearTimeout(timer);
-  }, [searchQuery, products]);
+    const timer = setTimeout(fetchCatalog, searchQuery.trim() ? 250 : 0);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchQuery, products, isSearchOpen]);
 
   // ── ACCIONES ────────────────────────────────────────────────────────────────
   const handleRemoveProduct = (idToRemove: string) => {
@@ -316,13 +329,12 @@ export const ComparePage: React.FC = () => {
         status: 'ACTIVE',
         condition: 'NEW_SEALED',
         brand_name: item.brand?.name || 'Coleccionable',
-        license_name: item.license?.name || '',
+        license_name: 'Colección Oficial',
         category_name: 'Figuras de Acción',
         primary_image: primaryImg,
         normalized_attributes: {
           price: { raw: item.base_price, display: `$ ${Number(item.base_price).toLocaleString('es-UY')} UYU`, is_informed: true, numeric_value: Number(item.base_price) },
           brand: { raw: item.brand?.name, display: item.brand?.name || 'Oficial', is_informed: Boolean(item.brand?.name) },
-          license: { raw: item.license?.name, display: item.license?.name || 'Oficial', is_informed: Boolean(item.license?.name) },
           availability: { raw: 'LOCAL', display: 'Stock local disponible', is_informed: true },
         }
       };
@@ -332,12 +344,40 @@ export const ComparePage: React.FC = () => {
         next[swapTargetIdx] = updatedEntry;
         return next;
       });
-    } else {
-      // Modo con URL activa o agregar nuevo producto
-      if (productIds.length >= 4) return;
+    } else if (isDemoMode && swapTargetIdx === null) {
+      // Agregar nuevo producto en modo demo
+      if (products.length >= 4) return;
+      const newEntry: ComparedProduct = {
+        id: item.id,
+        title: item.title,
+        slug: item.slug || item.id,
+        base_price: Number(item.base_price || 0),
+        status: 'ACTIVE',
+        condition: 'NEW_SEALED',
+        brand_name: item.brand?.name || 'Coleccionable',
+        license_name: 'Colección Oficial',
+        category_name: 'Figuras de Acción',
+        primary_image: primaryImg,
+        normalized_attributes: {
+          price: { raw: item.base_price, display: `$ ${Number(item.base_price).toLocaleString('es-UY')} UYU`, is_informed: true, numeric_value: Number(item.base_price) },
+          brand: { raw: item.brand?.name, display: item.brand?.name || 'Oficial', is_informed: Boolean(item.brand?.name) },
+          availability: { raw: 'LOCAL', display: 'Stock local disponible', is_informed: true },
+        }
+      };
+      setProducts(prev => [...prev, newEntry]);
       addToCompare(item.id);
-      const nextIds = isDemoMode ? [products[0]?.id, item.id].filter(Boolean) : [...productIds, item.id];
-      setSearchParams({ products: nextIds.join(',') });
+    } else {
+      // Modo con URL activa (productos reales)
+      if (swapTargetIdx !== null) {
+        const nextIds = [...productIds];
+        nextIds[swapTargetIdx] = item.id;
+        setSearchParams({ products: nextIds.join(',') });
+      } else {
+        if (productIds.length >= 4) return;
+        addToCompare(item.id);
+        const nextIds = [...productIds, item.id];
+        setSearchParams({ products: nextIds.join(',') });
+      }
     }
 
     setIsSearchOpen(false);
@@ -1194,7 +1234,7 @@ export const ComparePage: React.FC = () => {
                         </div>
                         <div className="space-y-0.5">
                           <p className="text-xs font-bold text-zinc-100 line-clamp-1">{p.title}</p>
-                          <p className="text-[10px] text-zinc-400">{p.brand?.name || 'Coleccionable'} · {p.license?.name || 'Catálogo'}</p>
+                          <p className="text-[10px] text-zinc-400">{p.brand?.name || 'Coleccionable'} · Catálogo Oficial</p>
                         </div>
                       </div>
                       <span className="text-xs font-black text-amber-400 whitespace-nowrap">$ {Number(p.base_price).toLocaleString('es-UY')}</span>
