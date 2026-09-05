@@ -15,14 +15,52 @@ import { getProductImage } from '../lib/imageUtils';
 import { resolveCartItemPrice } from '../lib/priceResolver';
 import SEO from '../components/SEO';
 
-const SUGGESTION_CHIPS = [
-  'Batman 1:10',
-  'Resina Polystone',
-  'Preventas 2026',
-  'Hot Toys 1:6',
-  'Marvel Legends',
-  'Figuras Chase'
+const REFERENCE_QUESTION_GROUPS: string[][] = [
+  // Grupo A: Búsqueda por producto + Pregunta conceptual + Recomendación
+  [
+    'Batman de unos 18 cm por menos de USD 50',
+    '¿Qué es una figura Chase?',
+    'Mejor figura 1:12 de Marvel para empezar',
+  ],
+  // Grupo B
+  [
+    'Figuras de terror que no sean Funko',
+    '¿Cómo detecto un bootleg?',
+    'Hot Toys que pueda traer usando franquicia',
+  ],
+  // Grupo C
+  [
+    'Algo parecido a NECA Ultimate Michael Myers',
+    '¿Qué escala es más grande, 1:6 o 1:10?',
+    'Iron Studios vs Sideshow en resina',
+  ],
+  // Grupo D
+  [
+    'Pokémon para regalar por menos de $2.000',
+    '¿Qué es resina Polystone?',
+    'S.H.Figuarts vs Mezco para articulación',
+  ],
+  // Grupo E
+  [
+    'Quiero una figura 1:12 de Marvel',
+    '¿Qué significa MISB?',
+    'Mejor Batman 1:10 calidad/precio',
+  ],
+  // Grupo F
+  [
+    'Dragon Ball escala 1:12 articuladas',
+    '¿Qué materiales usan las estatuas?',
+    'Funko Pop exclusivos 2026',
+  ],
 ];
+
+/** Selecciona el grupo de 3 preguntas de referencia que corresponde según la hora actual (rota cada 4 horas). */
+function getActiveReferenceQuestions(): string[] {
+  const hourSlot = Math.floor(Date.now() / (4 * 60 * 60 * 1000));
+  const index = hourSlot % REFERENCE_QUESTION_GROUPS.length;
+  return REFERENCE_QUESTION_GROUPS[index];
+}
+
 
 interface RadarMatch {
   id: string;
@@ -355,20 +393,25 @@ export default function AISearchPage() {
           </div>
         </form>
 
-        {/* Suggestion Chips */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs no-scrollbar">
-          <span className="text-zinc-500 text-[11px] font-semibold uppercase shrink-0">Sugerencias:</span>
-          {SUGGESTION_CHIPS.map(chip => (
-            <button
-              key={chip}
-              type="button"
-              onClick={() => handleChipClick(chip)}
-              className="px-3 py-1 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-white/10 hover:border-fuchsia-500/40 text-zinc-300 hover:text-white transition-all text-xs shrink-0 cursor-pointer"
-            >
-              {chip}
-            </button>
-          ))}
-        </div>
+        {/* Reference Questions (rotate every 4 hours) */}
+        {!queryParam && (
+          <div className="space-y-2 pt-1">
+            <span className="text-zinc-500 text-[11px] font-semibold uppercase tracking-wider">Prueba preguntar:</span>
+            <div className="flex flex-col gap-2">
+              {getActiveReferenceQuestions().map(q => (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => handleChipClick(q)}
+                  className="w-full text-left px-4 py-2.5 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-white/5 hover:border-fuchsia-500/30 text-zinc-300 hover:text-white transition-all text-sm cursor-pointer group flex items-center gap-3"
+                >
+                  <Search size={14} className="text-zinc-600 group-hover:text-fuchsia-400 shrink-0 transition-colors" />
+                  <span className="line-clamp-1">{q}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Image Preview Banner */}
         {imagePreview && (
