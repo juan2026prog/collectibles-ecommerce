@@ -1,6 +1,6 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
-import { ShoppingCart, Minus, Plus, Star, ChevronDown, Heart, Zap, ZoomIn } from 'lucide-react';
+import { ShoppingCart, Minus, Plus, Star, ChevronDown, Heart, Zap, ZoomIn, Archive } from 'lucide-react';
 import { useProduct, useProductBuyBox, useProducts, getProductGroupBadge, getAllProductGroupBadges } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
 import { useInternationalCartContext } from '../contexts/InternationalCartContext';
@@ -30,6 +30,8 @@ import { getConditionLabel } from '../config/conditionConfig';
 import InternationalCuposBadge from '../components/international/InternationalCuposBadge';
 import InternationalWaitlistModal from '../components/international/InternationalWaitlistModal';
 import { resolveProductInventory } from '../lib/canonicalStock';
+import { AddToCompareButton } from '../components/compare/AddToCompareButton';
+import { ProductUruguayCostDrawer } from '../components/customs/ProductUruguayCostDrawer';
 
 // ── COMPONENTE SECCIÓN PRODUCTOS RELACIONADOS ──
 function RelatedProductsSection({ currentProductId, categorySlug }: { currentProductId: string; categorySlug?: string }) {
@@ -92,6 +94,7 @@ export default function ProductDetail() {
   const [isHovering, setIsHovering] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
   const [showWaitlistModal, setShowWaitlistModal] = useState(false);
+  const [showCustomsDrawer, setShowCustomsDrawer] = useState(false);
   const [openMobileTab, setOpenMobileTab] = useState<'description' | 'specs' | null>('description');
   const [showStickyBar, setShowStickyBar] = useState(false);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
@@ -562,6 +565,16 @@ export default function ProductDetail() {
                 </span>
               )}
 
+              {/* ESTIMACIÓN COSTO PUESTO EN URUGUAY (MI FRANQUICIA) */}
+              <button
+                type="button"
+                onClick={() => setShowCustomsDrawer(true)}
+                className="text-xs font-bold px-3 py-1 rounded-full border border-sky-500/30 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20 transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+              >
+                <span>🇺🇾</span>
+                <span>Ver costo estimado puesto en Uruguay ›</span>
+              </button>
+
               {selectedCurrency === 'ARS' && (
                 arShippingStatus.reasonCode === 'VENDOR_ARGENTINA_DISABLED' ? (
                   <span className="text-xs font-medium px-3 py-1 rounded-full border border-slate-700 bg-slate-800 text-slate-400 flex items-center gap-1.5" title="Este vendedor no realiza envíos a Argentina">
@@ -678,15 +691,30 @@ export default function ProductDetail() {
                   : 'Agregar al carrito'}
             </button>
 
-            {/* FAVORITOS */}
-            <div className="flex justify-center pt-1">
+            {/* FAVORITOS, COMPARADOR Y VAULT */}
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
               <button
                 onClick={() => toggleWishlist(product)}
-                className="inline-flex items-center gap-2 text-xs font-medium text-slate-400 hover:text-white transition-colors py-1 cursor-pointer"
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-white transition-colors py-1 cursor-pointer"
               >
                 <Heart className={`w-4 h-4 transition-colors ${isInWishlist(product.id) ? 'fill-[#f00856] text-[#f00856]' : 'text-slate-400'}`} />
-                <span>{isInWishlist(product.id) ? 'Quitar de favoritos' : 'Agregar a favoritos'}</span>
+                <span>{isInWishlist(product.id) ? 'En Favoritos' : 'Favoritos'}</span>
               </button>
+
+              <span className="text-white/20">|</span>
+
+              <AddToCompareButton productId={product.id} variant="button" />
+
+              <span className="text-white/20">|</span>
+
+              <Link
+                to={`/vault/item/new?product_id=${product.id}&title=${encodeURIComponent(product.title)}`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-zinc-800/80 hover:bg-zinc-700 text-amber-400 border border-amber-500/30 transition"
+                title="Agregar a mi colección personal en Collector Vault"
+              >
+                <Archive size={14} />
+                <span>Mi Vault</span>
+              </Link>
             </div>
           </div>
 
@@ -1045,6 +1073,16 @@ export default function ProductDetail() {
         productTitle={product.title}
         internationalProductId={product.international_products?.[0]?.id}
         estimatedCostUsd={product.base_price_usd}
+      />
+
+      {/* MODAL ESTIMACIÓN PUESTO EN URUGUAY (MI FRANQUICIA) */}
+      <ProductUruguayCostDrawer
+        isOpen={showCustomsDrawer}
+        onClose={() => setShowCustomsDrawer(false)}
+        productPriceUsd={product.base_price_usd || (finalPrice / 42.5)}
+        categoryName={product.category?.name || product.category_name}
+        knownWeightKg={product.weight_kg || product.weight}
+        productTitle={product.title}
       />
     </div>
   );

@@ -1,0 +1,13 @@
+{
+  "id": "collector-academy",
+  "name": "Collector Academy",
+  "version": "1.0.0",
+  "description": "Base de conocimiento editorial, glosario técnico, guías de escalas y vinculación inteligente con el catálogo.",
+  "author": "Collectibles Team",
+  "enabled": true,
+  "config": {
+    "collector_academy_enabled": true,
+    "ai_drafts_enabled": true,
+    "glossary_enabled": true
+  }
+}

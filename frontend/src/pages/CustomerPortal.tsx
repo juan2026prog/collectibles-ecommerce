@@ -3,13 +3,14 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useCartContext } from '../contexts/CartContext';
-import { Package, User, Settings, Save, Check, ShoppingCart, RotateCcw, MapPin, Phone, Plus, Trash2, Lock, Eye, EyeOff, Edit3, Store, Truck, AlertCircle, FileText, Globe, CreditCard, Clock } from 'lucide-react';
+import { Package, User, Settings, Save, Check, ShoppingCart, RotateCcw, MapPin, Phone, Plus, Trash2, Lock, Eye, EyeOff, Edit3, Store, Truck, AlertCircle, FileText, Globe, CreditCard, Clock, ShieldCheck } from 'lucide-react';
 import { useLocale } from '../contexts/LocaleContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { URUGUAY_LOCATIONS, DEPARTAMENTOS } from '../utils/uruguayLocations';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import { useImageProtection } from '../hooks/useImageProtection';
 import { BackofficePageHeader, BackofficeTabs, BackofficeStatusBadge, BackofficeCompactRow, BackofficePrimaryAction } from '../components/backoffice';
+import { FranchiseStatusCard } from '../components/customs/FranchiseStatusCard';
 
 function getOrderItemImage(item: any): string {
   const img = item.products?.images?.[0];
@@ -40,7 +41,7 @@ export default function CustomerPortal() {
   const cart = useCartContext();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'orders' | 'profile' | 'security' | 'couriers'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'profile' | 'couriers' | 'franchise' | 'security'>('orders');
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
   const [isVendor, setIsVendor] = useState(false);
@@ -537,6 +538,7 @@ export default function CustomerPortal() {
           { key: 'orders', icon: Package, label: 'Mis Pedidos', count: orders.length },
           { key: 'profile', icon: User, label: 'Mis Datos' },
           { key: 'couriers', icon: Globe, label: 'Direcciones Courier USA' },
+          { key: 'franchise', icon: ShieldCheck, label: 'Mi Franquicia UY' },
           { key: 'security', icon: Lock, label: 'Seguridad' },
         ] as const).map(tab => (
           <button
@@ -1390,6 +1392,13 @@ export default function CustomerPortal() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ═══ TAB: Mi Franquicia UY ═══ */}
+      {activeTab === 'franchise' && (
+        <div className="space-y-6 max-w-4xl">
+          <FranchiseStatusCard />
         </div>
       )}
 

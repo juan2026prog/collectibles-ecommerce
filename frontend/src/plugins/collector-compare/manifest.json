@@ -1,0 +1,16 @@
+{
+  "id": "collector-compare",
+  "name": "Collector Compare (Comparador del Coleccionista)",
+  "version": "1.0.0",
+  "description": "Sistema de comparación técnica de piezas, normalización de escalas, compatibilidad y veredicto factual.",
+  "author": "Collectibles Team",
+  "enabled": true,
+  "config": {
+    "collector_compare_enabled": true,
+    "compare_ai_verdict_enabled": true,
+    "compare_compatibility_enabled": true,
+    "compare_editorial_seo_enabled": false,
+    "compare_import_cost_enabled": true,
+    "compare_max_products": 4
+  }
+}

@@ -4,7 +4,8 @@ import {
   LayoutDashboard, ShoppingBag, FolderTree, Users, Settings, LogOut, Package, 
   Tag, Image, CreditCard, LayoutTemplate, Star, Percent, Megaphone,
   Mail, BarChart3, Search, ShieldCheck, Store, Share2, ExternalLink, Library, FileText,
-  Globe, Download, RefreshCw, Award, Layers, KeyRound
+  Globe, Download, RefreshCw, Award, Layers, KeyRound, Scale,
+  Sparkles, Radio, Archive, GraduationCap
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LocaleSwitcher from '../components/LocaleSwitcher';
@@ -56,6 +57,11 @@ export default function AdminLayout() {
     { name: 'Artistas & Cameo', path: '/admin/artists', icon: Star },
     { name: 'Reportes', path: '/admin/reports', icon: BarChart3 },
     { name: 'SEO', path: '/admin/seo', icon: Search },
+    { name: 'AI Search', path: '/admin/ai-search', icon: Sparkles },
+    { name: 'Radar & Lanzamientos', path: '/admin/radar', icon: Radio },
+    { name: 'Comparador', path: '/admin/compare', icon: Scale },
+    { name: 'Collector Vault', path: '/admin/vault', icon: Archive },
+    { name: 'Collector Academy', path: '/admin/academy', icon: GraduationCap },
     { name: 'Usuarios & Auditoria', path: '/admin/users', icon: ShieldCheck },
   ];
 
@@ -97,11 +103,11 @@ export default function AdminLayout() {
         <div className="pt-3 pb-1">
           <p className="px-3.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">Internacional</p>
           <Link
-            to="/admin/internacional/amazon"
+            to="/admin/internacional/sourcing"
             onClick={() => closeOnClick && setMobileDrawerOpen(false)}
             className="flex items-center px-3.5 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-xl transition-colors min-h-[44px]"
           >
-            <Download className="mr-2.5 h-[18px] w-[18px] shrink-0" /> Importador Amazon
+            <Download className="mr-2.5 h-[18px] w-[18px] shrink-0" /> Sourcing & Importación
           </Link>
           <Link
             to="/admin/internacional/productos"

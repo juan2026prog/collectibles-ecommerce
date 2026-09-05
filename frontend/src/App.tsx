@@ -90,11 +90,38 @@ const AdminVendorPayouts = lazy(() => import('./pages/admin/AdminVendorPayouts')
 const AdminVendorKyc = lazy(() => import('./pages/admin/AdminVendorKyc'));
 const AdminBuyBox = lazy(() => import('./pages/admin/AdminBuyBox'));
 const AdminMarketplace = lazy(() => import('./pages/admin/AdminMarketplace'));
+const AdminSourcingImport = lazy(() => import('./pages/admin/AdminSourcingImport'));
 const AdminInternationalAmazon = lazy(() => import('./pages/admin/AdminInternationalAmazon'));
 const AdminInternationalProducts = lazy(() => import('./pages/admin/AdminInternationalProducts'));
 const AdminInternationalSync = lazy(() => import('./pages/admin/AdminInternationalSync'));
-const AdminZinc = lazy(() => import('./pages/admin/AdminZinc'));
 const AdminRefunds = lazy(() => import('./pages/admin/AdminRefunds'));
+
+// Collector Plugins (6 official modules)
+// 01. AI Search
+const AISearchPage = lazy(() => import('./pages/AISearchPage'));
+const AdminAISearch = lazy(() => import('./pages/admin/AdminAISearch'));
+
+// 02. Radar & Release Calendar
+const RadarFeedPage = lazy(() => import('./pages/radar/RadarFeedPage'));
+const ReleaseDetailPage = lazy(() => import('./pages/radar/ReleaseDetailPage'));
+const ReleaseCalendarPage = lazy(() => import('./pages/radar/ReleaseCalendarPage'));
+const AdminRadar = lazy(() => import('./pages/admin/AdminRadar'));
+
+// 03. My Vault
+const VaultDashboard = lazy(() => import('./pages/vault/VaultDashboard'));
+const VaultItemDetail = lazy(() => import('./pages/vault/VaultItemDetail'));
+const PublicCollectorProfile = lazy(() => import('./pages/vault/PublicCollectorProfile'));
+const AdminVault = lazy(() => import('./pages/admin/AdminVault'));
+
+// 04. Collector Compare
+const ComparePage = lazy(() => import('./pages/compare/ComparePage'));
+const AdminCompare = lazy(() => import('./pages/admin/AdminCompare'));
+import { CompareProvider } from './contexts/CompareContext';
+
+// 05. Collector Academy
+const AcademyHome = lazy(() => import('./pages/academy/AcademyHome'));
+const AcademyArticlePage = lazy(() => import('./pages/academy/AcademyArticlePage'));
+const AdminAcademy = lazy(() => import('./pages/admin/AdminAcademy'));
 
 // GodMode removed from production — SEC-CRIT-01 (hardcoded credentials)
 import { useReferralTracking } from './hooks/useReferralTracking';
@@ -124,7 +151,8 @@ function App() {
           <MetaPixelTracker />
           <WishlistProvider>
             <CartProvider>
-              <InternationalCartProvider>
+              <CompareProvider>
+                <InternationalCartProvider>
               <FeatureToggleProvider>
               <LocaleProvider>
                 <CurrencyProvider>
@@ -175,6 +203,26 @@ function App() {
                         <Wishlist />
                       </ProtectedRoute>
                     } />
+
+                    {/* Collector Compare */}
+                    <Route path="/compare" element={<ComparePage />} />
+
+                    {/* 01. AI Search */}
+                    <Route path="/ai-search" element={<AISearchPage />} />
+
+                    {/* 02. Radar & Release Calendar */}
+                    <Route path="/radar" element={<RadarFeedPage />} />
+                    <Route path="/radar/:slug" element={<ReleaseDetailPage />} />
+                    <Route path="/releases" element={<ReleaseCalendarPage />} />
+
+                    {/* 03. My Vault */}
+                    <Route path="/vault" element={<ProtectedRoute><VaultDashboard /></ProtectedRoute>} />
+                    <Route path="/vault/item/:id" element={<ProtectedRoute><VaultItemDetail /></ProtectedRoute>} />
+                    <Route path="/collector/:username" element={<PublicCollectorProfile />} />
+
+                    {/* 05. Collector Academy */}
+                    <Route path="/academy" element={<AcademyHome />} />
+                    <Route path="/academy/:slug" element={<AcademyArticlePage />} />
                   </Route>
 
                 {/* Isolated Portals with Lateral Navigation */}
@@ -268,6 +316,11 @@ function App() {
                   </ProtectedRoute>
                 }>
                   <Route index element={<AdminDashboard />} />
+                  <Route path="compare" element={<AdminCompare />} />
+                  <Route path="ai-search" element={<AdminAISearch />} />
+                  <Route path="radar" element={<AdminRadar />} />
+                  <Route path="vault" element={<AdminVault />} />
+                  <Route path="academy" element={<AdminAcademy />} />
                   <Route path="products" element={<AdminProducts />} />
                   <Route path="pages" element={<AdminPages />} />
                   <Route path="orders" element={<AdminOrders />} />
@@ -301,6 +354,7 @@ function App() {
                   <Route path="vendor-payouts" element={<Navigate to="/admin/marketplace?tab=liquidaciones" replace />} />
                   <Route path="vendor-kyc" element={<Navigate to="/admin/marketplace?tab=kyc" replace />} />
                   <Route path="buybox" element={<Navigate to="/admin/marketplace?tab=analytics" replace />} />
+                  <Route path="internacional/sourcing" element={<AdminSourcingImport />} />
                   <Route path="internacional/amazon" element={<AdminInternationalAmazon />} />
                   <Route path="internacional/productos" element={<AdminInternationalProducts />} />
                   <Route path="internacional/sync" element={<AdminInternationalSync />} />
@@ -312,6 +366,7 @@ function App() {
               </LocaleProvider>
               </FeatureToggleProvider>
               </InternationalCartProvider>
+              </CompareProvider>
             </CartProvider>
           </WishlistProvider>
           </AdminModeProvider>

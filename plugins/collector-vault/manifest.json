@@ -1,0 +1,13 @@
+{
+  "id": "collector-vault",
+  "name": "Collector Vault (My Vault)",
+  "version": "1.0.0",
+  "description": "Sistema modular de inventario personal, vitrinas públicas y privacidad para coleccionistas.",
+  "author": "Collectibles Team",
+  "enabled": true,
+  "config": {
+    "collector_vault_enabled": true,
+    "vault_external_items_enabled": true,
+    "vault_public_collections_enabled": true
+  }
+}

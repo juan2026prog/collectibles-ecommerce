@@ -1,0 +1,13 @@
+{
+  "id": "collectibles-radar",
+  "name": "Collectibles Radar & Release Calendar",
+  "version": "1.0.0",
+  "description": "Release Engine unificado para el monitoreo de anuncios, preórdenes, lanzamientos y fechas estimadas de coleccionables.",
+  "author": "Collectibles Team",
+  "enabled": true,
+  "config": {
+    "radar_enabled": true,
+    "release_calendar_enabled": true,
+    "radar_alerts_enabled": true
+  }
+}

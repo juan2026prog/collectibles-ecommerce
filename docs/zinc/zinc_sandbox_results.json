@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-04T20:39:59.178Z",
+  "timestamp": "2026-09-04T21:44:20.062Z",
   "environment": "sandbox",
   "official_docs_checked": "PASS",
   "openapi_latest_checked": "PASS",
@@ -11,52 +11,52 @@
       "status": 400,
       "code": null,
       "passed": true,
-      "elapsed_ms": 756
+      "elapsed_ms": 983
     },
     "url_unreachable": {
       "type": "synchronous_error",
       "status": 400,
       "code": null,
       "passed": true,
-      "elapsed_ms": 207
+      "elapsed_ms": 215
     },
     "insufficient_funds": {
       "type": "synchronous_error",
       "status": 402,
       "code": null,
       "passed": true,
-      "elapsed_ms": 193
+      "elapsed_ms": 190
     },
     "success": {
       "type": "success_lifecycle",
       "status": 201,
-      "order_id": "081f4c67-bf3d-447d-ac77-34ee96c13c73",
+      "order_id": "71f8a018-d3fb-411d-9400-78004f9aaf0d",
       "order_status": "pending",
       "passed": true,
-      "elapsed_ms": 356
+      "elapsed_ms": 348
     },
     "price_exceeded": {
       "type": "asynchronous_error",
       "status": 201,
-      "order_id": "8314b67d-84a2-4b77-a6e6-4978a9faf80c",
+      "order_id": "3bcb966a-8157-49da-beb4-2a6e6f706dd2",
       "passed": true
     },
     "out_of_stock": {
       "type": "asynchronous_error",
       "status": 201,
-      "order_id": "daaa83fc-611f-43a1-9272-b86c8367aa69",
+      "order_id": "3c6ce144-a819-47e8-889e-a586d6882c4b",
       "passed": true
     },
     "invalid_variant": {
       "type": "asynchronous_error",
       "status": 201,
-      "order_id": "238b5fed-01d6-4dde-8ced-17cc2d131e41",
+      "order_id": "ad7ef073-55b5-4ad8-b177-f93d05e5d7c2",
       "passed": true
     },
     "shipping_unavailable": {
       "type": "asynchronous_error",
       "status": 201,
-      "order_id": "6e810dd3-71ed-4084-9b6b-ad2558b69507",
+      "order_id": "e2942c79-30dc-4726-9d6d-52a3828df592",
       "passed": true
     }
   },

@@ -6,6 +6,12 @@ interface FeatureToggles {
   affiliatesEnabled: boolean;
   artistCameoEnabled: boolean;
   mercadoLibreSyncEnabled: boolean;
+  aiSearchEnabled: boolean;
+  radarEnabled: boolean;
+  releaseCalendarEnabled: boolean;
+  collectorVaultEnabled: boolean;
+  collectorCompareEnabled: boolean;
+  collectorAcademyEnabled: boolean;
 }
 
 const defaultFeatures: FeatureToggles = {
@@ -13,6 +19,12 @@ const defaultFeatures: FeatureToggles = {
   affiliatesEnabled: true,
   artistCameoEnabled: false,
   mercadoLibreSyncEnabled: true,
+  aiSearchEnabled: true,
+  radarEnabled: true,
+  releaseCalendarEnabled: true,
+  collectorVaultEnabled: true,
+  collectorCompareEnabled: true,
+  collectorAcademyEnabled: true,
 };
 
 const FeatureToggleContext = createContext<{
