@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Sparkles, History, RefreshCw, UploadCloud, SlidersHorizontal, 
   CheckCircle2, AlertTriangle, ArrowRight, ShieldCheck, Download, Clock,
-  Layers, Filter
+  Layers, Filter, BrainCircuit
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../components/admin/Toast';
@@ -18,7 +18,9 @@ import { SourcingColumnPicker } from '../../components/admin/sourcing/SourcingCo
 import { SourcingBulkBar } from '../../components/admin/sourcing/SourcingBulkBar';
 import { SourcingResearchPackModal } from '../../components/admin/sourcing/SourcingResearchPackModal';
 import { SourcingHistoryModal } from '../../components/admin/sourcing/SourcingHistoryModal';
+import { SourcingOpenAIModal } from '../../components/admin/sourcing/SourcingOpenAIModal';
 import { sourcingService } from '../../services/sourcing/sourcingService';
+import { checkOpenAIStatus } from '../../services/sourcing/openaiResearchService';
 import { SAMPLE_MCFARLANE_RESEARCH_PACK } from '../../data/sampleResearchPacks';
 import { calculateInternationalPricing } from '../../lib/internationalPricing';
 
@@ -67,6 +69,8 @@ export default function AdminSourcingImport() {
   // Modals
   const [showPackModal, setShowPackModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showOpenAIModal, setShowOpenAIModal] = useState(false);
+  const [openAIEnabled, setOpenAIEnabled] = useState(false);
 
   // Filters
   const [filters, setFilters] = useState<SourcingFilterState>({
@@ -82,6 +86,9 @@ export default function AdminSourcingImport() {
   // Load existing catalog titles and seed initial pack on mount
   useEffect(() => {
     loadInitialCatalogAndPack();
+    checkOpenAIStatus()
+      .then(st => setOpenAIEnabled(st.enabled))
+      .catch(() => setOpenAIEnabled(false));
   }, []);
 
   const loadInitialCatalogAndPack = async () => {
@@ -402,6 +409,33 @@ export default function AdminSourcingImport() {
         </div>
 
         <div className="flex items-center gap-2.5">
+          {/* OpenAI Optional Research Button */}
+          <div className="relative group">
+            <button
+              onClick={() => openAIEnabled && setShowOpenAIModal(true)}
+              disabled={!openAIEnabled}
+              title={openAIEnabled ? "Investigar productos con OpenAI" : "Activar en Configuración → Internacional"}
+              className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-lg border transition-all ${
+                openAIEnabled
+                  ? 'bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100 shadow-xs cursor-pointer'
+                  : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-75'
+              }`}
+            >
+              <BrainCircuit className="w-4 h-4" />
+              <span>Investigar con OpenAI</span>
+              {!openAIEnabled && (
+                <span className="text-[10px] uppercase tracking-wider bg-gray-200 text-gray-500 px-1 py-0.2 rounded ml-0.5">
+                  OFF
+                </span>
+              )}
+            </button>
+            {!openAIEnabled && (
+              <div className="absolute top-full mt-1.5 left-1/2 -translate-x-1/2 hidden group-hover:block z-30 w-52 p-2 bg-gray-900 text-white text-[11px] rounded-lg shadow-xl text-center pointer-events-none">
+                OpenAI Research está desactivado por defecto. Activalo en Configuración Internacional.
+              </div>
+            )}
+          </div>
+
           <button
             onClick={() => setShowHistoryModal(true)}
             className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 shadow-sm transition-colors"
@@ -510,6 +544,12 @@ export default function AdminSourcingImport() {
         isOpen={showHistoryModal}
         onClose={() => setShowHistoryModal(false)}
         historyEntries={sourcingService.getPackHistory()}
+      />
+
+      <SourcingOpenAIModal
+        isOpen={showOpenAIModal}
+        onClose={() => setShowOpenAIModal(false)}
+        onLoadPack={handleLoadNewPack}
       />
     </div>
   );

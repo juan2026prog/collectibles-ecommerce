@@ -12,6 +12,14 @@ export default function AdminInternationalSync() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [openAiConfig, setOpenAiConfig] = useState({
+    enabled: false,
+    model: 'gpt-4o',
+    webSearch: false,
+    maxResults: 100,
+    dailyLimit: 20,
+    dailyBudget: 10.0,
+  });
 
   useEffect(() => {
     fetchSettings();
@@ -47,6 +55,31 @@ export default function AdminInternationalSync() {
         .eq('status', 'pending');
       setWaitlistCount(count || 0);
 
+      // Fetch OpenAI Sourcing configuration from site_settings
+      const { data: openAiRows } = await supabase
+        .from('site_settings')
+        .select('key, value')
+        .in('key', [
+          'sourcing_openai_enabled',
+          'sourcing_openai_model',
+          'sourcing_openai_web_search_enabled',
+          'sourcing_openai_max_results',
+          'sourcing_openai_daily_request_limit',
+          'sourcing_openai_daily_budget_usd'
+        ]);
+
+      if (openAiRows) {
+        const m: Record<string, string> = {};
+        for (const r of openAiRows) m[r.key] = r.value;
+        setOpenAiConfig({
+          enabled: m['sourcing_openai_enabled'] === 'true',
+          model: m['sourcing_openai_model'] || 'gpt-4o',
+          webSearch: m['sourcing_openai_web_search_enabled'] === 'true',
+          maxResults: Number(m['sourcing_openai_max_results'] || 100),
+          dailyLimit: Number(m['sourcing_openai_daily_request_limit'] || 20),
+          dailyBudget: Number(m['sourcing_openai_daily_budget_usd'] || 10.0),
+        });
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -172,6 +205,19 @@ export default function AdminInternationalSync() {
         .eq('id', 1);
 
       if (error) throw error;
+
+      // Save OpenAI config to site_settings
+      const openAiUpdates = [
+        { key: 'sourcing_openai_enabled', value: String(openAiConfig.enabled), updated_at: new Date().toISOString() },
+        { key: 'sourcing_openai_model', value: openAiConfig.model, updated_at: new Date().toISOString() },
+        { key: 'sourcing_openai_web_search_enabled', value: String(openAiConfig.webSearch), updated_at: new Date().toISOString() },
+        { key: 'sourcing_openai_max_results', value: String(openAiConfig.maxResults), updated_at: new Date().toISOString() },
+        { key: 'sourcing_openai_daily_request_limit', value: String(openAiConfig.dailyLimit), updated_at: new Date().toISOString() },
+        { key: 'sourcing_openai_daily_budget_usd', value: String(openAiConfig.dailyBudget), updated_at: new Date().toISOString() },
+      ];
+      const { error: openAiErr } = await supabase.from('site_settings').upsert(openAiUpdates);
+      if (openAiErr) console.warn('Could not update OpenAI site_settings:', openAiErr);
+
       setSuccess('Configuración actualizada correctamente. Los cambios aplican de forma inmediata.');
       await fetchSettings();
       await fetchInternationalSettings(true);
@@ -641,6 +687,108 @@ export default function AdminInternationalSync() {
                 <span className="block text-xs text-gray-500">Descarta ofertas que no tengan envío rápido Prime en EE.UU.</span>
               </div>
             </label>
+          </div>
+        </div>
+
+        {/* ── INVESTIGACIÓN CON OPENAI (SOURCING) ── */}
+        <div className="pt-6 border-t border-gray-100">
+          <div className="flex items-center justify-between border-b pb-2 mb-4">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-purple-600" />
+              <h3 className="text-sm font-bold text-gray-900">Investigación con OpenAI (Sourcing Center)</h3>
+            </div>
+            <span className={`px-2.5 py-0.5 rounded text-[11px] font-bold border ${
+              openAiConfig.enabled
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-gray-100 text-gray-500 border-gray-200'
+            }`}>
+              {openAiConfig.enabled ? 'ACTIVO' : 'OFF (DESACTIVADO)'}
+            </span>
+          </div>
+
+          <p className="text-xs text-gray-500 mb-4">
+            Permite descubrir productos candidatos con OpenAI directamente desde el Sourcing Center.
+            Desactivado por defecto. Requiere <code className="font-mono bg-gray-100 px-1 py-0.5 rounded">OPENAI_API_KEY</code> en Supabase Secrets.
+          </p>
+
+          <div className="space-y-4">
+            <label className="flex items-center gap-3 cursor-pointer p-3 bg-purple-50/50 rounded-lg border border-purple-100 hover:bg-purple-50">
+              <input
+                type="checkbox"
+                className="w-5 h-5 text-purple-600 rounded"
+                checked={openAiConfig.enabled}
+                onChange={e => setOpenAiConfig({ ...openAiConfig, enabled: e.target.checked })}
+              />
+              <div>
+                <span className="block text-sm font-medium text-gray-900">Activar OpenAI Research</span>
+                <span className="block text-xs text-gray-500">Habilita el botón de búsqueda con IA en la pantalla de Sourcing & Importación.</span>
+              </div>
+            </label>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Modelo OpenAI</label>
+                <select
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-xs sm:text-xs"
+                  value={openAiConfig.model}
+                  onChange={e => setOpenAiConfig({ ...openAiConfig, model: e.target.value })}
+                >
+                  <option value="gpt-4o">gpt-4o (Recomendado)</option>
+                  <option value="gpt-4o-mini">gpt-4o-mini</option>
+                  <option value="gpt-4-turbo">gpt-4-turbo</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Máx. productos por búsqueda</label>
+                <input
+                  type="number"
+                  min={10}
+                  max={200}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-xs sm:text-xs"
+                  value={openAiConfig.maxResults}
+                  onChange={e => setOpenAiConfig({ ...openAiConfig, maxResults: Number(e.target.value) })}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Límite diario de búsquedas</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-xs sm:text-xs"
+                  value={openAiConfig.dailyLimit}
+                  onChange={e => setOpenAiConfig({ ...openAiConfig, dailyLimit: Number(e.target.value) })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Presupuesto diario máx. (USD)</label>
+                <input
+                  type="number"
+                  step="1"
+                  min={1}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-xs sm:text-xs"
+                  value={openAiConfig.dailyBudget}
+                  onChange={e => setOpenAiConfig({ ...openAiConfig, dailyBudget: Number(e.target.value) })}
+                />
+              </div>
+
+              <div className="flex items-center pt-5">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 text-purple-600 rounded"
+                    checked={openAiConfig.webSearch}
+                    onChange={e => setOpenAiConfig({ ...openAiConfig, webSearch: e.target.checked })}
+                  />
+                  <span className="text-xs font-medium text-gray-700">Web Research habilitado por defecto</span>
+                </label>
+              </div>
+            </div>
           </div>
         </div>
 

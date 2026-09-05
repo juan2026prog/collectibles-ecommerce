@@ -48,9 +48,20 @@ export const SourcingHistoryModal: React.FC<SourcingHistoryModalProps> = ({
                 className="p-3.5 bg-gray-50 border border-gray-200 rounded-xl space-y-2 hover:border-gray-300 transition-all text-xs"
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-sm text-gray-900">
-                    {entry.title}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm text-gray-900">
+                      {entry.title}
+                    </span>
+                    {entry.provider === 'openai' || entry.source === 'openai-research' ? (
+                      <span className="px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 text-[10px] font-bold">
+                        OPENAI API
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200 text-[10px] font-semibold">
+                        {entry.source || 'CHATGPT'}
+                      </span>
+                    )}
+                  </div>
                   <span className="font-mono text-[11px] text-gray-500 flex items-center gap-1">
                     <Calendar className="w-3.5 h-3.5 text-gray-400" />
                     {new Date(entry.processed_at).toLocaleString()}

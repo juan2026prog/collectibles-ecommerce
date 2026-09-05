@@ -20,6 +20,8 @@ export interface SourcingHistoryEntry {
   profitable_count: number;
   review_count: number;
   preorder_count: number;
+  source?: string;
+  provider?: string;
 }
 
 export class SourcingService {
@@ -254,7 +256,9 @@ export class SourcingService {
         total_products: products.length,
         profitable_count: profitableCount,
         review_count: reviewCount,
-        preorder_count: preorderCount
+        preorder_count: preorderCount,
+        source: pack.source,
+        provider: (pack as any).provider || (pack.source === 'openai-research' ? 'openai' : undefined)
       };
 
       const updated = [entry, ...history.filter(h => h.pack_id !== pack.pack_id)].slice(0, 30);

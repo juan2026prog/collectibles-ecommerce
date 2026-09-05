@@ -55,7 +55,12 @@ export type ResearchPackStatus =
   | 'URUGUAY_CHECK' 
   | 'READY' 
   | 'PARTIAL' 
-  | 'FAILED';
+  | 'FAILED'
+  | 'RATE_LIMITED'
+  | 'BUDGET_EXCEEDED'
+  | 'PENDING_CREDENTIAL'
+  | 'MODEL_UNAVAILABLE'
+  | 'FEATURE_DISABLED';
 
 export type UruguayMatchType = 
   | 'EXACT_MATCH' 
@@ -260,7 +265,7 @@ export interface ResearchPack {
   pack_id: string;
   title: string;
   generated_at: string;
-  source: 'chatgpt-research' | 'manual-urls' | 'csv-upload' | 'admin-import';
+  source: 'chatgpt-research' | 'manual-urls' | 'csv-upload' | 'admin-import' | 'openai-research';
   status: ResearchPackStatus;
   items_count: number;
   profitable_count?: number;
