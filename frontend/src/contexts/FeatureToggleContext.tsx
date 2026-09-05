@@ -70,8 +70,8 @@ export function FeatureToggleProvider({ children }: { children: React.ReactNode 
           collectorVaultEnabled: toggleMap.get('vault') ?? defaultFeatures.collectorVaultEnabled,
           collectorCompareEnabled: toggleMap.get('compare') ?? defaultFeatures.collectorCompareEnabled,
           collectorAcademyEnabled: toggleMap.get('academy') ?? defaultFeatures.collectorAcademyEnabled,
-          customsFranchiseEnabled: toggleMap.get('customs') ?? defaultFeatures.customsFranchiseEnabled,
-          importHubEnabled: toggleMap.get('import_hub') ?? defaultFeatures.importHubEnabled,
+          customsFranchiseEnabled: toggleMap.get('customs') ?? toggleMap.get('import_hub') ?? defaultFeatures.customsFranchiseEnabled,
+          importHubEnabled: toggleMap.get('import_hub') ?? toggleMap.get('customs') ?? defaultFeatures.importHubEnabled,
         });
       } else {
         // Fallback: try store_settings for backward compatibility
@@ -129,7 +129,14 @@ export function FeatureToggleProvider({ children }: { children: React.ReactNode 
         if (id === 'vault') next.collectorVaultEnabled = is_enabled;
         if (id === 'compare') next.collectorCompareEnabled = is_enabled;
         if (id === 'academy') next.collectorAcademyEnabled = is_enabled;
-        if (id === 'customs') next.customsFranchiseEnabled = is_enabled;
+        if (id === 'customs') {
+          next.customsFranchiseEnabled = is_enabled;
+          next.importHubEnabled = is_enabled;
+        }
+        if (id === 'import_hub') {
+          next.importHubEnabled = is_enabled;
+          next.customsFranchiseEnabled = is_enabled;
+        }
         return next;
       });
 

@@ -799,8 +799,13 @@ export default function AdminSettings() {
   }
 
   async function toggleModule(id: string, current: boolean) {
-    await supabase.from('feature_toggles').update({ is_enabled: !current, updated_at: new Date().toISOString() }).eq('id', id);
-    setToggles(prev => prev.map(t => t.id === id ? { ...t, is_enabled: !current } : t));
+    const nextVal = !current;
+    await supabase.from('feature_toggles').update({ is_enabled: nextVal, updated_at: new Date().toISOString() }).eq('id', id);
+    if (id === 'customs' || id === 'import_hub') {
+      const otherId = id === 'customs' ? 'import_hub' : 'customs';
+      await supabase.from('feature_toggles').update({ is_enabled: nextVal, updated_at: new Date().toISOString() }).eq('id', otherId);
+    }
+    setToggles(prev => prev.map(t => (t.id === id || (id === 'customs' && t.id === 'import_hub') || (id === 'import_hub' && t.id === 'customs')) ? { ...t, is_enabled: nextVal } : t));
   }
 
   async function saveHandyProvider(nextProvider?: HandyProviderRecord) {
@@ -1808,7 +1813,7 @@ export default function AdminSettings() {
                 { id: 'vault', name: 'My Vault / Collector Vault', desc: 'Gestión de colección personal y seguimiento de piezas del usuario.', icon: Archive, color: 'text-amber-500 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800' },
                 { id: 'compare', name: 'Comparador del Coleccionista', desc: 'Matriz comparativa de especificaciones técnicas, escalas y sellos.', icon: Scale, color: 'text-sky-500 bg-sky-50 dark:bg-sky-950/40 border-sky-200 dark:border-sky-800' },
                 { id: 'academy', name: 'Collector Academy', desc: 'Guías editoriales para coleccionistas, glosario y preservación.', icon: GraduationCap, color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800' },
-                { id: 'customs', name: 'Mi Franquicia / Import Hub', desc: 'Cálculo de franquicia uruguaya, aranceles y costos estimados en PDP.', icon: Truck, color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800' },
+                { id: 'customs', name: 'Import Hub (Mi Franquicia)', desc: 'Asesor de importaciones para Uruguay, comparador de couriers, aranceles y costo puesto en destino.', icon: Truck, color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800' },
               ].map(item => {
                 const currentRecord = toggles.find(t => t.id === item.id);
                 const isEnabled = currentRecord ? currentRecord.is_enabled : true;

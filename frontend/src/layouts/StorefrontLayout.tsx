@@ -352,15 +352,8 @@ export default function StorefrontLayout() {
       });
     }
 
-    if (features.importHubEnabled && !links.some(l => l.href === '/import-hub' || l.name?.toUpperCase().includes('IMPORT HUB'))) {
-      links.push({
-        name: 'IMPORT HUB',
-        href: '/import-hub'
-      });
-    }
-
     return links;
-  }, [t, settings, intlPublicEnabled, features.radarEnabled, features.collectorAcademyEnabled, features.comparatorEnabled, features.collectorVaultEnabled, features.importHubEnabled]);
+  }, [t, settings, intlPublicEnabled, features.radarEnabled, features.collectorAcademyEnabled, features.comparatorEnabled, features.collectorVaultEnabled]);
 
   const FOOTER_LINKS = useMemo(() => {
     const customFooterStr = settings['appearance_footer_menu_json'];
@@ -650,6 +643,11 @@ export default function StorefrontLayout() {
                              <Archive className="w-4 h-4" /> Mi Vault (Colección)
                           </Link>
                         )}
+                        {features.importHubEnabled && (
+                          <Link to="/import-hub" className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 text-sm font-bold text-indigo-400">
+                             <Truck className="w-4 h-4" /> Import Hub (Franquicia)
+                          </Link>
+                        )}
                         <Link to="/account" className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 text-sm font-bold text-slate-300">
                            <Package className="w-4 h-4" /> Mis pedidos
                         </Link>
@@ -884,7 +882,7 @@ export default function StorefrontLayout() {
                         </div>
                       </div>
                     </div>
-                    <div className={`grid ${features.collectorVaultEnabled ? 'grid-cols-2' : 'grid-cols-1'} gap-2 mt-2`}>
+                    <div className={`grid ${features.collectorVaultEnabled || features.importHubEnabled ? 'grid-cols-2' : 'grid-cols-1'} gap-2 mt-2`}>
                       {features.collectorVaultEnabled && (
                         <Link 
                           to="/vault" 
@@ -892,6 +890,15 @@ export default function StorefrontLayout() {
                           className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs font-bold text-amber-400 hover:text-white transition-colors min-h-[44px]"
                         >
                           <Archive className="w-3.5 h-3.5" /> Mi Vault
+                        </Link>
+                      )}
+                      {features.importHubEnabled && (
+                        <Link 
+                          to="/import-hub" 
+                          onClick={() => setMobileMenuOpen(false)}
+                          className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-xs font-bold text-indigo-400 hover:text-white transition-colors min-h-[44px]"
+                        >
+                          <Truck className="w-3.5 h-3.5" /> Import Hub
                         </Link>
                       )}
                       <Link 
