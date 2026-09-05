@@ -11,6 +11,7 @@ import { useCartContext } from '../contexts/CartContext';
 import { useWishlistContext } from '../contexts/WishlistContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocale } from '../contexts/LocaleContext';
+import { useFeatures } from '../contexts/FeatureToggleContext';
 import { useCategories, useBrands, useLicenses, useThemes } from '../hooks/useData';
 import LocaleSwitcher from '../components/LocaleSwitcher';
 import WhatsAppFAB from '../components/WhatsAppFAB';
@@ -174,6 +175,7 @@ export default function StorefrontLayout() {
   const { themes: activeThemes } = useThemes(true);
   const { settings, loaded: settingsLoaded } = useSiteSettings();
   const { publicEnabled: intlPublicEnabled } = useInternationalSettings();
+  const { features } = useFeatures();
   
 
   // Meta Pixel is already tracked globally by MetaPixelTracker in App.tsx
@@ -321,15 +323,15 @@ export default function StorefrontLayout() {
       links = links.filter(l => l.href !== '/intl' && l.href !== '/internacional' && l.name?.toUpperCase() !== 'INTERNACIONAL');
     }
 
-    // Mandatory Plugin Navigation links: RADAR and ACADEMY
-    if (!links.some(l => l.href === '/radar' || l.name?.toUpperCase() === 'RADAR')) {
+    // Plugin Navigation links: RADAR and ACADEMY (respects feature toggles)
+    if (features.radarEnabled && !links.some(l => l.href === '/radar' || l.name?.toUpperCase() === 'RADAR')) {
       links.push({
         name: 'RADAR',
         href: '/radar'
       });
     }
 
-    if (!links.some(l => l.href === '/academy' || l.name?.toUpperCase() === 'ACADEMY')) {
+    if (features.collectorAcademyEnabled && !links.some(l => l.href === '/academy' || l.name?.toUpperCase() === 'ACADEMY')) {
       links.push({
         name: 'ACADEMY',
         href: '/academy'
@@ -337,7 +339,7 @@ export default function StorefrontLayout() {
     }
 
     return links;
-  }, [t, settings, intlPublicEnabled]);
+  }, [t, settings, intlPublicEnabled, features.radarEnabled, features.collectorAcademyEnabled]);
 
   const FOOTER_LINKS = useMemo(() => {
     const customFooterStr = settings['appearance_footer_menu_json'];
@@ -555,22 +557,24 @@ export default function StorefrontLayout() {
             ))}
           </nav>
 
-          {/* SEARCH BOX (DESKTOP) */}
+            {/* SEARCH BOX (DESKTOP) */}
           <div className="hidden lg:flex flex-1 max-w-sm relative items-center">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
             <input 
               type="text" 
-              placeholder="Buscar figuras, marcas... o prueba IA ✨"
+              placeholder={features.aiSearchEnabled ? "Buscar figuras, marcas... o prueba IA ✨" : "Buscar figuras, marcas..."}
               className="w-full bg-white/5 border border-white/10 rounded-xl pl-11 pr-12 py-2.5 text-xs font-medium focus:border-[#f00856] focus:ring-1 focus:ring-[#f00856] transition-all outline-none"
               onKeyDown={e => e.key === 'Enter' && runSearch((e.target as HTMLInputElement).value)}
             />
-            <Link
-              to="/ai-search"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-lg bg-[#f00856]/20 text-[#f00856] hover:bg-[#f00856]/30 transition"
-              title="Búsqueda Inteligente con IA"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-            </Link>
+            {features.aiSearchEnabled && (
+              <Link
+                to="/ai-search"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-lg bg-[#f00856]/20 text-[#f00856] hover:bg-[#f00856]/30 transition"
+                title="Búsqueda Inteligente con IA"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+              </Link>
+            )}
           </div>
 
           {/* ACTIONS */}
@@ -580,14 +584,16 @@ export default function StorefrontLayout() {
             </div>
             
             {/* Quick search link on mobile header */}
-            <Link
-              to="/ai-search"
-              className="xl:hidden w-11 h-11 flex items-center justify-center rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-[#f00856]"
-              title="Búsqueda Inteligente con IA"
-              aria-label="Búsqueda Inteligente"
-            >
-              <Sparkles className="w-4 h-4" />
-            </Link>
+            {features.aiSearchEnabled && (
+              <Link
+                to="/ai-search"
+                className="xl:hidden w-11 h-11 flex items-center justify-center rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-[#f00856]"
+                title="Búsqueda Inteligente con IA"
+                aria-label="Búsqueda Inteligente"
+              >
+                <Sparkles className="w-4 h-4" />
+              </Link>
+            )}
 
             <Link 
               to="/wishlist" 

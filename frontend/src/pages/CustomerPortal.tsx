@@ -238,7 +238,7 @@ export default function CustomerPortal() {
           vendor:vendors(store_name, slug, logo_url, promotions_opt_in, company_name),
           vendor_store:vendor_stores(store_name, slug, logo_url),
           products (title, slug, images:product_images(url)),
-          international_order_items (id, purchase_status, zinc_order_id, tracking_number, carrier, tracking_url, final_price_usd, expected_delivery_date)
+          international_order_items (id, purchase_status, zinc_order_id, tracking_number, carrier, tracking_url, final_price_usd, estimated_delivery_to_courier)
         ),
         order_suborders (
           id, suborder_number, status, shipping_method, shipping_provider, shipping_cost, tracking_number, tracking_url, exchange_rate_value,

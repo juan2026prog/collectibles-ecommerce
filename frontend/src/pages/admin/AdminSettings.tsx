@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Save, ToggleLeft, ToggleRight, Settings, Store, Truck, Palette, LayoutTemplate, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, FileText, Share2, Link as LinkIcon, ImageIcon, CreditCard, ShieldCheck, Sparkles, Brain, Zap, Search as SearchIcon, Tag, Menu, Bell, RefreshCw, Info, Smartphone, Mail, MessageSquare, BellRing, CheckCircle2, AlertCircle as AlertCircleIcon, Globe, KeyRound } from 'lucide-react';
+import { Save, ToggleLeft, ToggleRight, Settings, Store, Truck, Palette, LayoutTemplate, Plus, Trash2, ChevronUp, ChevronDown, GripVertical, FileText, Share2, Link as LinkIcon, ImageIcon, CreditCard, ShieldCheck, Sparkles, Brain, Zap, Search as SearchIcon, Tag, Menu, Bell, RefreshCw, Info, Smartphone, Mail, MessageSquare, BellRing, CheckCircle2, AlertCircle as AlertCircleIcon, Globe, KeyRound, Sliders, Radio, Scale, Archive, GraduationCap } from 'lucide-react';
 import AdminInternationalSync from './AdminInternationalSync';
 import AdminZincConfig from '../../components/admin/AdminZincConfig';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
@@ -876,6 +876,7 @@ export default function AdminSettings() {
             className="w-full bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-900 dark:text-white shadow-2xs focus:ring-2 focus:ring-[#f00856] outline-none min-h-[44px] cursor-pointer"
           >
             <option value="general">Store Details / General</option>
+            <option value="modules">🧩 Módulos & Plugins (On/Off)</option>
             <option value="internacional">🌎 Compras Internacionales (Publicación y Cupos)</option>
             <option value="appearance">Theme Builder & Identidad</option>
             <option value="payments">Pasarelas de Pago</option>
@@ -891,6 +892,7 @@ export default function AdminSettings() {
           <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none no-scrollbar py-1 text-xs">
             {[
               { key: 'general', label: 'General', icon: Store },
+              { key: 'modules', label: 'Módulos & Plugins', icon: Sliders },
               { key: 'internacional', label: '🌎 Internacional', icon: Globe },
               { key: 'appearance', label: 'Theme Builder', icon: LayoutTemplate },
               { key: 'payments', label: 'Pasarelas de Pago', icon: CreditCard },
@@ -1787,25 +1789,114 @@ export default function AdminSettings() {
       
       {/* Modules Settings */}
       {currentTab === 'modules' && (
-        <div className="space-y-3 max-w-2xl">
-          <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl mb-4">
-             <h4 className="font-bold text-blue-900">Controladores de Arquitectura Modular</h4>
-             <p className="text-sm text-blue-700 mt-1">Apaga o enciende secciones completas de la plataforma. Los cambios tienen efecto inmediato en la carga de vistas.</p>
+        <div className="space-y-6 max-w-3xl">
+          <div className="bg-gradient-to-r from-slate-900 to-indigo-950 border border-white/10 p-5 rounded-2xl shadow-sm text-white">
+             <div className="flex items-center gap-3">
+               <div className="p-2.5 bg-indigo-500/20 border border-indigo-500/30 rounded-xl text-indigo-400">
+                 <Sliders className="w-5 h-5" />
+               </div>
+               <div>
+                 <h4 className="font-black text-base text-white">Controladores de Arquitectura Modular</h4>
+                 <p className="text-xs text-slate-300 mt-0.5">Activa o apaga funcionalidades completas en tiempo real. Los cambios se propagan de inmediato al catálogo, cabezal, menús y fichas de producto.</p>
+               </div>
+             </div>
           </div>
-          {toggles.map(t => (
-            <div key={t.id} className="bg-white rounded-xl border border-gray-200 p-4 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow">
-              <div>
-                <h4 className="font-bold text-gray-900">{t.name}</h4>
-                <p className="text-sm text-gray-500">{t.description}</p>
-              </div>
-              <button onClick={() => toggleModule(t.id, t.is_enabled)} className="p-1 hover:scale-105 transition-transform">
-                {t.is_enabled
-                  ? <ToggleRight className="w-10 h-10 text-green-500 drop-shadow-sm" />
-                  : <ToggleLeft className="w-10 h-10 text-gray-300" />
-                }
-              </button>
+
+          {/* Seccion 1: Plugins de Coleccionista */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[#f00856]"></span>
+              <h3 className="text-xs font-black uppercase tracking-widest text-gray-500 dark:text-slate-400">Plugins del Coleccionista (2026)</h3>
             </div>
-          ))}
+            
+            <div className="grid grid-cols-1 gap-3">
+              {[
+                { id: 'ai_search', name: 'Collectibles AI Search', desc: 'Buscador semántico asistido por IA y embeddings en catálogo y cabezal.', icon: Sparkles, color: 'text-fuchsia-500 bg-fuchsia-50 dark:bg-fuchsia-950/40 border-fuchsia-200 dark:border-fuchsia-800' },
+                { id: 'radar', name: 'Radar & Release Calendar', desc: 'Monitoreo de drops, calendario 2026/2027, alertas y waitlists.', icon: Radio, color: 'text-rose-500 bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800' },
+                { id: 'vault', name: 'My Vault / Collector Vault', desc: 'Gestión de colección personal y seguimiento de piezas del usuario.', icon: Archive, color: 'text-amber-500 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800' },
+                { id: 'compare', name: 'Comparador del Coleccionista', desc: 'Matriz comparativa de especificaciones técnicas, escalas y sellos.', icon: Scale, color: 'text-sky-500 bg-sky-50 dark:bg-sky-950/40 border-sky-200 dark:border-sky-800' },
+                { id: 'academy', name: 'Collector Academy', desc: 'Guías editoriales para coleccionistas, glosario y preservación.', icon: GraduationCap, color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800' },
+                { id: 'customs', name: 'Mi Franquicia / Import Hub', desc: 'Cálculo de franquicia uruguaya, aranceles y costos estimados en PDP.', icon: Truck, color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800' },
+              ].map(item => {
+                const currentRecord = toggles.find(t => t.id === item.id);
+                const isEnabled = currentRecord ? currentRecord.is_enabled : true;
+                const IconComponent = item.icon;
+
+                return (
+                  <div key={item.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-4 flex items-center justify-between shadow-sm hover:shadow-md transition-all gap-4">
+                    <div className="flex items-start gap-3.5 min-w-0">
+                      <div className={`p-2.5 rounded-xl border shrink-0 ${item.color}`}>
+                        <IconComponent className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-bold text-sm text-gray-900 dark:text-white">{item.name}</h4>
+                          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                            isEnabled 
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800' 
+                              : 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-slate-800 dark:text-gray-400 dark:border-slate-700'
+                          }`}>
+                            {isEnabled ? 'Activo' : 'Apagado'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{item.desc}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleModule(item.id, isEnabled)}
+                      className="p-1 hover:scale-105 transition-transform shrink-0 cursor-pointer focus:outline-none"
+                      title={isEnabled ? `Apagar ${item.name}` : `Encender ${item.name}`}
+                    >
+                      {isEnabled
+                        ? <ToggleRight className="w-11 h-11 text-emerald-500 drop-shadow-sm" />
+                        : <ToggleLeft className="w-11 h-11 text-gray-300 dark:text-slate-600" />
+                      }
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Seccion 2: Módulos Base de la Plataforma */}
+          <div className="space-y-3 pt-4 border-t border-gray-200 dark:border-slate-800">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+              <h3 className="text-xs font-black uppercase tracking-widest text-gray-500 dark:text-slate-400">Módulos Base de la Plataforma</h3>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3">
+              {toggles.filter(t => !['ai_search', 'radar', 'vault', 'compare', 'academy', 'customs'].includes(t.id)).map(t => (
+                <div key={t.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-4 flex items-center justify-between shadow-sm hover:shadow-md transition-all gap-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-bold text-sm text-gray-900 dark:text-white">{t.name}</h4>
+                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                        t.is_enabled 
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800' 
+                          : 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-slate-800 dark:text-gray-400 dark:border-slate-700'
+                      }`}>
+                        {t.is_enabled ? 'Activo' : 'Apagado'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{t.description}</p>
+                  </div>
+                  <button 
+                    type="button" 
+                    onClick={() => toggleModule(t.id, t.is_enabled)} 
+                    className="p-1 hover:scale-105 transition-transform shrink-0 cursor-pointer focus:outline-none"
+                    title={t.is_enabled ? `Apagar ${t.name}` : `Encender ${t.name}`}
+                  >
+                    {t.is_enabled
+                      ? <ToggleRight className="w-11 h-11 text-emerald-500 drop-shadow-sm" />
+                      : <ToggleLeft className="w-11 h-11 text-gray-300 dark:text-slate-600" />
+                    }
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 

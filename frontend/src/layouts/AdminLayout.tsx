@@ -5,7 +5,7 @@ import {
   Tag, Image, CreditCard, LayoutTemplate, Star, Percent, Megaphone,
   Mail, BarChart3, Search, ShieldCheck, Store, Share2, ExternalLink, Library, FileText,
   Globe, Download, RefreshCw, Award, Layers, KeyRound, Scale,
-  Sparkles, Radio, Archive, GraduationCap
+  Sparkles, Radio, Archive, GraduationCap, Sliders
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LocaleSwitcher from '../components/LocaleSwitcher';
@@ -49,6 +49,7 @@ export default function AdminLayout() {
     { name: 'Pedidos', path: '/admin/orders', icon: ShoppingBag },
     { name: 'Pasarelas de Pago', path: '/admin/settings?tab=payments', icon: CreditCard },
     { name: 'Configuracion', path: '/admin/settings', icon: Settings },
+    { name: 'Módulos & Plugins', path: '/admin/settings?tab=modules', icon: Sliders },
     { name: 'Clientes & CRM', path: '/admin/customers', icon: Users },
     { name: 'Mailing', path: '/admin/mailing', icon: Mail },
     { name: 'Finanzas & Facturas', path: '/admin/finances', icon: CreditCard },
