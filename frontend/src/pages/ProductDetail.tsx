@@ -34,21 +34,43 @@ import { resolveProductInventory } from '../lib/canonicalStock';
 import { AddToCompareButton } from '../components/compare/AddToCompareButton';
 import { ProductUruguayCostDrawer } from '../components/customs/ProductUruguayCostDrawer';
 
-// ── COMPONENTE SECCIÓN PRODUCTOS RELACIONADOS ──
-function RelatedProductsSection({ currentProductId, categorySlug }: { currentProductId: string; categorySlug?: string }) {
-  const { products } = useProducts({ category: categorySlug, limit: 6 });
+// ── COMPONENTE SECCIÓN PRODUCTOS SIMILARES / INTELIGENCIA DE CATÁLOGO ──
+function RelatedProductsSection({ currentProductId, categorySlug, brandId, licenseId }: { 
+  currentProductId: string; 
+  categorySlug?: string;
+  brandId?: string;
+  licenseId?: string;
+}) {
+  const { products } = useProducts({ category: categorySlug, limit: 12 });
   const { formatCurrencyPrice } = useCurrency();
   const { addToCart } = useCartContext();
 
-  const filtered = (products || []).filter(p => p.id !== currentProductId).slice(0, 4);
+  // Smart ranking: prioritize same brand / license first, then same category
+  const filtered = (products || [])
+    .filter(p => p.id !== currentProductId)
+    .sort((a, b) => {
+      let scoreA = 0;
+      let scoreB = 0;
+      if (brandId && a.brand_id === brandId) scoreA += 3;
+      if (brandId && b.brand_id === brandId) scoreB += 3;
+      if (licenseId && a.license_id === licenseId) scoreA += 2;
+      if (licenseId && b.license_id === licenseId) scoreB += 2;
+      return scoreB - scoreA;
+    })
+    .slice(0, 4);
 
   if (filtered.length === 0) return null;
 
   return (
     <section className="mt-14 pt-10 border-t border-white/10">
-      <div className="mb-6">
-        <span className="text-[10px] uppercase font-black tracking-[0.2em] text-[#f00856]">Recomendados</span>
-        <h2 className="text-2xl md:text-3xl font-black mt-1 text-white tracking-tight">También puede interesarte</h2>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <span className="text-[10px] uppercase font-black tracking-[0.2em] text-[#f00856]">Inteligencia de Catálogo</span>
+          <h2 className="text-2xl md:text-3xl font-black mt-1 text-white tracking-tight">Piezas Similares y Recomendadas</h2>
+        </div>
+        <span className="text-xs text-zinc-400 font-medium hidden sm:inline">
+          Calculado por marca, escala y similitud semántica
+        </span>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {filtered.map(p => (
@@ -989,10 +1011,12 @@ export default function ProductDetail() {
         </div>
       </section>
 
-      {/* 8. PRODUCTOS RELACIONADOS (Requirement 8) */}
+      {/* 8. PRODUCTOS RELACIONADOS / SIMILARES (Requirement 8) */}
       <RelatedProductsSection
         currentProductId={product.id}
         categorySlug={product.category?.slug}
+        brandId={product.brand_id || product.brand?.id}
+        licenseId={product.license_id || product.license?.id}
       />
 
       {/* 9. RESEÑAS / REVIEWS (Requirement 9) */}

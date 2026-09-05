@@ -5,6 +5,7 @@ import { Sparkles, Search, SlidersHorizontal, AlertCircle, ArrowRight, MessageSq
 import { ProductGridCard } from '../components/ProductGridCard';
 import { interpretUserQuery } from '../lib/search/aiQueryInterpreter';
 import type { AISearchQueryInterpretation } from '../lib/search/aiQueryInterpreter';
+import { queryCollectorKnowledge } from '../plugins/collector-academy/core/draftGuard';
 import SEO from '../components/SEO';
 
 export default function AISearchPage() {
@@ -60,8 +61,15 @@ export default function AISearchPage() {
         setProducts([]);
       }
 
-      // Generate conversational answer if intent is question/recommendation
-      if (interp.isQuestion || interp.intent === 'recommendation') {
+      // Generate conversational answer with Academy & Radar grounding if intent is question/recommendation
+      const groundedKnowledge = queryCollectorKnowledge(queryText);
+
+      if (groundedKnowledge) {
+        setAiAnswer(
+          `**${groundedKnowledge.title}:** ${groundedKnowledge.summary}\n\n` +
+          `• **Puntos Clave:** ${groundedKnowledge.keyDetails.join(' · ')}`
+        );
+      } else if (interp.isQuestion || interp.intent === 'recommendation') {
         setAiAnswer(
           `Analizamos tu consulta "${queryText}". Identificamos interés en ${interp.detectedBrand || 'coleccionables'} ` +
           `${interp.detectedScale ? `en escala ${interp.detectedScale}` : ''}. ` +

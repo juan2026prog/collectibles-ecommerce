@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { CheckCircle, Clock, Package, ArrowRight, Copy, Check, RefreshCcw, CreditCard } from 'lucide-react';
+import { CheckCircle, Clock, Package, ArrowRight, Copy, Check, RefreshCcw, CreditCard, Archive } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useCartContext } from '../contexts/CartContext';
 import { analytics } from '../lib/analytics';
@@ -230,7 +230,7 @@ export default function CheckoutSuccess() {
               </div>
               <div className="flex items-center justify-between py-2 border-t border-white/10">
                 <span className="text-sm text-slate-400">Metodo</span>
-                <span className="text-sm font-semibold text-gray-700 capitalize">
+                <span className="text-sm font-semibold text-gray-300 capitalize">
                   {order.payment_method === 'dlocalgo' || order.payment_method === 'dlocal'
                     ? 'Tarjeta / dLocal Go'
                     : order.payment_method === 'mercadopago'
@@ -248,6 +248,33 @@ export default function CheckoutSuccess() {
               </div>
             </>
           )}
+        </div>
+
+        {/* ═══ MY VAULT / COLLECTOR VAULT POST-CHECKOUT INTEGRATION ═══ */}
+        <div className="mb-8 p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-zinc-900 to-zinc-900 border border-amber-500/30 text-left flex items-start justify-between gap-4 shadow-lg">
+          <div className="flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0 mt-0.5">
+              <Archive size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-sm text-white">¿Quieres guardar estas piezas en tu Collector Vault?</h3>
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  Mi Colección
+                </span>
+              </div>
+              <p className="text-xs text-zinc-300 mt-1 leading-relaxed">
+                Haz seguimiento a tus figuras, controla el estado de entrega y lleva el inventario digital de tus piezas.
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/vault"
+            className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs shrink-0 transition flex items-center gap-1.5 shadow-md shadow-amber-500/20"
+          >
+            <span>Ir a Mi Vault</span>
+            <ArrowRight size={14} />
+          </Link>
         </div>
 
         <div className="flex items-center justify-center gap-3 mb-10">
