@@ -31,6 +31,7 @@ import AdminModeToggle from '../components/AdminModeToggle';
 import { ToastProvider } from '../components/admin/Toast';
 import { ImageProtectionGlobalListener } from '../hooks/useImageProtection';
 import { getDropdownMediaUrl } from '../utils/responsiveMedia';
+import { PredictiveSearchDropdown } from '../components/search/PredictiveSearchDropdown';
 import React from 'react';
 
 import { trackContact, trackFindLocation, generateMetaEventId } from '../lib/meta/metaPixel';
@@ -422,10 +423,17 @@ export default function StorefrontLayout() {
     }
   }, [settingsLoaded, settings]);
 
+  const [desktopSearchOpen, setDesktopSearchOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const desktopSearchRef = useRef<HTMLDivElement>(null);
+  const mobileSearchRef = useRef<HTMLDivElement>(null);
+
   // Close menus on route change
   useEffect(() => {
     setMobileMenuOpen(false);
     setSearchOpen(false);
+    setDesktopSearchOpen(false);
+    setMobileSearchOpen(false);
     setUserMenuOpen(false);
     
     // Capture affiliate code from URL if present
@@ -434,11 +442,17 @@ export default function StorefrontLayout() {
     if (ref) localStorage.setItem('affiliate_code', ref);
   }, [location.pathname, location.search]);
 
-  // Close user menu on outside click
+  // Close user menu and search dropdowns on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
         setUserMenuOpen(false);
+      }
+      if (desktopSearchRef.current && !desktopSearchRef.current.contains(e.target as Node)) {
+        setDesktopSearchOpen(false);
+      }
+      if (mobileSearchRef.current && !mobileSearchRef.current.contains(e.target as Node)) {
+        setMobileSearchOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClick);
@@ -572,13 +586,26 @@ export default function StorefrontLayout() {
           </nav>
 
             {/* SEARCH BOX (DESKTOP) */}
-          <div className="hidden lg:flex flex-1 max-w-sm relative items-center">
+          <div ref={desktopSearchRef} className="hidden lg:flex flex-1 max-w-sm relative items-center">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
             <input 
               type="text" 
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setDesktopSearchOpen(true);
+              }}
+              onFocus={() => setDesktopSearchOpen(true)}
               placeholder={features.aiSearchEnabled ? "Buscar figuras, marcas... o prueba IA ✨" : "Buscar figuras, marcas..."}
               className="w-full bg-white/5 border border-white/10 rounded-xl pl-11 pr-12 py-2.5 text-xs font-medium focus:border-[#f00856] focus:ring-1 focus:ring-[#f00856] transition-all outline-none"
-              onKeyDown={e => e.key === 'Enter' && runSearch((e.target as HTMLInputElement).value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  setDesktopSearchOpen(false);
+                  runSearch(searchQuery);
+                } else if (e.key === 'Escape') {
+                  setDesktopSearchOpen(false);
+                }
+              }}
             />
             {features.aiSearchEnabled && (
               <Link
@@ -589,6 +616,16 @@ export default function StorefrontLayout() {
                 <Sparkles className="w-3.5 h-3.5" />
               </Link>
             )}
+
+            <PredictiveSearchDropdown
+              query={searchQuery}
+              isOpen={desktopSearchOpen}
+              onClose={() => setDesktopSearchOpen(false)}
+              onSelectTerm={(term) => {
+                setSearchQuery(term);
+                runSearch(term);
+              }}
+            />
           </div>
 
           {/* ACTIONS */}
@@ -747,14 +784,15 @@ export default function StorefrontLayout() {
 
       {/* ═══ MOBILE HOME SEARCH BAR (NATURAL SCROLL, NOT STICKY) ═══ */}
       {isHome && (
-        <div className="lg:hidden bg-[#05070f] border-b border-white/10 px-4 py-2 relative z-[20]">
+        <div ref={mobileSearchRef} className="lg:hidden bg-[#05070f] border-b border-white/10 px-4 py-2 relative z-[90]">
           <form
             onSubmit={(e) => {
               e.preventDefault();
+              setMobileSearchOpen(false);
               const input = (e.currentTarget.querySelector('input') as HTMLInputElement)?.value?.trim();
               if (input) {
                 trackClarityEvent('home_search');
-                navigate(`/shop?q=${encodeURIComponent(input)}`);
+                runSearch(input);
               }
             }}
             className="relative flex items-center w-full"
@@ -762,9 +800,17 @@ export default function StorefrontLayout() {
             <Search className="absolute left-4 w-4 h-4 text-[#f00856] pointer-events-none" />
             <input 
               type="text" 
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setMobileSearchOpen(true);
+              }}
+              onFocus={() => setMobileSearchOpen(true)}
               placeholder={features.aiSearchEnabled ? "🔍 Buscar figuras... o prueba IA ✨" : "🔍 Buscar figuras, marcas..."}
-              defaultValue={searchQuery}
               className="w-full h-11 bg-white/5 border border-white/15 rounded-full pl-11 pr-12 py-2 text-xs font-semibold text-white placeholder-slate-400 focus:border-[#f00856] focus:ring-1 focus:ring-[#f00856] transition-all outline-none"
+              onKeyDown={e => {
+                if (e.key === 'Escape') setMobileSearchOpen(false);
+              }}
             />
             {features.aiSearchEnabled && (
               <Link
@@ -776,6 +822,16 @@ export default function StorefrontLayout() {
               </Link>
             )}
           </form>
+
+          <PredictiveSearchDropdown
+            query={searchQuery}
+            isOpen={mobileSearchOpen}
+            onClose={() => setMobileSearchOpen(false)}
+            onSelectTerm={(term) => {
+              setSearchQuery(term);
+              runSearch(term);
+            }}
+          />
         </div>
       )}
 
