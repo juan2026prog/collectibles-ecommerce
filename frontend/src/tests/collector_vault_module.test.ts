@@ -115,6 +115,19 @@ describe('COLLECTIBLES MY VAULT — Modular Test Suite', () => {
       expect(stats.amount_spent).toBeNull();
     });
 
+    it('handles empty items array safely with 0 values and non-crashing amount_spent', () => {
+      const emptyStats = calculateVaultStats([], 0, true);
+      expect(emptyStats.total_items).toBe(0);
+      expect(emptyStats.owned_count).toBe(0);
+      expect(emptyStats.preordered_count).toBe(0);
+      expect(emptyStats.amount_spent).toBe(0);
+      expect((emptyStats.amount_spent ?? 0).toFixed(2)).toBe('0.00');
+
+      const nonOwnerEmpty = calculateVaultStats([], 0, false);
+      expect(nonOwnerEmpty.amount_spent).toBeNull();
+      expect((nonOwnerEmpty.amount_spent ?? 0).toFixed(2)).toBe('0.00');
+    });
+
     it('generates breakdowns by brand, license and condition', () => {
       const brandBreakdown = calculateBrandBreakdown(sampleItems as any);
       expect(brandBreakdown['Hot Toys']).toBe(2);

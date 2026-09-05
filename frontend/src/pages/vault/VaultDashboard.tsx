@@ -71,15 +71,15 @@ export default function VaultDashboard() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-zinc-900/60 border border-white/10 rounded-2xl p-4">
           <span className="text-xs text-zinc-400 font-bold uppercase">Total en Bóveda</span>
-          <div className="text-3xl font-black text-white mt-1">{stats.totalItems}</div>
+          <div className="text-3xl font-black text-white mt-1">{stats.total_items || 0}</div>
         </div>
         <div className="bg-zinc-900/60 border border-white/10 rounded-2xl p-4">
           <span className="text-xs text-zinc-400 font-bold uppercase">En Posesión (Owned)</span>
-          <div className="text-3xl font-black text-emerald-400 mt-1">{stats.ownedItems}</div>
+          <div className="text-3xl font-black text-emerald-400 mt-1">{stats.owned_count || 0}</div>
         </div>
         <div className="bg-zinc-900/60 border border-white/10 rounded-2xl p-4">
           <span className="text-xs text-zinc-400 font-bold uppercase">En Pre-order</span>
-          <div className="text-3xl font-black text-sky-400 mt-1">{stats.preorderedItems}</div>
+          <div className="text-3xl font-black text-sky-400 mt-1">{stats.preordered_count || 0}</div>
         </div>
         <div className="bg-zinc-900/60 border border-white/10 rounded-2xl p-4">
           <span className="text-xs text-zinc-400 font-bold uppercase flex items-center gap-1">
@@ -87,7 +87,7 @@ export default function VaultDashboard() {
             Inversión Privada
           </span>
           <div className="text-3xl font-black text-amber-400 font-mono mt-1">
-            ${stats.totalSpent.toFixed(2)}
+            ${(stats.amount_spent ?? 0).toFixed(2)}
           </div>
         </div>
       </div>
