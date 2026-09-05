@@ -9,6 +9,7 @@ import { useWishlistContext } from '../contexts/WishlistContext';
 import { usePromotions, getApplicablePromotions, evaluateItemDiscountDetailed } from '../hooks/usePromotions';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { useLocale } from '../contexts/LocaleContext';
+import { useFeatures } from '../contexts/FeatureToggleContext';
 import { resolveImage, FALLBACK_IMAGE } from '../lib/imageUtils';
 import { useImageProtection } from '../hooks/useImageProtection';
 import { analytics } from '../lib/analytics';
@@ -84,6 +85,7 @@ export default function ProductDetail() {
   const { formatCurrencyPrice, selectedCurrency } = useCurrency();
   const { promotions } = usePromotions();
   const { toggleWishlist, isInWishlist } = useWishlistContext();
+  const { features } = useFeatures();
 
   const arShippingStatus = calculateArgentinaShippingStatus(product || {});
   
@@ -566,14 +568,16 @@ export default function ProductDetail() {
               )}
 
               {/* ESTIMACIÓN COSTO PUESTO EN URUGUAY (MI FRANQUICIA) */}
-              <button
-                type="button"
-                onClick={() => setShowCustomsDrawer(true)}
-                className="text-xs font-bold px-3 py-1 rounded-full border border-sky-500/30 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20 transition flex items-center gap-1.5 cursor-pointer shadow-sm"
-              >
-                <span>🇺🇾</span>
-                <span>Ver costo estimado puesto en Uruguay ›</span>
-              </button>
+              {features.customsFranchiseEnabled && (
+                <button
+                  type="button"
+                  onClick={() => setShowCustomsDrawer(true)}
+                  className="text-xs font-bold px-3 py-1 rounded-full border border-sky-500/30 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20 transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                >
+                  <span>🇺🇾</span>
+                  <span>Ver costo estimado puesto en Uruguay ›</span>
+                </button>
+              )}
 
               {selectedCurrency === 'ARS' && (
                 arShippingStatus.reasonCode === 'VENDOR_ARGENTINA_DISABLED' ? (
@@ -701,20 +705,26 @@ export default function ProductDetail() {
                 <span>{isInWishlist(product.id) ? 'En Favoritos' : 'Favoritos'}</span>
               </button>
 
-              <span className="text-white/20">|</span>
+              {features.collectorCompareEnabled && (
+                <>
+                  <span className="text-white/20">|</span>
+                  <AddToCompareButton productId={product.id} variant="button" />
+                </>
+              )}
 
-              <AddToCompareButton productId={product.id} variant="button" />
-
-              <span className="text-white/20">|</span>
-
-              <Link
-                to={`/vault/item/new?product_id=${product.id}&title=${encodeURIComponent(product.title)}`}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-zinc-800/80 hover:bg-zinc-700 text-amber-400 border border-amber-500/30 transition"
-                title="Agregar a mi colección personal en Collector Vault"
-              >
-                <Archive size={14} />
-                <span>Mi Vault</span>
-              </Link>
+              {features.collectorVaultEnabled && (
+                <>
+                  <span className="text-white/20">|</span>
+                  <Link
+                    to={`/vault/item/new?product_id=${product.id}&title=${encodeURIComponent(product.title)}`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-zinc-800/80 hover:bg-zinc-700 text-amber-400 border border-amber-500/30 transition"
+                    title="Agregar a mi colección personal en Collector Vault"
+                  >
+                    <Archive size={14} />
+                    <span>Mi Vault</span>
+                  </Link>
+                </>
+              )}
             </div>
           </div>
 

@@ -5,6 +5,7 @@ import { useProducts, useCategories, useBrands, useBanners, useProductGroups } f
 import { useCartContext } from '../contexts/CartContext';
 import { useLocale } from '../contexts/LocaleContext';
 import { useCurrency } from '../contexts/CurrencyContext';
+import { useFeatures } from '../contexts/FeatureToggleContext';
 import { ProductSkeleton } from '../components/Skeletons';
 import { ProductGridCard } from '../components/ProductGridCard';
 import { getProductImage } from '../lib/imageUtils';
@@ -247,6 +248,7 @@ export default function Home() {
   const cart = useCartContext();
   const { t } = useLocale();
   const { formatCurrencyPrice } = useCurrency();
+  const { features } = useFeatures();
 
   const displayedCategories = useMemo(() =>
     parseHomeCategories(settings['home_categories_config_json'], categories),
@@ -511,73 +513,91 @@ export default function Home() {
               ))}
             </div>
 
-            {/* COLLECTOR EXPERIENCE BAR (5 PLUGINS ACCESS) */}
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 md:gap-3">
-              <Link
-                to="/ai-search"
-                className="group flex items-center gap-2.5 p-2.5 md:p-3 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-[#f00856]/10 hover:border-[#f00856]/40 transition shadow-sm"
-              >
-                <div className="w-8 h-8 rounded-lg bg-[#f00856]/20 border border-[#f00856]/30 flex items-center justify-center shrink-0 text-[#f00856]">
-                  <Sparkles size={16} />
-                </div>
-                <div className="min-w-0">
-                  <span className="block text-[11px] md:text-xs font-black text-white group-hover:text-[#f00856] transition truncate">Búsqueda IA</span>
-                  <span className="text-[9px] text-zinc-400 hidden sm:block truncate">Buscador semántico</span>
-                </div>
-              </Link>
+            {/* COLLECTOR EXPERIENCE BAR (PLUGINS ACCESS - RESPECTS FEATURE TOGGLES) */}
+            {(() => {
+              const items = [
+                {
+                  id: 'ai_search',
+                  to: '/ai-search',
+                  show: features.aiSearchEnabled,
+                  title: 'Búsqueda IA',
+                  subtitle: 'Buscador semántico',
+                  icon: Sparkles,
+                  colorClass: 'text-[#f00856] bg-[#f00856]/20 border-[#f00856]/30',
+                  hoverClass: 'hover:bg-[#f00856]/10 hover:border-[#f00856]/40',
+                  hoverTextClass: 'group-hover:text-[#f00856]',
+                },
+                {
+                  id: 'radar',
+                  to: '/radar',
+                  show: features.radarEnabled,
+                  title: 'Radar Drops',
+                  subtitle: 'Calendario 2026/27',
+                  icon: Radio,
+                  colorClass: 'text-rose-400 bg-rose-500/20 border-rose-500/30',
+                  hoverClass: 'hover:bg-rose-500/10 hover:border-rose-500/40',
+                  hoverTextClass: 'group-hover:text-rose-400',
+                },
+                {
+                  id: 'vault',
+                  to: '/vault',
+                  show: features.collectorVaultEnabled,
+                  title: 'Mi Vault',
+                  subtitle: 'Mi colección personal',
+                  icon: Archive,
+                  colorClass: 'text-amber-400 bg-amber-500/20 border-amber-500/30',
+                  hoverClass: 'hover:bg-amber-500/10 hover:border-amber-500/40',
+                  hoverTextClass: 'group-hover:text-amber-400',
+                },
+                {
+                  id: 'compare',
+                  to: '/compare',
+                  show: features.collectorCompareEnabled,
+                  title: 'Comparador',
+                  subtitle: 'Escalas y specs',
+                  icon: Scale,
+                  colorClass: 'text-sky-400 bg-sky-500/20 border-sky-500/30',
+                  hoverClass: 'hover:bg-sky-500/10 hover:border-sky-500/40',
+                  hoverTextClass: 'group-hover:text-sky-400',
+                },
+                {
+                  id: 'academy',
+                  to: '/academy',
+                  show: features.collectorAcademyEnabled,
+                  title: 'Academy',
+                  subtitle: 'Guías y conservación',
+                  icon: GraduationCap,
+                  colorClass: 'text-emerald-400 bg-emerald-500/20 border-emerald-500/30',
+                  hoverClass: 'hover:bg-emerald-500/10 hover:border-emerald-500/40',
+                  hoverTextClass: 'group-hover:text-emerald-400',
+                },
+              ].filter(i => i.show);
 
-              <Link
-                to="/radar"
-                className="group flex items-center gap-2.5 p-2.5 md:p-3 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-rose-500/10 hover:border-rose-500/40 transition shadow-sm"
-              >
-                <div className="w-8 h-8 rounded-lg bg-rose-500/20 border border-rose-500/30 flex items-center justify-center shrink-0 text-rose-400">
-                  <Radio size={16} />
-                </div>
-                <div className="min-w-0">
-                  <span className="block text-[11px] md:text-xs font-black text-white group-hover:text-rose-400 transition truncate">Radar Drops</span>
-                  <span className="text-[9px] text-zinc-400 hidden sm:block truncate">Calendario 2026/27</span>
-                </div>
-              </Link>
+              if (items.length === 0) return null;
 
-              <Link
-                to="/vault"
-                className="group flex items-center gap-2.5 p-2.5 md:p-3 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-amber-500/10 hover:border-amber-500/40 transition shadow-sm"
-              >
-                <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center shrink-0 text-amber-400">
-                  <Archive size={16} />
+              return (
+                <div className={`grid grid-cols-2 sm:grid-cols-${Math.min(items.length, 5)} gap-2 md:gap-3`}>
+                  {items.map(item => {
+                    const IconComponent = item.icon;
+                    return (
+                      <Link
+                        key={item.id}
+                        to={item.to}
+                        className={`group flex items-center gap-2.5 p-2.5 md:p-3 rounded-xl border border-white/10 bg-white/[0.02] ${item.hoverClass} transition shadow-sm`}
+                      >
+                        <div className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${item.colorClass}`}>
+                          <IconComponent size={16} />
+                        </div>
+                        <div className="min-w-0">
+                          <span className={`block text-[11px] md:text-xs font-black text-white ${item.hoverTextClass} transition truncate`}>{item.title}</span>
+                          <span className="text-[9px] text-zinc-400 hidden sm:block truncate">{item.subtitle}</span>
+                        </div>
+                      </Link>
+                    );
+                  })}
                 </div>
-                <div className="min-w-0">
-                  <span className="block text-[11px] md:text-xs font-black text-white group-hover:text-amber-400 transition truncate">Mi Vault</span>
-                  <span className="text-[9px] text-zinc-400 hidden sm:block truncate">Mi colección personal</span>
-                </div>
-              </Link>
-
-              <Link
-                to="/compare"
-                className="group flex items-center gap-2.5 p-2.5 md:p-3 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-sky-500/10 hover:border-sky-500/40 transition shadow-sm"
-              >
-                <div className="w-8 h-8 rounded-lg bg-sky-500/20 border border-sky-500/30 flex items-center justify-center shrink-0 text-sky-400">
-                  <Scale size={16} />
-                </div>
-                <div className="min-w-0">
-                  <span className="block text-[11px] md:text-xs font-black text-white group-hover:text-sky-400 transition truncate">Comparador</span>
-                  <span className="text-[9px] text-zinc-400 hidden sm:block truncate">Escalas y specs</span>
-                </div>
-              </Link>
-
-              <Link
-                to="/academy"
-                className="col-span-2 sm:col-span-1 group flex items-center gap-2.5 p-2.5 md:p-3 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-emerald-500/10 hover:border-emerald-500/40 transition shadow-sm"
-              >
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0 text-emerald-400">
-                  <GraduationCap size={16} />
-                </div>
-                <div className="min-w-0">
-                  <span className="block text-[11px] md:text-xs font-black text-white group-hover:text-emerald-400 transition truncate">Academy</span>
-                  <span className="text-[9px] text-zinc-400 hidden sm:block truncate">Guías y conservación</span>
-                </div>
-              </Link>
-            </div>
+              );
+            })()}
           </section>
         );
 
