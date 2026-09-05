@@ -84,11 +84,11 @@ export const SourcingTable: React.FC<SourcingTableProps> = ({
   const isAllSelected = paginatedProducts.length > 0 && paginatedProducts.every(p => selectedIds.includes(p.id));
 
   return (
-    <div className="bg-dark-900 border border-white/10 rounded-2xl overflow-hidden shadow-xl">
-      <div className="overflow-x-auto custom-scrollbar">
+    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+      <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="border-b border-white/10 bg-dark-950/60 text-[11px] font-bold text-gray-400 uppercase tracking-wider select-none">
+            <tr className="border-b border-gray-200 bg-gray-50 text-[11px] font-bold text-gray-600 uppercase tracking-wider select-none">
               {columns.filter(c => c.visible).map(col => {
                 if (col.id === 'select') {
                   return (
@@ -97,7 +97,7 @@ export const SourcingTable: React.FC<SourcingTableProps> = ({
                         type="checkbox"
                         checked={isAllSelected}
                         onChange={onToggleSelectAll}
-                        className="rounded border-gray-600 bg-dark-800 text-primary-600 focus:ring-primary-500 w-3.5 h-3.5 cursor-pointer"
+                        className="rounded border-gray-300 text-[#f00856] focus:ring-[#f00856] w-3.5 h-3.5 cursor-pointer"
                       />
                     </th>
                   );
@@ -110,12 +110,12 @@ export const SourcingTable: React.FC<SourcingTableProps> = ({
                     key={col.id}
                     onClick={() => isSortable && handleSort(col.id)}
                     className={`py-3 px-3 whitespace-nowrap ${
-                      isSortable ? 'cursor-pointer hover:text-white transition-colors' : ''
+                      isSortable ? 'cursor-pointer hover:text-gray-900 transition-colors' : ''
                     }`}
                   >
                     <div className="flex items-center gap-1">
                       <span>{col.label}</span>
-                      {isSortable && <ArrowUpDown className="w-3 h-3 text-gray-500" />}
+                      {isSortable && <ArrowUpDown className="w-3 h-3 text-gray-400" />}
                     </div>
                   </th>
                 );
@@ -123,7 +123,7 @@ export const SourcingTable: React.FC<SourcingTableProps> = ({
             </tr>
           </thead>
 
-          <tbody>
+          <tbody className="divide-y divide-gray-100">
             {paginatedProducts.length > 0 ? (
               paginatedProducts.map(product => (
                 <SourcingTableRow
@@ -141,7 +141,7 @@ export const SourcingTable: React.FC<SourcingTableProps> = ({
               ))
             ) : (
               <tr>
-                <td colSpan={columns.filter(c => c.visible).length} className="py-16 text-center text-gray-400 text-sm">
+                <td colSpan={columns.filter(c => c.visible).length} className="py-16 text-center text-gray-500 text-sm">
                   No se encontraron productos con los criterios seleccionados.
                 </td>
               </tr>
@@ -151,7 +151,7 @@ export const SourcingTable: React.FC<SourcingTableProps> = ({
       </div>
 
       {/* Barra inferior de paginación */}
-      <div className="flex flex-col sm:flex-row items-center justify-between px-4 py-3 border-t border-white/10 bg-dark-950/40 text-xs text-gray-400 gap-3">
+      <div className="flex flex-col sm:flex-row items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50 text-xs text-gray-600 gap-3">
         <div className="flex items-center gap-2">
           <span>Filas por página:</span>
           <select
@@ -160,7 +160,7 @@ export const SourcingTable: React.FC<SourcingTableProps> = ({
               setPageSize(Number(e.target.value));
               setCurrentPage(1);
             }}
-            className="bg-dark-800 border border-white/10 rounded px-2 py-1 text-white text-xs"
+            className="bg-white border border-gray-300 rounded px-2 py-1 text-gray-800 text-xs shadow-sm focus:outline-none focus:border-[#f00856]"
           >
             <option value="25">25</option>
             <option value="50">50</option>
@@ -176,17 +176,17 @@ export const SourcingTable: React.FC<SourcingTableProps> = ({
           <button
             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
             disabled={currentPage === 1}
-            className="p-1 rounded bg-dark-800 hover:bg-dark-700 disabled:opacity-30 text-white transition-colors"
+            className="p-1.5 rounded-lg bg-white border border-gray-300 hover:bg-gray-100 disabled:opacity-40 text-gray-700 transition-colors shadow-sm"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <span className="font-mono text-white px-2">
+          <span className="font-mono text-gray-800 px-2 font-semibold">
             Página {currentPage} de {totalPages}
           </span>
           <button
             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
             disabled={currentPage >= totalPages}
-            className="p-1 rounded bg-dark-800 hover:bg-dark-700 disabled:opacity-30 text-white transition-colors"
+            className="p-1.5 rounded-lg bg-white border border-gray-300 hover:bg-gray-100 disabled:opacity-40 text-gray-700 transition-colors shadow-sm"
           >
             <ChevronRight className="w-4 h-4" />
           </button>

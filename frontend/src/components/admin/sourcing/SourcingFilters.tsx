@@ -76,8 +76,8 @@ export const SourcingFilters: React.FC<SourcingFiltersProps> = ({
             type="text"
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
-            placeholder="Buscar por título, personaje, marca, UPC o SKU..."
-            className="w-full bg-dark-900 border border-white/10 rounded-xl pl-9 pr-24 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 transition-colors"
+            placeholder="Buscar por título, personaje, marca, UPC, ASIN o SKU..."
+            className="w-full bg-white border border-gray-300 rounded-lg pl-9 pr-24 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#f00856] focus:ring-1 focus:ring-[#f00856] transition-colors shadow-sm"
           />
           <div className="absolute right-2 flex items-center gap-1">
             {localSearch && (
@@ -87,14 +87,14 @@ export const SourcingFilters: React.FC<SourcingFiltersProps> = ({
                   setLocalSearch('');
                   onChangeFilters({ ...filters, searchQuery: '' });
                 }}
-                className="p-1 text-gray-400 hover:text-white"
+                className="p-1 text-gray-400 hover:text-gray-600"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
             <button
               type="submit"
-              className="px-3 py-1 bg-primary-600 hover:bg-primary-500 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
+              className="px-3 py-1 bg-[#f00856] hover:bg-[#d0074a] text-white rounded-md text-xs font-semibold shadow-sm transition-colors"
             >
               Buscar
             </button>
@@ -104,10 +104,10 @@ export const SourcingFilters: React.FC<SourcingFiltersProps> = ({
         <button
           type="button"
           onClick={() => setShowAdvanced(!showAdvanced)}
-          className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border transition-all ${
+          className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg border transition-all shadow-sm ${
             showAdvanced || filters.brandFilter || filters.minMargin > 0
-              ? 'bg-primary-600/20 border-primary-500 text-primary-300'
-              : 'bg-dark-800 border-white/10 text-gray-300 hover:text-white hover:bg-dark-700'
+              ? 'bg-pink-50 border-pink-200 text-[#f00856]'
+              : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
           }`}
         >
           <Filter className="w-3.5 h-3.5" />
@@ -116,17 +116,17 @@ export const SourcingFilters: React.FC<SourcingFiltersProps> = ({
       </div>
 
       {/* Quick Filters Horizontales */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar text-xs">
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
         {QUICK_FILTER_BUTTONS.map(btn => {
           const isActive = filters.quickFilter === btn.id;
           return (
             <button
               key={btn.id}
               onClick={() => setQuickFilter(btn.id)}
-              className={`px-3 py-1.5 rounded-lg whitespace-nowrap font-medium transition-all ${
+              className={`px-3 py-1.5 rounded-lg whitespace-nowrap font-medium transition-all shadow-sm ${
                 isActive
-                  ? 'bg-primary-600 text-white shadow-sm font-semibold'
-                  : 'bg-dark-900/80 text-gray-400 hover:text-white hover:bg-dark-800 border border-white/5'
+                  ? 'bg-[#f00856] text-white font-semibold'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 hover:text-gray-900 border border-gray-200'
               }`}
             >
               {btn.label}
@@ -137,13 +137,13 @@ export const SourcingFilters: React.FC<SourcingFiltersProps> = ({
 
       {/* Panel de Filtros Avanzados Expandible */}
       {showAdvanced && (
-        <div className="bg-dark-900/95 border border-white/10 rounded-xl p-4 grid grid-cols-1 md:grid-cols-4 gap-4 animate-in fade-in slide-in-from-top-2 duration-150 text-xs">
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 grid grid-cols-1 md:grid-cols-4 gap-4 animate-in fade-in duration-150 text-xs shadow-sm">
           <div>
-            <label className="block text-gray-400 mb-1 font-medium">Marca / Fabricante</label>
+            <label className="block text-gray-700 mb-1 font-semibold">Marca / Fabricante</label>
             <select
               value={filters.brandFilter}
               onChange={(e) => onChangeFilters({ ...filters, brandFilter: e.target.value })}
-              className="w-full bg-dark-800 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-primary-500"
+              className="w-full bg-white border border-gray-300 rounded-lg px-2.5 py-1.5 text-gray-900 text-xs focus:outline-none focus:border-[#f00856]"
             >
               <option value="">Todas las marcas</option>
               {availableBrands.map(b => (
@@ -153,7 +153,7 @@ export const SourcingFilters: React.FC<SourcingFiltersProps> = ({
           </div>
 
           <div>
-            <label className="block text-gray-400 mb-1 font-medium">Margen Mínimo (%)</label>
+            <label className="block text-gray-700 mb-1 font-semibold">Margen Mínimo (%)</label>
             <div className="flex items-center gap-2">
               <input
                 type="range"
@@ -162,18 +162,18 @@ export const SourcingFilters: React.FC<SourcingFiltersProps> = ({
                 step="5"
                 value={filters.minMargin}
                 onChange={(e) => onChangeFilters({ ...filters, minMargin: Number(e.target.value) })}
-                className="w-full accent-primary-500 cursor-pointer"
+                className="w-full accent-[#f00856] cursor-pointer"
               />
-              <span className="text-white font-mono w-10 text-right">{filters.minMargin}%</span>
+              <span className="text-gray-900 font-mono font-bold w-10 text-right">{filters.minMargin}%</span>
             </div>
           </div>
 
           <div>
-            <label className="block text-gray-400 mb-1 font-medium">Authenticity Gate</label>
+            <label className="block text-gray-700 mb-1 font-semibold">Authenticity Gate</label>
             <select
               value={filters.authenticityStatus}
               onChange={(e) => onChangeFilters({ ...filters, authenticityStatus: e.target.value })}
-              className="w-full bg-dark-800 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-primary-500"
+              className="w-full bg-white border border-gray-300 rounded-lg px-2.5 py-1.5 text-gray-900 text-xs focus:outline-none focus:border-[#f00856]"
             >
               <option value="all">Cualquier estado</option>
               <option value="VERIFIED_OFFICIAL">Solo Oficial Verificado (100%)</option>
@@ -192,11 +192,11 @@ export const SourcingFilters: React.FC<SourcingFiltersProps> = ({
                 onlyOfficialVerified: true,
                 authenticityStatus: 'all'
               })}
-              className="text-gray-400 hover:text-white underline text-xs"
+              className="text-gray-500 hover:text-gray-800 underline text-xs font-medium"
             >
-              Limpiar todos los filtros
+              Limpiar filtros
             </button>
-            <span className="text-gray-400 font-mono text-[11px]">
+            <span className="text-gray-500 font-mono text-[11px]">
               Mostrando {filteredResultsCount} de {totalResultsCount}
             </span>
           </div>

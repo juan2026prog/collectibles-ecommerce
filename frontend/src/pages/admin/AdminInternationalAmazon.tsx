@@ -706,17 +706,17 @@ export default function AdminInternationalAmazon() {
       </div>
 
       {/* Banner Sourcing & Importación Multifuente V2 */}
-      <div className="bg-gradient-to-r from-rose-950/90 via-dark-900 to-rose-950/90 p-4 rounded-xl border border-rose-500/40 flex items-center justify-between text-white shadow-lg">
+      <div className="bg-pink-50/60 p-4 rounded-xl border border-pink-200 flex items-center justify-between text-gray-900 shadow-sm">
         <div className="flex items-center gap-3">
-          <Sparkles className="w-5 h-5 text-rose-400 shrink-0" />
+          <Sparkles className="w-5 h-5 text-[#f00856] shrink-0" />
           <div>
-            <h3 className="text-sm font-bold text-white">NUEVA HERRAMIENTA DISPONIBLE: SOURCING & IMPORTACIÓN MULTIFUENTE V2</h3>
-            <p className="text-xs text-gray-300">Selección multifuente (Amazon, Best Buy, eBay) · Deduplicación · Authenticity Gate · Costo puesto · Margen · Mercado Uruguay.</p>
+            <h3 className="text-sm font-bold text-gray-900">NUEVA HERRAMIENTA DISPONIBLE: SOURCING & IMPORTACIÓN MULTIFUENTE V2</h3>
+            <p className="text-xs text-gray-600">Selección multifuente (Amazon, Best Buy, eBay) · Deduplicación · Authenticity Gate · Costo puesto · Margen · Mercado Uruguay.</p>
           </div>
         </div>
         <a
           href="/admin/internacional/sourcing"
-          className="px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg text-xs font-bold whitespace-nowrap shadow-sm transition-all"
+          className="px-4 py-2 bg-[#f00856] hover:bg-[#d0074a] text-white rounded-lg text-xs font-bold whitespace-nowrap shadow-sm transition-all"
         >
           Ir a Sourcing & Importación →
         </a>

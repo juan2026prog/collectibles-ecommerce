@@ -129,23 +129,23 @@ export const SourcingResearchPackModal: React.FC<SourcingResearchPackModalProps>
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-dark-900 border border-white/15 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+      <div className="bg-white border border-gray-200 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in fade-in duration-150">
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-white/10 bg-dark-950/50">
+        <div className="flex items-center justify-between p-5 border-b border-gray-200 bg-gray-50/80">
           <div>
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-primary-500" />
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-[#f00856]" />
               Cargar Investigación de Productos
             </h2>
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="text-xs text-gray-500 mt-0.5">
               Cargue listas o Research Packs de ChatGPT, Amazon, Best Buy o eBay sin límites.
             </p>
           </div>
           <button
             onClick={onClose}
             disabled={processingStatus !== null}
-            className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-dark-800 transition-colors"
+            className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -153,19 +153,19 @@ export const SourcingResearchPackModal: React.FC<SourcingResearchPackModalProps>
 
         {/* Progress Bar Si está procesando */}
         {processingStatus !== null && (
-          <div className="p-6 bg-dark-950/80 border-b border-white/10 text-center space-y-3">
-            <Loader2 className="w-8 h-8 text-primary-500 animate-spin mx-auto" />
+          <div className="p-6 bg-gray-50 border-b border-gray-200 text-center space-y-3">
+            <Loader2 className="w-8 h-8 text-[#f00856] animate-spin mx-auto" />
             <div>
-              <span className="font-bold text-sm text-white block">
+              <span className="font-bold text-sm text-gray-900 block">
                 Fase de Procesamiento: {processingStatus}
               </span>
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-gray-500">
                 Resolviendo retailers, verificando originalidad y calculando cotizaciones...
               </span>
             </div>
-            <div className="w-full bg-dark-800 h-2 rounded-full overflow-hidden">
+            <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
               <div
-                className="bg-primary-500 h-full transition-all duration-300"
+                className="bg-[#f00856] h-full transition-all duration-300"
                 style={{ width: `${progressPercent}%` }}
               ></div>
             </div>
@@ -175,24 +175,24 @@ export const SourcingResearchPackModal: React.FC<SourcingResearchPackModalProps>
         {/* Selector de Pestañas */}
         {processingStatus === null && (
           <div>
-            <div className="flex border-b border-white/10 bg-dark-950/30 text-xs">
+            <div className="flex border-b border-gray-200 bg-gray-50/60 text-xs">
               <button
                 onClick={() => setActiveTab('sample')}
                 className={`flex-1 py-3 px-4 font-semibold text-center transition-all ${
                   activeTab === 'sample'
-                    ? 'text-primary-400 border-b-2 border-primary-500 bg-dark-900'
-                    : 'text-gray-400 hover:text-white'
+                    ? 'text-[#f00856] border-b-2 border-[#f00856] bg-white font-bold shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/60'
                 }`}
               >
-                ⭐ Pack de Prueba Repo
+                ⭐ Pack de Prueba
               </button>
 
               <button
                 onClick={() => setActiveTab('urls')}
                 className={`flex-1 py-3 px-4 font-semibold text-center transition-all ${
                   activeTab === 'urls'
-                    ? 'text-primary-400 border-b-2 border-primary-500 bg-dark-900'
-                    : 'text-gray-400 hover:text-white'
+                    ? 'text-[#f00856] border-b-2 border-[#f00856] bg-white font-bold shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/60'
                 }`}
               >
                 🔗 Pegar URLs
@@ -202,8 +202,8 @@ export const SourcingResearchPackModal: React.FC<SourcingResearchPackModalProps>
                 onClick={() => setActiveTab('json')}
                 className={`flex-1 py-3 px-4 font-semibold text-center transition-all ${
                   activeTab === 'json'
-                    ? 'text-primary-400 border-b-2 border-primary-500 bg-dark-900'
-                    : 'text-gray-400 hover:text-white'
+                    ? 'text-[#f00856] border-b-2 border-[#f00856] bg-white font-bold shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/60'
                 }`}
               >
                 📄 JSON Versionado
@@ -213,8 +213,8 @@ export const SourcingResearchPackModal: React.FC<SourcingResearchPackModalProps>
                 onClick={() => setActiveTab('csv')}
                 className={`flex-1 py-3 px-4 font-semibold text-center transition-all ${
                   activeTab === 'csv'
-                    ? 'text-primary-400 border-b-2 border-primary-500 bg-dark-900'
-                    : 'text-gray-400 hover:text-white'
+                    ? 'text-[#f00856] border-b-2 border-[#f00856] bg-white font-bold shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/60'
                 }`}
               >
                 📊 CSV / Archivo
@@ -224,8 +224,8 @@ export const SourcingResearchPackModal: React.FC<SourcingResearchPackModalProps>
             {/* Contenido por Pestaña */}
             <div className="p-6 space-y-4">
               {errorMsg && (
-                <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-400 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
                   <span>{errorMsg}</span>
                 </div>
               )}
@@ -233,19 +233,19 @@ export const SourcingResearchPackModal: React.FC<SourcingResearchPackModalProps>
               {/* TAB 1: SAMPLE PACK REPO */}
               {activeTab === 'sample' && (
                 <div className="space-y-4 text-xs">
-                  <div className="bg-dark-800/60 border border-white/10 rounded-xl p-4 space-y-2">
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-sm text-white">
+                      <span className="font-bold text-sm text-gray-900">
                         {SAMPLE_MCFARLANE_RESEARCH_PACK.title}
                       </span>
-                      <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-semibold text-[11px]">
+                      <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold text-[11px]">
                         v{SAMPLE_MCFARLANE_RESEARCH_PACK.schema_version}
                       </span>
                     </div>
-                    <p className="text-gray-400">
+                    <p className="text-gray-600">
                       Incluye figuras oficiales de Batman Detective Comics, Spawn Deluxe, Superman y Ghostbusters cruzadas entre Amazon, Best Buy y eBay para demostrar deduplicación y selección de mejor fuente.
                     </p>
-                    <div className="flex items-center gap-4 text-gray-300 font-mono text-[11px] pt-1">
+                    <div className="flex items-center gap-4 text-gray-700 font-mono text-[11px] pt-1">
                       <span>• {SAMPLE_MCFARLANE_RESEARCH_PACK.items.length} items de prueba</span>
                       <span>• 3 retailers incluidos</span>
                       <span>• Oficialmente licenciados</span>
@@ -254,7 +254,7 @@ export const SourcingResearchPackModal: React.FC<SourcingResearchPackModalProps>
 
                   <button
                     onClick={handleLoadSample}
-                    className="w-full py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl font-bold shadow-lg shadow-primary-600/20 flex items-center justify-center gap-2 transition-all"
+                    className="w-full py-2.5 bg-[#f00856] hover:bg-[#d0074a] text-white rounded-xl font-bold shadow-md flex items-center justify-center gap-2 transition-all hover:shadow-lg"
                   >
                     <span>Cargar e Iniciar Sourcing de Prueba</span>
                     <ArrowRight className="w-4 h-4" />
@@ -266,18 +266,18 @@ export const SourcingResearchPackModal: React.FC<SourcingResearchPackModalProps>
               {activeTab === 'urls' && (
                 <div className="space-y-4 text-xs">
                   <div>
-                    <label className="block text-gray-400 mb-1 font-medium">Nombre de la Investigación</label>
+                    <label className="block text-gray-700 mb-1 font-semibold">Nombre de la Investigación</label>
                     <input
                       type="text"
                       value={titleInput}
                       onChange={(e) => setTitleInput(e.target.value)}
                       placeholder="Ej. Figuras DC McFarlane Septiembre 2026"
-                      className="w-full bg-dark-800 border border-white/10 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-primary-500"
+                      className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-xs focus:outline-none focus:border-[#f00856] shadow-xs"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-gray-400 mb-1 font-medium">
+                    <label className="block text-gray-700 mb-1 font-semibold">
                       Pegar lista de links (Amazon, Best Buy, eBay...)
                     </label>
                     <textarea
@@ -285,16 +285,16 @@ export const SourcingResearchPackModal: React.FC<SourcingResearchPackModalProps>
                       value={urlsText}
                       onChange={(e) => setUrlsText(e.target.value)}
                       placeholder={`https://www.amazon.com/dp/B081VR7Y32\nhttps://www.bestbuy.com/site/.../6412345.p\nhttps://www.ebay.com/itm/324123456789`}
-                      className="w-full bg-dark-800 border border-white/10 rounded-lg p-3 font-mono text-xs text-white focus:outline-none focus:border-primary-500"
+                      className="w-full bg-white border border-gray-300 rounded-lg p-3 font-mono text-xs text-gray-900 focus:outline-none focus:border-[#f00856] shadow-xs"
                     />
-                    <span className="text-gray-500 text-[11px]">
+                    <span className="text-gray-500 text-[11px] mt-1 block">
                       Una URL por línea. El sistema detectará automáticamente el retailer y agrupará duplicados.
                     </span>
                   </div>
 
                   <button
                     onClick={handleLoadUrls}
-                    className="w-full py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 transition-all"
+                    className="w-full py-2.5 bg-[#f00856] hover:bg-[#d0074a] text-white rounded-xl font-bold shadow-md flex items-center justify-center gap-2 transition-all hover:shadow-lg"
                   >
                     <span>Procesar URLs</span>
                     <ArrowRight className="w-4 h-4" />
@@ -307,8 +307,8 @@ export const SourcingResearchPackModal: React.FC<SourcingResearchPackModalProps>
                 <div className="space-y-4 text-xs">
                   <div>
                     <div className="flex justify-between items-center mb-1">
-                      <label className="text-gray-400 font-medium">JSON de ChatGPT Research Pack (Schema v1.0)</label>
-                      <label className="text-primary-400 hover:underline cursor-pointer flex items-center gap-1">
+                      <label className="text-gray-700 font-semibold">JSON de ChatGPT Research Pack (Schema v1.0)</label>
+                      <label className="text-[#f00856] hover:underline cursor-pointer flex items-center gap-1 font-semibold">
                         <Upload className="w-3.5 h-3.5" />
                         <span>Subir archivo .json</span>
                         <input type="file" accept=".json" onChange={handleFileUpload} className="hidden" />
@@ -319,13 +319,13 @@ export const SourcingResearchPackModal: React.FC<SourcingResearchPackModalProps>
                       value={jsonText}
                       onChange={(e) => setJsonText(e.target.value)}
                       placeholder={`{\n  "schema_version": "1.0",\n  "pack_id": "mcfarlane-2026-09",\n  "title": "McFarlane US",\n  "items": [\n    { "url": "https://...", "brand": "McFarlane Toys", "license": "DC Comics" }\n  ]\n}`}
-                      className="w-full bg-dark-800 border border-white/10 rounded-lg p-3 font-mono text-xs text-white focus:outline-none focus:border-primary-500"
+                      className="w-full bg-white border border-gray-300 rounded-lg p-3 font-mono text-xs text-gray-900 focus:outline-none focus:border-[#f00856] shadow-xs"
                     />
                   </div>
 
                   <button
                     onClick={handleLoadJson}
-                    className="w-full py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 transition-all"
+                    className="w-full py-2.5 bg-[#f00856] hover:bg-[#d0074a] text-white rounded-xl font-bold shadow-md flex items-center justify-center gap-2 transition-all hover:shadow-lg"
                   >
                     <span>Validar y Cargar Research Pack</span>
                     <ArrowRight className="w-4 h-4" />
@@ -338,8 +338,8 @@ export const SourcingResearchPackModal: React.FC<SourcingResearchPackModalProps>
                 <div className="space-y-4 text-xs">
                   <div>
                     <div className="flex justify-between items-center mb-1">
-                      <label className="text-gray-400 font-medium">Contenido CSV con encabezados (url, brand, license, price...)</label>
-                      <label className="text-primary-400 hover:underline cursor-pointer flex items-center gap-1">
+                      <label className="text-gray-700 font-semibold">Contenido CSV con encabezados (url, brand, license, price...)</label>
+                      <label className="text-[#f00856] hover:underline cursor-pointer flex items-center gap-1 font-semibold">
                         <Upload className="w-3.5 h-3.5" />
                         <span>Subir .csv</span>
                         <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
@@ -350,13 +350,13 @@ export const SourcingResearchPackModal: React.FC<SourcingResearchPackModalProps>
                       value={csvText}
                       onChange={(e) => setCsvText(e.target.value)}
                       placeholder={`url,brand,license,price\nhttps://www.amazon.com/dp/B081VR7Y32,McFarlane Toys,DC Comics,26.00\nhttps://www.bestbuy.com/site/.../6412345.p,McFarlane Toys,DC Comics,24.99`}
-                      className="w-full bg-dark-800 border border-white/10 rounded-lg p-3 font-mono text-xs text-white focus:outline-none focus:border-primary-500"
+                      className="w-full bg-white border border-gray-300 rounded-lg p-3 font-mono text-xs text-gray-900 focus:outline-none focus:border-[#f00856] shadow-xs"
                     />
                   </div>
 
                   <button
                     onClick={handleLoadCsv}
-                    className="w-full py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 transition-all"
+                    className="w-full py-2.5 bg-[#f00856] hover:bg-[#d0074a] text-white rounded-xl font-bold shadow-md flex items-center justify-center gap-2 transition-all hover:shadow-lg"
                   >
                     <span>Importar CSV</span>
                     <ArrowRight className="w-4 h-4" />
