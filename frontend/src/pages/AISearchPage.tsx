@@ -3,7 +3,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { 
   Sparkles, Search, Camera, X, RefreshCw, MessageSquare, 
-  Radio, BookOpen, ArrowRight, Bell, Check
+  Radio, BookOpen, ArrowRight, Bell, Check, ChevronDown, HelpCircle
 } from 'lucide-react';
 import { ProductGridCard } from '../components/ProductGridCard';
 import { interpretUserQuery } from '../lib/search/aiQueryInterpreter';
@@ -15,50 +15,33 @@ import { getProductImage } from '../lib/imageUtils';
 import { resolveCartItemPrice } from '../lib/priceResolver';
 import SEO from '../components/SEO';
 
-const REFERENCE_QUESTION_GROUPS: string[][] = [
-  // Grupo A: Búsqueda por producto + Pregunta conceptual + Recomendación
-  [
-    'Batman de unos 18 cm por menos de USD 50',
-    '¿Qué es una figura Chase?',
-    'Mejor figura 1:12 de Marvel para empezar',
-  ],
-  // Grupo B
-  [
-    'Figuras de terror que no sean Funko',
-    '¿Cómo detecto un bootleg?',
-    'Hot Toys que pueda traer usando franquicia',
-  ],
-  // Grupo C
-  [
-    'Algo parecido a NECA Ultimate Michael Myers',
-    '¿Qué escala es más grande, 1:6 o 1:10?',
-    'Iron Studios vs Sideshow en resina',
-  ],
-  // Grupo D
-  [
-    'Pokémon para regalar por menos de $2.000',
-    '¿Qué es resina Polystone?',
-    'S.H.Figuarts vs Mezco para articulación',
-  ],
-  // Grupo E
-  [
-    'Quiero una figura 1:12 de Marvel',
-    '¿Qué significa MISB?',
-    'Mejor Batman 1:10 calidad/precio',
-  ],
-  // Grupo F
-  [
-    'Dragon Ball escala 1:12 articuladas',
-    '¿Qué materiales usan las estatuas?',
-    'Funko Pop exclusivos 2026',
-  ],
+const REFERENCE_QUESTIONS_POOL: string[] = [
+  'De la Wave 3 de DC Multiverse de McFarlane, ¿qué tenés disponible?',
+  '¿Qué figuras de la misma wave que este producto puedo comprar ahora?',
+  'Mostrame figuras de terror de NECA Ultimate que estén disponibles en Uruguay.',
+  'Quiero una figura de Batman de unos 18 cm, que no sea Funko y cueste menos de USD 80.',
+  '¿Qué figuras 1:12 de Marvel tengo disponibles y cuáles combinan mejor entre sí?',
+  '¿Qué preventas de Dragon Ball están abiertas y cuáles salen próximamente?',
+  '¿Qué productos nuevos de McFarlane llegaron últimamente?',
+  '¿Qué Hot Toys de Star Wars puedo comprar o traer actualmente?',
+  'Tengo esta figura de NECA. ¿Qué otras piezas de la misma línea me recomendarías mirar?',
+  'De esta colección, ¿qué piezas me faltan y cuáles están disponibles ahora?',
+  'Tengo USD 150 de presupuesto total. ¿Qué figuras puedo comprar incluyendo el costo estimado de traerlas a Uruguay?',
+  '¿Qué lanzamientos próximos coinciden con las marcas y líneas que colecciono?'
 ];
 
-/** Selecciona el grupo de 3 preguntas de referencia que corresponde según la hora actual (rota cada 4 horas). */
+/** Selecciona 3 preguntas pseudo-aleatorias deterministas que rotan cada 2 horas */
 function getActiveReferenceQuestions(): string[] {
-  const hourSlot = Math.floor(Date.now() / (4 * 60 * 60 * 1000));
-  const index = hourSlot % REFERENCE_QUESTION_GROUPS.length;
-  return REFERENCE_QUESTION_GROUPS[index];
+  const twoHourSlot = Math.floor(Date.now() / (2 * 60 * 60 * 1000));
+  const pool = [...REFERENCE_QUESTIONS_POOL];
+  
+  let seed = twoHourSlot;
+  for (let i = pool.length - 1; i > 0; i--) {
+    seed = (seed * 9301 + 49297) % 233280;
+    const j = Math.floor((seed / 233280) * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, 3);
 }
 
 
@@ -156,6 +139,21 @@ export default function AISearchPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [analyzingImage, setAnalyzingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Reference Questions Dropdown State
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     if (queryParam.trim()) {
@@ -393,23 +391,51 @@ export default function AISearchPage() {
           </div>
         </form>
 
-        {/* Reference Questions (rotate every 4 hours) */}
+        {/* Dropdown Menu: 3 Reference Questions (rotate every 2 hours) */}
         {!queryParam && (
-          <div className="space-y-2 pt-1">
-            <span className="text-zinc-500 text-[11px] font-semibold uppercase tracking-wider">Prueba preguntar:</span>
-            <div className="flex flex-col gap-2">
-              {getActiveReferenceQuestions().map(q => (
-                <button
-                  key={q}
-                  type="button"
-                  onClick={() => handleChipClick(q)}
-                  className="w-full text-left px-4 py-2.5 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-white/5 hover:border-fuchsia-500/30 text-zinc-300 hover:text-white transition-all text-sm cursor-pointer group flex items-center gap-3"
-                >
-                  <Search size={14} className="text-zinc-600 group-hover:text-fuchsia-400 shrink-0 transition-colors" />
-                  <span className="line-clamp-1">{q}</span>
-                </button>
-              ))}
+          <div className="relative pt-1" ref={dropdownRef}>
+            <div className="flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-white/10 hover:border-fuchsia-500/40 text-xs font-semibold text-zinc-300 hover:text-white transition-all shadow-sm cursor-pointer"
+              >
+                <Sparkles size={13} className="text-fuchsia-400" />
+                <span>Ejemplos de preguntas recomendadas (3)</span>
+                <ChevronDown size={14} className={`text-zinc-400 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180 text-fuchsia-400' : ''}`} />
+              </button>
+
+              <span className="text-[11px] text-zinc-500 hidden sm:inline">
+                Rotan cada 2 horas
+              </span>
             </div>
+
+            {/* Dropdown Content */}
+            {isDropdownOpen && (
+              <div className="absolute left-0 right-0 mt-2 p-2 bg-zinc-950/95 border border-fuchsia-500/30 rounded-2xl shadow-2xl backdrop-blur-xl z-50 space-y-1.5 animate-fade-in">
+                <div className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-zinc-400 border-b border-white/10 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-fuchsia-400">
+                    <HelpCircle size={12} />
+                    Preguntas de referencia activas
+                  </span>
+                  <span className="text-[10px] text-zinc-500 font-normal">3 de 12 preguntas</span>
+                </div>
+                {getActiveReferenceQuestions().map((q, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      handleChipClick(q);
+                      setIsDropdownOpen(false);
+                    }}
+                    className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-fuchsia-950/40 border border-transparent hover:border-fuchsia-500/30 text-xs text-zinc-200 hover:text-white transition flex items-start gap-2.5 cursor-pointer group"
+                  >
+                    <Search size={13} className="text-zinc-500 group-hover:text-fuchsia-400 mt-0.5 shrink-0 transition-colors" />
+                    <span className="leading-relaxed">{q}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
