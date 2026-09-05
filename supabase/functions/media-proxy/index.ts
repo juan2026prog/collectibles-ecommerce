@@ -29,7 +29,18 @@ serve(async (req) => {
       return new Response("Invalid URL format", { status: 400 });
     }
 
-    if (!parsedTarget.hostname.endsWith('amazon.com') && parsedTarget.hostname !== 'via.placeholder.com') {
+    const hostname = parsedTarget.hostname.toLowerCase();
+    const isAllowed = 
+      hostname.endsWith('amazon.com') ||
+      hostname.endsWith('media-amazon.com') ||
+      hostname.endsWith('ssl-images-amazon.com') ||
+      hostname.endsWith('images-amazon.com') ||
+      hostname.endsWith('ebayimg.com') ||
+      hostname.endsWith('walmartimages.com') ||
+      hostname.includes('supabase.co') ||
+      hostname === 'via.placeholder.com';
+
+    if (!isAllowed) {
       return new Response("Domain not allowed for proxy", { status: 403 });
     }
 

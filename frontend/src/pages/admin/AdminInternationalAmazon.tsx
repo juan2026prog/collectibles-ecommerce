@@ -652,10 +652,8 @@ export default function AdminInternationalAmazon() {
     }
   }
 
-  const getProxyImageUrl = (url: string) => {
-    if (!url) return '';
-    const baseUrl = import.meta.env.VITE_SUPABASE_URL;
-    return `${baseUrl}/functions/v1/media-proxy?url=${encodeURIComponent(url)}`;
+  const getCandidateImageUrl = (c: any) => {
+    return c?.image_url || c?.main_image_url_external || c?.raw_data?.image || '';
   };
 
   const getCategoryName = (id: string) => {
@@ -992,9 +990,9 @@ export default function AdminInternationalAmazon() {
                   </td>
                   <td className="px-4 py-4">
                     <div className="w-16 h-16 bg-white border rounded overflow-hidden flex items-center justify-center p-1 relative">
-                      {(c.image_url || c.main_image_url_external || c.raw_data?.image) ? (
+                      {getCandidateImageUrl(c) ? (
                          <img 
-                           src={getProxyImageUrl(c.image_url || c.main_image_url_external || c.raw_data?.image)} 
+                           src={getCandidateImageUrl(c)} 
                            alt="" 
                            className="max-w-full max-h-full object-contain" 
                            loading="lazy" 

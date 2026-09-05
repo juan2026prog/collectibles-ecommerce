@@ -862,15 +862,27 @@ export default async function handler(req, res) {
       renderedHtml = renderedHtml.replace('</head>', `${scriptsHtml}\n</head>`);
     }
 
-    // 6. Body Content in <div id="root">
-    if (bodyContent && renderedHtml.includes('<div id="root"></div>')) {
-      renderedHtml = renderedHtml.replace('<div id="root"></div>', `<div id="root">${bodyContent}</div>`);
-    } else if (bodyContent && renderedHtml.includes('<div id="root">')) {
-      renderedHtml = renderedHtml.replace(/<div id="root">[\s\S]*?<\/div>/i, `<div id="root">${bodyContent}</div>`);
+    // 6. Body Content in <div id="root"> (Only for Search Crawlers and Social Bots to avoid hydration flash in browsers)
+    const userAgent = (req.headers && (req.headers['user-agent'] || req.headers['User-Agent'])) || '';
+    const isBrowser = /Mozilla\/5\.0.*(Chrome|Safari|Firefox|Edge|Mobile|Opera)/i.test(userAgent) && !/Googlebot|bingbot|Baiduspider|facebookexternalhit|Twitterbot|LinkedInBot|WhatsApp|TelegramBot|Discordbot|rogerbot|outbrain|pinterest|slackbot|vkshare|w3c_validator/i.test(userAgent);
+    const isBot = !isBrowser;
+
+    if (isBot && bodyContent) {
+      if (renderedHtml.includes('<div id="root"></div>')) {
+        renderedHtml = renderedHtml.replace('<div id="root"></div>', `<div id="root">${bodyContent}</div>`);
+      } else if (renderedHtml.includes('<div id="root">')) {
+        renderedHtml = renderedHtml.replace(/<div id="root">[\s\S]*?<\/div>/i, `<div id="root">${bodyContent}</div>`);
+      }
     }
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400');
+    if (isBot) {
+      res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400');
+    } else {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
     res.status(200).send(renderedHtml);
   } catch (error) {
     console.error('Error in SEO Prerender handler:', error);
