@@ -2,59 +2,117 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Archive, Plus, ShieldCheck, Download, Share2, Layers, Star, ExternalLink, Lock, CheckCircle2, Sparkles, Image as ImageIcon, ShoppingBag, Eye } from 'lucide-react';
-import { calculateVaultStats } from '../../plugins/collector-vault/core/statsEngine';
+import { Archive, Plus, Share2, Star, ExternalLink, Lock, CheckCircle2, Sparkles, Image as ImageIcon, ShoppingBag, Eye, Heart, Globe, Settings, SlidersHorizontal, ArrowRight } from 'lucide-react';
 import SEO from '../../components/SEO';
-import { VaultShareCardModal } from './VaultShareCardModal';
+import { VaultShareCardModal, type ShareItemData } from './VaultShareCardModal';
+
+// 3 FIGURAS REALES DEMO QUE DAN VIDA A MY VAULT DESDE EL PRIMER MOMENTO
+const DEMO_VAULT_PIECES: ShareItemData[] = [
+  {
+    id: 'demo-vader',
+    custom_name: 'Darth Vader — Revenge of the Sith',
+    brand_name: 'Hot Toys',
+    line: 'Movie Masterpiece Series',
+    franchise: 'STAR WARS',
+    scale: '1:6',
+    height: '35 cm',
+    condition: 'MISB',
+    box_condition: 'SEALED',
+    status: 'OWNED',
+    rating: 5,
+    is_favorite: true,
+    is_featured: true,
+    purchase_date: 'Agosto 2026',
+    notes: 'Una de las piezas centrales de mi colección Star Wars.',
+    official_image_url: 'https://images.unsplash.com/photo-1585676623547-a006c6460114?auto=format&fit=crop&w=800&q=80',
+    slug: 'darth-vader-hot-toys'
+  },
+  {
+    id: 'demo-goku',
+    custom_name: 'Son Goku — A Saiyan Raised on Earth',
+    brand_name: 'Bandai Spirits · S.H.Figuarts',
+    line: 'S.H.Figuarts',
+    franchise: 'DRAGON BALL Z',
+    scale: '14 CM',
+    height: '14 cm',
+    condition: 'Open / Complete',
+    box_condition: 'OPEN_BOX',
+    status: 'OWNED',
+    rating: 5,
+    is_favorite: false,
+    is_featured: true,
+    purchase_date: 'Marzo 2026',
+    notes: 'Mi Goku definitivo para la línea S.H.Figuarts.',
+    official_image_url: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=800&q=80',
+    slug: 'son-goku-sh-figuarts'
+  },
+  {
+    id: 'demo-batman',
+    custom_name: 'Batman 1989 #03',
+    brand_name: 'Funko · Pop! Die-Cast',
+    line: 'Pop! Die-Cast',
+    franchise: 'BATMAN',
+    scale: 'DIE-CAST',
+    height: '10,2 cm',
+    condition: 'Exclusive · MISB',
+    box_condition: 'ACRYLIC_CASE',
+    status: 'OWNED',
+    rating: 4,
+    is_favorite: false,
+    is_featured: true,
+    purchase_date: 'Enero 2026',
+    notes: 'Batman 1989 es una de mis películas favoritas.',
+    official_image_url: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=800&q=80',
+    slug: 'batman-1989-funko-die-cast'
+  }
+];
 
 export default function VaultDashboard() {
   const { user } = useAuth();
   const [items, setItems] = useState<any[]>([]);
-  const [collections, setCollections] = useState<any[]>([]);
-  const [recommendedProducts, setRecommendedProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [importingOrders, setImportingOrders] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
-  const [selectedShareItem, setSelectedShareItem] = useState<any | null>(null);
-  const [copiedProfileLink, setCopiedProfileLink] = useState(false);
+  
+  // Modals state
+  const [selectedShareItem, setSelectedShareItem] = useState<ShareItemData | null>(null);
+  const [isShareFullVaultOpen, setIsShareFullVaultOpen] = useState(false);
+  const [isEditVaultOpen, setIsEditVaultOpen] = useState(false);
+  
+  // Collector Profile settings
+  const [collectorHandle, setCollectorHandle] = useState<string>(() => {
+    return user?.email ? `@${user.email.split('@')[0]}` : '@collector';
+  });
+  const [isVaultPublic, setIsVaultPublic] = useState(true);
+  const [filterFranchise, setFilterFranchise] = useState<string>('ALL');
 
   useEffect(() => {
     if (user) {
       loadVault();
-      loadRecommendations();
     } else {
       setLoading(false);
-      loadRecommendations();
     }
   }, [user]);
 
   const loadVault = async () => {
     try {
       setLoading(true);
-      const [itemsRes, colRes] = await Promise.all([
-        supabase.from('vault_items').select('*').eq('user_id', user?.id),
-        supabase.from('vault_collections').select('*').eq('user_id', user?.id)
-      ]);
+      const { data: dbItems, error } = await supabase
+        .from('vault_items')
+        .select('*')
+        .eq('user_id', user?.id)
+        .order('created_at', { ascending: false });
 
-      setItems(itemsRes.data || []);
-      setCollections(colRes.data || []);
+      if (!error && dbItems && dbItems.length > 0) {
+        setItems(dbItems);
+      } else {
+        // Inicializamos con las 3 figuras de referencia vivas
+        setItems([]);
+      }
     } catch (err) {
       console.error('Error loading vault:', err);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadRecommendations = async () => {
-    try {
-      const { data } = await supabase
-        .from('products')
-        .select('id, title, slug, price, base_price, images')
-        .eq('status', 'active')
-        .limit(4);
-      if (data) setRecommendedProducts(data);
-    } catch (e) {
-      console.error(e);
     }
   };
 
@@ -73,7 +131,7 @@ export default function VaultDashboard() {
         .eq('user_id', user.id);
 
       if (ordersErr || !orders || orders.length === 0) {
-        setImportMessage('No encontramos pedidos anteriores asociados a tu cuenta.');
+        setImportMessage('No encontramos compras anteriores en tu cuenta de Collectibles.');
         return;
       }
 
@@ -90,7 +148,7 @@ export default function VaultDashboard() {
           const vaultPayload = {
             user_id: user.id,
             product_id: orderItem.product_id || null,
-            custom_name: orderItem.title || 'Figura Collectibles',
+            custom_name: orderItem.title || 'Figura Coleccionable',
             custom_image_url: orderItem.image_url || null,
             status: 'OWNED',
             condition: 'MINT',
@@ -98,7 +156,7 @@ export default function VaultDashboard() {
             purchase_price: orderItem.price || null,
             purchase_date: order.created_at ? order.created_at.split('T')[0] : null,
             notes: `Adquirido en orden #${order.id.slice(0, 8)} de Collectibles.uy`,
-            visibility: 'PRIVATE',
+            visibility: 'PUBLIC',
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           };
@@ -119,287 +177,410 @@ export default function VaultDashboard() {
       }
     } catch (err: any) {
       console.error('Error importing past orders:', err);
-      setImportMessage('Ocurrió un error al importar tus compras. Inténtalo nuevamente.');
+      setImportMessage('Ocurrió un error al importar tus compras.');
     } finally {
       setImportingOrders(false);
     }
   };
 
-  const handleCopyPublicProfile = () => {
-    const link = window.location.origin + `/vault`;
-    navigator.clipboard.writeText(link);
-    setCopiedProfileLink(true);
-    setTimeout(() => setCopiedProfileLink(false), 2500);
-  };
+  // Determine active displayed pieces (real database items or lively demo showcase)
+  const isDemoMode = items.length === 0;
+  const activePieces: ShareItemData[] = isDemoMode
+    ? DEMO_VAULT_PIECES
+    : items.map((dbItem) => ({
+        id: dbItem.id,
+        custom_name: dbItem.custom_name || 'Pieza Coleccionable',
+        brand_name: dbItem.brand_name || 'Colección',
+        franchise: dbItem.franchise || 'GENERAL',
+        scale: dbItem.scale || '1:10',
+        height: dbItem.height || null,
+        line: dbItem.line || null,
+        condition: dbItem.condition || 'MINT',
+        box_condition: dbItem.box_condition || 'SEALED',
+        status: dbItem.status || 'OWNED',
+        rating: dbItem.rating || 5,
+        is_favorite: !!dbItem.is_favorite,
+        is_featured: !!dbItem.is_featured,
+        notes: dbItem.notes || null,
+        official_image_url: dbItem.official_image_url || dbItem.custom_image_url,
+        custom_image_url: dbItem.custom_image_url,
+        purchase_date: dbItem.purchase_date,
+        collector_handle: collectorHandle,
+        slug: dbItem.slug || (dbItem.custom_name ? encodeURIComponent(dbItem.custom_name.toLowerCase().replace(/[^a-z0-9]+/g, '-')) : dbItem.id)
+      }));
 
-  const stats = calculateVaultStats(items);
+  // Dynamic Metrics Calculation: X piezas · Y franquicias · Z marcas
+  const totalPieces = activePieces.length;
+  const uniqueFranchises = new Set(activePieces.map(p => p.franchise?.toUpperCase()).filter(Boolean)).size || 1;
+  const uniqueBrands = new Set(activePieces.map(p => p.brand_name?.toUpperCase()).filter(Boolean)).size || 1;
+
+  const filteredPieces = filterFranchise === 'ALL'
+    ? activePieces
+    : activePieces.filter(p => p.franchise?.toUpperCase() === filterFranchise);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 text-white space-y-10">
+    <div className="max-w-7xl mx-auto px-4 py-8 text-white space-y-8 animate-fade-in">
       <SEO
-        title="The Vault | Mi Bóveda & Vitrina de Colección | Collectibles 2026"
-        description="Gestiona tu inventario privado de coleccionables, exporta fichas de tus piezas para redes sociales y completa tus colecciones."
-        noIndex={true}
+        title={`My Vault | La colección de ${collectorHandle} | Collectibles`}
+        description={`Vitrina digital de coleccionables de ${collectorHandle}: ${totalPieces} piezas, ${uniqueFranchises} franquicias y ${uniqueBrands} marcas.`}
       />
 
-      {/* Header */}
-      <div className="bg-gradient-to-br from-amber-950/40 via-zinc-900 to-zinc-950 border border-amber-500/20 rounded-3xl p-6 sm:p-10 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+      {/* BLOQUE SUPERIOR DE MY VAULT */}
+      <div className="bg-gradient-to-br from-amber-950/40 via-zinc-900/90 to-zinc-950 border border-amber-500/25 rounded-3xl p-6 sm:p-10 shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
-          <div className="max-w-2xl space-y-3">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-black uppercase tracking-widest">
-              <Archive size={14} />
-              <span>The Collector Vault</span>
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
+          <div className="space-y-2.5">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-black tracking-widest uppercase text-amber-400 bg-amber-500/15 border border-amber-500/30 px-3 py-1 rounded-full">
+                My Vault
+              </span>
+              <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
+                isVaultPublic 
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
+                  : 'bg-zinc-800 text-zinc-400 border-white/10'
+              }`}>
+                {isVaultPublic ? <Globe size={11} /> : <Lock size={11} />}
+                <span>{isVaultPublic ? 'Vault Público' : 'Vault Privado'}</span>
+              </span>
             </div>
-            <h1 className="text-3xl sm:text-4xl font-black text-white leading-tight">
-              Mi Bóveda Personal de Coleccionables
+
+            <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
+              La colección de <span className="text-amber-400">{collectorHandle}</span>
             </h1>
-            <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
-              Tu vitrina digital privada: registra tus figuras adquiridas, fotos reales del estado de conservación, y genera fichas con marca de agua para compartir en Instagram Stories, Facebook o WhatsApp sin revelar precios de compra.
+
+            {/* Métricas destacadas de coleccionista */}
+            <p className="text-sm sm:text-base font-bold text-zinc-300 flex items-center gap-2">
+              <span className="text-white font-black">{totalPieces} piezas</span>
+              <span className="text-zinc-600">·</span>
+              <span className="text-white font-black">{uniqueFranchises} franquicias</span>
+              <span className="text-zinc-600">·</span>
+              <span className="text-white font-black">{uniqueBrands} marcas</span>
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          {/* Botones de acción principales */}
+          <div className="flex flex-wrap items-center gap-2.5 pt-2 lg:pt-0">
             <button
               type="button"
-              onClick={handleImportPastOrders}
-              disabled={importingOrders}
-              className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs rounded-xl transition flex items-center gap-2 border border-white/10 cursor-pointer disabled:opacity-50 shadow-md"
+              onClick={() => setIsEditVaultOpen(true)}
+              className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 border border-white/10 cursor-pointer shadow"
             >
-              <Download size={14} className={importingOrders ? 'animate-bounce text-amber-400' : 'text-amber-400'} />
-              <span>{importingOrders ? 'Sincronizando...' : 'Importar mis compras de Collectibles'}</span>
+              <Settings size={14} className="text-zinc-400" />
+              <span>Editar Vault</span>
             </button>
 
             <Link
               to="/vault/item/new"
-              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl transition flex items-center gap-1.5 shadow-lg shadow-amber-500/20"
+              className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-amber-400 hover:text-amber-300 font-bold text-xs rounded-xl transition flex items-center gap-1.5 border border-amber-500/30 cursor-pointer shadow"
             >
-              <Plus size={16} />
-              <span>Registrar Pieza Externa</span>
+              <Plus size={15} />
+              <span>＋ Agregar pieza</span>
             </Link>
+
+            <button
+              type="button"
+              onClick={() => setIsShareFullVaultOpen(true)}
+              className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-black font-black text-xs rounded-xl transition flex items-center gap-1.5 shadow-lg shadow-amber-500/20 cursor-pointer"
+            >
+              <Share2 size={14} />
+              <span>↗ Compartir mi Vault</span>
+            </button>
           </div>
         </div>
 
         {/* Feedback Banner */}
         {importMessage && (
-          <div className="mt-6 bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center justify-between text-xs text-amber-300 animate-fade-in">
+          <div className="mt-6 bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center justify-between text-xs text-amber-300">
             <div className="flex items-center gap-2">
               <CheckCircle2 size={16} className="text-amber-400 shrink-0" />
               <span>{importMessage}</span>
             </div>
-            <button onClick={() => setImportMessage(null)} className="text-zinc-400 hover:text-white text-xs">
+            <button onClick={() => setImportMessage(null)} className="text-zinc-400 hover:text-white text-xs cursor-pointer">
               ✕
+            </button>
+          </div>
+        )}
+
+        {/* Live Demo Banner Note */}
+        {isDemoMode && (
+          <div className="mt-6 p-4 rounded-2xl bg-zinc-950/60 border border-dashed border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-zinc-300">
+            <div className="flex items-center gap-2.5">
+              <Sparkles size={18} className="text-amber-400 shrink-0" />
+              <span>
+                <strong>Modo Vitrina Viva:</strong> Estás explorando 3 piezas de demostración con fichas de catálogo reales. Puedes modificarlas, registrar tus propias figuras o sincronizar tus compras.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleImportPastOrders}
+              disabled={importingOrders}
+              className="px-3.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-bold rounded-lg text-[11px] whitespace-nowrap transition cursor-pointer"
+            >
+              {importingOrders ? 'Importando...' : 'Importar mis compras'}
             </button>
           </div>
         )}
       </div>
 
-      {/* KPI Stats Bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-zinc-900/80 border border-white/10 rounded-2xl p-4">
-          <span className="text-xs text-zinc-400 font-bold uppercase">Piezas en Bóveda</span>
-          <div className="text-3xl font-black text-white mt-1">{stats.total_items || 0}</div>
+      {/* FILTRO RÁPIDO POR FRANQUICIA */}
+      <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-4">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full">
+          <button
+            type="button"
+            onClick={() => setFilterFranchise('ALL')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
+              filterFranchise === 'ALL'
+                ? 'bg-amber-500 text-black shadow'
+                : 'bg-zinc-900 text-zinc-400 hover:text-white border border-white/10'
+            }`}
+          >
+            Todas las piezas ({activePieces.length})
+          </button>
+          {Array.from(new Set(activePieces.map(p => p.franchise).filter(Boolean))).map((fr) => (
+            <button
+              key={fr}
+              type="button"
+              onClick={() => setFilterFranchise(fr?.toUpperCase() || 'ALL')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
+                filterFranchise === fr?.toUpperCase()
+                  ? 'bg-amber-500 text-black shadow'
+                  : 'bg-zinc-900 text-zinc-400 hover:text-white border border-white/10'
+              }`}
+            >
+              {fr}
+            </button>
+          ))}
         </div>
-        <div className="bg-zinc-900/80 border border-white/10 rounded-2xl p-4">
-          <span className="text-xs text-zinc-400 font-bold uppercase">En Posesión (Owned)</span>
-          <div className="text-3xl font-black text-emerald-400 mt-1">{stats.owned_count || 0}</div>
-        </div>
-        <div className="bg-zinc-900/80 border border-white/10 rounded-2xl p-4">
-          <span className="text-xs text-zinc-400 font-bold uppercase">En Pre-order</span>
-          <div className="text-3xl font-black text-sky-400 mt-1">{stats.preordered_count || 0}</div>
-        </div>
-        <div className="bg-zinc-900/80 border border-white/10 rounded-2xl p-4">
-          <span className="text-xs text-zinc-400 font-bold uppercase flex items-center gap-1">
-            <Lock size={12} className="text-zinc-500" />
-            Inversión Privada
-          </span>
-          <div className="text-3xl font-black text-amber-400 font-mono mt-1">
-            ${(stats.amount_spent ?? 0).toFixed(2)}
-          </div>
-        </div>
+
+        <span className="text-xs text-zinc-500 font-mono hidden sm:inline-block">
+          Mostrando {filteredPieces.length} de {activePieces.length}
+        </span>
       </div>
 
-      {/* Main Content Section */}
-      {loading ? (
-        <div className="py-20 text-center text-zinc-500">Cargando inventario de Vault...</div>
-      ) : items.length === 0 ? (
-        /* VITRINA DEMO / EJEMPLO ATRACTIVO CUANDO ESTÁ VACÍO */
-        <div className="space-y-6">
-          <div className="bg-zinc-900/50 border border-white/10 rounded-3xl p-8 text-center max-w-3xl mx-auto space-y-4">
-            <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
-              <Archive size={32} />
-            </div>
-            <h2 className="text-2xl font-black text-white">Tu Vitrina Digital aún está esperando sus piezas</h2>
-            <p className="text-xs sm:text-sm text-zinc-400 max-w-lg mx-auto leading-relaxed">
-              The Vault te permite organizar tu colección personal (tanto compras de Collectibles como piezas externas), llevar registro de estado y compartir fotos oficiales con tus amigos.
-            </p>
-            <div className="flex flex-wrap justify-center gap-3 pt-2">
-              <button
-                onClick={handleImportPastOrders}
-                className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl transition cursor-pointer shadow-lg"
-              >
-                Sincronizar mis compras anteriores →
-              </button>
-              <Link
-                to="/vault/item/new"
-                className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs rounded-xl transition border border-white/10"
-              >
-                Agregar mi primera pieza manualmente
-              </Link>
-            </div>
-          </div>
+      {/* GRID DE CARDS DE FIGURAS */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredPieces.map((piece, idx) => {
+          const cardImage = piece.custom_image_url || piece.official_image_url;
 
-          {/* Ejemplo de cómo luce una vitrina */}
-          <div className="space-y-3 pt-4">
-            <div className="flex items-center gap-2">
-              <Sparkles size={16} className="text-amber-400" />
-              <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400">
-                Ejemplo: Así se visualizan tus figuras en The Vault
-              </h3>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 opacity-75">
-              {[
-                { title: 'Batman Supreme Knight (One:12 Collective)', brand: 'Mezco Toyz', scale: '1:12', condition: 'MINT', box: 'SEALED' },
-                { title: 'Michael Myers Ultimate (Halloween 2018)', brand: 'NECA', scale: '1:10', condition: 'NEAR_MINT', box: 'OPEN_BOX' },
-                { title: 'Spider-Man Advanced Suit (Movie Masterpiece)', brand: 'Hot Toys', scale: '1:6', condition: 'MINT', box: 'ACRYLIC_CASE' },
-              ].map((demo, idx) => (
-                <div key={idx} className="bg-zinc-900/60 border border-dashed border-white/15 rounded-2xl p-4 flex gap-3">
-                  <div className="w-16 h-16 bg-zinc-950 rounded-xl border border-white/10 flex items-center justify-center text-zinc-600 shrink-0">
-                    <ImageIcon size={24} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <span className="text-[9px] uppercase font-black px-2 py-0.5 rounded bg-zinc-800 text-zinc-400">
-                      EJEMPLO • {demo.scale}
-                    </span>
-                    <h4 className="font-bold text-xs text-zinc-200 truncate mt-1">{demo.title}</h4>
-                    <p className="text-[11px] text-zinc-500 mt-0.5">{demo.brand} • {demo.condition}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      ) : (
-        /* LISTADO DE PIEZAS REALES */
-        <div className="space-y-4">
-          <div className="flex items-center justify-between border-b border-white/10 pb-3">
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <span>Piezas Registradas ({items.length})</span>
-            </h2>
-
-            <button
-              onClick={handleCopyPublicProfile}
-              className="px-3.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-amber-300 border border-amber-500/20 flex items-center gap-1.5 transition cursor-pointer"
+          return (
+            <div
+              key={piece.id || idx}
+              className="bg-gradient-to-b from-zinc-900 via-zinc-900 to-zinc-950 border border-white/10 hover:border-amber-500/40 rounded-3xl p-5 shadow-xl transition-all duration-300 flex flex-col justify-between group relative overflow-hidden"
             >
-              <Share2 size={13} />
-              <span>{copiedProfileLink ? '¡Enlace Copiado!' : 'Compartir mi Bóveda'}</span>
-            </button>
-          </div>
+              {/* Gold light reflection on hover */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl group-hover:bg-amber-500/15 transition-all pointer-events-none" />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {items.map((item) => (
-              <div
-                key={item.id}
-                className="bg-zinc-900/80 border border-white/10 rounded-2xl p-4 flex gap-4 hover:border-amber-500/30 transition-all group shadow-lg"
-              >
-                <div className="w-20 h-20 bg-zinc-950 rounded-xl border border-white/10 p-1 flex items-center justify-center flex-shrink-0 overflow-hidden relative">
-                  {item.custom_image_url ? (
-                    <img src={item.custom_image_url} alt={item.custom_name} className="w-full h-full object-contain" />
+              <div>
+                {/* 1. IMAGEN GRANDE */}
+                <div className="w-full aspect-square bg-zinc-950 rounded-2xl border border-white/10 p-3 mb-4 flex items-center justify-center overflow-hidden relative group-hover:border-amber-500/20 transition">
+                  {cardImage ? (
+                    <img
+                      src={cardImage}
+                      alt={piece.custom_name}
+                      className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
+                    />
                   ) : (
-                    <Archive size={28} className="text-zinc-600" />
+                    <div className="flex flex-col items-center text-zinc-600 gap-1">
+                      <ImageIcon size={36} />
+                      <span className="text-[10px] font-mono">Sin foto</span>
+                    </div>
+                  )}
+
+                  {/* Top-Right Favorite / Featured Badge */}
+                  {piece.is_favorite && (
+                    <div className="absolute top-3 right-3 bg-rose-500/20 border border-rose-500/30 text-rose-300 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] font-black flex items-center gap-1 shadow">
+                      <Heart size={11} className="fill-rose-400 text-rose-400" />
+                      <span>Favorita</span>
+                    </div>
                   )}
                 </div>
 
-                <div className="flex-1 min-w-0 flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="text-[9px] uppercase font-black px-2 py-0.5 rounded bg-zinc-800 text-zinc-300">
-                        {item.status}
-                      </span>
-                      <span className="text-[10px] text-zinc-500 font-mono">
-                        {item.condition}
-                      </span>
-                    </div>
-                    <h4 className="font-bold text-sm text-white truncate mt-1.5">{item.custom_name || 'Pieza Coleccionable'}</h4>
-                  </div>
+                {/* 2. TAGS: FRANQUICIA · ESCALA · ESTADO */}
+                <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
+                  {piece.franchise && (
+                    <span className="text-[9px] font-black tracking-widest uppercase bg-amber-500/15 border border-amber-500/30 text-amber-300 px-2 py-0.5 rounded-md">
+                      {piece.franchise}
+                    </span>
+                  )}
+                  {piece.scale && (
+                    <span className="text-[9px] font-black tracking-wider uppercase bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded-md">
+                      {piece.scale}
+                    </span>
+                  )}
+                  {piece.condition && (
+                    <span className="text-[9px] font-black tracking-wider uppercase bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 px-2 py-0.5 rounded-md">
+                      {piece.condition}
+                    </span>
+                  )}
+                </div>
 
-                  <div className="flex items-center gap-2 pt-2 border-t border-white/5">
-                    <Link
-                      to={`/vault/item/${item.id}`}
-                      className="text-xs text-amber-400 hover:underline font-semibold"
-                    >
-                      Editar Ficha →
-                    </Link>
-                    <span className="text-zinc-600">•</span>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedShareItem(item)}
-                      className="text-xs text-zinc-400 hover:text-white flex items-center gap-1 cursor-pointer font-semibold"
-                    >
-                      <Share2 size={11} />
-                      <span>Compartir</span>
-                    </button>
-                  </div>
+                {/* 3. TÍTULO DE LA PIEZA */}
+                <h3 className="font-black text-base text-white line-clamp-1 group-hover:text-amber-400 transition">
+                  {piece.custom_name}
+                </h3>
+
+                {/* 4. FABRICANTE Y LÍNEA */}
+                <p className="text-xs text-zinc-400 font-medium mt-0.5 truncate">
+                  {piece.brand_name} {piece.line ? `· ${piece.line}` : ''}
+                </p>
+
+                {/* Rating Stars & Notes */}
+                <div className="flex items-center gap-1 mt-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Star
+                      key={star}
+                      size={12}
+                      className={star <= (piece.rating || 5) ? 'text-amber-400 fill-amber-400' : 'text-zinc-700'}
+                    />
+                  ))}
+                  {piece.purchase_date && (
+                    <span className="text-[10px] text-zinc-500 font-mono ml-1.5">
+                      · {piece.purchase_date}
+                    </span>
+                  )}
+                </div>
+
+                {piece.notes && (
+                  <p className="text-xs text-zinc-400/90 italic line-clamp-2 mt-2 font-serif bg-zinc-950/40 p-2 rounded-xl border border-white/5">
+                    "{piece.notes}"
+                  </p>
+                )}
+              </div>
+
+              {/* 5. ACCIONES: Ver pieza · ↗ Compartir */}
+              <div className="flex items-center justify-between pt-4 mt-4 border-t border-white/10">
+                <Link
+                  to={`/vault/item/${piece.id || 'demo'}`}
+                  className="text-xs font-black text-amber-400 hover:text-amber-300 flex items-center gap-1 group-hover:underline"
+                >
+                  <span>Ver pieza</span>
+                  <ArrowRight size={13} />
+                </Link>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedShareItem(piece)}
+                  className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition cursor-pointer border border-white/10"
+                >
+                  <Share2 size={13} className="text-amber-400" />
+                  <span>Compartir ↗</span>
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* MODAL EDITAR VAULT (Handle, Bio, Public/Private) */}
+      {isEditVaultOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+          <div className="w-full max-w-md bg-zinc-950 border border-white/10 rounded-3xl p-6 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <h3 className="font-bold text-base text-white flex items-center gap-2">
+                <Settings size={18} className="text-amber-400" />
+                Configurar My Vault
+              </h3>
+              <button
+                onClick={() => setIsEditVaultOpen(false)}
+                className="text-zinc-400 hover:text-white text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div>
+                <label className="block text-zinc-400 font-semibold mb-1">Nombre de Coleccionista / Handle</label>
+                <input
+                  type="text"
+                  value={collectorHandle}
+                  onChange={(e) => setCollectorHandle(e.target.value.startsWith('@') ? e.target.value : `@${e.target.value}`)}
+                  className="w-full px-3 py-2 bg-zinc-900 border border-white/10 rounded-xl text-white font-mono"
+                  placeholder="@collector"
+                />
+              </div>
+
+              <div>
+                <label className="block text-zinc-400 font-semibold mb-1">Visibilidad del Vault</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsVaultPublic(true)}
+                    className={`p-3 rounded-xl border text-left cursor-pointer transition ${
+                      isVaultPublic
+                        ? 'bg-amber-500/10 border-amber-500/40 text-amber-300 font-bold'
+                        : 'bg-zinc-900 border-white/10 text-zinc-400'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <Globe size={13} />
+                      <span>🌐 Público</span>
+                    </div>
+                    <p className="text-[10px] text-zinc-400">Accesible y compartible con tus amigos.</p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsVaultPublic(false)}
+                    className={`p-3 rounded-xl border text-left cursor-pointer transition ${
+                      !isVaultPublic
+                        ? 'bg-amber-500/10 border-amber-500/40 text-amber-300 font-bold'
+                        : 'bg-zinc-900 border-white/10 text-zinc-400'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <Lock size={13} />
+                      <span>🔒 Privado</span>
+                    </div>
+                    <p className="text-[10px] text-zinc-400">Sólo tú puedes ver tus figuras.</p>
+                  </button>
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* CROSS-SELL: Recomendaciones para Completar Colección */}
-      {recommendedProducts.length > 0 && (
-        <div className="pt-8 border-t border-white/10 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ShoppingBag size={18} className="text-amber-400" />
-              <h3 className="text-base font-bold text-white">Piezas recomendadas para completar tu Vault</h3>
             </div>
-            <Link to="/shop" className="text-xs text-amber-400 hover:underline font-bold">
-              Ver catálogo completo →
-            </Link>
-          </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {recommendedProducts.map((p) => {
-              const img = p.images?.[0] || '';
-              return (
-                <Link
-                  key={p.id}
-                  to={`/producto/${p.slug}`}
-                  className="bg-zinc-900/60 border border-white/10 rounded-2xl p-3 hover:border-amber-500/30 transition flex flex-col justify-between group shadow-sm"
-                >
-                  <div className="aspect-square bg-zinc-950 rounded-xl overflow-hidden mb-2 p-2 flex items-center justify-center">
-                    {img ? <img src={img} alt={p.title} className="w-full h-full object-contain group-hover:scale-105 transition" /> : <Archive size={24} className="text-zinc-700" />}
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-white line-clamp-1 group-hover:text-amber-400 transition">{p.title}</h4>
-                    <span className="text-xs font-black text-amber-400 font-mono mt-1 block">$ {p.base_price || p.price}</span>
-                  </div>
-                </Link>
-              );
-            })}
+            <div className="flex justify-end gap-2 pt-3 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setIsEditVaultOpen(false)}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl cursor-pointer"
+              >
+                Guardar Cambios
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Share Card Modal */}
+      {/* SHARE MODAL: PIEZA INDIVIDUAL */}
       {selectedShareItem && (
         <VaultShareCardModal
           isOpen={!!selectedShareItem}
           onClose={() => setSelectedShareItem(null)}
           item={{
-            custom_name: selectedShareItem.custom_name,
-            status: selectedShareItem.status,
-            condition: selectedShareItem.condition,
-            box_condition: selectedShareItem.box_condition,
-            custom_image_url: selectedShareItem.custom_image_url,
-            purchase_date: selectedShareItem.purchase_date
+            ...selectedShareItem,
+            collector_handle: collectorHandle
+          }}
+          isFullVault={false}
+        />
+      )}
+
+      {/* SHARE MODAL: VAULT COMPLETO */}
+      {isShareFullVaultOpen && (
+        <VaultShareCardModal
+          isOpen={isShareFullVaultOpen}
+          onClose={() => setIsShareFullVaultOpen(false)}
+          isFullVault={true}
+          vaultData={{
+            collector_handle: collectorHandle,
+            total_items: totalPieces,
+            total_franchises: uniqueFranchises,
+            total_brands: uniqueBrands,
+            featured_items: activePieces.filter(p => p.is_featured || p.is_favorite).slice(0, 3)
           }}
         />
       )}
     </div>
   );
 }
+

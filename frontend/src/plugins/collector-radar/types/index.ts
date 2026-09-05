@@ -14,6 +14,22 @@ export type ReleaseStatus =
   | 'SOLD_OUT' 
   | 'RESTOCKED';
 
+/**
+ * Vocabulario fijo de señales editoriales del Radar.
+ * Cada señal tiene una razón objetiva distinta de aparecer en Radar.
+ */
+export type RadarSignal =
+  | 'PREVENTA_CERRANDO'   // Deadline de preventa en ≤ 7 días
+  | 'NUEVO_ANUNCIO'       // Anunciado hace ≤ 14 días
+  | 'ACABA_DE_SALIR'      // Lanzado al mercado hace ≤ 30 días
+  | 'PREVENTA_ABIERTA'    // Pre-order en curso sin urgencia inmediata
+  | 'ALTA_DEMANDA'        // Crowdfunding/demanda masiva verificada
+  | 'EXCLUSIVO'           // Exclusivo de canal / creator / retailer
+  | 'REEDICION'           // Reedición de ítem clásico
+  | 'AGOTADO'             // Sin stock disponible actualmente
+  | 'VUELVE_A_STOCK'      // Re-stock confirmado
+  | 'MERECE_ATENCION';    // Editorial catch-all
+
 export type MilestoneType = 'ANNOUNCEMENT' | 'PREORDER' | 'RELEASE' | 'RESTOCK' | 'SHIPPING' | 'OTHER';
 
 export interface ReleaseMilestone {
@@ -58,6 +74,10 @@ export interface ReleaseEvent {
   is_published: boolean;
   created_at: string;
   milestones?: ReleaseMilestone[];
-  brand?: { id: string; name: string };
-  license?: { id: string; name: string };
+  brand?: { id: string; name: string; slug?: string };
+  license?: { id: string; name: string; slug?: string };
+  // Campos editoriales del Radar (añadidos en migración futura)
+  radar_signal?: RadarSignal | null;
+  radar_why?: string | null;       // Frase editorial: por qué está en Radar
+  radar_context?: string | null;   // Datos extra: "23.553 backers · Meta: 10.000"
 }

@@ -220,6 +220,8 @@ function App() {
                     {/* 03. My Vault */}
                     <Route path="/vault" element={<ProtectedRoute><VaultDashboard /></ProtectedRoute>} />
                     <Route path="/vault/item/:id" element={<ProtectedRoute><VaultItemDetail /></ProtectedRoute>} />
+                    <Route path="/vault/:username" element={<PublicCollectorProfile />} />
+                    <Route path="/vault/:username/:itemSlug" element={<PublicCollectorProfile />} />
                     <Route path="/collector/:username" element={<PublicCollectorProfile />} />
 
                     {/* 05. Collector Academy */}

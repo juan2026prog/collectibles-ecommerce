@@ -1,4 +1,42 @@
-import type { ReleasePrecision, ReleaseStatus } from '../types';
+import type { ReleasePrecision, ReleaseStatus, RadarSignal } from '../types';
+
+export interface RadarSignalConfig {
+  label: string;
+  icon: string;
+  bg: string;
+  text: string;
+  border: string;
+  ring?: string;
+  pulse?: boolean;
+}
+
+export function getRadarSignalConfig(signal?: RadarSignal | null): RadarSignalConfig {
+  switch (signal) {
+    case 'PREVENTA_CERRANDO':
+      return { label: 'PREVENTA CERRANDO', icon: '🔴', bg: 'bg-red-500/20', text: 'text-red-300', border: 'border-red-500/50', ring: 'ring-1 ring-red-500/30', pulse: true };
+    case 'NUEVO_ANUNCIO':
+      return { label: 'NUEVO ANUNCIO', icon: '🟣', bg: 'bg-violet-500/20', text: 'text-violet-300', border: 'border-violet-500/50' };
+    case 'ACABA_DE_SALIR':
+      return { label: 'ACABA DE SALIR', icon: '🟢', bg: 'bg-emerald-500/20', text: 'text-emerald-300', border: 'border-emerald-500/50' };
+    case 'PREVENTA_ABIERTA':
+      return { label: 'PREVENTA ABIERTA', icon: '🟩', bg: 'bg-green-500/15', text: 'text-green-300', border: 'border-green-500/40' };
+    case 'ALTA_DEMANDA':
+      return { label: 'ALTA DEMANDA', icon: '🔥', bg: 'bg-orange-500/20', text: 'text-orange-300', border: 'border-orange-500/50' };
+    case 'EXCLUSIVO':
+      return { label: 'EXCLUSIVO', icon: '⭐', bg: 'bg-amber-500/20', text: 'text-amber-300', border: 'border-amber-500/50' };
+    case 'REEDICION':
+      return { label: 'REEDICIÓN', icon: '🔵', bg: 'bg-sky-500/20', text: 'text-sky-300', border: 'border-sky-500/50' };
+    case 'AGOTADO':
+      return { label: 'AGOTADO', icon: '⚫', bg: 'bg-zinc-800/80', text: 'text-zinc-400', border: 'border-zinc-600/50' };
+    case 'VUELVE_A_STOCK':
+      return { label: 'VUELVE A STOCK', icon: '🔄', bg: 'bg-teal-500/20', text: 'text-teal-300', border: 'border-teal-500/50' };
+    case 'MERECE_ATENCION':
+    default:
+      return { label: signal ? 'MERECE ATENCIÓN' : 'EN RADAR', icon: '📡', bg: 'bg-zinc-700/50', text: 'text-zinc-300', border: 'border-zinc-500/40' };
+  }
+}
+
+
 
 export function formatReleaseDatePrecision(
   precision: ReleasePrecision,
