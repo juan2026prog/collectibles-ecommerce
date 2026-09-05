@@ -61,7 +61,7 @@ describe('SOURCING & IMPORTACIÓN MULTIFUENTE V2 — Automated Test Suite', () =
       expect(offer.source_product_id).toBe('324123456789');
       expect(offer.price).toBe(20.00);
       expect(offer.domestic_shipping).toBe(8.50);
-      expect(offer.is_zinc_compatible).toBe(false);
+      expect(offer.is_zinc_compatible).toBe(true);
     });
 
     it('BestBuySourceAdapter extracts SKU and identifies stock', () => {
@@ -81,6 +81,7 @@ describe('SOURCING & IMPORTACIÓN MULTIFUENTE V2 — Automated Test Suite', () =
       expect(offer.source_product_id).toBe('6412345');
       expect(offer.price).toBe(24.99);
       expect(offer.domestic_shipping).toBe(0);
+      expect(offer.is_zinc_compatible).toBe(true);
     });
 
     it('resolveAdapterForUrl resolves correct adapter automatically', () => {

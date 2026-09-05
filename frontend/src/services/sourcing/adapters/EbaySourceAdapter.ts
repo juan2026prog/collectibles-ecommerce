@@ -72,9 +72,9 @@ export class EbaySourceAdapter implements ISourceAdapter {
       availability: raw.availability,
       stock: 5,
       condition: raw.condition,
-      status: 'RESEARCH_ONLY', // Requires EbayLiveSourceAdapter or Live Check before import
+      status: 'RESEARCH_ONLY', // Requires Live Check via Zinc before import
       estimated_delivery: raw.estimated_delivery || '4-7 días (USA)',
-      is_zinc_compatible: false, // Currently managed via manual or specialized eBay ordering
+      is_zinc_compatible: true, // Native Zinc multi-retailer support
       reliability_score: 85,
       last_checked_at: new Date().toISOString(),
       metadata: raw.raw_metadata

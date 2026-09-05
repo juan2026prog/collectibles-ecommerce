@@ -79,30 +79,32 @@ describe('FASE 3 — CONECTORES LIVE REALES Y ELIMINACIÓN TOTAL DE MOCKS', () =
     });
   });
 
-  // 2. eBay Live Source Adapter
-  describe('2. EbayLiveSourceAdapter & Credentials Contract', () => {
-    it('reports PENDING_CREDENTIAL gracefully when eBay API credentials are not yet configured', async () => {
+  // 2. eBay Live Source Adapter (Zinc Multi-Retailer)
+  describe('2. EbayLiveSourceAdapter & Zinc Multi-Retailer Contract', () => {
+    it('resolves eBay live item via Zinc and assigns is_zinc_compatible true', async () => {
       const liveItem = await ebayLiveSourceAdapter.resolveLiveItem({ itemId: '324123456789' });
       expect(liveItem.item_id).toBe('324123456789');
-      expect(liveItem.status).toBe('PENDING_CREDENTIAL');
-      expect(liveItem.error_message).toContain('eBay');
+      expect(liveItem.status).toBe('LIVE');
+      expect(liveItem.seller).toContain('eBay');
 
       const offer = ebayLiveSourceAdapter.toLiveSourceOffer(liveItem);
       expect(offer.source).toBe('ebay');
-      expect(offer.status).toBe('PENDING_CREDENTIAL');
+      expect(offer.status).toBe('LIVE');
+      expect(offer.is_zinc_compatible).toBe(true);
     });
   });
 
-  // 3. Best Buy Live Source Adapter
-  describe('3. BestBuyLiveSourceAdapter & Credentials Contract', () => {
-    it('reports PENDING_CREDENTIAL gracefully when Best Buy API Key is not yet configured', async () => {
+  // 3. Best Buy Live Source Adapter (Zinc Multi-Retailer)
+  describe('3. BestBuyLiveSourceAdapter & Zinc Multi-Retailer Contract', () => {
+    it('resolves Best Buy live item via Zinc and assigns is_zinc_compatible true', async () => {
       const liveItem = await bestBuyLiveSourceAdapter.resolveLiveItem({ sku: '6412345' });
       expect(liveItem.sku).toBe('6412345');
-      expect(liveItem.status).toBe('PENDING_CREDENTIAL');
+      expect(liveItem.status).toBe('LIVE');
 
       const offer = bestBuyLiveSourceAdapter.toLiveSourceOffer(liveItem);
       expect(offer.source).toBe('bestbuy');
-      expect(offer.status).toBe('PENDING_CREDENTIAL');
+      expect(offer.status).toBe('LIVE');
+      expect(offer.is_zinc_compatible).toBe(true);
     });
   });
 

@@ -31,7 +31,8 @@ serve(async (req) => {
     const { data: settings } = await supabase.from('international_sync_settings').select('*').eq('id', 1).single();
     const { effective_rate } = await getEffectiveExchangeRate(supabase);
 
-    const url = `https://api.zinc.com/products/${prod.external_product_id}?retailer=amazon`;
+    const retailer = prod.source_retailer || prod.retailer || 'amazon';
+    const url = `https://api.zinc.com/products/${prod.external_product_id}?retailer=${retailer}`;
     const res = await fetch(url, { headers: { 'Authorization': `Bearer ${ZINC_API_KEY}` } });
 
     if (!res.ok) {

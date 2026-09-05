@@ -72,9 +72,9 @@ export class BestBuySourceAdapter implements ISourceAdapter {
       availability: raw.availability,
       stock: 8,
       condition: raw.condition,
-      status: 'RESEARCH_ONLY', // Requires BestBuyLiveSourceAdapter or Live Check before import
+      status: 'RESEARCH_ONLY', // Requires Live Check via Zinc before import
       estimated_delivery: raw.estimated_delivery || '3-5 días (USA)',
-      is_zinc_compatible: false,
+      is_zinc_compatible: true, // Native Zinc multi-retailer support
       reliability_score: 95,
       last_checked_at: new Date().toISOString(),
       metadata: raw.raw_metadata

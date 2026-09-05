@@ -49,7 +49,8 @@ serve(async (req) => {
        if (!prod) continue; // Not an international product or not found
 
        try {
-           const url = `https://api.zinc.com/products/${prod.external_product_id}?retailer=amazon`;
+           const retailer = prod.source_retailer || prod.retailer || 'amazon';
+           const url = `https://api.zinc.com/products/${prod.external_product_id}?retailer=${retailer}`;
            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${ZINC_API_KEY}` } });
            
            if (!res.ok) throw new Error(`Retailer API error: ${res.status}`);
