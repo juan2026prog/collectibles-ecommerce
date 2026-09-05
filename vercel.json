@@ -60,11 +60,6 @@
       "source": "/store/:slug*",
       "destination": "/shop",
       "permanent": true
-    },
-    {
-      "source": "/wishlist",
-      "destination": "/cart",
-      "permanent": true
     }
   ],
   "rewrites": [
