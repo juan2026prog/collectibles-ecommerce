@@ -635,35 +635,78 @@ export default function StorefrontLayout() {
                    {user ? (
                      <div className="space-y-1">
                         <div className="px-4 py-3 mb-2 border-b border-white/10">
-                           <div className="text-xs font-black text-[#f00856] uppercase tracking-widest">Collector</div>
+                           <div className="text-[10px] font-black text-[#f00856] uppercase tracking-widest">Collector</div>
                            <div className="text-sm font-black text-white truncate">{profile?.first_name ? `${profile.first_name} ${profile.last_name || ''}`.trim() : user.email}</div>
                         </div>
-                        {features.collectorVaultEnabled && (
-                          <Link to="/vault" className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 text-sm font-bold text-amber-400">
-                             <Archive className="w-4 h-4" /> Mi Vault (Colección)
-                          </Link>
-                        )}
-                        {features.importHubEnabled && (
-                          <Link to="/import-hub" className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 text-sm font-bold text-indigo-400">
-                             <Truck className="w-4 h-4" /> Import Hub (Franquicia)
-                          </Link>
-                        )}
-                        <Link to="/account" className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 text-sm font-bold text-slate-300">
-                           <Package className="w-4 h-4" /> Mis pedidos
+
+                        {/* Customer links */}
+                        <Link 
+                          to="/account" 
+                          onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 text-sm font-bold text-slate-200 transition-colors"
+                        >
+                           <User className="w-4 h-4 text-[#f00856]" /> Mi Perfil / Dashboard
                         </Link>
-                        {profile?.is_admin && (
-                          <Link to="/admin" className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 text-sm font-bold text-slate-300">
-                             <LayoutDashboard className="w-4 h-4" /> Panel Admin
-                          </Link>
+                        <Link 
+                          to="/account?tab=orders" 
+                          onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 text-sm font-bold text-slate-200 transition-colors"
+                        >
+                           <Package className="w-4 h-4 text-blue-400" /> Mis pedidos
+                        </Link>
+                        <Link 
+                          to="/wishlist" 
+                          onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 text-sm font-bold text-slate-200 transition-colors justify-between"
+                        >
+                           <div className="flex items-center gap-3">
+                             <Heart className="w-4 h-4 text-[#f00856]" /> Mi Wishlist
+                           </div>
+                           {wishlist.length > 0 && (
+                             <span className="px-2 py-0.5 text-[10px] font-black rounded-full bg-[#f00856]/20 text-[#f00856] border border-[#f00856]/30">
+                               {wishlist.length}
+                             </span>
+                           )}
+                        </Link>
+
+                        {/* Admin / Vendor Management links */}
+                        {(profile?.is_admin || profile?.is_vendor) && (
+                          <div className="pt-2 mt-2 border-t border-white/10 space-y-1">
+                            <div className="px-4 py-1 text-[9px] font-black uppercase tracking-widest text-slate-500">
+                              Gestión
+                            </div>
+                            {profile?.is_admin && (
+                              <Link 
+                                to="/admin" 
+                                onClick={() => setUserMenuOpen(false)}
+                                className="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 text-sm font-bold text-amber-400 transition-colors"
+                              >
+                                 <LayoutDashboard className="w-4 h-4" /> Panel Admin
+                              </Link>
+                            )}
+                            {profile?.is_vendor && (
+                              <Link 
+                                to="/vendor" 
+                                onClick={() => setUserMenuOpen(false)}
+                                className="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 text-sm font-bold text-emerald-400 transition-colors"
+                              >
+                                 <Store className="w-4 h-4" /> Panel Vendedor
+                              </Link>
+                            )}
+                          </div>
                         )}
-                        {profile?.is_vendor && (
-                          <Link to="/vendor" className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 text-sm font-bold text-slate-300">
-                             <Store className="w-4 h-4" /> Panel Vendedor
-                          </Link>
-                        )}
-                        <button onClick={() => handleSignOut()} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-red-500/10 text-sm font-bold text-red-500">
-                           <LogOut className="w-4 h-4" /> Cerrar sesión
-                        </button>
+
+                        <div className="pt-2 mt-2 border-t border-white/10">
+                          <button 
+                            onClick={() => {
+                              setUserMenuOpen(false);
+                              handleSignOut();
+                            }} 
+                            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-red-500/10 text-sm font-bold text-red-500 transition-colors"
+                          >
+                             <LogOut className="w-4 h-4" /> Cerrar sesión
+                          </button>
+                        </div>
                      </div>
                    ) : (
                      <div className="p-2 space-y-2">
