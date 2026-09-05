@@ -323,7 +323,7 @@ export default function StorefrontLayout() {
       links = links.filter(l => l.href !== '/intl' && l.href !== '/internacional' && l.name?.toUpperCase() !== 'INTERNACIONAL');
     }
 
-    // Plugin Navigation links: RADAR and ACADEMY (respects feature toggles)
+    // Plugin Navigation links: RADAR, ACADEMY, COMPARADOR, VAULT (respects feature toggles)
     if (features.radarEnabled && !links.some(l => l.href === '/radar' || l.name?.toUpperCase() === 'RADAR')) {
       links.push({
         name: 'RADAR',
@@ -338,8 +338,22 @@ export default function StorefrontLayout() {
       });
     }
 
+    if (features.comparatorEnabled && !links.some(l => l.href === '/compare' || l.name?.toUpperCase() === 'COMPARADOR')) {
+      links.push({
+        name: 'COMPARADOR',
+        href: '/compare'
+      });
+    }
+
+    if (features.collectorVaultEnabled && !links.some(l => l.href === '/vault' || l.name?.toUpperCase().includes('VAULT'))) {
+      links.push({
+        name: 'MY VAULT',
+        href: '/vault'
+      });
+    }
+
     return links;
-  }, [t, settings, intlPublicEnabled, features.radarEnabled, features.collectorAcademyEnabled]);
+  }, [t, settings, intlPublicEnabled, features.radarEnabled, features.collectorAcademyEnabled, features.comparatorEnabled, features.collectorVaultEnabled]);
 
   const FOOTER_LINKS = useMemo(() => {
     const customFooterStr = settings['appearance_footer_menu_json'];

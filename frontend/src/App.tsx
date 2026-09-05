@@ -210,6 +210,7 @@ function App() {
 
                     {/* 01. AI Search */}
                     <Route path="/ai-search" element={<AISearchPage />} />
+                    <Route path="/search" element={<AISearchPage />} />
 
                     {/* 02. Radar & Release Calendar */}
                     <Route path="/radar" element={<RadarFeedPage />} />
