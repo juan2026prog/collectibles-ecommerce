@@ -14,6 +14,7 @@ import { useLocale } from '../contexts/LocaleContext';
 import { useCategories, useBrands, useLicenses, useThemes } from '../hooks/useData';
 import LocaleSwitcher from '../components/LocaleSwitcher';
 import WhatsAppFAB from '../components/WhatsAppFAB';
+import MobileBottomNav from '../components/MobileBottomNav';
 import { supabase } from '../lib/supabase';
 import CookieConsent from '../components/CookieConsent';
 import CartDrawer from '../components/CartDrawer';
@@ -941,7 +942,7 @@ export default function StorefrontLayout() {
       )}
 
       {/* ═══ MAIN CONTENT ═══ */}
-      <main className="flex-grow">
+      <main className="flex-grow pb-20 xl:pb-0">
         <Suspense fallback={null}>
           <Outlet />
         </Suspense>
@@ -1055,6 +1056,7 @@ export default function StorefrontLayout() {
         </div>
       </footer>
 
+      <MobileBottomNav />
       <WhatsAppFAB />
       <CookieConsent />
       <CartDrawer />

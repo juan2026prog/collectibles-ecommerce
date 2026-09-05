@@ -27,27 +27,33 @@ export default function MobileBottomNav() {
         {/* INICIO */}
         <Link
           to="/"
-          className={lex flex-col items-center justify-center w-full min-h-[48px] py-1 text-[10px] font-bold transition-all }
+          className={`flex flex-col items-center justify-center w-full min-h-[48px] py-1 text-[10px] font-bold transition-all ${
+            isHome ? 'text-[#f00856]' : 'text-slate-400 hover:text-white'
+          }`}
         >
-          <Home className={w-5 h-5 mb-0.5 transition-transform } />
+          <Home className={`w-5 h-5 mb-0.5 transition-transform ${isHome ? 'scale-110' : ''}`} />
           <span className="tracking-tight">Inicio</span>
         </Link>
 
         {/* CATÁLOGO */}
         <Link
           to="/shop"
-          className={lex flex-col items-center justify-center w-full min-h-[48px] py-1 text-[10px] font-bold transition-all }
+          className={`flex flex-col items-center justify-center w-full min-h-[48px] py-1 text-[10px] font-bold transition-all ${
+            isShop ? 'text-[#f00856]' : 'text-slate-400 hover:text-white'
+          }`}
         >
-          <Grid className={w-5 h-5 mb-0.5 transition-transform } />
+          <Grid className={`w-5 h-5 mb-0.5 transition-transform ${isShop ? 'scale-110' : ''}`} />
           <span className="tracking-tight">Catálogo</span>
         </Link>
 
         {/* LICENCIAS */}
         <Link
           to="/licencias"
-          className={lex flex-col items-center justify-center w-full min-h-[48px] py-1 text-[10px] font-bold transition-all }
+          className={`flex flex-col items-center justify-center w-full min-h-[48px] py-1 text-[10px] font-bold transition-all ${
+            isLicencias ? 'text-[#f00856]' : 'text-slate-400 hover:text-white'
+          }`}
         >
-          <Sparkles className={w-5 h-5 mb-0.5 transition-transform } />
+          <Sparkles className={`w-5 h-5 mb-0.5 transition-transform ${isLicencias ? 'scale-110' : ''}`} />
           <span className="tracking-tight">Licencias</span>
         </Link>
 
@@ -72,12 +78,14 @@ export default function MobileBottomNav() {
         {/* CUENTA / LOGIN */}
         <Link
           to={user ? '/account' : '/login'}
-          className={lex flex-col items-center justify-center w-full min-h-[48px] py-1 text-[10px] font-bold transition-all }
+          className={`flex flex-col items-center justify-center w-full min-h-[48px] py-1 text-[10px] font-bold transition-all ${
+            isAccount ? 'text-[#f00856]' : 'text-slate-400 hover:text-white'
+          }`}
         >
           {user ? (
-            <User className={w-5 h-5 mb-0.5 transition-transform } />
+            <User className={`w-5 h-5 mb-0.5 transition-transform ${isAccount ? 'scale-110' : ''}`} />
           ) : (
-            <LogIn className={w-5 h-5 mb-0.5 transition-transform } />
+            <LogIn className={`w-5 h-5 mb-0.5 transition-transform ${isAccount ? 'scale-110' : ''}`} />
           )}
           <span className="tracking-tight">{user ? 'Mi Cuenta' : 'Ingresar'}</span>
         </Link>

@@ -54,7 +54,7 @@ export default function WhatsAppFAB() {
 
   return (
     <div className={`fixed right-4 md:right-6 z-40 flex flex-col items-end gap-3 group/fab pb-[env(safe-area-inset-bottom,0px)] transition-all duration-300 ${
-      isPDP ? 'bottom-24 lg:bottom-6' : 'bottom-6'
+      isPDP ? 'bottom-24 lg:bottom-6' : 'bottom-20 md:bottom-6'
     }`}>
       {/* Tooltip bubble */}
       <div className="bg-white text-gray-800 text-xs md:text-sm font-semibold px-3 py-1.5 md:px-4 md:py-2 shadow-xl border border-white/10 opacity-0 translate-y-2 group-hover/fab:opacity-100 group-hover/fab:translate-y-0 transition-all duration-200 whitespace-nowrap">
