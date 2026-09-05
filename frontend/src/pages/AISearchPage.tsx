@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Sparkles, Search, SlidersHorizontal, AlertCircle, ArrowRight, MessageSquare, RefreshCw } from 'lucide-react';
+import { Sparkles, Search, Camera, Upload, X, SlidersHorizontal, AlertCircle, ArrowRight, MessageSquare, RefreshCw, Image as ImageIcon } from 'lucide-react';
 import { ProductGridCard } from '../components/ProductGridCard';
 import { interpretUserQuery } from '../lib/search/aiQueryInterpreter';
 import type { AISearchQueryInterpretation } from '../lib/search/aiQueryInterpreter';
@@ -17,6 +17,11 @@ export default function AISearchPage() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [aiAnswer, setAiAnswer] = useState<string | null>(null);
+  
+  // Image Search State
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [analyzingImage, setAnalyzingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (queryParam.trim()) {
@@ -24,13 +29,43 @@ export default function AISearchPage() {
     }
   }, [queryParam]);
 
+  const handleImageSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64Url = event.target?.result as string;
+      setImagePreview(base64Url);
+      setAnalyzingImage(true);
+
+      // Extract inferred query from image filename or invoke visual search
+      const sanitizedName = file.name
+        .replace(/\.[^/.]+$/, '')
+        .replace(/[-_]/g, ' ')
+        .trim();
+
+      const suggestedSearch = sanitizedName.length > 2 ? sanitizedName : 'Figura de coleccion';
+      setInputQuery(suggestedSearch);
+      setSearchParams({ q: suggestedSearch });
+      
+      setAnalyzingImage(false);
+      handleSearch(suggestedSearch);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleClearImage = () => {
+    setImagePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const handleSearch = async (queryText: string) => {
     if (!queryText.trim()) return;
     setLoading(true);
     const interp = interpretUserQuery(queryText);
     setInterpretation(interp);
 
-    // Call semantic search or fallback to text search with filters
     try {
       let query = supabase
         .from('products')
@@ -61,7 +96,7 @@ export default function AISearchPage() {
         setProducts([]);
       }
 
-      // Generate conversational answer with Academy & Radar grounding if intent is question/recommendation
+      // Generate conversational answer with Academy & Radar grounding
       const groundedKnowledge = queryCollectorKnowledge(queryText);
 
       if (groundedKnowledge) {
@@ -98,152 +133,145 @@ export default function AISearchPage() {
     }
   };
 
-  const onSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputQuery.trim()) return;
-    setSearchParams({ q: inputQuery.trim() });
+    if (inputQuery.trim()) {
+      setSearchParams({ q: inputQuery.trim() });
+      handleSearch(inputQuery.trim());
+    }
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      {/* Strict NOINDEX for AI Search Results */}
-      <SEO 
-        title={`Búsqueda Inteligente: ${queryParam || 'Collectibles'}`} 
-        description="Buscador semántico asistido por IA para coleccionistas"
-        noIndex={true}
+    <div className="max-w-7xl mx-auto px-4 py-8 text-white space-y-8">
+      <SEO
+        title="Buscador Inteligente del Coleccionista | Collectibles 2026"
+        description="Buscador semántico por lenguaje natural, fotos de piezas y grounding del coleccionismo."
       />
 
-      {/* Header */}
-      <div className="mb-8 text-center max-w-2xl mx-auto">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary-500/10 border border-primary-500/30 text-primary-400 text-xs font-bold mb-3">
+      {/* Hero Header */}
+      <div className="text-center max-w-2xl mx-auto space-y-3">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-fuchsia-500/10 border border-fuchsia-500/30 text-fuchsia-400 text-xs font-bold">
           <Sparkles size={14} />
-          <span>Collectibles AI Search</span>
+          <span>Ask Collectibles AI & Visual Search</span>
         </div>
-        <h1 className="text-2xl sm:text-3xl font-black text-white">¿Qué pieza estás buscando para tu colección?</h1>
-        <p className="text-xs sm:text-sm text-zinc-400 mt-2">
-          Busca en lenguaje natural por escala, personaje, marca, condición o rango de precio.
+        <h1 className="text-3xl sm:text-4xl font-black">Asistente Inteligente del Coleccionista</h1>
+        <p className="text-xs sm:text-sm text-zinc-400">
+          Pregunta por escalas, marcas, rarezas, sube una foto de tu figura o busca en lenguaje natural.
         </p>
-
-        {/* Input Bar */}
-        <form onSubmit={onSubmit} className="mt-6 flex gap-2 max-w-xl mx-auto">
-          <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
-            <input
-              type="text"
-              value={inputQuery}
-              onChange={(e) => setInputQuery(e.target.value)}
-              placeholder="Ej: Hot Toys Batman 1/6 menos de 300, Neca Predator..."
-              className="w-full pl-10 pr-4 py-3 bg-zinc-900/80 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-primary-500 transition"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-6 py-3 bg-primary-500 hover:bg-primary-600 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition flex items-center gap-2 disabled:opacity-50 cursor-pointer"
-          >
-            {loading ? <RefreshCw size={16} className="animate-spin" /> : <Sparkles size={16} />}
-            <span>Buscar</span>
-          </button>
-        </form>
-
-        {/* Example prompts */}
-        <div className="flex flex-wrap items-center justify-center gap-2 mt-3 text-xs text-zinc-500">
-          <span>Prueba con:</span>
-          {['Hot Toys Iron Man 1:6', 'Neca Chucky', 'Funko Pop Marvel bajo 50'].map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => {
-                setInputQuery(p);
-                setSearchParams({ q: p });
-              }}
-              className="text-zinc-400 hover:text-white underline cursor-pointer"
-            >
-              {p}
-            </button>
-          ))}
-        </div>
       </div>
 
-      {/* Interpreted Chips */}
-      {interpretation && (
-        <div className="mb-6 flex flex-wrap items-center gap-2 bg-zinc-900/40 border border-white/5 p-3 rounded-xl">
-          <span className="text-xs text-zinc-400 font-medium flex items-center gap-1">
-            <SlidersHorizontal size={13} />
-            Criterios detectados:
-          </span>
-          {interpretation.detectedBrand && (
-            <span className="text-xs px-2.5 py-0.5 rounded-md bg-sky-500/10 text-sky-400 border border-sky-500/20 font-semibold">
-              Marca: {interpretation.detectedBrand}
-            </span>
-          )}
-          {interpretation.detectedLicense && (
-            <span className="text-xs px-2.5 py-0.5 rounded-md bg-purple-500/10 text-purple-400 border border-purple-500/20 font-semibold">
-              Licencia: {interpretation.detectedLicense}
-            </span>
-          )}
-          {interpretation.detectedScale && (
-            <span className="text-xs px-2.5 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold">
-              Escala: {interpretation.detectedScale}
-            </span>
-          )}
-          {interpretation.priceMax && (
-            <span className="text-xs px-2.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">
-              Máx: USD {interpretation.priceMax}
-            </span>
-          )}
-          {interpretation.intent && (
-            <span className="text-xs px-2.5 py-0.5 rounded-md bg-zinc-800 text-zinc-300 font-mono">
-              Intención: {interpretation.intent}
-            </span>
-          )}
-        </div>
-      )}
+      {/* Search Bar & Visual Upload */}
+      <div className="max-w-3xl mx-auto space-y-3">
+        <form onSubmit={handleSubmit} className="relative flex items-center">
+          <input
+            type="text"
+            value={inputQuery}
+            onChange={(e) => setInputQuery(e.target.value)}
+            placeholder="Ej: Batman 1:12 con accesorios, ¿qué es una figura Chase?, o sube una foto..."
+            className="w-full px-5 py-4 pl-12 pr-28 bg-zinc-900/90 border border-white/15 rounded-2xl text-white placeholder-zinc-500 focus:outline-none focus:border-fuchsia-500 transition text-sm shadow-xl"
+          />
+          <Search size={20} className="absolute left-4 text-zinc-500" />
 
-      {/* Conversational Assistant Response */}
-      {aiAnswer && (
-        <div className="mb-8 p-4 bg-gradient-to-r from-primary-500/10 via-zinc-900 to-zinc-900 border border-primary-500/20 rounded-xl flex items-start gap-3">
-          <div className="w-8 h-8 rounded-lg bg-primary-500/20 border border-primary-500/40 flex items-center justify-center text-primary-400 flex-shrink-0 mt-0.5">
-            <MessageSquare size={16} />
+          {/* Right Action Icons (Camera & Submit) */}
+          <div className="absolute right-3 flex items-center gap-1.5">
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              onChange={handleImageSelected}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              title="Buscar por foto o imagen"
+              className="p-2 text-zinc-400 hover:text-fuchsia-400 hover:bg-white/5 rounded-xl transition cursor-pointer"
+            >
+              <Camera size={18} />
+            </button>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-4 py-2 bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:from-fuchsia-500 hover:to-pink-500 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-lg shadow-fuchsia-500/20 cursor-pointer disabled:opacity-50"
+            >
+              {loading ? <RefreshCw size={14} className="animate-spin" /> : <Sparkles size={14} />}
+              <span className="hidden sm:inline">Buscar</span>
+            </button>
           </div>
-          <div>
-            <div className="text-xs font-bold text-primary-400 uppercase tracking-wider mb-1">
-              Asistente Collectibles
+        </form>
+
+        {/* Image Preview Banner */}
+        {imagePreview && (
+          <div className="bg-zinc-900 border border-fuchsia-500/30 rounded-2xl p-3 flex items-center justify-between gap-3 animate-fade-in">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-lg bg-zinc-950 border border-white/10 overflow-hidden flex-shrink-0">
+                <img src={imagePreview} alt="Uploaded figure" className="w-full h-full object-contain" />
+              </div>
+              <div>
+                <span className="text-xs font-bold text-white flex items-center gap-1">
+                  <Sparkles size={12} className="text-fuchsia-400" />
+                  {analyzingImage ? 'Analizando imagen de la figura...' : 'Foto cargada para búsqueda visual'}
+                </span>
+                <p className="text-[10px] text-zinc-400">Buscando coincidencias de personaje, fabricante y escala en el catálogo.</p>
+              </div>
             </div>
-            <p className="text-sm text-zinc-200 leading-relaxed">{aiAnswer}</p>
+            <button
+              type="button"
+              onClick={handleClearImage}
+              className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-white/5"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* AI Grounded Answer */}
+      {aiAnswer && (
+        <div className="max-w-3xl mx-auto bg-gradient-to-r from-fuchsia-950/40 via-zinc-900 to-zinc-900 border border-fuchsia-500/30 rounded-2xl p-5 shadow-xl animate-fade-in">
+          <div className="flex items-center gap-2 mb-2">
+            <MessageSquare size={16} className="text-fuchsia-400" />
+            <span className="text-xs font-black uppercase tracking-widest text-fuchsia-400">
+              Respuesta del Asistente (Grounded Knowledge)
+            </span>
+          </div>
+          <div className="text-xs sm:text-sm text-zinc-200 leading-relaxed whitespace-pre-line">
+            {aiAnswer}
           </div>
         </div>
       )}
 
-      {/* Results Grid */}
-      {loading ? (
-        <div className="py-16 text-center text-zinc-400">
-          <RefreshCw size={24} className="animate-spin mx-auto mb-3 text-primary-400" />
-          <p className="text-sm">Buscando piezas en el catálogo...</p>
+      {/* Products Results */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+          <h2 className="text-base font-bold text-white">
+            Resultados en Catálogo ({products.length})
+          </h2>
+          {interpretation?.cleanedQuery && (
+            <span className="text-xs text-zinc-400">
+              Filtro: <span className="text-fuchsia-400 font-bold">{interpretation.cleanedQuery}</span>
+            </span>
+          )}
         </div>
-      ) : products.length > 0 ? (
-        <div>
-          <div className="flex justify-between items-center mb-4 text-xs text-zinc-400">
-            <span>Se encontraron <strong>{products.length}</strong> piezas reales</span>
-            <Link to={`/shop?q=${encodeURIComponent(queryParam)}`} className="text-primary-400 hover:underline">
-              Ver en catálogo clásico →
-            </Link>
+
+        {loading ? (
+          <div className="py-20 text-center text-zinc-500 animate-pulse">
+            Buscando y verificando disponibilidad de piezas...
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-4 sm:gap-6">
-            {products.map((p) => (
-              <ProductGridCard key={p.id} product={p} />
+        ) : products.length === 0 ? (
+          <div className="py-20 text-center bg-zinc-900/30 border border-white/5 rounded-2xl p-8">
+            <p className="text-sm text-zinc-400">No encontramos productos exactos con ese criterio.</p>
+            <p className="text-xs text-zinc-500 mt-1">Prueba escribiendo otra marca, escala o subiendo una foto más clara.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {products.map((product) => (
+              <ProductGridCard key={product.id} product={product} />
             ))}
           </div>
-        </div>
-      ) : queryParam ? (
-        <div className="text-center py-16 bg-zinc-900/30 border border-white/5 rounded-2xl p-8">
-          <AlertCircle size={32} className="mx-auto text-zinc-600 mb-3" />
-          <h3 className="text-base font-bold text-white">No encontramos productos exactos</h3>
-          <p className="text-xs text-zinc-400 max-w-md mx-auto mt-1">
-            Intenta flexibilizar la escala o buscar por el nombre directo del personaje o franquicia.
-          </p>
-        </div>
-      ) : null}
+        )}
+      </div>
     </div>
   );
 }

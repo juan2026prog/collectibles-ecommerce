@@ -1,19 +1,56 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { Radio, Calendar, Bell, Filter, Sparkles, ArrowRight, ExternalLink } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { Radio, Calendar, Bell, BellRing, Filter, Sparkles, ArrowRight, Check } from 'lucide-react';
 import type { ReleaseEvent } from '../../plugins/collector-radar/types';
 import { formatReleaseDatePrecision, getStatusBadgeConfig } from '../../plugins/collector-radar/core/releaseEngine';
 import SEO from '../../components/SEO';
 
 export default function RadarFeedPage() {
+  const { user } = useAuth();
   const [releases, setReleases] = useState<ReleaseEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<string>('ALL');
+  const [subscribedIds, setSubscribedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadReleases();
-  }, []);
+    loadSubscriptions();
+  }, [user]);
+
+  const loadSubscriptions = () => {
+    try {
+      const stored = localStorage.getItem('radar_subscribed_releases');
+      if (stored) {
+        setSubscribedIds(new Set(JSON.parse(stored)));
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const toggleSubscribe = async (releaseId: string, releaseTitle: string) => {
+    const next = new Set(subscribedIds);
+    const isSubscribed = next.has(releaseId);
+
+    if (isSubscribed) {
+      next.delete(releaseId);
+    } else {
+      next.add(releaseId);
+      if (user) {
+        await supabase.from('release_alerts').insert({
+          user_id: user.id,
+          release_id: releaseId,
+          alert_channel: 'push',
+          created_at: new Date().toISOString()
+        }).catch(() => {});
+      }
+    }
+
+    setSubscribedIds(next);
+    localStorage.setItem('radar_subscribed_releases', JSON.stringify(Array.from(next)));
+  };
 
   const loadReleases = async () => {
     try {
@@ -112,6 +149,7 @@ export default function RadarFeedPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredReleases.map((release) => {
             const badge = getStatusBadgeConfig(release.status);
+            const isSubscribed = subscribedIds.has(release.id);
             const dateStr = formatReleaseDatePrecision(
               release.release_precision,
               release.release_date_start,
@@ -154,13 +192,32 @@ export default function RadarFeedPage() {
                 {/* Content */}
                 <div className="p-5 flex-1 flex flex-col justify-between">
                   <div>
-                    <div className="flex items-center gap-2 text-[11px] text-zinc-400 mb-1">
-                      {release.brand?.name && <span>{release.brand.name}</span>}
-                      {release.license?.name && <span>• {release.license.name}</span>}
+                    <div className="flex items-center justify-between text-[11px] text-zinc-400 mb-1">
+                      <div className="flex items-center gap-1.5 truncate">
+                        {release.brand?.name && <span>{release.brand.name}</span>}
+                        {release.license?.name && <span>• {release.license.name}</span>}
+                      </div>
+
+                      {/* 1-Click Alert Button */}
+                      <button
+                        type="button"
+                        onClick={() => toggleSubscribe(release.id, release.title)}
+                        title={isSubscribed ? 'Cancelar alerta de preventa' : 'Avisarme cuando abra la preventa'}
+                        className={`p-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-1 cursor-pointer shrink-0 ${
+                          isSubscribed
+                            ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400'
+                            : 'bg-zinc-800/80 border-white/10 text-zinc-300 hover:text-white hover:bg-zinc-700'
+                        }`}
+                      >
+                        {isSubscribed ? <Check size={12} /> : <Bell size={12} className="text-amber-400" />}
+                        <span className="text-[10px] hidden sm:inline">
+                          {isSubscribed ? 'Aviso Activo' : 'Alerta Pre-order'}
+                        </span>
+                      </button>
                     </div>
 
                     <Link to={`/radar/${release.slug}`}>
-                      <h3 className="font-bold text-base text-white hover:text-rose-400 transition line-clamp-2">
+                      <h3 className="font-bold text-base text-white hover:text-rose-400 transition line-clamp-2 mt-2">
                         {release.title}
                       </h3>
                     </Link>

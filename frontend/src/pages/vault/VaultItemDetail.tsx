@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Archive, ArrowLeft, Save, Lock } from 'lucide-react';
+import { Archive, ArrowLeft, Save, Lock, Share2, Sparkles, Image as ImageIcon } from 'lucide-react';
 import type { VaultCondition, VaultBoxCondition, VaultStatus } from '../../plugins/collector-vault/types';
+import { VaultShareCardModal } from './VaultShareCardModal';
 
 export default function VaultItemDetail() {
   const { id } = useParams<{ id: string }>();
@@ -13,9 +14,11 @@ export default function VaultItemDetail() {
   const isNew = id === 'new';
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   const [form, setForm] = useState({
     custom_name: '',
+    custom_image_url: '',
     status: 'OWNED' as VaultStatus,
     condition: 'MINT' as VaultCondition,
     box_condition: 'SEALED' as VaultBoxCondition,
@@ -43,6 +46,7 @@ export default function VaultItemDetail() {
       if (!error && data) {
         setForm({
           custom_name: data.custom_name || '',
+          custom_image_url: data.custom_image_url || '',
           status: data.status,
           condition: data.condition,
           box_condition: data.box_condition,
@@ -66,6 +70,7 @@ export default function VaultItemDetail() {
       const payload = {
         user_id: user.id,
         custom_name: form.custom_name || 'Pieza Personal',
+        custom_image_url: form.custom_image_url || null,
         status: form.status,
         condition: form.condition,
         box_condition: form.box_condition,
@@ -92,14 +97,27 @@ export default function VaultItemDetail() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8 text-white space-y-6">
-      <Link to="/vault" className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-white transition">
-        <ArrowLeft size={14} />
-        <span>Volver a Mi Vault</span>
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link to="/vault" className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-white transition">
+          <ArrowLeft size={14} />
+          <span>Volver a Mi Vault</span>
+        </Link>
+
+        {!isNew && (
+          <button
+            type="button"
+            onClick={() => setIsShareModalOpen(true)}
+            className="px-3.5 py-1.5 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-amber-300 font-bold text-xs rounded-xl flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <Share2 size={13} />
+            <span>Compartir Ficha</span>
+          </button>
+        )}
+      </div>
 
       <div className="bg-zinc-900 border border-white/10 rounded-2xl p-6 shadow-xl">
         <h1 className="text-xl font-bold text-white mb-4">
-          {isNew ? 'Registrar Pieza Externa en Vault' : 'Editar Pieza en Bóveda'}
+          {isNew ? 'Registrar Pieza en Vault' : 'Editar Pieza en Bóveda'}
         </h1>
 
         <form onSubmit={handleSave} className="space-y-4 text-xs">
@@ -113,6 +131,31 @@ export default function VaultItemDetail() {
               placeholder="Ej: Mezco One:12 Batman Supreme Knight"
               className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-lg text-white"
             />
+          </div>
+
+          {/* Custom Photo URL / Upload */}
+          <div>
+            <label className="block text-zinc-400 font-semibold mb-1 flex items-center gap-1">
+              <ImageIcon size={13} className="text-amber-400" />
+              Foto Privada de tu Pieza (URL de imagen)
+            </label>
+            <div className="flex gap-3 items-center">
+              <input
+                type="url"
+                value={form.custom_image_url}
+                onChange={(e) => setForm({ ...form, custom_image_url: e.target.value })}
+                placeholder="https://i.imgur.com/ejemplo.jpg"
+                className="flex-1 px-3 py-2 bg-zinc-950 border border-white/10 rounded-lg text-white font-mono text-xs"
+              />
+              {form.custom_image_url && (
+                <div className="w-10 h-10 rounded-lg border border-white/10 bg-zinc-950 overflow-hidden flex-shrink-0">
+                  <img src={form.custom_image_url} alt="Preview" className="w-full h-full object-cover" />
+                </div>
+              )}
+            </div>
+            <p className="text-[10px] text-zinc-500 mt-1">
+              Esta foto se almacena de forma privada en tu bóveda para identificar el estado real de tu figura.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -181,12 +224,22 @@ export default function VaultItemDetail() {
           </div>
 
           <div>
+            <label className="block text-zinc-400 font-semibold mb-1">Fecha de Adquisición</label>
+            <input
+              type="date"
+              value={form.purchase_date}
+              onChange={(e) => setForm({ ...form, purchase_date: e.target.value })}
+              className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-lg text-white"
+            />
+          </div>
+
+          <div>
             <label className="block text-zinc-400 font-semibold mb-1">Notas Privadas del Coleccionista</label>
             <textarea
               rows={3}
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              placeholder="Detalles sobre accesorios, vendedor original o recuerdos de adquisición..."
+              placeholder="Detalles sobre número de edición, accesorios exhibidos o recuerdos personales..."
               className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-lg text-white"
             />
           </div>
@@ -195,14 +248,14 @@ export default function VaultItemDetail() {
             <button
               type="button"
               onClick={() => navigate('/vault')}
-              className="px-4 py-2 rounded-xl text-xs text-zinc-400 hover:text-white"
+              className="px-4 py-2 rounded-xl text-xs text-zinc-400 hover:text-white cursor-pointer"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-black font-bold text-xs rounded-xl flex items-center gap-1.5 transition"
+              className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-black font-bold text-xs rounded-xl flex items-center gap-1.5 transition cursor-pointer"
             >
               <Save size={14} />
               <span>{saving ? 'Guardando...' : 'Guardar en Vault'}</span>
@@ -210,6 +263,19 @@ export default function VaultItemDetail() {
           </div>
         </form>
       </div>
+
+      <VaultShareCardModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        item={{
+          custom_name: form.custom_name,
+          custom_image_url: form.custom_image_url,
+          status: form.status,
+          condition: form.condition,
+          box_condition: form.box_condition,
+          purchase_date: form.purchase_date
+        }}
+      />
     </div>
   );
 }
