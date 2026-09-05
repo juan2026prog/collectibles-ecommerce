@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { 
   Scale, Shield, Share2, Check, X, Sparkles, 
   ArrowLeft, Plus, Search, ShoppingCart, RefreshCw, Star,
-  Eye, CheckCircle2
+  Eye, CheckCircle2, ChevronDown, ChevronUp, FileText
 } from 'lucide-react';
 import { 
   DEFAULT_ATTRIBUTES, 
@@ -165,6 +165,7 @@ export const ComparePage: React.FC = () => {
 
   // Vistas y filtros
   const [activeTab, setActiveTab] = useState<'all' | 'diffs' | 'verdict'>('all');
+  const [isSpecsOpen, setIsSpecsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [addedToast, setAddedToast] = useState<string | null>(null);
 
@@ -1044,110 +1045,156 @@ export const ComparePage: React.FC = () => {
           </div>
         )}
 
-        {/* ── 6. COMPARACIÓN COMPLETA (FICHA TÉCNICA AGRUPADA) ── */}
+        {/* ── 6. COMPARACIÓN COMPLETA (FICHA TÉCNICA AGRUPADA CON DROPDOWN) ── */}
         {(activeTab === 'all') && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <div>
-                <h2 className="text-lg font-black text-white">Ficha Técnica Completa Agrupada</h2>
-                <p className="text-xs text-zinc-400">Datos normalizados de catálogo organizados por categoría:</p>
+          <div className="space-y-4">
+            {/* Header / Botón Dropdown principal */}
+            <div 
+              onClick={() => setIsSpecsOpen(prev => !prev)}
+              className="rounded-2xl bg-[#111726] border border-white/10 hover:border-white/20 p-4 sm:p-5 flex items-center justify-between gap-4 cursor-pointer transition-all shadow-lg group select-none"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-amber-400/10 border border-amber-400/20 text-amber-400 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                  <FileText size={20} />
+                </div>
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-base sm:text-lg font-black text-white group-hover:text-amber-400 transition-colors">
+                      Ficha Técnica Completa Agrupada
+                    </h2>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/5 border border-white/10 text-zinc-400">
+                      12 especificaciones
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-400">
+                    Dimensiones, articulación, cabezas, accesorios y packaging normalizados.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-zinc-200 group-hover:border-[#f00856]/50 group-hover:text-white transition flex-shrink-0">
+                <span className="hidden sm:inline">
+                  {isSpecsOpen ? 'Ocultar ficha técnica' : 'Ver ficha técnica completa'}
+                </span>
+                <span className="sm:hidden">
+                  {isSpecsOpen ? 'Ocultar' : 'Ver ficha'}
+                </span>
+                <ChevronDown 
+                  size={16} 
+                  className={`transition-transform duration-300 ${isSpecsOpen ? 'rotate-180 text-[#f00856]' : 'text-zinc-400'}`} 
+                />
               </div>
             </div>
 
-            {/* ── VISTA DESKTOP: TABLA AGRUPADA LIMPIA ── */}
-            <div className="hidden md:block rounded-2xl bg-[#111726] border border-white/10 shadow-xl overflow-hidden">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-white/10 bg-[#0b0f19]">
-                    <th className="p-4 w-60 text-xs font-black uppercase tracking-wider text-zinc-400">
-                      Especificación
-                    </th>
-                    {products.map((p) => (
-                      <th key={p.id} className="p-4 align-top">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 p-1 flex items-center justify-center flex-shrink-0">
-                            {p.primary_image && <img src={p.primary_image} alt="" className="max-w-full max-h-full object-contain" />}
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-white line-clamp-1">{p.title}</p>
-                            <p className="text-[11px] font-black text-amber-400">$ {p.base_price.toLocaleString('es-UY')}</p>
-                          </div>
-                        </div>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {SPEC_GROUPS.map((group) => (
-                    <React.Fragment key={group.id}>
-                      {/* Fila Encabezado de Grupo */}
-                      <tr className="bg-[#0e1422] border-t border-b border-white/10">
-                        <td colSpan={products.length + 1} className="py-2.5 px-4 text-xs font-black uppercase tracking-wider text-amber-400">
-                          {group.title}
-                        </td>
-                      </tr>
-
-                      {/* Filas de atributos del grupo */}
-                      {group.attributes.map((attr) => (
-                        <tr key={attr.key} className="hover:bg-white/[0.02] transition">
-                          <td className="py-3 px-4 text-xs font-medium text-zinc-400 bg-[#111726]/80">
-                            <div className="flex flex-col">
-                              <span className="text-zinc-200 font-bold">{attr.label}</span>
-                              {attr.description && (
-                                <span className="text-[10px] text-zinc-500">{attr.description}</span>
-                              )}
-                            </div>
-                          </td>
-
-                          {products.map((p) => {
-                            const val = p.normalized_attributes?.[attr.key]?.display || (p.metadata as any)?.[attr.key] || 'No informado';
-                            const isInformed = val !== 'No informado';
-
-                            return (
-                              <td key={p.id} className="py-3 px-4 text-xs font-medium text-zinc-300">
-                                <span className={isInformed ? 'text-zinc-200' : 'text-zinc-600 italic'}>
-                                  {val}
-                                </span>
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </React.Fragment>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* ── VISTA MOBILE: TARJETAS VERTICALES APILADAS POR ATRIBUTO ── */}
-            <div className="block md:hidden space-y-4">
-              {SPEC_GROUPS.map((group) => (
-                <div key={group.id} className="rounded-2xl bg-[#111726] border border-white/10 p-4 space-y-3">
-                  <h3 className="text-xs font-black uppercase tracking-wider text-amber-400 border-b border-white/5 pb-2">
-                    {group.title}
-                  </h3>
-
-                  <div className="space-y-3 divide-y divide-white/5">
-                    {group.attributes.map((attr) => (
-                      <div key={attr.key} className="pt-2.5 first:pt-0 space-y-2">
-                        <span className="text-xs font-bold text-zinc-300 block">{attr.label}</span>
-                        <div className="grid grid-cols-2 gap-2">
-                          {products.map((p) => {
-                            const val = p.normalized_attributes?.[attr.key]?.display || (p.metadata as any)?.[attr.key] || 'No informado';
-                            return (
-                              <div key={p.id} className="bg-[#080c14] p-2.5 rounded-xl border border-white/5 space-y-1">
-                                <span className="text-[10px] text-zinc-500 font-bold block line-clamp-1">{p.title.split(' ')[0]}</span>
-                                <span className="text-xs font-medium text-zinc-200 block">{val}</span>
+            {/* Contenido desplegable (Dropdown) */}
+            {isSpecsOpen && (
+              <div className="space-y-6 pt-2 animate-in fade-in slide-in-from-top-3 duration-300">
+                {/* ── VISTA DESKTOP: TABLA AGRUPADA LIMPIA ── */}
+                <div className="hidden md:block rounded-2xl bg-[#111726] border border-white/10 shadow-xl overflow-hidden">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/10 bg-[#0b0f19]">
+                        <th className="p-4 w-60 text-xs font-black uppercase tracking-wider text-zinc-400">
+                          Especificación
+                        </th>
+                        {products.map((p) => (
+                          <th key={p.id} className="p-4 align-top">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 p-1 flex items-center justify-center flex-shrink-0">
+                                {p.primary_image && <img src={p.primary_image} alt="" className="max-w-full max-h-full object-contain" />}
                               </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                              <div>
+                                <p className="text-xs font-bold text-white line-clamp-1">{p.title}</p>
+                                <p className="text-[11px] font-black text-amber-400">$ {p.base_price.toLocaleString('es-UY')}</p>
+                              </div>
+                            </div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {SPEC_GROUPS.map((group) => (
+                        <React.Fragment key={group.id}>
+                          {/* Fila Encabezado de Grupo */}
+                          <tr className="bg-[#0e1422] border-t border-b border-white/10">
+                            <td colSpan={products.length + 1} className="py-2.5 px-4 text-xs font-black uppercase tracking-wider text-amber-400">
+                              {group.title}
+                            </td>
+                          </tr>
+
+                          {/* Filas de atributos del grupo */}
+                          {group.attributes.map((attr) => (
+                            <tr key={attr.key} className="hover:bg-white/[0.02] transition">
+                              <td className="py-3 px-4 text-xs font-medium text-zinc-400 bg-[#111726]/80">
+                                <div className="flex flex-col">
+                                  <span className="text-zinc-200 font-bold">{attr.label}</span>
+                                  {attr.description && (
+                                    <span className="text-[10px] text-zinc-500">{attr.description}</span>
+                                  )}
+                                </div>
+                              </td>
+
+                              {products.map((p) => {
+                                const val = p.normalized_attributes?.[attr.key]?.display || (p.metadata as any)?.[attr.key] || 'No informado';
+                                const isInformed = val !== 'No informado';
+
+                                return (
+                                  <td key={p.id} className="py-3 px-4 text-xs font-medium text-zinc-300">
+                                    <span className={isInformed ? 'text-zinc-200' : 'text-zinc-600 italic'}>
+                                      {val}
+                                    </span>
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </React.Fragment>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              ))}
-            </div>
+
+                {/* ── VISTA MOBILE: TARJETAS VERTICALES APILADAS POR ATRIBUTO ── */}
+                <div className="block md:hidden space-y-4">
+                  {SPEC_GROUPS.map((group) => (
+                    <div key={group.id} className="rounded-2xl bg-[#111726] border border-white/10 p-4 space-y-3">
+                      <h3 className="text-xs font-black uppercase tracking-wider text-amber-400 border-b border-white/5 pb-2">
+                        {group.title}
+                      </h3>
+
+                      <div className="space-y-3 divide-y divide-white/5">
+                        {group.attributes.map((attr) => (
+                          <div key={attr.key} className="pt-2.5 first:pt-0 space-y-2">
+                            <span className="text-xs font-bold text-zinc-300 block">{attr.label}</span>
+                            <div className="grid grid-cols-2 gap-2">
+                              {products.map((p) => {
+                                const val = p.normalized_attributes?.[attr.key]?.display || (p.metadata as any)?.[attr.key] || 'No informado';
+                                return (
+                                  <div key={p.id} className="bg-[#080c14] p-2.5 rounded-xl border border-white/5 space-y-1">
+                                    <span className="text-[10px] text-zinc-500 font-bold block line-clamp-1">{p.title.split(' ')[0]}</span>
+                                    <span className="text-xs font-medium text-zinc-200 block">{val}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Botón inferior para plegar */}
+                <div className="flex justify-center pt-2">
+                  <button
+                    onClick={() => setIsSpecsOpen(false)}
+                    className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-medium text-zinc-400 hover:text-white transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <ChevronUp size={14} /> Ocultar ficha técnica completa
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
