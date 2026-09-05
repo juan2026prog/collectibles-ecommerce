@@ -1,12 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { 
   Sparkles, Search, Camera, X, RefreshCw, MessageSquare, 
-  Radio, BookOpen, ArrowRight, Bell, Check, ChevronDown, HelpCircle
+  Radio, BookOpen, ArrowRight, Bell, Check, ChevronDown, 
+  HelpCircle, Globe, Calendar, Flame, Shield, ArrowUpRight, Plus
 } from 'lucide-react';
 import { ProductGridCard } from '../components/ProductGridCard';
-import { interpretUserQuery } from '../lib/search/aiQueryInterpreter';
+import { 
+  interpretUserQuery, 
+  generateDirectEditorialAnswer, 
+  generateContextualQuestions 
+} from '../lib/search/aiQueryInterpreter';
 import type { AISearchQueryInterpretation } from '../lib/search/aiQueryInterpreter';
 import { queryCollectorKnowledge } from '../plugins/collector-academy/core/draftGuard';
 import { useCurrency } from '../contexts/CurrencyContext';
@@ -14,6 +19,17 @@ import { useCartContext } from '../contexts/CartContext';
 import { getProductImage } from '../lib/imageUtils';
 import { resolveCartItemPrice } from '../lib/priceResolver';
 import SEO from '../components/SEO';
+
+const HERO_SUGGESTION_CHIPS = [
+  'Dragon Ball',
+  'Preventas',
+  'S.H.Figuarts',
+  'Próximos lanzamientos',
+  'McFarlane DC',
+  'NECA Horror',
+  'Hot Toys 1:6',
+  'Marvel Legends'
+];
 
 const REFERENCE_QUESTIONS_POOL: string[] = [
   'De la Wave 3 de DC Multiverse de McFarlane, ¿qué tenés disponible?',
@@ -43,7 +59,6 @@ function getActiveReferenceQuestions(): string[] {
   }
   return pool.slice(0, 3);
 }
-
 
 interface RadarMatch {
   id: string;
@@ -119,6 +134,8 @@ const STATIC_RADAR_ITEMS: RadarMatch[] = [
   }
 ];
 
+type ResultFilterTab = 'all' | 'in_stock' | 'preorder' | 'international';
+
 export default function AISearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryParam = searchParams.get('q') || '';
@@ -126,11 +143,26 @@ export default function AISearchPage() {
   const [inputQuery, setInputQuery] = useState(queryParam);
   const [interpretation, setInterpretation] = useState<AISearchQueryInterpretation | null>(null);
   const [products, setProducts] = useState<any[]>([]);
+  const [relaxedProducts, setRelaxedProducts] = useState<any[]>([]);
   const [radarDrops, setRadarDrops] = useState<RadarMatch[]>([]);
   const [loading, setLoading] = useState(false);
-  const [aiAnswer, setAiAnswer] = useState<string | null>(null);
+  
+  // Editorial AI Answer State
+  const [editorialAnswer, setEditorialAnswer] = useState<{
+    headline: string;
+    summary: string;
+    breakdown: string[];
+    nextHighlight?: string;
+  } | null>(null);
   const [academyMatch, setAcademyMatch] = useState<{ title: string; summary: string; slug: string } | null>(null);
+  const [relatedQuestions, setRelatedQuestions] = useState<string[]>([]);
+  
+  // Quick Filter Tab
+  const [activeTab, setActiveTab] = useState<ResultFilterTab>('all');
+  
+  // Alerts & Subscriptions
   const [subscribedAlerts, setSubscribedAlerts] = useState<Record<string, boolean>>({});
+  const [searchAlertCreated, setSearchAlertCreated] = useState(false);
 
   const { formatCurrencyPrice } = useCurrency();
   const cart = useCartContext();
@@ -156,8 +188,17 @@ export default function AISearchPage() {
   }, []);
 
   useEffect(() => {
+    setInputQuery(queryParam);
     if (queryParam.trim()) {
       handleSearch(queryParam.trim());
+    } else {
+      setProducts([]);
+      setRelaxedProducts([]);
+      setRadarDrops([]);
+      setEditorialAnswer(null);
+      setAcademyMatch(null);
+      setInterpretation(null);
+      setSearchAlertCreated(false);
     }
   }, [queryParam]);
 
@@ -194,6 +235,9 @@ export default function AISearchPage() {
   const handleSearch = async (queryText: string) => {
     if (!queryText.trim()) return;
     setLoading(true);
+    setActiveTab('all');
+    setSearchAlertCreated(false);
+
     const interp = interpretUserQuery(queryText);
     setInterpretation(interp);
 
@@ -203,15 +247,18 @@ export default function AISearchPage() {
         .select(`
           id, title, slug, price, currency, final_price_usd, base_price,
           status, condition, brand_id, images, category_id,
+          is_international, source_provider, is_preorder,
           brand:brands(id, name),
           category:categories(id, name),
           variants:product_variants(*)
         `)
         .eq('status', 'active')
-        .limit(24);
+        .limit(36);
 
       if (interp.cleanedQuery) {
         query = query.ilike('title', `%${interp.cleanedQuery}%`);
+      } else if (interp.detectedLicense) {
+        query = query.ilike('title', `%${interp.detectedLicense}%`);
       }
 
       if (interp.priceMax) {
@@ -222,7 +269,11 @@ export default function AISearchPage() {
       }
 
       const { data, error } = await query;
+      let directResults: any[] = [];
+      let secondaryResults: any[] = [];
+
       if (!error && data) {
+        directResults = data;
         setProducts(data);
       } else {
         setProducts([]);
@@ -234,42 +285,62 @@ export default function AISearchPage() {
         item.title.toLowerCase().includes(lowerQ) ||
         item.brand.toLowerCase().includes(lowerQ) ||
         item.line.toLowerCase().includes(lowerQ) ||
-        (interp.detectedBrand && item.brand.toLowerCase().includes(interp.detectedBrand.toLowerCase()))
+        (interp.detectedBrand && item.brand.toLowerCase().includes(interp.detectedBrand.toLowerCase())) ||
+        (interp.detectedLicense && item.title.toLowerCase().includes(interp.detectedLicense.toLowerCase()))
       );
       setRadarDrops(matchedDrops);
 
-      // Generate conversational answer with Academy & Radar grounding
-      const groundedKnowledge = queryCollectorKnowledge(queryText);
+      // Relaxed Fallback when 0 exact results
+      if (directResults.length === 0 && (interp.detectedLicense || interp.detectedBrand || interp.detectedLine)) {
+        const fallbackTerm = interp.detectedLicense || interp.detectedBrand || interp.detectedLine;
+        const { data: fallbackData } = await supabase
+          .from('products')
+          .select(`
+            id, title, slug, price, currency, final_price_usd, base_price,
+            status, condition, brand_id, images, category_id,
+            is_international, source_provider, is_preorder,
+            brand:brands(id, name),
+            category:categories(id, name),
+            variants:product_variants(*)
+          `)
+          .eq('status', 'active')
+          .ilike('title', `%${fallbackTerm}%`)
+          .limit(12);
+        
+        secondaryResults = fallbackData || [];
+        setRelaxedProducts(secondaryResults);
+      } else {
+        setRelaxedProducts([]);
+      }
 
+      // Direct Editorial Answer Generation
+      const directAnswer = generateDirectEditorialAnswer(interp, directResults, matchedDrops);
+      setEditorialAnswer(directAnswer);
+
+      // Contextual Related Questions
+      const questions = generateContextualQuestions(interp);
+      setRelatedQuestions(questions);
+
+      // Academy Knowledge Grounding Link
+      const groundedKnowledge = queryCollectorKnowledge(queryText);
       if (groundedKnowledge) {
-        setAiAnswer(
-          `**${groundedKnowledge.title}:** ${groundedKnowledge.summary}\n\n` +
-          `• **Puntos Clave:** ${groundedKnowledge.keyDetails.join(' · ')}`
-        );
         setAcademyMatch({
           title: groundedKnowledge.title,
           summary: groundedKnowledge.summary,
           slug: groundedKnowledge.suggestedSlug || 'como-empezar-coleccion-figuras'
         });
-      } else if (interp.isQuestion || interp.intent === 'recommendation') {
-        setAiAnswer(
-          `Analizamos tu consulta "${queryText}". Identificamos interés en ${interp.detectedBrand || 'coleccionables'} ` +
-          `${interp.detectedScale ? `en escala ${interp.detectedScale}` : ''}. ` +
-          `A continuación te presentamos las piezas exactas verificadas en nuestro catálogo que coinciden con tu criterio.`
-        );
-        setAcademyMatch(null);
       } else {
-        setAiAnswer(null);
         setAcademyMatch(null);
       }
 
-      // Log search for AI insights
+      // Log search for AI telemetry
       await supabase.from('ai_search_logs').insert({
         query: queryText,
-        results_count: data ? data.length : 0,
+        results_count: directResults.length,
         filters_detected: {
           brand: interp.detectedBrand,
           license: interp.detectedLicense,
+          line: interp.detectedLine,
           scale: interp.detectedScale,
           priceRange: [interp.priceMin, interp.priceMax]
         }
@@ -294,6 +365,22 @@ export default function AISearchPage() {
     setInputQuery(chip);
     setSearchParams({ q: chip });
     handleSearch(chip);
+  };
+
+  const handleRemoveFilterToken = (tokenToRemove: string) => {
+    const updatedQuery = inputQuery
+      .replace(new RegExp(tokenToRemove, 'gi'), '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (updatedQuery) {
+      setInputQuery(updatedQuery);
+      setSearchParams({ q: updatedQuery });
+      handleSearch(updatedQuery);
+    } else {
+      setInputQuery('');
+      setSearchParams({});
+    }
   };
 
   const handleAddToCart = (p: any) => {
@@ -331,270 +418,648 @@ export default function AISearchPage() {
     }));
   };
 
+  const handleCreateSearchAlert = () => {
+    setSearchAlertCreated(true);
+  };
+
+  // Filtered Products based on Quick Tab
+  const displayedProducts = useMemo(() => {
+    const sourceList = products.length > 0 ? products : relaxedProducts;
+    if (activeTab === 'all') return sourceList;
+    if (activeTab === 'in_stock') return sourceList.filter(p => !p.is_preorder && p.status !== 'preorder');
+    if (activeTab === 'preorder') return sourceList.filter(p => p.is_preorder || p.status === 'preorder');
+    if (activeTab === 'international') return sourceList.filter(p => p.is_international || p.source_provider === 'zinc');
+    return sourceList;
+  }, [products, relaxedProducts, activeTab]);
+
+  const inStockCount = useMemo(() => {
+    const source = products.length > 0 ? products : relaxedProducts;
+    return source.filter(p => !p.is_preorder && p.status !== 'preorder').length;
+  }, [products, relaxedProducts]);
+
+  const preorderCount = useMemo(() => {
+    const source = products.length > 0 ? products : relaxedProducts;
+    return source.filter(p => p.is_preorder || p.status === 'preorder').length;
+  }, [products, relaxedProducts]);
+
+  const internationalCount = useMemo(() => {
+    const source = products.length > 0 ? products : relaxedProducts;
+    return source.filter(p => p.is_international || p.source_provider === 'zinc').length;
+  }, [products, relaxedProducts]);
+
+  const hasSearchQuery = Boolean(queryParam.trim());
+
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 text-white space-y-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8 text-white min-h-[80vh]">
       <SEO
-        title="Buscador Inteligente del Coleccionista | Collectibles 2026"
-        description="Buscador semántico por lenguaje natural, fotos de piezas y grounding del coleccionismo."
+        title={hasSearchQuery ? `Buscando "${queryParam}" | Collectibles AI` : 'Asistente Inteligente del Coleccionista | Collectibles 2026'}
+        description="Buscador semántico por lenguaje natural, fotos de piezas y asistente de compras de coleccionismo."
       />
 
-      {/* Hero Header */}
-      <div className="text-center max-w-2xl mx-auto space-y-3">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-fuchsia-500/10 border border-fuchsia-500/30 text-fuchsia-400 text-xs font-bold">
-          <Sparkles size={14} />
-          <span>Ask Collectibles AI & Visual Search</span>
-        </div>
-        <h1 className="text-3xl sm:text-4xl font-black">Asistente Inteligente del Coleccionista</h1>
-        <p className="text-xs sm:text-sm text-zinc-400">
-          Pregunta por escalas, marcas, rarezas, sube una foto de tu figura o busca en lenguaje natural.
-        </p>
-      </div>
-
-      {/* Search Bar & Visual Upload */}
-      <div className="max-w-3xl mx-auto space-y-3">
-        <form onSubmit={handleSubmit} className="relative flex items-center">
-          <input
-            type="text"
-            value={inputQuery}
-            onChange={(e) => setInputQuery(e.target.value)}
-            placeholder="Ej: Batman 1:12 con accesorios, ¿qué es una figura Chase?, o sube una foto..."
-            className="w-full px-5 py-4 pl-12 pr-28 bg-zinc-900/90 border border-white/15 rounded-2xl text-white placeholder-zinc-500 focus:outline-none focus:border-fuchsia-500 transition text-sm shadow-xl"
-          />
-          <Search size={20} className="absolute left-4 text-zinc-500" />
-
-          {/* Right Action Icons (Camera & Submit) */}
-          <div className="absolute right-3 flex items-center gap-1.5">
-            <input
-              type="file"
-              ref={fileInputRef}
-              accept="image/*"
-              onChange={handleImageSelected}
-              className="hidden"
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              title="Buscar por foto o imagen"
-              className="p-2 text-zinc-400 hover:text-fuchsia-400 hover:bg-white/5 rounded-xl transition cursor-pointer"
-            >
-              <Camera size={18} />
-            </button>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-4 py-2 bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:from-fuchsia-500 hover:to-pink-500 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-lg shadow-fuchsia-500/20 cursor-pointer disabled:opacity-50"
-            >
-              {loading ? <RefreshCw size={14} className="animate-spin" /> : <Sparkles size={14} />}
-              <span className="hidden sm:inline">Buscar</span>
-            </button>
+      {/* ========================================================================= */}
+      {/* 1. ESTADO INICIAL — ANTES DE REALIZAR UNA BÚSQUEDA (HERO PROTAGONISTA)     */}
+      {/* ========================================================================= */}
+      {!hasSearchQuery ? (
+        <div className="max-w-3xl mx-auto space-y-8 py-8 sm:py-12 animate-fade-in">
+          {/* Hero Branding */}
+          <div className="text-center space-y-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#f00856]/10 border border-[#f00856]/30 text-[#f00856] text-xs font-black uppercase tracking-wider">
+              <Sparkles size={14} className="animate-pulse" />
+              <span>COLLECTIBLES AI · ASISTENTE INTELIGENTE</span>
+            </div>
+            <h1 className="text-3xl sm:text-5xl font-black tracking-tight leading-tight">
+              Asistente Inteligente del Coleccionista
+            </h1>
+            <p className="text-sm sm:text-base text-zinc-400 max-w-xl mx-auto font-medium">
+              Preguntá por figuras, líneas, escalas, marcas, lanzamientos o subí una foto.
+            </p>
           </div>
-        </form>
 
-        {/* Dropdown Menu: 3 Reference Questions (rotate every 2 hours) */}
-        {!queryParam && (
-          <div className="relative pt-1" ref={dropdownRef}>
-            <div className="flex items-center justify-between gap-2">
-              <button
-                type="button"
-                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-white/10 hover:border-fuchsia-500/40 text-xs font-semibold text-zinc-300 hover:text-white transition-all shadow-sm cursor-pointer"
-              >
-                <Sparkles size={13} className="text-fuchsia-400" />
-                <span>Ejemplos de preguntas recomendadas (3)</span>
-                <ChevronDown size={14} className={`text-zinc-400 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180 text-fuchsia-400' : ''}`} />
-              </button>
+          {/* Main Hero Search Bar */}
+          <div className="space-y-4">
+            <form onSubmit={handleSubmit} className="relative flex items-center shadow-2xl">
+              <input
+                type="text"
+                value={inputQuery}
+                onChange={(e) => setInputQuery(e.target.value)}
+                placeholder="Ej: Batman 1:12 con accesorios, ¿qué es una figura Chase?, o sube una foto..."
+                className="w-full px-5 py-4 pl-12 pr-28 bg-zinc-900/95 border border-white/15 rounded-2xl text-white placeholder-zinc-500 focus:outline-none focus:border-[#f00856] transition text-sm sm:text-base shadow-xl"
+              />
+              <Search size={20} className="absolute left-4 text-zinc-500" />
 
-              <span className="text-[11px] text-zinc-500 hidden sm:inline">
-                Rotan cada 2 horas
-              </span>
+              <div className="absolute right-3 flex items-center gap-1.5">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/*"
+                  onChange={handleImageSelected}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Buscar por foto o imagen"
+                  className="p-2 text-zinc-400 hover:text-[#f00856] hover:bg-white/5 rounded-xl transition cursor-pointer"
+                >
+                  <Camera size={19} />
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-5 py-2.5 bg-gradient-to-r from-[#f00856] to-pink-600 hover:from-[#d00749] hover:to-pink-500 text-white font-black text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-[#f00856]/25 cursor-pointer disabled:opacity-50"
+                >
+                  {loading ? <RefreshCw size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                  <span>Buscar</span>
+                </button>
+              </div>
+            </form>
+
+            {/* Dynamic Suggestion Chips */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs no-scrollbar">
+              <span className="text-zinc-500 text-[11px] font-bold uppercase tracking-wider shrink-0">Sugerencias:</span>
+              {HERO_SUGGESTION_CHIPS.map(chip => (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={() => handleChipClick(chip)}
+                  className="px-3 py-1 rounded-full bg-zinc-900/80 hover:bg-zinc-800 border border-white/10 hover:border-[#f00856]/40 text-zinc-300 hover:text-white transition-all text-xs shrink-0 cursor-pointer font-medium"
+                >
+                  {chip}
+                </button>
+              ))}
             </div>
 
-            {/* Dropdown Content */}
-            {isDropdownOpen && (
-              <div className="absolute left-0 right-0 mt-2 p-2 bg-zinc-950/95 border border-fuchsia-500/30 rounded-2xl shadow-2xl backdrop-blur-xl z-50 space-y-1.5 animate-fade-in">
-                <div className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-zinc-400 border-b border-white/10 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5 text-fuchsia-400">
-                    <HelpCircle size={12} />
-                    Preguntas de referencia activas
-                  </span>
-                  <span className="text-[10px] text-zinc-500 font-normal">3 de 12 preguntas</span>
+            {/* Dropdown Menu: 3 Reference Questions (rotate every 2 hours) */}
+            <div className="relative pt-2" ref={dropdownRef}>
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-white/10 hover:border-[#f00856]/40 text-xs font-semibold text-zinc-300 hover:text-white transition-all shadow-sm cursor-pointer"
+                >
+                  <Sparkles size={13} className="text-[#f00856]" />
+                  <span>Ejemplos de preguntas recomendadas (3)</span>
+                  <ChevronDown size={14} className={`text-zinc-400 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180 text-[#f00856]' : ''}`} />
+                </button>
+                <span className="text-[11px] text-zinc-500 hidden sm:inline">Rotan cada 2 horas</span>
+              </div>
+
+              {isDropdownOpen && (
+                <div className="absolute left-0 right-0 mt-2 p-2 bg-zinc-950 border border-white/15 rounded-2xl shadow-2xl backdrop-blur-xl z-50 space-y-1 animate-fade-in">
+                  <div className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-zinc-400 border-b border-white/10 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-[#f00856]">
+                      <HelpCircle size={12} />
+                      Preguntas de referencia activas
+                    </span>
+                    <span className="text-[10px] text-zinc-500">3 de 12 seleccionadas</span>
+                  </div>
+                  {getActiveReferenceQuestions().map((q, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        handleChipClick(q);
+                        setIsDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-[#f00856]/10 border border-transparent hover:border-[#f00856]/30 text-xs text-zinc-200 hover:text-white transition flex items-start gap-2.5 cursor-pointer group"
+                    >
+                      <Search size={13} className="text-zinc-500 group-hover:text-[#f00856] mt-0.5 shrink-0 transition-colors" />
+                      <span className="leading-relaxed">{q}</span>
+                    </button>
+                  ))}
                 </div>
-                {getActiveReferenceQuestions().map((q, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => {
-                      handleChipClick(q);
-                      setIsDropdownOpen(false);
-                    }}
-                    className="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-fuchsia-950/40 border border-transparent hover:border-fuchsia-500/30 text-xs text-zinc-200 hover:text-white transition flex items-start gap-2.5 cursor-pointer group"
+              )}
+            </div>
+          </div>
+
+          {/* Quick Pillar Cards Preview */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-6">
+            <div className="bg-zinc-900/50 border border-white/5 rounded-2xl p-4 text-center space-y-1.5">
+              <Sparkles size={18} className="text-[#f00856] mx-auto" />
+              <h3 className="text-xs font-bold text-white">Búsqueda Semántica</h3>
+              <p className="text-[10px] text-zinc-400 leading-tight">Por escala, medidas o lenguaje natural</p>
+            </div>
+            <Link to="/radar" className="bg-zinc-900/50 border border-white/5 hover:border-sky-500/30 rounded-2xl p-4 text-center space-y-1.5 transition">
+              <Radio size={18} className="text-sky-400 mx-auto" />
+              <h3 className="text-xs font-bold text-white">Radar de Preventas</h3>
+              <p className="text-[10px] text-zinc-400 leading-tight">Lanzamientos y alertas oficiales</p>
+            </Link>
+            <Link to="/academy" className="bg-zinc-900/50 border border-white/5 hover:border-fuchsia-500/30 rounded-2xl p-4 text-center space-y-1.5 transition">
+              <BookOpen size={18} className="text-fuchsia-400 mx-auto" />
+              <h3 className="text-xs font-bold text-white">Collector Academy</h3>
+              <p className="text-[10px] text-zinc-400 leading-tight">Guías de escalas, resinas y bootlegs</p>
+            </Link>
+            <Link to="/vault" className="bg-zinc-900/50 border border-white/5 hover:border-emerald-500/30 rounded-2xl p-4 text-center space-y-1.5 transition">
+              <Shield size={18} className="text-emerald-400 mx-auto" />
+              <h3 className="text-xs font-bold text-white">The Vault</h3>
+              <p className="text-[10px] text-zinc-400 leading-tight">Vitrina y colección privada</p>
+            </Link>
+          </div>
+        </div>
+      ) : (
+        /* ========================================================================= */
+        /* 2. ESTADO RESULTADOS — DESPUÉS DE HACER UNA BÚSQUEDA (COMPACTO Y DIRECTO)  */
+        /* ========================================================================= */
+        <div className="space-y-4 sm:space-y-5 animate-fade-in">
+          {/* Compact Top Header & Search Bar (~120-150px) */}
+          <div className="bg-zinc-900/90 border border-white/10 rounded-2xl p-3 sm:p-4 shadow-xl space-y-2.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              {/* Compact Badge */}
+              <div className="flex items-center gap-2">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#f00856]/10 text-[#f00856] text-[11px] font-black tracking-wider uppercase">
+                  <Sparkles size={12} />
+                  <span>COLLECTIBLES AI</span>
+                </div>
+                <span className="text-xs text-zinc-400 font-medium hidden md:inline">
+                  Asistente conectado al catálogo
+                </span>
+              </div>
+
+              {/* Reset to New Search Link */}
+              <Link 
+                to="/search/ai"
+                onClick={() => setInputQuery('')}
+                className="text-[11px] font-bold text-zinc-400 hover:text-white transition flex items-center gap-1"
+              >
+                <span>Nueva consulta</span>
+                <ArrowRight size={12} />
+              </Link>
+            </div>
+
+            {/* Compact Search Bar */}
+            <form onSubmit={handleSubmit} className="relative flex items-center">
+              <input
+                type="text"
+                value={inputQuery}
+                onChange={(e) => setInputQuery(e.target.value)}
+                placeholder="Realizar otra consulta al asistente..."
+                className="w-full px-4 py-2.5 pl-10 pr-24 bg-zinc-950 border border-white/10 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-[#f00856] transition text-xs sm:text-sm shadow-inner"
+              />
+              <Search size={16} className="absolute left-3.5 text-zinc-500" />
+
+              <div className="absolute right-2 flex items-center gap-1">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/*"
+                  onChange={handleImageSelected}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Buscar por imagen"
+                  className="p-1.5 text-zinc-400 hover:text-[#f00856] hover:bg-white/5 rounded-lg transition cursor-pointer"
+                >
+                  <Camera size={16} />
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-3.5 py-1.5 bg-[#f00856] hover:bg-[#d00749] text-white font-bold text-xs rounded-lg transition flex items-center gap-1.5 shadow-md cursor-pointer disabled:opacity-50"
+                >
+                  {loading ? <RefreshCw size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                  <span>Buscar</span>
+                </button>
+              </div>
+            </form>
+
+            {/* Interpreted Filter Chips (Interactive & Removable) */}
+            {interpretation && (
+              <div className="flex items-center gap-1.5 flex-wrap pt-0.5 text-[11px]">
+                <span className="text-zinc-500 font-bold uppercase tracking-wider text-[10px] mr-1">Criterios:</span>
+                
+                {interpretation.detectedLicense && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-zinc-800 border border-white/10 text-zinc-200 font-semibold">
+                    Franquicia: <strong className="text-white">{interpretation.detectedLicense}</strong>
+                    <button type="button" onClick={() => handleRemoveFilterToken(interpretation.detectedLicense!)} className="text-zinc-400 hover:text-[#f00856] ml-0.5">
+                      <X size={12} />
+                    </button>
+                  </span>
+                )}
+
+                {interpretation.detectedBrand && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-zinc-800 border border-white/10 text-zinc-200 font-semibold">
+                    Marca: <strong className="text-white">{interpretation.detectedBrand}</strong>
+                    <button type="button" onClick={() => handleRemoveFilterToken(interpretation.detectedBrand!)} className="text-zinc-400 hover:text-[#f00856] ml-0.5">
+                      <X size={12} />
+                    </button>
+                  </span>
+                )}
+
+                {interpretation.detectedLine && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-zinc-800 border border-white/10 text-zinc-200 font-semibold">
+                    Línea: <strong className="text-white">{interpretation.detectedLine}</strong>
+                    <button type="button" onClick={() => handleRemoveFilterToken(interpretation.detectedLine!)} className="text-zinc-400 hover:text-[#f00856] ml-0.5">
+                      <X size={12} />
+                    </button>
+                  </span>
+                )}
+
+                {interpretation.detectedScale && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-zinc-800 border border-white/10 text-zinc-200 font-semibold">
+                    Escala: <strong className="text-white">{interpretation.detectedScale}</strong>
+                    <button type="button" onClick={() => handleRemoveFilterToken(interpretation.detectedScale!)} className="text-zinc-400 hover:text-[#f00856] ml-0.5">
+                      <X size={12} />
+                    </button>
+                  </span>
+                )}
+
+                {interpretation.isPreorder && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-950/80 border border-sky-500/30 text-sky-300 font-bold">
+                    Preventa
+                  </span>
+                )}
+
+                {interpretation.priceMax && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-800 border border-white/10 text-zinc-200 font-semibold">
+                    Máx: <strong className="text-white">USD {interpretation.priceMax}</strong>
+                  </span>
+                )}
+
+                {interpretation.excludedBrand && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-950/60 border border-red-500/30 text-red-300 font-semibold">
+                    Excluir: {interpretation.excludedBrand}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Image Preview Banner (if loaded) */}
+          {imagePreview && (
+            <div className="bg-zinc-900 border border-white/10 rounded-2xl p-3 flex items-center justify-between gap-3 animate-fade-in">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-zinc-950 border border-white/10 overflow-hidden shrink-0">
+                  <img src={imagePreview} alt="Uploaded figure" className="w-full h-full object-contain" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-white flex items-center gap-1">
+                    <Sparkles size={12} className="text-[#f00856]" />
+                    {analyzingImage ? 'Analizando imagen...' : 'Foto cargada para búsqueda visual'}
+                  </span>
+                  <p className="text-[10px] text-zinc-400">Coincidencias deducidas por visión y catálogo.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleClearImage}
+                className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-white/5 cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* RESPUESTA EDITORIAL DE LA IA (SOBRIA, DIRECTA, SIN BORDES GIGANTES)        */}
+          {/* ========================================================================= */}
+          {editorialAnswer && (
+            <div className="bg-zinc-900/70 border border-white/10 rounded-2xl p-4 sm:p-5 shadow-lg space-y-3">
+              <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                <div className="flex items-center gap-2">
+                  <Sparkles size={14} className="text-[#f00856]" />
+                  <h2 className="text-xs font-black uppercase tracking-wider text-white">
+                    {editorialAnswer.headline}
+                  </h2>
+                </div>
+                {radarDrops.length > 0 && (
+                  <span className="text-[11px] font-bold text-sky-400 flex items-center gap-1">
+                    <Radio size={12} />
+                    {radarDrops.length} en Radar
+                  </span>
+                )}
+              </div>
+
+              {/* Direct Concise Summary */}
+              <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed font-medium">
+                {editorialAnswer.summary}
+              </p>
+
+              {/* Breakdown Bullet Points */}
+              {editorialAnswer.breakdown && editorialAnswer.breakdown.length > 0 && (
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5 pt-1 text-xs text-zinc-300">
+                  {editorialAnswer.breakdown.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#f00856]" />
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {editorialAnswer.nextHighlight && (
+                <div className="text-[11px] text-zinc-400 font-medium pt-1">
+                  💡 {editorialAnswer.nextHighlight}
+                </div>
+              )}
+
+              {/* Connected Academy Guide Link (if matched) */}
+              {academyMatch && (
+                <div className="mt-2 pt-2 border-t border-white/5 flex items-center justify-between gap-3 bg-black/20 p-2.5 rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <BookOpen size={14} className="text-fuchsia-400 shrink-0" />
+                    <span className="text-xs text-zinc-300">
+                      <strong>Guía en Academy:</strong> {academyMatch.title}
+                    </span>
+                  </div>
+                  <Link 
+                    to={`/academy/${academyMatch.slug}`}
+                    className="text-xs font-bold text-[#f00856] hover:text-pink-400 flex items-center gap-1 shrink-0"
                   >
-                    <Search size={13} className="text-zinc-500 group-hover:text-fuchsia-400 mt-0.5 shrink-0 transition-colors" />
-                    <span className="leading-relaxed">{q}</span>
+                    <span>Leer guía</span>
+                    <ArrowRight size={12} />
+                  </Link>
+                </div>
+              )}
+
+              {/* Related Contextual Questions (2-4 Clickable Follow-ups) */}
+              {relatedQuestions.length > 0 && (
+                <div className="pt-2 border-t border-white/5 space-y-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 block">
+                    También podés consultar:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {relatedQuestions.map((q, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => handleChipClick(q)}
+                        className="px-2.5 py-1 rounded-lg bg-black/40 hover:bg-white/5 border border-white/5 hover:border-[#f00856]/30 text-[11px] text-zinc-300 hover:text-white transition flex items-center gap-1.5 cursor-pointer text-left"
+                      >
+                        <Search size={11} className="text-zinc-500" />
+                        <span>{q}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* MODO DESCUBRIMIENTO CUANDO HAY 0 RESULTADOS EXACTOS (NUNCA PANTALLA VACÍA) */}
+          {/* ========================================================================= */}
+          {!loading && products.length === 0 && (
+            <div className="bg-zinc-900/60 border border-white/10 rounded-2xl p-5 sm:p-6 space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <span className="text-xs font-black uppercase text-[#f00856] tracking-wider flex items-center gap-1.5">
+                    <Sparkles size={14} />
+                    Modo Descubrimiento
+                  </span>
+                  <h3 className="text-sm sm:text-base font-bold text-white">
+                    Explorá opciones alternativas para completar tu vitrina
+                  </h3>
+                  <p className="text-xs text-zinc-400 max-w-xl">
+                    No encontramos stock exacto para ese criterio específico, pero podés consultar los lanzamientos en Radar, el catálogo internacional o activar una alerta.
+                  </p>
+                </div>
+
+                {/* Create Alert Action */}
+                <button
+                  type="button"
+                  onClick={handleCreateSearchAlert}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 shrink-0 cursor-pointer shadow-md ${
+                    searchAlertCreated
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      : 'bg-[#f00856] hover:bg-[#d00749] text-white shadow-[#f00856]/20'
+                  }`}
+                >
+                  {searchAlertCreated ? <Check size={14} /> : <Bell size={14} />}
+                  <span>{searchAlertCreated ? 'Alerta de preventa activa' : 'Avisarme cuando esté disponible'}</span>
+                </button>
+              </div>
+
+              {/* Action Buttons connected to actual tools */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+                <Link
+                  to="/radar"
+                  className="px-3 py-2.5 rounded-xl bg-sky-950/40 hover:bg-sky-900/50 border border-sky-500/30 text-sky-300 text-xs font-bold transition flex items-center justify-between"
+                >
+                  <span>Próximos lanzamientos</span>
+                  <ArrowUpRight size={14} />
+                </Link>
+
+                <Link
+                  to="/shop?international=true"
+                  className="px-3 py-2.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-700/80 border border-white/10 text-zinc-200 text-xs font-bold transition flex items-center justify-between"
+                >
+                  <span>Buscar internacional</span>
+                  <Globe size={14} />
+                </Link>
+
+                <button
+                  type="button"
+                  onClick={() => handleChipClick(interpretation?.detectedLicense || interpretation?.detectedBrand || 'Coleccionables')}
+                  className="px-3 py-2.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-700/80 border border-white/10 text-zinc-200 text-xs font-bold transition flex items-center justify-between text-left cursor-pointer"
+                >
+                  <span className="truncate">Ver todo de {interpretation?.detectedLicense || interpretation?.detectedBrand || 'la línea'}</span>
+                  <Search size={14} />
+                </button>
+
+                <Link
+                  to="/academy"
+                  className="px-3 py-2.5 rounded-xl bg-fuchsia-950/40 hover:bg-fuchsia-900/50 border border-fuchsia-500/30 text-fuchsia-300 text-xs font-bold transition flex items-center justify-between"
+                >
+                  <span>Guías en Academy</span>
+                  <BookOpen size={14} />
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {/* Radar Drops Matches Section (if found) */}
+          {radarDrops.length > 0 && (
+            <div className="space-y-3 bg-zinc-900/50 border border-sky-500/20 rounded-2xl p-4 shadow-lg">
+              <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                <div className="flex items-center gap-2">
+                  <Radio size={15} className="text-sky-400 animate-pulse" />
+                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                    Lanzamientos & Preventas en Radar ({radarDrops.length})
+                  </h3>
+                </div>
+                <Link to="/radar" className="text-[11px] font-bold text-sky-400 hover:text-sky-300 flex items-center gap-1">
+                  <span>Ver Radar</span>
+                  <ArrowRight size={11} />
+                </Link>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                {radarDrops.map(drop => (
+                  <div key={drop.id} className="bg-zinc-950 border border-white/10 rounded-xl p-2.5 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-10 h-10 rounded-lg bg-zinc-900 border border-white/5 overflow-hidden shrink-0 flex items-center justify-center">
+                        <img src={drop.official_image_url} alt={drop.title} className="w-full h-full object-contain" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-[9px] font-black uppercase text-sky-400 tracking-wider block truncate">{drop.brand} · {drop.line}</span>
+                        <h4 className="text-xs font-bold text-white truncate">{drop.title}</h4>
+                        <span className="text-[10px] text-zinc-400">{drop.date_label}</span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => toggleRadarAlert(drop.id)}
+                      className={`p-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 shrink-0 cursor-pointer ${
+                        subscribedAlerts[drop.id] 
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                          : 'bg-sky-500/20 text-sky-300 hover:bg-sky-500/30 border border-sky-500/30'
+                      }`}
+                      title={subscribedAlerts[drop.id] ? 'Alerta activada' : 'Avisarme de preventa'}
+                    >
+                      {subscribedAlerts[drop.id] ? <Check size={13} /> : <Bell size={13} />}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* RESULTADOS DEL CATÁLOGO + FILTROS RÁPIDOS (COMIENZAN SIN SCROLL EXCESIVO)   */}
+          {/* ========================================================================= */}
+          <div className="space-y-3.5 pt-1">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-2.5">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm sm:text-base font-black text-white">
+                  {products.length > 0 ? `${displayedProducts.length} Productos Encontrados` : `Piezas Similares (${displayedProducts.length})`}
+                </h3>
+              </div>
+
+              {/* Quick Filter Tabs */}
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 sm:pb-0">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('all')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
+                    activeTab === 'all' 
+                      ? 'bg-[#f00856] text-white shadow-sm' 
+                      : 'bg-zinc-900 text-zinc-400 hover:text-white border border-white/5'
+                  }`}
+                >
+                  Todos ({products.length > 0 ? products.length : relaxedProducts.length})
+                </button>
+
+                {inStockCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('in_stock')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
+                      activeTab === 'in_stock' 
+                        ? 'bg-[#f00856] text-white shadow-sm' 
+                        : 'bg-zinc-900 text-zinc-400 hover:text-white border border-white/5'
+                    }`}
+                  >
+                    En Stock ({inStockCount})
                   </button>
+                )}
+
+                {preorderCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('preorder')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
+                      activeTab === 'preorder' 
+                        ? 'bg-sky-600 text-white shadow-sm' 
+                        : 'bg-zinc-900 text-zinc-400 hover:text-white border border-white/5'
+                    }`}
+                  >
+                    Preventa ({preorderCount})
+                  </button>
+                )}
+
+                {internationalCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('international')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
+                      activeTab === 'international' 
+                        ? 'bg-indigo-600 text-white shadow-sm' 
+                        : 'bg-zinc-900 text-zinc-400 hover:text-white border border-white/5'
+                    }`}
+                  >
+                    Internacional ({internationalCount})
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="py-16 text-center text-zinc-400 space-y-2">
+                <RefreshCw size={24} className="animate-spin mx-auto text-[#f00856]" />
+                <p className="text-xs font-medium">Buscando y verificando disponibilidad de piezas...</p>
+              </div>
+            ) : displayedProducts.length === 0 ? (
+              <div className="py-12 text-center bg-zinc-900/30 border border-white/5 rounded-2xl p-6">
+                <p className="text-xs text-zinc-400 font-medium">No hay productos en esta pestaña específica.</p>
+                <button 
+                  type="button"
+                  onClick={() => setActiveTab('all')}
+                  className="mt-2 text-xs font-bold text-[#f00856] underline"
+                >
+                  Ver todos los resultados
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+                {displayedProducts.map((product) => (
+                  <ProductGridCard 
+                    key={product.id} 
+                    product={product} 
+                    onAddToCart={handleAddToCart}
+                    formatPrice={formatCurrencyPrice}
+                  />
                 ))}
               </div>
             )}
           </div>
-        )}
-
-        {/* Image Preview Banner */}
-        {imagePreview && (
-          <div className="bg-zinc-900 border border-fuchsia-500/30 rounded-2xl p-3 flex items-center justify-between gap-3 animate-fade-in">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-lg bg-zinc-950 border border-white/10 overflow-hidden flex-shrink-0">
-                <img src={imagePreview} alt="Uploaded figure" className="w-full h-full object-contain" />
-              </div>
-              <div>
-                <span className="text-xs font-bold text-white flex items-center gap-1">
-                  <Sparkles size={12} className="text-fuchsia-400" />
-                  {analyzingImage ? 'Analizando imagen de la figura...' : 'Foto cargada para búsqueda visual'}
-                </span>
-                <p className="text-[10px] text-zinc-400">Buscando coincidencias de personaje, fabricante y escala en el catálogo.</p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={handleClearImage}
-              className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-white/5 cursor-pointer"
-            >
-              <X size={16} />
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* AI Grounded Answer */}
-      {aiAnswer && (
-        <div className="max-w-3xl mx-auto bg-gradient-to-r from-fuchsia-950/40 via-zinc-900 to-zinc-900 border border-fuchsia-500/30 rounded-2xl p-5 shadow-xl animate-fade-in space-y-4">
-          <div className="flex items-center gap-2">
-            <MessageSquare size={16} className="text-fuchsia-400" />
-            <span className="text-xs font-black uppercase tracking-widest text-fuchsia-400">
-              Respuesta del Asistente (Grounded Knowledge)
-            </span>
-          </div>
-          <div className="text-xs sm:text-sm text-zinc-200 leading-relaxed whitespace-pre-line">
-            {aiAnswer}
-          </div>
-
-          {/* Connected Academy Guide Card */}
-          {academyMatch && (
-            <div className="mt-3 pt-3 border-t border-white/10 flex items-center justify-between gap-4 bg-black/20 p-3 rounded-xl">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-fuchsia-500/20 text-fuchsia-400 flex items-center justify-center shrink-0">
-                  <BookOpen size={16} />
-                </div>
-                <div>
-                  <span className="text-xs font-bold text-white block">Guía de Collector Academy</span>
-                  <span className="text-[11px] text-zinc-400 line-clamp-1">{academyMatch.title}</span>
-                </div>
-              </div>
-              <Link 
-                to={`/academy/${academyMatch.slug}`}
-                className="inline-flex items-center gap-1 text-xs font-bold text-fuchsia-400 hover:text-fuchsia-300 shrink-0"
-              >
-                <span>Leer guía</span>
-                <ArrowRight size={14} />
-              </Link>
-            </div>
-          )}
         </div>
       )}
-
-      {/* Radar Matches Section (Future Drops / Pre-orders) */}
-      {radarDrops.length > 0 && (
-        <div className="space-y-3 bg-zinc-900/60 border border-sky-500/30 rounded-2xl p-5 shadow-xl">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Radio size={16} className="text-sky-400 animate-pulse" />
-              <h2 className="text-sm font-bold text-white uppercase tracking-wider">
-                Lanzamientos & Preventas en Radar ({radarDrops.length})
-              </h2>
-            </div>
-            <Link to="/radar" className="text-xs font-bold text-sky-400 hover:text-sky-300 flex items-center gap-1">
-              <span>Ver Radar Completo</span>
-              <ArrowRight size={12} />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2">
-            {radarDrops.map(drop => (
-              <div key={drop.id} className="bg-zinc-950/80 border border-white/10 rounded-xl p-3 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-lg bg-zinc-900 border border-white/5 overflow-hidden shrink-0 flex items-center justify-center">
-                    <img src={drop.official_image_url} alt={drop.title} className="w-full h-full object-contain" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-black uppercase text-sky-400 tracking-wider block">{drop.brand} · {drop.line}</span>
-                    <h3 className="text-xs font-bold text-white line-clamp-1">{drop.title}</h3>
-                    <span className="text-[10px] text-zinc-400">{drop.date_label}</span>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => toggleRadarAlert(drop.id)}
-                  className={`p-2 rounded-lg text-xs font-bold transition flex items-center gap-1 shrink-0 cursor-pointer ${
-                    subscribedAlerts[drop.id] 
-                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
-                      : 'bg-sky-500/20 text-sky-300 hover:bg-sky-500/30 border border-sky-500/30'
-                  }`}
-                  title={subscribedAlerts[drop.id] ? 'Alerta activada' : 'Avisarme cuando abra preventa'}
-                >
-                  {subscribedAlerts[drop.id] ? <Check size={14} /> : <Bell size={14} />}
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Catalog Products Results */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between border-b border-white/10 pb-3">
-          <h2 className="text-base font-bold text-white">
-            Resultados en Catálogo ({products.length})
-          </h2>
-          {interpretation?.cleanedQuery && (
-            <span className="text-xs text-zinc-400">
-              Filtro: <span className="text-fuchsia-400 font-bold">{interpretation.cleanedQuery}</span>
-            </span>
-          )}
-        </div>
-
-        {loading ? (
-          <div className="py-20 text-center text-zinc-500 animate-pulse">
-            Buscando y verificando disponibilidad de piezas en el catálogo...
-          </div>
-        ) : products.length === 0 ? (
-          <div className="py-16 text-center bg-zinc-900/30 border border-white/5 rounded-2xl p-8 space-y-4">
-            <p className="text-sm text-zinc-300 font-bold">No encontramos piezas activas con ese criterio exacto.</p>
-            <p className="text-xs text-zinc-400 max-w-md mx-auto">
-              Prueba buscando por otra franquicia, escala o explora las novedades en el Radar y guías en Academy.
-            </p>
-            <div className="flex items-center justify-center gap-3 pt-2">
-              <Link to="/radar" className="px-4 py-2 rounded-xl bg-sky-600/20 border border-sky-500/40 text-sky-300 text-xs font-bold hover:bg-sky-600/30 transition">
-                Ver Preventas en Radar
-              </Link>
-              <Link to="/academy" className="px-4 py-2 rounded-xl bg-fuchsia-600/20 border border-fuchsia-500/40 text-fuchsia-300 text-xs font-bold hover:bg-fuchsia-600/30 transition">
-                Explorar Collector Academy
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {products.map((product) => (
-              <ProductGridCard 
-                key={product.id} 
-                product={product} 
-                onAddToCart={handleAddToCart}
-                formatPrice={formatCurrencyPrice}
-              />
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
+
