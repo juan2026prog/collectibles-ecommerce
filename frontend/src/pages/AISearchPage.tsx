@@ -574,7 +574,7 @@ export default function AISearchPage() {
           </div>
 
           {/* Quick Pillar Cards Preview */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4">
             <div className="bg-zinc-900/50 border border-white/5 rounded-2xl p-4 text-center space-y-1.5">
               <Sparkles size={18} className="text-[#f00856] mx-auto" />
               <h3 className="text-xs font-bold text-white">Búsqueda Semántica</h3>
@@ -596,6 +596,142 @@ export default function AISearchPage() {
               <p className="text-[10px] text-zinc-400 leading-tight">Vitrina y colección privada</p>
             </Link>
           </div>
+
+          {/* ========================================================================= */}
+          {/* EJEMPLO POR DEFECTO DE RESULTADOS COMPLETOS (DEMO EN VIVO)               */}
+          {/* ========================================================================= */}
+          <div className="pt-8 border-t border-white/10 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zinc-900/40 border border-white/10 rounded-2xl p-4">
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#f00856]/10 text-[#f00856] text-[10px] font-black uppercase tracking-wider">
+                  <Sparkles size={11} />
+                  <span>Ejemplo por defecto de consulta completa</span>
+                </div>
+                <h2 className="text-sm font-bold text-white">
+                  "¿Qué preventas de Dragon Ball están abiertas y cuáles salen próximamente?"
+                </h2>
+                <p className="text-xs text-zinc-400">
+                  Así es como el Asistente interpreta la consulta, sintetiza los datos editoriales y presenta los productos del catálogo.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleChipClick('¿Qué preventas de Dragon Ball están abiertas y cuáles salen próximamente?')}
+                className="px-4 py-2 bg-[#f00856] hover:bg-[#d00749] text-white text-xs font-black rounded-xl transition flex items-center gap-1.5 shadow-md shrink-0 cursor-pointer self-start sm:self-center"
+              >
+                <span>Probar esta consulta</span>
+                <ArrowRight size={13} />
+              </button>
+            </div>
+
+            {/* Simulated Complete Result Preview */}
+            <div className="space-y-4 opacity-95">
+              {/* Filter Tokens Preview */}
+              <div className="flex items-center gap-1.5 flex-wrap text-[11px] px-1">
+                <span className="text-zinc-500 font-bold uppercase tracking-wider text-[10px]">Criterios detectados:</span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-zinc-800 border border-white/10 text-zinc-200 font-semibold">
+                  Franquicia: <strong className="text-white">Dragon Ball</strong>
+                </span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-zinc-800 border border-white/10 text-zinc-200 font-semibold">
+                  Marca: <strong className="text-white">Bandai Spirits</strong>
+                </span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-sky-950/80 border border-sky-500/30 text-sky-300 font-bold">
+                  Preventas Activas
+                </span>
+              </div>
+
+              {/* Editorial Answer Box Preview */}
+              <div className="bg-zinc-900/70 border border-white/10 rounded-2xl p-4 sm:p-5 shadow-lg space-y-3">
+                <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={14} className="text-[#f00856]" />
+                    <h3 className="text-xs font-black uppercase tracking-wider text-white">
+                      Preventas de Dragon Ball
+                    </h3>
+                  </div>
+                  <span className="text-[11px] font-bold text-sky-400 flex items-center gap-1">
+                    <Radio size={12} />
+                    1 en Radar
+                  </span>
+                </div>
+
+                <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed font-medium">
+                  Encontré 6 productos relacionados con Dragon Ball, principalmente de Bandai / Tamashii Nations.
+                </p>
+
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5 pt-1 text-xs text-zinc-300">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#f00856]" />
+                    <span>2 S.H.Figuarts</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#f00856]" />
+                    <span>3 Ichibansho</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#f00856]" />
+                    <span>1 Figuarts ZERO</span>
+                  </div>
+                </div>
+
+                <div className="text-[11px] text-zinc-400 font-medium pt-1">
+                  💡 Próximo lanzamiento destacado en Radar: Vegeta — Z-Fighters (S.H.Figuarts, Abr 2027).
+                </div>
+
+                <div className="pt-2 border-t border-white/5 flex items-center justify-between gap-3 bg-black/20 p-2.5 rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <BookOpen size={14} className="text-fuchsia-400 shrink-0" />
+                    <span className="text-xs text-zinc-300">
+                      <strong>Guía en Academy:</strong> Escalas y Líneas de Figuras Dragon Ball
+                    </span>
+                  </div>
+                  <Link to="/academy" className="text-xs font-bold text-[#f00856] hover:text-pink-400 flex items-center gap-1 shrink-0">
+                    <span>Leer guía</span>
+                    <ArrowRight size={12} />
+                  </Link>
+                </div>
+              </div>
+
+              {/* Sample Radar Drop Card */}
+              <div className="bg-zinc-900/50 border border-sky-500/20 rounded-2xl p-3.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Radio size={14} className="text-sky-400 animate-pulse" />
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                      Preventa Detectada en Radar (1)
+                    </h4>
+                  </div>
+                  <Link to="/radar" className="text-[11px] font-bold text-sky-400 hover:text-sky-300">
+                    Ver Radar
+                  </Link>
+                </div>
+                <div className="bg-zinc-950 border border-white/10 rounded-xl p-2.5 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-lg bg-zinc-900 border border-white/5 overflow-hidden shrink-0 flex items-center justify-center text-xs font-black text-sky-400">
+                      DBZ
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-black uppercase text-sky-400 tracking-wider block">Bandai Spirits · S.H.Figuarts</span>
+                      <h5 className="text-xs font-bold text-white">Vegeta — Z-Fighters</h5>
+                      <span className="text-[10px] text-zinc-400">Abr 2027 · Preventa Abierta</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleRadarAlert('shfiguarts-vegeta-z-fighters')}
+                    className={`p-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 shrink-0 cursor-pointer ${
+                      subscribedAlerts['shfiguarts-vegeta-z-fighters']
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-sky-500/20 text-sky-300 hover:bg-sky-500/30 border border-sky-500/30'
+                    }`}
+                  >
+                    {subscribedAlerts['shfiguarts-vegeta-z-fighters'] ? <Check size={13} /> : <Bell size={13} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       ) : (
         /* ========================================================================= */
@@ -603,27 +739,27 @@ export default function AISearchPage() {
         /* ========================================================================= */
         <div className="space-y-4 sm:space-y-5 animate-fade-in">
           {/* Compact Top Header & Search Bar (~120-150px) */}
-          <div className="bg-zinc-900/90 border border-white/10 rounded-2xl p-3 sm:p-4 shadow-xl space-y-2.5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              {/* Compact Badge */}
-              <div className="flex items-center gap-2">
+          <div className="bg-zinc-900/90 border border-white/10 rounded-2xl p-4 sm:p-5 shadow-xl space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-2.5">
+              {/* Header Title with Badge */}
+              <div className="space-y-0.5">
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#f00856]/10 text-[#f00856] text-[11px] font-black tracking-wider uppercase">
                   <Sparkles size={12} />
                   <span>COLLECTIBLES AI</span>
                 </div>
-                <span className="text-xs text-zinc-400 font-medium hidden md:inline">
-                  Asistente conectado al catálogo
-                </span>
+                <h1 className="text-lg sm:text-xl font-black text-white tracking-tight">
+                  Asistente Inteligente del Coleccionista
+                </h1>
               </div>
 
               {/* Reset to New Search Link */}
               <Link 
                 to="/search/ai"
                 onClick={() => setInputQuery('')}
-                className="text-[11px] font-bold text-zinc-400 hover:text-white transition flex items-center gap-1"
+                className="text-xs font-bold text-zinc-400 hover:text-white transition flex items-center gap-1.5 self-start sm:self-center px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10"
               >
                 <span>Nueva consulta</span>
-                <ArrowRight size={12} />
+                <ArrowRight size={13} />
               </Link>
             </div>
 
