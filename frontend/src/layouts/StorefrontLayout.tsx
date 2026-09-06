@@ -1102,7 +1102,7 @@ export default function StorefrontLayout() {
       <WhatsAppFAB />
       <CookieConsent />
       <CartDrawer />
-      {features.collectorCompareEnabled && <CompareTray />}
+      {isModuleVisible('compare') && <CompareTray />}
 
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes marquee-header {
