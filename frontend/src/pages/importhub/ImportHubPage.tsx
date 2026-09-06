@@ -22,6 +22,7 @@ import { ImportGuideSection } from '../../components/importhub/ImportGuideSectio
 import { ImportAIConsultantChat } from '../../components/importhub/ImportAIConsultantChat';
 import { DeclareExternalPurchaseModal } from '../../components/importhub/DeclareExternalPurchaseModal';
 import { UserCourierProfileModal } from '../../components/importhub/UserCourierProfileModal';
+import { ImportHub } from '../../components/customs/ImportHub';
 
 import { 
   ShieldCheck, 
@@ -32,12 +33,15 @@ import {
   MessageSquare, 
   LayoutDashboard,
   MapPin,
-  Sparkles
+  Sparkles,
+  Globe
 } from 'lucide-react';
 
 const ImportHubPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialTab = searchParams.get('tab') || 'dashboard';
+  const rawTab = searchParams.get('tab') || 'hub';
+  // Unificar franchise, simulator y dashboard en 'hub'
+  const initialTab = (rawTab === 'franchise' || rawTab === 'simulator' || rawTab === 'dashboard') ? 'hub' : rawTab;
 
   const [activeTab, setActiveTab] = useState<string>(initialTab);
   const [couriers, setCouriers] = useState<ImportCourier[]>(DEFAULT_COURIERS);
@@ -188,22 +192,19 @@ const ImportHubPage: React.FC = () => {
   };
 
   const tabs = [
-    { id: 'dashboard', label: 'Resumen Hub', icon: LayoutDashboard },
-    { id: 'simulator', label: 'Simulador de Costo', icon: Calculator },
-    { id: 'franchise', label: 'Mis Franquicias', icon: ShieldCheck },
-    { id: 'simulations', label: 'Cotizaciones Guardadas', icon: Bookmark },
-    { id: 'shipments', label: 'Seguimiento de Envíos', icon: Truck },
-    { id: 'guide', label: 'Guía de Importación', icon: BookOpen },
-    { id: 'ai-chat', label: 'Consultor IA', icon: MessageSquare }
+    { id: 'hub', label: '⚡ Importador HUB (Casilla, Franquicias & 60%)', icon: Globe },
+    { id: 'shipments', label: '📦 Seguimiento de Envíos', icon: Truck },
+    { id: 'guide', label: '📖 Guía Oficial Aduana UY', icon: BookOpen },
+    { id: 'ai-chat', label: '🤖 Consultor IA Aduanero', icon: MessageSquare }
   ];
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto space-y-8">
+      <div className="max-w-7xl mx-auto space-y-6">
         
         {/* Navigation Tabs Header */}
         <div className="flex items-center justify-between border-b border-slate-800/80 pb-4 overflow-x-auto gap-2">
-          <div className="flex items-center gap-1.5 min-w-max">
+          <div className="flex items-center gap-2 min-w-max">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -211,10 +212,10 @@ const ImportHubPage: React.FC = () => {
                 <button
                   key={tab.id}
                   onClick={() => handleTabChange(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all ${
+                  className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-2xl transition-all cursor-pointer ${
                     isActive
-                      ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900'
+                      ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg shadow-sky-500/25 font-black'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-900 border border-transparent'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -226,7 +227,7 @@ const ImportHubPage: React.FC = () => {
 
           <button
             onClick={() => setIsProfileModalOpen(true)}
-            className="flex items-center gap-2 px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-amber-400 font-bold text-xs rounded-xl shrink-0 transition-colors"
+            className="flex items-center gap-2 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-sky-400 font-bold text-xs rounded-xl shrink-0 transition-colors cursor-pointer"
           >
             <MapPin className="w-4 h-4" />
             <span>Suite: {userProfile.suite_number}</span>
@@ -235,45 +236,8 @@ const ImportHubPage: React.FC = () => {
 
         {/* Tab Content Display */}
         <div>
-          {activeTab === 'dashboard' && (
-            <ImportHubDashboard
-              rule={customsRule}
-              declarations={declarations}
-              savedSimulations={savedSimulations}
-              activeShipments={activeShipments}
-              onNavigateTab={handleTabChange}
-              onOpenDeclareModal={() => setIsDeclareModalOpen(true)}
-              onOpenProfileModal={() => setIsProfileModalOpen(true)}
-            />
-          )}
-
-          {activeTab === 'simulator' && (
-            <ImportSimulator
-              couriers={couriers}
-              customsRule={customsRule}
-              declarations={declarations}
-              initialPriceUsd={initialPriceUsd}
-              initialWeightKg={initialWeightKg}
-              initialTitle={initialTitle}
-              onSaveSimulation={handleSaveSimulation}
-            />
-          )}
-
-          {activeTab === 'franchise' && (
-            <MyFranchiseSection
-              rule={customsRule}
-              declarations={declarations}
-              onOpenDeclareModal={() => setIsDeclareModalOpen(true)}
-              onDeleteDeclaration={handleDeleteDeclaration}
-            />
-          )}
-
-          {activeTab === 'simulations' && (
-            <MySimulationsSection
-              simulations={savedSimulations}
-              onDeleteSimulation={handleDeleteSimulation}
-              onLoadSimulation={handleLoadSimulation}
-            />
+          {activeTab === 'hub' && (
+            <ImportHub />
           )}
 
           {activeTab === 'shipments' && (
