@@ -62,7 +62,7 @@ const DesktopDropdownMenu = React.memo(({
   }, [type]);
 
   return (
-    <div className="absolute top-full left-0 w-80 pt-0 pointer-events-none group-hover:pointer-events-auto z-[110] opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 transition-all duration-200 ease-out">
+    <div className="absolute top-full left-0 w-80 pt-1 invisible opacity-0 group-hover:visible group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto z-[110] translate-y-1 group-hover:translate-y-0 transition-all duration-150 ease-out">
       <div className="bg-[#05070f] border border-white/10 rounded-2xl shadow-2xl shadow-black/80 overflow-hidden flex flex-col p-2 max-h-[calc(100vh-120px)]">
         {headerTitle && (
           <div className="px-4 py-2 border-b border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-500">
