@@ -258,44 +258,80 @@ export default function AISearchPage() {
     setInterpretation(interp);
 
     try {
-      let query = supabase
+      const searchTerm = interp.cleanedQuery || interp.detectedLicense || interp.detectedBrand || interp.detectedLine || queryText.trim();
+
+      // 1. Query Local Products with full relations
+      let localQuery = supabase
         .from('products')
         .select(`
-          id, title, slug, price, currency, final_price_usd, base_price,
-          status, condition, brand_id, images, category_id,
-          is_international, source_provider, is_preorder,
-          brand:brands(id, name),
-          category:categories(id, name),
-          variants:product_variants(*)
+          id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, created_at,
+          category:categories(id, name, slug),
+          brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
+          images:product_images(id, url, alt_text, is_primary),
+          variants:product_variants(id, sku, price_adjustment, inventory_count),
+          vendor:vendors(id, store_name, slug, logo_url),
+          vendor_store:vendor_stores(id, store_name, slug, logo_url, is_official)
         `)
-        .eq('status', 'active')
+        .eq('is_active', true)
         .limit(36);
 
-      if (interp.cleanedQuery) {
-        query = query.ilike('title', `%${interp.cleanedQuery}%`);
-      } else if (interp.detectedLicense) {
-        query = query.ilike('title', `%${interp.detectedLicense}%`);
+      if (searchTerm) {
+        localQuery = localQuery.ilike('title', `%${searchTerm}%`);
       }
 
       if (interp.priceMax) {
-        query = query.lte('price', interp.priceMax);
+        localQuery = localQuery.lte('base_price', interp.priceMax);
       }
       if (interp.priceMin) {
-        query = query.gte('price', interp.priceMin);
+        localQuery = localQuery.gte('base_price', interp.priceMin);
       }
 
-      const { data, error } = await query;
-      let directResults: any[] = [];
-      let secondaryResults: any[] = [];
+      const { data: localData, error: localErr } = await localQuery;
+      let directResults: any[] = (!localErr && localData) ? localData : [];
 
-      if (!error && data) {
-        directResults = data;
-        setProducts(data);
-      } else {
-        setProducts([]);
+      // 2. Query International Products
+      let intlQuery = supabase
+        .from('international_products')
+        .select('id, title, slug, final_price_usd, amazon_list_price_usd, image_url, brand, category, status')
+        .eq('status', 'published')
+        .limit(24);
+
+      if (searchTerm) {
+        intlQuery = intlQuery.ilike('title', `%${searchTerm}%`);
       }
 
-      // Check Radar Matches
+      if (interp.priceMax) {
+        intlQuery = intlQuery.lte('final_price_usd', interp.priceMax);
+      }
+      if (interp.priceMin) {
+        intlQuery = intlQuery.gte('final_price_usd', interp.priceMin);
+      }
+
+      const { data: intlData } = await intlQuery;
+
+      if (intlData && intlData.length > 0) {
+        const mappedIntl = intlData.map(item => ({
+          id: item.id,
+          title: item.title,
+          slug: item.slug || `intl-${item.id}`,
+          base_price: Number(item.final_price_usd || item.amazon_list_price_usd || 0),
+          price: Number(item.final_price_usd || item.amazon_list_price_usd || 0),
+          compare_at_price: Number(item.amazon_list_price_usd || item.final_price_usd || 0),
+          images: [{ id: item.id, url: item.image_url, is_primary: true }],
+          image_url: item.image_url,
+          brand: { name: item.brand || 'Importado', slug: item.brand ? item.brand.toLowerCase() : 'importado' },
+          category: { name: item.category || 'Coleccionables', slug: 'coleccionables' },
+          source_provider: 'zinc',
+          is_international: true,
+          is_active: true,
+          status: item.status
+        }));
+        directResults = [...directResults, ...mappedIntl];
+      }
+
+      setProducts(directResults);
+
+      // 3. Radar Matches
       const lowerQ = queryText.toLowerCase();
       const matchedDrops = STATIC_RADAR_ITEMS.filter(item => 
         item.title.toLowerCase().includes(lowerQ) ||
@@ -306,64 +342,36 @@ export default function AISearchPage() {
       );
       setRadarDrops(matchedDrops);
 
-      // Relaxed Fallback when 0 exact results: always provide top featured products
+      // 4. Relaxed Fallback when 0 exact results: always provide top featured products
       if (directResults.length === 0) {
-        let fallbackData: any[] = [];
-        
-        if (interp.detectedLicense || interp.detectedBrand || interp.detectedLine) {
-          const fallbackTerm = interp.detectedLicense || interp.detectedBrand || interp.detectedLine;
-          const { data: catMatches } = await supabase
-            .from('products')
-            .select(`
-              id, title, slug, price, currency, final_price_usd, base_price,
-              status, condition, brand_id, images, category_id,
-              is_international, source_provider, is_preorder,
-              brand:brands(id, name),
-              category:categories(id, name),
-              variants:product_variants(*)
-            `)
-            .eq('status', 'active')
-            .ilike('title', `%${fallbackTerm}%`)
-            .limit(12);
-          
-          if (catMatches && catMatches.length > 0) {
-            fallbackData = catMatches;
-          }
-        }
+        const { data: fallbackLocal } = await supabase
+          .from('products')
+          .select(`
+            id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, created_at,
+            category:categories(id, name, slug),
+            brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
+            images:product_images(id, url, alt_text, is_primary),
+            variants:product_variants(id, sku, price_adjustment, inventory_count),
+            vendor:vendors(id, store_name, slug, logo_url),
+            vendor_store:vendor_stores(id, store_name, slug, logo_url, is_official)
+          `)
+          .eq('is_active', true)
+          .limit(12);
 
-        // If still empty, fetch popular active items so the vitrina is never blank
-        if (fallbackData.length === 0) {
-          const { data: popularData } = await supabase
-            .from('products')
-            .select(`
-              id, title, slug, price, currency, final_price_usd, base_price,
-              status, condition, brand_id, images, category_id,
-              is_international, source_provider, is_preorder,
-              brand:brands(id, name),
-              category:categories(id, name),
-              variants:product_variants(*)
-            `)
-            .eq('status', 'active')
-            .limit(12);
-          
-          fallbackData = popularData || [];
-        }
-
-        secondaryResults = fallbackData;
-        setRelaxedProducts(secondaryResults);
+        setRelaxedProducts(fallbackLocal || []);
       } else {
         setRelaxedProducts([]);
       }
 
-      // Direct Editorial Answer Generation
+      // 5. Direct Editorial Answer Generation
       const directAnswer = generateDirectEditorialAnswer(interp, directResults, matchedDrops);
       setEditorialAnswer(directAnswer);
 
-      // Contextual Related Questions
+      // 6. Contextual Related Questions
       const questions = generateContextualQuestions(interp);
       setRelatedQuestions(questions);
 
-      // Academy Knowledge Grounding Link
+      // 7. Academy Knowledge Grounding Link
       const groundedKnowledge = queryCollectorKnowledge(queryText);
       if (groundedKnowledge) {
         setAcademyMatch({
@@ -660,7 +668,7 @@ export default function AISearchPage() {
               </div>
 
               <Link 
-                to="/search/ai"
+                to="/ai-search"
                 onClick={() => setInputQuery('')}
                 className="text-[11px] font-bold text-zinc-400 hover:text-white transition flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10"
               >
