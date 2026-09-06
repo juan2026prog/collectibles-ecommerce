@@ -7,14 +7,15 @@
  */
 
 export interface CourierRateDefinition {
-  courierCode: 'puntomio' | 'urubox' | 'usx_cargo';
+  courierCode: 'puntomio' | 'urubox' | 'mbe' | 'usx_cargo';
   courierName: string;
   minWeightKg: number;
   maxWeightKg: number;
   fixedPriceUsd?: number;
   ratePerKgUsd?: number;
   handlingFeeUsd: number;
-  ursecFeePercent?: number; // Urubox 10%
+  estimatedDeliveryDays?: string;
+  ursecFeePercent?: number;
 }
 
 export interface CourierCalculationResult {
@@ -26,13 +27,14 @@ export interface CourierCalculationResult {
   ursecUsd: number;
   totalCourierUsd: number;
   breakdownDescription: string;
+  estimatedDeliveryDays: string;
   isOverweight: boolean;
 }
 
-export const KNOWN_COURIERS: Record<string, { code: string; name: string }> = {
-  puntomio: { code: 'puntomio', name: 'PuntoMio' },
-  urubox: { code: 'urubox', name: 'Urubox' },
-  usx_cargo: { code: 'usx_cargo', name: 'USX Cargo' }
+export const KNOWN_COURIERS: Record<string, { code: string; name: string; deliveryDays: string }> = {
+  puntomio: { code: 'puntomio', name: 'PuntoMio', deliveryDays: '4 a 6 días hábiles' },
+  urubox: { code: 'urubox', name: 'Urubox', deliveryDays: '5 a 8 días hábiles' },
+  mbe: { code: 'mbe', name: 'Mail Boxes Etc. (MBE)', deliveryDays: '3 a 5 días hábiles' }
 };
 
 export class CourierPricingEngine {
@@ -48,6 +50,7 @@ export class CourierPricingEngine {
   public static calculatePuntoMio(weightKg: number): CourierCalculationResult {
     const courierCode = 'puntomio';
     const courierName = 'PuntoMio';
+    const estimatedDeliveryDays = '4 a 6 días hábiles';
 
     if (weightKg > 20) {
       return {
@@ -59,6 +62,7 @@ export class CourierPricingEngine {
         ursecUsd: 0,
         totalCourierUsd: 0,
         breakdownDescription: 'Excede el peso máximo permitido (20 kg).',
+        estimatedDeliveryDays,
         isOverweight: true
       };
     }
@@ -94,6 +98,7 @@ export class CourierPricingEngine {
       ursecUsd: 0,
       totalCourierUsd: baseFreight,
       breakdownDescription: desc,
+      estimatedDeliveryDays,
       isOverweight: false
     };
   }
@@ -107,12 +112,12 @@ export class CourierPricingEngine {
    * 1.0 - 5.0 kg: USD 19.90 / kg
    * 5.0 - 10.0 kg: USD 17.90 / kg
    * 10.0 - 20.0 kg: USD 16.50 / kg
-   * Plus handling: USD 5.00
-   * Plus URSEC: 10% of base freight
+   * Plus handling: USD 4.90
    */
   public static calculateUrubox(weightKg: number): CourierCalculationResult {
     const courierCode = 'urubox';
     const courierName = 'Urubox';
+    const estimatedDeliveryDays = '5 a 8 días hábiles';
 
     if (weightKg > 20) {
       return {
@@ -124,6 +129,7 @@ export class CourierPricingEngine {
         ursecUsd: 0,
         totalCourierUsd: 0,
         breakdownDescription: 'Excede el peso máximo permitido (20 kg).',
+        estimatedDeliveryDays,
         isOverweight: true
       };
     }
@@ -154,9 +160,8 @@ export class CourierPricingEngine {
       desc = `${weightKg.toFixed(2)} kg x USD 16.50/kg`;
     }
 
-    const handling = 5.00;
-    const ursec = Number((baseFreight * 0.10).toFixed(2));
-    const total = Number((baseFreight + handling + ursec).toFixed(2));
+    const handling = 4.90;
+    const total = Number((baseFreight + handling).toFixed(2));
 
     return {
       courierCode,
@@ -164,9 +169,62 @@ export class CourierPricingEngine {
       weightKg,
       baseFreightUsd: Number(baseFreight.toFixed(2)),
       handlingUsd: handling,
-      ursecUsd: ursec,
+      ursecUsd: 0,
       totalCourierUsd: total,
-      breakdownDescription: `${desc} + USD 5 handling + 10% URSEC`,
+      breakdownDescription: `${desc} + USD 4.90 handling`,
+      estimatedDeliveryDays,
+      isOverweight: false
+    };
+  }
+
+  /**
+   * Calculates rate for MBE (Mail Boxes Etc.)
+   * Express Air freight: USD 13.50 / kg (min. 0.5 kg: USD 9.50) + USD 3.50 handling
+   */
+  public static calculateMBE(weightKg: number): CourierCalculationResult {
+    const courierCode = 'mbe';
+    const courierName = 'Mail Boxes Etc. (MBE)';
+    const estimatedDeliveryDays = '3 a 5 días hábiles';
+
+    if (weightKg > 20) {
+      return {
+        courierCode,
+        courierName,
+        weightKg,
+        baseFreightUsd: 0,
+        handlingUsd: 0,
+        ursecUsd: 0,
+        totalCourierUsd: 0,
+        breakdownDescription: 'Excede el peso máximo permitido (20 kg).',
+        estimatedDeliveryDays,
+        isOverweight: true
+      };
+    }
+
+    let baseFreight = 0;
+    let desc = '';
+
+    if (weightKg <= 0.5) {
+      baseFreight = 9.50;
+      desc = 'Tarifa base hasta 500g (USD 9.50)';
+    } else {
+      baseFreight = weightKg * 13.50;
+      desc = `${weightKg.toFixed(2)} kg x USD 13.50/kg`;
+    }
+
+    const handling = 3.50;
+    const total = Number((baseFreight + handling).toFixed(2));
+
+    return {
+      courierCode,
+      courierName,
+      weightKg,
+      baseFreightUsd: Number(baseFreight.toFixed(2)),
+      handlingUsd: handling,
+      ursecUsd: 0,
+      totalCourierUsd: total,
+      breakdownDescription: `${desc} + USD 3.50 despacho y seguro`,
+      estimatedDeliveryDays,
       isOverweight: false
     };
   }
@@ -184,6 +242,9 @@ export class CourierPricingEngine {
     const cleanCode = courierCode.toLowerCase().replace(/[^a-z0-9_]/g, '');
     if (cleanCode.includes('urubox')) {
       return this.calculateUrubox(weightKg);
+    }
+    if (cleanCode.includes('mbe')) {
+      return this.calculateMBE(weightKg);
     }
     // Default to PuntoMio as leading cost-efficient courier
     return this.calculatePuntoMio(weightKg);

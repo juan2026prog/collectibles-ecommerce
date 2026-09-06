@@ -18,6 +18,7 @@ import { trackViewContent, generateMetaEventId } from '../lib/meta/metaPixel';
 import SEO from '../components/SEO';
 import { generateProductSchema, generateBreadcrumbs, generateMetaTitle, generateMetaDescription, generateCanonical } from '../utils/seoHelpers';
 import { useSiteSettings } from '../hooks/useSiteSettings';
+import { supabase } from '../lib/supabase';
 import { formatUSD } from '../lib/formatters';
 import SoldByCard from '../components/SoldByCard';
 import ProductShippingBlock from '../components/ProductShippingBlock';
@@ -33,6 +34,77 @@ import InternationalWaitlistModal from '../components/international/Internationa
 import { resolveProductInventory } from '../lib/canonicalStock';
 import { AddToCompareButton } from '../components/compare/AddToCompareButton';
 import { ProductUruguayCostDrawer } from '../components/customs/ProductUruguayCostDrawer';
+
+// ── COMPONENTE SECCIÓN MISMA WAVE / SERIE (Sourcing & Catalogo) ──
+function WaveProductsSection({ currentProductId, waveName }: { currentProductId: string; waveName?: string | null }) {
+  const [waveProducts, setWaveProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { formatCurrencyPrice } = useCurrency();
+  const { addToCart } = useCartContext();
+
+  useEffect(() => {
+    const trimmed = (waveName || '').trim();
+    if (!trimmed) {
+      setLoading(false);
+      setWaveProducts([]);
+      return;
+    }
+    const loadWave = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('products')
+          .select(`
+            id, title, slug, price, currency, final_price_usd, base_price,
+            status, condition, brand_id, images, category_id,
+            is_international, source_provider, is_preorder, wave_name,
+            brand:brands(name, slug)
+          `)
+          .eq('wave_name', trimmed)
+          .neq('id', currentProductId)
+          .limit(8);
+
+        if (!error && data) {
+          setWaveProducts(data);
+        }
+      } catch (e) {
+        console.error('Error loading wave products:', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadWave();
+  }, [currentProductId, waveName]);
+
+  if (loading || waveProducts.length === 0) return null;
+
+  return (
+    <section className="mt-14 pt-10 border-t border-white/10">
+      <div className="mb-6 flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <span className="text-[10px] uppercase font-black tracking-[0.2em] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-full inline-block">
+            Misma Serie / Wave
+          </span>
+          <h2 className="text-2xl md:text-3xl font-black mt-1 text-white tracking-tight">
+            Colección {waveName}
+          </h2>
+        </div>
+        <span className="text-xs text-zinc-400 font-medium">
+          {waveProducts.length} {waveProducts.length === 1 ? 'figura adicional disponible' : 'figuras adicionales disponibles'}
+        </span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {waveProducts.map(p => (
+          <ProductGridCard
+            key={p.id}
+            product={p}
+            onAddToCart={() => addToCart(p)}
+            formatPrice={(price) => formatCurrencyPrice(price)}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
 
 // ── COMPONENTE SECCIÓN PRODUCTOS SIMILARES / INTELIGENCIA DE CATÁLOGO ──
 function RelatedProductsSection({ currentProductId, categorySlug, brandId, licenseId }: { 
@@ -1011,7 +1083,13 @@ export default function ProductDetail() {
         </div>
       </section>
 
-      {/* 8. PRODUCTOS RELACIONADOS / SIMILARES (Requirement 8) */}
+      {/* 8. MISMA WAVE / SERIE (Condicional si el origen provee atributo wave) */}
+      <WaveProductsSection
+        currentProductId={product.id}
+        waveName={product.wave_name || (product as any).wave || (product as any).series}
+      />
+
+      {/* 8.1. PRODUCTOS RELACIONADOS / SIMILARES (Requirement 8) */}
       <RelatedProductsSection
         currentProductId={product.id}
         categorySlug={product.category?.slug}

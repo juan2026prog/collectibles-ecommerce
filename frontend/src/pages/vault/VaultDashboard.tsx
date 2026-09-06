@@ -2,9 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Archive, Plus, Share2, Star, ExternalLink, Lock, CheckCircle2, Sparkles, Image as ImageIcon, ShoppingBag, Eye, Heart, Globe, Settings, SlidersHorizontal, ArrowRight } from 'lucide-react';
+import { Archive, Plus, Share2, Star, ExternalLink, Lock, CheckCircle2, Sparkles, Image as ImageIcon, ShoppingBag, Eye, Heart, Globe, Settings, SlidersHorizontal, ArrowRight, Percent, PackagePlus } from 'lucide-react';
 import SEO from '../../components/SEO';
 import { VaultShareCardModal, type ShareItemData } from './VaultShareCardModal';
+import { useCurrency } from '../../contexts/CurrencyContext';
+import { useCartContext } from '../../contexts/CartContext';
+import { getProductImage } from '../../lib/imageUtils';
 
 // 3 FIGURAS REALES DEMO QUE DAN VIDA A MY VAULT DESDE EL PRIMER MOMENTO
 const DEMO_VAULT_PIECES: ShareItemData[] = [
@@ -86,6 +89,15 @@ export default function VaultDashboard() {
   const [isVaultPublic, setIsVaultPublic] = useState(true);
   const [filterFranchise, setFilterFranchise] = useState<string>('ALL');
 
+  // Configuración de completitud (desde Admin site_settings)
+  const [completionEnabled, setCompletionEnabled] = useState(false);
+  const [catalogSource, setCatalogSource] = useState('store_catalog');
+  const [completionPercent, setCompletionPercent] = useState<number>(0);
+  const [missingPieces, setMissingPieces] = useState<any[]>([]);
+
+  const { formatCurrencyPrice } = useCurrency();
+  const { addToCart } = useCartContext();
+
   useEffect(() => {
     if (user) {
       loadVault();
@@ -97,17 +109,51 @@ export default function VaultDashboard() {
   const loadVault = async () => {
     try {
       setLoading(true);
-      const { data: dbItems, error } = await supabase
-        .from('vault_items')
-        .select('*')
-        .eq('user_id', user?.id)
-        .order('created_at', { ascending: false });
+      const [vaultRes, settingsRes] = await Promise.all([
+        supabase
+          .from('vault_items')
+          .select('*')
+          .eq('user_id', user?.id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('site_settings')
+          .select('key, value')
+          .in('key', ['vault_completion_enabled', 'vault_catalog_source'])
+      ]);
 
-      if (!error && dbItems && dbItems.length > 0) {
-        setItems(dbItems);
-      } else {
-        // Inicializamos con las 3 figuras de referencia vivas
-        setItems([]);
+      const isEnabled = settingsRes.data?.find(s => s.key === 'vault_completion_enabled')?.value === 'true';
+      const source = settingsRes.data?.find(s => s.key === 'vault_catalog_source')?.value || 'store_catalog';
+      setCompletionEnabled(isEnabled);
+      setCatalogSource(source);
+
+      const dbItems = vaultRes.data || [];
+      setItems(dbItems);
+
+      // Si está activada la completitud en Admin, calculamos el % y las piezas faltantes
+      if (isEnabled && dbItems.length > 0) {
+        // Obtenemos franquicias / waves de las piezas del usuario
+        const userFranchises = Array.from(new Set(dbItems.map((i: any) => i.franchise).filter(Boolean)));
+        const userWaveNames = Array.from(new Set(dbItems.map((i: any) => i.line).filter(Boolean)));
+
+        let catalogQuery = supabase.from('products').select('id, title, slug, price, currency, images, brand:brands(name), category_id, wave_name');
+        
+        if (source === 'wave_series' && userWaveNames.length > 0) {
+          catalogQuery = catalogQuery.in('wave_name', userWaveNames);
+        }
+
+        const { data: catalogProducts } = await catalogQuery.limit(50);
+
+        if (catalogProducts && catalogProducts.length > 0) {
+          const ownedProductIds = new Set(dbItems.map((i: any) => i.product_id).filter(Boolean));
+          const ownedNames = new Set(dbItems.map((i: any) => (i.custom_name || '').toLowerCase().trim()));
+
+          const missing = catalogProducts.filter(p => !ownedProductIds.has(p.id) && !ownedNames.has(p.title.toLowerCase().trim()));
+          setMissingPieces(missing.slice(0, 4));
+
+          const totalPossible = Math.max(catalogProducts.length, dbItems.length);
+          const percent = Math.min(100, Math.round((dbItems.length / totalPossible) * 100));
+          setCompletionPercent(percent);
+        }
       }
     } catch (err) {
       console.error('Error loading vault:', err);
@@ -257,6 +303,24 @@ export default function VaultDashboard() {
               <span className="text-zinc-600">·</span>
               <span className="text-white font-black">{uniqueBrands} marcas</span>
             </p>
+
+            {/* Barra de Completitud de Colección (Condicional si está activo en Admin) */}
+            {completionEnabled && (
+              <div className="pt-2 max-w-md space-y-1.5 animate-in fade-in">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-amber-400 font-bold flex items-center gap-1">
+                    <Percent size={12} /> Completitud de Colección
+                  </span>
+                  <span className="text-white font-black">{completionPercent}%</span>
+                </div>
+                <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden border border-white/10">
+                  <div
+                    className="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full transition-all duration-500"
+                    style={{ width: `${completionPercent}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Botones de acción principales */}
@@ -357,6 +421,74 @@ export default function VaultDashboard() {
           Mostrando {filteredPieces.length} de {activePieces.length}
         </span>
       </div>
+
+      {/* SECCIÓN DE PIEZAS FALTANTES PARA COMPLETAR TU COLECCIÓN (Condicional si está activo en Admin) */}
+      {completionEnabled && missingPieces.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-500/10 via-zinc-900 to-zinc-950 border border-amber-500/30 rounded-3xl p-6 space-y-4 animate-in fade-in">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-widest text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2.5 py-0.5 rounded-full inline-block">
+                Completa tu Colección
+              </span>
+              <h2 className="text-xl font-black text-white mt-1">
+                Piezas sugeridas para tu Vault
+              </h2>
+            </div>
+            <span className="text-xs text-zinc-400 font-medium">
+              Disponibles en el catálogo de Collectibles
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {missingPieces.map(p => {
+              const imgUrl = getProductImage(p.images);
+              return (
+                <div
+                  key={p.id}
+                  className="bg-zinc-900/80 border border-white/10 hover:border-amber-500/40 rounded-2xl p-4 flex flex-col justify-between transition group shadow"
+                >
+                  <div className="space-y-3">
+                    <div className="w-full h-36 bg-black/40 rounded-xl overflow-hidden flex items-center justify-center p-2">
+                      <img
+                        src={imgUrl}
+                        alt={p.title}
+                        className="w-full h-full object-contain group-hover:scale-105 transition-transform"
+                      />
+                    </div>
+                    <div>
+                      {p.brand?.name && (
+                        <span className="text-[9px] font-black uppercase text-slate-400 block truncate">
+                          {p.brand.name}
+                        </span>
+                      )}
+                      <Link
+                        to={`/producto/${p.slug}`}
+                        className="text-xs font-bold text-white group-hover:text-amber-400 transition line-clamp-2"
+                      >
+                        {p.title}
+                      </Link>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 mt-3 border-t border-white/10 flex items-center justify-between">
+                    <span className="text-xs font-black text-amber-400">
+                      {formatCurrencyPrice(p.price)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => addToCart(p)}
+                      className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs rounded-xl flex items-center gap-1 transition shadow cursor-pointer"
+                    >
+                      <PackagePlus size={13} />
+                      <span>Comprar</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* GRID DE CARDS DE FIGURAS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
