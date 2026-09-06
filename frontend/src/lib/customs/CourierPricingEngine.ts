@@ -250,3 +250,50 @@ export class CourierPricingEngine {
     return this.calculatePuntoMio(weightKg);
   }
 }
+
+export function calculateTotalImportCost({
+  fobPriceUSD,
+  weightKg,
+  hasAvailableFranchise
+}: {
+  fobPriceUSD: number;
+  weightKg: number;
+  hasAvailableFranchise: boolean;
+}) {
+  const customsTax = hasAvailableFranchise ? 0 : Math.max(20, Number((fobPriceUSD * 0.6).toFixed(2)));
+  const couriers = [
+    { code: 'puntomio', name: 'PuntoMio', calc: CourierPricingEngine.calculatePuntoMio(weightKg) },
+    { code: 'urubox', name: 'Urubox', calc: CourierPricingEngine.calculateUrubox(weightKg) },
+    { code: 'mbe', name: 'Mail Boxes Etc. (MBE)', calc: CourierPricingEngine.calculateMBE(weightKg) }
+  ];
+
+  const courierComparisons = couriers.map(c => {
+    const shippingCostUSD = c.calc.baseFreightUsd;
+    const handlingFeeUSD = c.calc.handlingUsd;
+    const totalLandedUSD = Number((fobPriceUSD + shippingCostUSD + handlingFeeUSD + customsTax).toFixed(2));
+    return {
+      courierCode: c.code,
+      courierName: c.name,
+      shippingCostUSD,
+      handlingFeeUSD,
+      customsTaxUSD: customsTax,
+      totalLandedUSD,
+      totalCourierUSD: c.calc.totalCourierUsd
+    };
+  });
+
+  const bestCourier = [...courierComparisons].sort((a, b) => a.totalLandedUSD - b.totalLandedUSD)[0] || {
+    courierCode: 'puntomio',
+    courierName: 'PuntoMio',
+    totalLandedUSD: 0
+  };
+
+  return {
+    bestCourier: {
+      courierCode: bestCourier.courierCode,
+      name: bestCourier.courierName,
+      totalCostUSD: bestCourier.totalLandedUSD
+    },
+    courierComparisons
+  };
+}
