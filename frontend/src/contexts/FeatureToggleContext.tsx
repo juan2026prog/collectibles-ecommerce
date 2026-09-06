@@ -49,8 +49,26 @@ const FeatureToggleContext = createContext<FeatureToggleContextType>({
   refreshFeatures: async () => {},
 });
 
+const FEATURE_TOGGLES_CACHE_KEY = 'collectibles_feature_toggles_cache';
+
+function getCachedFeatures(): FeatureToggles {
+  try {
+    const raw = localStorage.getItem(FEATURE_TOGGLES_CACHE_KEY);
+    if (raw) {
+      return { ...defaultFeatures, ...JSON.parse(raw) };
+    }
+  } catch {}
+  return defaultFeatures;
+}
+
+function setCachedFeatures(f: FeatureToggles) {
+  try {
+    localStorage.setItem(FEATURE_TOGGLES_CACHE_KEY, JSON.stringify(f));
+  } catch {}
+}
+
 export function FeatureToggleProvider({ children }: { children: React.ReactNode }) {
-  const [features, setFeatures] = useState<FeatureToggles>(defaultFeatures);
+  const [features, setFeatures] = useState<FeatureToggles>(getCachedFeatures);
   const [loading, setLoading] = useState(true);
 
   const loadConfig = useCallback(async () => {
@@ -63,7 +81,7 @@ export function FeatureToggleProvider({ children }: { children: React.ReactNode 
       if (!toggleError && toggleData && toggleData.length > 0) {
         // Build a map from id -> is_enabled
         const toggleMap = new Map(toggleData.map((t: any) => [t.id, t.is_enabled]));
-        setFeatures({
+        const loaded: FeatureToggles = {
           marketplaceEnabled: toggleMap.get('marketplace') ?? defaultFeatures.marketplaceEnabled,
           affiliatesEnabled: toggleMap.get('affiliates') ?? defaultFeatures.affiliatesEnabled,
           artistCameoEnabled: toggleMap.get('cameo') ?? defaultFeatures.artistCameoEnabled,
@@ -78,7 +96,9 @@ export function FeatureToggleProvider({ children }: { children: React.ReactNode 
           collectorAcademyEnabled: toggleMap.get('academy') ?? defaultFeatures.collectorAcademyEnabled,
           customsFranchiseEnabled: toggleMap.get('customs') ?? toggleMap.get('import_hub') ?? defaultFeatures.customsFranchiseEnabled,
           importHubEnabled: toggleMap.get('import_hub') ?? toggleMap.get('customs') ?? defaultFeatures.importHubEnabled,
-        });
+        };
+        setFeatures(loaded);
+        setCachedFeatures(loaded);
       } else {
         // Fallback: try store_settings for backward compatibility
         const { data, error } = await supabase
@@ -88,17 +108,19 @@ export function FeatureToggleProvider({ children }: { children: React.ReactNode 
           .single();
 
         if (!error && data) {
-          setFeatures({
+          const loaded: FeatureToggles = {
             ...defaultFeatures,
             marketplaceEnabled: data.marketplace_enabled ?? true,
             affiliatesEnabled: data.affiliates_enabled ?? true,
             artistCameoEnabled: data.artist_cameo_enabled ?? false,
             mercadoLibreSyncEnabled: data.ml_sync_enabled ?? true,
-          });
+          };
+          setFeatures(loaded);
+          setCachedFeatures(loaded);
         }
       }
     } catch {
-      // Silent fail — defaults remain active
+      // Silent fail — cached or defaults remain active
     } finally {
       setLoading(false);
     }
@@ -145,6 +167,7 @@ export function FeatureToggleProvider({ children }: { children: React.ReactNode 
           next.importHubEnabled = is_enabled;
           next.customsFranchiseEnabled = is_enabled;
         }
+        setCachedFeatures(next);
         return next;
       });
 

@@ -26,14 +26,14 @@ export interface CollectorPermissions {
  */
 export function useCollectorPermissions(): CollectorPermissions {
   const { profile, user, loading: authLoading } = useAuth();
-  const { features } = useFeatures();
+  const { features, loading: featuresLoading } = useFeatures();
   const { settings, loaded: settingsLoaded } = useSiteSettings();
 
   const isPluginsAdminOnly = settings['collector_plugins_admin_only'] === 'true';
-  const isAdmin = !!profile?.is_admin;
+  const isAdmin = Boolean(profile?.is_admin || (profile as any)?.role === 'admin');
 
   const canAccessCollectorPlugins = !isPluginsAdminOnly || isAdmin;
-  const isLoadingPermissions = (authLoading && !!user) || !settingsLoaded;
+  const isLoadingPermissions = (authLoading && !!user) || !settingsLoaded || (featuresLoading && !localStorage.getItem('collectibles_feature_toggles_cache'));
 
   const isModuleVisible = (moduleId: CollectorModuleId): boolean => {
     if (isPluginsAdminOnly && !isAdmin) {

@@ -304,6 +304,18 @@ export default function StorefrontLayout() {
       });
     }
 
+    // SANITIZATION GATE: If custom appearance_menu_json had hardcoded links to modules that are currently hidden/disabled, remove them
+    links = links.filter(l => {
+      const url = (l.href || '').toLowerCase();
+      if ((url === '/radar' || url.startsWith('/radar/') || url === '/releases') && !isModuleVisible('radar')) return false;
+      if ((url === '/academy' || url.startsWith('/academy/')) && !isModuleVisible('academy')) return false;
+      if (url === '/compare' && !isModuleVisible('compare')) return false;
+      if ((url === '/ai-search' || url === '/search/ai') && !isModuleVisible('ai_search')) return false;
+      if ((url === '/vault' || url.startsWith('/vault/')) && !isModuleVisible('vault')) return false;
+      if ((url === '/import-hub' || url === '/importaciones' || url.startsWith('/franquicia')) && !isModuleVisible('import_hub')) return false;
+      return true;
+    });
+
     return links;
   }, [t, settings, intlPublicEnabled, isModuleVisible]);
 
