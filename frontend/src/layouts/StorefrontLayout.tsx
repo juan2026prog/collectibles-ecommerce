@@ -33,6 +33,7 @@ import { ImageProtectionGlobalListener } from '../hooks/useImageProtection';
 import { getDropdownMediaUrl } from '../utils/responsiveMedia';
 import React from 'react';
 import StorefrontSearchBar from '../components/search/StorefrontSearchBar';
+import { useCollectorPermissions } from '../hooks/useCollectorPermissions';
 
 import { trackContact, trackFindLocation, generateMetaEventId } from '../lib/meta/metaPixel';
 import { trackClarityEvent } from '../lib/analyticsTracker';
@@ -135,9 +136,7 @@ export default function StorefrontLayout() {
   const { themes: activeThemes } = useThemes(true);
   const { settings, loaded: settingsLoaded } = useSiteSettings();
   const { publicEnabled: intlPublicEnabled } = useInternationalSettings();
-  const { features } = useFeatures();
-  
-  const isPluginsAdminOnly = settings['collector_plugins_admin_only'] === 'true';
+  const { isModuleVisible, canAccessCollectorPlugins, isPluginsAdminOnly } = useCollectorPermissions();
   // Meta Pixel is already tracked globally by MetaPixelTracker in App.tsx
 
   const getSocialUrl = (key: string, value: string) => {
@@ -283,36 +282,30 @@ export default function StorefrontLayout() {
       links = links.filter(l => l.href !== '/intl' && l.href !== '/internacional' && l.name?.toUpperCase() !== 'INTERNACIONAL');
     }
 
-    // Collector Plugins visibility (Respects individual toggle + admin-only mode)
-    const isPluginsAdminOnly = settings['collector_plugins_admin_only'] === 'true';
-    const canAccessCollectorPlugins = !isPluginsAdminOnly || !!profile?.is_admin;
-
     // Plugin Navigation links: RADAR, ACADEMY, COMPARADOR (respects feature toggles & admin-only)
-    if (canAccessCollectorPlugins) {
-      if (features.radarEnabled && !links.some(l => l.href === '/radar' || l.name?.toUpperCase() === 'RADAR')) {
-        links.push({
-          name: 'RADAR',
-          href: '/radar'
-        });
-      }
+    if (isModuleVisible('radar') && !links.some(l => l.href === '/radar' || l.name?.toUpperCase() === 'RADAR')) {
+      links.push({
+        name: 'RADAR',
+        href: '/radar'
+      });
+    }
 
-      if (features.collectorAcademyEnabled && !links.some(l => l.href === '/academy' || l.name?.toUpperCase() === 'ACADEMY')) {
-        links.push({
-          name: 'ACADEMY',
-          href: '/academy'
-        });
-      }
+    if (isModuleVisible('academy') && !links.some(l => l.href === '/academy' || l.name?.toUpperCase() === 'ACADEMY')) {
+      links.push({
+        name: 'ACADEMY',
+        href: '/academy'
+      });
+    }
 
-      if (features.comparatorEnabled && !links.some(l => l.href === '/compare' || l.name?.toUpperCase() === 'COMPARADOR')) {
-        links.push({
-          name: 'COMPARADOR',
-          href: '/compare'
-        });
-      }
+    if (isModuleVisible('compare') && !links.some(l => l.href === '/compare' || l.name?.toUpperCase() === 'COMPARADOR')) {
+      links.push({
+        name: 'COMPARADOR',
+        href: '/compare'
+      });
     }
 
     return links;
-  }, [t, settings, intlPublicEnabled, features.radarEnabled, features.collectorAcademyEnabled, features.comparatorEnabled, features.collectorVaultEnabled, profile?.is_admin]);
+  }, [t, settings, intlPublicEnabled, isModuleVisible]);
 
   const FOOTER_LINKS = useMemo(() => {
     const customFooterStr = settings['appearance_footer_menu_json'];
@@ -536,7 +529,7 @@ export default function StorefrontLayout() {
 
             {/* SEARCH BOX (DESKTOP) */}
             <StorefrontSearchBar
-              aiSearchEnabled={features.aiSearchEnabled && (!isPluginsAdminOnly || !!profile?.is_admin)}
+              aiSearchEnabled={isModuleVisible('ai_search')}
               allBrands={allBrands}
               activeLicenses={activeLicenses}
               className="hidden lg:flex"
@@ -549,7 +542,7 @@ export default function StorefrontLayout() {
             </div>
             
             {/* Quick search link on mobile header */}
-            {features.aiSearchEnabled && (!isPluginsAdminOnly || profile?.is_admin) && (
+            {isModuleVisible('ai_search') && (
               <Link
                 to="/ai-search"
                 className="xl:hidden w-11 h-11 flex items-center justify-center rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-[#f00856]"
@@ -598,7 +591,7 @@ export default function StorefrontLayout() {
                         >
                            <User className="w-4 h-4 text-[#f00856]" /> Mi Perfil / Dashboard
                         </Link>
-                        {features.collectorVaultEnabled && (!isPluginsAdminOnly || profile?.is_admin) && (
+                        {isModuleVisible('vault') && (
                           <Link 
                             to="/vault" 
                             onClick={() => setUserMenuOpen(false)}
@@ -607,7 +600,7 @@ export default function StorefrontLayout() {
                              <Archive className="w-4 h-4 text-amber-400" /> Mi Vault
                           </Link>
                         )}
-                        {features.importHubEnabled && (!isPluginsAdminOnly || profile?.is_admin) && (
+                        {isModuleVisible('import_hub') && (
                           <Link 
                             to="/import-hub" 
                             onClick={() => setUserMenuOpen(false)}
@@ -718,7 +711,7 @@ export default function StorefrontLayout() {
       {isHome && (
         <div className="lg:hidden bg-[#05070f] border-b border-white/10 px-4 py-2 relative z-[20]">
           <StorefrontSearchBar
-            aiSearchEnabled={features.aiSearchEnabled}
+            aiSearchEnabled={isModuleVisible('ai_search')}
             allBrands={allBrands}
             activeLicenses={activeLicenses}
             className="w-full max-w-none"
@@ -890,8 +883,8 @@ export default function StorefrontLayout() {
                         </div>
                       </div>
                     </div>
-                    <div className={`grid ${(features.collectorVaultEnabled && (!isPluginsAdminOnly || profile?.is_admin)) || (features.importHubEnabled && (!isPluginsAdminOnly || profile?.is_admin)) ? 'grid-cols-2' : 'grid-cols-1'} gap-2 mt-2`}>
-                      {features.collectorVaultEnabled && (!isPluginsAdminOnly || profile?.is_admin) && (
+                    <div className={`grid ${(isModuleVisible('vault')) || (isModuleVisible('import_hub')) ? 'grid-cols-2' : 'grid-cols-1'} gap-2 mt-2`}>
+                      {isModuleVisible('vault') && (
                         <Link 
                           to="/vault" 
                           onClick={() => setMobileMenuOpen(false)}
@@ -900,7 +893,7 @@ export default function StorefrontLayout() {
                           <Archive className="w-3.5 h-3.5" /> Mi Vault
                         </Link>
                       )}
-                      {features.importHubEnabled && (!isPluginsAdminOnly || profile?.is_admin) && (
+                      {isModuleVisible('import_hub') && (
                         <Link 
                           to="/import-hub" 
                           onClick={() => setMobileMenuOpen(false)}
@@ -1040,11 +1033,12 @@ export default function StorefrontLayout() {
              <ul className="space-y-3">
                 {[
                   { label: 'Catálogo completo', href: '/shop', show: true },
-                  { label: 'Radar & Lanzamientos', href: '/radar', show: features.radarEnabled },
-                  { label: 'Collector Academy', href: '/academy', show: features.collectorAcademyEnabled },
-                  { label: 'Comparador', href: '/compare', show: features.collectorCompareEnabled },
-                  { label: 'Búsqueda IA', href: '/ai-search', show: features.aiSearchEnabled },
-                  { label: 'Mi Vault (Colección)', href: '/vault', show: features.collectorVaultEnabled },
+                  { label: 'Radar & Lanzamientos', href: '/radar', show: isModuleVisible('radar') },
+                  { label: 'Collector Academy', href: '/academy', show: isModuleVisible('academy') },
+                  { label: 'Comparador', href: '/compare', show: isModuleVisible('compare') },
+                  { label: 'Búsqueda IA', href: '/ai-search', show: isModuleVisible('ai_search') },
+                  { label: 'Mi Vault (Colección)', href: '/vault', show: isModuleVisible('vault') },
+                  { label: 'Import Hub (Mi Franquicia)', href: '/import-hub', show: isModuleVisible('import_hub') },
                   { label: 'Novedades', href: '/shop?badge=new', show: true },
                   { label: 'Sobre nosotros', href: '/page/nosotros', show: true },
                   { label: 'Contacto', href: '/contact', show: true },

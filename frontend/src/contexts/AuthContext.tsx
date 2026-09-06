@@ -27,12 +27,34 @@ interface AuthContextType {
   signOut: () => Promise<void>;
 }
 
+const AUTH_PROFILE_CACHE_KEY = 'collectibles_auth_profile_cache';
+
+function getCachedProfile(): Profile | null {
+  try {
+    const raw = localStorage.getItem(AUTH_PROFILE_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedProfile(p: Profile | null) {
+  try {
+    if (p) {
+      localStorage.setItem(AUTH_PROFILE_CACHE_KEY, JSON.stringify(p));
+    } else {
+      localStorage.removeItem(AUTH_PROFILE_CACHE_KEY);
+    }
+  } catch {}
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const cachedProfile = useMemo(() => getCachedProfile(), []);
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(cachedProfile);
   const [loading, setLoading] = useState(true);
 
   const fetchedUserIdRef = useRef<string | null>(null);
@@ -53,6 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logoutOneSignalUser();
         fetchedUserIdRef.current = null;
         setProfile(null);
+        setCachedProfile(null);
         setLoading(false);
       }
     });
@@ -80,10 +103,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq('id', userId)
         .single();
       if (error) throw error;
-      setProfile(data as Profile | null);
+      const loadedProfile = data as Profile | null;
+      setProfile(loadedProfile);
+      setCachedProfile(loadedProfile);
     } catch (err) {
       if (import.meta.env.DEV) console.error('[AuthContext] Failed to fetch profile:', err);
-      setProfile(null);
+      // Do not clear cachedProfile on network transient errors if user is still logged in
     } finally {
       setLoading(false);
     }
@@ -121,6 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await logoutOneSignalUser();
     await supabase.auth.signOut();
     setProfile(null);
+    setCachedProfile(null);
   }, []);
 
   const value = useMemo(() => ({

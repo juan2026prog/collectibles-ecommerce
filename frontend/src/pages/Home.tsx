@@ -10,6 +10,7 @@ import { ProductSkeleton } from '../components/Skeletons';
 import { ProductGridCard } from '../components/ProductGridCard';
 import { getProductImage } from '../lib/imageUtils';
 import { useSiteSettings } from '../hooks/useSiteSettings';
+import { useCollectorPermissions } from '../hooks/useCollectorPermissions';
 import HeroSlider from '../components/HeroSlider';
 import { resolveCartItemPrice } from '../lib/priceResolver';
 import { trackClarityEvent } from '../lib/analyticsTracker';
@@ -249,6 +250,7 @@ export default function Home() {
   const { t } = useLocale();
   const { formatCurrencyPrice } = useCurrency();
   const { features } = useFeatures();
+  const { isModuleVisible } = useCollectorPermissions();
 
   const displayedCategories = useMemo(() =>
     parseHomeCategories(settings['home_categories_config_json'], categories),
@@ -513,13 +515,13 @@ export default function Home() {
               ))}
             </div>
 
-            {/* COLLECTOR EXPERIENCE BAR (PLUGINS ACCESS - RESPECTS FEATURE TOGGLES) */}
+            {/* COLLECTOR EXPERIENCE BAR (PLUGINS ACCESS - RESPECTS FEATURE TOGGLES & ADMIN-ONLY) */}
             {(() => {
               const items = [
                 {
                   id: 'ai_search',
                   to: '/ai-search',
-                  show: features.aiSearchEnabled,
+                  show: isModuleVisible('ai_search'),
                   title: 'Búsqueda IA',
                   subtitle: 'Buscador semántico',
                   icon: Sparkles,
@@ -530,7 +532,7 @@ export default function Home() {
                 {
                   id: 'radar',
                   to: '/radar',
-                  show: features.radarEnabled,
+                  show: isModuleVisible('radar'),
                   title: 'Radar Drops',
                   subtitle: 'Calendario 2026/27',
                   icon: Radio,
@@ -541,7 +543,7 @@ export default function Home() {
                 {
                   id: 'vault',
                   to: '/vault',
-                  show: features.collectorVaultEnabled,
+                  show: isModuleVisible('vault'),
                   title: 'Mi Vault',
                   subtitle: 'Mi colección personal',
                   icon: Archive,
@@ -552,7 +554,7 @@ export default function Home() {
                 {
                   id: 'compare',
                   to: '/compare',
-                  show: features.collectorCompareEnabled,
+                  show: isModuleVisible('compare'),
                   title: 'Comparador',
                   subtitle: 'Escalas y specs',
                   icon: Scale,
@@ -563,7 +565,7 @@ export default function Home() {
                 {
                   id: 'academy',
                   to: '/academy',
-                  show: features.collectorAcademyEnabled,
+                  show: isModuleVisible('academy'),
                   title: 'Academy',
                   subtitle: 'Guías y conservación',
                   icon: GraduationCap,

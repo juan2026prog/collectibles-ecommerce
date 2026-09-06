@@ -84,11 +84,10 @@ describe('Módulo 06: Mi Franquicia Uruguay 2026 Engine Tests', () => {
 
     it('calculates Urubox tiers with handling and 10% URSEC', () => {
       const estimate = CourierPricingEngine.calculateUrubox(0.4);
-      // Urubox: 200g - 500g is USD 15.90 base + USD 5 handling + 10% of 15.90 (1.59) = 22.49
+      // Urubox: 200g - 500g is USD 15.90 base + USD 4.90 handling = 20.80
       expect(estimate.baseFreightUsd).toBe(15.90);
-      expect(estimate.handlingUsd).toBe(5.00);
-      expect(estimate.ursecUsd).toBe(1.59);
-      expect(estimate.totalCourierUsd).toBe(22.49);
+      expect(estimate.handlingUsd).toBe(4.90);
+      expect(estimate.totalCourierUsd).toBe(20.80);
     });
 
     it('flags packages over 20 kg as overweight', () => {

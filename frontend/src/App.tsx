@@ -133,6 +133,7 @@ import { useReferralTracking } from './hooks/useReferralTracking';
 import MetaPixelTracker from './components/MetaPixelTracker';
 import MarketplaceGuard from './components/MarketplaceGuard';
 import VendorRouteGuard from './components/VendorRouteGuard';
+import CollectorPluginGuard from './components/CollectorPluginGuard';
 
 function ReferralTracker() {
   useReferralTracking();
@@ -210,31 +211,31 @@ function App() {
                     } />
 
                     {/* Collector Compare */}
-                    <Route path="/compare" element={<ComparePage />} />
+                    <Route path="/compare" element={<CollectorPluginGuard module="compare"><ComparePage /></CollectorPluginGuard>} />
 
                     {/* 01. AI Search */}
-                    <Route path="/ai-search" element={<AISearchPage />} />
-                    <Route path="/search" element={<AISearchPage />} />
-                    <Route path="/search/ai" element={<AISearchPage />} />
+                    <Route path="/ai-search" element={<CollectorPluginGuard module="ai_search"><AISearchPage /></CollectorPluginGuard>} />
+                    <Route path="/search" element={<CollectorPluginGuard module="ai_search"><AISearchPage /></CollectorPluginGuard>} />
+                    <Route path="/search/ai" element={<CollectorPluginGuard module="ai_search"><AISearchPage /></CollectorPluginGuard>} />
 
                     {/* 02. Radar & Release Calendar */}
-                    <Route path="/radar" element={<RadarFeedPage />} />
-                    <Route path="/radar/:slug" element={<ReleaseDetailPage />} />
-                    <Route path="/releases" element={<ReleaseCalendarPage />} />
+                    <Route path="/radar" element={<CollectorPluginGuard module="radar"><RadarFeedPage /></CollectorPluginGuard>} />
+                    <Route path="/radar/:slug" element={<CollectorPluginGuard module="radar"><ReleaseDetailPage /></CollectorPluginGuard>} />
+                    <Route path="/releases" element={<CollectorPluginGuard module="radar"><ReleaseCalendarPage /></CollectorPluginGuard>} />
 
                     {/* 03. My Vault */}
-                    <Route path="/vault" element={<ProtectedRoute><VaultDashboard /></ProtectedRoute>} />
-                    <Route path="/vault/item/:id" element={<ProtectedRoute><VaultItemDetail /></ProtectedRoute>} />
-                    <Route path="/vault/:username" element={<PublicCollectorProfile />} />
-                    <Route path="/vault/:username/:itemSlug" element={<PublicCollectorProfile />} />
-                    <Route path="/collector/:username" element={<PublicCollectorProfile />} />
+                    <Route path="/vault" element={<CollectorPluginGuard module="vault"><ProtectedRoute><VaultDashboard /></ProtectedRoute></CollectorPluginGuard>} />
+                    <Route path="/vault/item/:id" element={<CollectorPluginGuard module="vault"><ProtectedRoute><VaultItemDetail /></ProtectedRoute></CollectorPluginGuard>} />
+                    <Route path="/vault/:username" element={<CollectorPluginGuard module="vault"><PublicCollectorProfile /></CollectorPluginGuard>} />
+                    <Route path="/vault/:username/:itemSlug" element={<CollectorPluginGuard module="vault"><PublicCollectorProfile /></CollectorPluginGuard>} />
+                    <Route path="/collector/:username" element={<CollectorPluginGuard module="vault"><PublicCollectorProfile /></CollectorPluginGuard>} />
 
                     {/* 05. Collector Academy */}
-                    <Route path="/academy" element={<AcademyHome />} />
-                    <Route path="/academy/:slug" element={<AcademyArticlePage />} />
+                    <Route path="/academy" element={<CollectorPluginGuard module="academy"><AcademyHome /></CollectorPluginGuard>} />
+                    <Route path="/academy/:slug" element={<CollectorPluginGuard module="academy"><AcademyArticlePage /></CollectorPluginGuard>} />
 
                     {/* 06. Collectibles Import Hub */}
-                    <Route path="/import-hub" element={<ImportHubPage />} />
+                    <Route path="/import-hub" element={<CollectorPluginGuard module="import_hub"><ImportHubPage /></CollectorPluginGuard>} />
                     <Route path="/importaciones" element={<Navigate to="/import-hub" replace />} />
                     <Route path="/franquicia" element={<Navigate to="/import-hub?tab=franchise" replace />} />
                     <Route path="/franquicias" element={<Navigate to="/import-hub?tab=franchise" replace />} />

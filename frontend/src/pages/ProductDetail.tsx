@@ -34,6 +34,7 @@ import InternationalWaitlistModal from '../components/international/Internationa
 import { resolveProductInventory } from '../lib/canonicalStock';
 import { AddToCompareButton } from '../components/compare/AddToCompareButton';
 import { ProductUruguayCostDrawer } from '../components/customs/ProductUruguayCostDrawer';
+import { useCollectorPermissions } from '../hooks/useCollectorPermissions';
 
 // ── COMPONENTE SECCIÓN MISMA WAVE / SERIE (Sourcing & Catalogo) ──
 function WaveProductsSection({ currentProductId, waveName }: { currentProductId: string; waveName?: string | null }) {
@@ -180,6 +181,7 @@ export default function ProductDetail() {
   const { promotions } = usePromotions();
   const { toggleWishlist, isInWishlist } = useWishlistContext();
   const { features } = useFeatures();
+  const { isModuleVisible } = useCollectorPermissions();
 
   const arShippingStatus = calculateArgentinaShippingStatus(product || {});
   
@@ -662,7 +664,7 @@ export default function ProductDetail() {
               )}
 
               {/* ESTIMACIÓN COSTO PUESTO EN URUGUAY (MI FRANQUICIA) */}
-              {features.customsFranchiseEnabled && (
+              {isModuleVisible('customs') && (
                 <button
                   type="button"
                   onClick={() => setShowCustomsDrawer(true)}
@@ -678,15 +680,7 @@ export default function ProductDetail() {
                   <span className="text-xs font-medium px-3 py-1 rounded-full border border-slate-700 bg-slate-800 text-slate-400 flex items-center gap-1.5" title="Este vendedor no realiza envíos a Argentina">
                     Este vendedor no realiza envíos a Argentina
                   </span>
-                ) : arShippingStatus.isEligible ? (
-                  <span className="text-xs font-medium px-3 py-1 rounded-full border border-sky-500/30 bg-sky-500/10 text-sky-300 flex items-center gap-1.5">
-                    🇦🇷 Envío a Argentina disponible
-                  </span>
-                ) : (
-                  <span className="text-xs font-medium px-3 py-1 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300 flex items-center gap-1.5" title={arShippingStatus.reason}>
-                    🇦🇷 Consultar envío a Argentina
-                  </span>
-                )
+                ) : null
               )}
             </div>
           </div>
@@ -799,14 +793,14 @@ export default function ProductDetail() {
                 <span>{isInWishlist(product.id) ? 'En Favoritos' : 'Favoritos'}</span>
               </button>
 
-              {features.collectorCompareEnabled && (
+              {isModuleVisible('compare') && (
                 <>
                   <span className="text-white/20">|</span>
                   <AddToCompareButton productId={product.id} variant="button" />
                 </>
               )}
 
-              {features.collectorVaultEnabled && (
+              {isModuleVisible('vault') && (
                 <>
                   <span className="text-white/20">|</span>
                   <Link
