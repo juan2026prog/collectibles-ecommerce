@@ -310,11 +310,12 @@ export default function VaultItemDetail() {
                 </div>
 
                 {/* Watermark overlay on preview */}
-                <div className="absolute top-3 right-3 bg-black/75 backdrop-blur-md px-2 py-0.5 rounded-full text-[9px] font-mono font-bold text-rose-400 border border-rose-500/30 flex items-center gap-1">
-                  <Sparkles size={10} className="text-rose-400" />
+                <div className="absolute top-3 right-3 bg-black/80 backdrop-blur-md px-2.5 py-1 rounded-full text-[9px] font-mono font-bold text-white border border-white/20 flex items-center gap-1.5 shadow-md">
+                  <img src="/images/collectibles-star-white.png" alt="Collectibles" className="w-3.5 h-3.5 object-contain" />
                   <span>Collectibles.uy</span>
                 </div>
               </div>
+
 
               {/* Photo Source Selector (Only if User Photos Feature is Enabled) */}
               {userPhotosEnabled && (

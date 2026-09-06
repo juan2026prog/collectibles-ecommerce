@@ -508,9 +508,11 @@ export default function VaultDashboard() {
                   )}
 
                   {/* Watermark Logo Badge */}
-                  <div className="absolute bottom-2.5 left-2.5 bg-black/75 backdrop-blur-md px-2 py-0.5 rounded-md text-[8px] font-mono font-bold text-rose-400 border border-rose-500/30 flex items-center gap-1">
-                    <span>⚡ Collectibles</span>
+                  <div className="absolute bottom-2.5 left-2.5 bg-black/80 backdrop-blur-md px-2 py-0.5 rounded-md text-[8px] font-mono font-bold text-white border border-white/20 flex items-center gap-1 shadow-sm">
+                    <img src="/images/collectibles-star-white.png" alt="Collectibles" className="w-3 h-3 object-contain" />
+                    <span>Collectibles</span>
                   </div>
+
 
                   {/* Top-Right Favorite Badge */}
                   {piece.is_favorite && (

@@ -16,12 +16,14 @@ function CollectiblesWatermark({ isOverlay = false }: { isOverlay?: boolean }) {
   return (
     <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border backdrop-blur-md select-none pointer-events-none ${
       isOverlay
-        ? 'bg-black/80 border-rose-500/40 text-rose-300 shadow-lg shadow-black/60'
+        ? 'bg-black/85 border-white/20 text-white shadow-lg shadow-black/60'
         : 'bg-zinc-950/80 border-white/15 text-zinc-300'
     }`}>
-      <div className="w-4 h-4 rounded-full bg-gradient-to-tr from-rose-600 to-pink-500 flex items-center justify-center text-[9px] font-black text-white shadow-sm">
-        C
-      </div>
+      <img
+        src="/images/collectibles-star-white.png"
+        alt="Collectibles"
+        className="w-3.5 h-3.5 object-contain"
+      />
       <div className="flex flex-col text-left leading-none">
         <span className="text-[9px] font-black tracking-widest text-white">COLLECTIBLES</span>
         <span className="text-[6px] font-mono font-bold tracking-wider text-rose-400">VERIFIED VAULT</span>
@@ -173,7 +175,7 @@ export function VaultShareCardModal({
               <h3 className="text-sm font-black text-white">
                 Compartir en Redes Sociales
               </h3>
-              <p className="text-[11px] text-zinc-400">Ficha visual con identidad y marca de agua Collectibles</p>
+              <p className="text-[11px] text-zinc-400">Ficha visual oficial de Collectibles</p>
             </div>
           </div>
           <button
@@ -324,26 +326,26 @@ export function VaultShareCardModal({
             <div className="absolute top-0 right-0 w-48 h-48 bg-rose-600/15 rounded-full blur-3xl pointer-events-none" />
             <div className="absolute bottom-0 left-0 w-36 h-36 bg-pink-600/10 rounded-full blur-2xl pointer-events-none" />
 
-            {/* Diagonal subtle watermark background pattern */}
-            <div className="absolute inset-0 opacity-[0.03] select-none pointer-events-none flex flex-col justify-around rotate-[-25deg] text-[18px] font-black tracking-widest text-white whitespace-nowrap overflow-hidden">
-              <div>COLLECTIBLES.UY · MY VAULT · COLLECTIBLES.UY · MY VAULT</div>
-              <div>COLLECTIBLES.UY · MY VAULT · COLLECTIBLES.UY · MY VAULT</div>
-              <div>COLLECTIBLES.UY · MY VAULT · COLLECTIBLES.UY · MY VAULT</div>
-              <div>COLLECTIBLES.UY · MY VAULT · COLLECTIBLES.UY · MY VAULT</div>
+            {/* Diagonal subtle watermark background pattern with official star symbol */}
+            <div className="absolute inset-0 opacity-[0.035] select-none pointer-events-none flex flex-col justify-around rotate-[-25deg] text-[17px] font-black tracking-widest text-white whitespace-nowrap overflow-hidden">
+              <div>✦ COLLECTIBLES · MY VAULT · ✦ COLLECTIBLES · MY VAULT</div>
+              <div>✦ COLLECTIBLES · MY VAULT · ✦ COLLECTIBLES · MY VAULT</div>
+              <div>✦ COLLECTIBLES · MY VAULT · ✦ COLLECTIBLES · MY VAULT</div>
+              <div>✦ COLLECTIBLES · MY VAULT · ✦ COLLECTIBLES · MY VAULT</div>
             </div>
 
-            {/* Card Header with Collector Public Identity */}
+            {/* Card Header with Collector Public Identity (NO RIGHT BADGE as requested) */}
             <div className="relative z-10">
               <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2.5">
                   {collectorAvatarUrl ? (
                     <img
                       src={collectorAvatarUrl}
                       alt={collectorNickname || primaryHandle}
-                      className="w-7 h-7 rounded-full object-cover border border-rose-500/40 shadow"
+                      className="w-8 h-8 rounded-full object-cover border border-rose-500/40 shadow"
                     />
                   ) : (
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-rose-600 to-pink-500 flex items-center justify-center text-[11px] font-black text-white shadow">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-rose-600 to-pink-500 flex items-center justify-center text-xs font-black text-white shadow">
                       {initialLetter}
                     </div>
                   )}
@@ -354,8 +356,6 @@ export function VaultShareCardModal({
                     )}
                   </div>
                 </div>
-
-                <CollectiblesWatermark isOverlay={false} />
               </div>
 
               {!isCurrentFull && currentItem?.franchise && (
@@ -390,7 +390,7 @@ export function VaultShareCardModal({
                   </div>
                 </div>
 
-                <div className="text-center space-y-1 w-full">
+                <div className="text-center space-y-1.5 w-full">
                   <h4 className="text-sm font-black text-white leading-tight">
                     {currentItem?.custom_name}
                   </h4>
@@ -464,18 +464,22 @@ export function VaultShareCardModal({
               </div>
             )}
 
-            {/* Card Footer with Verified Badge & Collectibles Logo */}
-            <div className="relative z-10 pt-2 border-t border-white/10 flex items-center justify-between text-[9px] text-zinc-400 font-mono">
-              <div className="flex items-center gap-1">
-                <Sparkles size={10} className="text-rose-400" />
-                <span>⭐ Colección Verificada</span>
+            {/* Card Footer with Official Collectibles White Logo on Left (Celeste Area) and collectibles.uy on Right */}
+            <div className="relative z-10 pt-3 border-t border-white/10 flex items-center justify-between">
+              <div className="flex items-center">
+                <img
+                  src="/images/collectibles-logo-white.png"
+                  alt="Collectibles — Figuras que cuentan historias"
+                  className="h-6 max-w-[145px] object-contain"
+                />
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-bold text-white tracking-wider">collectibles.uy</span>
-              </div>
+              <span className="font-mono text-[10px] font-bold text-zinc-300 tracking-wider">
+                collectibles.uy
+              </span>
             </div>
           </div>
         </div>
+
 
         {/* Action Buttons: WhatsApp, Instagram, Copiar Link */}
         <div className="p-4 sm:p-6 border-t border-white/10 bg-zinc-900/60 space-y-3">
