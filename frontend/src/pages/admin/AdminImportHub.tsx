@@ -116,11 +116,25 @@ const AdminImportHub: React.FC = () => {
     }
   };
 
-  const simResult = calculateTotalImportCost({
-    fobPriceUSD: simFob,
-    weightKg: simWeight,
-    hasAvailableFranchise: simFranchise
+  const courierCodes = ['puntomio', 'urubox', 'mbe'] as const;
+  const simComparisons = courierCodes.map(code => {
+    const res = ImportCostEngine.calculateLandedCost({
+      productPriceUsd: simFob,
+      weightKg: simWeight,
+      courierCode: code,
+      forceSimplifiedRegime: !simFranchise,
+      exchangeRateUsdToUyu: 42.50
+    });
+    return {
+      courierCode: code,
+      courierName: KNOWN_COURIERS[code]?.name || code,
+      estimate: res
+    };
   });
+
+  const bestCourierSim = simComparisons.reduce((min, curr) => 
+    curr.estimate.totalCostUsd < min.estimate.totalCostUsd ? curr : min
+  , simComparisons[0]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -421,27 +435,28 @@ const AdminImportHub: React.FC = () => {
           </div>
 
           <div className="lg:col-span-2 bg-white border border-gray-200 rounded-xl p-6 shadow-sm space-y-4">
-            <h3 className="text-base font-bold text-gray-900 flex items-center justify-between">
+            <h3 className="text-base font-bold text-gray-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <span>Resultados Comparativos en Tiempo Real</span>
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                Mejor Opción: {simResult.bestCourier.name} (${simResult.bestCourier.totalCostUSD.toFixed(2)} USD)
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 self-start sm:self-auto">
+                Mejor Opción: {bestCourierSim.courierName} (${bestCourierSim.estimate.totalCostUsd.toFixed(2)} USD)
               </span>
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {simResult.courierComparisons.map((c) => {
-                const isBest = c.courierCode === simResult.bestCourier.courierCode;
+              {simComparisons.map((c) => {
+                const isBest = c.courierCode === bestCourierSim.courierCode;
                 return (
                   <div key={c.courierCode} className={`p-4 rounded-xl border ${isBest ? 'bg-pink-50/50 border-pink-300 shadow-sm' : 'bg-gray-50/60 border-gray-200'}`}>
                     <div className="flex items-center justify-between mb-2">
                       <span className="font-bold text-gray-900 text-sm">{c.courierName}</span>
                       {isBest && <span className="text-[10px] bg-[#f00856] text-white px-2 py-0.5 rounded-full font-bold">MEJOR</span>}
                     </div>
-                    <div className="text-2xl font-black text-gray-900 font-mono">${c.totalLandedUSD.toFixed(2)}</div>
+                    <div className="text-2xl font-black text-gray-900 font-mono">${c.estimate.totalCostUsd.toFixed(2)}</div>
                     <div className="text-[11px] text-gray-500 mt-2 space-y-1 font-mono">
-                      <div>Flete Internacional: ${c.shippingCostUSD.toFixed(2)}</div>
-                      <div>Handling / Gestión: ${c.handlingFeeUSD.toFixed(2)}</div>
-                      <div>Impuestos Aduana: ${c.customsTaxUSD.toFixed(2)}</div>
+                      <div>Flete: ${c.estimate.freightCostUsd.toFixed(2)}</div>
+                      <div>Handling: ${c.estimate.handlingFeeUsd.toFixed(2)}</div>
+                      <div>Aduana / IVA: ${c.estimate.customsTaxUsd.toFixed(2)}</div>
+                      {c.estimate.ursecFeeUsd > 0 && <div>URSEC: ${c.estimate.ursecFeeUsd.toFixed(2)}</div>}
                     </div>
                   </div>
                 );
