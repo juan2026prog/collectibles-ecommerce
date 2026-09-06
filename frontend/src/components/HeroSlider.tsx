@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useImageProtection } from '../hooks/useImageProtection';
@@ -27,8 +27,6 @@ interface HeroSliderProps {
 
 export default function HeroSlider({ banners, loading = false }: HeroSliderProps) {
   const [activeIndex, setActiveIndex] = useState(0);
-  const [prevActiveIndex, setPrevActiveIndex] = useState<number | null>(null);
-  const activeIndexRef = useRef(activeIndex);
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
   const autoplayTimer = useRef<NodeJS.Timeout | null>(null);
@@ -37,49 +35,51 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
   // Filter active banners (memoized to prevent render loops)
   const activeBanners = useMemo(() => banners.filter(b => b.image_url), [banners]);
 
-  // Programmatic image preloading to prevent flickers/flashes during slide transitions
-  // Only preload the NEXT banner to avoid massive network requests
+  // Keep activeIndex within bounds if banners change
+  useEffect(() => {
+    if (activeBanners.length > 0 && activeIndex >= activeBanners.length) {
+      setActiveIndex(0);
+    }
+  }, [activeBanners.length, activeIndex]);
+
+  // Comprehensive image preloading to guarantee zero image decode delay on transitions
   useEffect(() => {
     if (activeBanners.length <= 1) return;
     
-    const nextIndex = (activeIndex + 1) % activeBanners.length;
-    const bannerToPreload = activeBanners[nextIndex];
-    
-    if (bannerToPreload?.image_url) {
-      const img = new Image();
-      img.src = bannerToPreload.image_url;
-    }
-    if (bannerToPreload?.mobile_image_url) {
-      const mobImg = new Image();
-      mobImg.src = bannerToPreload.mobile_image_url;
-    }
-  }, [activeIndex, activeBanners]);
+    activeBanners.forEach(banner => {
+      if (banner.image_url) {
+        const img = new Image();
+        img.src = banner.image_url;
+      }
+      if (banner.mobile_image_url) {
+        const mobImg = new Image();
+        mobImg.src = banner.mobile_image_url;
+      }
+    });
+  }, [activeBanners]);
 
-  // Track prev index for smooth crossfade blending
-  useEffect(() => {
-    const prev = activeIndexRef.current;
-    if (prev !== activeIndex) {
-      setPrevActiveIndex(prev);
-      activeIndexRef.current = activeIndex;
+  // Autoplay management
+  const startAutoplay = useCallback(() => {
+    if (autoplayTimer.current) {
+      clearInterval(autoplayTimer.current);
+      autoplayTimer.current = null;
     }
-  }, [activeIndex]);
-
-  // Reset autoplay timer when index changes
-  const startAutoplay = () => {
-    if (autoplayTimer.current) clearInterval(autoplayTimer.current);
     if (activeBanners.length <= 1) return;
     
     autoplayTimer.current = setInterval(() => {
       setActiveIndex(prev => (prev + 1) % activeBanners.length);
-    }, 7000); // 7 seconds slow autoplay
-  };
+    }, 7000); // 7 seconds autoplay
+  }, [activeBanners.length]);
 
   useEffect(() => {
     startAutoplay();
     return () => {
-      if (autoplayTimer.current) clearInterval(autoplayTimer.current);
+      if (autoplayTimer.current) {
+        clearInterval(autoplayTimer.current);
+        autoplayTimer.current = null;
+      }
     };
-  }, [activeBanners.length]);
+  }, [startAutoplay]);
 
   const handlePrev = (e?: React.MouseEvent) => {
     e?.preventDefault();
@@ -110,7 +110,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
   };
 
   const handleTouchEnd = () => {
-    if (!touchStartX.current || !touchEndX.current) return;
+    if (touchStartX.current === null || touchEndX.current === null) return;
     const diff = touchStartX.current - touchEndX.current;
     
     // Swipe left (next)
@@ -127,7 +127,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
   };
 
   if (loading && activeBanners.length === 0) {
-    // Render a stable dark cinematic background container of exactly the same size without any fake text/buttons
+    // Render a stable dark cinematic background container without any fake text/buttons
     return (
       <section className="relative h-[380px] sm:h-[420px] md:h-screen w-full bg-[#05070f] overflow-hidden">
         <div className="absolute inset-0 bg-[#05070f]" />
@@ -173,7 +173,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Background grid texture & ambient glow (fixed behind all slides) */}
+      {/* Base Background grid texture & ambient glow (stable behind all slides) */}
       <div className="absolute inset-0 bg-[#05070f] z-0" />
       <div className="absolute -right-40 -top-40 w-[800px] h-[800px] bg-[#f00856]/[.07] blur-[180px] rounded-full pointer-events-none z-0" />
       <div className="absolute -left-60 bottom-0 w-[500px] h-[500px] bg-[#f00856]/[.04] blur-[140px] rounded-full pointer-events-none z-0" />
@@ -182,25 +182,28 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
         backgroundSize: '60px 60px'
       }} />
 
-      {/* 1. BACKGROUND IMAGES CROSSFADE */}
+      {/* 
+        ATOMIC SLIDES:
+        Each slide is an indivisible unit containing its own background image,
+        overlays, gradients, and content (badge, title, subtitle, CTAs).
+        Transitions fade the ENTIRE slide unit atomically without desynchronization.
+      */}
       {activeBanners.map((banner, index) => {
         const isCurrent = index === activeIndex;
-        const isPrev = index === prevActiveIndex;
         const opacityVal = banner.overlay_opacity !== null ? Number(banner.overlay_opacity) : 0.4;
         const alignCenter = banner.content_align === 'center';
         
         return (
           <div
-            key={`bg-${banner.id}`}
-            className={`absolute inset-0 ${
+            key={banner.id || `slide-${index}`}
+            className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
               isCurrent 
-                ? 'opacity-100 z-10 transition-opacity duration-1000 ease-in-out' 
-                : isPrev 
-                ? 'opacity-100 z-0' 
+                ? 'opacity-100 z-10 pointer-events-auto' 
                 : 'opacity-0 z-0 pointer-events-none'
             }`}
+            aria-hidden={!isCurrent}
           >
-            {/* Fullscreen Image with intelligent crop using object-cover */}
+            {/* 1. Fullscreen Background Image with Ken-Burns zoom on active */}
             <picture>
               {banner.mobile_image_url && (
                 <source media="(max-width: 767px)" srcSet={banner.mobile_image_url} />
@@ -214,45 +217,28 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
                 loading={index === 0 ? "eager" : "lazy"}
                 fetchPriority={index === 0 ? "high" : "auto"}
                 decoding="async"
-                {...getImageProps("absolute inset-0 w-full h-full object-cover object-center transform scale-100 transition-transform duration-[8000ms] ease-out")}
+                {...getImageProps("absolute inset-0 w-full h-full object-cover object-center transition-transform duration-[7000ms] ease-out")}
               />
             </picture>
 
-            {/* Custom dark solid overlay */}
+            {/* 2. Custom dark solid overlay */}
             <div 
-              className="absolute inset-0 bg-black pointer-events-none transition-opacity duration-500" 
+              className="absolute inset-0 bg-black pointer-events-none" 
               style={{ opacity: opacityVal }} 
             />
 
-            {/* Cinematic Gradient overlay for text readability */}
+            {/* 3. Cinematic Gradient overlay for text readability */}
             <div 
-              className={`absolute inset-0 pointer-events-none z-10 ${
+              className={`absolute inset-0 pointer-events-none ${
                 alignCenter 
                   ? 'bg-gradient-to-t from-black/90 via-black/40 to-black/30' 
                   : 'bg-gradient-to-r from-black/90 via-black/40 to-transparent'
               }`}
             />
-          </div>
-        );
-      })}
 
-      {/* 2. TEXT & CONTENT OVERLAY LAYER (crossfades smoothly without layout recalculation or flickering slide-up text animations) */}
-      {activeBanners.map((banner, index) => {
-        const isCurrent = index === activeIndex;
-        const isPrev = index === prevActiveIndex;
-        const alignCenter = banner.content_align === 'center';
-
-        if (!isCurrent && !isPrev) return null;
-
-        return (
-          <div
-            key={`content-${banner.id}`}
-            className={`absolute inset-0 pointer-events-none transition-opacity duration-500 ease-in-out ${
-              isCurrent ? 'opacity-100 z-20' : 'opacity-0 z-10'
-            }`}
-          >
+            {/* 4. Slide Content Layer (Badge, Title, Subtitle, CTAs) */}
             <div 
-              className={`max-w-[1500px] mx-auto px-6 w-full h-full flex ${
+              className={`relative z-10 max-w-[1500px] mx-auto px-6 w-full h-full flex ${
                 banner.content_position === 'top' 
                   ? 'items-start pt-28 md:pt-36' 
                   : banner.content_position === 'bottom' 
@@ -261,7 +247,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
               }`}
             >
               <div 
-                className={`w-full max-w-4xl pointer-events-auto ${
+                className={`w-full max-w-4xl ${
                   alignCenter 
                     ? 'text-center mx-auto flex flex-col items-center' 
                     : 'text-left'
@@ -328,7 +314,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
         );
       })}
 
-      {/* Touch Swipe Indicator or arrows on Desktop */}
+      {/* Navigation Controls on Desktop */}
       {activeBanners.length > 1 && (
         <>
           {/* Left Arrow */}
@@ -369,9 +355,10 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
                         : 'w-4 bg-white/30 group-hover:bg-white/60'
                     }`}
                   />
-                  {/* Premium visual timeline effect on active slide */}
+                  {/* Timeline progress indicator on active slide */}
                   {isActive && (
                     <span 
+                      key={`timeline-${i}`}
                       className="absolute left-0 top-1/2 -translate-y-1/2 h-[2px] bg-white rounded-full animate-timeline-progress"
                       style={{ animationDuration: '7000ms' }}
                     />
@@ -385,34 +372,12 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
 
       {/* Component Specific Inline Styles for Keyframe Animations */}
       <style dangerouslySetInnerHTML={{__html: `
-        @keyframes slideUpFade {
-          from {
-            opacity: 0;
-            transform: translateY(30px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
         @keyframes timelineProgress {
           from { width: 0%; }
           to { width: 100%; }
         }
         .animate-timeline-progress {
           animation: timelineProgress linear forwards;
-        }
-        .animate-slide-up-fade-1 {
-          animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s forwards;
-        }
-        .animate-slide-up-fade-2 {
-          animation: slideUpFade 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.25s forwards;
-        }
-        .animate-slide-up-fade-3 {
-          animation: slideUpFade 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards;
-        }
-        .animate-slide-up-fade-4 {
-          animation: slideUpFade 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.55s forwards;
         }
       `}} />
     </section>
