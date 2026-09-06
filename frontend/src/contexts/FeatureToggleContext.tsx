@@ -10,6 +10,8 @@ export interface FeatureToggles {
   radarEnabled: boolean;
   releaseCalendarEnabled: boolean;
   collectorVaultEnabled: boolean;
+  collectorVaultUserPhotosEnabled: boolean;
+  collectorVaultCatalogSearchEnabled: boolean;
   collectorCompareEnabled: boolean;
   collectorAcademyEnabled: boolean;
   customsFranchiseEnabled: boolean;
@@ -25,6 +27,8 @@ const defaultFeatures: FeatureToggles = {
   radarEnabled: true,
   releaseCalendarEnabled: true,
   collectorVaultEnabled: true,
+  collectorVaultUserPhotosEnabled: false,
+  collectorVaultCatalogSearchEnabled: true,
   collectorCompareEnabled: true,
   collectorAcademyEnabled: true,
   customsFranchiseEnabled: true,
@@ -68,6 +72,8 @@ export function FeatureToggleProvider({ children }: { children: React.ReactNode 
           radarEnabled: toggleMap.get('radar') ?? defaultFeatures.radarEnabled,
           releaseCalendarEnabled: toggleMap.get('radar') ?? defaultFeatures.releaseCalendarEnabled,
           collectorVaultEnabled: toggleMap.get('vault') ?? defaultFeatures.collectorVaultEnabled,
+          collectorVaultUserPhotosEnabled: toggleMap.get('vault_user_photos') ?? defaultFeatures.collectorVaultUserPhotosEnabled,
+          collectorVaultCatalogSearchEnabled: toggleMap.get('vault_catalog_search') ?? defaultFeatures.collectorVaultCatalogSearchEnabled,
           collectorCompareEnabled: toggleMap.get('compare') ?? defaultFeatures.collectorCompareEnabled,
           collectorAcademyEnabled: toggleMap.get('academy') ?? defaultFeatures.collectorAcademyEnabled,
           customsFranchiseEnabled: toggleMap.get('customs') ?? toggleMap.get('import_hub') ?? defaultFeatures.customsFranchiseEnabled,
@@ -127,6 +133,8 @@ export function FeatureToggleProvider({ children }: { children: React.ReactNode 
           next.releaseCalendarEnabled = is_enabled;
         }
         if (id === 'vault') next.collectorVaultEnabled = is_enabled;
+        if (id === 'vault_user_photos' || id === 'collector_vault_user_photos_enabled') next.collectorVaultUserPhotosEnabled = is_enabled;
+        if (id === 'vault_catalog_search' || id === 'collector_vault_catalog_search_enabled') next.collectorVaultCatalogSearchEnabled = is_enabled;
         if (id === 'compare') next.collectorCompareEnabled = is_enabled;
         if (id === 'academy') next.collectorAcademyEnabled = is_enabled;
         if (id === 'customs') {
@@ -147,18 +155,45 @@ export function FeatureToggleProvider({ children }: { children: React.ReactNode 
     }
   }, []);
 
+  const isFeatureEnabled = useCallback((featureKey: string): boolean => {
+    switch (featureKey) {
+      case 'collector_vault_user_photos_enabled':
+      case 'vault_user_photos':
+        return features.collectorVaultUserPhotosEnabled;
+      case 'collector_vault_catalog_search_enabled':
+      case 'vault_catalog_search':
+        return features.collectorVaultCatalogSearchEnabled;
+      case 'collector_vault_enabled':
+      case 'vault':
+        return features.collectorVaultEnabled;
+      case 'marketplace':
+        return features.marketplaceEnabled;
+      case 'affiliates':
+        return features.affiliatesEnabled;
+      case 'cameo':
+        return features.artistCameoEnabled;
+      default:
+        return true;
+    }
+  }, [features]);
+
   const value = useMemo(() => ({
     features,
     loading,
     updateFeatureToggle,
+    isFeatureEnabled,
     refreshFeatures: loadConfig
-  }), [features, loading, updateFeatureToggle, loadConfig]);
+  }), [features, loading, updateFeatureToggle, isFeatureEnabled, loadConfig]);
 
   return (
-    <FeatureToggleContext.Provider value={value}>
+    <FeatureToggleContext.Provider value={value as any}>
       {children}
     </FeatureToggleContext.Provider>
   );
 }
 
 export const useFeatures = () => useContext(FeatureToggleContext);
+export const useFeatureToggle = () => useContext(FeatureToggleContext) as FeatureToggleContextType & {
+  isFeatureEnabled: (key: string) => boolean;
+};
+

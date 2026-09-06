@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { ArrowLeft, Save, Share2, Sparkles, Image as ImageIcon, Star, Heart, Lock, Globe, ShieldCheck, Box, Tag, Award, Info } from 'lucide-react';
+import { useFeatureToggle } from '../../contexts/FeatureToggleContext';
+import { ArrowLeft, Save, Share2, Sparkles, Image as ImageIcon, Star, Heart, Lock, ShieldCheck, Tag, Award } from 'lucide-react';
 import type { VaultCondition, VaultBoxCondition, VaultStatus } from '../../plugins/collector-vault/types';
-import { VaultShareCardModal, type ShareItemData } from './VaultShareCardModal';
+import { VaultShareCardModal } from './VaultShareCardModal';
 
 // Diccionario de items demo de referencia
 const DEMO_ITEMS_MAP: Record<string, any> = {
@@ -89,6 +90,8 @@ export default function VaultItemDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { isFeatureEnabled } = useFeatureToggle();
+  const userPhotosEnabled = isFeatureEnabled('collector_vault_user_photos_enabled');
 
   const isNew = id === 'new';
   const isDemo = id && (id.startsWith('demo') || id in DEMO_ITEMS_MAP);
@@ -97,6 +100,12 @@ export default function VaultItemDetail() {
   const [saving, setSaving] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [activePhotoTab, setActivePhotoTab] = useState<'official' | 'custom'>('official');
+
+  const [collectorProfile, setCollectorProfile] = useState<{
+    nickname?: string;
+    avatarUrl?: string;
+    username?: string;
+  }>({});
 
   const [form, setForm] = useState({
     custom_name: '',
@@ -122,6 +131,31 @@ export default function VaultItemDetail() {
     visibility: 'PUBLIC',
     notes: ''
   });
+
+  useEffect(() => {
+    if (user) {
+      loadUserProfile();
+    }
+  }, [user]);
+
+  const loadUserProfile = async () => {
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('username, collector_nickname, collector_avatar_url')
+        .eq('id', user?.id)
+        .single();
+      if (data) {
+        setCollectorProfile({
+          nickname: data.collector_nickname || undefined,
+          avatarUrl: data.collector_avatar_url || undefined,
+          username: data.username || undefined
+        });
+      }
+    } catch (e) {
+      console.warn('Could not fetch user profile:', e);
+    }
+  };
 
   useEffect(() => {
     if (isDemo && id) {
@@ -190,7 +224,7 @@ export default function VaultItemDetail() {
         scale: form.scale || null,
         height: form.height || null,
         official_image_url: form.official_image_url || null,
-        custom_image_url: form.custom_image_url || null,
+        custom_image_url: userPhotosEnabled ? (form.custom_image_url || null) : null,
         status: form.status,
         condition: form.condition,
         box_condition: form.box_condition,
@@ -219,7 +253,7 @@ export default function VaultItemDetail() {
 
   if (loading) return <div className="py-24 text-center text-zinc-500">Cargando detalles de la pieza...</div>;
 
-  const currentDisplayImage = activePhotoTab === 'custom' && form.custom_image_url
+  const currentDisplayImage = (userPhotosEnabled && activePhotoTab === 'custom' && form.custom_image_url)
     ? form.custom_image_url
     : (form.official_image_url || form.custom_image_url);
 
@@ -238,7 +272,7 @@ export default function VaultItemDetail() {
         <button
           type="button"
           onClick={() => setIsShareModalOpen(true)}
-          className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-black font-black text-xs rounded-xl flex items-center gap-1.5 transition shadow-lg shadow-amber-500/20 cursor-pointer"
+          className="px-4 py-2 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition shadow-lg shadow-rose-600/20 cursor-pointer"
         >
           <Share2 size={14} />
           <span>Compartir Ficha ↗</span>
@@ -251,7 +285,7 @@ export default function VaultItemDetail() {
         <div className="bg-gradient-to-b from-zinc-900 via-zinc-950 to-black border border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
             
-            {/* Left Image Showcase with Official / Custom Toggle */}
+            {/* Left Image Showcase with Official / Custom Toggle if enabled */}
             <div className="md:col-span-5 space-y-3">
               <div className="w-full aspect-square bg-zinc-950 rounded-2xl border border-white/10 p-3 flex items-center justify-center overflow-hidden relative shadow-inner">
                 {currentDisplayImage ? (
@@ -271,49 +305,51 @@ export default function VaultItemDetail() {
                 )}
 
                 <div className="absolute top-3 left-3 bg-black/80 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] font-bold text-zinc-300 border border-white/10 flex items-center gap-1">
-                  <ShieldCheck size={12} className="text-emerald-400" />
+                  <ShieldCheck size={12} className="text-rose-400" />
                   <span>{form.condition}</span>
                 </div>
 
                 {/* Watermark overlay on preview */}
-                <div className="absolute top-3 right-3 bg-black/75 backdrop-blur-md px-2 py-0.5 rounded-full text-[9px] font-mono font-bold text-amber-400 border border-amber-500/30 flex items-center gap-1">
-                  <Sparkles size={10} className="text-amber-400" />
+                <div className="absolute top-3 right-3 bg-black/75 backdrop-blur-md px-2 py-0.5 rounded-full text-[9px] font-mono font-bold text-rose-400 border border-rose-500/30 flex items-center gap-1">
+                  <Sparkles size={10} className="text-rose-400" />
                   <span>Collectibles.uy</span>
                 </div>
               </div>
 
-              {/* Photo Source Selector */}
-              <div className="flex items-center gap-1.5 bg-zinc-900/80 p-1 rounded-xl border border-white/10 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setActivePhotoTab('official')}
-                  className={`flex-1 py-1.5 rounded-lg font-bold text-[11px] transition cursor-pointer text-center ${
-                    activePhotoTab === 'official'
-                      ? 'bg-amber-500 text-black shadow'
-                      : 'text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  Foto Oficial
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActivePhotoTab('custom')}
-                  className={`flex-1 py-1.5 rounded-lg font-bold text-[11px] transition cursor-pointer text-center ${
-                    activePhotoTab === 'custom'
-                      ? 'bg-amber-500 text-black shadow'
-                      : 'text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  Mi Foto Real
-                </button>
-              </div>
+              {/* Photo Source Selector (Only if User Photos Feature is Enabled) */}
+              {userPhotosEnabled && (
+                <div className="flex items-center gap-1.5 bg-zinc-900/80 p-1 rounded-xl border border-white/10 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setActivePhotoTab('official')}
+                    className={`flex-1 py-1.5 rounded-lg font-bold text-[11px] transition cursor-pointer text-center ${
+                      activePhotoTab === 'official'
+                        ? 'bg-rose-600 text-white shadow'
+                        : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    Foto Oficial
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActivePhotoTab('custom')}
+                    className={`flex-1 py-1.5 rounded-lg font-bold text-[11px] transition cursor-pointer text-center ${
+                      activePhotoTab === 'custom'
+                        ? 'bg-rose-600 text-white shadow'
+                        : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    Mi Foto Real
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Right Summary Info */}
             <div className="md:col-span-7 space-y-4">
               <div className="flex flex-wrap items-center gap-2">
                 {form.franchise && (
-                  <span className="text-[10px] font-black tracking-widest uppercase bg-amber-500/15 border border-amber-500/30 text-amber-400 px-2.5 py-0.5 rounded-md">
+                  <span className="text-[10px] font-black tracking-widest uppercase bg-rose-500/15 border border-rose-500/30 text-rose-400 px-2.5 py-0.5 rounded-md">
                     {form.franchise}
                   </span>
                 )}
@@ -322,7 +358,7 @@ export default function VaultItemDetail() {
                     {form.scale}
                   </span>
                 )}
-                <span className="text-[10px] font-black tracking-wider uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded-md">
+                <span className="text-[10px] font-black tracking-wider uppercase bg-rose-500/15 text-rose-300 border border-rose-500/30 px-2.5 py-0.5 rounded-md">
                   {form.condition}
                 </span>
               </div>
@@ -348,12 +384,12 @@ export default function VaultItemDetail() {
                     >
                       <Star
                         size={18}
-                        className={star <= form.rating ? 'text-amber-400 fill-amber-400' : 'text-zinc-700'}
+                        className={star <= form.rating ? 'text-rose-400 fill-rose-400' : 'text-zinc-700'}
                       />
                     </button>
                   ))}
                 </div>
-                <span className="text-xs text-amber-300 font-bold ml-1">
+                <span className="text-xs text-rose-300 font-bold ml-1">
                   ({form.rating} de 5 estrellas)
                 </span>
               </div>
@@ -384,11 +420,11 @@ export default function VaultItemDetail() {
                   onClick={() => setForm({ ...form, is_featured: !form.is_featured })}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer border ${
                     form.is_featured
-                      ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                      ? 'bg-pink-500/20 border-pink-500/40 text-pink-300'
                       : 'bg-zinc-900 border-white/10 text-zinc-400 hover:text-white'
                   }`}
                 >
-                  <Star size={13} className={form.is_featured ? 'fill-amber-400 text-amber-400' : ''} />
+                  <Star size={13} className={form.is_featured ? 'fill-pink-400 text-pink-400' : ''} />
                   <span>{form.is_featured ? 'Destacada en Portada' : 'Destacar en Portada'}</span>
                 </button>
               </div>
@@ -399,7 +435,7 @@ export default function VaultItemDetail() {
         {/* SECTION 1: ESPECIFICACIONES OFICIALES DEL PRODUCTO */}
         <div className="bg-zinc-900/90 border border-white/10 rounded-3xl p-6 sm:p-8 space-y-6 shadow-xl">
           <div className="flex items-center gap-2.5 border-b border-white/10 pb-4">
-            <Award size={18} className="text-amber-400" />
+            <Award size={18} className="text-rose-400" />
             <div>
               <h2 className="text-base font-black text-white">Especificaciones Oficiales de la Pieza</h2>
               <p className="text-xs text-zinc-400">Datos técnicos y de catálogo del fabricante</p>
@@ -414,7 +450,7 @@ export default function VaultItemDetail() {
                 required
                 value={form.custom_name}
                 onChange={(e) => setForm({ ...form, custom_name: e.target.value })}
-                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white"
+                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white focus:border-rose-500 outline-none"
               />
             </div>
 
@@ -425,7 +461,7 @@ export default function VaultItemDetail() {
                 value={form.brand_name}
                 onChange={(e) => setForm({ ...form, brand_name: e.target.value })}
                 placeholder="Ej: Hot Toys, Bandai Spirits"
-                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white"
+                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white focus:border-rose-500 outline-none"
               />
             </div>
 
@@ -436,7 +472,7 @@ export default function VaultItemDetail() {
                 value={form.franchise}
                 onChange={(e) => setForm({ ...form, franchise: e.target.value })}
                 placeholder="Ej: Star Wars, Dragon Ball Z, Batman"
-                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white"
+                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white focus:border-rose-500 outline-none"
               />
             </div>
 
@@ -447,7 +483,7 @@ export default function VaultItemDetail() {
                 value={form.line}
                 onChange={(e) => setForm({ ...form, line: e.target.value })}
                 placeholder="Ej: Movie Masterpiece Series, S.H.Figuarts"
-                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white"
+                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white focus:border-rose-500 outline-none"
               />
             </div>
 
@@ -458,7 +494,7 @@ export default function VaultItemDetail() {
                 value={form.scale}
                 onChange={(e) => setForm({ ...form, scale: e.target.value })}
                 placeholder="Ej: 1:6, 1:12, 14 CM, Die-Cast"
-                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white"
+                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white focus:border-rose-500 outline-none"
               />
             </div>
 
@@ -469,7 +505,7 @@ export default function VaultItemDetail() {
                 value={form.height}
                 onChange={(e) => setForm({ ...form, height: e.target.value })}
                 placeholder="Ej: 35 cm, 14 cm"
-                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white"
+                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white focus:border-rose-500 outline-none"
               />
             </div>
 
@@ -480,7 +516,7 @@ export default function VaultItemDetail() {
                 value={form.code_sku}
                 onChange={(e) => setForm({ ...form, code_sku: e.target.value })}
                 placeholder="Ej: MMS810, Box #03"
-                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white font-mono"
+                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white font-mono focus:border-rose-500 outline-none"
               />
             </div>
 
@@ -491,7 +527,7 @@ export default function VaultItemDetail() {
                 value={form.official_image_url}
                 onChange={(e) => setForm({ ...form, official_image_url: e.target.value })}
                 placeholder="https://ejemplo.com/foto-oficial.jpg"
-                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white font-mono"
+                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white font-mono focus:border-rose-500 outline-none"
               />
             </div>
           </div>
@@ -503,7 +539,7 @@ export default function VaultItemDetail() {
               value={form.box_contents}
               onChange={(e) => setForm({ ...form, box_contents: e.target.value })}
               placeholder="Ej: Manos intercambiables, rostros alternativos, base de diorama..."
-              className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white"
+              className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white focus:border-rose-500 outline-none"
             />
           </div>
         </div>
@@ -511,10 +547,10 @@ export default function VaultItemDetail() {
         {/* SECTION 2: DATOS PERSONALES DEL COLECCIONISTA */}
         <div className="bg-zinc-900/90 border border-white/10 rounded-3xl p-6 sm:p-8 space-y-6 shadow-xl">
           <div className="flex items-center gap-2.5 border-b border-white/10 pb-4">
-            <Tag size={18} className="text-amber-400" />
+            <Tag size={18} className="text-rose-400" />
             <div>
               <h2 className="text-base font-black text-white">Mi Registro Personal de Colección</h2>
-              <p className="text-xs text-zinc-400">Estado de conservación, fotos reales y notas</p>
+              <p className="text-xs text-zinc-400">Estado de conservación, fecha y notas personales</p>
             </div>
           </div>
 
@@ -524,7 +560,7 @@ export default function VaultItemDetail() {
               <select
                 value={form.status}
                 onChange={(e) => setForm({ ...form, status: e.target.value as VaultStatus })}
-                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white"
+                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white focus:border-rose-500 outline-none"
               >
                 <option value="OWNED">OWNED (En mi vitrina / Posesión)</option>
                 <option value="PREORDERED">PREORDERED (Pre-ordenada)</option>
@@ -538,7 +574,7 @@ export default function VaultItemDetail() {
               <select
                 value={form.condition}
                 onChange={(e) => setForm({ ...form, condition: e.target.value as VaultCondition })}
-                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white font-bold"
+                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white font-bold focus:border-rose-500 outline-none"
               >
                 <option value="MINT">MINT (Impecable / Nueva)</option>
                 <option value="NEAR_MINT">NEAR_MINT (Casi perfecta)</option>
@@ -553,7 +589,7 @@ export default function VaultItemDetail() {
               <select
                 value={form.box_condition}
                 onChange={(e) => setForm({ ...form, box_condition: e.target.value as VaultBoxCondition })}
-                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white"
+                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white focus:border-rose-500 outline-none"
               >
                 <option value="SEALED">SEALED (Sellado de fábrica / MISB)</option>
                 <option value="OPEN_BOX">OPEN_BOX (Caja abierta completa)</option>
@@ -563,12 +599,12 @@ export default function VaultItemDetail() {
             </div>
 
             <div>
-              <label className="block text-zinc-400 font-semibold mb-1">Fecha de Compra / Añadida</label>
+              <label className="block text-zinc-400 font-semibold mb-1">Fecha de compra / incorporación</label>
               <input
                 type="date"
                 value={form.purchase_date}
                 onChange={(e) => setForm({ ...form, purchase_date: e.target.value })}
-                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white"
+                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white focus:border-rose-500 outline-none"
               />
             </div>
 
@@ -583,7 +619,7 @@ export default function VaultItemDetail() {
                 value={form.purchase_price}
                 onChange={(e) => setForm({ ...form, purchase_price: e.target.value })}
                 placeholder="0.00"
-                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white font-mono"
+                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white font-mono focus:border-rose-500 outline-none"
               />
             </div>
 
@@ -592,7 +628,7 @@ export default function VaultItemDetail() {
               <select
                 value={form.visibility}
                 onChange={(e) => setForm({ ...form, visibility: e.target.value })}
-                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white"
+                className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white focus:border-rose-500 outline-none"
               >
                 <option value="PUBLIC">🌐 Pública (Visible y compartible)</option>
                 <option value="PRIVATE">🔒 Privada (Sólo visible para ti)</option>
@@ -600,108 +636,108 @@ export default function VaultItemDetail() {
             </div>
           </div>
 
-          {/* User's Custom Photo Upload / URL + Photo Guidelines */}
-          <div className="space-y-4 pt-2 border-t border-white/5">
-            <div>
-              <label className="block text-zinc-300 font-bold mb-1.5 flex items-center justify-between text-xs">
-                <span className="flex items-center gap-1.5">
-                  <ImageIcon size={15} className="text-amber-400" />
-                  <span>Foto Real de tu Vitrina / Galería Personal</span>
-                </span>
-                <span className="text-[11px] font-mono text-amber-400/90 font-normal">
-                  Marca de agua Collectibles.uy automática al compartir
-                </span>
-              </label>
+          {/* User's Custom Photo Upload / URL + Photo Guidelines (ONLY IF ENABLED) */}
+          {userPhotosEnabled && (
+            <div className="space-y-4 pt-2 border-t border-white/5">
+              <div>
+                <label className="block text-zinc-300 font-bold mb-1.5 flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-1.5">
+                    <ImageIcon size={15} className="text-rose-400" />
+                    <span>Foto Real de tu Vitrina / Galería Personal</span>
+                  </span>
+                  <span className="text-[11px] font-mono text-rose-400 font-normal">
+                    Marca de agua Collectibles.uy automática al compartir
+                  </span>
+                </label>
 
-              {/* Upload or URL selector */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {/* File picker button */}
-                <div className="relative border-2 border-dashed border-white/15 hover:border-amber-500/40 rounded-2xl p-4 bg-zinc-950/60 flex flex-col items-center justify-center text-center transition group">
-                  <input
-                    type="file"
-                    accept="image/png, image/jpeg, image/webp"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        if (file.size > 10 * 1024 * 1024) {
-                          alert('La imagen excede el límite recomendado de 10 MB.');
-                          return;
-                        }
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                          if (event.target?.result) {
-                            setForm({ ...form, custom_image_url: event.target.result as string });
-                            setActivePhotoTab('custom');
+                {/* Upload or URL selector */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="relative border-2 border-dashed border-white/15 hover:border-rose-500/40 rounded-2xl p-4 bg-zinc-950/60 flex flex-col items-center justify-center text-center transition group">
+                    <input
+                      type="file"
+                      accept="image/png, image/jpeg, image/webp"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          if (file.size > 10 * 1024 * 1024) {
+                            alert('La imagen excede el límite recomendado de 10 MB.');
+                            return;
                           }
-                        };
-                        reader.readAsDataURL(file);
-                      }
-                    }}
-                    className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                  />
-                  <ImageIcon size={24} className="text-zinc-500 group-hover:text-amber-400 transition mb-1.5" />
-                  <span className="text-xs font-bold text-zinc-300 group-hover:text-white">
-                    {form.custom_image_url ? 'Cambiar foto de vitrina' : 'Subir foto desde tu dispositivo'}
-                  </span>
-                  <span className="text-[10px] text-zinc-500 mt-0.5">
-                    JPG, PNG o WEBP (Máx 10 MB)
-                  </span>
+                          const reader = new FileReader();
+                          reader.onload = (event) => {
+                            if (event.target?.result) {
+                              setForm({ ...form, custom_image_url: event.target.result as string });
+                              setActivePhotoTab('custom');
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                    />
+                    <ImageIcon size={24} className="text-zinc-500 group-hover:text-rose-400 transition mb-1.5" />
+                    <span className="text-xs font-bold text-zinc-300 group-hover:text-white">
+                      {form.custom_image_url ? 'Cambiar foto de vitrina' : 'Subir foto desde tu dispositivo'}
+                    </span>
+                    <span className="text-[10px] text-zinc-500 mt-0.5">
+                      JPG, PNG o WEBP (Máx 10 MB)
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col justify-center space-y-1.5 bg-zinc-950/40 border border-white/10 rounded-2xl p-4">
+                    <span className="text-[11px] font-bold text-zinc-400">O pegar enlace directo de imagen:</span>
+                    <input
+                      type="url"
+                      value={form.custom_image_url}
+                      onChange={(e) => {
+                        setForm({ ...form, custom_image_url: e.target.value });
+                        if (e.target.value) setActivePhotoTab('custom');
+                      }}
+                      placeholder="https://ejemplo.com/mi-foto-real.jpg"
+                      className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white font-mono text-xs focus:border-rose-500 outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Guía Oficial */}
+              <div className="bg-gradient-to-r from-rose-500/10 via-zinc-900/80 to-zinc-950 border border-rose-500/25 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center gap-2 text-rose-400 font-bold text-xs">
+                  <Sparkles size={15} />
+                  <span>Guía Oficial de Tamaño & Calidad para Fotos de Vitrina</span>
                 </div>
 
-                {/* Direct Image URL fallback */}
-                <div className="flex flex-col justify-center space-y-1.5 bg-zinc-950/40 border border-white/10 rounded-2xl p-4">
-                  <span className="text-[11px] font-bold text-zinc-400">O pegar enlace directo de imagen:</span>
-                  <input
-                    type="url"
-                    value={form.custom_image_url}
-                    onChange={(e) => {
-                      setForm({ ...form, custom_image_url: e.target.value });
-                      if (e.target.value) setActivePhotoTab('custom');
-                    }}
-                    placeholder="https://ejemplo.com/mi-foto-real.jpg"
-                    className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white font-mono text-xs"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11px] text-zinc-300">
+                  <div className="bg-zinc-950/60 p-2.5 rounded-xl border border-white/5 space-y-1">
+                    <div className="font-bold text-white flex items-center gap-1">
+                      <span>📐 Dimensiones</span>
+                    </div>
+                    <p className="text-zinc-400 text-[10px] leading-relaxed">
+                      <strong>1:1 Cuadrado</strong> (1200×1200 px) o <strong>4:5 Vertical</strong> (1080×1350 px).
+                    </p>
+                  </div>
+
+                  <div className="bg-zinc-950/60 p-2.5 rounded-xl border border-white/5 space-y-1">
+                    <div className="font-bold text-white flex items-center gap-1">
+                      <span>💡 Iluminación & Fondo</span>
+                    </div>
+                    <p className="text-zinc-400 text-[10px] leading-relaxed">
+                      Luz blanca difusa. Evitar reflejos directos en acrílicos o cajas.
+                    </p>
+                  </div>
+
+                  <div className="bg-zinc-950/60 p-2.5 rounded-xl border border-white/5 space-y-1">
+                    <div className="font-bold text-white flex items-center gap-1">
+                      <span>🛡️ Marca de agua</span>
+                    </div>
+                    <p className="text-zinc-400 text-[10px] leading-relaxed">
+                      Se agrega automáticamente el sello oficial <strong>Collectibles.uy</strong> al compartir.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
-
-            {/* GUÍA OFICIAL DE TAMAÑO Y CALIDAD DE FOTOS */}
-            <div className="bg-gradient-to-r from-amber-500/10 via-zinc-900/80 to-zinc-950 border border-amber-500/25 rounded-2xl p-4 space-y-3">
-              <div className="flex items-center gap-2 text-amber-400 font-bold text-xs">
-                <Sparkles size={15} />
-                <span>Guía Oficial de Tamaño & Calidad para Fotos de Vitrina</span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11px] text-zinc-300">
-                <div className="bg-zinc-950/60 p-2.5 rounded-xl border border-white/5 space-y-1">
-                  <div className="font-bold text-white flex items-center gap-1">
-                    <span>📐 Dimensiones recomendadas</span>
-                  </div>
-                  <p className="text-zinc-400 text-[10px] leading-relaxed">
-                    <strong>1:1 Cuadrado</strong> (1200×1200 px) o <strong>4:5 Vertical</strong> (1080×1350 px). Excelente para Instagram Feed y Stories.
-                  </p>
-                </div>
-
-                <div className="bg-zinc-950/60 p-2.5 rounded-xl border border-white/5 space-y-1">
-                  <div className="font-bold text-white flex items-center gap-1">
-                    <span>💡 Iluminación & Fondo</span>
-                  </div>
-                  <p className="text-zinc-400 text-[10px] leading-relaxed">
-                    Luz blanca difusa. Evitar reflejos directos en acrílicos o cajas. Figura centrada con espacio en los márgenes.
-                  </p>
-                </div>
-
-                <div className="bg-zinc-950/60 p-2.5 rounded-xl border border-white/5 space-y-1">
-                  <div className="font-bold text-white flex items-center gap-1">
-                    <span>🛡️ Marca de agua protegida</span>
-                  </div>
-                  <p className="text-zinc-400 text-[10px] leading-relaxed">
-                    Tus fotos compartidas integran el sello y marca de agua oficial <strong>Collectibles.uy</strong> para certificar la autoría de tu colección.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
+          )}
 
           <div>
             <label className="block text-zinc-400 font-semibold mb-1">Notas del Coleccionista</label>
@@ -710,7 +746,7 @@ export default function VaultItemDetail() {
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
               placeholder="Ej: Una de las piezas centrales de mi colección Star Wars..."
-              className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white"
+              className="w-full px-3 py-2 bg-zinc-950 border border-white/10 rounded-xl text-white focus:border-rose-500 outline-none"
             />
           </div>
         </div>
@@ -727,7 +763,7 @@ export default function VaultItemDetail() {
           <button
             type="submit"
             disabled={saving}
-            className="px-6 py-2.5 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-black font-black text-xs rounded-xl flex items-center gap-2 transition shadow-lg shadow-amber-500/20 cursor-pointer"
+            className="px-6 py-2.5 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white font-bold text-xs rounded-xl flex items-center gap-2 transition shadow-lg shadow-rose-600/20 cursor-pointer"
           >
             <Save size={15} />
             <span>{saving ? 'Guardando...' : 'Guardar en Mi Vault'}</span>
@@ -740,6 +776,11 @@ export default function VaultItemDetail() {
         <VaultShareCardModal
           isOpen={isShareModalOpen}
           onClose={() => setIsShareModalOpen(false)}
+          collectorNickname={collectorProfile.nickname}
+          collectorAvatarUrl={collectorProfile.avatarUrl}
+          collectorHandle={collectorProfile.username ? `@${collectorProfile.username}` : '@collector'}
+          isVaultPublic={form.visibility === 'PUBLIC'}
+          initialMode="single"
           item={{
             custom_name: form.custom_name,
             brand_name: form.brand_name,
@@ -757,7 +798,7 @@ export default function VaultItemDetail() {
             official_image_url: form.official_image_url,
             custom_image_url: form.custom_image_url,
             purchase_date: form.purchase_date,
-            collector_handle: '@collector'
+            collector_handle: collectorProfile.username ? `@${collectorProfile.username}` : '@collector'
           }}
           isFullVault={false}
         />
@@ -765,4 +806,5 @@ export default function VaultItemDetail() {
     </div>
   );
 }
+
 

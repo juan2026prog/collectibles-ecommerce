@@ -1861,40 +1861,104 @@ export default function AdminSettings() {
                 const IconComponent = item.icon;
 
                 return (
-                  <div key={item.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-4 flex items-center justify-between shadow-sm hover:shadow-md transition-all gap-4">
-                    <div className="flex items-start gap-3.5 min-w-0">
-                      <div className={`p-2.5 rounded-xl border shrink-0 ${item.color}`}>
-                        <IconComponent className="w-5 h-5" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h4 className="font-bold text-sm text-gray-900 dark:text-white">{item.name}</h4>
-                          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
-                            isEnabled 
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800' 
-                              : 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-slate-800 dark:text-gray-400 dark:border-slate-700'
-                          }`}>
-                            {isEnabled ? 'Activo' : 'Apagado'}
-                          </span>
+                  <div key={item.id} className="space-y-2">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-4 flex items-center justify-between shadow-sm hover:shadow-md transition-all gap-4">
+                      <div className="flex items-start gap-3.5 min-w-0">
+                        <div className={`p-2.5 rounded-xl border shrink-0 ${item.color}`}>
+                          <IconComponent className="w-5 h-5" />
                         </div>
-                        <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{item.desc}</p>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="font-bold text-sm text-gray-900 dark:text-white">{item.name}</h4>
+                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                              isEnabled 
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800' 
+                                : 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-slate-800 dark:text-gray-400 dark:border-slate-700'
+                            }`}>
+                              {isEnabled ? 'Activo' : 'Apagado'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{item.desc}</p>
+                        </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleModule(item.id, isEnabled)}
+                        className="p-1 hover:scale-105 transition-transform shrink-0 cursor-pointer focus:outline-none"
+                        title={isEnabled ? `Apagar ${item.name}` : `Encender ${item.name}`}
+                      >
+                        {isEnabled
+                          ? <ToggleRight className="w-11 h-11 text-emerald-500 drop-shadow-sm" />
+                          : <ToggleLeft className="w-11 h-11 text-gray-300 dark:text-slate-600" />
+                        }
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => toggleModule(item.id, isEnabled)}
-                      className="p-1 hover:scale-105 transition-transform shrink-0 cursor-pointer focus:outline-none"
-                      title={isEnabled ? `Apagar ${item.name}` : `Encender ${item.name}`}
-                    >
-                      {isEnabled
-                        ? <ToggleRight className="w-11 h-11 text-emerald-500 drop-shadow-sm" />
-                        : <ToggleLeft className="w-11 h-11 text-gray-300 dark:text-slate-600" />
-                      }
-                    </button>
+
+                    {/* Sub-opciones de My Vault */}
+                    {item.id === 'vault' && isEnabled && (
+                      <div className="ml-6 pl-4 border-l-2 border-amber-500/40 space-y-2 pt-1 pb-1">
+                        {/* Sub-toggle: Buscador de catálogo al agregar */}
+                        {(() => {
+                          const catalogRecord = toggles.find(t => t.id === 'vault_catalog_search');
+                          const isCatalogEnabled = catalogRecord ? catalogRecord.is_enabled : true;
+                          return (
+                            <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 flex items-center justify-between gap-3">
+                              <div>
+                                <span className="text-xs font-bold text-gray-900 dark:text-white block">
+                                  Buscador asistido del Catálogo al agregar piezas
+                                </span>
+                                <span className="text-[11px] text-gray-500 dark:text-slate-400">
+                                  Permite al usuario buscar productos existentes con autocompletado antes del registro manual.
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => toggleModule('vault_catalog_search', isCatalogEnabled)}
+                                className="p-1 cursor-pointer shrink-0"
+                              >
+                                {isCatalogEnabled
+                                  ? <ToggleRight className="w-8 h-8 text-amber-500" />
+                                  : <ToggleLeft className="w-8 h-8 text-gray-300 dark:text-slate-600" />
+                                }
+                              </button>
+                            </div>
+                          );
+                        })()}
+
+                        {/* Sub-toggle: Subida de fotos propias */}
+                        {(() => {
+                          const userPhotosRecord = toggles.find(t => t.id === 'vault_user_photos');
+                          const isUserPhotosEnabled = userPhotosRecord ? userPhotosRecord.is_enabled : false;
+                          return (
+                            <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 flex items-center justify-between gap-3">
+                              <div>
+                                <span className="text-xs font-bold text-gray-900 dark:text-white block">
+                                  Subida de fotos propias de vitrina (Imágenes de usuarios)
+                                </span>
+                                <span className="text-[11px] text-gray-500 dark:text-slate-400">
+                                  Si está desactivado, oculta completamente el campo de subida de fotos y usa sólo imágenes oficiales del catálogo.
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => toggleModule('vault_user_photos', isUserPhotosEnabled)}
+                                className="p-1 cursor-pointer shrink-0"
+                              >
+                                {isUserPhotosEnabled
+                                  ? <ToggleRight className="w-8 h-8 text-amber-500" />
+                                  : <ToggleLeft className="w-8 h-8 text-gray-300 dark:text-slate-600" />
+                                }
+                              </button>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
+
           </div>
 
           {/* Seccion 2: Módulos Base de la Plataforma */}

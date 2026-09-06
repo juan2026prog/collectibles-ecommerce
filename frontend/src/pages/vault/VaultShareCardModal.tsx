@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { X, Share2, Copy, Check, ShieldCheck, Sparkles, Image as ImageIcon, Star, Heart, MessageCircle, Layers, CheckCircle2 } from 'lucide-react';
+import { X, Share2, Copy, Check, ShieldCheck, Sparkles, Image as ImageIcon, Star, Heart, MessageCircle, Layers, Lock, AlertTriangle } from 'lucide-react';
 
 function InstagramIcon({ size = 14 }: { size?: number }) {
   return (
@@ -16,15 +16,15 @@ function CollectiblesWatermark({ isOverlay = false }: { isOverlay?: boolean }) {
   return (
     <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border backdrop-blur-md select-none pointer-events-none ${
       isOverlay
-        ? 'bg-black/75 border-amber-500/40 text-amber-300 shadow-lg shadow-black/60'
+        ? 'bg-black/80 border-rose-500/40 text-rose-300 shadow-lg shadow-black/60'
         : 'bg-zinc-950/80 border-white/15 text-zinc-300'
     }`}>
-      <div className="w-4 h-4 rounded-full bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center text-[9px] font-black text-black shadow-sm">
+      <div className="w-4 h-4 rounded-full bg-gradient-to-tr from-rose-600 to-pink-500 flex items-center justify-center text-[9px] font-black text-white shadow-sm">
         C
       </div>
       <div className="flex flex-col text-left leading-none">
         <span className="text-[9px] font-black tracking-widest text-white">COLLECTIBLES</span>
-        <span className="text-[6px] font-mono font-bold tracking-wider text-amber-400">VERIFIED VAULT</span>
+        <span className="text-[6px] font-mono font-bold tracking-wider text-rose-400">VERIFIED VAULT</span>
       </div>
     </div>
   );
@@ -57,6 +57,11 @@ interface VaultShareCardModalProps {
   onClose: () => void;
   item?: ShareItemData | null;
   isFullVault?: boolean;
+  initialMode?: 'full' | 'single';
+  collectorNickname?: string;
+  collectorAvatarUrl?: string;
+  collectorHandle?: string;
+  isVaultPublic?: boolean;
   vaultData?: {
     collector_handle: string;
     total_items: number;
@@ -71,17 +76,24 @@ export function VaultShareCardModal({
   onClose,
   item,
   isFullVault = false,
+  initialMode,
+  collectorNickname,
+  collectorAvatarUrl,
+  collectorHandle = '@collector',
+  isVaultPublic = true,
   vaultData
 }: VaultShareCardModalProps) {
-  // Mode: Colección Completa vs Pieza Individual
-  const [shareMode, setShareMode] = useState<'full' | 'single'>(isFullVault ? 'full' : 'single');
+  // Mode: "Mi colección" ('full') vs "Una pieza" ('single')
+  const [shareMode, setShareMode] = useState<'full' | 'single'>(
+    initialMode || (isFullVault ? 'full' : 'single')
+  );
   
   // Available items list for switching individual pieces
   const availableItems: ShareItemData[] = vaultData?.featured_items && vaultData.featured_items.length > 0
     ? vaultData.featured_items
     : item ? [item] : [];
 
-  // Selected piece for single item mode
+  // Selected piece for single item mode or spotlight hero
   const [selectedPiece, setSelectedPiece] = useState<ShareItemData>(() => {
     return item || (availableItems[0] as ShareItemData) || {
       custom_name: 'Darth Vader — Revenge of the Sith',
@@ -105,8 +117,10 @@ export function VaultShareCardModal({
 
   if (!isOpen) return null;
 
-  const currentItem = shareMode === 'single' ? selectedPiece : item;
-  const collectorName = vaultData?.collector_handle || currentItem?.collector_handle || '@collector';
+  const currentItem = shareMode === 'single' ? selectedPiece : (item || selectedPiece);
+  const primaryHandle = collectorHandle.startsWith('@') ? collectorHandle : `@${collectorHandle}`;
+  const displayTitle = collectorNickname ? `${collectorNickname}’s Vault` : `${primaryHandle}’s Vault`;
+  const initialLetter = (collectorNickname || primaryHandle.replace('@', '') || 'C').charAt(0).toUpperCase();
 
   const displayImage = currentItem ? (
     imageSource === 'custom' && currentItem.custom_image_url 
@@ -117,12 +131,12 @@ export function VaultShareCardModal({
   const isCurrentFull = shareMode === 'full';
 
   const shareUrl = isCurrentFull
-    ? `${window.location.origin}/vault/${collectorName.replace('@', '')}`
-    : `${window.location.origin}/vault/${collectorName.replace('@', '')}/${currentItem?.slug || (currentItem?.custom_name ? encodeURIComponent(currentItem.custom_name.toLowerCase().replace(/[^a-z0-9]+/g, '-')) : 'pieza')}`;
+    ? `${window.location.origin}/vault/${primaryHandle.replace('@', '')}`
+    : `${window.location.origin}/vault/${primaryHandle.replace('@', '')}/${currentItem?.slug || (currentItem?.custom_name ? encodeURIComponent(currentItem.custom_name.toLowerCase().replace(/[^a-z0-9]+/g, '-')) : 'pieza')}`;
 
   const shareText = isCurrentFull
     ? `🏆 Mira mi colección completa en My Vault (${vaultData?.total_items || availableItems.length || 3} piezas · ${vaultData?.total_franchises || 3} franquicias):\n${shareUrl}`
-    : `⭐ ${currentItem?.custom_name || 'Figura'} (${currentItem?.brand_name || 'Colección'} · ${currentItem?.scale || 'Oficial'})\n📦 Estado: ${currentItem?.condition || 'MISB'}\n${currentItem?.notes ? `💬 "${currentItem.notes}"\n` : ''}🏷️ Ver ficha verificada con marca de agua en Collectibles: ${shareUrl}`;
+    : `⭐ ${currentItem?.custom_name || 'Figura'} (${currentItem?.brand_name || 'Colección'} · ${currentItem?.scale || 'Oficial'})\n📦 Estado: ${currentItem?.condition || 'MISB'}\n${currentItem?.notes ? `💬 "${currentItem.notes}"\n` : ''}🏷️ Ver ficha verificada en Collectibles.uy: ${shareUrl}`;
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(shareUrl);
@@ -152,14 +166,14 @@ export function VaultShareCardModal({
         {/* Top bar */}
         <div className="flex items-center justify-between p-4 px-6 border-b border-white/10 bg-zinc-900/60">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <div className="w-7 h-7 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400">
               <Share2 size={14} />
             </div>
             <div>
               <h3 className="text-sm font-black text-white">
                 Compartir en Redes Sociales
               </h3>
-              <p className="text-[11px] text-zinc-400">Ficha visual con marca de agua oficial Collectibles</p>
+              <p className="text-[11px] text-zinc-400">Ficha visual con identidad y marca de agua Collectibles</p>
             </div>
           </div>
           <button
@@ -170,7 +184,17 @@ export function VaultShareCardModal({
           </button>
         </div>
 
-        {/* SELECTOR PRINCIPAL: COLECCIÓN COMPLETA VS PIEZA INDIVIDUAL */}
+        {/* PRIVACY WARNING IF VAULT IS PRIVATE */}
+        {!isVaultPublic && (
+          <div className="px-5 py-2.5 bg-amber-500/10 border-b border-amber-500/25 flex items-center gap-2 text-xs text-amber-300">
+            <AlertTriangle size={15} className="shrink-0 text-amber-400" />
+            <span>
+              <strong>Bóveda Privada:</strong> Sólo tú podrás ver este enlace a menos que actives la visibilidad pública en tu configuración.
+            </span>
+          </div>
+        )}
+
+        {/* SELECTOR PRINCIPAL: MI COLECCIÓN VS UNA PIEZA */}
         <div className="p-3 bg-zinc-900/40 border-b border-white/5 flex flex-col gap-2.5">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] font-bold text-zinc-400">¿Qué deseas compartir?</span>
@@ -180,24 +204,24 @@ export function VaultShareCardModal({
                 onClick={() => setShareMode('full')}
                 className={`px-3 py-1 rounded-lg font-bold text-[11px] flex items-center gap-1.5 transition cursor-pointer ${
                   shareMode === 'full'
-                    ? 'bg-amber-500 text-black shadow font-black'
+                    ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow font-black'
                     : 'text-zinc-400 hover:text-white'
                 }`}
               >
                 <Layers size={12} />
-                <span>Colección Completa</span>
+                <span>Mi colección</span>
               </button>
               <button
                 type="button"
                 onClick={() => setShareMode('single')}
                 className={`px-3 py-1 rounded-lg font-bold text-[11px] flex items-center gap-1.5 transition cursor-pointer ${
                   shareMode === 'single'
-                    ? 'bg-amber-500 text-black shadow font-black'
+                    ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow font-black'
                     : 'text-zinc-400 hover:text-white'
                 }`}
               >
                 <Star size={12} />
-                <span>Pieza Individual</span>
+                <span>Una pieza</span>
               </button>
             </div>
           </div>
@@ -218,12 +242,12 @@ export function VaultShareCardModal({
                     }}
                     className={`px-2.5 py-1 rounded-lg text-[10px] font-bold shrink-0 transition cursor-pointer flex items-center gap-1 border ${
                       isSelected
-                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm'
+                        ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 shadow-sm'
                         : 'bg-zinc-900 text-zinc-400 hover:text-white border-white/10'
                     }`}
                   >
                     <span>{pi.custom_name.split('—')[0] || pi.custom_name}</span>
-                    {isSelected && <Check size={10} className="text-amber-400" />}
+                    {isSelected && <Check size={10} className="text-rose-400" />}
                   </button>
                 );
               })}
@@ -267,7 +291,7 @@ export function VaultShareCardModal({
                 onClick={() => setImageSource('official')}
                 className={`px-2.5 py-1 rounded-lg font-bold text-[10px] transition cursor-pointer ${
                   imageSource === 'official'
-                    ? 'bg-amber-500 text-black'
+                    ? 'bg-rose-600 text-white'
                     : 'text-zinc-400 hover:text-white'
                 }`}
               >
@@ -278,7 +302,7 @@ export function VaultShareCardModal({
                 onClick={() => setImageSource('custom')}
                 className={`px-2.5 py-1 rounded-lg font-bold text-[10px] transition cursor-pointer ${
                   imageSource === 'custom'
-                    ? 'bg-amber-500 text-black'
+                    ? 'bg-rose-600 text-white'
                     : 'text-zinc-400 hover:text-white'
                 }`}
               >
@@ -292,13 +316,13 @@ export function VaultShareCardModal({
         <div className="p-4 sm:p-6 flex justify-center bg-zinc-950 overflow-hidden">
           <div
             ref={cardRef}
-            className={`w-full max-w-[340px] bg-gradient-to-b from-zinc-900 via-zinc-950 to-black border-2 border-amber-500/40 rounded-3xl p-5 shadow-2xl relative overflow-hidden flex flex-col justify-between transition-all duration-300 ${
-              aspectRatio === 'story' ? 'aspect-[9/16] min-h-[490px]' : 'aspect-[4/5] min-h-[420px]'
+            className={`w-full max-w-[340px] bg-gradient-to-b from-zinc-900 via-zinc-950 to-black border-2 border-rose-500/40 rounded-3xl p-5 shadow-2xl relative overflow-hidden flex flex-col justify-between transition-all duration-300 ${
+              aspectRatio === 'story' ? 'aspect-[9/16] min-h-[500px]' : 'aspect-[4/5] min-h-[420px]'
             }`}
           >
-            {/* Ambient gold glow */}
-            <div className="absolute top-0 right-0 w-44 h-44 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
-            <div className="absolute bottom-0 left-0 w-36 h-36 bg-amber-600/10 rounded-full blur-2xl pointer-events-none" />
+            {/* Ambient rose glow */}
+            <div className="absolute top-0 right-0 w-48 h-48 bg-rose-600/15 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-36 h-36 bg-pink-600/10 rounded-full blur-2xl pointer-events-none" />
 
             {/* Diagonal subtle watermark background pattern */}
             <div className="absolute inset-0 opacity-[0.03] select-none pointer-events-none flex flex-col justify-around rotate-[-25deg] text-[18px] font-black tracking-widest text-white whitespace-nowrap overflow-hidden">
@@ -308,23 +332,35 @@ export function VaultShareCardModal({
               <div>COLLECTIBLES.UY · MY VAULT · COLLECTIBLES.UY · MY VAULT</div>
             </div>
 
-            {/* Card Header */}
+            {/* Card Header with Collector Public Identity */}
             <div className="relative z-10">
               <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
                 <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center text-[10px] font-black text-black">
-                    C
+                  {collectorAvatarUrl ? (
+                    <img
+                      src={collectorAvatarUrl}
+                      alt={collectorNickname || primaryHandle}
+                      className="w-7 h-7 rounded-full object-cover border border-rose-500/40 shadow"
+                    />
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-rose-600 to-pink-500 flex items-center justify-center text-[11px] font-black text-white shadow">
+                      {initialLetter}
+                    </div>
+                  )}
+                  <div className="flex flex-col text-left leading-tight">
+                    <span className="text-xs font-black text-white">{displayTitle}</span>
+                    {collectorNickname && (
+                      <span className="text-[9px] font-mono text-zinc-400">{primaryHandle}</span>
+                    )}
                   </div>
-                  <span className="text-[11px] font-black tracking-widest text-white">MY VAULT</span>
                 </div>
-                <div className="text-[10px] font-black text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
-                  {collectorName}
-                </div>
+
+                <CollectiblesWatermark isOverlay={false} />
               </div>
 
               {!isCurrentFull && currentItem?.franchise && (
                 <div className="mt-2.5 flex items-center justify-between">
-                  <span className="text-[9px] font-black tracking-widest uppercase text-amber-400 bg-amber-500/15 px-2 py-0.5 rounded">
+                  <span className="text-[9px] font-black tracking-widest uppercase text-rose-300 bg-rose-500/15 border border-rose-500/20 px-2 py-0.5 rounded">
                     {currentItem.franchise}
                   </span>
                   {currentItem.is_favorite && (
@@ -338,67 +374,69 @@ export function VaultShareCardModal({
 
             {/* Main Visual Centerpiece */}
             {isCurrentFull ? (
-              /* Full Vault Collage Preview */
-              <div className="relative z-10 py-3 space-y-3">
-                <div className="text-center space-y-1">
-                  <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold">Colección Privada</span>
-                  <h4 className="text-lg font-black text-white leading-tight">La Colección de {collectorName}</h4>
-                  <p className="text-[10px] text-amber-300 font-mono font-bold">
-                    {vaultData?.total_items || availableItems.length || 3} PIEZAS · {vaultData?.total_franchises || 3} FRANQUICIAS · {vaultData?.total_brands || 3} MARCAS
-                  </p>
-                </div>
-
-                {/* 3 Featured Figures Collage */}
-                <div className="grid grid-cols-3 gap-2 pt-1">
-                  {(vaultData?.featured_items || availableItems || []).slice(0, 3).map((feat, idx) => (
-                    <div key={idx} className="bg-zinc-900/90 border border-white/15 rounded-xl p-1.5 flex flex-col items-center text-center relative overflow-hidden group">
-                      <div className="w-full aspect-square bg-black rounded-lg overflow-hidden flex items-center justify-center p-1 mb-1 relative">
-                        <img
-                          src={feat.official_image_url || feat.custom_image_url || 'https://images.unsplash.com/photo-1608889825205-eebdb9fc5806?auto=format&fit=crop&w=800&q=80'}
-                          alt={feat.custom_name}
-                          onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1608889825205-eebdb9fc5806?auto=format&fit=crop&w=800&q=80';
-                          }}
-                          className="w-full h-full object-contain"
-                        />
-                      </div>
-                      <span className="text-[8px] font-bold text-zinc-300 truncate w-full">{feat.custom_name}</span>
-                      <span className="text-[7px] text-amber-400 font-mono">{feat.brand_name || 'Official'}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              /* Single Piece Image Showcase */
-              <div className="relative z-10 my-auto py-2 flex flex-col items-center">
-                <div className="w-full aspect-square max-h-[210px] bg-gradient-to-b from-zinc-900 to-black rounded-2xl border border-white/10 flex items-center justify-center overflow-hidden relative shadow-inner p-2">
+              /* "Mi colección" Layout: Hero Spotlight Figure + Stats */
+              <div className="relative z-10 py-2 space-y-3 my-auto flex flex-col items-center">
+                <div className="w-full aspect-square max-h-[190px] bg-gradient-to-b from-zinc-900 to-black rounded-2xl border border-white/10 flex items-center justify-center overflow-hidden relative shadow-inner p-2">
                   <img
                     src={displayImage}
                     alt={currentItem?.custom_name}
                     onError={(e) => {
                       (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1608889825205-eebdb9fc5806?auto=format&fit=crop&w=800&q=80';
                     }}
-                    className="w-full h-full object-contain drop-shadow-2xl transition-transform duration-300 hover:scale-105"
+                    className="w-full h-full object-contain drop-shadow-2xl"
+                  />
+                  <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-md px-2 py-0.5 rounded text-[8px] font-bold text-rose-300 border border-rose-500/30">
+                    ⭐ Pieza Destacada
+                  </div>
+                </div>
+
+                <div className="text-center space-y-1 w-full">
+                  <h4 className="text-sm font-black text-white leading-tight">
+                    {currentItem?.custom_name}
+                  </h4>
+                  
+                  {/* Stats Badges */}
+                  <div className="bg-rose-500/10 border border-rose-500/25 rounded-xl py-1.5 px-3 flex items-center justify-around text-center text-xs font-mono font-bold text-rose-300">
+                    <div>
+                      <span className="text-white font-black">{vaultData?.total_items || availableItems.length || 3}</span> piezas
+                    </div>
+                    <div className="text-rose-500/40">·</div>
+                    <div>
+                      <span className="text-white font-black">{vaultData?.total_franchises || 3}</span> franquicias
+                    </div>
+                    <div className="text-rose-500/40">·</div>
+                    <div>
+                      <span className="text-white font-black">{vaultData?.total_brands || 3}</span> marcas
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* "Una pieza" Layout: 55-60% Photo + Key Specs */
+              <div className="relative z-10 my-auto py-1 flex flex-col items-center">
+                <div className="w-full aspect-square max-h-[220px] bg-gradient-to-b from-zinc-900 to-black rounded-2xl border border-white/10 flex items-center justify-center overflow-hidden relative shadow-inner p-2">
+                  <img
+                    src={displayImage}
+                    alt={currentItem?.custom_name}
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1608889825205-eebdb9fc5806?auto=format&fit=crop&w=800&q=80';
+                    }}
+                    className="w-full h-full object-contain drop-shadow-2xl"
                   />
 
-                  {/* OFFICIAL COLLECTIBLES WATERMARK OVERLAY (Top-Right of Image) */}
-                  <div className="absolute top-2 right-2">
-                    <CollectiblesWatermark isOverlay={true} />
-                  </div>
-
                   <div className="absolute bottom-2 left-2 bg-black/85 backdrop-blur-md px-2 py-0.5 rounded text-[9px] font-bold text-zinc-300 border border-white/10 flex items-center gap-1">
-                    <ShieldCheck size={10} className="text-emerald-400" />
+                    <ShieldCheck size={10} className="text-rose-400" />
                     <span>{currentItem?.condition || 'MISB'}</span>
                   </div>
 
                   {currentItem?.scale && (
-                    <div className="absolute bottom-2 right-2 bg-amber-500/20 backdrop-blur-md px-2 py-0.5 rounded text-[9px] font-black text-amber-300 border border-amber-500/30">
+                    <div className="absolute bottom-2 right-2 bg-rose-500/20 backdrop-blur-md px-2 py-0.5 rounded text-[9px] font-black text-rose-300 border border-rose-500/30">
                       {currentItem.scale}
                     </div>
                   )}
                 </div>
 
-                <div className="w-full text-center mt-3 space-y-1">
+                <div className="w-full text-center mt-2.5 space-y-1">
                   <h4 className="text-sm font-black text-white leading-snug line-clamp-1">
                     {currentItem?.custom_name || 'Darth Vader — Revenge of the Sith'}
                   </h4>
@@ -412,13 +450,13 @@ export function VaultShareCardModal({
                       <Star
                         key={star}
                         size={11}
-                        className={star <= (currentItem?.rating || 5) ? 'text-amber-400 fill-amber-400' : 'text-zinc-700'}
+                        className={star <= (currentItem?.rating || 5) ? 'text-rose-400 fill-rose-400' : 'text-zinc-700'}
                       />
                     ))}
                   </div>
 
                   {currentItem?.notes && (
-                    <p className="text-[10px] text-amber-200/80 italic line-clamp-2 px-2 pt-1 font-serif">
+                    <p className="text-[10px] text-rose-200/80 italic line-clamp-2 px-2 pt-0.5 font-serif">
                       "{currentItem.notes}"
                     </p>
                   )}
@@ -429,7 +467,7 @@ export function VaultShareCardModal({
             {/* Card Footer with Verified Badge & Collectibles Logo */}
             <div className="relative z-10 pt-2 border-t border-white/10 flex items-center justify-between text-[9px] text-zinc-400 font-mono">
               <div className="flex items-center gap-1">
-                <Sparkles size={10} className="text-amber-400" />
+                <Sparkles size={10} className="text-rose-400" />
                 <span>⭐ Colección Verificada</span>
               </div>
               <div className="flex items-center gap-1.5">
@@ -488,3 +526,4 @@ export function VaultShareCardModal({
     </div>
   );
 }
+

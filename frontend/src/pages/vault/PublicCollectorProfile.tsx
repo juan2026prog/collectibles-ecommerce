@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { Archive, ShieldCheck, Sparkles, Image as ImageIcon, Share2, Star, Heart, ArrowLeft, ArrowRight, ExternalLink, Globe } from 'lucide-react';
+import { ShieldCheck, Sparkles, Image as ImageIcon, Share2, Star, Heart, ArrowLeft, ArrowRight, Globe } from 'lucide-react';
 import SEO from '../../components/SEO';
 import { VaultShareCardModal, type ShareItemData } from './VaultShareCardModal';
 
@@ -80,20 +80,42 @@ export default function PublicCollectorProfile() {
     try {
       setLoading(true);
 
+      // 1. Try to fetch user profile from profiles table first (or fallback to vault_user_profiles)
+      let foundUser: any = null;
+      try {
+        const { data: userProf } = await supabase
+          .from('profiles')
+          .select('id, username, collector_nickname, collector_avatar_url, bio')
+          .or(`username.ilike.${cleanUsername},collector_nickname.ilike.${cleanUsername}`)
+          .maybeSingle();
+        if (userProf) foundUser = userProf;
+      } catch (e) {
+        console.warn(e);
+      }
+
+      const nickname = foundUser?.collector_nickname || null;
+      const avatarUrl = foundUser?.collector_avatar_url || null;
+      const actualUsername = foundUser?.username || cleanUsername;
+
+      setProfile({
+        display_name: nickname ? `${nickname}’s Vault` : `@${actualUsername}’s Vault`,
+        nickname: nickname,
+        avatar_url: avatarUrl,
+        username: actualUsername,
+        bio: foundUser?.bio || 'Coleccionista verificado en Collectibles.uy'
+      });
+
       // Check if viewing single item
       if (itemSlug) {
-        // Check demo map first
         if (PUBLIC_DEMO_ITEMS[itemSlug]) {
           setSingleItem({
             ...PUBLIC_DEMO_ITEMS[itemSlug],
-            collector_handle: handleTag
+            collector_handle: `@${actualUsername}`
           });
-          setProfile({ display_name: handleTag, bio: 'Coleccionista verificado en Collectibles.uy' });
           setLoading(false);
           return;
         }
 
-        // Query Supabase for public item by slug or id
         const { data: itemData } = await supabase
           .from('vault_items')
           .select('*')
@@ -118,25 +140,18 @@ export default function PublicCollectorProfile() {
             notes: itemData.notes,
             official_image_url: itemData.official_image_url || itemData.custom_image_url,
             custom_image_url: itemData.custom_image_url,
-            collector_handle: handleTag,
+            collector_handle: `@${actualUsername}`,
             slug: itemData.slug || itemData.id
           });
         }
       }
 
-      // Query Profile
-      const { data: profData } = await supabase
-        .from('vault_user_profiles')
-        .select('*')
-        .eq('display_name', cleanUsername)
-        .maybeSingle();
-
-      if (profData) {
-        setProfile(profData);
+      // Query Items for this user
+      if (foundUser?.id) {
         const { data: itemsData } = await supabase
           .from('vault_items')
           .select('*')
-          .eq('user_id', profData.user_id)
+          .eq('user_id', foundUser.id)
           .eq('visibility', 'PUBLIC');
 
         if (itemsData && itemsData.length > 0) {
@@ -155,22 +170,18 @@ export default function PublicCollectorProfile() {
             notes: i.notes,
             official_image_url: i.official_image_url || i.custom_image_url,
             custom_image_url: i.custom_image_url,
-            collector_handle: handleTag,
+            collector_handle: `@${actualUsername}`,
             slug: i.slug || i.id
           })));
         } else {
-          setPublicItems(Object.values(PUBLIC_DEMO_ITEMS).map(d => ({ ...d, collector_handle: handleTag })));
+          setPublicItems(Object.values(PUBLIC_DEMO_ITEMS).map(d => ({ ...d, collector_handle: `@${actualUsername}` })));
         }
       } else {
-        // Fallback demo showcase profile
-        setProfile({
-          display_name: handleTag,
-          bio: 'Coleccionista verificado de figuras y réplicas oficiales en Collectibles.uy'
-        });
-        setPublicItems(Object.values(PUBLIC_DEMO_ITEMS).map(d => ({ ...d, collector_handle: handleTag })));
+        setPublicItems(Object.values(PUBLIC_DEMO_ITEMS).map(d => ({ ...d, collector_handle: `@${actualUsername}` })));
       }
     } catch (err) {
       console.error('Error loading public profile:', err);
+      setPublicItems(Object.values(PUBLIC_DEMO_ITEMS).map(d => ({ ...d, collector_handle: handleTag })));
     } finally {
       setLoading(false);
     }
@@ -180,6 +191,9 @@ export default function PublicCollectorProfile() {
     return <div className="py-28 text-center text-zinc-500">Cargando vitrina de coleccionista...</div>;
   }
 
+  const primaryTitle = profile?.nickname ? `${profile.nickname}’s Vault` : `${profile?.display_name || handleTag}`;
+  const initialLetter = (profile?.nickname || cleanUsername).charAt(0).toUpperCase();
+
   // 1. PUBLIC SINGLE PIECE VIEW (/vault/@collector/:itemSlug)
   if (singleItem) {
     const itemImage = singleItem.custom_image_url || singleItem.official_image_url;
@@ -187,7 +201,7 @@ export default function PublicCollectorProfile() {
     return (
       <div className="max-w-4xl mx-auto px-4 py-8 text-white space-y-8 animate-fade-in">
         <SEO
-          title={`${singleItem.custom_name} | Colección de ${handleTag} | Collectibles`}
+          title={`${singleItem.custom_name} | ${primaryTitle} | Collectibles`}
           description={`Ficha verificada de ${singleItem.custom_name} (${singleItem.brand_name || 'Colección'} · ${singleItem.scale || 'Oficial'}). Estado: ${singleItem.condition}.`}
         />
 
@@ -195,10 +209,10 @@ export default function PublicCollectorProfile() {
         <div className="flex items-center justify-between">
           <Link
             to={`/vault/${cleanUsername}`}
-            className="inline-flex items-center gap-2 text-xs font-bold text-amber-400 hover:text-amber-300 transition group"
+            className="inline-flex items-center gap-2 text-xs font-bold text-rose-400 hover:text-rose-300 transition group"
           >
             <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
-            <span>Ver toda la colección de {handleTag}</span>
+            <span>Ver toda la colección de {primaryTitle}</span>
           </Link>
 
           <button
@@ -207,7 +221,7 @@ export default function PublicCollectorProfile() {
               setSelectedShareItem(singleItem);
               setIsShareModalOpen(true);
             }}
-            className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-black font-black text-xs rounded-xl flex items-center gap-1.5 transition shadow-lg shadow-amber-500/20 cursor-pointer"
+            className="px-4 py-2 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition shadow-lg shadow-rose-600/20 cursor-pointer"
           >
             <Share2 size={14} />
             <span>Compartir Ficha ↗</span>
@@ -215,7 +229,7 @@ export default function PublicCollectorProfile() {
         </div>
 
         {/* Product Card Details */}
-        <div className="bg-gradient-to-b from-zinc-900 via-zinc-950 to-black border-2 border-amber-500/30 rounded-3xl p-6 sm:p-10 shadow-2xl relative overflow-hidden">
+        <div className="bg-gradient-to-b from-zinc-900 via-zinc-950 to-black border-2 border-rose-500/30 rounded-3xl p-6 sm:p-10 shadow-2xl relative overflow-hidden">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
             
             {/* Big Photo */}
@@ -235,13 +249,13 @@ export default function PublicCollectorProfile() {
                 )}
 
                 <div className="absolute top-3 left-3 bg-black/80 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] font-bold text-zinc-300 border border-white/10 flex items-center gap-1">
-                  <ShieldCheck size={12} className="text-emerald-400" />
+                  <ShieldCheck size={12} className="text-rose-400" />
                   <span>{singleItem.condition}</span>
                 </div>
 
                 {/* Watermark badge overlay */}
-                <div className="absolute top-3 right-3 bg-black/75 backdrop-blur-md px-2 py-0.5 rounded-full text-[9px] font-mono font-bold text-amber-400 border border-amber-500/30 flex items-center gap-1">
-                  <Sparkles size={10} className="text-amber-400" />
+                <div className="absolute top-3 right-3 bg-black/75 backdrop-blur-md px-2 py-0.5 rounded-full text-[9px] font-mono font-bold text-rose-400 border border-rose-500/30 flex items-center gap-1">
+                  <Sparkles size={10} className="text-rose-400" />
                   <span>Collectibles.uy</span>
                 </div>
               </div>
@@ -251,7 +265,7 @@ export default function PublicCollectorProfile() {
             <div className="md:col-span-7 space-y-4">
               <div className="flex flex-wrap items-center gap-2">
                 {singleItem.franchise && (
-                  <span className="text-[10px] font-black tracking-widest uppercase bg-amber-500/15 border border-amber-500/30 text-amber-400 px-2.5 py-0.5 rounded-md">
+                  <span className="text-[10px] font-black tracking-widest uppercase bg-rose-500/15 border border-rose-500/30 text-rose-400 px-2.5 py-0.5 rounded-md">
                     {singleItem.franchise}
                   </span>
                 )}
@@ -272,13 +286,24 @@ export default function PublicCollectorProfile() {
               </div>
 
               {/* Collector Profile Badge */}
-              <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-zinc-900/80 border border-white/10">
-                <div className="w-9 h-9 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 text-sm font-black">
-                  C
-                </div>
+              <div className="flex items-center gap-3 p-3 rounded-2xl bg-zinc-900/80 border border-white/10">
+                {profile?.avatar_url ? (
+                  <img
+                    src={profile.avatar_url}
+                    alt={primaryTitle}
+                    className="w-10 h-10 rounded-full object-cover border border-rose-500/40 shadow"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-rose-600 to-pink-500 flex items-center justify-center text-white text-sm font-black shadow">
+                    {initialLetter}
+                  </div>
+                )}
                 <div>
                   <span className="text-[10px] text-zinc-400 uppercase font-bold block">Pieza de la vitrina de</span>
-                  <span className="text-xs font-black text-amber-400">{handleTag}</span>
+                  <span className="text-xs font-black text-white">{primaryTitle}</span>
+                  {profile?.nickname && (
+                    <span className="text-[10px] font-mono text-zinc-400 block">@{profile.username}</span>
+                  )}
                 </div>
               </div>
 
@@ -288,7 +313,7 @@ export default function PublicCollectorProfile() {
                   <Star
                     key={star}
                     size={16}
-                    className={star <= (singleItem.rating || 5) ? 'text-amber-400 fill-amber-400' : 'text-zinc-700'}
+                    className={star <= (singleItem.rating || 5) ? 'text-rose-400 fill-rose-400' : 'text-zinc-700'}
                   />
                 ))}
               </div>
@@ -304,7 +329,7 @@ export default function PublicCollectorProfile() {
                   to={`/vault/${cleanUsername}`}
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs rounded-xl border border-white/10 transition"
                 >
-                  <span>Ver colección completa de {handleTag} →</span>
+                  <span>Ver colección completa de {primaryTitle} →</span>
                 </Link>
               </div>
             </div>
@@ -317,6 +342,10 @@ export default function PublicCollectorProfile() {
             onClose={() => setIsShareModalOpen(false)}
             item={selectedShareItem}
             isFullVault={false}
+            initialMode="single"
+            collectorNickname={profile?.nickname}
+            collectorAvatarUrl={profile?.avatar_url}
+            collectorHandle={`@${profile?.username || cleanUsername}`}
           />
         )}
       </div>
@@ -331,22 +360,40 @@ export default function PublicCollectorProfile() {
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 text-white space-y-10 animate-fade-in">
       <SEO
-        title={`La colección de ${handleTag} | My Vault | Collectibles`}
-        description={`Explora la vitrina de coleccionables de ${handleTag}: ${totalItemsCount} figuras verificadas, ${totalFranchisesCount} franquicias y ${totalBrandsCount} marcas.`}
+        title={`${primaryTitle} | Collectibles`}
+        description={`Explora la vitrina de coleccionables de ${primaryTitle}: ${totalItemsCount} figuras verificadas, ${totalFranchisesCount} franquicias y ${totalBrandsCount} marcas.`}
       />
 
       {/* Public Header */}
-      <div className="bg-gradient-to-br from-amber-950/40 via-zinc-900 to-zinc-950 border border-amber-500/25 rounded-3xl p-6 sm:p-10 shadow-2xl relative overflow-hidden">
+      <div className="bg-gradient-to-br from-rose-950/40 via-zinc-900 to-zinc-950 border border-rose-500/25 rounded-3xl p-6 sm:p-10 shadow-2xl relative overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
-          <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-black uppercase tracking-widest">
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-400 text-xs font-black uppercase tracking-widest">
               <Globe size={13} />
               <span>Vitrina Pública de Coleccionista</span>
             </div>
 
-            <h1 className="text-3xl sm:text-4xl font-black text-white">
-              La colección de <span className="text-amber-400">{handleTag}</span>
-            </h1>
+            <div className="flex items-center gap-4">
+              {profile?.avatar_url ? (
+                <img
+                  src={profile.avatar_url}
+                  alt={primaryTitle}
+                  className="w-16 h-16 rounded-full object-cover border-2 border-rose-500/50 shadow-xl"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-rose-600 to-pink-500 flex items-center justify-center text-white text-2xl font-black shadow-xl">
+                  {initialLetter}
+                </div>
+              )}
+              <div>
+                <h1 className="text-3xl sm:text-4xl font-black text-white">
+                  {primaryTitle}
+                </h1>
+                {profile?.nickname && (
+                  <p className="text-xs font-mono text-zinc-400 mt-0.5">@{profile.username}</p>
+                )}
+              </div>
+            </div>
 
             <p className="text-sm font-bold text-zinc-300 flex items-center gap-2">
               <span className="text-white font-black">{totalItemsCount} piezas</span>
@@ -364,7 +411,7 @@ export default function PublicCollectorProfile() {
           <button
             type="button"
             onClick={() => setIsShareModalOpen(true)}
-            className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-black font-black text-xs rounded-xl flex items-center gap-2 transition shadow-lg shadow-amber-500/20 cursor-pointer self-start md:self-auto"
+            className="px-5 py-2.5 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white font-bold text-xs rounded-xl flex items-center gap-2 transition shadow-lg shadow-rose-600/20 cursor-pointer self-start md:self-auto"
           >
             <Share2 size={14} />
             <span>Compartir esta vitrina</span>
@@ -372,7 +419,7 @@ export default function PublicCollectorProfile() {
         </div>
       </div>
 
-      {/* Grid of Public Pieces */}
+      {/* Grid of Public Pieces (4:5 Cards with Object-Contain) */}
       <div className="space-y-4">
         <h2 className="text-xl font-black text-white flex items-center gap-2">
           <span>Piezas en Exhibición ({publicItems.length})</span>
@@ -385,10 +432,10 @@ export default function PublicCollectorProfile() {
             return (
               <div
                 key={piece.id || idx}
-                className="bg-zinc-900/90 border border-white/10 hover:border-amber-500/40 rounded-3xl p-5 shadow-xl transition-all duration-300 flex flex-col justify-between group"
+                className="bg-zinc-900/90 border border-white/10 hover:border-rose-500/40 rounded-3xl p-5 shadow-xl transition-all duration-300 flex flex-col justify-between group"
               >
                 <div>
-                  <div className="w-full aspect-square bg-zinc-950 rounded-2xl border border-white/10 p-3 mb-4 flex items-center justify-center overflow-hidden relative">
+                  <div className="w-full aspect-[4/5] bg-zinc-950 rounded-2xl border border-white/10 p-3 mb-4 flex items-center justify-center overflow-hidden relative">
                     {cardImg ? (
                       <img
                         src={cardImg}
@@ -403,7 +450,7 @@ export default function PublicCollectorProfile() {
                     )}
 
                     {/* Watermark Mini Badge */}
-                    <div className="absolute bottom-2.5 left-2.5 bg-black/75 backdrop-blur-md px-2 py-0.5 rounded-md text-[8px] font-mono font-bold text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                    <div className="absolute bottom-2.5 left-2.5 bg-black/75 backdrop-blur-md px-2 py-0.5 rounded-md text-[8px] font-mono font-bold text-rose-400 border border-rose-500/30 flex items-center gap-1">
                       <span>⚡ Collectibles</span>
                     </div>
 
@@ -417,23 +464,23 @@ export default function PublicCollectorProfile() {
 
                   <div className="flex flex-wrap items-center gap-1.5 mb-2">
                     {piece.franchise && (
-                      <span className="text-[9px] font-black tracking-widest uppercase bg-amber-500/15 border border-amber-500/30 text-amber-400 px-2 py-0.5 rounded-md">
+                      <span className="text-[9px] font-black tracking-widest uppercase bg-rose-500/15 border border-rose-500/30 text-rose-400 px-2.5 py-0.5 rounded-md">
                         {piece.franchise}
                       </span>
                     )}
                     {piece.scale && (
-                      <span className="text-[9px] font-black uppercase bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded-md">
+                      <span className="text-[9px] font-black uppercase bg-zinc-800 text-zinc-300 px-2.5 py-0.5 rounded-md">
                         {piece.scale}
                       </span>
                     )}
                     {piece.condition && (
-                      <span className="text-[9px] font-black uppercase bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 px-2 py-0.5 rounded-md">
+                      <span className="text-[9px] font-black uppercase bg-rose-500/15 border border-rose-500/30 text-rose-300 px-2.5 py-0.5 rounded-md">
                         {piece.condition}
                       </span>
                     )}
                   </div>
 
-                  <h3 className="font-black text-base text-white line-clamp-1 group-hover:text-amber-400 transition">
+                  <h3 className="font-black text-base text-white line-clamp-1 group-hover:text-rose-400 transition">
                     {piece.custom_name}
                   </h3>
                   <p className="text-xs text-zinc-400 mt-0.5 truncate">
@@ -445,7 +492,7 @@ export default function PublicCollectorProfile() {
                       <Star
                         key={star}
                         size={12}
-                        className={star <= (piece.rating || 5) ? 'text-amber-400 fill-amber-400' : 'text-zinc-700'}
+                        className={star <= (piece.rating || 5) ? 'text-rose-400 fill-rose-400' : 'text-zinc-700'}
                       />
                     ))}
                   </div>
@@ -460,7 +507,7 @@ export default function PublicCollectorProfile() {
                 <div className="flex items-center justify-between pt-4 mt-4 border-t border-white/10">
                   <Link
                     to={`/vault/${cleanUsername}/${piece.slug || piece.id}`}
-                    className="text-xs font-black text-amber-400 hover:text-amber-300 flex items-center gap-1"
+                    className="text-xs font-black text-rose-400 hover:text-rose-300 flex items-center gap-1"
                   >
                     <span>Ver ficha completa</span>
                     <ArrowRight size={13} />
@@ -472,7 +519,7 @@ export default function PublicCollectorProfile() {
                       setSelectedShareItem(piece);
                       setIsShareModalOpen(true);
                     }}
-                    className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-amber-400 border border-white/10 cursor-pointer"
+                    className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-rose-400 border border-white/10 cursor-pointer"
                   >
                     <Share2 size={13} />
                   </button>
@@ -493,8 +540,12 @@ export default function PublicCollectorProfile() {
           }}
           item={selectedShareItem}
           isFullVault={!selectedShareItem}
+          initialMode={selectedShareItem ? 'single' : 'full'}
+          collectorNickname={profile?.nickname}
+          collectorAvatarUrl={profile?.avatar_url}
+          collectorHandle={`@${profile?.username || cleanUsername}`}
           vaultData={{
-            collector_handle: handleTag,
+            collector_handle: `@${profile?.username || cleanUsername}`,
             total_items: totalItemsCount,
             total_franchises: totalFranchisesCount,
             total_brands: totalBrandsCount,
@@ -505,4 +556,5 @@ export default function PublicCollectorProfile() {
     </div>
   );
 }
+
 

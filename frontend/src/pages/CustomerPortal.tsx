@@ -95,6 +95,10 @@ export default function CustomerPortal() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
+  const [collectorNickname, setCollectorNickname] = useState('');
+  const [collectorAvatarUrl, setCollectorAvatarUrl] = useState('');
+  const [nicknameStatus, setNicknameStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'reserved' | 'invalid'>('idle');
+  const [nicknameErrorMsg, setNicknameErrorMsg] = useState('');
 
   // Addresses (up to 3)
   const [addresses, setAddresses] = useState<SavedAddress[]>([]);
@@ -289,11 +293,13 @@ export default function CustomerPortal() {
 
       // Load profile
       const { data: profileData } = await supabase
-        .from('profiles').select('first_name, last_name, phone, saved_addresses, is_vendor').eq('id', user!.id).single();
+        .from('profiles').select('first_name, last_name, phone, saved_addresses, is_vendor, collector_nickname, collector_avatar_url').eq('id', user!.id).single();
       if (profileData) {
         setFirstName(profileData.first_name || '');
         setLastName(profileData.last_name || '');
         setPhone(profileData.phone || '');
+        setCollectorNickname(profileData.collector_nickname || '');
+        setCollectorAvatarUrl(profileData.collector_avatar_url || '');
         setAddresses(Array.isArray(profileData.saved_addresses) ? profileData.saved_addresses : []);
         setIsVendor(!!profileData.is_vendor);
       }
@@ -316,15 +322,77 @@ export default function CustomerPortal() {
     loadData();
   }, [user]);
 
+  const RESERVED_NICKNAMES = [
+    'collectibles', 'admin', 'administrator', 'soporte', 'support', 
+    'staff', 'moderator', 'system', 'root', 'oficial', 'official',
+    'myvault', 'vault', 'store', 'shop'
+  ];
+
+  async function checkNicknameAvailability(nick: string) {
+    const trimmed = nick.trim();
+    if (!trimmed) {
+      setNicknameStatus('idle');
+      setNicknameErrorMsg('');
+      return;
+    }
+
+    if (trimmed.length < 3 || trimmed.length > 30) {
+      setNicknameStatus('invalid');
+      setNicknameErrorMsg('El apodo debe tener entre 3 y 30 caracteres.');
+      return;
+    }
+
+    if (RESERVED_NICKNAMES.includes(trimmed.toLowerCase())) {
+      setNicknameStatus('reserved');
+      setNicknameErrorMsg('Este apodo está reservado por el sistema.');
+      return;
+    }
+
+    // Regla de caracteres: letras, números, espacios, guiones y guiones bajos
+    if (!/^[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ_ -]+$/.test(trimmed)) {
+      setNicknameStatus('invalid');
+      setNicknameErrorMsg('Solo se permiten letras, números, espacios y guiones.');
+      return;
+    }
+
+    setNicknameStatus('checking');
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .ilike('collector_nickname', trimmed)
+        .neq('id', user?.id || '');
+
+      if (!error && data && data.length > 0) {
+        setNicknameStatus('taken');
+        setNicknameErrorMsg('Este apodo ya está en uso por otro coleccionista.');
+      } else {
+        setNicknameStatus('available');
+        setNicknameErrorMsg('');
+      }
+    } catch {
+      setNicknameStatus('available');
+    }
+  }
+
   async function saveProfile() {
     if (!user) return;
+    if (nicknameStatus === 'taken' || nicknameStatus === 'reserved' || nicknameStatus === 'invalid') {
+      alert(nicknameErrorMsg || 'Por favor ingresa un apodo de coleccionista válido y disponible.');
+      return;
+    }
+
     setSavingProfile(true);
     setProfileSaved(false);
+
+    const cleanNick = collectorNickname.trim();
 
     await supabase.from('profiles').update({
       first_name: firstName,
       last_name: lastName,
       phone,
+      collector_nickname: cleanNick || null,
+      collector_avatar_url: collectorAvatarUrl.trim() || null,
       saved_addresses: addresses,
       // Keep shipping_address as the first address for backward compatibility
       shipping_address: addresses.length > 0 ? addresses[0] : {},
@@ -1209,8 +1277,140 @@ export default function CustomerPortal() {
       {/* ═══ TAB: Mis Datos ═══ */}
       {activeTab === 'profile' && (
         <div className="space-y-6">
+          {/* IDENTIDAD PÚBLICA DEL COLECCIONISTA (MY VAULT) */}
+          <div className="bg-gradient-to-br from-rose-950/40 via-zinc-900 to-zinc-950 border border-rose-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+            <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
+              <div>
+                <span className="text-[10px] font-black tracking-widest uppercase text-rose-400 bg-rose-500/15 border border-rose-500/30 px-2.5 py-0.5 rounded-full">
+                  My Vault
+                </span>
+                <h2 className="text-xl font-black text-white mt-1.5 flex items-center gap-2">
+                  <Trophy className="w-5 h-5 text-rose-500" /> Identidad de Coleccionista
+                </h2>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Personalizá cómo te verán otros coleccionistas al compartir tu vitrina y figuras en redes sociales.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
+              {/* Form Inputs */}
+              <div className="md:col-span-7 space-y-4">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-zinc-300">
+                      Apodo de Coleccionista *
+                    </label>
+                    {nicknameStatus === 'checking' && (
+                      <span className="text-[10px] text-zinc-400">Verificando...</span>
+                    )}
+                    {nicknameStatus === 'available' && (
+                      <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-0.5">
+                        <Check className="w-3 h-3" /> Disponible
+                      </span>
+                    )}
+                    {(nicknameStatus === 'taken' || nicknameStatus === 'reserved' || nicknameStatus === 'invalid') && (
+                      <span className="text-[10px] text-rose-400 font-bold">
+                        {nicknameErrorMsg}
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={collectorNickname}
+                    onChange={(e) => {
+                      setCollectorNickname(e.target.value);
+                      checkNicknameAvailability(e.target.value);
+                    }}
+                    maxLength={30}
+                    placeholder="Ej: Juanma, RetroCollector, DarkKnightUY"
+                    className={`w-full px-4 py-2.5 bg-zinc-950 border rounded-xl text-white text-sm font-semibold transition ${
+                      nicknameStatus === 'taken' || nicknameStatus === 'reserved' || nicknameStatus === 'invalid'
+                        ? 'border-rose-500 focus:ring-1 focus:ring-rose-500'
+                        : nicknameStatus === 'available'
+                        ? 'border-emerald-500/60 focus:ring-1 focus:ring-emerald-500'
+                        : 'border-white/10 focus:border-rose-500'
+                    }`}
+                  />
+                  <p className="text-[11px] text-zinc-500 mt-1">
+                    Único, de 3 a 30 caracteres. Protagonista visual de tu Vault público.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-zinc-300 mb-1">
+                    Avatar de Coleccionista (Formato 1:1)
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="url"
+                      value={collectorAvatarUrl}
+                      onChange={(e) => setCollectorAvatarUrl(e.target.value)}
+                      placeholder="https://ejemplo.com/avatar.jpg"
+                      className="flex-1 px-4 py-2.5 bg-zinc-950 border border-white/10 rounded-xl text-white text-xs font-mono"
+                    />
+                    <label className="px-3 py-2.5 bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 rounded-xl text-xs font-bold cursor-pointer transition flex items-center gap-1.5 shrink-0">
+                      <Sparkles className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Subir</span>
+                      <input
+                        type="file"
+                        accept="image/png, image/jpeg, image/webp"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                              if (event.target?.result) {
+                                setCollectorAvatarUrl(event.target.result as string);
+                              }
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Preview Card */}
+              <div className="md:col-span-5 bg-zinc-950/80 border border-white/10 rounded-2xl p-5 flex flex-col items-center text-center space-y-3 shadow-inner">
+                <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
+                  Vista Previa de Identidad
+                </span>
+
+                <div className="relative">
+                  {collectorAvatarUrl ? (
+                    <img
+                      src={collectorAvatarUrl}
+                      alt={collectorNickname || 'Avatar'}
+                      className="w-20 h-20 rounded-full object-cover border-2 border-rose-500 shadow-lg shadow-rose-500/20"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-rose-600 to-pink-500 border-2 border-rose-400 flex items-center justify-center text-2xl font-black text-white shadow-lg shadow-rose-500/20">
+                      {(collectorNickname.trim() || user?.email?.split('@')[0] || 'C')[0].toUpperCase()}
+                    </div>
+                  )}
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-black border border-rose-500 flex items-center justify-center text-[10px]">
+                    ⭐
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-base font-black text-white">
+                    {collectorNickname.trim() ? `${collectorNickname.trim()}’s Vault` : `${user?.email?.split('@')[0] || 'Coleccionista'}’s Vault`}
+                  </h4>
+                  <p className="text-xs text-zinc-500 font-mono mt-0.5">
+                    @{user?.email?.split('@')[0] || 'usuario'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Personal Info */}
-          <div className="glass border  shadow-sm overflow-hidden">
+          <div className="glass border shadow-sm overflow-hidden rounded-3xl">
             <div className="px-8 py-5 border-b bg-white/5">
               <h2 className="text-lg font-bold flex items-center gap-2"><User className="w-5 h-5 text-primary-500" /> Datos Personales</h2>
             </div>
