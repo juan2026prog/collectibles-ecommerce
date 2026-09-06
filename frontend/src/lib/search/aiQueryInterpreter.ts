@@ -189,31 +189,24 @@ export function generateDirectEditorialAnswer(
   const count = products.length;
   const topic = interp.detectedLicense || interp.detectedBrand || interp.detectedLine || interp.cleanedQuery || 'coleccionables';
 
-  // 1. Caso 0 Resultados
+  // 1. Caso 0 Resultados directos
   if (count === 0) {
     if (interp.isPreorder) {
       return {
         headline: `Preventas de ${topic}`,
-        summary: `No encontramos preventas activas de ${topic} dentro del catálogo de Collectibles en este momento.`,
-        breakdown: [
-          'Podés explorar los próximos lanzamientos en Radar para activar avisos de preventa',
-          'También podés buscar opciones disponibles en catálogo internacional'
-        ],
-        nextHighlight: radarDrops.length > 0 ? `Hay ${radarDrops.length} drops detectados en Radar para esta línea.` : undefined
+        summary: `No tenemos preventas locales activas de ${topic} en este momento. Podés activar una alerta para el próximo drop oficial o pedir cotización de importación directa.`,
+        breakdown: [],
+        nextHighlight: radarDrops.length > 0 ? `Hay ${radarDrops.length} lanzamientos en Radar para esta línea.` : undefined
       };
     }
     return {
-      headline: `Búsqueda de ${topic}`,
-      summary: `No encontramos coincidencias exactas para "${interp.rawQuery}" en nuestro catálogo local activo.`,
-      breakdown: [
-        'Explorá opciones similares disponibles en stock inmediato',
-        'Podés consultar los lanzamientos oficiales en Radar o solicitar importación'
-      ]
+      headline: `Búsqueda: ${topic}`,
+      summary: `No hay stock para entrega inmediata de "${interp.rawQuery}" en el catálogo local, pero podés encargarla o revisar las opciones recomendadas a continuación.`,
+      breakdown: []
     };
   }
 
   // 2. Caso con Resultados
-  // Analizar desglose por líneas / marcas
   const lineCounts: Record<string, number> = {};
   let preorderCount = 0;
   let inStockCount = 0;
@@ -233,7 +226,7 @@ export function generateDirectEditorialAnswer(
   const breakdownBullets: string[] = [];
   const entries = Object.entries(lineCounts);
   if (entries.length > 0) {
-    entries.slice(0, 4).forEach(([lineName, num]) => {
+    entries.slice(0, 3).forEach(([lineName, num]) => {
       breakdownBullets.push(`${num} ${lineName}`);
     });
   } else if (interp.detectedBrand) {
@@ -241,9 +234,7 @@ export function generateDirectEditorialAnswer(
   }
 
   if (preorderCount > 0 && inStockCount > 0) {
-    breakdownBullets.push(`${inStockCount} en stock inmediato y ${preorderCount} en preventa`);
-  } else if (preorderCount > 0) {
-    breakdownBullets.push(`${preorderCount} preventas activas`);
+    breakdownBullets.push(`${inStockCount} en stock · ${preorderCount} preventa`);
   }
 
   const headline = interp.isPreorder 
@@ -252,14 +243,11 @@ export function generateDirectEditorialAnswer(
       ? `Recomendaciones para ${topic}`
       : `Resultados para ${topic}`;
 
-  let summary = `Encontré ${count} ${count === 1 ? 'producto relacionado' : 'productos relacionados'}${interp.detectedBrand ? ` de ${interp.detectedBrand}` : ''}.`;
-  if (interp.detectedScale) {
-    summary += ` en escala ${interp.detectedScale}.`;
-  }
+  let summary = `Encontramos ${count} ${count === 1 ? 'figura disponible' : 'figuras disponibles'}${interp.detectedBrand ? ` de ${interp.detectedBrand}` : ''}${interp.detectedScale ? ` en escala ${interp.detectedScale}` : ''}.`;
 
   let nextHighlight: string | undefined;
   if (radarDrops.length > 0) {
-    nextHighlight = `Próximo lanzamiento destacado en Radar: ${radarDrops[0].title}.`;
+    nextHighlight = `Próximo lanzamiento en Radar: ${radarDrops[0].title}.`;
   }
 
   return {
