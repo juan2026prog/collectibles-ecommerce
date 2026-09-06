@@ -449,7 +449,27 @@ export default function AcademyHome() {
         { scale_key: '1:1', label: 'Escala 1:1 (Life-Size / Busto)', approx_height_cm: '160 – 190 cm (Bustos: 60 – 90 cm)', description: 'Réplicas exactas a tamaño real 1:1 con ojos protésicos de vidrio, pelo de silicona insertado y nivel de detalle cinematográfico de museo.' },
       ]);
 
-      setGlossary(gloRes.data && gloRes.data.length > 0 ? gloRes.data : DEFAULT_GLOSSARY);
+      // Combinar términos de DB con DEFAULT_GLOSSARY para que ningún término quede afuera
+      const dbGlossary = gloRes.data || [];
+      const termsMap = new Map<string, any>();
+      
+      // Primero agregamos todos los DEFAULT_GLOSSARY
+      DEFAULT_GLOSSARY.forEach(item => {
+        termsMap.set(item.term.toLowerCase(), item);
+      });
+
+      // Luego sobreescribimos o agregamos los de DB si existen
+      dbGlossary.forEach((item: any) => {
+        if (item && item.term) {
+          termsMap.set(item.term.toLowerCase(), {
+            term: item.term,
+            definition: item.definition,
+            category: item.category || 'GENERAL'
+          });
+        }
+      });
+
+      setGlossary(Array.from(termsMap.values()));
     } catch (err) {
       console.error(err);
       setGlossary(DEFAULT_GLOSSARY);
