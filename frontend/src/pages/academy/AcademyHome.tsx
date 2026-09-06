@@ -486,6 +486,7 @@ export default function AcademyHome() {
   
   const [scales, setScales] = useState<any[]>([]);
   const [glossary, setGlossary] = useState<any[]>([]);
+  const [imageOverrides, setImageOverrides] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
@@ -495,9 +496,10 @@ export default function AcademyHome() {
   const loadAcademyData = async () => {
     try {
       setLoading(true);
-      const [scaRes, gloRes] = await Promise.all([
+      const [scaRes, gloRes, imgRes] = await Promise.all([
         supabase.from('academy_scales').select('*').order('created_at', { ascending: true }),
-        supabase.from('academy_glossary').select('*').eq('status', 'PUBLISHED').limit(50)
+        supabase.from('academy_glossary').select('*').eq('status', 'PUBLISHED').limit(50),
+        supabase.from('academy_article_images').select('article_id, image_url')
       ]);
 
       setScales(scaRes.data && scaRes.data.length > 0 ? scaRes.data : [
@@ -508,6 +510,17 @@ export default function AcademyHome() {
         { scale_key: '1:4', label: 'Escala 1:4 (Quarter Scale)', approx_height_cm: '45 – 55 cm', description: 'Grandes piezas centrales de museo y estatuas de resina premium. Requieren vitrinas reforzadas y espacio exclusivo dedicado.' },
         { scale_key: '1:1', label: 'Escala 1:1 (Life-Size / Busto)', approx_height_cm: '160 – 190 cm (Bustos: 60 – 90 cm)', description: 'Réplicas exactas a tamaño real 1:1 con ojos protésicos de vidrio, pelo de silicona insertado y nivel de detalle cinematográfico de museo.' },
       ]);
+
+      // Cargar overrides de imagen desde Supabase
+      if (imgRes.data && imgRes.data.length > 0) {
+        const overrideMap: Record<string, string> = {};
+        imgRes.data.forEach((row: any) => {
+          if (row.article_id && row.image_url) {
+            overrideMap[row.article_id] = row.image_url;
+          }
+        });
+        setImageOverrides(overrideMap);
+      }
 
       // Combinar términos de DB con DEFAULT_GLOSSARY para que ningún término quede afuera
       const dbGlossary = gloRes.data || [];
@@ -538,17 +551,24 @@ export default function AcademyHome() {
     }
   };
 
-  // Filtrado de artículos según tab y buscador
+
+  // Filtrado de artículos según tab y buscador (con override de imagen aplicado)
   const filteredArticles = useMemo(() => {
-    return ALL_ACADEMY_ARTICLES.filter(art => {
-      const matchesTab = activeTab === 'all' || art.category_key === activeTab;
-      const matchesQuery = searchQuery.trim() === '' || 
-        art.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        art.excerpt.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        art.category_name?.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesTab && matchesQuery;
-    });
-  }, [activeTab, searchQuery]);
+    return ALL_ACADEMY_ARTICLES
+      .filter(art => {
+        const matchesTab = activeTab === 'all' || art.category_key === activeTab;
+        const matchesQuery = searchQuery.trim() === '' ||
+          art.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          art.excerpt.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          art.category_name?.toLowerCase().includes(searchQuery.toLowerCase());
+        return matchesTab && matchesQuery;
+      })
+      .map(art => ({
+        ...art,
+        featured_image: imageOverrides[art.id] ?? art.featured_image,
+      }));
+  }, [activeTab, searchQuery, imageOverrides]);
+
 
   // Categorías de glosario únicas
   const glossaryCategories = useMemo(() => {
