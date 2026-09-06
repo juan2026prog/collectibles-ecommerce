@@ -117,6 +117,252 @@ const ALL_ACADEMY_ARTICLES: AcademyArticle[] = [
     read_time_minutes: 5,
     category_name: 'Glosario & Términos',
     level: 'Inicial'
+  },
+  // ─── 20 NUEVAS GUÍAS EDITORIALES DE TENDENCIA ─────────────────────────────────
+  // SECCIÓN 1: PRIMEROS PASOS
+  {
+    id: 'art-foco-coleccion',
+    title: 'El Arte del Foco: Cómo Elegir una Sola Línea y Dominarla sin Dispersarse',
+    slug: 'el-arte-del-foco-como-elegir-linea-coleccion',
+    excerpt: 'La dispersión es la enemiga número uno del coleccionista. Descubre cómo definir un foco temático fuerte y dominar una línea con criterio y coherencia visual.',
+    type: 'INICIO',
+    category_key: 'start',
+    featured_image: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=1200&q=80',
+    read_time_minutes: 6,
+    category_name: 'Primeros Pasos',
+    level: 'Inicial'
+  },
+  {
+    id: 'art-completismo-curaduria',
+    title: 'Completismo vs Curaduría: Por Qué Intentar Tener Todo Arruina el Disfrute',
+    slug: 'completismo-vs-curaduria-coleccionismo',
+    excerpt: 'El síndrome de la wave completa genera fatiga y repisas saturadas. Aprende a aplicar curaduría estética para que cada figura destaque como una obra de arte.',
+    type: 'INICIO',
+    category_key: 'start',
+    featured_image: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=1200&q=80',
+    read_time_minutes: 5,
+    category_name: 'Primeros Pasos',
+    level: 'Inicial'
+  },
+  {
+    id: 'art-presupuesto-real',
+    title: 'Presupuesto Real del Coleccionista: Costo Oculto de Envíos, Aduana y Exhibición',
+    slug: 'presupuesto-real-coleccionista-costos-ocultos',
+    excerpt: 'El precio de la figura es solo la mitad de la historia. Guía financiera para calcular fletes internacionales, franquicias aduaneras, vitrinas y accesorios.',
+    type: 'COMPRA',
+    category_key: 'start',
+    featured_image: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=1200&q=80',
+    read_time_minutes: 7,
+    category_name: 'Primeros Pasos',
+    level: 'Intermedio'
+  },
+  {
+    id: 'art-caja-cerrada-vs-open',
+    title: 'El Síndrome de la Caja Cerrada: Debate Definitivo entre Open-Box y Conservación Sellada',
+    slug: 'sindrome-caja-cerrada-open-box-vs-sellado',
+    excerpt: '¿Disfrutar en vitrina o especular con precintos de fábrica? Análisis imparcial sobre valor de reventa, degradación del plástico en caja y disfrute personal.',
+    type: 'INICIO',
+    category_key: 'start',
+    featured_image: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=1200&q=80',
+    read_time_minutes: 6,
+    category_name: 'Primeros Pasos',
+    level: 'Inicial'
+  },
+  // SECCIÓN 2: ESCALAS & TAMAÑOS
+  {
+    id: 'art-batalla-1-12-import-retail',
+    title: 'Batalla en Escala 1:12: Diferencias Reales entre Import Japonés y Retail Americano',
+    slug: 'batalla-escala-1-12-import-japones-vs-retail-americano',
+    excerpt: 'MAFEX y S.H.Figuarts frente a Marvel Legends y DC Multiverse: comparativa milimétrica de articulación, accesorios, escala real y relación calidad-precio.',
+    type: 'GUÍA',
+    category_key: 'scales',
+    featured_image: 'https://images.unsplash.com/photo-1563089145-599997674d42?w=1200&q=80',
+    read_time_minutes: 8,
+    category_name: 'Escalas & Tamaños',
+    level: 'Intermedio'
+  },
+  {
+    id: 'art-frontera-18cm-1-10',
+    title: 'La Frontera de los 18 cm: Por Qué la Escala 1:10 de McFarlane y NECA No Encaja con Todo',
+    slug: 'frontera-18-cm-escala-1-10-mcfarlane-neca',
+    excerpt: 'Las 7 pulgadas tienen una presencia imponente pero generan pesadillas de escala al mezclarse. Cómo armar repisas armoniosas con escala 1:10.',
+    type: 'GUÍA',
+    category_key: 'scales',
+    featured_image: 'https://images.unsplash.com/photo-1608889476518-738c9b1dcb40?w=1200&q=80',
+    read_time_minutes: 6,
+    category_name: 'Escalas & Tamaños',
+    level: 'Intermedio'
+  },
+  {
+    id: 'art-salto-escala-1-6',
+    title: 'El Salto a 1:6: Requisitos de Espacio, Peso y Soporte Antes de Comprar tu Primera Pieza',
+    slug: 'el-salto-a-escala-1-6-requisitos-espacio-vitrinas',
+    excerpt: 'Una figura de 30 cm con metal diecast y base dinámica no entra en cualquier estante. Lo que debes preparar en tu habitación antes de recibir tu primer Hot Toys o InArt.',
+    type: 'GUÍA',
+    category_key: 'scales',
+    featured_image: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=1200&q=80',
+    read_time_minutes: 7,
+    category_name: 'Escalas & Tamaños',
+    level: 'Avanzado'
+  },
+  {
+    id: 'art-micro-escalas-1-18',
+    title: 'Micro-Escalas y Miniaturas: Guía para Integrar Figuras 1:18 y 1:24 en tu Repisa',
+    slug: 'micro-escalas-miniaturas-figuras-1-18-y-1-24',
+    excerpt: 'De Star Wars Vintage Collection a JoyToy Warhammer 40K: el renacimiento de las 3.75 pulgadas y cómo construir dioramas masivos en espacios reducidos.',
+    type: 'GUÍA',
+    category_key: 'scales',
+    featured_image: 'https://images.unsplash.com/photo-1618336753974-aae8e04506aa?w=1200&q=80',
+    read_time_minutes: 5,
+    category_name: 'Escalas & Tamaños',
+    level: 'Inicial'
+  },
+  // SECCIÓN 3: AUTENTICIDAD & FABRICANTES
+  {
+    id: 'art-cabezas-custom-3d',
+    title: 'El Mercado de las Cabezas Custom: Escultura 3D, Pintura a Mano y Licencias no Oficiales',
+    slug: 'mercado-cabezas-custom-escultura-3d-pintura',
+    excerpt: 'El auge del aftermarket artístico: escultores digitales, pintores independientes en Patreon e Instagram, y cómo elevar una figura comercial a nivel de museo.',
+    type: 'AUTENTICIDAD',
+    category_key: 'authenticity',
+    featured_image: 'https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=1200&q=80',
+    read_time_minutes: 7,
+    category_name: 'Autenticidad & Copias',
+    level: 'Avanzado'
+  },
+  {
+    id: 'art-lineas-entrada-vs-alta-gama',
+    title: 'Líneas de Entrada vs Alta Gama: Bandai Spirits, Good Smile Company y Medicom Explicadas',
+    slug: 'lineas-entrada-vs-alta-gama-fabricantes-coleccionismo',
+    excerpt: 'Ichibansho vs Figuarts ZERO, Pop Up Parade vs Scale Figures y MAFEX vs Figma: guía de jerarquías para saber exactamente por qué estás pagando.',
+    type: 'AUTENTICIDAD',
+    category_key: 'authenticity',
+    featured_image: 'https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?w=1200&q=80',
+    read_time_minutes: 8,
+    category_name: 'Autenticidad & Copias',
+    level: 'Intermedio'
+  },
+  {
+    id: 'art-titanes-hot-toys-vs-inart',
+    title: 'Guerra de Titanes 1:6: Ingeniería de Hot Toys frente a la Silicona y Pelo Enraizado de InArt',
+    slug: 'guerra-titanes-1-6-hot-toys-vs-inart-ingenieria',
+    excerpt: 'La revolución del hiperrealismo: articulaciones magnéticas, trajes a medida y ojos móviles independientes. El cambio de paradigma en el coleccionismo cinematográfico.',
+    type: 'AUTENTICIDAD',
+    category_key: 'authenticity',
+    featured_image: 'https://images.unsplash.com/photo-1620428268482-cf1851a36764?w=1200&q=80',
+    read_time_minutes: 9,
+    category_name: 'Autenticidad & Copias',
+    level: 'Avanzado'
+  },
+  {
+    id: 'art-resinas-oficiales-vs-garages',
+    title: 'El Universo de las Resinas de Estudio: Licencia Oficial frente a Garages No Autorizados',
+    slug: 'resinas-estudio-licencia-oficial-vs-garages-custom',
+    excerpt: 'Prime 1 Studio, Tsume y XM Studios frente a los estudios independientes sin licencia. Pros, contras de valor, seguridad en envíos y calidad de fundición.',
+    type: 'AUTENTICIDAD',
+    category_key: 'authenticity',
+    featured_image: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=1200&q=80',
+    read_time_minutes: 7,
+    category_name: 'Autenticidad & Copias',
+    level: 'Avanzado'
+  },
+  // SECCIÓN 4: MATERIALES, MANTENIMIENTO & POSA
+  {
+    id: 'art-articulaciones-rigidas-calor',
+    title: 'Articulaciones Rígidas y Clavijas Quebradas: Técnicas Seguras con Calor para No Romper Figuras',
+    slug: 'articulaciones-rigidas-clavijas-quebradas-tecnicas-calor',
+    excerpt: 'El método del baño de agua caliente a 60°C y el secador de pelo. Cómo aflojar articulaciones duras de fábrica sin blanquear ni quebrar las clavijas de plástico.',
+    type: 'CUIDADO',
+    category_key: 'care',
+    featured_image: 'https://images.unsplash.com/photo-1545558014-8692077e9b5c?w=1200&q=80',
+    read_time_minutes: 6,
+    category_name: 'Materiales & Conservación',
+    level: 'Intermedio'
+  },
+  {
+    id: 'art-articulaciones-flojas-firmeza',
+    title: 'Articulaciones Flojas y Desgaste: Cómo Devolverle Firmeza a Rótulas y Ball-Joints sin Pegamento',
+    slug: 'articulaciones-flojas-devolver-firmeza-rotulas-sin-pegamento',
+    excerpt: 'El uso correcto de polímeros acrílicos al agua (Kiki Loose Joints, barniz acrílico brillante) para engrosar rótulas gastadas sin soldar la articulación.',
+    type: 'CUIDADO',
+    category_key: 'care',
+    featured_image: 'https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=1200&q=80',
+    read_time_minutes: 5,
+    category_name: 'Materiales & Conservación',
+    level: 'Intermedio'
+  },
+  {
+    id: 'art-posa-dinamica-balance',
+    title: 'Centro de Gravedad y Balance: Principios de Posa Dinámica sin Depender de Stands Visibles',
+    slug: 'centro-gravedad-balance-posa-dinamica-sin-stands',
+    excerpt: 'Línea de acción, distribución del peso en tobillos y rotación de cadera. Cómo lograr que tus figuras de acción luzcan vivas y cinematográficas en la vitrina.',
+    type: 'CUIDADO',
+    category_key: 'care',
+    featured_image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1200&q=80',
+    read_time_minutes: 7,
+    category_name: 'Materiales & Conservación',
+    level: 'Inicial'
+  },
+  {
+    id: 'art-cuidado-ropa-tela-cuerina',
+    title: 'Ropa de Tela y Cuerina (Pleather): Cómo Evitar el Cuarteado y Descascarillado con los Años',
+    slug: 'cuidado-ropa-tela-cuerina-pleather-evitar-cuarteado',
+    excerpt: 'La hidrólisis en chaquetas de cuerina y trajes de vinilo es la peor pesadilla en escala 1:6. Productos hidratantes (303 Aerospace Protectant) y humedad ideal.',
+    type: 'MATERIALES',
+    category_key: 'care',
+    featured_image: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=1200&q=80',
+    read_time_minutes: 6,
+    category_name: 'Materiales & Conservación',
+    level: 'Avanzado'
+  },
+  // SECCIÓN 5: GLOSARIO, COMPRA & LOGÍSTICA
+  {
+    id: 'art-fomo-aftermarket-reissue',
+    title: 'El Fenómeno FOMO y el Aftermarket: Cuándo Pagar Precio de Reventa y Cuándo Esperar un Reissue',
+    slug: 'fomo-aftermarket-reventa-vs-esperar-reissue',
+    excerpt: 'Psicología del mercado coleccionista: análisis de patrones de reedición de Bandai, MAFEX y Hot Toys para no caer en precios inflados por la histeria.',
+    type: 'COMPRA',
+    category_key: 'glossary',
+    featured_image: 'https://images.unsplash.com/photo-1614094082869-cd4e4b2905c7?w=1200&q=80',
+    read_time_minutes: 7,
+    category_name: 'Glosario & Términos',
+    level: 'Intermedio'
+  },
+  {
+    id: 'art-grading-afa-cas-figuras',
+    title: 'Grading en Figuras de Acción: Qué Hacen AFA y CAS y Cuándo Vale la Pena Certificar',
+    slug: 'grading-figuras-accion-afa-cas-certificacion',
+    excerpt: 'Sub-grados de burbuja, figura y cartón. Cuándo el encapsulado en acrílico agrega valor real de inversión y cuándo es solo un gasto innecesario.',
+    type: 'GLOSARIO',
+    category_key: 'glossary',
+    featured_image: 'https://images.unsplash.com/photo-1612404730960-5c71577fca11?w=1200&q=80',
+    read_time_minutes: 6,
+    category_name: 'Glosario & Términos',
+    level: 'Avanzado'
+  },
+  {
+    id: 'art-preventas-depositos-retrasos',
+    title: 'Preventas y Depósitos de Reserva: Ciclo de Producción, Retrasos Habituales y Cancelaciones',
+    slug: 'preventas-depositos-reserva-ciclo-produccion-retrasos',
+    excerpt: 'De la fase de prototipo (grey model) a la aprobación de licencias y el flete marítimo. Guía para entender los tiempos de producción y asegurar tus piezas.',
+    type: 'COMPRA',
+    category_key: 'glossary',
+    featured_image: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=1200&q=80',
+    read_time_minutes: 6,
+    category_name: 'Glosario & Términos',
+    level: 'Inicial'
+  },
+  {
+    id: 'art-guia-importacion-uruguay-franquicia',
+    title: 'Guía de Importación en Uruguay: Cómo Usar la Franquicia de USD 200 para Coleccionables sin Pagar Recargos',
+    slug: 'guia-importacion-uruguay-franquicia-usd-200-figuras',
+    excerpt: 'El manual definitivo para coleccionistas uruguayos: reglas de Aduana, facturas comerciales, límite de 3 envíos anuales, peso máximo y cómo evitar retenciones.',
+    type: 'COMPRA',
+    category_key: 'glossary',
+    featured_image: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=1200&q=80',
+    read_time_minutes: 8,
+    category_name: 'Glosario & Términos',
+    level: 'Intermedio'
   }
 ];
 
@@ -132,7 +378,18 @@ const DEFAULT_GLOSSARY = [
   { term: 'Diecast', definition: 'Aleación de metal fundido a presión que añade peso, estabilidad y acabados metálicos reales a partes específicas.', category: 'MATERIALES' },
   { term: 'Complete', definition: 'Pieza que conserva todos sus componentes originales: accesorios, manos, bases, manuales e inserts.', category: 'GRADING' },
   { term: 'Pre-Order', definition: 'Reserva de un producto antes de su lanzamiento. La fecha de entrega es estimada, no siempre garantizada.', category: 'COMPRA' },
-  { term: 'PERS', definition: 'Parallel Eyeball Rolling System: tecnología de ojos móviles usada en figuras Hot Toys para mayor realismo facial.', category: 'TÉCNICO' }
+  { term: 'PERS', definition: 'Parallel Eyeball Rolling System: tecnología de ojos móviles usada en figuras Hot Toys para mayor realismo facial.', category: 'TÉCNICO' },
+  // ─── 10 NUEVOS TÉRMINOS ───────────────────────────────────────────────
+  { term: 'Grail', definition: 'El Santo Grial: la pieza más codiciada, escasa o valiosa que un coleccionista persigue durante años para coronar su vitrina.', category: 'COMPRA' },
+  { term: 'BAF', definition: 'Build-A-Figure: formato donde cada figura de una serie incluye una pieza para ensamblar un personaje adicional de mayor tamaño.', category: 'TÉCNICO' },
+  { term: 'Reissue', definition: 'Reedición oficial: nueva tirada de producción comercializada por el fabricante meses o años tras el lote original.', category: 'COMPRA' },
+  { term: 'Aftermarket', definition: 'Mercado secundario: compraventa entre coleccionistas y tiendas especializadas una vez agotado el stock de distribución primaria.', category: 'COMPRA' },
+  { term: 'Soft Goods', definition: 'Ropa de tela real: prendas, capas y vestimentas confeccionadas en tejido a escala para permitir posado dinámico y realismo.', category: 'MATERIALES' },
+  { term: 'Rooted Hair', definition: 'Pelo enraizado: cabello insertado fibra a fibra en figuras de alta gama 1:6 para máximo realismo frente al pelo esculpido en plástico.', category: 'MATERIALES' },
+  { term: 'AFA / CAS', definition: 'Empresas certificadoras independientes que evalúan estado de pintura, cartón y empaque, asignando un grado numérico en acrílico sellado.', category: 'GRADING' },
+  { term: 'Variant / Repaint', definition: 'Variante de pintura o acabado sobre un mismo molde de producción (metalizado, battle-damaged, trajes alternativos).', category: 'COMPRA' },
+  { term: 'Peg Warmer', definition: 'Figura de baja demanda que permanece colgada durante meses en los ganchos de las tiendas hasta ser liquidada.', category: 'COMPRA' },
+  { term: 'Custom / Kitbash', definition: 'Figura personalizada combinando partes de diferentes figuras, esculturas 3D exclusivas y pintura artística a mano.', category: 'TÉCNICO' }
 ];
 
 const CATEGORY_TABS = [

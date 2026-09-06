@@ -847,7 +847,618 @@ Regla final: compra lo que realmente te gustaría seguir teniendo dentro de cinc
       }
     ],
     related_search_tag: 'figuras'
+  },
+
+  // ─── 20 NUEVAS GUÍAS EDITORIALES DE TENDENCIA ─────────────────────────────────
+  // SECCIÓN 1: PRIMEROS PASOS
+  'el-arte-del-foco-como-elegir-linea-coleccion': {
+    title: 'El Arte del Foco: Cómo Elegir una Sola Línea y Dominarla sin Dispersarse',
+    slug: 'el-arte-del-foco-como-elegir-linea-coleccion',
+    excerpt: 'La dispersión es la enemiga número uno del coleccionista. Descubre cómo definir un foco temático fuerte y dominar una línea con criterio y coherencia visual.',
+    type: 'INICIO',
+    read_time: '6 min de lectura',
+    featured_image: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=1200&q=80',
+    key_takeaways: [
+      'El coleccionismo de impacto se define por lo que decides NO comprar.',
+      'Elegir una franquicia o escala ancla evita repisas caóticas tipo bazar.',
+      'Tener un presupuesto enfocado permite adquirir piezas de gama alta en lugar de decenas de figuras mediocres.'
+    ],
+    sections: [
+      {
+        heading: '1. El Síndrome del Bazar: Por Qué la Dispersión Arruina Colecciones',
+        content: `El impulso inicial de todo coleccionista es acumular todo personaje o franquicia que alguna vez despertó nostalgia: un superhéroe por aquí, un auto a escala por allá, un personaje de anime y una nave espacial. Al cabo de dos años, la habitación no parece una galería curada, sino un bazar desordenado donde ninguna pieza tiene protagonismo real.
+
+El coleccionismo maduro entiende que el impacto estético no proviene del volumen, sino de la coherencia temática y cromática de la exhibición.`,
+        tip: 'Toma una foto de tu repisa actual. Si una persona ajena al hobby no puede deducir la temática en 3 segundos, necesitas aplicar foco.'
+      },
+      {
+        heading: '2. Definiendo tu Franquicia y Escala Ancla',
+        content: `Para dominar una línea, debes seleccionar una escala rectora (por ejemplo, 1:12 para figuras de acción o 1:6 para estatuas/cine) y un universo narrativo claro. Si eliges Batman, decide si tu foco son los cómics clásicos, el universo cinematográfico o una etapa editorial específica. Esta restricción voluntaria filtra el 95% del ruido del mercado.`,
+        warning: 'Mezclar escalas dispares en una misma balda (como 1:12 con 1:10) destruye la proporción anatómica y la ilusión de realismo.'
+      },
+      {
+        heading: '3. El Criterio de la Pieza Central (Grail Focus)',
+        content: `En lugar de comprar cuatro figuras de gama baja al mes, una estrategia enfocada destina ese mismo capital a conseguir el Santo Grial de la línea: esa pieza definitiva con escultura superior, ropa a medida o esculpido premium que eleva todas las figuras a su alrededor.`,
+        tip: 'Menos piezas pero de calidad superior siempre retienen mejor su valor en el mercado secundario.'
+      }
+    ],
+    related_search_tag: 'figuras'
+  },
+  'completismo-vs-curaduria-coleccionismo': {
+    title: 'Completismo vs Curaduría: Por Qué Intentar Tener Todo Arruina el Disfrute',
+    slug: 'completismo-vs-curaduria-coleccionismo',
+    excerpt: 'El síndrome de la wave completa genera fatiga y repisas saturadas. Aprende a aplicar curaduría estética para que cada figura destaque como una obra de arte.',
+    type: 'INICIO',
+    read_time: '5 min de lectura',
+    featured_image: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=1200&q=80',
+    key_takeaways: [
+      'Completar colecciones por obligación genera fatiga financiera y hastío emocional.',
+      'La curaduría convierte una vitrina en una experiencia visual de nivel museo.',
+      'El espacio físico libre (espacio negativo) es tan importante como las figuras exhibidas.'
+    ],
+    sections: [
+      {
+        heading: '1. La Trampa de la Wave Completa',
+        content: `Las compañías fabricantes diseñan olas de productos incluyendo personajes de relleno (los conocidos peg warmers) para obligar a comprar la serie completa y armar una figura extra (BAF). Caer en esta trampa significa gastar dinero en figuras que no te apasionan solo por completar una casilla imaginaria en un checklist.`,
+        warning: 'Si compras una figura solo porque viene con la pierna del BAF, evalúa si es más económico adquirir la pieza suelta en el mercado secundario.'
+      },
+      {
+        heading: '2. El Valor del Espacio Negativo',
+        content: `En museos y galerías de arte, las obras maestras respiran. Cuando apiñas 40 figuras hombro con hombro, ninguna resalta; los ojos del espectador se saturan y la inversión se diluye visualmente. Dejar aire entre las piezas crea dramatismo, sombras naturales y permite apreciar el esculpido.`,
+        tip: 'Aplica la regla de oro: exhibe solo el 60% de tu capacidad de repisa. Rota piezas periódicamente para mantener la frescura de tu colección.'
+      },
+      {
+        heading: '3. Curaduría Emocional: Comprar lo Esencial',
+        content: `Pregúntate antes de cada adquisición: ¿Esta pieza cuenta una historia con el resto de mi vitrina? Si la respuesta es una duda tibia, déjala pasar. La curaduría rigurosa es el único antídoto contra el arrepentimiento del comprador.`
+      }
+    ],
+    related_search_tag: 'coleccionismo'
+  },
+  'presupuesto-real-coleccionista-costos-ocultos': {
+    title: 'Presupuesto Real del Coleccionista: Costo Oculto de Envíos, Aduana y Exhibición',
+    slug: 'presupuesto-real-coleccionista-costos-ocultos',
+    excerpt: 'El precio de la figura es solo la mitad de la historia. Guía financiera para calcular fletes internacionales, franquicias aduaneras, vitrinas y accesorios.',
+    type: 'COMPRA',
+    read_time: '7 min de lectura',
+    featured_image: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=1200&q=80',
+    key_takeaways: [
+      'El precio de etiqueta (MSRP) representa apenas el 50% al 60% del costo total de tener la pieza en mano.',
+      'Fletes volumétricos, impuestos locales y vitrinas deben presupuestarse con antelación.',
+      'Tener un fondo de reserva mensual previene desajustes económicos frente a preventas simultáneas.'
+    ],
+    sections: [
+      {
+        heading: '1. El Desglose Real de Costos de Importación',
+        content: `Al comprar mediante catálogo internacional, entran en juego variables clave: el peso real vs. el peso volumétrico de la caja (cajas de figuras 1:6 con arte collector pesan poco pero ocupan enorme volumen), el costo del flete por kilo o libra, y la tarifa de gestión de courier.`,
+        tip: 'Siempre investiga las dimensiones de la caja exterior (brown shipper) antes de estimar el flete; una caja sobredimensionada puede duplicar el costo del envío.'
+      },
+      {
+        heading: '2. Iluminación y Vitrinas: El Costo Invisible de Exhibir',
+        content: `Una estatua de USD 500 apoyada en una mesa sin protección se deteriora rápidamente con polvo y rayos solares. Una vitrina hermética de cristal templado, tiras LED de luz fría (que no emiten radiación UV ni calor que degrade el PVC) y bases acrílicas representan entre el 20% y 30% del presupuesto de un coleccionista responsable.`,
+        warning: 'Nunca uses luces halógenas o tiras LED cálidas de baja calidad cerca de figuras; el calor constante deforma extremidades finas y reblandece el plástico.'
+      },
+      {
+        heading: '3. Estrategia de Asignación Presupuestaria',
+        content: `La regla financiera recomendada para el hobby es el método 60/25/15: 60% para compras directas de figuras, 25% para logística, aranceles y envíos, y 15% para infraestructura de conservación (vitrinas, displays, selladores).`
+      }
+    ],
+    related_search_tag: 'figuras'
+  },
+  'sindrome-caja-cerrada-open-box-vs-sellado': {
+    title: 'El Síndrome de la Caja Cerrada: Debate Definitivo entre Open-Box y Conservación Sellada',
+    slug: 'sindrome-caja-cerrada-open-box-vs-sellado',
+    excerpt: '¿Disfrutar en vitrina o especular con precintos de fábrica? Análisis imparcial sobre valor de reventa, degradación del plástico en caja y disfrute personal.',
+    type: 'INICIO',
+    read_time: '6 min de lectura',
+    featured_image: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=1200&q=80',
+    key_takeaways: [
+      'Las figuras modernas en empaque hermético sufren exudación de plastificantes si jamás se abren.',
+      'El empaque MISB preserva el valor de reventa solo si el cartón se mantiene intacto sin aplastamientos.',
+      'El open-box cuidadoso permite disfrutar de la articulación sin perder más del 10% al 15% del valor si conservas blíster y caja perfecta.'
+    ],
+    sections: [
+      {
+        heading: '1. La Degradación Química: El Fenómeno del Plástico Pegajoso',
+        content: `Muchos coleccionistas creen que guardar una figura sellada dentro de su caja de cartón la mantiene eternamente impecable. Químicamente ocurre lo contrario: los plastificantes (ftalatos) que mantienen flexible el PVC se evaporan con los años. Si la figura está sellada sin circulación de aire, esos gases se condensan en la superficie, dejando la figura grasosa, brillante y pegajosa.`,
+        warning: 'Si mantienes figuras MISB por años en climas húmedos o cálidos, los plastificantes atrapados pueden arruinar de forma irreversible la pintura y las capas transparentes.'
+      },
+      {
+        heading: '2. El Valor de Mercado: ¿Realmente se Pierde Tanto al Abrir?',
+        content: `En líneas contemporáneas para coleccionistas adultos (como MAFEX, S.H.Figuarts, Hot Toys o Mezco), las cajas vienen diseñadas tipo caja de ventana o clamshell reutilizable. Abrir la figura con bisturí por las pestañas inferiores sin rasgar el cartón y conservarla en vitrina protegida mantiene intacto entre el 85% y 90% de su cotización de reventa.`,
+        tip: 'Abre siempre los sellos circulares cortándolos suavemente con una cuchilla fina en lugar de tirar de la cinta adhesiva, para no desgarrar el arte de la caja.'
+      },
+      {
+        heading: '3. El Propósito del Hobby: Coleccionar vs Almacenar Cajas',
+        content: `Una colección apilada en cajas marrones en un placard es un inventario, no una colección. Salvo casos muy específicos de tarjetas vintage clásicas, el mayor dividendo del coleccionismo es el disfrute visual diario de ver a tus personajes favoritos posados con maestría.`
+      }
+    ],
+    related_search_tag: 'coleccionismo'
+  },
+  // SECCIÓN 2: ESCALAS & TAMAÑOS
+  'batalla-escala-1-12-import-japones-vs-retail-americano': {
+    title: 'Batalla en Escala 1:12: Diferencias Reales entre Import Japonés y Retail Americano',
+    slug: 'batalla-escala-1-12-import-japones-vs-retail-americano',
+    excerpt: 'MAFEX y S.H.Figuarts frente a Marvel Legends y DC Multiverse: comparativa milimétrica de articulación, accesorios, escala real y relación calidad-precio.',
+    type: 'GUÍA',
+    read_time: '8 min de lectura',
+    featured_image: 'https://images.unsplash.com/photo-1563089145-599997674d42?w=1200&q=80',
+    key_takeaways: [
+      'Las figuras importadas destacan por ingeniería de doble articulación, manos intercambiables y pintura matizada.',
+      'El retail americano ofrece figuras robustas, económicas y de alta durabilidad para manipulación constante.',
+      'La escala nominal de 6 pulgadas varía: los imports suelen rondar los 15-15.5 cm mientras que las marcas americanas rozan los 16.5-17 cm.'
+    ],
+    sections: [
+      {
+        heading: '1. Ingeniería Articular: Rótulas Complejas vs Pines Clásicos',
+        content: `Las marcas de importación utilizan articulaciones esféricas compuestas, hombros con bisagra tipo mariposa oculta y torsos multi-segmentados que permiten poses hiper-dinámicas idénticas a viñetas de manga o cómic. En contraste, el retail masivo tradicionalmente usaba articulaciones con clavijas visibles (pins), aunque recientemente ha migrado a sistemas pinless más limpios pero con menor rango en caderas y cuello.`,
+        tip: 'Si buscas recrear poses acrobáticas en el aire (como Spider-Man colgando de una telaraña), un import de alta gama ofrece el rango angular exacto que una figura masiva no puede alcanzar.'
+      },
+      {
+        heading: '2. Accesorios y Presentación',
+        content: `Un import típico de USD 80 a 100 incluye 4 a 6 pares de manos, 3 rostros expresivos alternativos, accesorios con pintura detallada y stand articulado transparente. El retail americano suele limitar los extras a un arma básica o una pieza BAF, manteniendo el precio en una franja de USD 25 a 35.`,
+        warning: 'Las articulaciones de las figuras de importación son micro-ingeniería delicada; forzarlas en frío sin calentar puede quebrar los pernos con facilidad.'
+      },
+      {
+        heading: '3. Veredicto de Compatibilidad',
+        content: `No intentes posar a un Batman de importación junto a un Superman de retail americano sin escalonar la profundidad de la vitrina: la diferencia de volumen corporal y altura romperá la armonía visual de la escena.`
+      }
+    ],
+    related_search_tag: 'figuras'
+  },
+  'frontera-18-cm-escala-1-10-mcfarlane-neca': {
+    title: 'La Frontera de los 18 cm: Por Qué la Escala 1:10 de McFarlane y NECA No Encaja con Todo',
+    slug: 'frontera-18-cm-escala-1-10-mcfarlane-neca',
+    excerpt: 'Las 7 pulgadas tienen una presencia imponente pero generan pesadillas de escala al mezclarse. Cómo armar repisas armoniosas con escala 1:10.',
+    type: 'GUÍA',
+    read_time: '6 min de lectura',
+    featured_image: 'https://images.unsplash.com/photo-1608889476518-738c9b1dcb40?w=1200&q=80',
+    key_takeaways: [
+      'Las 7 pulgadas (18 cm) llenan estantes grandes con excelente relación tamaño-precio.',
+      'No son compatibles anatómicamente con la escala 1:12 estándar de 15 cm.',
+      'NECA domina el cine de terror y clásicos de acción; McFarlane reina en los superhéroes de cómic.'
+    ],
+    sections: [
+      {
+        heading: '1. El Encanto de las 7 Pulgadas',
+        content: `La escala 1:10 se consolidó como la favorita de quienes desean una presencia imponente en repisa sin pagar el elevado precio ni ocupar el espacio masivo de una estatua 1:6. Por su tamaño, permite esculpir texturas de piel, cuero, tela rasgada y armaduras con un nivel de microdetalle que en 1:12 suele quedar empastado.`,
+        tip: 'Las figuras 1:10 de NECA (Alien, Predator, Robocop) lucen espectaculares en dioramas temáticos individuales con iluminación focal.'
+      },
+      {
+        heading: '2. El Problema de Escala Cruzada',
+        content: `Un personaje estándar en 1:10 mide entre 18 y 19 cm. Si colocas un Batman de 7 pulgadas al lado de un Iron Man de 6 pulgadas, Batman parecerá un gigante de dos metros y medio de altura. Intentar crear un crossover visual en el mismo estante suele verse poco profesional.`,
+        warning: 'Reserva baldas enteras exclusivamente para figuras de 7 pulgadas para evitar el contraste de escala antinatural.'
+      },
+      {
+        heading: '3. Rigidez Articular y Posa Escultórica',
+        content: `Tanto NECA como McFarlane priorizan la escultura por sobre la hiper-movilidad. Sus figuras están diseñadas para posas icónicas de museo más que para acrobacias extremas. Manejarlas con esa expectativa garantiza total satisfacción.`
+      }
+    ],
+    related_search_tag: 'figuras'
+  },
+  'el-salto-a-escala-1-6-requisitos-espacio-vitrinas': {
+    title: 'El Salto a 1:6: Requisitos de Espacio, Peso y Soporte Antes de Comprar tu Primera Pieza',
+    slug: 'el-salto-a-escala-1-6-requisitos-espacio-vitrinas',
+    excerpt: 'Una figura de 30 cm con metal diecast y base dinámica no entra en cualquier estante. Lo que debes preparar en tu habitación antes de recibir tu primer Hot Toys o InArt.',
+    type: 'GUÍA',
+    read_time: '7 min de lectura',
+    featured_image: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=1200&q=80',
+    key_takeaways: [
+      'Las figuras sixth scale requieren estanterías de al menos 38 a 40 cm de altura libre por nivel.',
+      'Las figuras Diecast (con aleación metálica) pesan entre 1.5 y 2.5 kg y exigen repisas reforzadas.',
+      'La luz solar directa y la humedad no controlada deterioran trajes de cuerina y telas sintéticas rápidamente.'
+    ],
+    sections: [
+      {
+        heading: '1. Dimensiones Reales: Más Allá de los 30 cm',
+        content: `Aunque la figura de pie mide 30 cm, al montarla en su base de exhibición dinámica, con capa ondeando o portando armas largas, el espacio vertical necesario supera frecuentemente los 38 cm y 30 cm de fondo. Estanterías populares de melamina económica suelen tener espacios fijos de 28 cm que impiden colocar la pieza sin arquearla.`,
+        tip: 'Verifica la altura interna útil de tu vitrina antes de presionar el botón de compra; considera vitrinas modulares con baldas ajustables.'
+      },
+      {
+        heading: '2. Peso y Resistencia del Cristal',
+        content: `Las piezas de alta gama que incorporan armaduras de aleación de zinc (Diecast) o bases con diorama de resina ejercen una presión puntual elevada. Colocar 4 o 5 figuras Diecast sobre un mismo vidrio de 4 mm sin soportes intermedios puede provocar fatiga de material y roturas catastróficas.`,
+        warning: 'Usa estantes de cristal templado de al menos 6 mm de grosor o baldas de madera maciza para exhibir grupos de figuras 1:6.'
+      },
+      {
+        heading: '3. Entorno de Conservación Obligatorio',
+        content: `Los trajes a medida y esculturas de cabeza pintadas a mano de 1:6 exigen una vitrina cerrada con burletes anti-polvo. Limpiar el polvo acumulado en telas delicadas con plumeros abrasivos desgasta la textura original.`
+      }
+    ],
+    related_search_tag: 'estatuas'
+  },
+  'micro-escalas-miniaturas-figuras-1-18-y-1-24': {
+    title: 'Micro-Escalas y Miniaturas: Guía para Integrar Figuras 1:18 y 1:24 en tu Repisa',
+    slug: 'micro-escalas-miniaturas-figuras-1-18-y-1-24',
+    excerpt: 'De Star Wars Vintage Collection a JoyToy Warhammer 40K: el renacimiento de las 3.75 pulgadas y cómo construir dioramas masivos en espacios reducidos.',
+    type: 'GUÍA',
+    read_time: '5 min de lectura',
+    featured_image: 'https://images.unsplash.com/photo-1618336753974-aae8e04506aa?w=1200&q=80',
+    key_takeaways: [
+      'La escala 1:18 (3.75 pulgadas / 10 cm) permite construir vehículos a escala y bases enteras sin ocupar una habitación.',
+      'Marcas contemporáneas como JoyToy han llevado la articulación y micro-pintura de 1:18 al nivel de figuras de 6 pulgadas.',
+      'Ideal para coleccionistas con limitaciones severas de espacio habitacional.'
+    ],
+    sections: [
+      {
+        heading: '1. El Renacimiento de las 3.75 Pulgadas',
+        content: `Históricamente dominada por figuras clásicas de Star Wars y G.I. Joe con articulación básica de 5 puntos, la micro-escala ha experimentado una revolución técnica. Hoy en día, fabricantes como JoyToy y Hiya Toys fabrican figuras de 10 cm con 25 puntos de articulación, manos intercambiables y pintura con efecto de desgaste militar.`,
+        tip: 'La escala 1:18 es perfecta para crear dioramas de hangares de combate o trincheras con múltiples soldados sin requerir muebles especiales.'
+      },
+      {
+        heading: '2. Vehículos a Escala Realista',
+        content: `El mayor superpoder de la escala 1:18 es la compatibilidad con vehículos. Un caza espacial o un tanque blindado en escala 1:12 mediría más de un metro y pesaría diez kilos; en 1:18 entra perfectamente en la parte superior de un mueble estándar manteniendo proporciones idénticas a las películas.`,
+        warning: 'Debido a la pequeñez de los pines en 1:18, nunca fuerces las articulaciones de codos o muñecas con palanca lateral brusca.'
+      },
+      {
+        heading: '3. Optimización de Espacio',
+        content: `En el espacio que ocupa una sola figura 1:6, puedes exhibir un escuadrón completo de 12 tropas 1:18 con sus armamentos y barricadas. Si vives en apartamento, esta escala es la aliada número uno de tu colección.`
+      }
+    ],
+    related_search_tag: 'figuras'
+  },
+  // SECCIÓN 3: AUTENTICIDAD & FABRICANTES
+  'mercado-cabezas-custom-escultura-3d-pintura': {
+    title: 'El Mercado de las Cabezas Custom: Escultura 3D, Pintura a Mano y Licencias no Oficiales',
+    slug: 'mercado-cabezas-custom-escultura-3d-pintura',
+    excerpt: 'El auge del aftermarket artístico: escultores digitales, pintores independientes en Patreon e Instagram, y cómo elevar una figura comercial a nivel de museo.',
+    type: 'AUTENTICIDAD',
+    read_time: '7 min de lectura',
+    featured_image: 'https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=1200&q=80',
+    key_takeaways: [
+      'Las cabezas custom reemplazan esculpidos masivos de fábrica por retratos fotorrealistas únicos.',
+      'La combinación de resina fotosensible 8K e impresión 3D ha democratizado el coleccionismo hiper-personalizado.',
+      'Saber verificar la reputación del artista y el tipo de anclaje (neck peg) evita incompatibilidades mecánicas.'
+    ],
+    sections: [
+      {
+        heading: '1. La Revolución del Headsculpt Independiente',
+        content: `Muchas veces una figura comercial posee un cuerpo excelente y ropa bien confeccionada, pero el rostro de producción masiva carece de parecido con el actor o luce inexpresivo por limitaciones de fábrica. Aquí entra el mercado custom: artistas independientes esculpen digitalmente retratos ultra-precisos, los imprimen en resina de alta resolución y los pintan a mano capa por capa.`,
+        tip: 'Seguir a pintores profesionales de miniaturas en redes permite acceder a tandas limitadas de cabezas pintadas de altísimo valor coleccionable.'
+      },
+      {
+        heading: '2. Clavijas y Adaptación (Pegs)',
+        content: `Cada marca (Hasbro, MAFEX, Mezco, Hot Toys) utiliza clavijas de cuello con diámetros milimétricamente distintos. Al encargar una cabeza custom, consulta si incluye adaptador interno de silicona o si requerirá masilla adhesiva tipo Blu-Tack para ajustarse al cuello de tu figura.`,
+        warning: 'Las resinas 3D convencionales son más quebradizas que el PVC comercial; si la cabeza cae al suelo sobre una superficie dura, la nariz o el cabello fino pueden astillarse fácilmente.'
+      },
+      {
+        heading: '3. El Valor Residual de una Figura Personalizada',
+        content: `Una figura masiva mejorada con una cabeza custom firmada por un artista reconocido a menudo duplica su cotización entre la comunidad de coleccionistas avanzados.`
+      }
+    ],
+    related_search_tag: 'coleccionismo'
+  },
+  'lineas-entrada-vs-alta-gama-fabricantes-coleccionismo': {
+    title: 'Líneas de Entrada vs Alta Gama: Bandai Spirits, Good Smile Company y Medicom Explicadas',
+    slug: 'lineas-entrada-vs-alta-gama-fabricantes-coleccionismo',
+    excerpt: 'Ichibansho vs Figuarts ZERO, Pop Up Parade vs Scale Figures y MAFEX vs Figma: guía de jerarquías para saber exactamente por qué estás pagando.',
+    type: 'AUTENTICIDAD',
+    read_time: '8 min de lectura',
+    featured_image: 'https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?w=1200&q=80',
+    key_takeaways: [
+      'Las figuras de entrada (premios/prize) usan PVC moldeado en color con sombreados mínimos para mantener precios accesibles.',
+      'Las líneas de escala (scale figures) y alta articulación utilizan pintura multicapa aerográfica y materiales de resina/ABS prémium.',
+      'Conocer la jerarquía interna de cada fabricante previene pagar sobreprecios por figuras de gama base.'
+    ],
+    sections: [
+      {
+        heading: '1. Bandai: De Banpresto Premio a S.H.Figuarts e Ichibansho',
+        content: `Bandai Spirits opera múltiples divisiones. Banpresto produce estatuas prize pensadas originalmente para máquinas recreativas y retail accesible; son piezas atractivas pero con costuras de molde visibles y plástico mate sin pintar. En el escalón medio-alto se ubican las Ichibansho (lanzamientos de mayor escala y mejor empaque) y las S.H.Figuarts, que representan su estándar dorado de figuras de acción articuladas.`,
+        tip: 'Si buscas fidelidad anatómica y efectos de poder traslúcidos espectaculares, la serie Figuarts ZERO ofrece la mejor relación precio-calidad en estatuas estáticas de anime.'
+      },
+      {
+        heading: '2. Good Smile: Pop Up Parade vs Escalas 1:7 y Figma',
+        content: `Good Smile Company revolucionó el mercado con Pop Up Parade: estatuas de USD 35 a 45 con poses estandarizadas y calidad consistente. Sin embargo, no deben confundirse con sus estatuas a escala oficial (1:7 o 1:8), cuyos acabados nacarados, bases complejas y esculpido de cabello transparente justifican cotizaciones superiores a USD 180.`,
+        warning: 'No esperes encontrar articulaciones en líneas como Pop Up Parade o Ichibansho; son figuras completamente estáticas orientadas a posa fija.'
+      },
+      {
+        heading: '3. Medicom Toy y MAFEX: El Éxito de la Acción Coleccionable',
+        content: `Medicom se enfoca en coleccionistas exigentes mediante su línea MAFEX. Con capas de tela con alambre perimetral maleable, articulaciones ultra-suaves y licencias icónicas de cómics y cine, se posiciona en el segmento más alto de la escala 1:12.`
+      }
+    ],
+    related_search_tag: 'figuras'
+  },
+  'guerra-titanes-1-6-hot-toys-vs-inart-ingenieria': {
+    title: 'Guerra de Titanes 1:6: Ingeniería de Hot Toys frente a la Silicona y Pelo Enraizado de InArt',
+    slug: 'guerra-titanes-1-6-hot-toys-vs-inart-ingenieria',
+    excerpt: 'La revolución del hiperrealismo: articulaciones magnéticas, trajes a medida y ojos móviles independientes. El cambio de paradigma en el coleccionismo cinematográfico.',
+    type: 'AUTENTICIDAD',
+    read_time: '9 min de lectura',
+    featured_image: 'https://images.unsplash.com/photo-1620428268482-cf1851a36764?w=1200&q=80',
+    key_takeaways: [
+      'Hot Toys ostenta el catálogo más extenso y robustez comprobada en piezas Diecast y licencias cinematográficas.',
+      'InArt (Queen Studios) ha elevado el estándar con cabello enraizado de lana de oveja, ojos móviles magnéticos y piel de silicona médica.',
+      'La competencia directa ha forzado a toda la industria 1:6 a mejorar sus técnicas de realismo y esculpido.'
+    ],
+    sections: [
+      {
+        heading: '1. El Dominio Histórico de Hot Toys',
+        content: `Durante más de dos décadas, la firma de Hong Kong ha sido el sinónimo indiscutido de figuras coleccionables de 12 pulgadas. Su catálogo de Marvel, Star Wars y DC definió el mercado, introduciendo armaduras con piezas metálicas Diecast, sistemas de iluminación LED y trajes con patronaje de alta costura a escala reducida.`,
+        tip: 'Las figuras Diecast de Hot Toys mantienen un valor de reventa sobresaliente debido a la durabilidad de sus estructuras internas metálicas.'
+      },
+      {
+        heading: '2. La Irrupción de InArt y la Búsqueda del Hiperrealismo',
+        content: `InArt entró al mercado apostando por técnicas propias de la escultura de museo: cabello enraizado manualmente con fibras naturales (mohair), ojos con iris de cristal y movimiento independiente regulable mediante joystick magnético trasero, e imanes en las suelas del calzado para eliminar las antiestéticas pinzas de cintura en los stands.`,
+        warning: 'Las figuras con cabello enraizado requieren mantenimiento con cera de peinado y tijeras de precisión; no son piezas para manipulación lúdica continua.'
+      },
+      {
+        heading: '3. Cómo Elegir entre Ambas Marcas',
+        content: `Si valoras la solidez, la variedad de personajes secundarios y la tranquilidad de una marca consagrada, Hot Toys es la elección segura. Si buscas una pieza de conversación definitiva que parezca literalmente una persona viva en miniatura, InArt marca la vanguardia artística.`
+      }
+    ],
+    related_search_tag: 'estatuas'
+  },
+  'resinas-estudio-licencia-oficial-vs-garages-custom': {
+    title: 'El Universo de las Resinas de Estudio: Licencia Oficial frente a Garages No Autorizados',
+    slug: 'resinas-estudio-licencia-oficial-vs-garages-custom',
+    excerpt: 'Prime 1 Studio, Tsume y XM Studios frente a los estudios independientes sin licencia. Pros, contras de valor, seguridad en envíos y calidad de fundición.',
+    type: 'AUTENTICIDAD',
+    read_time: '7 min de lectura',
+    featured_image: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=1200&q=80',
+    key_takeaways: [
+      'Las estatuas con licencia oficial ofrecen certificados de autenticidad, control de calidad regulado y garantía contra roturas de fábrica.',
+      'Los estudios no oficiales (custom garages) exploran conceptos arriesgados que los titulares de derechos no autorizan, pero carecen de respaldo legal.',
+      'El envío internacional de resinas polystone exige cajas de poliestireno de alta densidad debido a la fragilidad inherente del material.'
+    ],
+    sections: [
+      {
+        heading: '1. La Garantía de la Licencia Oficial',
+        content: `Compañías como Prime 1 Studio, Sideshow Collectibles, Tsume Art y XM Studios trabajan bajo supervisión directa de estudios cinematográficos y editoriales. Cada rostro y proporción debe ser aprobada antes de la producción en masa. Además, vienen acompañadas de placas metálicas numeradas y embalajes diseñados para resistir caídas severas durante el flete marítimo.`,
+        tip: 'Las resinas oficiales siempre conservan mayor liquidez en subastas y grupos internacionales de coleccionismo debido a la trazabilidad de su certificado.'
+      },
+      {
+        heading: '2. El Atractivo de los Garages No Oficiales',
+        content: `Muchos talleres independientes producen piezas espectaculares de anime o cómics que las marcas tradicionales no fabrican por restricciones de licencia. Ofrecen estéticas alternativas o momentos cumbre de batallas sangrientas. No obstante, existe el riesgo de que el taller cierre antes de entregar preventas o que la calidad de pintura final difiera fuertemente del prototipo 3D digital.`,
+        warning: 'Si una resina no oficial llega rota en el correo, la posibilidad de recibir piezas de reemplazo es prácticamente nula, requiriendo restauraciones manuales con cianoacrilato.'
+      },
+      {
+        heading: '3. El Material Polystone: Rigidez y Fragilidad',
+        content: `Tanto en resinas oficiales como custom, el material no es plástico PVC flexible, sino resina de poliéster mezclada con polvo mineral (polystone), fría al tacto y muy pesada. Un golpe leve puede quebrar dedos finos o espadas en mil pedazos.`
+      }
+    ],
+    related_search_tag: 'estatuas'
+  },
+  // SECCIÓN 4: MATERIALES, MANTENIMIENTO & POSA
+  'articulaciones-rigidas-clavijas-quebradas-tecnicas-calor': {
+    title: 'Articulaciones Rígidas y Clavijas Quebradas: Técnicas Seguras con Calor para No Romper Figuras',
+    slug: 'articulaciones-rigidas-clavijas-quebradas-tecnicas-calor',
+    excerpt: 'El método del baño de agua caliente a 60°C y el secador de pelo. Cómo aflojar articulaciones duras de fábrica sin blanquear ni quebrar las clavijas de plástico.',
+    type: 'CUIDADO',
+    read_time: '6 min de lectura',
+    featured_image: 'https://images.unsplash.com/photo-1545558014-8692077e9b5c?w=1200&q=80',
+    key_takeaways: [
+      'Jamás fuerces una articulación rígida en frío; el 90% de las clavijas rotas ocurren en los primeros 10 minutos de unboxing.',
+      'El calor reblandece temporalmente el plástico exterior (PVC) permitiendo liberar la rótula interna (POM/ABS) sin esfuerzo.',
+      'El agua tibia controlada a 60°C es el método más uniforme y seguro para no quemar la pintura.'
+    ],
+    sections: [
+      {
+        heading: '1. Por Qué Vienen Rígidas de Fábrica',
+        content: `Durante el ensamblaje en fábrica y el enfriamiento tras el moldeo, los excesos de barniz transparente o las tolerancias mecánicas mínimas pueden hacer que el plástico se adhiera entre sí. Si aplicas fuerza bruta en frío, el plástico rígido genera marcas de estrés blanco y la clavija de la muñeca o el tobillo se cercena limpiamente.`,
+        warning: 'Nunca hagas palanca con pinzas metálicas sobre una articulación trabada sin haber aplicado calor previo.'
+      },
+      {
+        heading: '2. El Método del Baño de Agua a 60°C',
+        content: `Sumerge la extremidad bloqueada en un vaso con agua caliente (no hirviendo; unos 60°C, similar a la temperatura de una infusión de té) durante 40 a 60 segundos. El PVC absorberá el calor, se volverá gomoso y flexible, y podrás mover suavemente la rótula en su eje natural. Una vez enfriado a temperatura ambiente, el plástico recupera su dureza original.`,
+        tip: 'Si la figura tiene ropa de tela o partes electrónicas que no pueden mojarse, utiliza un secador de pelo a potencia media a 15 cm de distancia moviéndolo en círculos constantes.'
+      },
+      {
+        heading: '3. Lubricación Preventiva con Silicona',
+        content: `Una vez liberada la articulación, una microgota de lubricante 100% de silicona pura aplicada con la punta de un escarbadientes garantizará un giro suave y evitará que vuelva a pegarse en el futuro.`
+      }
+    ],
+    related_search_tag: 'figuras'
+  },
+  'articulaciones-flojas-devolver-firmeza-rotulas-sin-pegamento': {
+    title: 'Articulaciones Flojas y Desgaste: Cómo Devolverle Firmeza a Rótulas y Ball-Joints sin Pegamento',
+    slug: 'articulaciones-flojas-devolver-firmeza-rotulas-sin-pegamento',
+    excerpt: 'El uso correcto de polímeros acrílicos al agua (Kiki Loose Joints, barniz acrílico brillante) para engrosar rótulas gastadas sin soldar la articulación.',
+    type: 'CUIDADO',
+    read_time: '5 min de lectura',
+    featured_image: 'https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=1200&q=80',
+    key_takeaways: [
+      'El cianoacrilato (pegamento instantáneo) es peligroso porque puede soldar permanentemente la rótula o emanar vapores blancos que arruinen la pintura.',
+      'Los polímeros acrílicos base agua aumentan la fricción de forma segura y reversible.',
+      'Con paciencia y capas finas se puede restaurar una figura inestable para que vuelva a sostenerse de pie sin caer.'
+    ],
+    sections: [
+      {
+        heading: '1. El Peligro del Pegamento Instantáneo',
+        content: `El error más habitual entre coleccionistas novatos es aplicar pegamento instantáneo sobre una articulación floja esperando moverla rápidamente antes de que cure. El cianoacrilato emite vapores que generan manchas blancas opacas indelebles (frosting) en el plástico y, si te demoras un segundo, la articulación quedará petrificada para siempre.`,
+        warning: 'Jamás apliques pegamentos instantáneos directamente en cavidades articulares cerradas.'
+      },
+      {
+        heading: '2. La Técnica del Barniz Acrílico al Agua',
+        content: `El método profesional consiste en utilizar un barniz acrílico poliuretánico al agua o formulaciones especializadas como Kiki Loose Joints. Se aplica una gota con un pincel fino directamente en la holgura del ball-joint y se flexiona la articulación suavemente durante dos minutos.`,
+        tip: 'El polímero acrílico crea una micro-película transparente y gomosa que rellena las décimas de milímetro gastadas, devolviendo la fricción perfecta sin riesgo alguno.'
+      },
+      {
+        heading: '3. Reparación de Pines con Cinta de Teflón',
+        content: `Para figuras donde la articulación se puede desmontar fácilmente (como muñecas o codos de figuras modulares), envolver la clavija con dos vueltas de cinta de teflón de plomería engrosa el perno de forma 100% limpia, seca y reversible.`
+      }
+    ],
+    related_search_tag: 'figuras'
+  },
+  'centro-gravedad-balance-posa-dinamica-sin-stands': {
+    title: 'Centro de Gravedad y Balance: Principios de Posa Dinámica sin Depender de Stands Visibles',
+    slug: 'centro-gravedad-balance-posa-dinamica-sin-stands',
+    excerpt: 'Línea de acción, distribución del peso en tobillos y rotación de cadera. Cómo lograr que tus figuras de acción luzcan vivas y cinematográficas en la vitrina.',
+    type: 'CUIDADO',
+    read_time: '7 min de lectura',
+    featured_image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1200&q=80',
+    key_takeaways: [
+      'Una figura rígida y recta parece un juguete barato; una postura asimétrica con rotación de torso le da peso y presencia humana.',
+      'El secreto del equilibrio reside en la articulación de basculación del tobillo (ankle rocker).',
+      'Distribuir el centro de masa sobre la pierna de apoyo permite posas complejas sin soportes plásticos invasivos.'
+    ],
+    sections: [
+      {
+        heading: '1. La Línea de Acción y el Contrapposto',
+        content: `Los escultores clásicos griegos inventaron el contrapposto: inclinar la cadera en una dirección y los hombros en la opuesta. En tus figuras, nunca dejes los pies alineados paralelos al frente ni los brazos cayendo como estacas. Desplaza el peso hacia una de las piernas, gira levemente la cabeza y torsiona el pecho hacia la línea visual del personaje.`,
+        tip: 'Imita tú mismo la pose frente a un espejo durante 5 segundos para sentir dónde recae la gravedad natural del cuerpo antes de posar la figura.'
+      },
+      {
+        heading: '2. El Dominio del Ankle Rocker',
+        content: `Para que una figura se sostenga sin caer hacia adelante o hacia atrás, ambas suelas del calzado deben hacer contacto plano y total con la superficie de la repisa. Ajusta primero la inclinación lateral del tobillo: si la suela queda levantada por el borde exterior, la figura resbalará indefectiblemente.`,
+        warning: 'Una figura mal balanceada en la repisa superior de una vitrina puede caer derribando en efecto dominó decenas de piezas valiosas.'
+      },
+      {
+        heading: '3. El Truco del Museo: Museum Putty',
+        content: `Si deseas exhibir a tus figuras en poses dinámicas al borde de la repisa sin usar brazos de plástico transparentes que arruinen la vista limpia, coloca una pequeña bolita de masilla de museo (Museum Wax o Blu-Tack neutro) bajo la suela del pie de apoyo. Mantiene la figura fijada contra vibraciones cotidianas sin manchar el plástico.`
+      }
+    ],
+    related_search_tag: 'figuras'
+  },
+  'cuidado-ropa-tela-cuerina-pleather-evitar-cuarteado': {
+    title: 'Ropa de Tela y Cuerina (Pleather): Cómo Evitar el Cuarteado y Descascarillado con los Años',
+    slug: 'cuidado-ropa-tela-cuerina-pleather-evitar-cuarteado',
+    excerpt: 'La hidrólisis en chaquetas de cuerina y trajes de vinilo es la peor pesadilla en escala 1:6. Productos hidratantes (303 Aerospace Protectant) y humedad ideal.',
+    type: 'MATERIALES',
+    read_time: '6 min de lectura',
+    featured_image: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=1200&q=80',
+    key_takeaways: [
+      'La cuerina sintética (poliuretano sobre tela) se desintegra por hidrólisis ante excesos o carencias extremas de humedad ambiental.',
+      'Mantener figuras en posturas con codos o rodillas flexionadas al 100% agrieta la capa exterior del traje con el tiempo.',
+      'Tratamientos periódicos con protectores UV y acondicionadores sin petróleo prolongan la vida útil del material por décadas.'
+    ],
+    sections: [
+      {
+        heading: '1. Qué es la Hidrólisis y Por Qué Ocurre',
+        content: `La mayoría de los trajes oscuros de superhéroes y chaquetas en escala 1:6 están confeccionados con polipiel o cuerina (pleather). Con el paso de los años, las moléculas de agua del aire reaccionan con la capa de poliuretano, provocando que se vuelva quebradiza, se descascara y se desprenda en diminutas escamas negras.`,
+        warning: 'Nunca guardes figuras con trajes de vinilo o cuerina en bolsas de plástico herméticas: la humedad condensada acelera drásticamente la degradación del material.'
+      },
+      {
+        heading: '2. Tratamiento Preventivo con Protectores Especializados',
+        content: `El estándar de oro utilizado por museos y coleccionistas avanzados es aplicar un protector de polímeros sintéticos (como 303 Aerospace Protectant) con un hisopo de algodón una vez al año. Este producto no contiene aceites de petróleo dañinos, no deja residuo pegajoso y crea una barrera contra la oxidación y la radiación ultravioleta.`,
+        tip: 'Aplica el producto frotando muy suavemente con la yema del dedo cubierta con un guante de nitrilo, retirando cualquier exceso con un paño de microfibra limpio.'
+      },
+      {
+        heading: '3. La Regla de la Posa Neutra para Almacenamiento Prolongado',
+        content: `Si vas a dejar una figura en vitrina durante meses sin moverla, evita poses extremas donde la tela de las articulaciones quede estirada a máxima tensión. Regrésala a una pose de museo relajada para no fatigar las fibras elásticas del traje.`
+      }
+    ],
+    related_search_tag: 'estatuas'
+  },
+  // SECCIÓN 5: GLOSARIO, COMPRA & LOGÍSTICA
+  'fomo-aftermarket-reventa-vs-esperar-reissue': {
+    title: 'El Fenómeno FOMO y el Aftermarket: Cuándo Pagar Precio de Reventa y Cuándo Esperar un Reissue',
+    slug: 'fomo-aftermarket-reventa-vs-esperar-reissue',
+    excerpt: 'Psicología del mercado coleccionista: análisis de patrones de reedición de Bandai, MAFEX y Hot Toys para no caer en precios inflados por la histeria.',
+    type: 'COMPRA',
+    read_time: '7 min de lectura',
+    featured_image: 'https://images.unsplash.com/photo-1614094082869-cd4e4b2905c7?w=1200&q=80',
+    key_takeaways: [
+      'El FOMO (miedo a quedarse afuera) es el motor principal que infla los precios del mercado secundario inmediatamente después de un sold out.',
+      'El 80% de las figuras populares de marcas líderes reciben reediciones (reissues) o versiones actualizadas en un plazo de 18 a 36 meses.',
+      'Pagar sobreprecios de más del 50% rara vez es rentable a largo plazo en figuras de producción masiva moderna.'
+    ],
+    sections: [
+      {
+        heading: '1. La Curva de Histeria Post-Lanzamiento',
+        content: `Cuando una figura muy esperada se agota en su primera semana de lanzamiento internacional, el aftermarket en grupos y subastas experimenta un pico artificial de euforia. Los revendedores especulan aprovechando la ansiedad de quienes no hicieron pre-orden. Por lo general, este precio pico cae entre un 20% y 30% a los tres meses, cuando la demanda inmediata se estabiliza.`,
+        tip: 'Si te perdiste el lanzamiento oficial, espera al menos 90 días antes de buscarla en el mercado secundario; la euforia inicial habrá disminuido.'
+      },
+      {
+        heading: '2. Ciclos de Reedición de las Grandes Marcas',
+        content: `Fabricantes líderes siguen una política comercial predecible: cualquier molde de personaje de alta demanda es reeditado periódicamente con mejoras leves de empaque o pintura. Pagar el triple por la primera edición original suele ser una pérdida financiera segura cuando se anuncia el reissue.`,
+        warning: 'Diferencia las figuras conmemorativas de eventos exclusivos de las de catálogo regular: las exclusivas de evento casi nunca se reeditan de forma idéntica.'
+      },
+      {
+        heading: '3. Cuándo Sí Vale la Pena Pagar Aftermarket',
+        content: `Solo se justifica pagar sobreprecio cuando la licencia ha expirado legalmente (por ejemplo, el fabricante perdió los derechos de la franquicia), cuando la empresa original quebró, o cuando se trata de una tirada limitada numerada de una resina de autor.`
+      }
+    ],
+    related_search_tag: 'coleccionismo'
+  },
+  'grading-figuras-accion-afa-cas-certificacion': {
+    title: 'Grading en Figuras de Acción: Qué Hacen AFA y CAS y Cuándo Vale la Pena Certificar',
+    slug: 'grading-figuras-accion-afa-cas-certificacion',
+    excerpt: 'Sub-grados de burbuja, figura y cartón. Cuándo el encapsulado en acrílico agrega valor real de inversión y cuándo es solo un gasto innecesario.',
+    type: 'GLOSARIO',
+    read_time: '6 min de lectura',
+    featured_image: 'https://images.unsplash.com/photo-1612404730960-5c71577fca11?w=1200&q=80',
+    key_takeaways: [
+      'Las compañías certificadoras (AFA, CAS, VGA) evalúan el estado de conservación de una figura sellada y la encapsulan en acrílico con filtro UV.',
+      'El sistema de sub-grados analiza por separado el cartón (Cardback), la burbuja (Blister) y la figura física.',
+      'Certificar figuras modernas de tirada masiva rara vez recupera el costo del servicio; el grading es rentable casi exclusivamente en piezas vintage clásicas.'
+    ],
+    sections: [
+      {
+        heading: '1. Qué es el Grading y Cómo Funciona la Escala',
+        content: `El grading es la evaluación profesional e imparcial del estado de conservación de un coleccionable sellado en empaque original. Organismos reconocidos como Action Figure Authority (AFA) o Collector Archive Services (CAS) inspeccionan la pieza bajo lupas de alta definición, asignando un puntaje numérico del 10 al 100 (donde 85 es considerado un estándar excelente de calidad museo).`,
+        tip: 'Un sub-grado AFA de C85 B85 F90 indica que la burbuja y el cartón tienen mínimas imperfecciones, pero la figura interna está en estado perfecto.'
+      },
+      {
+        heading: '2. El Encapsulado Inviolable',
+        content: `Una vez asignada la calificación, la figura se sella sónicamente dentro de una urna de acrílico resistente a impactos con protección contra rayos ultravioleta. Este encapsulado es definitivo: no se puede abrir sin destruir la caja y el sello holográfico numerado registrado en la base de datos oficial.`,
+        warning: 'Nunca envíes a certificar una figura si la burbuja presenta pequeñas rajaduras o abolladuras graves; la calificación caerá drásticamente por debajo de 70, depreciando la pieza.'
+      },
+      {
+        heading: '3. ¿Para Quién Tiene Sentido Económico?',
+        content: `El costo de certificar una figura (envío internacional asegurado, arancel de grading y tiempo de espera de meses) ronda los USD 70 a 120 por pieza. Solo tiene sentido comercial en piezas raras de líneas vintage de los años 70 y 80, o figuras variantes con errores de fábrica documentados.`
+      }
+    ],
+    related_search_tag: 'coleccionismo'
+  },
+  'preventas-depositos-reserva-ciclo-produccion-retrasos': {
+    title: 'Preventas y Depósitos de Reserva: Ciclo de Producción, Retrasos Habituales y Cancelaciones',
+    slug: 'preventas-depositos-reserva-ciclo-produccion-retrasos',
+    excerpt: 'De la fase de prototipo (grey model) a la aprobación de licencias y el flete marítimo. Guía para entender los tiempos de producción y asegurar tus piezas.',
+    type: 'COMPRA',
+    read_time: '6 min de lectura',
+    featured_image: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=1200&q=80',
+    key_takeaways: [
+      'El ciclo promedio entre el anuncio de una preventa de alta gama y su entrega final oscila entre 9 y 18 meses.',
+      'Los depósitos no reembolsables aseguran la cuota asignada por el distribuidor oficial frente a tiradas limitadas.',
+      'Aprender a gestionar los retrasos habituales de fabricación evita frustraciones y cancelaciones precipitadas.'
+    ],
+    sections: [
+      {
+        heading: '1. El Viaje de una Figura: Del Prototipo a la Caja',
+        content: `Cuando una marca abre una preventa, suele exhibir un prototipo pintado a mano que aún debe pasar por varias fases: aprobación legal del licenciante de cine o la editorial, diseño de matrices de inyección de acero, pruebas de seguridad de materiales, producción en masa y pintura por tampografía o aerografía.`,
+        tip: 'Recuerda que las imágenes promocionales de preventa suelen llevar la advertencia Prototype shown, final product may vary: el producto final puede diferir ligeramente en tonalidades.'
+      },
+      {
+        heading: '2. Por Qué los Retrasos son la Norma y No la Excepción',
+        content: `Factores como congestión portuaria en fletes marítimos, cambios solicitados a última hora para mejorar parecidos faciales, o revisiones de calidad en las telas suelen posponer la fecha estimada de entrega inicial en varios trimestres. Los coleccionistas experimentados asumen estas demoras como parte habitual del hobby.`,
+        warning: 'Evita endeudarte en múltiples preventas con fechas de entrega teóricas idénticas; si varias figuras se retrasan y se despachan simultáneamente en el mismo mes, tendrás que afrontar todos los saldos juntos.'
+      },
+      {
+        heading: '3. La Importancia de Reservar con Canales Confiables',
+        content: `Reservar con tiendas serias garantiza que tu unidad esté respaldada por cupos oficiales y que, en caso de cancelación del producto por parte del fabricante, tu seña o depósito esté completamente protegido.`
+      }
+    ],
+    related_search_tag: 'coleccionismo'
+  },
+  'guia-importacion-uruguay-franquicia-usd-200-figuras': {
+    title: 'Guía de Importación en Uruguay: Cómo Usar la Franquicia de USD 200 para Coleccionables sin Pagar Recargos',
+    slug: 'guia-importacion-uruguay-franquicia-usd-200-figuras',
+    excerpt: 'El manual definitivo para coleccionistas uruguayos: reglas de Aduana, facturas comerciales, límite de 3 envíos anuales, peso máximo y cómo evitar retenciones.',
+    type: 'COMPRA',
+    read_time: '8 min de lectura',
+    featured_image: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=1200&q=80',
+    key_takeaways: [
+      'La franquicia aduanera en Uruguay permite hasta 3 envíos al año de hasta USD 200 de valor de factura comercial sin pagar aranceles de importación.',
+      'El pago debe realizarse obligatoriamente con una tarjeta de crédito o débito internacional emitida a nombre del titular de la compra.',
+      'El peso máximo reglamentario por paquete es de 20 kg brutos, suficiente para casi cualquier figura o estatua individual.'
+    ],
+    sections: [
+      {
+        heading: '1. Los 4 Pilares Inquebrantables de la Franquicia',
+        content: `Para que tu paquete ingrese bajo el régimen simplificado de encomiendas postales internacionales sin pagar el 60% de aranceles de importación general, debes cumplir simultáneamente cuatro condiciones: ser mayor de 18 años, no superar las 3 franquicias por año calendario (de enero a diciembre), que el valor de la factura comercial no exceda los USD 200, y que el medio de pago esté registrado al mismo documento de identidad (Cédula de Identidad uruguaya).`,
+        warning: 'Si el total de tu factura supera los USD 200,01 aunque sea por un solo centavo, el paquete pierde el amparo de la franquicia y tributará el régimen general completo.'
+      },
+      {
+        heading: '2. Cómo Calcular el Límite de USD 200: Flete vs Valor de la Figura',
+        content: `Bajo la normativa aduanera de courier expreso, los USD 200 se calculan sobre el valor de la mercadería reflejado en la factura comercial emitida por el vendedor. Si compras en un catálogo internacional con envío doméstico dentro del país de origen hacia la casilla del courier, ese flete interno suma al valor de factura. El flete internacional posterior cobrado por tu courier uruguayo no computa para el tope de los USD 200.`,
+        tip: 'Descarga siempre el comprobante de pago bancario y la factura detallada con desglose de items apenas realices la transacción, para declararlo con anticipación en el sistema de tu courier.'
+      },
+      {
+        heading: '3. El Reto de las Estatuas de Gran Escala y Soluciones Locales',
+        content: `Cuando una estatua o figura 1:6 supera ampliamente los USD 200 (algo habitual en piezas de gama alta como estatuas de estudio o figuras de aleación metálica), recurrir a tiendas especializadas locales que gestionan importaciones corporativas con stock e inventario oficial en Uruguay es la vía más económica, segura y libre de trámites burocráticos.`
+      }
+    ],
+    related_search_tag: 'coleccionismo'
   }
+
 };
 
 export default function AcademyArticlePage() {

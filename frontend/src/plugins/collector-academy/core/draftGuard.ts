@@ -60,6 +60,34 @@ export const COLLECTOR_KNOWLEDGE_BASE: Record<string, GroundedKnowledgeItem> = {
     url: '/academy#glosario',
     keyDetails: ['Collectibles sólo comercializa productos 100% oficiales y verificados', 'Plásticos de menor densidad y pintura defectuosa', 'Ausencia de sellos holográficos de licencia']
   },
+  'grail': {
+    type: 'GLOSSARY',
+    title: 'Grail (El Santo Grial)',
+    summary: 'La pieza más codiciada, escasa o valiosa de un coleccionista, perseguida durante años para coronar su vitrina.',
+    url: '/academy#glosario',
+    keyDetails: ['Pieza central de vitrina', 'Alta dificultad de obtención', 'Suele alcanzar valores elevados en aftermarket']
+  },
+  'baf': {
+    type: 'GLOSSARY',
+    title: 'BAF (Build-A-Figure)',
+    summary: 'Formato donde cada figura de una wave incluye una pieza para ensamblar una figura adicional más grande.',
+    url: '/academy#glosario',
+    keyDetails: ['Común en Marvel Legends y DC Multiverse', 'Requiere completar la serie', 'La figura resultante no se vende por separado']
+  },
+  'aftermarket': {
+    type: 'GLOSSARY',
+    title: 'Aftermarket (Mercado Secundario)',
+    summary: 'Compraventa entre coleccionistas y tiendas especializadas una vez que el stock de distribución primaria se agotó.',
+    url: '/academy#glosario',
+    keyDetails: ['Precios fijados por oferta y demanda', 'Importancia crítica del estado de conservación', 'Riesgo de sobreprecio por FOMO']
+  },
+  'reissue': {
+    type: 'GLOSSARY',
+    title: 'Reissue (Reedición Oficial)',
+    summary: 'Nueva tirada de producción comercializada por el fabricante original meses o años después del lote inicial.',
+    url: '/academy#glosario',
+    keyDetails: ['Reduce la especulación del mercado secundario', 'Frecuentemente con empaque renovado', 'Mantiene la autenticidad oficial']
+  },
   '1:12': {
     type: 'SCALE',
     title: 'Escala 1:12 (6 pulgadas / ~15-18 cm)',
