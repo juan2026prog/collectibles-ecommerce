@@ -81,13 +81,18 @@ export class CustomsRuleEngine {
     productPriceUsd,
     actualWeightKg,
     usage,
-    forceSimplifiedRegime = false
+    forceSimplifiedRegime = false,
+    usDomesticShippingUsd = 0
   }: {
     productPriceUsd: number;
     actualWeightKg: number;
     usage: UserCustomsUsage;
     forceSimplifiedRegime?: boolean;
+    usDomesticShippingUsd?: number;
   }): CustomsRegimeEvaluation {
+    const domesticShipping = Math.max(0, usDomesticShippingUsd || 0);
+    const taxableBaseUsd = Number((productPriceUsd + domesticShipping).toFixed(2));
+
     // 1. Strict weight limit: max 20 kg
     if (actualWeightKg > this.rules.maxWeightKg) {
       return {
@@ -117,15 +122,16 @@ export class CustomsRuleEngine {
       };
     }
 
-    // 3. Fallback to Régimen Simplificado (60%, min USD 20)
-    const calculatedTax = Math.max(this.rules.minTaxUsd, productPriceUsd * this.rules.simplifiedTaxRate);
+    // 3. Fallback to Régimen Simplificado (60% de base imponible: Producto + Envío USA, mín USD 20)
+    // Regla de Oro: El Régimen Simplificado NO consume franquicia anual.
+    const calculatedTax = Math.max(this.rules.minTaxUsd, taxableBaseUsd * this.rules.simplifiedTaxRate);
     const roundedTax = Number(calculatedTax.toFixed(2));
 
-    let reason = 'Régimen simplificado (60% de impuestos aduaneros, mín. USD 20).';
+    let reason = `Régimen simplificado (60% de base imponible USD ${taxableBaseUsd.toFixed(2)}, mín. USD 20). No consume franquicia.`;
     if (forceSimplifiedRegime) {
-      reason = 'Se aplicó régimen simplificado a solicitud del usuario.';
+      reason = `Se aplicó régimen simplificado (+60% sobre base USD ${taxableBaseUsd.toFixed(2)}). Tus franquicias quedan intactas.`;
     } else if (shipmentsLeft <= 0) {
-      reason = 'Agotaste los 3 envíos anuales de franquicia. Aplica régimen simplificado (60%).';
+      reason = `Agotaste los 3 envíos anuales de franquicia. Aplica régimen simplificado (60% sobre base USD ${taxableBaseUsd.toFixed(2)}).`;
     } else if (productPriceUsd > quotaLeft) {
       reason = `El valor (USD ${productPriceUsd.toFixed(2)}) supera tu cupo restante de franquicia (USD ${quotaLeft.toFixed(2)}). Aplica régimen simplificado (60%).`;
     }

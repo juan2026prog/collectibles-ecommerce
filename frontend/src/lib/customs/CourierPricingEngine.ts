@@ -31,10 +31,74 @@ export interface CourierCalculationResult {
   isOverweight: boolean;
 }
 
-export const KNOWN_COURIERS: Record<string, { code: string; name: string; deliveryDays: string }> = {
-  puntomio: { code: 'puntomio', name: 'PuntoMio', deliveryDays: '4 a 6 días hábiles' },
-  urubox: { code: 'urubox', name: 'Urubox', deliveryDays: '5 a 8 días hábiles' },
-  mbe: { code: 'mbe', name: 'Mail Boxes Etc. (MBE)', deliveryDays: '3 a 5 días hábiles' }
+export interface KnownCourierMeta {
+  code: string;
+  name: string;
+  deliveryDays: string;
+  defaultAddressLine1: string;
+  defaultAddressLine2?: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  phone: string;
+}
+
+export const KNOWN_COURIERS: Record<string, KnownCourierMeta> = {
+  puntomio: { 
+    code: 'puntomio', 
+    name: 'PuntoMio', 
+    deliveryDays: '4 a 6 días hábiles',
+    defaultAddressLine1: '2200 NW 129th Ave',
+    defaultAddressLine2: 'Suite UY',
+    city: 'Doral',
+    state: 'FL',
+    postalCode: '33182',
+    phone: '+1 (305) 477-2020'
+  },
+  urubox: { 
+    code: 'urubox', 
+    name: 'Urubox', 
+    deliveryDays: '5 a 8 días hábiles',
+    defaultAddressLine1: '2030 NW 95th Ave',
+    defaultAddressLine2: 'Suite UY',
+    city: 'Doral',
+    state: 'FL',
+    postalCode: '33172',
+    phone: '+1 (786) 314-0977'
+  },
+  usx_cargo: { 
+    code: 'usx_cargo', 
+    name: 'USX Cargo', 
+    deliveryDays: '4 a 7 días hábiles',
+    defaultAddressLine1: '8400 NW 25th St',
+    defaultAddressLine2: 'Suite USX',
+    city: 'Doral',
+    state: 'FL',
+    postalCode: '33198',
+    phone: '+1 (305) 592-7474'
+  },
+  buybox: { 
+    code: 'buybox', 
+    name: 'BuyBox Uruguay', 
+    deliveryDays: '5 a 8 días hábiles',
+    defaultAddressLine1: '8290 NW 66th St',
+    defaultAddressLine2: 'Suite BUY',
+    city: 'Miami',
+    state: 'FL',
+    postalCode: '33166',
+    phone: '+1 (786) 693-8080'
+  },
+  mbe: { 
+    code: 'mbe', 
+    name: 'Mail Boxes Etc. (MBE)', 
+    deliveryDays: '3 a 5 días hábiles',
+    defaultAddressLine1: '8333 NW 53rd St',
+    defaultAddressLine2: 'Suite 450',
+    city: 'Doral',
+    state: 'FL',
+    postalCode: '33166',
+    phone: '+1 (305) 436-1212'
+  }
 };
 
 export class CourierPricingEngine {
@@ -230,14 +294,98 @@ export class CourierPricingEngine {
   }
 
   /**
+   * Calculates rate for USX Cargo
+   * USD 17.50 / kg (min. USD 9.90)
+   */
+  public static calculateUSX(weightKg: number): CourierCalculationResult {
+    const courierCode = 'usx_cargo';
+    const courierName = 'USX Cargo';
+    const estimatedDeliveryDays = '4 a 7 días hábiles';
+
+    if (weightKg > 20) {
+      return {
+        courierCode,
+        courierName,
+        weightKg,
+        baseFreightUsd: 0,
+        handlingUsd: 0,
+        ursecUsd: 0,
+        totalCourierUsd: 0,
+        breakdownDescription: 'Excede el peso máximo permitido (20 kg).',
+        estimatedDeliveryDays,
+        isOverweight: true
+      };
+    }
+
+    const baseFreight = Math.max(9.90, weightKg * 17.50);
+    const total = Number(baseFreight.toFixed(2));
+
+    return {
+      courierCode,
+      courierName,
+      weightKg,
+      baseFreightUsd: total,
+      handlingUsd: 0,
+      ursecUsd: 0,
+      totalCourierUsd: total,
+      breakdownDescription: `${weightKg.toFixed(2)} kg x USD 17.50/kg (mín. USD 9.90)`,
+      estimatedDeliveryDays,
+      isOverweight: false
+    };
+  }
+
+  /**
+   * Calculates rate for BuyBox Uruguay
+   * USD 18.00 / kg (min. USD 10.00)
+   */
+  public static calculateBuyBox(weightKg: number): CourierCalculationResult {
+    const courierCode = 'buybox';
+    const courierName = 'BuyBox Uruguay';
+    const estimatedDeliveryDays = '5 a 8 días hábiles';
+
+    if (weightKg > 20) {
+      return {
+        courierCode,
+        courierName,
+        weightKg,
+        baseFreightUsd: 0,
+        handlingUsd: 0,
+        ursecUsd: 0,
+        totalCourierUsd: 0,
+        breakdownDescription: 'Excede el peso máximo permitido (20 kg).',
+        estimatedDeliveryDays,
+        isOverweight: true
+      };
+    }
+
+    const baseFreight = Math.max(10.00, weightKg * 18.00);
+    const total = Number(baseFreight.toFixed(2));
+
+    return {
+      courierCode,
+      courierName,
+      weightKg,
+      baseFreightUsd: total,
+      handlingUsd: 0,
+      ursecUsd: 0,
+      totalCourierUsd: total,
+      breakdownDescription: `${weightKg.toFixed(2)} kg x USD 18.00/kg (mín. USD 10.00)`,
+      estimatedDeliveryDays,
+      isOverweight: false
+    };
+  }
+
+  /**
    * Generic entrypoint for any supported courier
    */
   public static calculate({
     courierCode,
-    weightKg
+    weightKg,
+    customRatePerKgUsd = 18.00
   }: {
     courierCode: string;
     weightKg: number;
+    customRatePerKgUsd?: number;
   }): CourierCalculationResult {
     const cleanCode = courierCode.toLowerCase().replace(/[^a-z0-9_]/g, '');
     if (cleanCode.includes('urubox')) {
@@ -246,8 +394,31 @@ export class CourierPricingEngine {
     if (cleanCode.includes('mbe')) {
       return this.calculateMBE(weightKg);
     }
-    // Default to PuntoMio as leading cost-efficient courier
-    return this.calculatePuntoMio(weightKg);
+    if (cleanCode.includes('usx')) {
+      return this.calculateUSX(weightKg);
+    }
+    if (cleanCode.includes('buybox')) {
+      return this.calculateBuyBox(weightKg);
+    }
+    if (cleanCode.includes('puntomio')) {
+      return this.calculatePuntoMio(weightKg);
+    }
+
+    // Custom or unrecognized courier
+    const rate = customRatePerKgUsd > 0 ? customRatePerKgUsd : 18.00;
+    const baseFreight = Math.max(10.00, Number((weightKg * rate).toFixed(2)));
+    return {
+      courierCode: 'custom',
+      courierName: 'Courier Personalizado',
+      weightKg,
+      baseFreightUsd: baseFreight,
+      handlingUsd: 0,
+      ursecUsd: 0,
+      totalCourierUsd: baseFreight,
+      breakdownDescription: `${weightKg.toFixed(2)} kg x USD ${rate.toFixed(2)}/kg est.`,
+      estimatedDeliveryDays: '5 a 10 días hábiles',
+      isOverweight: weightKg > 20
+    };
   }
 }
 

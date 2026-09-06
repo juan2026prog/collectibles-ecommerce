@@ -17,6 +17,7 @@ import AddressAutocomplete from '../components/AddressAutocomplete';
 import { useImageProtection } from '../hooks/useImageProtection';
 import { BackofficePageHeader, BackofficeTabs, BackofficeStatusBadge, BackofficeCompactRow, BackofficePrimaryAction } from '../components/backoffice';
 import { FranchiseStatusCard } from '../components/customs/FranchiseStatusCard';
+import { ImportHub } from '../components/customs/ImportHub';
 
 function getOrderItemImage(item: any): string {
   const img = item.products?.images?.[0];
@@ -52,7 +53,7 @@ export default function CustomerPortal() {
   
   // Supported tabs
   const tabFromUrl = searchParams.get('tab');
-  const validTabs = ['orders', 'profile', 'couriers', 'franchise', 'security'] as const;
+  const validTabs = ['orders', 'import_hub', 'profile', 'franchise', 'couriers', 'security'] as const;
   type TabType = typeof validTabs[number];
   
   const initialTab: TabType = validTabs.includes(tabFromUrl as any) ? (tabFromUrl as TabType) : 'orders';
@@ -662,12 +663,11 @@ export default function CustomerPortal() {
             <nav className="mt-6 space-y-1.5">
               {([
                 { key: 'orders', icon: Package, label: 'Mis Pedidos', badge: orders.length > 0 ? String(orders.length) : undefined, color: 'text-blue-400' },
-                { key: 'franchise', icon: ShieldCheck, label: 'Mi Franquicia UY (Cupo USA)', badge: 'USD 800', color: 'text-emerald-400' },
+                { key: 'import_hub', icon: Globe, label: 'Importador HUB (Aduana & Casilla)', badge: '2026', color: 'text-sky-400' },
                 { key: 'profile', icon: User, label: 'Mis Datos y Direcciones', color: 'text-purple-400' },
-                { key: 'couriers', icon: Globe, label: 'Casillas Courier USA', color: 'text-amber-400' },
                 { key: 'security', icon: Lock, label: 'Seguridad y Acceso', color: 'text-rose-400' },
               ] as const).map(item => {
-                const isActive = activeTab === item.key;
+                const isActive = activeTab === item.key || (item.key === 'import_hub' && (activeTab === 'franchise' || activeTab === 'couriers'));
                 return (
                   <button
                     key={item.key}
@@ -1863,10 +1863,10 @@ export default function CustomerPortal() {
         </div>
       )}
 
-      {/* ═══ TAB: Mi Franquicia UY ═══ */}
-      {activeTab === 'franchise' && (
-        <div className="space-y-6 max-w-4xl">
-          <FranchiseStatusCard />
+      {/* ═══ TAB: Importador HUB (Aduana, Franquicias, Casilla Miami) ═══ */}
+      {(activeTab === 'import_hub' || activeTab === 'franchise' || activeTab === 'couriers') && (
+        <div className="space-y-6 max-w-5xl">
+          <ImportHub />
         </div>
       )}
 

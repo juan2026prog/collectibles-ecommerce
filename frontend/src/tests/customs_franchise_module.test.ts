@@ -145,5 +145,39 @@ describe('Módulo 06: Mi Franquicia Uruguay 2026 Engine Tests', () => {
       expect(landed.totalCostUsd).toBe(0);
       expect(landed.ineligibilityReason).toContain('excede el límite máximo de 20 kg');
     });
+
+    it('calculates simplified regime +60% on taxable base (product + US shipping) and does not consume franchise', () => {
+      // Producto $150 + Envío USA $10 = Base Imponible $160
+      // 60% Aduana = $96
+      // Courier Urubox 1.8kg = (1.8 * 19.90) + 4.90 = 35.82 + 4.90 = 40.72
+      // Total puesto en UY = $160 + $96 + $40.72 = $296.72
+      const landed = ImportCostEngine.calculateLandedCost({
+        productPriceUsd: 150,
+        usDomesticShippingUsd: 10,
+        weightKg: 1.8,
+        courierCode: 'urubox',
+        usage: { usedShipments: 1, usedAmountUsd: 180 },
+        forceSimplifiedRegime: true,
+        exchangeRateUsdToUyu: 42.50
+      });
+
+      expect(landed.isEligibleForImport).toBe(true);
+      expect(landed.totalUsaUsd).toBe(160.00); // Base Imponible en USA
+      expect(landed.customsTaxUsd).toBe(96.00); // 60% sobre base
+      expect(landed.courier.totalCourierUsd).toBe(40.72); // Urubox 1.8kg
+      expect(landed.totalCostUsd).toBe(296.72);
+      // Franquicias intactas (no se consumió cupo)
+      if (landed.customsEvaluation.status === 'SIMPLIFIED_REGIME') {
+        expect(landed.customsEvaluation.remainingShipmentsAfter).toBe(2); // 3 - 1 = 2
+      }
+    });
+
+    it('calculates USX Cargo and BuyBox couriers properly', () => {
+      const usx = CourierPricingEngine.calculateUSX(1.0);
+      expect(usx.totalCourierUsd).toBe(17.50);
+
+      const buybox = CourierPricingEngine.calculateBuyBox(1.0);
+      expect(buybox.totalCourierUsd).toBe(18.00);
+    });
   });
 });
