@@ -36,7 +36,12 @@ export function useCollectorPermissions(): CollectorPermissions {
   const isLoadingPermissions = (authLoading && !!user) || !settingsLoaded || (featuresLoading && !localStorage.getItem('collectibles_feature_toggles_cache'));
 
   const isModuleVisible = (moduleId: CollectorModuleId): boolean => {
-    if (isPluginsAdminOnly && !isAdmin) {
+    // Admins always have access to test and preview all collector modules
+    if (isAdmin) {
+      return true;
+    }
+
+    if (isPluginsAdminOnly) {
       return false;
     }
 

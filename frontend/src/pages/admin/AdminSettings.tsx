@@ -6,6 +6,7 @@ import AdminZincConfig from '../../components/admin/AdminZincConfig';
 import { MediaPickerModal } from '../../components/MediaPickerModal';
 import { useToast } from '../../components/admin/Toast';
 import { useAuth } from '../../contexts/AuthContext';
+import { useFeatures } from '../../contexts/FeatureToggleContext';
 import { EmailRecipientsModal, type EmailRecipient } from '../../components/common/EmailRecipientsModal';
 import { MobilePushSetup } from '../../components/common/MobilePushSetup';
 import {
@@ -462,6 +463,7 @@ export default function AdminSettings() {
   const [showMediaPicker, setShowMediaPicker] = useState<false | 'logo'>(false);
   const { toast } = useToast();
   const { user } = useAuth();
+  const { updateFeatureToggle } = useFeatures();
 
   const [registeringPush, setRegisteringPush] = useState(false);
   const [sendingTest, setSendingTest] = useState(false);
@@ -800,12 +802,17 @@ export default function AdminSettings() {
 
   async function toggleModule(id: string, current: boolean) {
     const nextVal = !current;
-    await supabase.from('feature_toggles').update({ is_enabled: nextVal, updated_at: new Date().toISOString() }).eq('id', id);
+    const ok = await updateFeatureToggle(id, nextVal);
     if (id === 'customs' || id === 'import_hub') {
       const otherId = id === 'customs' ? 'import_hub' : 'customs';
-      await supabase.from('feature_toggles').update({ is_enabled: nextVal, updated_at: new Date().toISOString() }).eq('id', otherId);
+      await updateFeatureToggle(otherId, nextVal);
     }
-    setToggles(prev => prev.map(t => (t.id === id || (id === 'customs' && t.id === 'import_hub') || (id === 'import_hub' && t.id === 'customs')) ? { ...t, is_enabled: nextVal } : t));
+    if (ok) {
+      setToggles(prev => prev.map(t => (t.id === id || (id === 'customs' && t.id === 'import_hub') || (id === 'import_hub' && t.id === 'customs')) ? { ...t, is_enabled: nextVal } : t));
+      toast.success(`Módulo ${nextVal ? 'activado' : 'desactivado'}`);
+    } else {
+      toast.error('No se pudo actualizar el módulo');
+    }
   }
 
   async function saveHandyProvider(nextProvider?: HandyProviderRecord) {

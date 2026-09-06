@@ -165,4 +165,55 @@ describe('useCollectorPermissions Hook', () => {
     expect(result.current.isModuleVisible('academy')).toBe(true);
     expect(result.current.isModuleVisible('import_hub')).toBe(true);
   });
+
+  it('allows admins access to collector modules even when individual feature toggles are false in DB', () => {
+    vi.spyOn(AuthContext, 'useAuth').mockReturnValue({
+      user: { id: 'admin-1', email: 'admin@collectibles.uy' } as any,
+      profile: { id: 'admin-1', email: 'admin@collectibles.uy', is_admin: true } as any,
+      loading: false,
+      session: null,
+      signUp: vi.fn(),
+      signIn: vi.fn(),
+      signInWithGoogle: vi.fn(),
+      signInWithOtp: vi.fn(),
+      signOut: vi.fn(),
+    });
+
+    vi.spyOn(FeatureToggleContext, 'useFeatures').mockReturnValue({
+      features: {
+        marketplaceEnabled: true,
+        affiliatesEnabled: true,
+        artistCameoEnabled: false,
+        mercadoLibreSyncEnabled: true,
+        aiSearchEnabled: false,
+        radarEnabled: false,
+        releaseCalendarEnabled: false,
+        collectorVaultEnabled: false,
+        collectorVaultUserPhotosEnabled: false,
+        collectorVaultCatalogSearchEnabled: false,
+        collectorCompareEnabled: false,
+        collectorAcademyEnabled: false,
+        customsFranchiseEnabled: false,
+        importHubEnabled: false,
+      },
+      loading: false,
+      updateFeatureToggle: vi.fn(),
+      refreshFeatures: vi.fn(),
+    });
+
+    vi.spyOn(useSiteSettingsModule, 'useSiteSettings').mockReturnValue({
+      settings: { collector_plugins_admin_only: 'false' },
+      loaded: true,
+    });
+
+    const { result } = renderHook(() => useCollectorPermissions());
+
+    expect(result.current.canAccessCollectorPlugins).toBe(true);
+    expect(result.current.isModuleVisible('ai_search')).toBe(true);
+    expect(result.current.isModuleVisible('academy')).toBe(true);
+    expect(result.current.isModuleVisible('vault')).toBe(true);
+    expect(result.current.isModuleVisible('compare')).toBe(true);
+    expect(result.current.isModuleVisible('radar')).toBe(true);
+    expect(result.current.isModuleVisible('import_hub')).toBe(true);
+  });
 });
