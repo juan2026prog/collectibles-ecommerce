@@ -98,7 +98,7 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
   const isCollectibles = !product.vendor_id;
 
   return (
-    <article className={`grid-card group relative p-2.5 sm:p-3 bg-[#0c1322] rounded-store-xl transition-all duration-200 ${
+    <article className={`grid-card group relative p-2.5 sm:p-3 bg-[#0c1322] rounded-none transition-all duration-200 ${
       isInternational
         ? 'border border-sky-500/30 hover:border-sky-400/80 shadow-md shadow-sky-950/30'
         : isCollectibles 
@@ -110,7 +110,7 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
         <Link 
           to={`/producto/${product.slug}`} 
           onClick={handleCardClick}
-          className={`flex bg-white w-full aspect-square overflow-hidden p-3 sm:p-4 items-center justify-center rounded-store-lg transition-all ${
+          className={`flex bg-white w-full aspect-square overflow-hidden p-3 sm:p-4 items-center justify-center rounded-none transition-all ${
             isInternational 
               ? 'border border-sky-500/15 group-hover:border-sky-500/40' 
               : 'border border-slate-100 group-hover:border-[#f00856]/30'

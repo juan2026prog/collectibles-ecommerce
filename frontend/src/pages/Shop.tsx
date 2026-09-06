@@ -578,7 +578,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Buscar..."
-            className="w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#f00856] transition-colors"
+            className="w-full bg-white/5 border border-white/10 rounded-none pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#f00856] transition-colors"
           />
         </div>
       </form>
@@ -779,7 +779,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                           placeholder="Buscar licencia..."
                           value={searchLicenseQuery}
                           onChange={e => setSearchLicenseQuery(e.target.value)}
-                          className="w-full pl-7 pr-3 py-1.5 text-[11px] border border-white/10 bg-white/5 text-white focus:outline-none focus:ring-1 focus:ring-[#f00856] placeholder:text-slate-500 rounded-lg transition-all duration-200 focus:bg-white/10"
+                          className="w-full pl-7 pr-3 py-1.5 text-[11px] border border-white/10 bg-white/5 text-white focus:outline-none focus:ring-1 focus:ring-[#f00856] placeholder:text-slate-500 rounded-none transition-all duration-200 focus:bg-white/10"
                         />
                       </div>
 
@@ -950,7 +950,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                           placeholder="Buscar marca..."
                           value={searchBrandQuery}
                           onChange={e => setSearchBrandQuery(e.target.value)}
-                          className="w-full pl-7 pr-3 py-1.5 text-[11px] border border-white/10 bg-white/5 text-white focus:outline-none focus:ring-1 focus:ring-[#f00856] placeholder:text-slate-500 rounded-lg transition-all duration-200 focus:bg-white/10"
+                          className="w-full pl-7 pr-3 py-1.5 text-[11px] border border-white/10 bg-white/5 text-white focus:outline-none focus:ring-1 focus:ring-[#f00856] placeholder:text-slate-500 rounded-none transition-all duration-200 focus:bg-white/10"
                         />
                       </div>
 
@@ -1044,19 +1044,19 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
             placeholder="Mín"
             value={priceMin}
             onChange={e => setPriceMin(e.target.value)}
-            className="w-1/2 border border-white/10 px-2 py-1.5 text-xs bg-white/5 text-white focus:outline-none focus:ring-1 focus:ring-[#f00856] placeholder:text-slate-500 rounded-lg"
+            className="w-1/2 border border-white/10 px-2 py-1.5 text-xs bg-white/5 text-white focus:outline-none focus:ring-1 focus:ring-[#f00856] placeholder:text-slate-500 rounded-none"
           />
           <input
             type="number"
             placeholder="Máx"
             value={priceMax}
             onChange={e => setPriceMax(e.target.value)}
-            className="w-1/2 border border-white/10 px-2 py-1.5 text-xs bg-white/5 text-white focus:outline-none focus:ring-1 focus:ring-[#f00856] placeholder:text-slate-500 rounded-lg"
+            className="w-1/2 border border-white/10 px-2 py-1.5 text-xs bg-white/5 text-white focus:outline-none focus:ring-1 focus:ring-[#f00856] placeholder:text-slate-500 rounded-none"
           />
         </div>
         <button
           onClick={applyPriceFilter}
-          className="mt-2 w-full py-1.5 text-xs font-bold bg-[#f00856] text-white rounded-lg hover:bg-[#d0074a] transition-colors"
+          className="mt-2 w-full py-1.5 text-xs font-bold bg-[#f00856] text-white rounded-none hover:bg-[#d0074a] transition-colors"
         >
           Aplicar
         </button>
@@ -1095,7 +1095,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
       {(categorySlug || brandSlug || licenseSlug || themeSlug || searchQ || priceMin || priceMax || groupSlug || conditionFilter || availabilityFilter) && (
         <button
           onClick={clearAllFilters}
-          className="w-full py-1.5 text-xs font-bold text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/5 transition-colors"
+          className="w-full py-1.5 text-xs font-bold text-red-400 border border-red-500/20 rounded-none hover:bg-red-500/5 transition-colors"
         >
           Limpiar filtros
         </button>
@@ -1326,7 +1326,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
 
       <main className="max-w-[1500px] mx-auto px-4 sm:px-6 py-4 md:py-10 grid lg:grid-cols-[260px_1fr] gap-8">
         {/* FILTERS ASIDE — hidden on mobile, shown on desktop */}
-        <aside className="hidden lg:block glass rounded-store-xl p-5 h-[calc(100vh-120px)] max-h-[calc(100vh-120px)] min-h-0 sticky top-24 z-10 flex flex-col overflow-hidden">
+        <aside className="hidden lg:block glass rounded-none p-5 h-[calc(100vh-120px)] max-h-[calc(100vh-120px)] min-h-0 sticky top-24 z-10 flex flex-col overflow-hidden">
           <div className="flex items-center justify-between mb-4 shrink-0">
             <h2 className="font-black text-xl tracking-tight">Filtros</h2>
             {(categorySlug || brandSlug || searchQ || groupSlug) && (
@@ -1356,7 +1356,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                   <button
                     key={n}
                     onClick={() => { setGridCols(n); setPage(0); }}
-                    className={`w-8 h-8 rounded font-black text-sm transition-all ${
+                    className={`w-8 h-8 rounded-none font-black text-sm transition-all ${
                       gridCols === n
                         ? 'bg-[#f00856] text-white shadow-lg shadow-[#f00856]/30'
                         : 'border border-white/10 text-slate-400 hover:text-white hover:border-white/30'
