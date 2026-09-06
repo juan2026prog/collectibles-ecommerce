@@ -180,19 +180,72 @@ serve(async (req) => {
       return json({ ok: true, unhandled: true, event: eventType }, 200);
     }
 
-    // 7B. Return Event: persist durable event without corrupting purchase_status
+    // 7B. Return Event: process return updates and sync with international_return_requests
     if (mapped.is_return_event) {
+      let returnRecordFound = false;
+
+      // Find matching return request by return_id or order_id
+      let returnQuery = service.from("international_return_requests").select("*");
+      if (returnId) {
+        returnQuery = returnQuery.eq("zinc_return_id", returnId);
+      } else if (zincOrderId) {
+        returnQuery = returnQuery.eq("zinc_order_id", zincOrderId);
+      }
+
+      const { data: matchedReturns } = await returnQuery.limit(1);
+      const matchedReturn = matchedReturns?.[0];
+
+      if (matchedReturn) {
+        returnRecordFound = true;
+        const returnUpdates: Record<string, unknown> = {
+          updated_at: new Date().toISOString(),
+          zinc_response_payload: payload,
+        };
+
+        if (eventType === "return.approved") {
+          returnUpdates.status = "approved";
+        } else if (eventType === "return.denied") {
+          returnUpdates.status = "denied";
+        } else if (eventType === "return.credited") {
+          returnUpdates.status = "credited";
+        }
+
+        const newLabels = payload.data?.label_urls || payload.label_urls;
+        if (Array.isArray(newLabels) && newLabels.length > 0) {
+          returnUpdates.label_urls = newLabels;
+        }
+
+        if (payload.merchant_return_id) {
+          returnUpdates.merchant_return_id = payload.merchant_return_id;
+        }
+
+        await service
+          .from("international_return_requests")
+          .update(returnUpdates)
+          .eq("id", matchedReturn.id);
+
+        if (eventType === "return.credited" && matchedReturn.international_order_item_id) {
+          await service
+            .from("international_order_items")
+            .update({
+              purchase_status: "return_credited",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", matchedReturn.international_order_item_id);
+        }
+      }
+
       if (currentEventId) {
         await service
           .from("zinc_webhook_events")
           .update({
-            processing_status: "unhandled_return",
+            processing_status: returnRecordFound ? "processed" : "unhandled_return",
             processed_at: new Date().toISOString(),
             last_processing_at: new Date().toISOString(),
           })
           .eq("id", currentEventId);
       }
-      return json({ ok: true, return_event: true, event: eventType, return_id: returnId }, 200);
+      return json({ ok: true, return_event: true, event: eventType, return_id: returnId, matched: returnRecordFound }, 200);
     }
 
     // 7C. Order Events: requires matching internal order item

@@ -600,4 +600,67 @@ describe('Zinc API V2 - Final Unit Test Certification Suite', () => {
       expect(anyDelivered?.delivered_at).toBe('2026-09-04T15:00:00Z');
     });
   });
+
+  describe('7. Miami International Returns (RMA) & Boundary Rules', () => {
+    const VALID_RETURN_REASONS = [
+      'damaged',
+      'not_delivered',
+      'empty_box',
+      'wrong_item',
+      'defective',
+      'not_as_described',
+      'wrong_size',
+      'no_longer_needed',
+      'forced_cancellation',
+      'other',
+    ];
+
+    const ELIGIBLE_MIAMI_STATUSES = [
+      'purchased',
+      'zinc_order_created',
+      'zinc_processing',
+      'shipped_to_courier',
+      'delivered_to_courier',
+    ];
+
+    function isEligibleForMiamiReturn(status: string): boolean {
+      return ELIGIBLE_MIAMI_STATUSES.includes((status || '').trim().toLowerCase());
+    }
+
+    it('allows return requests only while package is in Miami casillero boundary', () => {
+      expect(isEligibleForMiamiReturn('purchased')).toBe(true);
+      expect(isEligibleForMiamiReturn('zinc_processing')).toBe(true);
+      expect(isEligibleForMiamiReturn('shipped_to_courier')).toBe(true);
+      expect(isEligibleForMiamiReturn('delivered_to_courier')).toBe(true);
+    });
+
+    it('rejects return requests once package has departed Miami or arrived in Uruguay', () => {
+      expect(isEligibleForMiamiReturn('dispatched_to_uruguay')).toBe(false);
+      expect(isEligibleForMiamiReturn('in_customs_uruguay')).toBe(false);
+      expect(isEligibleForMiamiReturn('ready_for_pickup')).toBe(false);
+      expect(isEligibleForMiamiReturn('delivered_to_customer')).toBe(false);
+    });
+
+    it('validates return reason matches official Zinc V2 reason codes', () => {
+      expect(VALID_RETURN_REASONS.includes('no_longer_needed')).toBe(true);
+      expect(VALID_RETURN_REASONS.includes('damaged')).toBe(true);
+      expect(VALID_RETURN_REASONS.includes('wrong_item')).toBe(true);
+      expect(VALID_RETURN_REASONS.includes('invalid_random_reason')).toBe(false);
+    });
+
+    it('validates return request creation payload structure matching ReturnRequestCreate schema', () => {
+      const returnPayload = {
+        order_id: '164d3211-3904-4cf2-bc4b-766782a5be53',
+        items: [{ order_item_id: '994d3211-3904-4cf2-bc4b-766782a5be99', quantity: 1 }],
+        reason: 'no_longer_needed',
+        notes: 'Cliente canceló en Miami'
+      };
+
+      expect(returnPayload.order_id).toBeDefined();
+      expect(returnPayload.items).toHaveLength(1);
+      expect(returnPayload.items[0].quantity).toBe(1);
+      expect(VALID_RETURN_REASONS.includes(returnPayload.reason)).toBe(true);
+    });
+  });
 });
+

@@ -14,8 +14,14 @@ import {
   Clock, 
   Webhook,
   Zap,
-  CheckCircle
+  CheckCircle,
+  RotateCcw,
+  FileText,
+  Download,
+  ExternalLink,
+  Plus
 } from 'lucide-react';
+import InternationalReturnModal from './InternationalReturnModal';
 
 interface ZincSetting {
   environment: 'sandbox' | 'production';
@@ -67,11 +73,36 @@ export default function AdminZincConfig() {
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [globalSuccess, setGlobalSuccess] = useState<string | null>(null);
 
+  // International Returns (RMA) State
+  const [returnsList, setReturnsList] = useState<any[]>([]);
+  const [loadingReturns, setLoadingReturns] = useState<boolean>(false);
+  const [isReturnModalOpen, setIsReturnModalOpen] = useState<boolean>(false);
+  const [customReturnOrderId, setCustomReturnOrderId] = useState<string>('');
+
   const isBusy = loading || savingEnv !== null || testingEnv !== null || savingWebhookEnv !== null;
 
   useEffect(() => {
     fetchStatus();
+    fetchReturns();
   }, []);
+
+  async function fetchReturns() {
+    setLoadingReturns(true);
+    try {
+      const { data, error } = await supabase
+        .from('international_return_requests')
+        .select('*, orders(order_number, total_amount)')
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        setReturnsList(data);
+      }
+    } catch {
+      console.error('Error al cargar devoluciones internacionales.');
+    } finally {
+      setLoadingReturns(false);
+    }
+  }
 
   async function fetchStatus() {
     setLoading(true);
@@ -835,6 +866,157 @@ export default function AdminZincConfig() {
           </p>
         </div>
       </div>
+
+      {/* 5. GESTIÓN DE DEVOLUCIONES EN MIAMI (RMA) */}
+      <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 dark:border-slate-800 pb-4">
+          <div className="space-y-1">
+            <h2 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <RotateCcw className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+              Devoluciones en Miami (RMA)
+            </h2>
+            <p className="text-xs text-gray-500 dark:text-slate-400">
+              Gestión de cancelaciones y retorno al retailer mientras el paquete se encuentra en el casillero de Miami (antes del vuelo a Uruguay).
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={fetchReturns}
+              disabled={loadingReturns}
+              className="p-2 rounded-xl border border-gray-200 dark:border-slate-700 hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-600 dark:text-slate-400 transition-colors"
+              title="Actualizar Devoluciones"
+            >
+              <RefreshCw className={`w-4 h-4 ${loadingReturns ? 'animate-spin' : ''}`} />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const orderIdInput = prompt('Ingrese el ID de la orden interna o UUID:');
+                if (orderIdInput && orderIdInput.trim()) {
+                  setCustomReturnOrderId(orderIdInput.trim());
+                  setIsReturnModalOpen(true);
+                }
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold shadow-sm transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              Nueva Devolución RMA
+            </button>
+          </div>
+        </div>
+
+        {loadingReturns ? (
+          <div className="py-12 flex flex-col items-center justify-center gap-3 text-slate-400 text-xs">
+            <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
+            Cargando solicitudes de devolución...
+          </div>
+        ) : returnsList.length === 0 ? (
+          <div className="py-10 text-center space-y-2 border border-dashed border-gray-200 dark:border-slate-800 rounded-2xl">
+            <RotateCcw className="w-8 h-8 text-gray-300 dark:text-slate-700 mx-auto" />
+            <p className="text-xs font-semibold text-gray-700 dark:text-slate-300">
+              No hay solicitudes de devolución registradas
+            </p>
+            <p className="text-[11px] text-gray-400 dark:text-slate-500 max-w-sm mx-auto">
+              Las devoluciones solicitadas en casillero Miami aparecerán aquí con sus etiquetas PDF de retorno y estado en Zinc.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-800">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-gray-50 dark:bg-slate-800/60 text-gray-500 dark:text-slate-400 uppercase tracking-wider font-semibold border-b border-gray-200 dark:border-slate-800">
+                <tr>
+                  <th className="px-4 py-3">Fecha</th>
+                  <th className="px-4 py-3">Orden</th>
+                  <th className="px-4 py-3">ID Zinc / RMA</th>
+                  <th className="px-4 py-3">Motivo</th>
+                  <th className="px-4 py-3">Estado</th>
+                  <th className="px-4 py-3 text-right">Etiquetas PDF</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-slate-800 font-medium">
+                {returnsList.map((ret) => (
+                  <tr key={ret.id} className="hover:bg-gray-50/50 dark:hover:bg-slate-800/40 transition-colors">
+                    <td className="px-4 py-3 text-gray-500 dark:text-slate-400 whitespace-nowrap">
+                      {new Date(ret.created_at).toLocaleDateString('es-UY', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-gray-900 dark:text-white whitespace-nowrap">
+                      {ret.orders?.order_number ? `#${ret.orders.order_number}` : ret.order_id?.slice(0, 8)}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-[11px] text-slate-600 dark:text-slate-300">
+                      <div>Order: {ret.zinc_order_id?.slice(0, 8)}...</div>
+                      {ret.zinc_return_id && (
+                        <div className="text-amber-600 dark:text-amber-400">RMA: {ret.zinc_return_id?.slice(0, 8)}...</div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-gray-700 dark:text-slate-300 capitalize">
+                      {ret.reason?.replace(/_/g, ' ')}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        ret.status === 'credited'
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                          : ret.status === 'approved'
+                          ? 'bg-sky-100 text-sky-800 dark:bg-sky-950/40 dark:text-sky-300 border border-sky-300 dark:border-sky-800'
+                          : ret.status === 'denied'
+                          ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-300 dark:border-rose-800'
+                          : 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                      }`}>
+                        {ret.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {Array.isArray(ret.label_urls) && ret.label_urls.length > 0 ? (
+                        <div className="flex items-center justify-end gap-1.5">
+                          {ret.label_urls.map((url: string, idx: number) => (
+                            <a
+                              key={idx}
+                              href={url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-sky-600 dark:text-sky-400 text-[11px] font-semibold border border-slate-300 dark:border-slate-700 transition-colors"
+                            >
+                              <FileText className="w-3 h-3" />
+                              PDF #{idx + 1}
+                            </a>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 dark:text-slate-500 text-[11px] italic">
+                          Pendiente
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* MODAL RMA */}
+      {isReturnModalOpen && (
+        <InternationalReturnModal
+          isOpen={isReturnModalOpen}
+          onClose={() => {
+            setIsReturnModalOpen(false);
+            setCustomReturnOrderId('');
+          }}
+          orderId={customReturnOrderId}
+          onSuccess={() => {
+            fetchReturns();
+          }}
+        />
+      )}
     </div>
   );
 }
+

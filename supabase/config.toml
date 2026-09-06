@@ -109,5 +109,9 @@ verify_jwt = true
 enabled = true
 verify_jwt = true
 
+[functions.zinc-create-return]
+enabled = true
+verify_jwt = true
+
 
 
