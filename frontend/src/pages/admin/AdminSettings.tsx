@@ -1801,9 +1801,50 @@ export default function AdminSettings() {
         <div className="space-y-6 max-w-3xl">
           {/* Seccion 1: Plugins de Coleccionista */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-[#f00856]"></span>
-              <h3 className="text-xs font-black uppercase tracking-widest text-gray-500 dark:text-slate-400">Plugins del Coleccionista (2026)</h3>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-[#f00856]"></span>
+                <h3 className="text-xs font-black uppercase tracking-widest text-gray-500 dark:text-slate-400">Plugins del Coleccionista (2026)</h3>
+              </div>
+            </div>
+
+            {/* Checkbox / Switch: Solo Administradores (Modo Testing / Beta) */}
+            <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 rounded-2xl p-4 flex items-center justify-between gap-4">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-500 border border-amber-500/30 shrink-0">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="font-black text-sm text-gray-900 dark:text-white">Acceso exclusivo para Administradores (Modo Beta)</h4>
+                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                      settings['collector_plugins_admin_only'] === 'true'
+                        ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-700'
+                        : 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-slate-800 dark:text-gray-400 dark:border-slate-700'
+                    }`}>
+                      {settings['collector_plugins_admin_only'] === 'true' ? 'Solo Admins' : 'Público'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-slate-300 mt-1 leading-relaxed">
+                    Al activar esta casilla, los 6 módulos de coleccionista (AI Search, Radar, My Vault, Comparador, Academy e Import Hub) solo serán visibles e interactivos para usuarios con rol de Administrador. Los visitantes normales no verán sus accesos en el menú ni cabezal.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const nextVal = settings['collector_plugins_admin_only'] === 'true' ? 'false' : 'true';
+                  saveSetting('collector_plugins_admin_only', nextVal);
+                }}
+                className="p-1 hover:scale-105 transition-transform shrink-0 cursor-pointer focus:outline-none"
+                title={settings['collector_plugins_admin_only'] === 'true' ? 'Desactivar modo solo administradores' : 'Activar modo solo administradores'}
+              >
+                {settings['collector_plugins_admin_only'] === 'true' ? (
+                  <ToggleRight className="w-11 h-11 text-amber-500 drop-shadow-sm" />
+                ) : (
+                  <ToggleLeft className="w-11 h-11 text-gray-300 dark:text-slate-600" />
+                )}
+              </button>
             </div>
             
             <div className="grid grid-cols-1 gap-3">

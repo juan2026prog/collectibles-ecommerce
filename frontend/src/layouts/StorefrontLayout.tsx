@@ -137,7 +137,7 @@ export default function StorefrontLayout() {
   const { publicEnabled: intlPublicEnabled } = useInternationalSettings();
   const { features } = useFeatures();
   
-
+  const isPluginsAdminOnly = settings['collector_plugins_admin_only'] === 'true';
   // Meta Pixel is already tracked globally by MetaPixelTracker in App.tsx
 
   const getSocialUrl = (key: string, value: string) => {
@@ -283,37 +283,36 @@ export default function StorefrontLayout() {
       links = links.filter(l => l.href !== '/intl' && l.href !== '/internacional' && l.name?.toUpperCase() !== 'INTERNACIONAL');
     }
 
-    // Plugin Navigation links: RADAR, ACADEMY, COMPARADOR, VAULT (respects feature toggles)
-    if (features.radarEnabled && !links.some(l => l.href === '/radar' || l.name?.toUpperCase() === 'RADAR')) {
-      links.push({
-        name: 'RADAR',
-        href: '/radar'
-      });
-    }
+    // Collector Plugins visibility (Respects individual toggle + admin-only mode)
+    const isPluginsAdminOnly = settings['collector_plugins_admin_only'] === 'true';
+    const canAccessCollectorPlugins = !isPluginsAdminOnly || !!profile?.is_admin;
 
-    if (features.collectorAcademyEnabled && !links.some(l => l.href === '/academy' || l.name?.toUpperCase() === 'ACADEMY')) {
-      links.push({
-        name: 'ACADEMY',
-        href: '/academy'
-      });
-    }
+    // Plugin Navigation links: RADAR, ACADEMY, COMPARADOR (respects feature toggles & admin-only)
+    if (canAccessCollectorPlugins) {
+      if (features.radarEnabled && !links.some(l => l.href === '/radar' || l.name?.toUpperCase() === 'RADAR')) {
+        links.push({
+          name: 'RADAR',
+          href: '/radar'
+        });
+      }
 
-    if (features.comparatorEnabled && !links.some(l => l.href === '/compare' || l.name?.toUpperCase() === 'COMPARADOR')) {
-      links.push({
-        name: 'COMPARADOR',
-        href: '/compare'
-      });
-    }
+      if (features.collectorAcademyEnabled && !links.some(l => l.href === '/academy' || l.name?.toUpperCase() === 'ACADEMY')) {
+        links.push({
+          name: 'ACADEMY',
+          href: '/academy'
+        });
+      }
 
-    if (features.collectorVaultEnabled && !links.some(l => l.href === '/vault' || l.name?.toUpperCase().includes('VAULT'))) {
-      links.push({
-        name: 'MY VAULT',
-        href: '/vault'
-      });
+      if (features.comparatorEnabled && !links.some(l => l.href === '/compare' || l.name?.toUpperCase() === 'COMPARADOR')) {
+        links.push({
+          name: 'COMPARADOR',
+          href: '/compare'
+        });
+      }
     }
 
     return links;
-  }, [t, settings, intlPublicEnabled, features.radarEnabled, features.collectorAcademyEnabled, features.comparatorEnabled, features.collectorVaultEnabled]);
+  }, [t, settings, intlPublicEnabled, features.radarEnabled, features.collectorAcademyEnabled, features.comparatorEnabled, features.collectorVaultEnabled, profile?.is_admin]);
 
   const FOOTER_LINKS = useMemo(() => {
     const customFooterStr = settings['appearance_footer_menu_json'];
@@ -537,7 +536,7 @@ export default function StorefrontLayout() {
 
             {/* SEARCH BOX (DESKTOP) */}
             <StorefrontSearchBar
-              aiSearchEnabled={features.aiSearchEnabled}
+              aiSearchEnabled={features.aiSearchEnabled && (!isPluginsAdminOnly || !!profile?.is_admin)}
               allBrands={allBrands}
               activeLicenses={activeLicenses}
               className="hidden lg:flex"
@@ -550,7 +549,7 @@ export default function StorefrontLayout() {
             </div>
             
             {/* Quick search link on mobile header */}
-            {features.aiSearchEnabled && (
+            {features.aiSearchEnabled && (!isPluginsAdminOnly || profile?.is_admin) && (
               <Link
                 to="/ai-search"
                 className="xl:hidden w-11 h-11 flex items-center justify-center rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-[#f00856]"
@@ -599,6 +598,24 @@ export default function StorefrontLayout() {
                         >
                            <User className="w-4 h-4 text-[#f00856]" /> Mi Perfil / Dashboard
                         </Link>
+                        {features.collectorVaultEnabled && (!isPluginsAdminOnly || profile?.is_admin) && (
+                          <Link 
+                            to="/vault" 
+                            onClick={() => setUserMenuOpen(false)}
+                            className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 text-sm font-bold text-amber-400 transition-colors"
+                          >
+                             <Archive className="w-4 h-4 text-amber-400" /> Mi Vault
+                          </Link>
+                        )}
+                        {features.importHubEnabled && (!isPluginsAdminOnly || profile?.is_admin) && (
+                          <Link 
+                            to="/import-hub" 
+                            onClick={() => setUserMenuOpen(false)}
+                            className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 text-sm font-bold text-indigo-400 transition-colors"
+                          >
+                             <Truck className="w-4 h-4 text-indigo-400" /> 📦 Import Hub
+                          </Link>
+                        )}
                         <Link 
                           to="/account?tab=orders" 
                           onClick={() => setUserMenuOpen(false)}
@@ -873,8 +890,8 @@ export default function StorefrontLayout() {
                         </div>
                       </div>
                     </div>
-                    <div className={`grid ${features.collectorVaultEnabled || features.importHubEnabled ? 'grid-cols-2' : 'grid-cols-1'} gap-2 mt-2`}>
-                      {features.collectorVaultEnabled && (
+                    <div className={`grid ${(features.collectorVaultEnabled && (!isPluginsAdminOnly || profile?.is_admin)) || (features.importHubEnabled && (!isPluginsAdminOnly || profile?.is_admin)) ? 'grid-cols-2' : 'grid-cols-1'} gap-2 mt-2`}>
+                      {features.collectorVaultEnabled && (!isPluginsAdminOnly || profile?.is_admin) && (
                         <Link 
                           to="/vault" 
                           onClick={() => setMobileMenuOpen(false)}
@@ -883,7 +900,7 @@ export default function StorefrontLayout() {
                           <Archive className="w-3.5 h-3.5" /> Mi Vault
                         </Link>
                       )}
-                      {features.importHubEnabled && (
+                      {features.importHubEnabled && (!isPluginsAdminOnly || profile?.is_admin) && (
                         <Link 
                           to="/import-hub" 
                           onClick={() => setMobileMenuOpen(false)}
