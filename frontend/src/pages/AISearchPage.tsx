@@ -813,7 +813,36 @@ export default function AISearchPage() {
 
               {/* Action Pills Row (1-click interactive quick actions) */}
               <div className="flex items-center gap-2 flex-wrap pt-1">
-                {/* 1. Alert button */}
+                {/* 1. International Catalog quick filter */}
+                {internationalCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('international')}
+                    className="px-3 py-1.5 rounded-xl bg-indigo-950/50 hover:bg-indigo-900/60 border border-indigo-500/40 text-indigo-300 text-xs font-bold transition flex items-center gap-1.5 shrink-0 shadow-sm cursor-pointer"
+                  >
+                    <Globe size={13} />
+                    <span>Ver Catálogo Internacional ({internationalCount})</span>
+                  </button>
+                ) : (
+                  <Link
+                    to="/shop?international=true"
+                    className="px-3 py-1.5 rounded-xl bg-indigo-950/40 hover:bg-indigo-900/50 border border-indigo-500/30 text-indigo-300 text-xs font-bold transition flex items-center gap-1.5 shrink-0 shadow-sm"
+                  >
+                    <Globe size={13} />
+                    <span>Catálogo Internacional</span>
+                  </Link>
+                )}
+
+                {/* 2. Import Hub / Franchise Simulator */}
+                <Link
+                  to="/import-hub?tab=simulator"
+                  className="px-3 py-1.5 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-500/30 text-emerald-300 text-xs font-bold transition flex items-center gap-1.5 shrink-0 shadow-sm"
+                >
+                  <Shield size={13} />
+                  <span>Simular Franquicia</span>
+                </Link>
+
+                {/* 3. Alert button */}
                 <button
                   type="button"
                   onClick={handleCreateSearchAlert}
@@ -827,18 +856,7 @@ export default function AISearchPage() {
                   <span>{searchAlertCreated ? 'Alerta guardada' : 'Avisarme si ingresa'}</span>
                 </button>
 
-                {/* 2. WhatsApp Custom Order */}
-                <a
-                  href={getWhatsAppUrl()}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3 py-1.5 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-500/30 text-emerald-300 text-xs font-bold transition flex items-center gap-1.5 shrink-0 shadow-sm"
-                >
-                  <MessageCircle size={13} />
-                  <span>Cotizar por encargo</span>
-                </a>
-
-                {/* 3. Radar shortcut */}
+                {/* 4. Radar shortcut */}
                 <Link
                   to="/radar"
                   className="px-3 py-1.5 rounded-xl bg-sky-950/40 hover:bg-sky-900/50 border border-sky-500/30 text-sky-300 text-xs font-bold transition flex items-center gap-1.5 shrink-0 shadow-sm"
@@ -847,7 +865,7 @@ export default function AISearchPage() {
                   <span>Ver Preventas Radar</span>
                 </Link>
 
-                {/* 4. Academy guide link (if available) */}
+                {/* 5. Academy guide link (if available) */}
                 {academyMatch && (
                   <Link
                     to={`/academy/${academyMatch.slug}`}
@@ -972,21 +990,7 @@ export default function AISearchPage() {
                         : 'bg-zinc-900 text-zinc-400 hover:text-white border border-white/5'
                     }`}
                   >
-                    En Stock ({inStockCount})
-                  </button>
-                )}
-
-                {preorderCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('preorder')}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
-                      activeTab === 'preorder' 
-                        ? 'bg-sky-600 text-white shadow-sm' 
-                        : 'bg-zinc-900 text-zinc-400 hover:text-white border border-white/5'
-                    }`}
-                  >
-                    Preventa ({preorderCount})
+                    En Stock UY ({inStockCount})
                   </button>
                 )}
 
@@ -1000,7 +1004,21 @@ export default function AISearchPage() {
                         : 'bg-zinc-900 text-zinc-400 hover:text-white border border-white/5'
                     }`}
                   >
-                    Internacional ({internationalCount})
+                    Catálogo Internacional ({internationalCount})
+                  </button>
+                )}
+
+                {preorderCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('preorder')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
+                      activeTab === 'preorder' 
+                        ? 'bg-sky-600 text-white shadow-sm' 
+                        : 'bg-zinc-900 text-zinc-400 hover:text-white border border-white/5'
+                    }`}
+                  >
+                    Preventas ({preorderCount})
                   </button>
                 )}
               </div>

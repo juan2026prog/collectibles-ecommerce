@@ -189,53 +189,42 @@ export function generateDirectEditorialAnswer(
   const count = products.length;
   const topic = interp.detectedLicense || interp.detectedBrand || interp.detectedLine || interp.cleanedQuery || 'coleccionables';
 
+  let localCount = 0;
+  let intlCount = 0;
+  let preorderCount = 0;
+
+  products.forEach(p => {
+    if (p.is_international || p.source_provider === 'zinc') {
+      intlCount++;
+    } else if (p.is_preorder || p.status === 'preorder') {
+      preorderCount++;
+    } else {
+      localCount++;
+    }
+  });
+
   // 1. Caso 0 Resultados directos
   if (count === 0) {
     if (interp.isPreorder) {
       return {
         headline: `Preventas de ${topic}`,
-        summary: `No tenemos preventas locales activas de ${topic} en este momento. Podés activar una alerta para el próximo drop oficial o pedir cotización de importación directa.`,
+        summary: `No tenemos preventas locales activas de ${topic} en este momento. Podés activar una alerta para el próximo lanzamiento oficial o consultar el catálogo internacional.`,
         breakdown: [],
         nextHighlight: radarDrops.length > 0 ? `Hay ${radarDrops.length} lanzamientos en Radar para esta línea.` : undefined
       };
     }
     return {
       headline: `Búsqueda: ${topic}`,
-      summary: `No hay stock para entrega inmediata de "${interp.rawQuery}" en el catálogo local, pero podés encargarla o revisar las opciones recomendadas a continuación.`,
+      summary: `No encontramos stock local inmediato para "${interp.rawQuery}". Podés ver opciones en el catálogo internacional o revisar piezas destacadas abajo.`,
       breakdown: []
     };
   }
 
   // 2. Caso con Resultados
-  const lineCounts: Record<string, number> = {};
-  let preorderCount = 0;
-  let inStockCount = 0;
-
-  products.forEach(p => {
-    if (p.is_preorder || p.status === 'preorder') preorderCount++;
-    else inStockCount++;
-
-    const titleLower = (p.title || '').toLowerCase();
-    for (const l of LINES_LIST) {
-      if (titleLower.includes(l.toLowerCase())) {
-        lineCounts[l] = (lineCounts[l] || 0) + 1;
-      }
-    }
-  });
-
   const breakdownBullets: string[] = [];
-  const entries = Object.entries(lineCounts);
-  if (entries.length > 0) {
-    entries.slice(0, 3).forEach(([lineName, num]) => {
-      breakdownBullets.push(`${num} ${lineName}`);
-    });
-  } else if (interp.detectedBrand) {
-    breakdownBullets.push(`${count} piezas de ${interp.detectedBrand}`);
-  }
-
-  if (preorderCount > 0 && inStockCount > 0) {
-    breakdownBullets.push(`${inStockCount} en stock · ${preorderCount} preventa`);
-  }
+  if (localCount > 0) breakdownBullets.push(`${localCount} en stock local`);
+  if (intlCount > 0) breakdownBullets.push(`${intlCount} en catálogo internacional`);
+  if (preorderCount > 0) breakdownBullets.push(`${preorderCount} en preventa`);
 
   const headline = interp.isPreorder 
     ? `Preventas de ${topic}`
@@ -243,7 +232,16 @@ export function generateDirectEditorialAnswer(
       ? `Recomendaciones para ${topic}`
       : `Resultados para ${topic}`;
 
-  let summary = `Encontramos ${count} ${count === 1 ? 'figura disponible' : 'figuras disponibles'}${interp.detectedBrand ? ` de ${interp.detectedBrand}` : ''}${interp.detectedScale ? ` en escala ${interp.detectedScale}` : ''}.`;
+  let summary = '';
+  if (localCount > 0 && intlCount > 0) {
+    summary = `Encontramos ${localCount} en stock inmediato en Uruguay y ${intlCount} disponibles en catálogo internacional.`;
+  } else if (localCount > 0) {
+    summary = `Encontramos ${localCount} ${localCount === 1 ? 'figura disponible' : 'figuras disponibles'} para entrega inmediata en Uruguay.`;
+  } else if (intlCount > 0) {
+    summary = `Encontramos ${intlCount} ${intlCount === 1 ? 'figura disponible' : 'figuras disponibles'} en catálogo internacional con envío a Uruguay.`;
+  } else {
+    summary = `Encontramos ${count} ${count === 1 ? 'figura' : 'figuras'} disponibles.`;
+  }
 
   let nextHighlight: string | undefined;
   if (radarDrops.length > 0) {
