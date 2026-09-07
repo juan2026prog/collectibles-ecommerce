@@ -94,11 +94,13 @@ export default function AdminZincConfig() {
         .select('*, orders(order_number, total_amount)')
         .order('created_at', { ascending: false });
 
-      if (!error && data) {
+      if (error) {
+        console.error('Error al cargar devoluciones internacionales:', error);
+      } else if (data) {
         setReturnsList(data);
       }
-    } catch {
-      console.error('Error al cargar devoluciones internacionales.');
+    } catch (err) {
+      console.error('Error al cargar devoluciones internacionales:', err);
     } finally {
       setLoadingReturns(false);
     }

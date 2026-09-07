@@ -67,7 +67,13 @@ export default function InternationalReturnModal({
       });
 
       if (fnErr) {
-        throw new Error(fnErr.message || 'Error al comunicarse con la función de devolución.');
+        let errorMsg = fnErr.message;
+        try {
+          const errBody = await fnErr.context?.json();
+          if (errBody?.error) errorMsg = errBody.error;
+          else if (errBody?.message) errorMsg = errBody.message;
+        } catch {}
+        throw new Error(errorMsg || 'Error al comunicarse con la función de devolución.');
       }
 
       if (!data?.success && data?.error) {

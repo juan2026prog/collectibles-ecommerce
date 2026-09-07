@@ -8,7 +8,8 @@ import {
   Package, User, Settings, Save, Check, ShoppingCart, RotateCcw, MapPin, 
   Phone, Plus, Trash2, Lock, Eye, EyeOff, Edit3, Store, Truck, AlertCircle, 
   FileText, Globe, CreditCard, Clock, ShieldCheck, Heart, Sparkles, Trophy, 
-  Award, Flame, ExternalLink, ChevronRight, LayoutDashboard, Compass, Star
+  Award, Flame, ExternalLink, ChevronRight, LayoutDashboard, Compass, Star,
+  HelpCircle, MessageCircle, X
 } from 'lucide-react';
 import { useLocale } from '../contexts/LocaleContext';
 import { useCurrency } from '../contexts/CurrencyContext';
@@ -50,6 +51,7 @@ export default function CustomerPortal() {
   const cart = useCartContext();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [supportOrderModal, setSupportOrderModal] = useState<any | null>(null);
   
   // Supported tabs
   const tabFromUrl = searchParams.get('tab');
@@ -1266,6 +1268,12 @@ export default function CustomerPortal() {
                     <button onClick={() => downloadCleanInvoice(order)} className="flex items-center gap-2 px-5 py-2 bg-white/5 text-white hover:bg-white/10 font-bold text-sm transition-colors border border-white/10">
                       <FileText className="w-4 h-4 text-slate-400" /> Descargar Factura
                     </button>
+                    <button 
+                      onClick={() => setSupportOrderModal(order)} 
+                      className="flex items-center gap-2 px-5 py-2 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 font-bold text-sm transition-colors border border-amber-500/20"
+                    >
+                      <HelpCircle className="w-4 h-4 text-amber-400" /> Ayuda / Devolución
+                    </button>
                   </div>
                 </div>
               ))}
@@ -1906,6 +1914,81 @@ export default function CustomerPortal() {
       )}
         </div>
       </div>
+
+      {/* MODAL DE ASISTENCIA Y DEVOLUCIONES */}
+      {supportOrderModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-[#0e131f] border border-white/10 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative space-y-5">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400">
+                  <RotateCcw className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">
+                    Soporte & Devoluciones
+                  </h3>
+                  <p className="text-xs text-slate-400 font-mono">
+                    Orden #{supportOrderModal.order_number || supportOrderModal.id.slice(0, 8).toUpperCase()}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSupportOrderModal(null)} 
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs text-slate-300">
+              <div className="p-3.5 bg-white/5 border border-white/5 rounded-xl space-y-1.5">
+                <p className="font-bold text-white uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" /> Garantía y Políticas de Devolución
+                </p>
+                <p className="leading-relaxed text-slate-400">
+                  • <b>Productos Locales / Nacionales:</b> Tienes 5 días hábiles a partir de la entrega del paquete para solicitar cambio o devolución por fallas de fábrica o desistimiento de compra.
+                </p>
+                <p className="leading-relaxed text-slate-400">
+                  • <b>Compras Internacionales:</b> Las devoluciones aplican exclusivamente mientras el producto se encuentra en tu casillero en Miami antes de ser despachado en el vuelo a Uruguay.
+                </p>
+              </div>
+
+              <p className="text-slate-400">
+                Para resolver tu caso rápidamente, podés escribirnos por WhatsApp con los datos de tu orden ya cargados o completar el formulario oficial de reclamos y devoluciones.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              <a 
+                href={`https://wa.me/59899000000?text=${encodeURIComponent(`Hola Collectibles, quisiera consultar por una devolución/soporte para mi pedido #${supportOrderModal.order_number || supportOrderModal.id.slice(0, 8).toUpperCase()}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg transition-all"
+              >
+                <MessageCircle className="w-4 h-4" /> WhatsApp Soporte
+              </a>
+              <Link
+                to={`/contacto?asunto=Cambios y devoluciones&orden=${supportOrderModal.order_number || supportOrderModal.id.slice(0, 8).toUpperCase()}`}
+                onClick={() => setSupportOrderModal(null)}
+                className="flex items-center justify-center gap-2 px-4 py-3 bg-white/10 hover:bg-white/15 text-white font-bold text-xs rounded-xl border border-white/10 transition-all"
+              >
+                <FileText className="w-4 h-4 text-slate-300" /> Formulario Oficial
+              </Link>
+            </div>
+
+            <div className="border-t border-white/5 pt-3 text-center">
+              <Link 
+                to="/page/envios-devoluciones" 
+                target="_blank"
+                className="text-[11px] text-primary-400 hover:underline inline-flex items-center gap-1 font-medium"
+              >
+                Leer términos oficiales de devoluciones <ExternalLink className="w-3 h-3" />
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

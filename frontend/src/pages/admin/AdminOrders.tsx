@@ -855,37 +855,33 @@ export default function AdminOrders() {
 
     setIsCancelling(true);
     try {
-      const url = `${SUPABASE_URL}/functions/v1/refund-order`;
-      
-      const res = await fetch(url, {
-         method: 'POST',
-         headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${ANON_KEY}`,
-            'apikey': ANON_KEY
-         },
-         body: JSON.stringify({ orderId: selectedOrder.id, reason: reason || "Cancelada por el administrador" })
+      const { data, error: fnErr } = await supabase.functions.invoke('refund-order', {
+        body: {
+          orderId: selectedOrder.id,
+          reason: reason || "Cancelada por el administrador"
+        }
       });
       
-      let data;
-      try {
-        data = await res.json();
-      } catch {
-        const text = await res.text();
-        throw new Error(`Error ${res.status}: ${text || res.statusText}`);
+      if (fnErr) {
+        let errorMsg = fnErr.message;
+        try {
+          const errBody = await fnErr.context?.json();
+          if (errBody?.error) errorMsg = errBody.error;
+        } catch {}
+        throw new Error(errorMsg || 'Error al procesar el reembolso en la pasarela');
       }
-      
-      if (!res.ok) throw new Error(data.error || `Error ${res.status} al cancelar la orden`);
       
       if (isPending) {
          toast.success("La orden pendiente fue cancelada exitosamente.");
       } else {
-         if (data.refundSuccess) {
+         if (data?.refundSuccess) {
            const details = data.refundDetails || {};
            const testWarning = details.isTestMode ? '\n\n⚠️ ATENCIÓN: Estás usando un token de PRUEBA (TEST). Este reembolso solo se procesó en el sandbox de MercadoPago y NO se reflejará en la tarjeta de crédito real del cliente.' : '';
-           toast.success(`Orden cancelada y reembolso procesado. Refund ID: ${details.refund_id || 'N/A'}${testWarning}`, 8000);
+           toast.success(`Orden cancelada y reembolso procesado. Refund ID: ${details.refund_id || details.id || 'N/A'}${testWarning}`, 8000);
+         } else if (data?.manualRequired) {
+           toast.warning("Esta pasarela requiere devolución manual. Se ha registrado la solicitud de reembolso manual.");
          } else {
-           const details = data.refundDetails || {};
+           const details = data?.refundDetails || {};
            toast.error(`La orden fue cancelada, pero el reembolso NO se pudo procesar. Error: ${details.error || 'Desconocido'}`);
          }
       }
@@ -894,7 +890,7 @@ export default function AdminOrders() {
       fetchOrders();
     } catch (e: any) {
       console.error('Cancel order error:', e);
-      alert(`Error al cancelar: ${e.message}`);
+      toast.error(`Error al cancelar: ${e.message}`);
     } finally {
       setIsCancelling(false);
     }
@@ -910,22 +906,22 @@ export default function AdminOrders() {
 
     setIsBlocking(true);
     try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/block-user`, {
-         method: 'POST',
-         headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${ANON_KEY}`,
-            'apikey': ANON_KEY
-         },
-         body: JSON.stringify({ userId: selectedOrder.customer.id })
+      const { data, error: fnErr } = await supabase.functions.invoke('block-user', {
+        body: { userId: selectedOrder.customer.id }
       });
       
-      const data = await res.json();
       try {
         await supabase.from('profiles').update({ is_blocked: true }).eq('id', selectedOrder.customer.id);
       } catch (e) {}
 
-      if (!res.ok) throw new Error(data.error || "Error al bloquear usuario");
+      if (fnErr) {
+        let errMsg = fnErr.message;
+        try {
+          const errBody = await fnErr.context?.json();
+          if (errBody?.error) errMsg = errBody.error;
+        } catch {}
+        throw new Error(errMsg || "Error al bloquear usuario");
+      }
       
       toast.success("Usuario bloqueado exitosamente.");
     } catch (e: any) {
@@ -942,24 +938,21 @@ export default function AdminOrders() {
     
     setIsSendingDiscount(true);
     try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/transactional-emails`, {
-         method: 'POST',
-         headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${ANON_KEY}`,
-            'apikey': ANON_KEY
-         },
-         body: JSON.stringify({ 
-           type: 'abandoned_order_discount', 
-           order: selectedOrder, 
-           discountCode: discountCode 
-         })
+      const { error: fnErr } = await supabase.functions.invoke('transactional-emails', {
+        body: { 
+          type: 'abandoned_order_discount', 
+          order: selectedOrder, 
+          discountCode: discountCode 
+        }
       });
       
-      if (!res.ok) {
-        let errMsg = `Error ${res.status}`;
-        try { const d = await res.json(); errMsg = d.error || errMsg; } catch { /* ignore */ }
-        throw new Error(errMsg);
+      if (fnErr) {
+        let errMsg = fnErr.message;
+        try {
+          const errBody = await fnErr.context?.json();
+          if (errBody?.error) errMsg = errBody.error;
+        } catch {}
+        throw new Error(errMsg || "Error al enviar email");
       }
       
       // 2. Change status to abandonada

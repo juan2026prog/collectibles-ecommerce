@@ -1,11 +1,21 @@
 import { useState, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Mail, MapPin, Phone, Send, CheckCircle, Clock, MessageCircle } from 'lucide-react';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { trackLead, trackContact, trackFindLocation, generateMetaEventId } from '../lib/meta/metaPixel';
 
 export default function Contact() {
   const { settings } = useSiteSettings();
-  const [form, setForm] = useState({ name: '', email: '', subject: '', message: '' });
+  const [searchParams] = useSearchParams();
+  const initialSubject = searchParams.get('asunto') || searchParams.get('subject') || '';
+  const initialOrder = searchParams.get('orden') || searchParams.get('order') || '';
+  
+  const [form, setForm] = useState({ 
+    name: '', 
+    email: '', 
+    subject: initialSubject, 
+    message: initialOrder ? `Hola, me comunico respecto al pedido #${initialOrder}: ` : '' 
+  });
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');

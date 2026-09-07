@@ -260,7 +260,15 @@ export default function AdminRefunds() {
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        let errorMsg = error.message;
+        try {
+          const errBody = await error.context?.json();
+          if (errBody?.error) errorMsg = errBody.error;
+          else if (errBody?.message) errorMsg = errBody.message;
+        } catch {}
+        throw new Error(errorMsg || 'Error al procesar reembolso');
+      }
 
       if (data?.manualRequired) {
         toast.warning('Esta pasarela requiere devolución manual. Se ha registrado la solicitud.');
