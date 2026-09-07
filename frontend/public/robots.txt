@@ -4,12 +4,21 @@ Allow: /shop
 Allow: /producto/
 Allow: /categoria/
 Allow: /marca/
+Allow: /licencias/
 Allow: /licencias
+Allow: /themes/
 Allow: /themes
+Allow: /academy
+Allow: /academy/
+Allow: /radar
+Allow: /radar/
+Allow: /releases
+Allow: /compare
+Allow: /import-hub
 Allow: /page/
 Allow: /contact
 
-# Rutas privadas / técnicas protegidas
+# Bloqueo de URLs internas privadas o de usuario
 Disallow: /admin
 Disallow: /admin/
 Disallow: /vendor
@@ -25,6 +34,7 @@ Disallow: /checkout/
 Disallow: /cart
 Disallow: /account
 Disallow: /account/
+Disallow: /profile
 Disallow: /perfil
 Disallow: /mi-cuenta
 Disallow: /wishlist
@@ -33,3 +43,4 @@ Disallow: /callback/
 Disallow: /api/
 
 Sitemap: https://collectibles.uy/sitemap.xml
+Sitemap: https://collectibles.uy/sitemap_index.xml

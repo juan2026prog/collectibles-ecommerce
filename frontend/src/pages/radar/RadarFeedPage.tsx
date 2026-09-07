@@ -375,6 +375,7 @@ export default function RadarFeedPage() {
       <SEO
         title="Collectibles Radar — Qué está pasando ahora en coleccionismo"
         description="No solo cuándo sale, sino por qué importa. Preventas cerrando, anuncios nuevos, exclusivos y alta demanda en figuras de colección."
+        url="https://collectibles.uy/radar"
       />
 
       {/* Header */}

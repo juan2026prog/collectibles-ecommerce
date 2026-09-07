@@ -47,6 +47,56 @@
       "permanent": true
     },
     {
+      "source": "/p/:slug*",
+      "destination": "/producto/:slug*",
+      "permanent": true
+    },
+    {
+      "source": "/temas/:slug*",
+      "destination": "/themes/:slug*",
+      "permanent": true
+    },
+    {
+      "source": "/temas",
+      "destination": "/themes",
+      "permanent": true
+    },
+    {
+      "source": "/about",
+      "destination": "/page/nosotros",
+      "permanent": true
+    },
+    {
+      "source": "/terms",
+      "destination": "/page/terminos",
+      "permanent": true
+    },
+    {
+      "source": "/privacy",
+      "destination": "/page/pol-ticas-de-privacidad",
+      "permanent": true
+    },
+    {
+      "source": "/help",
+      "destination": "/page/condiciones-de-compra",
+      "permanent": true
+    },
+    {
+      "source": "/importaciones",
+      "destination": "/import-hub",
+      "permanent": true
+    },
+    {
+      "source": "/franquicias",
+      "destination": "/import-hub",
+      "permanent": true
+    },
+    {
+      "source": "/franquicia",
+      "destination": "/import-hub",
+      "permanent": true
+    },
+    {
       "source": "/product-tag/:tag*",
       "destination": "/shop",
       "permanent": true
@@ -68,6 +118,30 @@
       "destination": "/api/sitemap"
     },
     {
+      "source": "/sitemap_index.xml",
+      "destination": "/api/sitemap?type=index"
+    },
+    {
+      "source": "/sitemap-products.xml",
+      "destination": "/api/sitemap?type=products"
+    },
+    {
+      "source": "/sitemap-categories.xml",
+      "destination": "/api/sitemap?type=categories"
+    },
+    {
+      "source": "/sitemap-brands.xml",
+      "destination": "/api/sitemap?type=brands"
+    },
+    {
+      "source": "/sitemap-academy.xml",
+      "destination": "/api/sitemap?type=academy"
+    },
+    {
+      "source": "/sitemap-pages.xml",
+      "destination": "/api/sitemap?type=pages"
+    },
+    {
       "source": "/merchant-feed.xml",
       "destination": "/api/merchant-feed"
     },
@@ -80,8 +154,48 @@
       "destination": "/api/catalog-image?path=$1"
     },
     {
-      "source": "/p/:slug*",
-      "destination": "/api/seo-prerender"
+      "source": "/assets/(.*):([0-9]+):([0-9]+)",
+      "destination": "/api/seo-prerender?type=asset_garbage"
+    },
+    {
+      "source": "/sample-page(.*)",
+      "destination": "/api/seo-prerender?type=wp_garbage"
+    },
+    {
+      "source": "/wp-includes/(.*)",
+      "destination": "/api/seo-prerender?type=wp_garbage"
+    },
+    {
+      "source": "/wp-content/(.*)",
+      "destination": "/api/seo-prerender?type=wp_garbage"
+    },
+    {
+      "source": "/feed(.*)",
+      "destination": "/api/seo-prerender?type=wp_garbage"
+    },
+    {
+      "source": "/author/(.*)",
+      "destination": "/api/seo-prerender?type=wp_garbage"
+    },
+    {
+      "source": "/blog/(.*)",
+      "destination": "/api/seo-prerender?type=wp_garbage"
+    },
+    {
+      "source": "/2024/(.*)",
+      "destination": "/api/seo-prerender?type=wp_garbage"
+    },
+    {
+      "source": "/2025/(.*)",
+      "destination": "/api/seo-prerender?type=wp_garbage"
+    },
+    {
+      "source": "/2026/(.*)",
+      "destination": "/api/seo-prerender?type=wp_garbage"
+    },
+    {
+      "source": "/page=([0-9]+)(.*)",
+      "destination": "/api/seo-prerender?type=page_garbage"
     },
     {
       "source": "/producto/:slug*",
@@ -96,6 +210,34 @@
       "destination": "/api/seo-prerender"
     },
     {
+      "source": "/academy/:slug*",
+      "destination": "/api/seo-prerender"
+    },
+    {
+      "source": "/academy",
+      "destination": "/api/seo-prerender"
+    },
+    {
+      "source": "/radar/:slug*",
+      "destination": "/api/seo-prerender"
+    },
+    {
+      "source": "/radar",
+      "destination": "/api/seo-prerender"
+    },
+    {
+      "source": "/releases",
+      "destination": "/api/seo-prerender"
+    },
+    {
+      "source": "/compare",
+      "destination": "/api/seo-prerender"
+    },
+    {
+      "source": "/import-hub",
+      "destination": "/api/seo-prerender"
+    },
+    {
       "source": "/page/:slug*",
       "destination": "/api/seo-prerender"
     },
@@ -104,7 +246,15 @@
       "destination": "/api/seo-prerender"
     },
     {
+      "source": "/licencias/:slug*",
+      "destination": "/api/seo-prerender"
+    },
+    {
       "source": "/licencias",
+      "destination": "/api/seo-prerender"
+    },
+    {
+      "source": "/themes/:slug*",
       "destination": "/api/seo-prerender"
     },
     {

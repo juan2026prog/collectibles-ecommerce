@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { supabase } from '../lib/supabase';
 import { FileText, ArrowLeft, Shield, CheckCircle } from 'lucide-react';
 import { sanitizeRichHtml } from '../lib/sanitize';
@@ -458,6 +459,11 @@ export default function DynamicPage({ forcedSlug }: { forcedSlug?: string }) {
 
   return (
     <div className="min-h-screen text-white font-sans bg-[#05070f]">
+      <Helmet>
+        <title>{`${page.title} | Collectibles Uruguay`}</title>
+        <meta name="description" content={pageSubtitle} />
+        <link rel="canonical" href={`https://collectibles.uy/page/${page.slug || slug}`} />
+      </Helmet>
       {/* HERO DOCUMENTO */}
       <section className="relative overflow-hidden border-b border-white/10">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(240,8,86,.15),transparent_40%),linear-gradient(90deg,#05070f_0%,#05070f_55%,#250313_100%)]"></div>

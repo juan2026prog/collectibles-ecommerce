@@ -1,7 +1,7 @@
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useSiteSettings } from '../hooks/useSiteSettings';
-import { BASE_URL } from '../utils/seoHelpers';
+import { BASE_URL } from '../seo/seoConfig';
 
 interface SEOProps {
   title: string;
@@ -31,12 +31,17 @@ export default function SEO({
   // Format title cleanly without duplicated site names
   const fullTitle = title.includes('Collectibles') ? title : `${title} | ${siteName}`;
 
-  // Ensure absolute canonical url starting with https://collectibles.uy
+  // Clean and ensure absolute canonical URL starting with https://collectibles.uy without query params
   let canonicalUrl = url;
   if (!canonicalUrl.startsWith('http')) {
     canonicalUrl = `${BASE_URL}${canonicalUrl.startsWith('/') ? '' : '/'}${canonicalUrl}`;
   }
   canonicalUrl = canonicalUrl.replace('http://', 'https://').replace('www.collectibles.uy', 'collectibles.uy');
+  // Strip query string and hashes from canonical
+  try {
+    const parsed = new URL(canonicalUrl);
+    canonicalUrl = `${parsed.origin}${parsed.pathname}`;
+  } catch {}
 
   const organizationSchema = {
     "@context": "https://schema.org",
@@ -60,7 +65,10 @@ export default function SEO({
     "url": BASE_URL,
     "potentialAction": {
       "@type": "SearchAction",
-      "target": "https://collectibles.uy/shop?q={search_term_string}",
+      "target": {
+        "@type": "EntryPoint",
+        "urlTemplate": "https://collectibles.uy/shop?q={search_term_string}"
+      },
       "query-input": "required name=search_term_string"
     }
   };

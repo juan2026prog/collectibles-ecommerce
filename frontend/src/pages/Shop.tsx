@@ -1157,6 +1157,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
         title={shopSeoTitle}
         description={shopSeoDesc}
         url={shopSeoUrl}
+        noIndex={Boolean(searchQ)}
         schema={[breadcrumbSchema]}
       />
 

@@ -1,116 +1,317 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.dummy';
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+const BASE_URL = 'https://collectibles.uy';
+
+// Curated & static editorial academy guides list (fully indexable 200 OK)
+const ACADEMY_ARTICLE_SLUGS = [
+  "como-empezar-coleccion-figuras",
+  "figuras-accion-vs-estatuas",
+  "el-arte-del-foco-como-elegir-linea-coleccion",
+  "completismo-vs-curaduria-coleccionismo",
+  "presupuesto-real-coleccionista-costos-ocultos",
+  "sindrome-caja-cerrada-open-box-vs-sellado",
+  "guia-escalas-figuras-coleccion",
+  "el-salto-a-escala-1-6-requisitos-espacio-vitrinas",
+  "micro-escalas-miniaturas-figuras-1-18-y-1-24",
+  "batalla-escala-1-12-import-japones-vs-retail-americano",
+  "frontera-18-cm-escala-1-10-mcfarlane-neca",
+  "lineas-entrada-vs-alta-gama-fabricantes-coleccionismo",
+  "guerra-titanes-1-6-hot-toys-vs-inart-ingenieria",
+  "como-reconocer-figura-original-bootleg",
+  "mercado-cabezas-custom-escultura-3d-pintura",
+  "resinas-estudio-licencia-oficial-vs-garages-custom",
+  "materiales-figuras-pvc-abs-resina-diecast",
+  "como-cuidar-exhibir-figuras-coleccion",
+  "articulaciones-rigidas-clavijas-quebradas-tecnicas-calor",
+  "articulaciones-flojas-devolver-firmeza-rotulas-sin-pegamento",
+  "centro-gravedad-balance-posa-dinamica-sin-stands",
+  "cuidado-ropa-tela-cuerina-pleather-evitar-cuarteado",
+  "edicion-limitada-exclusive-chase-preorder",
+  "fomo-aftermarket-reventa-vs-esperar-reissue",
+  "preventas-depositos-reserva-ciclo-produccion-retrasos",
+  "guia-importacion-uruguay-franquicia-usd-200-figuras",
+  "misb-mib-loose-glosario-coleccionismo",
+  "grading-figuras-accion-afa-cas-certificacion",
+  "guia-de-escalas-coleccionables",
+  "como-detectar-bootlegs-figuras-originales",
+  "pvc-vs-resina-vs-diecast-cuidados",
+  "vitrinas-iluminacion-led-y-control-uv"
+];
+
+async function fetchCategories() {
+  let allCategories = [];
+  let page = 0;
+  const pageSize = 1000;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data: batch, error } = await supabase
+      .from('categories')
+      .select('slug, updated_at, created_at')
+      .eq('is_active', true)
+      .eq('status', 'approved')
+      .range(page * pageSize, (page + 1) * pageSize - 1);
+
+    if (error) {
+      console.error('Error fetching sitemap categories batch:', error);
+      break;
+    }
+
+    if (batch && batch.length > 0) {
+      allCategories = allCategories.concat(batch);
+      if (batch.length < pageSize) hasMore = false;
+      else page++;
+    } else {
+      hasMore = false;
+    }
+  }
+  return allCategories;
+}
+
+async function fetchBrands() {
+  let allBrands = [];
+  let page = 0;
+  const pageSize = 1000;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data: batch, error } = await supabase
+      .from('brands')
+      .select('slug, updated_at, created_at')
+      .eq('is_active', true)
+      .eq('status', 'approved')
+      .range(page * pageSize, (page + 1) * pageSize - 1);
+
+    if (error) {
+      console.error('Error fetching sitemap brands batch:', error);
+      break;
+    }
+
+    if (batch && batch.length > 0) {
+      allBrands = allBrands.concat(batch);
+      if (batch.length < pageSize) hasMore = false;
+      else page++;
+    } else {
+      hasMore = false;
+    }
+  }
+  return allBrands;
+}
+
+async function fetchLicenses() {
+  const { data, error } = await supabase
+    .from('licenses')
+    .select('slug, updated_at, created_at')
+    .eq('is_active', true);
+  return data || [];
+}
+
+async function fetchThemes() {
+  const { data, error } = await supabase
+    .from('themes')
+    .select('slug, updated_at, created_at')
+    .eq('is_active', true);
+  return data || [];
+}
+
+async function fetchProducts() {
+  let allProducts = [];
+  let page = 0;
+  const pageSize = 1000;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data: batch, error } = await supabase
+      .from('products')
+      .select('slug, updated_at, created_at')
+      .eq('is_active', true)
+      .eq('status', 'published')
+      .range(page * pageSize, (page + 1) * pageSize - 1);
+
+    if (error) {
+      console.error('Error fetching sitemap products batch:', error);
+      break;
+    }
+
+    if (batch && batch.length > 0) {
+      allProducts = allProducts.concat(batch);
+      if (batch.length < pageSize) hasMore = false;
+      else page++;
+    } else {
+      hasMore = false;
+    }
+  }
+  return allProducts;
+}
+
 export default async function handler(req, res) {
   try {
-    const baseUrl = 'https://collectibles.uy';
+    const reqUrl = req.url || '';
+    const isIndex = reqUrl.includes('sitemap_index.xml') || reqUrl.includes('type=index');
+    const isProducts = reqUrl.includes('sitemap-products.xml') || reqUrl.includes('type=products');
+    const isCategories = reqUrl.includes('sitemap-categories.xml') || reqUrl.includes('type=categories');
+    const isBrands = reqUrl.includes('sitemap-brands.xml') || reqUrl.includes('type=brands');
+    const isPages = reqUrl.includes('sitemap-pages.xml') || reqUrl.includes('type=pages');
+    const isAcademy = reqUrl.includes('sitemap-academy.xml') || reqUrl.includes('type=academy');
 
-    // 1. Paginated Categories
-    let allCategories = [];
-    let page = 0;
-    const pageSize = 1000;
-    let hasMore = true;
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=43200');
 
-    while (hasMore) {
-      const { data: batch, error } = await supabase
-        .from('categories')
-        .select('slug')
-        .eq('is_active', true)
-        .eq('status', 'approved')
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-      if (error) {
-        console.error('Error fetching sitemap categories batch:', error);
-        throw error;
-      }
-
-      if (batch && batch.length > 0) {
-        allCategories = allCategories.concat(batch);
-        if (batch.length < pageSize) {
-          hasMore = false;
-        } else {
-          page++;
-        }
-      } else {
-        hasMore = false;
-      }
+    // 1. SITEMAP INDEX
+    if (isIndex) {
+      const now = new Date().toISOString();
+      const indexXml = `<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap>
+    <loc>${BASE_URL}/sitemap-pages.xml</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>${BASE_URL}/sitemap-products.xml</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>${BASE_URL}/sitemap-categories.xml</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>${BASE_URL}/sitemap-brands.xml</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>${BASE_URL}/sitemap-academy.xml</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>
+</sitemapindex>`;
+      return res.status(200).send(indexXml);
     }
 
-    // 2. Paginated Brands
-    let allBrands = [];
-    page = 0;
-    hasMore = true;
-
-    while (hasMore) {
-      const { data: batch, error } = await supabase
-        .from('brands')
-        .select('slug')
-        .eq('is_active', true)
-        .eq('status', 'approved')
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-      if (error) {
-        console.error('Error fetching sitemap brands batch:', error);
-        throw error;
-      }
-
-      if (batch && batch.length > 0) {
-        allBrands = allBrands.concat(batch);
-        if (batch.length < pageSize) {
-          hasMore = false;
-        } else {
-          page++;
+    // 2. SITEMAP PRODUCTS
+    if (isProducts) {
+      const products = await fetchProducts();
+      let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
+      products.forEach(p => {
+        if (p.slug) {
+          const date = p.updated_at || p.created_at;
+          const lastMod = date ? new Date(date).toISOString() : new Date().toISOString();
+          xml += `  <url>\n    <loc>${BASE_URL}/producto/${p.slug}</loc>\n    <lastmod>${lastMod}</lastmod>\n    <priority>0.8</priority>\n    <changefreq>daily</changefreq>\n  </url>\n`;
         }
-      } else {
-        hasMore = false;
-      }
+      });
+      xml += `</urlset>`;
+      return res.status(200).send(xml);
     }
 
-    // 3. Paginated Products
-    let allProducts = [];
-    page = 0;
-    hasMore = true;
-
-    while (hasMore) {
-      const { data: batch, error } = await supabase
-        .from('products')
-        .select('slug, updated_at, created_at')
-        .eq('is_active', true)
-        .eq('status', 'published')
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-      if (error) {
-        console.error('Error fetching sitemap products batch:', error);
-        throw error;
-      }
-
-      if (batch && batch.length > 0) {
-        allProducts = allProducts.concat(batch);
-        if (batch.length < pageSize) {
-          hasMore = false;
-        } else {
-          page++;
+    // 3. SITEMAP CATEGORIES
+    if (isCategories) {
+      const [categories, licenses, themes] = await Promise.all([
+        fetchCategories(),
+        fetchLicenses(),
+        fetchThemes()
+      ]);
+      let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
+      categories.forEach(c => {
+        if (c.slug) {
+          const date = c.updated_at || c.created_at;
+          const lastMod = date ? new Date(date).toISOString() : new Date().toISOString();
+          xml += `  <url>\n    <loc>${BASE_URL}/categoria/${c.slug}</loc>\n    <lastmod>${lastMod}</lastmod>\n    <priority>0.9</priority>\n    <changefreq>weekly</changefreq>\n  </url>\n`;
         }
-      } else {
-        hasMore = false;
-      }
+      });
+      licenses.forEach(l => {
+        if (l.slug) {
+          xml += `  <url>\n    <loc>${BASE_URL}/licencias/${l.slug}</loc>\n    <priority>0.8</priority>\n    <changefreq>weekly</changefreq>\n  </url>\n`;
+        }
+      });
+      themes.forEach(t => {
+        if (t.slug) {
+          xml += `  <url>\n    <loc>${BASE_URL}/themes/${t.slug}</loc>\n    <priority>0.8</priority>\n    <changefreq>weekly</changefreq>\n  </url>\n`;
+        }
+      });
+      xml += `</urlset>`;
+      return res.status(200).send(xml);
     }
 
-    let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
-    xml += `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
+    // 4. SITEMAP BRANDS
+    if (isBrands) {
+      const brands = await fetchBrands();
+      let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
+      brands.forEach(b => {
+        if (b.slug) {
+          const date = b.updated_at || b.created_at;
+          const lastMod = date ? new Date(date).toISOString() : new Date().toISOString();
+          xml += `  <url>\n    <loc>${BASE_URL}/marca/${b.slug}</loc>\n    <lastmod>${lastMod}</lastmod>\n    <priority>0.8</priority>\n    <changefreq>weekly</changefreq>\n  </url>\n`;
+        }
+      });
+      xml += `</urlset>`;
+      return res.status(200).send(xml);
+    }
 
-    // Home
-    xml += `  <url>\n    <loc>${baseUrl}/</loc>\n    <priority>1.0</priority>\n    <changefreq>daily</changefreq>\n  </url>\n`;
+    // 5. SITEMAP ACADEMY
+    if (isAcademy) {
+      let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
+      xml += `  <url>\n    <loc>${BASE_URL}/academy</loc>\n    <priority>0.9</priority>\n    <changefreq>weekly</changefreq>\n  </url>\n`;
+      const uniqueAcademySlugs = Array.from(new Set(ACADEMY_ARTICLE_SLUGS));
+      uniqueAcademySlugs.forEach(slug => {
+        xml += `  <url>\n    <loc>${BASE_URL}/academy/${slug}</loc>\n    <priority>0.7</priority>\n    <changefreq>monthly</changefreq>\n  </url>\n`;
+      });
+      xml += `</urlset>`;
+      return res.status(200).send(xml);
+    }
 
-    // Real Commercial & Static Base Pages (200 OK)
+    // 6. SITEMAP PAGES
+    if (isPages) {
+      const staticPages = [
+        '/',
+        '/shop',
+        '/licencias',
+        '/themes',
+        '/radar',
+        '/releases',
+        '/compare',
+        '/import-hub',
+        '/contact',
+        '/page/nosotros',
+        '/page/terminos',
+        '/page/pol-ticas-de-privacidad',
+        '/page/condiciones-de-compra',
+        '/page/envios-devoluciones'
+      ];
+      let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
+      staticPages.forEach(p => {
+        const priority = p === '/' ? '1.0' : '0.8';
+        const changefreq = p === '/' ? 'daily' : 'weekly';
+        xml += `  <url>\n    <loc>${BASE_URL}${p === '/' ? '' : p}</loc>\n    <priority>${priority}</priority>\n    <changefreq>${changefreq}</changefreq>\n  </url>\n`;
+      });
+      xml += `</urlset>`;
+      return res.status(200).send(xml);
+    }
+
+    // DEFAULT: Comprehensive Full Sitemap (for backward compatibility with single sitemap.xml)
+    const [categories, brands, products, licenses, themes] = await Promise.all([
+      fetchCategories(),
+      fetchBrands(),
+      fetchProducts(),
+      fetchLicenses(),
+      fetchThemes()
+    ]);
+
+    let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
+
+    // Static & commercial core pages
     const mainPages = [
+      '/',
       '/shop',
       '/licencias',
       '/themes',
+      '/academy',
+      '/radar',
+      '/releases',
+      '/compare',
+      '/import-hub',
       '/contact',
       '/page/nosotros',
       '/page/terminos',
@@ -119,43 +320,61 @@ export default async function handler(req, res) {
       '/page/envios-devoluciones'
     ];
     mainPages.forEach(p => {
-      xml += `  <url>\n    <loc>${baseUrl}${p}</loc>\n    <priority>0.8</priority>\n    <changefreq>weekly</changefreq>\n  </url>\n`;
+      const priority = p === '/' ? '1.0' : (p === '/shop' || p === '/academy' || p === '/radar' ? '0.9' : '0.8');
+      const changefreq = p === '/' || p === '/shop' ? 'daily' : 'weekly';
+      xml += `  <url>\n    <loc>${BASE_URL}${p === '/' ? '' : p}</loc>\n    <priority>${priority}</priority>\n    <changefreq>${changefreq}</changefreq>\n  </url>\n`;
     });
 
-    // Categories (0.9)
-    if (allCategories && allCategories.length > 0) {
-      allCategories.forEach(c => {
-        if (c.slug) {
-          xml += `  <url>\n    <loc>${baseUrl}/categoria/${c.slug}</loc>\n    <priority>0.9</priority>\n    <changefreq>weekly</changefreq>\n  </url>\n`;
-        }
-      });
-    }
+    // Academy Articles
+    const uniqueAcademySlugs = Array.from(new Set(ACADEMY_ARTICLE_SLUGS));
+    uniqueAcademySlugs.forEach(slug => {
+      xml += `  <url>\n    <loc>${BASE_URL}/academy/${slug}</loc>\n    <priority>0.7</priority>\n    <changefreq>monthly</changefreq>\n  </url>\n`;
+    });
 
-    // Brands (0.8)
-    if (allBrands && allBrands.length > 0) {
-      allBrands.forEach(b => {
-        if (b.slug) {
-          xml += `  <url>\n    <loc>${baseUrl}/marca/${b.slug}</loc>\n    <priority>0.8</priority>\n    <changefreq>weekly</changefreq>\n  </url>\n`;
-        }
-      });
-    }
+    // Categories
+    categories.forEach(c => {
+      if (c.slug) {
+        const date = c.updated_at || c.created_at;
+        const lastMod = date ? new Date(date).toISOString() : new Date().toISOString();
+        xml += `  <url>\n    <loc>${BASE_URL}/categoria/${c.slug}</loc>\n    <lastmod>${lastMod}</lastmod>\n    <priority>0.9</priority>\n    <changefreq>weekly</changefreq>\n  </url>\n`;
+      }
+    });
 
-    // Published & Active Products (0.7)
-    if (allProducts && allProducts.length > 0) {
-      allProducts.forEach(p => {
-        if (p.slug) {
-          const date = p.updated_at || p.created_at;
-          const lastMod = date ? new Date(date).toISOString() : new Date().toISOString();
-          xml += `  <url>\n    <loc>${baseUrl}/producto/${p.slug}</loc>\n    <lastmod>${lastMod}</lastmod>\n    <priority>0.7</priority>\n    <changefreq>daily</changefreq>\n  </url>\n`;
-        }
-      });
-    }
+    // Licenses
+    licenses.forEach(l => {
+      if (l.slug) {
+        xml += `  <url>\n    <loc>${BASE_URL}/licencias/${l.slug}</loc>\n    <priority>0.8</priority>\n    <changefreq>weekly</changefreq>\n  </url>\n`;
+      }
+    });
+
+    // Themes
+    themes.forEach(t => {
+      if (t.slug) {
+        xml += `  <url>\n    <loc>${BASE_URL}/themes/${t.slug}</loc>\n    <priority>0.8</priority>\n    <changefreq>weekly</changefreq>\n  </url>\n`;
+      }
+    });
+
+    // Brands
+    brands.forEach(b => {
+      if (b.slug) {
+        const date = b.updated_at || b.created_at;
+        const lastMod = date ? new Date(date).toISOString() : new Date().toISOString();
+        xml += `  <url>\n    <loc>${BASE_URL}/marca/${b.slug}</loc>\n    <lastmod>${lastMod}</lastmod>\n    <priority>0.8</priority>\n    <changefreq>weekly</changefreq>\n  </url>\n`;
+      }
+    });
+
+    // Products
+    products.forEach(p => {
+      if (p.slug) {
+        const date = p.updated_at || p.created_at;
+        const lastMod = date ? new Date(date).toISOString() : new Date().toISOString();
+        xml += `  <url>\n    <loc>${BASE_URL}/producto/${p.slug}</loc>\n    <lastmod>${lastMod}</lastmod>\n    <priority>0.7</priority>\n    <changefreq>daily</changefreq>\n  </url>\n`;
+      }
+    });
 
     xml += `</urlset>`;
+    return res.status(200).send(xml);
 
-    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=43200');
-    res.status(200).send(xml);
   } catch (error) {
     console.error('Error generating sitemap:', error);
     res.status(500).json({ error: 'Error generating sitemap' });

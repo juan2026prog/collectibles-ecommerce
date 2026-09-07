@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import type { 
   ImportCourier, 
   CustomsRule, 
@@ -200,6 +201,11 @@ const ImportHubPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 py-8 px-4 sm:px-6 lg:px-8">
+      <Helmet>
+        <title>HUB de Importaciones & Franquicias Aduaneras | Collectibles Uruguay</title>
+        <meta name="description" content="Calculá costos de importación, gestioná tus cupos de franquicia aduanera de U$S 200 y rastreá tus encomiendas hacia Uruguay." />
+        <link rel="canonical" href="https://collectibles.uy/import-hub" />
+      </Helmet>
       <div className="max-w-7xl mx-auto space-y-6">
         
         {/* Navigation Tabs Header */}

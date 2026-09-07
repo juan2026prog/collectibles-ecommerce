@@ -513,6 +513,8 @@ export default function AISearchPage() {
       <SEO
         title={hasSearchQuery ? `Buscando "${queryParam}" | Collectibles AI` : 'Asistente Inteligente del Coleccionista | Collectibles'}
         description="Buscador inteligente con AI Overview, lenguaje natural y catálogo de figuras de colección."
+        url="https://collectibles.uy/ai-search"
+        noIndex={hasSearchQuery}
       />
 
       {/* ========================================================================= */}

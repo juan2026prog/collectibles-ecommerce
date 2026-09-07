@@ -43,6 +43,7 @@ export default function ReleaseCalendarPage() {
       <SEO
         title="Calendario de Lanzamientos 2026 / 2027 | Collectibles"
         description="Cronograma mensual de lanzamientos de figuras de colección, preórdenes y despachos."
+        url="https://collectibles.uy/releases"
       />
 
       {/* Header */}

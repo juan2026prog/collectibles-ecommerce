@@ -168,7 +168,7 @@ export default function ProductDetail() {
 
   useEffect(() => {
     if (redirectSlug && redirectSlug !== slug) {
-      navigate(`/p/${redirectSlug}`, { replace: true });
+      navigate(`/producto/${redirectSlug}`, { replace: true });
     }
   }, [redirectSlug, slug, navigate]);
   const { getImageProps, handleDragStart } = useImageProtection({ isProduct: true });

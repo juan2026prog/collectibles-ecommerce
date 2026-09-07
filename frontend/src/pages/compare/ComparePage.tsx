@@ -456,6 +456,7 @@ export const ComparePage: React.FC = () => {
             : `Comparativa de ${products.length} figuras | Collectibles`}
         </title>
         <meta name="description" content="Tabla comparativa técnica y directa entre figuras de colección. Especificaciones, medidas y accesorios cara a cara." />
+        <link rel="canonical" href="https://collectibles.uy/compare" />
       </Helmet>
 
       {/* ── TOAST NOTIFICATION ── */}

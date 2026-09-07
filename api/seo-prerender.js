@@ -4,6 +4,170 @@ import path from 'path';
 
 const BASE_URL = 'https://collectibles.uy';
 
+// Curated & static editorial academy guides list (fully indexable 200 OK)
+const ACADEMY_ARTICLES_MAP = {
+  "como-empezar-coleccion-figuras": {
+    title: "Cómo Empezar una Colección sin Comprar Todo lo que Ves",
+    excerpt: "Una guía práctica para definir tu colección, controlar el presupuesto y evitar compras impulsivas. El punto de partida de todo coleccionista.",
+    type: "INICIO"
+  },
+  "figuras-accion-vs-estatuas": {
+    title: "Figuras de Acción vs Estatuas: ¿Qué Tipo de Colección es para Ti?",
+    excerpt: "Articulación, tamaño, materiales y precio: descubre las principales diferencias antes de elegir.",
+    type: "GUÍA"
+  },
+  "el-arte-del-foco-como-elegir-linea-coleccion": {
+    title: "El Arte del Foco: Cómo Elegir una Sola Línea y Dominarla sin Dispersarse",
+    excerpt: "La dispersión es la enemiga número uno del coleccionista. Descubre cómo definir un foco temático fuerte y dominar una línea con criterio y coherencia visual.",
+    type: "INICIO"
+  },
+  "completismo-vs-curaduria-coleccionismo": {
+    title: "Completismo vs Curaduría: Por Qué Intentar Tener Todo Arruina el Disfrute",
+    excerpt: "El síndrome de la wave completa genera fatiga y repisas saturadas. Aprende a aplicar curaduría estética para que cada figura destaque como una obra de arte.",
+    type: "INICIO"
+  },
+  "presupuesto-real-coleccionista-costos-ocultos": {
+    title: "Presupuesto Real del Coleccionista: Costo Oculto de Envíos, Aduana y Exhibición",
+    excerpt: "El precio de la figura es solo la mitad de la historia. Guía financiera para calcular fletes internacionales, franquicias aduaneras, vitrinas y accesorios.",
+    type: "COMPRA"
+  },
+  "sindrome-caja-cerrada-open-box-vs-sellado": {
+    title: "El Síndrome de la Caja Cerrada: Debate Definitivo entre Open-Box y Conservación Sellada",
+    excerpt: "Analizamos el valor de reventa, degradación del plástico en caja y disfrute personal entre conservar sellado o abrir.",
+    type: "INICIO"
+  },
+  "guia-escalas-figuras-coleccion": {
+    title: "Guía de Escalas en Figuras de Colección: de 1:18 a 1:4",
+    excerpt: "Aprende qué significan las escalas 1:18, 1:12, 1:10, 1:6 y 1:4, cuánto mide cada figura y cuáles pueden exhibirse juntas.",
+    type: "GUÍA"
+  },
+  "el-salto-a-escala-1-6-requisitos-espacio-vitrinas": {
+    title: "El Salto a 1:6: Requisitos de Espacio, Peso y Soporte Antes de Comprar tu Primera Pieza",
+    excerpt: "Una figura de 30 cm con metal diecast y base dinámica no entra en cualquier estante. Lo que debes preparar en tu habitación antes de recibir tu primer Hot Toys o InArt.",
+    type: "GUÍA"
+  },
+  "micro-escalas-miniaturas-figuras-1-18-y-1-24": {
+    title: "Micro-Escalas y Miniaturas: Guía para Integrar Figuras 1:18 y 1:24 en tu Repisa",
+    excerpt: "De Star Wars Vintage Collection a JoyToy Warhammer 40K: el renacimiento de las 3.75 pulgadas.",
+    type: "GUÍA"
+  },
+  "batalla-escala-1-12-import-japones-vs-retail-americano": {
+    title: "Batalla en Escala 1:12: Diferencias Reales entre Import Japonés y Retail Americano",
+    excerpt: "MAFEX y S.H.Figuarts frente a Marvel Legends y DC Multiverse: comparativa milimétrica de articulación, accesorios, escala real y relación calidad-precio.",
+    type: "GUÍA"
+  },
+  "frontera-18-cm-escala-1-10-mcfarlane-neca": {
+    title: "La Frontera de los 18 cm: Por Qué la Escala 1:10 de McFarlane y NECA No Encaja con Todo",
+    excerpt: "Las 7 pulgadas tienen una presencia imponente pero generan pesadillas de escala al mezclarse.",
+    type: "GUÍA"
+  },
+  "lineas-entrada-vs-alta-gama-fabricantes-coleccionismo": {
+    title: "Líneas de Entrada vs Alta Gama: Bandai Spirits, Good Smile Company y Medicom Explicadas",
+    excerpt: "Ichibansho vs Figuarts ZERO, Pop Up Parade vs Scale Figures y MAFEX vs Figma.",
+    type: "AUTENTICIDAD"
+  },
+  "guerra-titanes-1-6-hot-toys-vs-inart-ingenieria": {
+    title: "Guerra de Titanes 1:6: Ingeniería de Hot Toys frente a la Silicona y Pelo Enraizado de InArt",
+    excerpt: "La revolución del hiperrealismo: articulaciones magnéticas, trajes a medida y ojos móviles independientes.",
+    type: "AUTENTICIDAD"
+  },
+  "como-reconocer-figura-original-bootleg": {
+    title: "Cómo Reconocer una Figura Original y Evitar Bootlegs",
+    excerpt: "Aprende a identificar señales comunes de falsificaciones y qué revisar antes de comprar.",
+    type: "AUTENTICIDAD"
+  },
+  "mercado-cabezas-custom-escultura-3d-pintura": {
+    title: "El Mercado de las Cabezas Custom: Escultura 3D, Pintura a Mano y Licencias no Oficiales",
+    excerpt: "El auge del aftermarket artístico: escultores digitales y pintores independientes.",
+    type: "AUTENTICIDAD"
+  },
+  "resinas-estudio-licencia-oficial-vs-garages-custom": {
+    title: "El Universo de las Resinas de Estudio: Licencia Oficial frente a Garages No Autorizados",
+    excerpt: "Prime 1 Studio, Tsume y XM Studios frente a los estudios independientes sin licencia.",
+    type: "AUTENTICIDAD"
+  },
+  "materiales-figuras-pvc-abs-resina-diecast": {
+    title: "PVC, ABS, Resina y Die-Cast: Materiales de las Figuras Explicados",
+    excerpt: "Qué diferencias existen entre PVC, ABS, resina y metal die-cast y cómo afectan peso, detalle y resistencia.",
+    type: "MATERIALES"
+  },
+  "como-cuidar-exhibir-figuras-coleccion": {
+    title: "Cómo Cuidar y Exhibir tus Figuras sin Dañarlas",
+    excerpt: "Luz, polvo, humedad y temperatura: las reglas esenciales para conservar una colección durante años.",
+    type: "CUIDADO"
+  },
+  "articulaciones-rigidas-clavijas-quebradas-tecnicas-calor": {
+    title: "Articulaciones Rígidas y Clavijas Quebradas: Técnicas Seguras con Calor para No Romper Figuras",
+    excerpt: "El método del baño de agua caliente a 60°C y el secador de pelo para aflojar articulaciones duras.",
+    type: "CUIDADO"
+  },
+  "articulaciones-flojas-devolver-firmeza-rotulas-sin-pegamento": {
+    title: "Articulaciones Flojas y Desgaste: Cómo Devolverle Firmeza a Rótulas y Ball-Joints sin Pegamento",
+    excerpt: "El uso correcto de polímeros acrílicos al agua para engrosar rótulas gastadas sin soldar la articulación.",
+    type: "CUIDADO"
+  },
+  "centro-gravedad-balance-posa-dinamica-sin-stands": {
+    title: "Centro de Gravedad y Balance: Principios de Posa Dinámica sin Depender de Stands Visibles",
+    excerpt: "Línea de acción, distribución del peso en tobillos y rotación de cadera.",
+    type: "CUIDADO"
+  },
+  "cuidado-ropa-tela-cuerina-pleather-evitar-cuarteado": {
+    title: "Ropa de Tela y Cuerina (Pleather): Cómo Evitar el Cuarteado y Descascarillado con los Años",
+    excerpt: "La hidrólisis en chaquetas de cuerina y trajes de vinilo: productos hidratantes y humedad ideal.",
+    type: "MATERIALES"
+  },
+  "edicion-limitada-exclusive-chase-preorder": {
+    title: "Edición Limitada, Exclusive, Chase y Pre-Order: Qué Significan",
+    excerpt: "Aprende la diferencia entre edición limitada, exclusiva, chase, preventa y reedición antes de comprar.",
+    type: "COMPRA"
+  },
+  "fomo-aftermarket-reventa-vs-esperar-reissue": {
+    title: "El Fenómeno FOMO y el Aftermarket: Cuándo Pagar Precio de Reventa y Cuándo Esperar un Reissue",
+    excerpt: "Psicología del mercado coleccionista: análisis de patrones de reedición de Bandai, MAFEX y Hot Toys.",
+    type: "COMPRA"
+  },
+  "preventas-depositos-reserva-ciclo-produccion-retrasos": {
+    title: "Preventas y Depósitos de Reserva: Ciclo de Producción, Retrasos Habituales y Cancelaciones",
+    excerpt: "De la fase de prototipo a la aprobación de licencias y el flete marítimo.",
+    type: "COMPRA"
+  },
+  "guia-importacion-uruguay-franquicia-usd-200-figuras": {
+    title: "Guía de Importación en Uruguay: Cómo Usar la Franquicia de USD 200 para Coleccionables sin Pagar Recargos",
+    excerpt: "El manual definitivo para coleccionistas uruguayos: reglas de Aduana, facturas comerciales y límite de 3 envíos anuales.",
+    type: "COMPRA"
+  },
+  "misb-mib-loose-glosario-coleccionismo": {
+    title: "MISB, MIB, Loose y otros términos del coleccionismo",
+    excerpt: "¿MISB? ¿MIB? ¿Loose? Aprende los términos utilizados para describir el estado de figuras y coleccionables.",
+    type: "GLOSARIO"
+  },
+  "grading-figuras-accion-afa-cas-certificacion": {
+    title: "Grading en Figuras de Acción: Qué Hacen AFA y CAS y Cuándo Vale la Pena Certificar",
+    excerpt: "Sub-grados de burbuja, figura y cartón. Cuándo el encapsulado en acrílico agrega valor real.",
+    type: "GLOSARIO"
+  },
+  "guia-de-escalas-coleccionables": {
+    title: "Guía Definitiva de Escalas: 1:12 vs 1:10 vs 1:6 en Figuras de Acción",
+    excerpt: "Descubre las diferencias reales de tamaño, articulación y compatibilidad de vitrinas.",
+    type: "GUÍA TÉCNICA"
+  },
+  "como-detectar-bootlegs-figuras-originales": {
+    title: "Cómo Detectar Bootlegs y Copias No Oficiales vs Figuras Originales",
+    excerpt: "Aprende a identificar sellos holográficos de Toei/Bandai, calidades de pintura defectuosas y empaques sospechosos.",
+    type: "AUTENTICIDAD"
+  },
+  "pvc-vs-resina-vs-diecast-cuidados": {
+    title: "PVC vs Resina Polystone vs Diecast: Cuidados y Conservación",
+    excerpt: "Por qué la resina no tolera caídas, cómo evitar el efecto sudor plástico en PVC y la protección anticorrosión.",
+    type: "PRESERVACIÓN"
+  },
+  "vitrinas-iluminacion-led-y-control-uv": {
+    title: "Vitrinas para Coleccionistas: Iluminación LED, Polvo y Control UV",
+    excerpt: "La luz solar directa y las lámparas halógenas amarillean los plásticos. Configura vitrinas con LEDs fríos sin emisión UV.",
+    type: "CONSERVACIÓN"
+  }
+};
+
 function cleanText(str) {
   if (!str) return '';
   return String(str).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -22,11 +186,17 @@ function escapeHtml(str) {
 function generateCanonical(type, slug) {
   if (type === 'home' || !type) return BASE_URL;
   if (type === 'shop') return `${BASE_URL}/shop`;
-  if (type === 'licencias' || type === 'licenses') return `${BASE_URL}/licencias`;
-  if (type === 'themes' || type === 'temas') return `${BASE_URL}/themes`;
-  if (type === 'producto' || type === 'product') return `${BASE_URL}/producto/${slug}`;
+  if (type === 'licencias') return slug ? `${BASE_URL}/licencias/${slug}` : `${BASE_URL}/licencias`;
+  if (type === 'themes') return slug ? `${BASE_URL}/themes/${slug}` : `${BASE_URL}/themes`;
+  if (type === 'producto' || type === 'product' || type === 'p') return `${BASE_URL}/producto/${slug}`;
   if (type === 'categoria' || type === 'category') return `${BASE_URL}/categoria/${slug}`;
   if (type === 'marca' || type === 'brand') return `${BASE_URL}/marca/${slug}`;
+  if (type === 'academy') return slug ? `${BASE_URL}/academy/${slug}` : `${BASE_URL}/academy`;
+  if (type === 'radar') return slug ? `${BASE_URL}/radar/${slug}` : `${BASE_URL}/radar`;
+  if (type === 'releases') return `${BASE_URL}/releases`;
+  if (type === 'compare') return `${BASE_URL}/compare`;
+  if (type === 'import-hub') return `${BASE_URL}/import-hub`;
+  if (type === 'contact') return `${BASE_URL}/contact`;
   if (type === 'page') return `${BASE_URL}/page/${slug}`;
   if (type === 'static') return `${BASE_URL}/${slug}`;
   return `${BASE_URL}/${slug || ''}`;
@@ -35,18 +205,24 @@ function generateCanonical(type, slug) {
 function generateMetaTitle(type, name) {
   if (type === 'home' || !type) return 'Juguetes Retro Uruguay & Coleccionables | Collectibles Store';
   if (type === 'shop') return 'Catálogo de Coleccionables en Uruguay | Collectibles';
-  if (type === 'licencias') return 'Licencias Oficiales de Coleccionables | Collectibles Uruguay';
-  if (type === 'themes') return 'Universos y Temas Geek | Collectibles Uruguay';
-  if (type === 'producto' || type === 'product') return `${name} | Collectibles Uruguay`;
+  if (type === 'licencias') return name ? `${name} | Licencias Oficiales | Collectibles Uruguay` : 'Licencias Oficiales de Coleccionables | Collectibles Uruguay';
+  if (type === 'themes') return name ? `${name} | Universos Geek | Collectibles Uruguay` : 'Universos y Temas Geek | Collectibles Uruguay';
+  if (type === 'producto' || type === 'product' || type === 'p') return `${name} | Collectibles Uruguay`;
   if (type === 'marca' || type === 'brand') return `${name} en Uruguay | Collectibles`;
   if (type === 'categoria' || type === 'category') return `${name} en Uruguay | Collectibles`;
-  if (type === 'static' || type === 'page') return `${name} | Collectibles`;
+  if (type === 'academy') return name ? `${name} | Collector Academy Uruguay` : 'Collector Academy — Guías de Coleccionismo y Conservación | Collectibles Uruguay';
+  if (type === 'radar') return name ? `${name} | Radar de Coleccionables Uruguay` : 'Collectibles Radar — Qué está pasando ahora en coleccionismo | Collectibles Uruguay';
+  if (type === 'releases') return 'Calendario de Lanzamientos 2026 / 2027 | Collectibles Uruguay';
+  if (type === 'compare') return 'Comparador de Figuras y Coleccionables | Collectibles Uruguay';
+  if (type === 'import-hub') return 'Collectibles Import Hub — Casilla y Franquicias en Uruguay';
+  if (type === 'contact') return 'Contacto | Collectibles Uruguay';
+  if (type === 'static' || type === 'page') return `${name} | Collectibles Uruguay`;
   return `${name} | Collectibles Uruguay`;
 }
 
 function generateMetaDescription(type, rawDesc, name) {
   const cleaned = cleanText(rawDesc);
-  if (cleaned && cleaned.length > 10) {
+  if (cleaned && cleaned.length > 15) {
     return cleaned.length > 160 ? cleaned.slice(0, 157) + '...' : cleaned;
   }
 
@@ -54,24 +230,50 @@ function generateMetaDescription(type, rawDesc, name) {
     return 'Tu tienda N°1 de juguetes retro en Uruguay, figuras vintage, cartas de colección, merchandising geek y figuras de acción. Envíos a todo el país.';
   }
   if (type === 'shop') {
-    return 'Explora nuestro catálogo completo de figuras de acción, Funkos, cómics y coleccionables en Uruguay.';
+    return 'Explora nuestro catálogo completo de figuras de acción, Funkos, cómics y coleccionables en Uruguay con envíos a todo el país.';
   }
   if (type === 'licencias') {
-    return 'Explora todas las franquicias y licencias oficiales disponibles en Collectibles Uruguay: Marvel, Star Wars, DC Comics, Funko, Disney y más.';
+    return name 
+      ? `Explora todas las figuras y coleccionables oficiales de ${name} en Collectibles Uruguay. Envíos a todo el país.`
+      : 'Explora todas las franquicias y licencias oficiales disponibles en Collectibles Uruguay: Marvel, Star Wars, DC Comics, Funko, Disney y más.';
   }
   if (type === 'themes') {
-    return 'Descubre coleccionables por universo, temática y sagas: Anime, Terror, Cine, Series, Deportes y Gaming en Collectibles Uruguay.';
+    return name
+      ? `Descubre figuras y coleccionables del universo ${name} en Collectibles Uruguay. Envíos garantizados.`
+      : 'Descubre coleccionables por universo, temática y sagas: Anime, Terror, Cine, Series, Deportes y Gaming en Collectibles Uruguay.';
   }
-  if (type === 'producto' || type === 'product') {
-    return `Comprar ${name} en Collectibles Uruguay. Envíos a todo el país.`;
+  if (type === 'producto' || type === 'product' || type === 'p') {
+    return `Comprar ${name} en Collectibles Uruguay. Pieza 100% oficial con garantía de autenticidad y envíos a todo el país.`;
   }
   if (type === 'categoria' || type === 'category') {
-    return `Explora nuestra colección de ${name} en Collectibles Uruguay. Figuras de colección y merchandising con envíos a todo el país.`;
+    return `Explora nuestra colección de ${name} en Collectibles Uruguay. Figuras de colección, merchandising oficial y envíos a todo el país.`;
   }
   if (type === 'marca' || type === 'brand') {
-    return `Comprar productos oficiales de ${name} en Collectibles Uruguay. Figuras y coleccionables con envíos a todo el país.`;
+    return `Comprar productos oficiales de ${name} en Collectibles Uruguay. Figuras, estatuas y coleccionables con envíos a todo el país.`;
   }
-  return `Collectibles Uruguay - ${name}`;
+  if (type === 'academy') {
+    return name
+      ? `Guía editorial: ${name}. Aprende sobre autenticidad, escalas y conservación en Collector Academy.`
+      : 'Collector Academy: el portal educativo definitivo para coleccionistas en Uruguay. Guías técnicas sobre escalas, detección de bootlegs y preservación.';
+  }
+  if (type === 'radar') {
+    return name
+      ? `Seguimiento de preventa y lanzamiento: ${name} en Collectibles Radar.`
+      : 'Seguimiento en tiempo real de preventas cerrando, nuevos anuncios, exclusivos y alta demanda en figuras de colección.';
+  }
+  if (type === 'releases') {
+    return 'Cronograma mensual de lanzamientos de figuras de colección, fechas estimadas de entrega y preórdenes para coleccionistas.';
+  }
+  if (type === 'compare') {
+    return 'Compara especificaciones técnicas de figuras de acción, escalas, puntos de articulación y accesorios cara a cara.';
+  }
+  if (type === 'import-hub') {
+    return 'Calculadora y simulador de costos de importación para coleccionistas en Uruguay bajo el régimen de franquicia USD 200.';
+  }
+  if (type === 'contact') {
+    return 'Contacta con el equipo de Collectibles Uruguay. Atención personalizada por WhatsApp, teléfono y correo electrónico.';
+  }
+  return `Collectibles Uruguay - ${name || 'Coleccionables y Figuras Oficiales'}`;
 }
 
 function generateBreadcrumbs(type, entity) {
@@ -105,6 +307,16 @@ function generateBreadcrumbs(type, entity) {
       name: entity.name || 'Marca',
       item: `${BASE_URL}/marca/${entity.slug}`
     });
+  } else if (type === 'licencias' && entity && entity.slug) {
+    itemListElement.push(
+      { '@type': 'ListItem', position: 2, name: 'Licencias', item: `${BASE_URL}/licencias` },
+      { '@type': 'ListItem', position: 3, name: entity.name || 'Licencia', item: `${BASE_URL}/licencias/${entity.slug}` }
+    );
+  } else if (type === 'themes' && entity && entity.slug) {
+    itemListElement.push(
+      { '@type': 'ListItem', position: 2, name: 'Themes', item: `${BASE_URL}/themes` },
+      { '@type': 'ListItem', position: 3, name: entity.name || 'Theme', item: `${BASE_URL}/themes/${entity.slug}` }
+    );
   } else if ((type === 'producto' || type === 'product') && entity) {
     let currentPos = 2;
     if (entity.category && entity.category.slug && entity.category.name) {
@@ -122,12 +334,42 @@ function generateBreadcrumbs(type, entity) {
       name: entity.title || entity.name,
       item: `${BASE_URL}/producto/${entity.slug}`
     });
+  } else if (type === 'academy') {
+    itemListElement.push({
+      '@type': 'ListItem',
+      position: 2,
+      name: 'Collector Academy',
+      item: `${BASE_URL}/academy`
+    });
+    if (entity && entity.slug) {
+      itemListElement.push({
+        '@type': 'ListItem',
+        position: 3,
+        name: entity.title || entity.name,
+        item: `${BASE_URL}/academy/${entity.slug}`
+      });
+    }
+  } else if (type === 'radar') {
+    itemListElement.push({
+      '@type': 'ListItem',
+      position: 2,
+      name: 'Radar',
+      item: `${BASE_URL}/radar`
+    });
+    if (entity && entity.slug) {
+      itemListElement.push({
+        '@type': 'ListItem',
+        position: 3,
+        name: entity.title || entity.name,
+        item: `${BASE_URL}/radar/${entity.slug}`
+      });
+    }
   } else if (type === 'static' || type === 'page') {
     itemListElement.push({
       '@type': 'ListItem',
       position: 2,
-      name: entity.name || 'Página',
-      item: `${BASE_URL}/${entity.path || entity.slug}`
+      name: entity?.name || 'Página',
+      item: `${BASE_URL}/${entity?.path || entity?.slug || ''}`
     });
   }
 
@@ -172,7 +414,7 @@ function generateProductSchema(product, brand, category, images) {
   let condition = 'https://schema.org/NewCondition';
   if (product.condition) {
     const cLower = String(product.condition).toLowerCase();
-    if (cLower.includes('usad') || cLower.includes('used')) {
+    if (cLower.includes('usad') || cLower.includes('used') || cLower.includes('loose')) {
       condition = 'https://schema.org/UsedCondition';
     }
   }
@@ -255,7 +497,7 @@ function generateProductSchema(product, brand, category, images) {
 }
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.dummy';
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -324,6 +566,32 @@ function renderNotFoundPage(res, htmlTemplate, type, slug) {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   return res.status(404).send(renderedHtml);
+}
+
+function renderGonePage(res, htmlTemplate, reason) {
+  let renderedHtml = htmlTemplate || getBaseTemplate();
+  const goneTitle = '410 - Contenido Eliminado Definitivamente | Collectibles Uruguay';
+
+  renderedHtml = renderedHtml.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(goneTitle)}</title>`);
+  renderedHtml = renderedHtml.replace(/<meta[^>]*name=["']robots["'][^>]*\/?>/i, '<meta name="robots" content="noindex, nofollow" />');
+
+  const goneBody = `
+    <div style="padding: 40px 20px; font-family: system-ui, -apple-system, sans-serif; max-width: 800px; margin: 0 auto; text-align: center;">
+      <h1 style="font-size: 36px; font-weight: bold; color: #64748b; margin-bottom: 15px;">410 - Contenido Eliminado</h1>
+      <p style="font-size: 18px; color: #4b5563; margin-bottom: 25px;">El recurso solicitado (${escapeHtml(reason)}) fue retirado definitivamente y ya no está disponible.</p>
+      <a href="${BASE_URL}/" style="display: inline-block; padding: 10px 20px; background-color: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600;">Ir al Inicio</a>
+    </div>
+  `;
+
+  if (renderedHtml.includes('<div id="root"></div>')) {
+    renderedHtml = renderedHtml.replace('<div id="root"></div>', `<div id="root">${goneBody}</div>`);
+  } else if (renderedHtml.includes('<div id="root">')) {
+    renderedHtml = renderedHtml.replace(/<div id="root">[\s\S]*?<\/div>/i, `<div id="root">${goneBody}</div>`);
+  }
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800');
+  return res.status(410).send(renderedHtml);
 }
 
 function extractMluId(rawSlug) {
@@ -426,6 +694,22 @@ export default async function handler(req, res) {
     const xForwardedUri = req.headers?.['x-forwarded-uri'] || req.headers?.['x-matched-path'] || '';
     const combinedUri = (reqUrl + ' ' + xForwardedUri).toLowerCase();
 
+    // 0. HANDLE 410 FOR RESIDUAL WORDPRESS / JS TRACE / GARBAGE URLS
+    if (type === 'wp_garbage' || combinedUri.includes('sample-page') || combinedUri.includes('/wp-') || combinedUri.includes('/feed') || combinedUri.includes('/author/') || combinedUri.includes('/blog/') || combinedUri.includes('/2024/') || combinedUri.includes('/2025/')) {
+      return renderGonePage(res, getBaseTemplate(), 'Ruta heredada de WordPress');
+    }
+
+    if (type === 'asset_garbage' || (combinedUri.includes('/assets/') && (combinedUri.includes('.js:') || combinedUri.includes('.css:')))) {
+      return renderGonePage(res, getBaseTemplate(), 'Traza de ejecución JavaScript interna');
+    }
+
+    if (type === 'page_garbage' || combinedUri.includes('/page=')) {
+      // 301 to clean shop
+      res.setHeader('Location', `${BASE_URL}/shop`);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.status(301).end();
+    }
+
     // Extract type & slug from URI if query parameters are missing from Vercel rewrite
     if (!type || !slug) {
       if (combinedUri.includes('/marca/')) {
@@ -448,17 +732,42 @@ export default async function handler(req, res) {
         type = 'p';
         const match = combinedUri.match(/\/p\/([^\/\?\s]+)/);
         if (match) slug = match[1];
+      } else if (combinedUri.includes('/academy/')) {
+        type = 'academy_article';
+        const match = combinedUri.match(/\/academy\/([^\/\?\s]+)/);
+        if (match) slug = match[1];
+      } else if (combinedUri.includes('/academy')) {
+        type = 'academy';
+      } else if (combinedUri.includes('/radar/')) {
+        type = 'radar_item';
+        const match = combinedUri.match(/\/radar\/([^\/\?\s]+)/);
+        if (match) slug = match[1];
+      } else if (combinedUri.includes('/radar')) {
+        type = 'radar';
+      } else if (combinedUri.includes('/releases')) {
+        type = 'releases';
+      } else if (combinedUri.includes('/compare')) {
+        type = 'compare';
+      } else if (combinedUri.includes('/import-hub')) {
+        type = 'import-hub';
+      } else if (combinedUri.includes('/licencias/')) {
+        type = 'licencia_detail';
+        const match = combinedUri.match(/\/licencias\/([^\/\?\s]+)/);
+        if (match) slug = match[1];
+      } else if (combinedUri.includes('/licencias')) {
+        type = 'licencias';
+      } else if (combinedUri.includes('/themes/') || combinedUri.includes('/temas/')) {
+        type = 'theme_detail';
+        const match = combinedUri.match(/\/(?:themes|temas)\/([^\/\?\s]+)/);
+        if (match) slug = match[1];
+      } else if (combinedUri.includes('/themes') || combinedUri.includes('/temas')) {
+        type = 'themes';
       } else if (combinedUri.includes('/page/')) {
         type = 'page';
         const match = combinedUri.match(/\/page\/([^\/\?\s]+)/);
         if (match) slug = match[1];
-      } else if (combinedUri.includes('/licencias')) {
-        type = 'licencias';
-      } else if (combinedUri.includes('/themes') || combinedUri.includes('/temas')) {
-        type = 'themes';
       } else if (combinedUri.includes('/contact')) {
-        type = 'page';
-        slug = 'contact';
+        type = 'contact';
       } else if (combinedUri.includes('/shop')) {
         type = 'shop';
       } else if (combinedUri.includes('type=home') || reqUrl === '/' || xForwardedUri === '/') {
@@ -476,6 +785,7 @@ export default async function handler(req, res) {
     let jsonLdScripts = [];
     let bodyContent = '';
 
+    // 1. PRODUCT
     if ((type === 'producto' || type === 'product' || type === 'p') && slug) {
       const resolved = await resolveCanonicalProduct(slug);
 
@@ -550,6 +860,7 @@ export default async function handler(req, res) {
         </div>
       `;
 
+    // 2. CATEGORY
     } else if (type === 'categoria' && slug) {
       const { data: category } = await supabase
         .from('categories')
@@ -596,6 +907,7 @@ export default async function handler(req, res) {
         </div>
       `;
 
+    // 3. BRAND
     } else if (type === 'marca' && slug) {
       const { data: brand } = await supabase
         .from('brands')
@@ -642,34 +954,123 @@ export default async function handler(req, res) {
         </div>
       `;
 
-    } else if (type === 'static' || type === 'page') {
-      const pageSlug = slug || '';
-      const pageTitles = {
-        'nosotros': 'Nosotros',
-        'terminos': 'Términos y Condiciones',
-        'pol-ticas-de-privacidad': 'Políticas de Privacidad',
-        'condiciones-de-compra': 'Condiciones de Compra',
-        'envios-devoluciones': 'Envíos y Devoluciones',
-        'contact': 'Contacto'
-      };
-      const pageName = pageTitles[pageSlug] || pageSlug || 'Página';
-      title = generateMetaTitle('static', pageName);
-      description = generateMetaDescription('static', null, pageName);
-      canonical = generateCanonical('static', pageSlug.startsWith('page/') ? pageSlug : (pageSlug === 'contact' ? 'contact' : `page/${pageSlug}`));
+    // 4. ACADEMY ARTICLE
+    } else if (type === 'academy_article' && slug) {
+      const guideData = ACADEMY_ARTICLES_MAP[slug];
+      let articleTitle = guideData ? guideData.title : 'Guía de Coleccionismo';
+      let articleExcerpt = guideData ? guideData.excerpt : '';
 
-      const breadcrumbSchema = generateBreadcrumbs('static', { name: pageName, path: canonical.replace(`${BASE_URL}/`, '') });
+      if (!guideData) {
+        const { data: dbArticle } = await supabase
+          .from('academy_content')
+          .select('title, excerpt, featured_image')
+          .eq('slug', slug)
+          .maybeSingle();
+
+        if (dbArticle) {
+          articleTitle = dbArticle.title;
+          articleExcerpt = dbArticle.excerpt;
+        } else {
+          return renderNotFoundPage(res, htmlTemplate, 'academy', slug);
+        }
+      }
+
+      title = generateMetaTitle('academy', articleTitle);
+      description = generateMetaDescription('academy', articleExcerpt, articleTitle);
+      canonical = generateCanonical('academy', slug);
+
+      const breadcrumbSchema = generateBreadcrumbs('academy', { title: articleTitle, slug });
+      jsonLdScripts.push(breadcrumbSchema);
+
+      bodyContent = `
+        <div style="padding: 20px; font-family: system-ui, -apple-system, sans-serif; max-width: 900px; margin: 0 auto;">
+          <nav style="font-size: 14px; margin-bottom: 15px;">
+            <a href="${BASE_URL}/">Inicio</a> &gt; <a href="${BASE_URL}/academy">Collector Academy</a> &gt; <span>${escapeHtml(articleTitle)}</span>
+          </nav>
+          <article>
+            <h1 style="font-size: 32px; font-weight: bold; margin-bottom: 15px;">${escapeHtml(articleTitle)}</h1>
+            <p style="font-size: 18px; color: #4b5563; line-height: 1.6;">${escapeHtml(description)}</p>
+          </article>
+        </div>
+      `;
+
+    // 5. ACADEMY HOME
+    } else if (type === 'academy') {
+      title = generateMetaTitle('academy');
+      description = generateMetaDescription('academy');
+      canonical = generateCanonical('academy');
+
+      const breadcrumbSchema = generateBreadcrumbs('academy');
       jsonLdScripts.push(breadcrumbSchema);
 
       bodyContent = `
         <div style="padding: 20px; font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto;">
           <nav style="font-size: 14px; margin-bottom: 15px;">
-            <a href="${BASE_URL}/">Inicio</a> &gt; <span>${escapeHtml(pageName)}</span>
+            <a href="${BASE_URL}/">Inicio</a> &gt; <span>Collector Academy</span>
           </nav>
-          <h1 style="font-size: 28px; font-weight: bold; margin-bottom: 10px;">${escapeHtml(pageName)}</h1>
+          <h1 style="font-size: 32px; font-weight: bold; margin-bottom: 10px;">Collector Academy Uruguay</h1>
+          <p style="font-size: 16px; color: #4b5563;">${escapeHtml(description)}</p>
+        </div>
+      `;
+
+    // 6. RADAR
+    } else if (type === 'radar' || type === 'releases') {
+      title = generateMetaTitle(type);
+      description = generateMetaDescription(type);
+      canonical = generateCanonical(type);
+
+      const breadcrumbSchema = generateBreadcrumbs(type);
+      jsonLdScripts.push(breadcrumbSchema);
+
+      bodyContent = `
+        <div style="padding: 20px; font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto;">
+          <nav style="font-size: 14px; margin-bottom: 15px;">
+            <a href="${BASE_URL}/">Inicio</a> &gt; <span>Radar de Lanzamientos</span>
+          </nav>
+          <h1 style="font-size: 32px; font-weight: bold; margin-bottom: 10px;">Collectibles Radar & Lanzamientos</h1>
           <p>${escapeHtml(description)}</p>
         </div>
       `;
 
+    // 7. COMPARE
+    } else if (type === 'compare') {
+      title = generateMetaTitle('compare');
+      description = generateMetaDescription('compare');
+      canonical = generateCanonical('compare');
+
+      const breadcrumbSchema = generateBreadcrumbs('compare');
+      jsonLdScripts.push(breadcrumbSchema);
+
+      bodyContent = `
+        <div style="padding: 20px; font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto;">
+          <nav style="font-size: 14px; margin-bottom: 15px;">
+            <a href="${BASE_URL}/">Inicio</a> &gt; <span>Comparador</span>
+          </nav>
+          <h1 style="font-size: 32px; font-weight: bold; margin-bottom: 10px;">Comparador de Figuras y Coleccionables</h1>
+          <p>${escapeHtml(description)}</p>
+        </div>
+      `;
+
+    // 8. IMPORT HUB
+    } else if (type === 'import-hub') {
+      title = generateMetaTitle('import-hub');
+      description = generateMetaDescription('import-hub');
+      canonical = generateCanonical('import-hub');
+
+      const breadcrumbSchema = generateBreadcrumbs('import-hub');
+      jsonLdScripts.push(breadcrumbSchema);
+
+      bodyContent = `
+        <div style="padding: 20px; font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto;">
+          <nav style="font-size: 14px; margin-bottom: 15px;">
+            <a href="${BASE_URL}/">Inicio</a> &gt; <span>Import Hub</span>
+          </nav>
+          <h1 style="font-size: 32px; font-weight: bold; margin-bottom: 10px;">Collectibles Import Hub Uruguay</h1>
+          <p>${escapeHtml(description)}</p>
+        </div>
+      `;
+
+    // 9. LICENCIAS & THEMES
     } else if (type === 'licencias') {
       title = generateMetaTitle('licencias');
       description = generateMetaDescription('licencias');
@@ -736,6 +1137,7 @@ export default async function handler(req, res) {
         </div>
       `;
 
+    // 10. SHOP
     } else if (type === 'shop') {
       title = generateMetaTitle('shop');
       description = generateMetaDescription('shop');
@@ -768,8 +1170,37 @@ export default async function handler(req, res) {
         </div>
       `;
 
+    // 11. STATIC / LEGAL / CONTACT
+    } else if (type === 'static' || type === 'page' || type === 'contact') {
+      const pageSlug = type === 'contact' ? 'contact' : (slug || '');
+      const pageTitles = {
+        'nosotros': 'Nosotros',
+        'terminos': 'Términos y Condiciones',
+        'pol-ticas-de-privacidad': 'Políticas de Privacidad',
+        'condiciones-de-compra': 'Condiciones de Compra',
+        'envios-devoluciones': 'Envíos y Devoluciones',
+        'contact': 'Contacto'
+      };
+      const pageName = pageTitles[pageSlug] || pageSlug || 'Página Institucional';
+      title = generateMetaTitle('static', pageName);
+      description = generateMetaDescription('static', null, pageName);
+      canonical = generateCanonical(pageSlug === 'contact' ? 'contact' : 'page', pageSlug);
+
+      const breadcrumbSchema = generateBreadcrumbs('static', { name: pageName, path: canonical.replace(`${BASE_URL}/`, '') });
+      jsonLdScripts.push(breadcrumbSchema);
+
+      bodyContent = `
+        <div style="padding: 20px; font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto;">
+          <nav style="font-size: 14px; margin-bottom: 15px;">
+            <a href="${BASE_URL}/">Inicio</a> &gt; <span>${escapeHtml(pageName)}</span>
+          </nav>
+          <h1 style="font-size: 28px; font-weight: bold; margin-bottom: 10px;">${escapeHtml(pageName)}</h1>
+          <p>${escapeHtml(description)}</p>
+        </div>
+      `;
+
+    // 12. HOME
     } else if (type === 'home' || reqUrl === '/' || combinedUri.includes('type=home')) {
-      // HOME
       title = generateMetaTitle('home');
       description = generateMetaDescription('home');
       canonical = generateCanonical('home');
@@ -883,7 +1314,7 @@ export default async function handler(req, res) {
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
     }
-    res.status(200).send(renderedHtml);
+    return res.status(200).send(renderedHtml);
   } catch (error) {
     console.error('Error in SEO Prerender handler:', error);
     res.status(500).send('Server Error');

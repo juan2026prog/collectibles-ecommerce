@@ -68,6 +68,7 @@ export default function ReleaseDetailPage() {
       <SEO
         title={`${release.title} | Radar Collectibles 2026`}
         description={release.summary || release.description || 'Seguimiento de lanzamiento y pre-órdenes'}
+        url={`https://collectibles.uy/radar/${slug}`}
       />
 
       {/* Back Link */}
