@@ -539,7 +539,6 @@ const CATEGORY_TABS = [
   { key: 'care', label: 'Cuidado & Exhibición', icon: Box, count: 6 },
   { key: 'market', label: 'Mercado', icon: ShoppingBag, count: 4 },
   { key: 'glossary', label: 'Glosario', icon: HelpCircle, count: 2 },
-  { key: 'all', label: 'Todas las Guías', icon: BookOpen, count: 28 },
 ];
 
 const TYPE_COLORS: Record<string, string> = {
@@ -948,9 +947,28 @@ export default function AcademyHome() {
               )}
             </div>
 
-            {/* Controles secundarios: Vista compacta + Switcher de Vistas */}
-            <div className="flex items-center justify-between sm:justify-end gap-3 flex-shrink-0">
-              {/* Checkbox Vista Compacta */}
+            {/* Controles secundarios: Todas las guías + Sin Imágenes + Switcher de Vistas */}
+            <div className="flex items-center justify-between sm:justify-end gap-2.5 flex-shrink-0 flex-wrap sm:flex-nowrap">
+              
+              {/* Botón Todas las guías */}
+              <button
+                onClick={() => setActiveTab('all')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer ${
+                  activeTab === 'all'
+                    ? 'bg-emerald-500 text-black border-emerald-400 shadow-md shadow-emerald-500/25 font-black'
+                    : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-700 hover:bg-zinc-850'
+                }`}
+              >
+                <BookOpen size={13} className={activeTab === 'all' ? 'text-black' : 'text-emerald-400'} />
+                <span>Todas las guías</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                  activeTab === 'all' ? 'bg-black/20 text-black' : 'bg-zinc-800 text-zinc-400'
+                }`}>
+                  28
+                </span>
+              </button>
+
+              {/* Checkbox Sin Imágenes */}
               <label 
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border cursor-pointer text-xs select-none transition ${
                   isCompactView 
@@ -965,10 +983,7 @@ export default function AcademyHome() {
                   onChange={(e) => handleToggleCompactView(e.target.checked)}
                   className="rounded bg-zinc-800 border-zinc-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-zinc-900 w-3.5 h-3.5 cursor-pointer accent-emerald-500"
                 />
-                <span className="font-bold">Vista compacta</span>
-                <span className="text-[10px] text-zinc-500 hidden md:inline leading-none">
-                  (sin imágenes)
-                </span>
+                <span className="font-bold">Sin Imágenes</span>
               </label>
 
               {/* View Switcher & Counter */}
