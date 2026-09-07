@@ -115,7 +115,7 @@
   "rewrites": [
     {
       "source": "/sitemap.xml",
-      "destination": "/api/sitemap"
+      "destination": "/api/sitemap?type=index"
     },
     {
       "source": "/sitemap_index.xml",
@@ -140,6 +140,14 @@
     {
       "source": "/sitemap-pages.xml",
       "destination": "/api/sitemap?type=pages"
+    },
+    {
+      "source": "/sitemap-(.*)",
+      "destination": "/api/sitemap?type=unknown"
+    },
+    {
+      "source": "/sitemap_(.*)",
+      "destination": "/api/sitemap?type=unknown"
     },
     {
       "source": "/merchant-feed.xml",
