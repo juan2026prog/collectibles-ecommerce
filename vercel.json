@@ -4,7 +4,7 @@
   "outputDirectory": "frontend/dist",
   "headers": [
     {
-      "source": "/assets/(.*)",
+      "source": "/assets/:path*",
       "headers": [
         {
           "key": "Cache-Control",
@@ -142,11 +142,11 @@
       "destination": "/api/sitemap?type=pages"
     },
     {
-      "source": "/sitemap-(.*)",
+      "source": "/sitemap-:slug*",
       "destination": "/api/sitemap?type=unknown"
     },
     {
-      "source": "/sitemap_(.*)",
+      "source": "/sitemap_:slug*",
       "destination": "/api/sitemap?type=unknown"
     },
     {
@@ -158,56 +158,48 @@
       "destination": "/api/meta-catalog"
     },
     {
-      "source": "/catalog-images/(.*)",
-      "destination": "/api/catalog-image?path=$1"
+      "source": "/catalog-images/:path*",
+      "destination": "/api/catalog-image?path=:path*"
     },
     {
-      "source": "/assets/(.*):([0-9]+):([0-9]+)",
-      "destination": "/api/seo-prerender?type=asset_garbage"
-    },
-    {
-      "source": "/sample-page(.*)",
+      "source": "/sample-page:slug*",
       "destination": "/api/seo-prerender?type=wp_garbage"
     },
     {
-      "source": "/wp-includes/(.*)",
+      "source": "/wp-includes/:slug*",
       "destination": "/api/seo-prerender?type=wp_garbage"
     },
     {
-      "source": "/wp-content/(.*)",
+      "source": "/wp-content/:slug*",
       "destination": "/api/seo-prerender?type=wp_garbage"
     },
     {
-      "source": "/wp-(.*)",
+      "source": "/wp-:slug*",
       "destination": "/api/seo-prerender?type=wp_garbage"
     },
     {
-      "source": "/feed(.*)",
+      "source": "/feed:slug*",
       "destination": "/api/seo-prerender?type=wp_garbage"
     },
     {
-      "source": "/author/(.*)",
+      "source": "/author/:slug*",
       "destination": "/api/seo-prerender?type=wp_garbage"
     },
     {
-      "source": "/blog/(.*)",
+      "source": "/blog/:slug*",
       "destination": "/api/seo-prerender?type=wp_garbage"
     },
     {
-      "source": "/2024/(.*)",
+      "source": "/2024/:slug*",
       "destination": "/api/seo-prerender?type=wp_garbage"
     },
     {
-      "source": "/2025/(.*)",
+      "source": "/2025/:slug*",
       "destination": "/api/seo-prerender?type=wp_garbage"
     },
     {
-      "source": "/2026/(.*)",
+      "source": "/2026/:slug*",
       "destination": "/api/seo-prerender?type=wp_garbage"
-    },
-    {
-      "source": "/page=([0-9]+)(.*)",
-      "destination": "/api/seo-prerender?type=page_garbage"
     },
     {
       "source": "/producto/:slug*",
