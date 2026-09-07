@@ -166,6 +166,7 @@ export default async function handler(req, res) {
 
     res.setHeader('Content-Type', 'application/xml; charset=utf-8');
     res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=43200');
+    res.setHeader('X-SEO-Version', '2026.09.07-v4');
 
     // 1. SITEMAP INDEX
     if (isIndex) {

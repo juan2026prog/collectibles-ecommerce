@@ -1326,6 +1326,7 @@ export default async function handler(req, res) {
     }
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('X-SEO-Version', '2026.09.07-v4');
     if (isBot) {
       res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400');
     } else {
