@@ -23,6 +23,7 @@ export interface AcademyArticle {
 }
 
 const ALL_ACADEMY_ARTICLES: AcademyArticle[] = [
+  // ─── 1. PRIMEROS PASOS (6 guías) ─────────────────────────────────────────────
   {
     id: 'art-empezar',
     title: 'Cómo Empezar una Colección sin Comprar Todo lo que Ves',
@@ -33,18 +34,6 @@ const ALL_ACADEMY_ARTICLES: AcademyArticle[] = [
     featured_image: 'https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?w=1200&q=80',
     read_time_minutes: 8,
     category_name: 'Primeros Pasos',
-    level: 'Inicial'
-  },
-  {
-    id: 'art-escalas-nuevo',
-    title: 'Guía de Escalas en Figuras de Colección: de 1:18 a 1:4',
-    slug: 'guia-escalas-figuras-coleccion',
-    excerpt: 'Aprende qué significan las escalas 1:18, 1:12, 1:10, 1:6 y 1:4, cuánto mide cada figura y cuáles pueden exhibirse juntas.',
-    type: 'GUÍA',
-    category_key: 'scales',
-    featured_image: 'https://images.unsplash.com/photo-1608889476518-738c9b1dcb40?w=1200&q=80',
-    read_time_minutes: 7,
-    category_name: 'Escalas & Tamaños',
     level: 'Inicial'
   },
   {
@@ -59,68 +48,6 @@ const ALL_ACADEMY_ARTICLES: AcademyArticle[] = [
     category_name: 'Primeros Pasos',
     level: 'Inicial'
   },
-  {
-    id: 'art-bootleg-nuevo',
-    title: 'Cómo Reconocer una Figura Original y Evitar Bootlegs',
-    slug: 'como-reconocer-figura-original-bootleg',
-    excerpt: 'Aprende a identificar señales comunes de falsificaciones y qué revisar antes de comprar.',
-    type: 'AUTENTICIDAD',
-    category_key: 'authenticity',
-    featured_image: 'https://images.unsplash.com/photo-1620428268482-cf1851a36764?w=1200&q=80',
-    read_time_minutes: 6,
-    category_name: 'Autenticidad & Copias',
-    level: 'Inicial'
-  },
-  {
-    id: 'art-materiales-nuevo',
-    title: 'PVC, ABS, Resina y Die-Cast: Materiales de las Figuras Explicados',
-    slug: 'materiales-figuras-pvc-abs-resina-diecast',
-    excerpt: 'Qué diferencias existen entre PVC, ABS, resina y metal die-cast y cómo afectan peso, detalle y resistencia.',
-    type: 'MATERIALES',
-    category_key: 'care',
-    featured_image: 'https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=1200&q=80',
-    read_time_minutes: 6,
-    category_name: 'Materiales & Conservación',
-    level: 'Intermedio'
-  },
-  {
-    id: 'art-cuidar-nuevo',
-    title: 'Cómo Cuidar y Exhibir tus Figuras sin Dañarlas',
-    slug: 'como-cuidar-exhibir-figuras-coleccion',
-    excerpt: 'Luz, polvo, humedad y temperatura: las reglas esenciales para conservar una colección durante años.',
-    type: 'CUIDADO',
-    category_key: 'care',
-    featured_image: 'https://images.unsplash.com/photo-1545558014-8692077e9b5c?w=1200&q=80',
-    read_time_minutes: 5,
-    category_name: 'Materiales & Conservación',
-    level: 'Inicial'
-  },
-  {
-    id: 'art-misb',
-    title: 'MISB, MIB, Loose y otros términos del coleccionismo',
-    slug: 'misb-mib-loose-glosario-coleccionismo',
-    excerpt: '¿MISB? ¿MIB? ¿Loose? Aprende los términos utilizados para describir el estado de figuras y coleccionables.',
-    type: 'GLOSARIO',
-    category_key: 'glossary',
-    featured_image: 'https://images.unsplash.com/photo-1614094082869-cd4e4b2905c7?w=1200&q=80',
-    read_time_minutes: 5,
-    category_name: 'Glosario & Términos',
-    level: 'Inicial'
-  },
-  {
-    id: 'art-edicion-limitada',
-    title: 'Edición Limitada, Exclusive, Chase y Pre-Order: Qué Significan',
-    slug: 'edicion-limitada-exclusive-chase-preorder',
-    excerpt: 'Aprende la diferencia entre edición limitada, exclusiva, chase, preventa y reedición antes de comprar.',
-    type: 'COMPRA',
-    category_key: 'glossary',
-    featured_image: 'https://images.unsplash.com/photo-1612404730960-5c71577fca11?w=1200&q=80',
-    read_time_minutes: 5,
-    category_name: 'Glosario & Términos',
-    level: 'Inicial'
-  },
-  // ─── 20 NUEVAS GUÍAS EDITORIALES DE TENDENCIA ─────────────────────────────────
-  // SECCIÓN 1: PRIMEROS PASOS
   {
     id: 'art-foco-coleccion',
     title: 'El Arte del Foco: Cómo Elegir una Sola Línea y Dominarla sin Dispersarse',
@@ -169,30 +96,19 @@ const ALL_ACADEMY_ARTICLES: AcademyArticle[] = [
     category_name: 'Primeros Pasos',
     level: 'Inicial'
   },
-  // SECCIÓN 2: ESCALAS & TAMAÑOS
+
+  // ─── 2. ESCALAS & TAMAÑOS (3 guías) ──────────────────────────────────────────
   {
-    id: 'art-batalla-1-12-import-retail',
-    title: 'Batalla en Escala 1:12: Diferencias Reales entre Import Japonés y Retail Americano',
-    slug: 'batalla-escala-1-12-import-japones-vs-retail-americano',
-    excerpt: 'MAFEX y S.H.Figuarts frente a Marvel Legends y DC Multiverse: comparativa milimétrica de articulación, accesorios, escala real y relación calidad-precio.',
-    type: 'GUÍA',
-    category_key: 'scales',
-    featured_image: 'https://images.unsplash.com/photo-1563089145-599997674d42?w=1200&q=80',
-    read_time_minutes: 8,
-    category_name: 'Escalas & Tamaños',
-    level: 'Intermedio'
-  },
-  {
-    id: 'art-frontera-18cm-1-10',
-    title: 'La Frontera de los 18 cm: Por Qué la Escala 1:10 de McFarlane y NECA No Encaja con Todo',
-    slug: 'frontera-18-cm-escala-1-10-mcfarlane-neca',
-    excerpt: 'Las 7 pulgadas tienen una presencia imponente pero generan pesadillas de escala al mezclarse. Cómo armar repisas armoniosas con escala 1:10.',
+    id: 'art-escalas-nuevo',
+    title: 'Guía de Escalas en Figuras de Colección: de 1:18 a 1:4',
+    slug: 'guia-escalas-figuras-coleccion',
+    excerpt: 'Aprende qué significan las escalas 1:18, 1:12, 1:10, 1:6 y 1:4, cuánto mide cada figura y cuáles pueden exhibirse juntas.',
     type: 'GUÍA',
     category_key: 'scales',
     featured_image: 'https://images.unsplash.com/photo-1608889476518-738c9b1dcb40?w=1200&q=80',
-    read_time_minutes: 6,
+    read_time_minutes: 7,
     category_name: 'Escalas & Tamaños',
-    level: 'Intermedio'
+    level: 'Inicial'
   },
   {
     id: 'art-salto-escala-1-6',
@@ -218,7 +134,70 @@ const ALL_ACADEMY_ARTICLES: AcademyArticle[] = [
     category_name: 'Escalas & Tamaños',
     level: 'Inicial'
   },
-  // SECCIÓN 3: AUTENTICIDAD & FABRICANTES
+
+  // ─── 3. MARCAS & GAMAS (4 guías) ─────────────────────────────────────────────
+  {
+    id: 'art-batalla-1-12-import-retail',
+    title: 'Batalla en Escala 1:12: Diferencias Reales entre Import Japonés y Retail Americano',
+    slug: 'batalla-escala-1-12-import-japones-vs-retail-americano',
+    excerpt: 'MAFEX y S.H.Figuarts frente a Marvel Legends y DC Multiverse: comparativa milimétrica de articulación, accesorios, escala real y relación calidad-precio.',
+    type: 'GUÍA',
+    category_key: 'brands',
+    featured_image: 'https://images.unsplash.com/photo-1563089145-599997674d42?w=1200&q=80',
+    read_time_minutes: 8,
+    category_name: 'Marcas & Gamas',
+    level: 'Intermedio'
+  },
+  {
+    id: 'art-frontera-18cm-1-10',
+    title: 'La Frontera de los 18 cm: Por Qué la Escala 1:10 de McFarlane y NECA No Encaja con Todo',
+    slug: 'frontera-18-cm-escala-1-10-mcfarlane-neca',
+    excerpt: 'Las 7 pulgadas tienen una presencia imponente pero generan pesadillas de escala al mezclarse. Cómo armar repisas armoniosas con escala 1:10.',
+    type: 'GUÍA',
+    category_key: 'brands',
+    featured_image: 'https://images.unsplash.com/photo-1608889476518-738c9b1dcb40?w=1200&q=80',
+    read_time_minutes: 6,
+    category_name: 'Marcas & Gamas',
+    level: 'Intermedio'
+  },
+  {
+    id: 'art-lineas-entrada-vs-alta-gama',
+    title: 'Líneas de Entrada vs Alta Gama: Bandai Spirits, Good Smile Company y Medicom Explicadas',
+    slug: 'lineas-entrada-vs-alta-gama-fabricantes-coleccionismo',
+    excerpt: 'Ichibansho vs Figuarts ZERO, Pop Up Parade vs Scale Figures y MAFEX vs Figma: guía de jerarquías para saber exactamente por qué estás pagando.',
+    type: 'AUTENTICIDAD',
+    category_key: 'brands',
+    featured_image: 'https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?w=1200&q=80',
+    read_time_minutes: 8,
+    category_name: 'Marcas & Gamas',
+    level: 'Intermedio'
+  },
+  {
+    id: 'art-titanes-hot-toys-vs-inart',
+    title: 'Guerra de Titanes 1:6: Ingeniería de Hot Toys frente a la Silicona y Pelo Enraizado de InArt',
+    slug: 'guerra-titanes-1-6-hot-toys-vs-inart-ingenieria',
+    excerpt: 'La revolución del hiperrealismo: articulaciones magnéticas, trajes a medida y ojos móviles independientes. El cambio de paradigma en el coleccionismo cinematográfico.',
+    type: 'AUTENTICIDAD',
+    category_key: 'brands',
+    featured_image: 'https://images.unsplash.com/photo-1620428268482-cf1851a36764?w=1200&q=80',
+    read_time_minutes: 9,
+    category_name: 'Marcas & Gamas',
+    level: 'Avanzado'
+  },
+
+  // ─── 4. AUTENTICIDAD (3 guías) ───────────────────────────────────────────────
+  {
+    id: 'art-bootleg-nuevo',
+    title: 'Cómo Reconocer una Figura Original y Evitar Bootlegs',
+    slug: 'como-reconocer-figura-original-bootleg',
+    excerpt: 'Aprende a identificar señales comunes de falsificaciones y qué revisar antes de comprar.',
+    type: 'AUTENTICIDAD',
+    category_key: 'authenticity',
+    featured_image: 'https://images.unsplash.com/photo-1620428268482-cf1851a36764?w=1200&q=80',
+    read_time_minutes: 6,
+    category_name: 'Autenticidad',
+    level: 'Inicial'
+  },
   {
     id: 'art-cabezas-custom-3d',
     title: 'El Mercado de las Cabezas Custom: Escultura 3D, Pintura a Mano y Licencias no Oficiales',
@@ -228,31 +207,7 @@ const ALL_ACADEMY_ARTICLES: AcademyArticle[] = [
     category_key: 'authenticity',
     featured_image: 'https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=1200&q=80',
     read_time_minutes: 7,
-    category_name: 'Autenticidad & Copias',
-    level: 'Avanzado'
-  },
-  {
-    id: 'art-lineas-entrada-vs-alta-gama',
-    title: 'Líneas de Entrada vs Alta Gama: Bandai Spirits, Good Smile Company y Medicom Explicadas',
-    slug: 'lineas-entrada-vs-alta-gama-fabricantes-coleccionismo',
-    excerpt: 'Ichibansho vs Figuarts ZERO, Pop Up Parade vs Scale Figures y MAFEX vs Figma: guía de jerarquías para saber exactamente por qué estás pagando.',
-    type: 'AUTENTICIDAD',
-    category_key: 'authenticity',
-    featured_image: 'https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?w=1200&q=80',
-    read_time_minutes: 8,
-    category_name: 'Autenticidad & Copias',
-    level: 'Intermedio'
-  },
-  {
-    id: 'art-titanes-hot-toys-vs-inart',
-    title: 'Guerra de Titanes 1:6: Ingeniería de Hot Toys frente a la Silicona y Pelo Enraizado de InArt',
-    slug: 'guerra-titanes-1-6-hot-toys-vs-inart-ingenieria',
-    excerpt: 'La revolución del hiperrealismo: articulaciones magnéticas, trajes a medida y ojos móviles independientes. El cambio de paradigma en el coleccionismo cinematográfico.',
-    type: 'AUTENTICIDAD',
-    category_key: 'authenticity',
-    featured_image: 'https://images.unsplash.com/photo-1620428268482-cf1851a36764?w=1200&q=80',
-    read_time_minutes: 9,
-    category_name: 'Autenticidad & Copias',
+    category_name: 'Autenticidad',
     level: 'Avanzado'
   },
   {
@@ -264,10 +219,35 @@ const ALL_ACADEMY_ARTICLES: AcademyArticle[] = [
     category_key: 'authenticity',
     featured_image: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=1200&q=80',
     read_time_minutes: 7,
-    category_name: 'Autenticidad & Copias',
+    category_name: 'Autenticidad',
     level: 'Avanzado'
   },
-  // SECCIÓN 4: MATERIALES, MANTENIMIENTO & POSA
+
+  // ─── 5. CUIDADO & EXHIBICIÓN (6 guías) ───────────────────────────────────────
+  {
+    id: 'art-materiales-nuevo',
+    title: 'PVC, ABS, Resina y Die-Cast: Materiales de las Figuras Explicados',
+    slug: 'materiales-figuras-pvc-abs-resina-diecast',
+    excerpt: 'Qué diferencias existen entre PVC, ABS, resina y metal die-cast y cómo afectan peso, detalle y resistencia.',
+    type: 'MATERIALES',
+    category_key: 'care',
+    featured_image: 'https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=1200&q=80',
+    read_time_minutes: 6,
+    category_name: 'Cuidado & Exhibición',
+    level: 'Intermedio'
+  },
+  {
+    id: 'art-cuidar-nuevo',
+    title: 'Cómo Cuidar y Exhibir tus Figuras sin Dañarlas',
+    slug: 'como-cuidar-exhibir-figuras-coleccion',
+    excerpt: 'Luz, polvo, humedad y temperatura: las reglas esenciales para conservar una colección durante años.',
+    type: 'CUIDADO',
+    category_key: 'care',
+    featured_image: 'https://images.unsplash.com/photo-1545558014-8692077e9b5c?w=1200&q=80',
+    read_time_minutes: 5,
+    category_name: 'Cuidado & Exhibición',
+    level: 'Inicial'
+  },
   {
     id: 'art-articulaciones-rigidas-calor',
     title: 'Articulaciones Rígidas y Clavijas Quebradas: Técnicas Seguras con Calor para No Romper Figuras',
@@ -277,7 +257,7 @@ const ALL_ACADEMY_ARTICLES: AcademyArticle[] = [
     category_key: 'care',
     featured_image: 'https://images.unsplash.com/photo-1545558014-8692077e9b5c?w=1200&q=80',
     read_time_minutes: 6,
-    category_name: 'Materiales & Conservación',
+    category_name: 'Cuidado & Exhibición',
     level: 'Intermedio'
   },
   {
@@ -289,7 +269,7 @@ const ALL_ACADEMY_ARTICLES: AcademyArticle[] = [
     category_key: 'care',
     featured_image: 'https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=1200&q=80',
     read_time_minutes: 5,
-    category_name: 'Materiales & Conservación',
+    category_name: 'Cuidado & Exhibición',
     level: 'Intermedio'
   },
   {
@@ -301,7 +281,7 @@ const ALL_ACADEMY_ARTICLES: AcademyArticle[] = [
     category_key: 'care',
     featured_image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1200&q=80',
     read_time_minutes: 7,
-    category_name: 'Materiales & Conservación',
+    category_name: 'Cuidado & Exhibición',
     level: 'Inicial'
   },
   {
@@ -313,21 +293,72 @@ const ALL_ACADEMY_ARTICLES: AcademyArticle[] = [
     category_key: 'care',
     featured_image: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=1200&q=80',
     read_time_minutes: 6,
-    category_name: 'Materiales & Conservación',
+    category_name: 'Cuidado & Exhibición',
     level: 'Avanzado'
   },
-  // SECCIÓN 5: GLOSARIO, COMPRA & LOGÍSTICA
+
+  // ─── 6. MERCADO (4 guías) ───────────────────────────────────────────────────
+  {
+    id: 'art-edicion-limitada',
+    title: 'Edición Limitada, Exclusive, Chase y Pre-Order: Qué Significan',
+    slug: 'edicion-limitada-exclusive-chase-preorder',
+    excerpt: 'Aprende la diferencia entre edición limitada, exclusiva, chase, preventa y reedición antes de comprar.',
+    type: 'COMPRA',
+    category_key: 'market',
+    featured_image: 'https://images.unsplash.com/photo-1612404730960-5c71577fca11?w=1200&q=80',
+    read_time_minutes: 5,
+    category_name: 'Mercado',
+    level: 'Inicial'
+  },
   {
     id: 'art-fomo-aftermarket-reissue',
     title: 'El Fenómeno FOMO y el Aftermarket: Cuándo Pagar Precio de Reventa y Cuándo Esperar un Reissue',
     slug: 'fomo-aftermarket-reventa-vs-esperar-reissue',
     excerpt: 'Psicología del mercado coleccionista: análisis de patrones de reedición de Bandai, MAFEX y Hot Toys para no caer en precios inflados por la histeria.',
     type: 'COMPRA',
-    category_key: 'glossary',
+    category_key: 'market',
     featured_image: 'https://images.unsplash.com/photo-1614094082869-cd4e4b2905c7?w=1200&q=80',
     read_time_minutes: 7,
-    category_name: 'Glosario & Términos',
+    category_name: 'Mercado',
     level: 'Intermedio'
+  },
+  {
+    id: 'art-preventas-depositos-retrasos',
+    title: 'Preventas y Depósitos de Reserva: Ciclo de Producción, Retrasos Habituales y Cancelaciones',
+    slug: 'preventas-depositos-reserva-ciclo-produccion-retrasos',
+    excerpt: 'De la fase de prototipo (grey model) a la aprobación de licencias y el flete marítimo. Guía para entender los tiempos de producción y asegurar tus piezas.',
+    type: 'COMPRA',
+    category_key: 'market',
+    featured_image: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=1200&q=80',
+    read_time_minutes: 6,
+    category_name: 'Mercado',
+    level: 'Inicial'
+  },
+  {
+    id: 'art-guia-importacion-uruguay-franquicia',
+    title: 'Guía de Importación en Uruguay: Cómo Usar la Franquicia de USD 200 para Coleccionables sin Pagar Recargos',
+    slug: 'guia-importacion-uruguay-franquicia-usd-200-figuras',
+    excerpt: 'El manual definitivo para coleccionistas uruguayos: reglas de Aduana, facturas comerciales, límite de 3 envíos anuales, peso máximo y cómo evitar retenciones.',
+    type: 'COMPRA',
+    category_key: 'market',
+    featured_image: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=1200&q=80',
+    read_time_minutes: 8,
+    category_name: 'Mercado',
+    level: 'Intermedio'
+  },
+
+  // ─── 7. GLOSARIO (2 guías) ──────────────────────────────────────────────────
+  {
+    id: 'art-misb',
+    title: 'MISB, MIB, Loose y otros términos del coleccionismo',
+    slug: 'misb-mib-loose-glosario-coleccionismo',
+    excerpt: '¿MISB? ¿MIB? ¿Loose? Aprende los términos utilizados para describir el estado de figuras y coleccionables.',
+    type: 'GLOSARIO',
+    category_key: 'glossary',
+    featured_image: 'https://images.unsplash.com/photo-1614094082869-cd4e4b2905c7?w=1200&q=80',
+    read_time_minutes: 5,
+    category_name: 'Glosario',
+    level: 'Inicial'
   },
   {
     id: 'art-grading-afa-cas-figuras',
@@ -338,32 +369,8 @@ const ALL_ACADEMY_ARTICLES: AcademyArticle[] = [
     category_key: 'glossary',
     featured_image: 'https://images.unsplash.com/photo-1612404730960-5c71577fca11?w=1200&q=80',
     read_time_minutes: 6,
-    category_name: 'Glosario & Términos',
+    category_name: 'Glosario',
     level: 'Avanzado'
-  },
-  {
-    id: 'art-preventas-depositos-retrasos',
-    title: 'Preventas y Depósitos de Reserva: Ciclo de Producción, Retrasos Habituales y Cancelaciones',
-    slug: 'preventas-depositos-reserva-ciclo-produccion-retrasos',
-    excerpt: 'De la fase de prototipo (grey model) a la aprobación de licencias y el flete marítimo. Guía para entender los tiempos de producción y asegurar tus piezas.',
-    type: 'COMPRA',
-    category_key: 'glossary',
-    featured_image: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=1200&q=80',
-    read_time_minutes: 6,
-    category_name: 'Glosario & Términos',
-    level: 'Inicial'
-  },
-  {
-    id: 'art-guia-importacion-uruguay-franquicia',
-    title: 'Guía de Importación en Uruguay: Cómo Usar la Franquicia de USD 200 para Coleccionables sin Pagar Recargos',
-    slug: 'guia-importacion-uruguay-franquicia-usd-200-figuras',
-    excerpt: 'El manual definitivo para coleccionistas uruguayos: reglas de Aduana, facturas comerciales, límite de 3 envíos anuales, peso máximo y cómo evitar retenciones.',
-    type: 'COMPRA',
-    category_key: 'glossary',
-    featured_image: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=1200&q=80',
-    read_time_minutes: 8,
-    category_name: 'Glosario & Términos',
-    level: 'Intermedio'
   }
 ];
 
@@ -505,13 +512,34 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
   'Todos': 'Índice general estructurado de toda la terminología del coleccionismo.'
 };
 
+// ─── METADATA DE LAS 7 CATEGORÍAS EDITORIALES DE GUÍAS ────────────────────────
+export interface GuideCategoryMeta {
+  key: string;
+  name: string;
+  count: number;
+  icon: any;
+  description: string;
+}
+
+const GUIDE_CATEGORIES_METADATA: GuideCategoryMeta[] = [
+  { key: 'start', name: 'Primeros Pasos', count: 6, icon: GraduationCap, description: 'Bases, presupuestos y criterios para construir una colección sostenible.' },
+  { key: 'scales', name: 'Escalas & Tamaños', count: 3, icon: Layers, description: 'Dimensiones reales, compatibilidad y requerimientos de vitrina.' },
+  { key: 'brands', name: 'Marcas & Gamas', count: 4, icon: Sparkles, description: 'Fabricantes, líneas de producto, filosofías de diseño y diferencias de gama.' },
+  { key: 'authenticity', name: 'Autenticidad', count: 3, icon: ShieldCheck, description: 'Identificación de piezas originales, bootlegs, copias no autorizadas y customs.' },
+  { key: 'care', name: 'Cuidado & Exhibición', count: 6, icon: Box, description: 'Materiales, conservación, técnicas de reparación y principios de posado.' },
+  { key: 'market', name: 'Mercado', count: 4, icon: ShoppingBag, description: 'Preventas, exclusivas, aftermarket, compras internacionales y franquicias.' },
+  { key: 'glossary', name: 'Glosario', count: 2, icon: HelpCircle, description: 'Terminología técnica fundamental y sistemas de certificación.' },
+];
+
 const CATEGORY_TABS = [
-  { key: 'all', label: 'Todas las Guías', icon: BookOpen },
-  { key: 'start', label: 'Primeros Pasos', icon: GraduationCap },
-  { key: 'scales', label: 'Escalas & Tamaños', icon: Layers },
-  { key: 'authenticity', label: 'Autenticidad & Bootlegs', icon: ShieldCheck },
-  { key: 'care', label: 'Materiales & Cuidados', icon: Box },
-  { key: 'glossary', label: 'Glosario & Términos', icon: HelpCircle },
+  { key: 'start', label: 'Primeros Pasos', icon: GraduationCap, count: 6 },
+  { key: 'scales', label: 'Escalas & Tamaños', icon: Layers, count: 3 },
+  { key: 'brands', label: 'Marcas & Gamas', icon: Sparkles, count: 4 },
+  { key: 'authenticity', label: 'Autenticidad', icon: ShieldCheck, count: 3 },
+  { key: 'care', label: 'Cuidado & Exhibición', icon: Box, count: 6 },
+  { key: 'market', label: 'Mercado', icon: ShoppingBag, count: 4 },
+  { key: 'glossary', label: 'Glosario', icon: HelpCircle, count: 2 },
+  { key: 'all', label: 'Todas las Guías', icon: BookOpen, count: 28 },
 ];
 
 const TYPE_COLORS: Record<string, string> = {
@@ -530,9 +558,20 @@ function getTypeBadgeClass(type: string): string {
 }
 
 export default function AcademyHome() {
-  const [activeTab, setActiveTab] = useState<string>('all');
+  // Categoría por defecto: Primeros Pasos
+  const [activeTab, setActiveTab] = useState<string>('start');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  
+  // Preferencia de Vista Compacta con persistencia en localStorage
+  const [isCompactView, setIsCompactView] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('academyCompactView') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
   const [selectedGlossaryCategory, setSelectedGlossaryCategory] = useState<GlossaryCategory>('Autenticidad');
   const [glossarySearch, setGlossarySearch] = useState<string>('');
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
@@ -546,6 +585,15 @@ export default function AcademyHome() {
   useEffect(() => {
     loadAcademyData();
   }, []);
+
+  const handleToggleCompactView = (val: boolean) => {
+    setIsCompactView(val);
+    try {
+      localStorage.setItem('academyCompactView', String(val));
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const loadAcademyData = async () => {
     try {
@@ -649,11 +697,118 @@ export default function AcademyHome() {
 
   const activeScale = scales[selectedScaleIndex] || scales[0];
 
+  // Helper para renderizar una Card de Guía según modo compacto o regular
+  const renderArticleCard = (art: AcademyArticle & { featured_image?: string }) => {
+    if (isCompactView) {
+      return (
+        <Link
+          key={art.id}
+          to={`/academy/${art.slug}`}
+          className="group flex flex-col justify-between bg-zinc-900/90 border border-zinc-800 hover:border-emerald-500/50 rounded-xl p-4 transition duration-200 shadow-md hover:shadow-emerald-500/5 space-y-3"
+        >
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+                  {art.category_name}
+                </span>
+                <span className="text-zinc-600">·</span>
+                <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${getTypeBadgeClass(art.type)}`}>
+                  {art.type}
+                </span>
+                {art.level && (
+                  <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700/60">
+                    {art.level}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1 text-[11px] font-medium text-zinc-400 flex-shrink-0">
+                <Clock size={11} className="text-emerald-400" />
+                <span>{art.read_time_minutes} min</span>
+              </div>
+            </div>
+
+            <h3 className="font-bold text-sm text-white group-hover:text-emerald-400 transition leading-snug line-clamp-2">
+              {art.title}
+            </h3>
+
+            <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
+              {art.excerpt}
+            </p>
+          </div>
+
+          <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between text-xs font-bold text-emerald-400 group-hover:translate-x-0.5 transition">
+            <span>Leer guía</span>
+            <ArrowRight size={13} />
+          </div>
+        </Link>
+      );
+    }
+
+    return (
+      <Link
+        key={art.id}
+        to={`/academy/${art.slug}`}
+        className="group flex flex-col bg-zinc-900/90 border border-zinc-800 hover:border-emerald-500/50 rounded-2xl overflow-hidden transition duration-300 shadow-lg hover:shadow-emerald-500/5"
+      >
+        {/* Image header */}
+        <div className="relative w-full h-44 bg-zinc-950 overflow-hidden">
+          {art.featured_image && (
+            <img
+              src={art.featured_image}
+              alt={art.title}
+              className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+              loading="lazy"
+            />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-transparent to-black/20" />
+          
+          {/* Badges */}
+          <div className="absolute top-3 left-3 flex items-center gap-1.5">
+            <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${getTypeBadgeClass(art.type)}`}>
+              {art.type}
+            </span>
+            {art.level && (
+              <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-black/70 backdrop-blur text-zinc-300 border border-zinc-700">
+                {art.level}
+              </span>
+            )}
+          </div>
+
+          <div className="absolute bottom-2.5 left-3 flex items-center gap-1 text-[11px] font-semibold text-zinc-300 bg-black/60 backdrop-blur px-2 py-0.5 rounded-md">
+            <Clock size={11} className="text-emerald-400" />
+            <span>{art.read_time_minutes} min lectura</span>
+          </div>
+        </div>
+
+        {/* Content body */}
+        <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
+          <div className="space-y-1.5">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+              {art.category_name}
+            </div>
+            <h3 className="font-bold text-sm text-white group-hover:text-emerald-400 transition leading-snug line-clamp-2">
+              {art.title}
+            </h3>
+            <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
+              {art.excerpt}
+            </p>
+          </div>
+
+          <div className="pt-2.5 border-t border-zinc-800/80 flex items-center justify-between text-xs font-bold text-emerald-400 group-hover:translate-x-0.5 transition">
+            <span>Leer guía completa</span>
+            <ArrowRight size={13} />
+          </div>
+        </div>
+      </Link>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-[#0a0c0e] text-white py-8 px-4 sm:px-6 lg:px-8 space-y-12">
       <SEO
         title="Collector Academy | Enciclopedia & Guías del Coleccionista"
-        description="Aprende sobre escalas (1:18 a 1:1 Life-Size), autenticidad de figuras, materiales PVC/resina/die-cast, cómo empezar tu colección, glosario MISB/MIB/Loose y mucho más."
+        description="Aprende sobre escalas (1:18 a 1:1 Life-Size), marcas, autenticidad de figuras, materiales PVC/resina/die-cast, cómo empezar tu colección, glosario MISB/MIB/Loose y mercado internacional."
       />
 
       {/* ── 1. HEADER HERO COMPACTO ────────────────────────────────────────────── */}
@@ -672,13 +827,13 @@ export default function AcademyHome() {
                 Aprende, compara y colecciona como un experto
               </h1>
               <p className="text-sm text-zinc-400 leading-relaxed max-w-xl">
-                Guías técnicas independientes sobre escalas, autenticidad, cuidado de piezas y terminología internacional de figuras de colección.
+                28 guías técnicas independientes sobre escalas, marcas, autenticidad, cuidado de piezas, mercado internacional y terminología de figuras de colección.
               </p>
               
               {/* Quick stats badges */}
               <div className="flex flex-wrap items-center gap-2.5 pt-1 text-xs text-zinc-400">
                 <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-800/80 border border-zinc-700/60 font-medium">
-                  <BookOpen size={13} className="text-emerald-400" /> 8 Guías completas
+                  <BookOpen size={13} className="text-emerald-400" /> 28 Guías completas
                 </span>
                 <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-800/80 border border-zinc-700/60 font-medium">
                   <Layers size={13} className="text-sky-400" /> 6 Escalas analizadas
@@ -701,7 +856,7 @@ export default function AcademyHome() {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Ej: Escalas, Bootleg, Resina..."
+                  placeholder="Ej: Escalas, Bootleg, Resina, InArt..."
                   className="w-full pl-9 pr-3 py-2.5 bg-zinc-900 border border-zinc-700/80 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 transition"
                 />
                 <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
@@ -715,7 +870,7 @@ export default function AcademyHome() {
                 )}
               </div>
               <div className="text-[11px] text-zinc-500">
-                Tip: Filtra por categoría o término para encontrar la guía precisa.
+                Tip: Busca en las 28 guías por título, contenido o categoría.
               </div>
             </div>
           </div>
@@ -725,182 +880,293 @@ export default function AcademyHome() {
       {/* ── 2. SECCIÓN PRINCIPAL: TABS Y FEED DE ARTÍCULOS ─────────────────────── */}
       <div className="max-w-7xl mx-auto space-y-6">
         
-        {/* Barra de navegación de Tabs + Controles de Vista */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
-          
-          {/* Scrollable Tabs */}
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 md:pb-0">
-            {CATEGORY_TABS.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.key;
-              return (
-                <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key)}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
-                    isActive
-                      ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20'
-                      : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
-                  }`}
-                >
-                  <Icon size={14} />
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* View Switcher & Counter */}
-          <div className="flex items-center justify-between md:justify-end gap-3 flex-shrink-0">
-            <span className="text-xs text-zinc-500 font-medium">
-              {filteredArticles.length} {filteredArticles.length === 1 ? 'guía' : 'guías'}
-            </span>
+        {/* Barra de navegación de Tabs + Controles secundarios */}
+        <div className="space-y-3 border-b border-zinc-800 pb-4">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             
-            <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl p-1 gap-1">
-              <button
-                onClick={() => setViewMode('grid')}
-                title="Vista de cuadrícula"
-                className={`p-1.5 rounded-lg transition ${
-                  viewMode === 'grid' 
-                    ? 'bg-zinc-800 text-emerald-400 shadow' 
-                    : 'text-zinc-500 hover:text-zinc-300'
-                }`}
+            {/* Scrollable Tabs */}
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 lg:pb-0">
+              {CATEGORY_TABS.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    onClick={() => setActiveTab(tab.key)}
+                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                      isActive
+                        ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20'
+                        : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+                    }`}
+                  >
+                    <Icon size={14} />
+                    <span>{tab.label}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${
+                      isActive ? 'bg-black/20 text-black' : 'bg-zinc-800 text-zinc-400'
+                    }`}>
+                      {tab.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Secondary Controls: Vista Compacta Checkbox + Switcher de Vistas */}
+            <div className="flex items-center justify-between lg:justify-end gap-3 flex-shrink-0">
+              
+              {/* Checkbox Vista Compacta */}
+              <label 
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 cursor-pointer text-xs select-none transition group"
+                title="Ocultar imágenes para recorrer las guías rápidamente"
               >
-                <LayoutGrid size={15} />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                title="Vista de lista compacta"
-                className={`p-1.5 rounded-lg transition ${
-                  viewMode === 'list' 
-                    ? 'bg-zinc-800 text-emerald-400 shadow' 
-                    : 'text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                <List size={15} />
-              </button>
+                <input
+                  type="checkbox"
+                  checked={isCompactView}
+                  onChange={(e) => handleToggleCompactView(e.target.checked)}
+                  className="rounded bg-zinc-800 border-zinc-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-zinc-900 w-3.5 h-3.5 cursor-pointer accent-emerald-500"
+                />
+                <div className="flex flex-col">
+                  <span className="font-bold text-zinc-300 group-hover:text-white flex items-center gap-1">
+                    Vista compacta
+                  </span>
+                  <span className="text-[10px] text-zinc-500 hidden sm:inline leading-none">
+                    Ocultar imágenes
+                  </span>
+                </div>
+              </label>
+
+              {/* View Switcher & Counter */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-zinc-500 font-medium hidden sm:inline">
+                  {filteredArticles.length} {filteredArticles.length === 1 ? 'guía' : 'guías'}
+                </span>
+                
+                <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl p-1 gap-1">
+                  <button
+                    onClick={() => setViewMode('grid')}
+                    title="Vista de cuadrícula"
+                    className={`p-1.5 rounded-lg transition ${
+                      viewMode === 'grid' 
+                        ? 'bg-zinc-800 text-emerald-400 shadow' 
+                        : 'text-zinc-500 hover:text-zinc-300'
+                    }`}
+                  >
+                    <LayoutGrid size={15} />
+                  </button>
+                  <button
+                    onClick={() => setViewMode('list')}
+                    title="Vista de lista"
+                    className={`p-1.5 rounded-lg transition ${
+                      viewMode === 'list' 
+                        ? 'bg-zinc-800 text-emerald-400 shadow' 
+                        : 'text-zinc-500 hover:text-zinc-300'
+                    }`}
+                  >
+                    <List size={15} />
+                  </button>
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
 
-        {/* ── MODO GRID COMPACTO ── */}
-        {viewMode === 'grid' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredArticles.map((art) => (
-              <Link
-                key={art.id}
-                to={`/academy/${art.slug}`}
-                className="group flex flex-col bg-zinc-900/90 border border-zinc-800 hover:border-emerald-500/50 rounded-2xl overflow-hidden transition duration-300 shadow-lg hover:shadow-emerald-500/5"
-              >
-                {/* Image header */}
-                <div className="relative w-full h-44 bg-zinc-950 overflow-hidden">
-                  {art.featured_image && (
-                    <img
-                      src={art.featured_image}
-                      alt={art.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                      loading="lazy"
-                    />
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-transparent to-black/20" />
-                  
-                  {/* Badges */}
-                  <div className="absolute top-3 left-3 flex items-center gap-1.5">
-                    <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${getTypeBadgeClass(art.type)}`}>
-                      {art.type}
-                    </span>
-                    {art.level && (
-                      <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-black/70 backdrop-blur text-zinc-300 border border-zinc-700">
-                        {art.level}
-                      </span>
-                    )}
-                  </div>
+        {/* ── CASO A: VISTA "TODAS LAS GUÍAS" AGRUPADA EDITORIALMENTE (sin búsqueda activa) ── */}
+        {activeTab === 'all' && !searchQuery.trim() && (
+          <div className="space-y-10">
+            {GUIDE_CATEGORIES_METADATA.map((catMeta) => {
+              const catArticles = filteredArticles.filter(art => art.category_key === catMeta.key);
+              if (catArticles.length === 0) return null;
+              const CatIcon = catMeta.icon;
 
-                  <div className="absolute bottom-2.5 left-3 flex items-center gap-1 text-[11px] font-semibold text-zinc-300 bg-black/60 backdrop-blur px-2 py-0.5 rounded-md">
-                    <Clock size={11} className="text-emerald-400" />
-                    <span>{art.read_time_minutes} min lectura</span>
-                  </div>
-                </div>
-
-                {/* Content body */}
-                <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
-                  <div className="space-y-1.5">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
-                      {art.category_name}
+              return (
+                <div key={catMeta.key} className="space-y-4">
+                  {/* Category Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800 pb-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <CatIcon size={16} />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-base sm:text-lg font-black text-white">
+                            {catMeta.name}
+                          </h3>
+                          <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                            {catArticles.length} {catArticles.length === 1 ? 'guía' : 'guías'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-zinc-400 mt-0.5">{catMeta.description}</p>
+                      </div>
                     </div>
-                    <h3 className="font-bold text-sm text-white group-hover:text-emerald-400 transition leading-snug line-clamp-2">
-                      {art.title}
-                    </h3>
-                    <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
-                      {art.excerpt}
-                    </p>
+
+                    <button
+                      onClick={() => setActiveTab(catMeta.key)}
+                      className="text-xs font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 self-start sm:self-center transition"
+                    >
+                      <span>Ver solo {catMeta.name}</span>
+                      <ArrowRight size={12} />
+                    </button>
                   </div>
 
-                  <div className="pt-2.5 border-t border-zinc-800/80 flex items-center justify-between text-xs font-bold text-emerald-400 group-hover:translate-x-0.5 transition">
-                    <span>Leer guía completa</span>
-                    <ArrowRight size={13} />
-                  </div>
+                  {/* Category Articles */}
+                  {viewMode === 'grid' ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                      {catArticles.map(art => renderArticleCard(art))}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {catArticles.map((art) => (
+                        <Link
+                          key={art.id}
+                          to={`/academy/${art.slug}`}
+                          className="group flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-zinc-900/90 border border-zinc-800 hover:border-emerald-500/50 hover:bg-zinc-850 transition duration-200 shadow-md"
+                        >
+                          <div className="flex items-start sm:items-center gap-4 flex-1 min-w-0">
+                            {!isCompactView && art.featured_image && (
+                              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-zinc-950 overflow-hidden flex-shrink-0 relative">
+                                <img
+                                  src={art.featured_image}
+                                  alt={art.title}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                                  loading="lazy"
+                                />
+                              </div>
+                            )}
+
+                            <div className="space-y-1 min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${getTypeBadgeClass(art.type)}`}>
+                                  {art.type}
+                                </span>
+                                <span className="text-[10px] text-zinc-500 font-medium">
+                                  {art.category_name}
+                                </span>
+                                <span className="text-zinc-600 hidden sm:inline">·</span>
+                                <span className="text-[11px] text-zinc-400 flex items-center gap-1">
+                                  <Clock size={11} className="text-emerald-400" />
+                                  {art.read_time_minutes} min
+                                </span>
+                              </div>
+
+                              <h4 className="font-bold text-sm text-white group-hover:text-emerald-400 transition truncate">
+                                {art.title}
+                              </h4>
+                              <p className="text-xs text-zinc-400 line-clamp-1 leading-relaxed">
+                                {art.excerpt}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-end sm:justify-center flex-shrink-0">
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-400 group-hover:translate-x-1 transition px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                              Leer <ChevronRight size={13} />
+                            </span>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </Link>
-            ))}
+              );
+            })}
           </div>
         )}
 
-        {/* ── MODO LISTA COMPACTA EDITORIAL ── */}
-        {viewMode === 'list' && (
-          <div className="space-y-3">
-            {filteredArticles.map((art) => (
-              <Link
-                key={art.id}
-                to={`/academy/${art.slug}`}
-                className="group flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-zinc-900/90 border border-zinc-800 hover:border-emerald-500/50 hover:bg-zinc-850 transition duration-200 shadow-md"
-              >
-                <div className="flex items-start sm:items-center gap-4 flex-1 min-w-0">
-                  {/* Thumbnail */}
-                  <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-zinc-950 overflow-hidden flex-shrink-0 relative">
-                    {art.featured_image && (
-                      <img
-                        src={art.featured_image}
-                        alt={art.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                        loading="lazy"
-                      />
-                    )}
-                  </div>
+        {/* ── CASO B: CATEGORÍA INDIVIDUAL O RESULTADOS DE BÚSQUEDA ── */}
+        {(activeTab !== 'all' || searchQuery.trim() !== '') && (
+          <div>
+            {/* Header explicativo para categoría individual */}
+            {!searchQuery.trim() && (
+              <div className="mb-6 flex items-center justify-between border-b border-zinc-800 pb-3">
+                <div>
+                  <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+                    <span>{GUIDE_CATEGORIES_METADATA.find(c => c.key === activeTab)?.name || 'Guías'}</span>
+                    <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                      {filteredArticles.length} {filteredArticles.length === 1 ? 'guía' : 'guías'}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-zinc-400 mt-1">
+                    {GUIDE_CATEGORIES_METADATA.find(c => c.key === activeTab)?.description}
+                  </p>
+                </div>
+              </div>
+            )}
 
-                  {/* Texts */}
-                  <div className="space-y-1 min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${getTypeBadgeClass(art.type)}`}>
-                        {art.type}
-                      </span>
-                      <span className="text-[10px] text-zinc-500 font-medium">
-                        {art.category_name}
-                      </span>
-                      <span className="text-zinc-600 hidden sm:inline">·</span>
-                      <span className="text-[11px] text-zinc-400 flex items-center gap-1">
-                        <Clock size={11} className="text-emerald-400" />
-                        {art.read_time_minutes} min
-                      </span>
+            {searchQuery.trim() && (
+              <div className="mb-6 flex items-center justify-between text-xs text-zinc-400 border-b border-zinc-800 pb-3">
+                <span>
+                  Resultados para <strong className="text-white">"{searchQuery}"</strong> ({filteredArticles.length} {filteredArticles.length === 1 ? 'guía' : 'guías'})
+                </span>
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="text-emerald-400 hover:underline cursor-pointer"
+                >
+                  Limpiar búsqueda
+                </button>
+              </div>
+            )}
+
+            {/* Grid o Lista */}
+            {viewMode === 'grid' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {filteredArticles.map(art => renderArticleCard(art))}
+              </div>
+            )}
+
+            {viewMode === 'list' && (
+              <div className="space-y-3">
+                {filteredArticles.map((art) => (
+                  <Link
+                    key={art.id}
+                    to={`/academy/${art.slug}`}
+                    className="group flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-zinc-900/90 border border-zinc-800 hover:border-emerald-500/50 hover:bg-zinc-850 transition duration-200 shadow-md"
+                  >
+                    <div className="flex items-start sm:items-center gap-4 flex-1 min-w-0">
+                      {!isCompactView && art.featured_image && (
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-zinc-950 overflow-hidden flex-shrink-0 relative">
+                          <img
+                            src={art.featured_image}
+                            alt={art.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                            loading="lazy"
+                          />
+                        </div>
+                      )}
+
+                      <div className="space-y-1 min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${getTypeBadgeClass(art.type)}`}>
+                            {art.type}
+                          </span>
+                          <span className="text-[10px] text-zinc-500 font-medium">
+                            {art.category_name}
+                          </span>
+                          <span className="text-zinc-600 hidden sm:inline">·</span>
+                          <span className="text-[11px] text-zinc-400 flex items-center gap-1">
+                            <Clock size={11} className="text-emerald-400" />
+                            {art.read_time_minutes} min
+                          </span>
+                        </div>
+
+                        <h3 className="font-bold text-sm text-white group-hover:text-emerald-400 transition truncate">
+                          {art.title}
+                        </h3>
+                        <p className="text-xs text-zinc-400 line-clamp-1 leading-relaxed">
+                          {art.excerpt}
+                        </p>
+                      </div>
                     </div>
 
-                    <h3 className="font-bold text-sm text-white group-hover:text-emerald-400 transition truncate">
-                      {art.title}
-                    </h3>
-                    <p className="text-xs text-zinc-400 line-clamp-1 leading-relaxed">
-                      {art.excerpt}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Arrow action */}
-                <div className="flex items-center justify-end sm:justify-center flex-shrink-0">
-                  <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-400 group-hover:translate-x-1 transition px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                    Leer <ChevronRight size={13} />
-                  </span>
-                </div>
-              </Link>
-            ))}
+                    <div className="flex items-center justify-end sm:justify-center flex-shrink-0">
+                      <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-400 group-hover:translate-x-1 transition px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                        Leer <ChevronRight size={13} />
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -912,10 +1178,10 @@ export default function AcademyHome() {
               No hay artículos que coincidan con los filtros seleccionados o el término de búsqueda "{searchQuery}".
             </p>
             <button
-              onClick={() => { setActiveTab('all'); setSearchQuery(''); }}
+              onClick={() => { setActiveTab('start'); setSearchQuery(''); }}
               className="px-4 py-2 bg-emerald-500 text-black text-xs font-bold rounded-xl hover:bg-emerald-400 transition"
             >
-              Restablecer filtros
+              Restablecer a Primeros Pasos
             </button>
           </div>
         )}
