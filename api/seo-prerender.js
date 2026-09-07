@@ -689,10 +689,13 @@ async function resolveCanonicalProduct(slug) {
 
 export default async function handler(req, res) {
   try {
-    let { type, slug } = req.query || {};
-    const reqUrl = req.url || '';
+    const rawUrl = req.url || '';
+    const parsed = new URL(rawUrl, 'https://collectibles.uy');
     const xForwardedUri = req.headers?.['x-forwarded-uri'] || req.headers?.['x-matched-path'] || '';
-    const combinedUri = (reqUrl + ' ' + xForwardedUri).toLowerCase();
+    const combinedUri = (parsed.pathname + ' ' + rawUrl + ' ' + xForwardedUri).toLowerCase();
+
+    let type = parsed.searchParams.get('type') || req.query?.type;
+    let slug = parsed.searchParams.get('slug') || req.query?.slug;
 
     // 0. HANDLE 410 FOR RESIDUAL WORDPRESS / JS TRACE / GARBAGE URLS
     if (type === 'wp_garbage' || combinedUri.includes('sample-page') || combinedUri.includes('/wp-') || combinedUri.includes('/feed') || combinedUri.includes('/author/') || combinedUri.includes('/blog/') || combinedUri.includes('/2024/') || combinedUri.includes('/2025/')) {

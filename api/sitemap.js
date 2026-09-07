@@ -151,16 +151,18 @@ async function fetchProducts() {
 
 export default async function handler(req, res) {
   try {
-    const reqUrl = req.url || '';
+    const rawUrl = req.url || '';
+    const parsed = new URL(rawUrl, 'https://collectibles.uy');
     const xForwardedUri = req.headers?.['x-forwarded-uri'] || req.headers?.['x-matched-path'] || '';
-    const fullUri = (reqUrl + ' ' + xForwardedUri).toLowerCase();
-    const type = (req.query?.type || '').toLowerCase();
-    const isIndex = type === 'index' || fullUri.includes('sitemap_index.xml') || fullUri.includes('type=index');
-    const isProducts = type === 'products' || fullUri.includes('sitemap-products.xml') || fullUri.includes('type=products');
-    const isCategories = type === 'categories' || fullUri.includes('sitemap-categories.xml') || fullUri.includes('type=categories');
-    const isBrands = type === 'brands' || fullUri.includes('sitemap-brands.xml') || fullUri.includes('type=brands');
-    const isPages = type === 'pages' || fullUri.includes('sitemap-pages.xml') || fullUri.includes('type=pages');
-    const isAcademy = type === 'academy' || fullUri.includes('sitemap-academy.xml') || fullUri.includes('type=academy');
+    const fullPath = (parsed.pathname + ' ' + rawUrl + ' ' + xForwardedUri).toLowerCase();
+    const typeParam = (parsed.searchParams.get('type') || req.query?.type || '').toLowerCase();
+
+    const isIndex = typeParam === 'index' || fullPath.includes('sitemap_index.xml') || fullPath.includes('type=index');
+    const isProducts = typeParam === 'products' || fullPath.includes('sitemap-products.xml') || fullPath.includes('type=products');
+    const isCategories = typeParam === 'categories' || fullPath.includes('sitemap-categories.xml') || fullPath.includes('type=categories');
+    const isBrands = typeParam === 'brands' || fullPath.includes('sitemap-brands.xml') || fullPath.includes('type=brands');
+    const isPages = typeParam === 'pages' || fullPath.includes('sitemap-pages.xml') || fullPath.includes('type=pages');
+    const isAcademy = typeParam === 'academy' || fullPath.includes('sitemap-academy.xml') || fullPath.includes('type=academy');
 
     res.setHeader('Content-Type', 'application/xml; charset=utf-8');
     res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=43200');
