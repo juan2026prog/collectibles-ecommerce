@@ -152,12 +152,13 @@ async function fetchProducts() {
 export default async function handler(req, res) {
   try {
     const reqUrl = req.url || '';
-    const isIndex = reqUrl.includes('sitemap_index.xml') || reqUrl.includes('type=index');
-    const isProducts = reqUrl.includes('sitemap-products.xml') || reqUrl.includes('type=products');
-    const isCategories = reqUrl.includes('sitemap-categories.xml') || reqUrl.includes('type=categories');
-    const isBrands = reqUrl.includes('sitemap-brands.xml') || reqUrl.includes('type=brands');
-    const isPages = reqUrl.includes('sitemap-pages.xml') || reqUrl.includes('type=pages');
-    const isAcademy = reqUrl.includes('sitemap-academy.xml') || reqUrl.includes('type=academy');
+    const type = (req.query?.type || '').toLowerCase();
+    const isIndex = type === 'index' || reqUrl.includes('sitemap_index.xml') || reqUrl.includes('type=index');
+    const isProducts = type === 'products' || reqUrl.includes('sitemap-products.xml') || reqUrl.includes('type=products');
+    const isCategories = type === 'categories' || reqUrl.includes('sitemap-categories.xml') || reqUrl.includes('type=categories');
+    const isBrands = type === 'brands' || reqUrl.includes('sitemap-brands.xml') || reqUrl.includes('type=brands');
+    const isPages = type === 'pages' || reqUrl.includes('sitemap-pages.xml') || reqUrl.includes('type=pages');
+    const isAcademy = type === 'academy' || reqUrl.includes('sitemap-academy.xml') || reqUrl.includes('type=academy');
 
     res.setHeader('Content-Type', 'application/xml; charset=utf-8');
     res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=43200');
