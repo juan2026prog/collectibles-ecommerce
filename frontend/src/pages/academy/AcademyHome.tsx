@@ -880,12 +880,12 @@ export default function AcademyHome() {
       {/* ── 2. SECCIÓN PRINCIPAL: TABS Y FEED DE ARTÍCULOS ─────────────────────── */}
       <div className="max-w-7xl mx-auto space-y-6">
         
-        {/* Barra de navegación de Tabs + Controles secundarios */}
-        <div className="space-y-3 border-b border-zinc-800 pb-4">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            
-            {/* Scrollable Tabs */}
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 lg:pb-0">
+        {/* ── BARRA DE NAVEGACIÓN Y HERRAMIENTAS EDITORIALES ── */}
+        <div className="space-y-3">
+          
+          {/* Nivel 1: Menú de Categorías (Pills dedicados con scroll horizontal fluido y sin colisiones) */}
+          <div className="bg-zinc-950/80 backdrop-blur border border-zinc-800/90 rounded-2xl p-2 shadow-lg">
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 px-0.5">
               {CATEGORY_TABS.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.key;
@@ -893,13 +893,13 @@ export default function AcademyHome() {
                   <button
                     key={tab.key}
                     onClick={() => setActiveTab(tab.key)}
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer flex-shrink-0 ${
                       isActive
-                        ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20'
-                        : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+                        ? 'bg-emerald-500 text-black shadow-md shadow-emerald-500/25 font-black'
+                        : 'bg-zinc-900/60 border border-zinc-800/80 text-zinc-400 hover:text-white hover:border-zinc-700 hover:bg-zinc-850'
                     }`}
                   >
-                    <Icon size={14} />
+                    <Icon size={14} className={isActive ? 'text-black' : 'text-zinc-400'} />
                     <span>{tab.label}</span>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${
                       isActive ? 'bg-black/20 text-black' : 'bg-zinc-800 text-zinc-400'
@@ -910,13 +910,53 @@ export default function AcademyHome() {
                 );
               })}
             </div>
+          </div>
 
-            {/* Secondary Controls: Vista Compacta Checkbox + Switcher de Vistas */}
-            <div className="flex items-center justify-between lg:justify-end gap-3 flex-shrink-0">
-              
+          {/* Nivel 2: Barra de Contexto y Herramientas (Sub-bar alineado y balanceado) */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1 pb-3 border-b border-zinc-800/80">
+            
+            {/* Info de la categoría activa / Búsqueda */}
+            <div className="flex items-center gap-2.5 min-w-0">
+              {searchQuery.trim() ? (
+                <div className="text-xs text-zinc-400 flex items-center gap-2">
+                  <span>
+                    Resultados para <strong className="text-white">"{searchQuery}"</strong> ({filteredArticles.length} {filteredArticles.length === 1 ? 'guía' : 'guías'})
+                  </span>
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="text-emerald-400 hover:underline cursor-pointer text-xs ml-2"
+                  >
+                    Limpiar búsqueda
+                  </button>
+                </div>
+              ) : activeTab === 'all' ? (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-black uppercase tracking-wider text-emerald-400">Todas las Guías</span>
+                  <span className="text-zinc-600">·</span>
+                  <span className="text-xs text-zinc-400">28 guías organizadas en 7 áreas temáticas</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-black uppercase tracking-wider text-emerald-400">
+                    {GUIDE_CATEGORIES_METADATA.find(c => c.key === activeTab)?.name}
+                  </span>
+                  <span className="text-zinc-600">·</span>
+                  <span className="text-xs text-zinc-400">
+                    {GUIDE_CATEGORIES_METADATA.find(c => c.key === activeTab)?.description}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Controles secundarios: Vista compacta + Switcher de Vistas */}
+            <div className="flex items-center justify-between sm:justify-end gap-3 flex-shrink-0">
               {/* Checkbox Vista Compacta */}
               <label 
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 cursor-pointer text-xs select-none transition group"
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border cursor-pointer text-xs select-none transition ${
+                  isCompactView 
+                    ? 'bg-emerald-500/10 border-emerald-500/40 text-white' 
+                    : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-zinc-300'
+                }`}
                 title="Ocultar imágenes para recorrer las guías rápidamente"
               >
                 <input
@@ -925,14 +965,10 @@ export default function AcademyHome() {
                   onChange={(e) => handleToggleCompactView(e.target.checked)}
                   className="rounded bg-zinc-800 border-zinc-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-zinc-900 w-3.5 h-3.5 cursor-pointer accent-emerald-500"
                 />
-                <div className="flex flex-col">
-                  <span className="font-bold text-zinc-300 group-hover:text-white flex items-center gap-1">
-                    Vista compacta
-                  </span>
-                  <span className="text-[10px] text-zinc-500 hidden sm:inline leading-none">
-                    Ocultar imágenes
-                  </span>
-                </div>
+                <span className="font-bold">Vista compacta</span>
+                <span className="text-[10px] text-zinc-500 hidden md:inline leading-none">
+                  (sin imágenes)
+                </span>
               </label>
 
               {/* View Switcher & Counter */}
@@ -945,24 +981,24 @@ export default function AcademyHome() {
                   <button
                     onClick={() => setViewMode('grid')}
                     title="Vista de cuadrícula"
-                    className={`p-1.5 rounded-lg transition ${
+                    className={`p-1.5 rounded-lg transition cursor-pointer ${
                       viewMode === 'grid' 
                         ? 'bg-zinc-800 text-emerald-400 shadow' 
                         : 'text-zinc-500 hover:text-zinc-300'
                     }`}
                   >
-                    <LayoutGrid size={15} />
+                    <LayoutGrid size={14} />
                   </button>
                   <button
                     onClick={() => setViewMode('list')}
                     title="Vista de lista"
-                    className={`p-1.5 rounded-lg transition ${
+                    className={`p-1.5 rounded-lg transition cursor-pointer ${
                       viewMode === 'list' 
                         ? 'bg-zinc-800 text-emerald-400 shadow' 
                         : 'text-zinc-500 hover:text-zinc-300'
                     }`}
                   >
-                    <List size={15} />
+                    <List size={14} />
                   </button>
                 </div>
               </div>
@@ -1076,37 +1112,6 @@ export default function AcademyHome() {
         {/* ── CASO B: CATEGORÍA INDIVIDUAL O RESULTADOS DE BÚSQUEDA ── */}
         {(activeTab !== 'all' || searchQuery.trim() !== '') && (
           <div>
-            {/* Header explicativo para categoría individual */}
-            {!searchQuery.trim() && (
-              <div className="mb-6 flex items-center justify-between border-b border-zinc-800 pb-3">
-                <div>
-                  <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
-                    <span>{GUIDE_CATEGORIES_METADATA.find(c => c.key === activeTab)?.name || 'Guías'}</span>
-                    <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
-                      {filteredArticles.length} {filteredArticles.length === 1 ? 'guía' : 'guías'}
-                    </span>
-                  </h3>
-                  <p className="text-xs text-zinc-400 mt-1">
-                    {GUIDE_CATEGORIES_METADATA.find(c => c.key === activeTab)?.description}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {searchQuery.trim() && (
-              <div className="mb-6 flex items-center justify-between text-xs text-zinc-400 border-b border-zinc-800 pb-3">
-                <span>
-                  Resultados para <strong className="text-white">"{searchQuery}"</strong> ({filteredArticles.length} {filteredArticles.length === 1 ? 'guía' : 'guías'})
-                </span>
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="text-emerald-400 hover:underline cursor-pointer"
-                >
-                  Limpiar búsqueda
-                </button>
-              </div>
-            )}
-
             {/* Grid o Lista */}
             {viewMode === 'grid' && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
