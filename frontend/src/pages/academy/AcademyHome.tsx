@@ -882,9 +882,9 @@ export default function AcademyHome() {
         {/* ── BARRA DE NAVEGACIÓN Y HERRAMIENTAS EDITORIALES ── */}
         <div className="space-y-3">
           
-          {/* Nivel 1: Menú de Categorías (Pills dedicados con scroll horizontal fluido y sin colisiones) */}
+          {/* Nivel 1: Menú de Categorías (7 botones de ancho idéntico, distribución equitativa de borde a borde) */}
           <div className="bg-zinc-950/80 backdrop-blur border border-zinc-800/90 rounded-2xl p-2 shadow-lg">
-            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 px-0.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 w-full">
               {CATEGORY_TABS.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.key;
@@ -892,15 +892,15 @@ export default function AcademyHome() {
                   <button
                     key={tab.key}
                     onClick={() => setActiveTab(tab.key)}
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer flex-shrink-0 ${
+                    className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 py-2 rounded-xl text-xs font-bold transition cursor-pointer w-full text-center ${
                       isActive
                         ? 'bg-emerald-500 text-black shadow-md shadow-emerald-500/25 font-black'
                         : 'bg-zinc-900/60 border border-zinc-800/80 text-zinc-400 hover:text-white hover:border-zinc-700 hover:bg-zinc-850'
                     }`}
                   >
-                    <Icon size={14} className={isActive ? 'text-black' : 'text-zinc-400'} />
-                    <span>{tab.label}</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${
+                    <Icon size={14} className={`flex-shrink-0 ${isActive ? 'text-black' : 'text-zinc-400'}`} />
+                    <span className="truncate">{tab.label}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold flex-shrink-0 ${
                       isActive ? 'bg-black/20 text-black' : 'bg-zinc-800 text-zinc-400'
                     }`}>
                       {tab.count}
