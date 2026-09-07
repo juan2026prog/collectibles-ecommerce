@@ -81,7 +81,7 @@ async function fetchBrands() {
   while (hasMore) {
     const { data: batch, error } = await supabase
       .from('brands')
-      .select('slug, updated_at, created_at')
+      .select('slug, created_at')
       .eq('is_active', true)
       .range(page * pageSize, (page + 1) * pageSize - 1);
 
@@ -263,7 +263,7 @@ export default async function handler(req, res) {
       let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
       brands.forEach(b => {
         if (b.slug) {
-          const date = b.updated_at || b.created_at;
+          const date = b.created_at;
           const lastMod = date ? new Date(date).toISOString() : new Date().toISOString();
           xml += `  <url>\n    <loc>${BASE_URL}/marca/${b.slug}</loc>\n    <lastmod>${lastMod}</lastmod>\n    <priority>0.8</priority>\n    <changefreq>weekly</changefreq>\n  </url>\n`;
         }
