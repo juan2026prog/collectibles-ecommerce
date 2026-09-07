@@ -4,7 +4,8 @@ import { supabase } from '../../lib/supabase';
 import { 
   GraduationCap, BookOpen, Layers, Sparkles, Search, HelpCircle, 
   ArrowRight, ShieldCheck, Clock, ShoppingBag, Star,
-  LayoutGrid, List, CheckCircle2, ChevronRight, Box
+  LayoutGrid, List, CheckCircle2, ChevronRight, Box,
+  ChevronDown, ChevronUp, Tag, Wrench, Shield
 } from 'lucide-react';
 import SEO from '../../components/SEO';
 
@@ -366,91 +367,143 @@ const ALL_ACADEMY_ARTICLES: AcademyArticle[] = [
   }
 ];
 
-const DEFAULT_GLOSSARY = [
-  // ─── GRADING ─────────────────────────────────────────────────────────────
-  { term: 'MISB', definition: 'Mint In Sealed Box. Pieza nueva dentro de su caja original, todavía sellada de fábrica.', category: 'GRADING' },
-  { term: 'MIB', definition: 'Mint In Box. Pieza en estado impecable con su caja original; no implica necesariamente que siga sellada.', category: 'GRADING' },
-  { term: 'NIB', definition: 'New In Box. Producto nuevo conservado dentro de su caja original.', category: 'GRADING' },
-  { term: 'MOC', definition: 'Mint On Card. Figura conservada en excelente estado sobre su card/blister original.', category: 'GRADING' },
-  { term: 'MOSC', definition: 'Mint On Sealed Card. Figura todavía sellada sobre su card original.', category: 'GRADING' },
-  { term: 'NRFB', definition: 'Never Removed From Box. Pieza cuyo empaque pudo abrirse, pero la figura nunca fue retirada de él.', category: 'GRADING' },
-  { term: 'Loose', definition: 'Figura fuera de su empaque original. Puede estar completa o incompleta.', category: 'GRADING' },
-  { term: 'CIB', definition: 'Complete In Box. Pieza con su caja y todos los componentes originales correspondientes.', category: 'GRADING' },
-  { term: 'Complete', definition: 'Incluye todos los accesorios, piezas y componentes originales con los que fue comercializada.', category: 'GRADING' },
-  { term: 'Incomplete', definition: 'Le falta uno o más accesorios o componentes originales.', category: 'GRADING' },
-  { term: 'Boxed', definition: 'Pieza que conserva su caja original, aunque no necesariamente esté nueva, completa o sellada.', category: 'GRADING' },
-  { term: 'Opened / Displayed', definition: 'Pieza que fue retirada del empaque y utilizada para exposición.', category: 'GRADING' },
-  { term: 'Graded', definition: 'Pieza evaluada profesionalmente y a la que se le asignó una calificación de conservación.', category: 'GRADING' },
-  { term: 'AFA', definition: 'Action Figure Authority. Empresa especializada en autenticar, graduar y encapsular figuras y juguetes.', category: 'GRADING' },
-  { term: 'CAS', definition: 'Collector Archive Services. Servicio de autenticación, graduación y encapsulado de coleccionables.', category: 'GRADING' },
-  // ─── MERCADO ─────────────────────────────────────────────────────────────
-  { term: 'Chase', definition: 'Variante poco común incluida aleatoriamente dentro de una producción o distribución normal.', category: 'MERCADO' },
-  { term: 'Pre-Order', definition: 'Preventa o reserva realizada antes de que el producto sea lanzado oficialmente.', category: 'MERCADO' },
-  { term: 'Grail', definition: 'Pieza especialmente deseada y difícil de conseguir para un coleccionista.', category: 'MERCADO' },
-  { term: 'Reissue', definition: 'Nueva producción oficial de una pieza lanzada anteriormente.', category: 'MERCADO' },
-  { term: 'Repaint', definition: 'Nueva versión que reutiliza principalmente el mismo molde pero cambia el esquema de pintura.', category: 'MERCADO' },
-  { term: 'Variant', definition: 'Versión alternativa de una figura que presenta alguna diferencia respecto a la edición estándar.', category: 'MERCADO' },
-  { term: 'Aftermarket', definition: 'Mercado secundario donde productos ya lanzados se compran y venden entre coleccionistas o revendedores.', category: 'MERCADO' },
-  { term: 'Peg Warmer', definition: 'Figura que permanece mucho tiempo en las estanterías debido a su baja demanda.', category: 'MERCADO' },
-  { term: 'Exclusive', definition: 'Producto distribuido exclusivamente mediante determinado vendedor, evento, región o canal.', category: 'MERCADO' },
-  { term: 'Retailer Exclusive', definition: 'Producto disponible originalmente solo a través de una cadena o comercio determinado.', category: 'MERCADO' },
-  { term: 'Convention Exclusive', definition: 'Producto creado o distribuido específicamente para una convención o evento.', category: 'MERCADO' },
-  { term: 'Limited Edition', definition: 'Producto cuya fabricación está restringida por cantidad, período o condiciones específicas.', category: 'MERCADO' },
-  { term: 'Numbered Edition', definition: 'Edición limitada donde cada unidad lleva un número dentro de la tirada total, por ejemplo 245/1000.', category: 'MERCADO' },
-  { term: 'Restock', definition: 'Nueva entrada de unidades de un producto que anteriormente se había agotado.', category: 'MERCADO' },
-  { term: 'Sold Out', definition: 'Producto sin unidades disponibles en un comercio o canal determinado.', category: 'MERCADO' },
-  { term: 'Waitlist', definition: 'Lista de compradores interesados en acceder a una unidad si vuelve a quedar disponible.', category: 'MERCADO' },
-  { term: 'Pre-Owned', definition: 'Pieza que anteriormente perteneció a otro propietario.', category: 'MERCADO' },
-  { term: 'Bundle / Set', definition: 'Grupo de varias figuras o productos vendidos conjuntamente.', category: 'MERCADO' },
-  { term: 'Army Builder', definition: 'Figura de soldados, tropas o personajes genéricos que suele comprarse en múltiples unidades para formar escenas o dioramas.', category: 'MERCADO' },
-  // ─── AUTENTICIDAD ─────────────────────────────────────────────────────────
-  { term: 'Official', definition: 'Producto producido oficialmente por la marca o fabricante autorizado.', category: 'AUTENTICIDAD' },
-  { term: 'Licensed', definition: 'Producto fabricado con autorización del propietario de la propiedad intelectual.', category: 'AUTENTICIDAD' },
-  { term: 'Bootleg', definition: 'Producto no autorizado que utiliza personajes, diseños o propiedades intelectuales sin permiso. No siempre intenta imitar una pieza oficial existente; puede ser un producto nuevo pero ilegal.', category: 'AUTENTICIDAD' },
-  { term: 'KO / Knockoff', definition: 'Copia no autorizada que intenta reproducir directamente una figura o producto oficial existente. Más específico que Bootleg: implica imitación deliberada de un producto concreto.', category: 'AUTENTICIDAD' },
-  { term: 'Counterfeit', definition: 'Producto creado específicamente para hacerse pasar por una pieza auténtica, incluyendo su empaque y marcas oficiales. Es el más grave de los tres: implica intención de engaño directo al comprador.', category: 'AUTENTICIDAD' },
-  { term: 'Unlicensed', definition: 'Producto basado en una propiedad intelectual sin autorización oficial. No necesariamente intenta hacerse pasar por uno existente; puede ser merchandise genérico sin licencia.', category: 'AUTENTICIDAD' },
-  { term: 'Recast', definition: 'Reproducción realizada copiando o tomando molde de una pieza original. Muy habitual en estatuas y resinas falsificadas.', category: 'AUTENTICIDAD' },
-  { term: 'Third-Party', definition: 'Producto fabricado por una empresa diferente al fabricante principal. El término por sí solo no significa que sea falso o no licenciado.', category: 'AUTENTICIDAD' },
-  { term: 'Factory Reject', definition: 'Unidad rechazada durante el control de calidad que puede terminar circulando fuera de los canales oficiales.', category: 'AUTENTICIDAD' },
-  { term: 'Repro / Reproduction', definition: 'Caja, accesorio, sticker, arma u otra pieza recreada posteriormente y que no pertenece a la producción original.', category: 'AUTENTICIDAD' },
-  { term: 'Original Parts', definition: 'Componentes auténticos pertenecientes a la producción original del producto.', category: 'AUTENTICIDAD' },
-  { term: 'Resealed', definition: 'Producto cuyo empaque fue abierto y posteriormente vuelto a cerrar intentando recuperar su apariencia original.', category: 'AUTENTICIDAD' },
-  { term: 'Tampered', definition: 'Producto o empaque que presenta modificaciones, aperturas o intervenciones posteriores a su fabricación.', category: 'AUTENTICIDAD' },
-  { term: 'COA', definition: 'Certificate of Authenticity. Documento emitido por fabricante, artista o entidad autorizada para acreditar una pieza.', category: 'AUTENTICIDAD' },
-  { term: 'Serial Number', definition: 'Código único o identificador utilizado por algunas marcas para registrar o identificar unidades.', category: 'AUTENTICIDAD' },
-  { term: 'Hologram / Sello', definition: 'Holograma o sello de autenticidad utilizado por determinadas marcas o licenciatarios para ayudar a identificar productos oficiales.', category: 'AUTENTICIDAD' },
-  { term: 'Provenance', definition: 'Historial documentado del origen, compra o propietarios anteriores de una pieza.', category: 'AUTENTICIDAD' },
-  { term: 'Prototype', definition: 'Pieza creada durante el desarrollo del producto antes de comenzar la producción comercial definitiva.', category: 'AUTENTICIDAD' },
-  { term: 'Production Sample', definition: 'Unidad producida para comprobar fabricación, acabados, packaging o calidad antes o durante la producción comercial.', category: 'AUTENTICIDAD' },
-  { term: 'Authentic but Modified', definition: 'Pieza auténtica que posteriormente fue repintada, reparada, customizada o alterada respecto a su estado original de fábrica.', category: 'AUTENTICIDAD' },
-  // ─── TÉCNICO ─────────────────────────────────────────────────────────────
-  { term: 'Pinless Joints', definition: 'Articulaciones diseñadas sin los pines o remaches visibles tradicionales, logrando una estética más limpia.', category: 'TÉCNICO' },
-  { term: 'Double Jointed', definition: 'Articulación que utiliza dos puntos de giro para aumentar el rango de movimiento.', category: 'TÉCNICO' },
-  { term: 'Butterfly Joint', definition: 'Sistema en hombros o torso que permite desplazar los brazos más hacia delante o atrás para mejores poses.', category: 'TÉCNICO' },
-  { term: 'Ball Joint', definition: 'Articulación esférica que permite movimiento en varias direcciones simultáneamente.', category: 'TÉCNICO' },
-  { term: 'Ankle Rocker', definition: 'Articulación lateral del tobillo que mejora estabilidad y posibilidades de pose dinámica.', category: 'TÉCNICO' },
-  { term: 'Drop-Down Hips', definition: 'Sistema que permite desplazar hacia abajo la articulación de la pierna para ganar mayor rango de movilidad.', category: 'TÉCNICO' },
-  { term: 'Ratchet Joint', definition: 'Articulación dentada que mantiene posiciones mediante pequeños pasos o clics audibles.', category: 'TÉCNICO' },
-  { term: 'PERS', definition: 'Parallel Eyeball Rolling System. Sistema de movimiento de ojos utilizado especialmente por Hot Toys para mayor realismo facial.', category: 'TÉCNICO' },
-  { term: 'BAF', definition: 'Build-A-Figure. Figura construida reuniendo piezas incluidas con diferentes productos de una misma wave.', category: 'TÉCNICO' },
-  { term: 'Custom', definition: 'Figura modificada o creada por un coleccionista o artista a partir de una base existente.', category: 'TÉCNICO' },
-  { term: 'Kitbash', definition: 'Figura creada combinando partes provenientes de diferentes figuras o productos.', category: 'TÉCNICO' },
-  { term: 'Swappable Parts', definition: 'Manos, cabezas, rostros u otros componentes diseñados para poder sustituirse sin herramientas.', category: 'TÉCNICO' },
-  { term: 'Likeness', definition: 'Grado de fidelidad con el que una figura reproduce el rostro o aspecto del personaje o actor representado.', category: 'TÉCNICO' },
-  { term: 'Paint Apps', definition: 'Diferentes capas, detalles y técnicas de pintura aplicadas sobre la figura durante su fabricación.', category: 'TÉCNICO' },
-  { term: 'QC', definition: 'Quality Control. Proceso destinado a detectar problemas de pintura, montaje, articulaciones o fabricación antes de su distribución.', category: 'TÉCNICO' },
-  // ─── MATERIALES ───────────────────────────────────────────────────────────
-  { term: 'Diecast', definition: 'Aleación metálica moldeada a presión utilizada en determinadas figuras, vehículos y componentes para mayor peso y realismo.', category: 'MATERIALES' },
-  { term: 'Soft Goods', definition: 'Prendas y componentes textiles reales fabricados a escala para la figura, que permiten posados dinámicos con mayor realismo.', category: 'MATERIALES' },
-  { term: 'Rooted Hair', definition: 'Cabello fabricado con fibras individuales o grupos de fibras implantadas físicamente en la cabeza de la figura.', category: 'MATERIALES' },
-  { term: 'PVC', definition: 'Plástico relativamente flexible muy utilizado para cuerpos, cabezas y partes exteriores de figuras.', category: 'MATERIALES' },
-  { term: 'ABS', definition: 'Plástico más rígido utilizado frecuentemente en estructuras internas, accesorios y articulaciones.', category: 'MATERIALES' },
-  { term: 'Resin', definition: 'Material utilizado especialmente en estatuas y piezas donde se busca el máximo nivel de detalle escultórico.', category: 'MATERIALES' },
-  { term: 'Polystone', definition: 'Compuesto de resina y cargas minerales muy utilizado en estatuas de colección premium por su peso y acabado.', category: 'MATERIALES' },
-  { term: 'Silicone', definition: 'Material flexible empleado en determinadas figuras realistas y cuerpos sin articulaciones visibles.', category: 'MATERIALES' },
-  { term: 'Seamless Body', definition: 'Cuerpo con una capa exterior flexible que oculta gran parte de las articulaciones internas, logrando un aspecto más realista.', category: 'MATERIALES' },
+export interface GlossaryTerm {
+  term: string;
+  spanish_term?: string;
+  definition: string;
+  category: 'Autenticidad' | 'Estado' | 'Mercado' | 'Técnico' | 'Materiales';
+  group?: string;
+  is_essential?: boolean;
+}
+
+const DEFAULT_GLOSSARY: GlossaryTerm[] = [
+  // ─── 1. AUTENTICIDAD ──────────────────────────────────────────────────────────
+  // Esenciales (6)
+  { term: 'Official', spanish_term: 'Oficial', definition: 'Producto producido oficialmente por la marca o fabricante autorizado.', category: 'Autenticidad', is_essential: true },
+  { term: 'Licensed', spanish_term: 'Licenciado', definition: 'Producto fabricado con autorización oficial del titular de los derechos de autor o propiedad intelectual.', category: 'Autenticidad', is_essential: true },
+  { term: 'Bootleg', spanish_term: 'Bootleg / Falsificación', definition: 'Producto no autorizado que utiliza personajes, diseños o propiedades intelectuales sin permiso.', category: 'Autenticidad', is_essential: true },
+  { term: 'KO / Knockoff', spanish_term: 'KO / Copia', definition: 'Copia no autorizada que intenta reproducir directamente una figura o molde oficial existente.', category: 'Autenticidad', is_essential: true },
+  { term: 'Counterfeit', spanish_term: 'Falsificación engañosa', definition: 'Producto creado específicamente para hacerse pasar por una pieza auténtica, imitando empaque, logos y sellos oficiales con intención de engaño.', category: 'Autenticidad', is_essential: true },
+  { term: 'Unlicensed', spanish_term: 'No licenciado', definition: 'Producto basado en una propiedad intelectual sin autorización formal, común en estatuas custom y merchandising de terceros.', category: 'Autenticidad', is_essential: true },
+  // Copias y alteraciones (7)
+  { term: 'Third-Party', spanish_term: 'Terceros (3P)', definition: 'Fabricante independiente que diseña figuras o complementos compatibles sin licencia formal pero con molde propio.', category: 'Autenticidad', group: 'Copias y alteraciones' },
+  { term: 'Recast', spanish_term: 'Recasting / Copia de molde', definition: 'Reproducción no autorizada obtenida al clonar directamente el molde de una pieza original, muy común en estatuas de resina.', category: 'Autenticidad', group: 'Copias y alteraciones' },
+  { term: 'Repro / Reproduction', spanish_term: 'Repro / Reproducción', definition: 'Caja, accesorio, sticker, arma u otra parte recreada posteriormente que no pertenece a la producción original.', category: 'Autenticidad', group: 'Copias y alteraciones' },
+  { term: 'Factory Reject', spanish_term: 'Rechazo de fábrica', definition: 'Unidad descartada en control de calidad que sale al mercado irregular por canales no oficiales.', category: 'Autenticidad', group: 'Copias y alteraciones' },
+  { term: 'Resealed', spanish_term: 'Resellado', definition: 'Producto abierto cuyo empaque fue vuelto a cerrar con cinta o calor intentando simular su estado de fábrica.', category: 'Autenticidad', group: 'Copias y alteraciones' },
+  { term: 'Tampered', spanish_term: 'Manipulado / Alterado', definition: 'Empaque o pieza que presenta aperturas forzadas, cambios de piezas internas o alteraciones posteriores a su fabricación.', category: 'Autenticidad', group: 'Copias y alteraciones' },
+  { term: 'Authentic but Modified', spanish_term: 'Auténtico modificado', definition: 'Pieza auténtica que fue repintada, reparada o customizada, alejándose de su estado original de fábrica.', category: 'Autenticidad', group: 'Copias y alteraciones' },
+  // Verificación (5)
+  { term: 'Original Parts', spanish_term: 'Partes originales', definition: 'Componentes auténticos pertenecientes a la tirada y producción oficial de fábrica.', category: 'Autenticidad', group: 'Verificación' },
+  { term: 'COA', spanish_term: 'Certificado de Autenticidad', definition: 'Certificate of Authenticity emitido por el fabricante o artista para garantizar la legitimidad y numeración de la pieza.', category: 'Autenticidad', group: 'Verificación' },
+  { term: 'Serial Number', spanish_term: 'Número de serie', definition: 'Código alfanumérico único grabado en la caja o base para registro y validación con el fabricante.', category: 'Autenticidad', group: 'Verificación' },
+  { term: 'Hologram / Authenticity Sticker', spanish_term: 'Sticker holográfico de autenticidad', definition: 'Sello brillante de seguridad (Toei cat, Bandai Spirits, Marvel) colocado en empaques para certificar licencias oficiales.', category: 'Autenticidad', group: 'Verificación' },
+  { term: 'Provenance', spanish_term: 'Procedencia / Historial', definition: 'Historial documentado del origen, factura de compra y propietarios anteriores de una pieza de alto valor.', category: 'Autenticidad', group: 'Verificación' },
+  // Producción (2)
+  { term: 'Prototype', spanish_term: 'Prototipo', definition: 'Pieza de prueba esculpida durante el desarrollo del producto antes de comenzar la producción comercial en serie.', category: 'Autenticidad', group: 'Producción' },
+  { term: 'Production Sample', spanish_term: 'Muestra de producción', definition: 'Unidad producida para auditar acabados, empaques y control de calidad antes del lanzamiento masivo.', category: 'Autenticidad', group: 'Producción' },
+
+  // ─── 2. ESTADO ────────────────────────────────────────────────────────────────
+  // Esenciales (6)
+  { term: 'MISB', spanish_term: 'Mint in Sealed Box', definition: 'Pieza completamente nueva dentro de su caja original, todavía con los sellos y precintos de fábrica intactos.', category: 'Estado', is_essential: true },
+  { term: 'MIB', spanish_term: 'Mint in Box', definition: 'Pieza en estado impecable conservada con su empaque original; la caja pudo haber sido abierta para inspección.', category: 'Estado', is_essential: true },
+  { term: 'NIB', spanish_term: 'New in Box', definition: 'Producto nuevo sin uso dentro de su empaque original de fábrica.', category: 'Estado', is_essential: true },
+  { term: 'Loose', spanish_term: 'Loose / Sin empaque', definition: 'Figura fuera de su caja original. Ideal para exhibir en vitrina; no significa que esté dañada.', category: 'Estado', is_essential: true },
+  { term: 'CIB', spanish_term: 'Complete in Box', definition: 'Pieza que conserva su empaque original junto con la totalidad de accesorios, manuales e inserts correspondientes.', category: 'Estado', is_essential: true },
+  { term: 'Complete', spanish_term: 'Completo', definition: 'Conserva todos sus accesorios, manos intercambiables, armas y soportes originales de fábrica.', category: 'Estado', is_essential: true },
+  // Empaque (6)
+  { term: 'MOC', spanish_term: 'Mint on Card', definition: 'Figura en estado impecable preservada sobre su cartón blister original.', category: 'Estado', group: 'Empaque' },
+  { term: 'MOSC', spanish_term: 'Mint on Sealed Card', definition: 'Figura en card original con la burbuja plástica sellada de fábrica sin abrir.', category: 'Estado', group: 'Empaque' },
+  { term: 'NRFB', spanish_term: 'Never Removed From Box', definition: 'El empaque exterior fue abierto pero la figura nunca fue retirada de sus anclajes o blisters internos.', category: 'Estado', group: 'Empaque' },
+  { term: 'Boxed', spanish_term: 'Con caja', definition: 'Conserva la caja original, aunque pueda presentar desgaste o no estar sellada.', category: 'Estado', group: 'Empaque' },
+  { term: 'Opened / Displayed', spanish_term: 'Abierto / En vitrina', definition: 'Pieza retirada de la caja y exhibida en vitrina en condiciones cuidadas de coleccionista.', category: 'Estado', group: 'Empaque' },
+  { term: 'Incomplete', spanish_term: 'Incompleto', definition: 'Pieza a la que le falta al menos un accesorio, mano, arma o base original.', category: 'Estado', group: 'Empaque' },
+  // Certificación (3)
+  { term: 'Graded', spanish_term: 'Graduado / Calificado', definition: 'Coleccionable auditado por expertos independientes y sellado en cápsula acrílica con nota de conservación.', category: 'Estado', group: 'Certificación' },
+  { term: 'AFA', spanish_term: 'Action Figure Authority', definition: 'Servicio y autoridad especializada en autenticar, graduar con nota numérica (escala 1-100) y encapsular figuras y juguetes.', category: 'Estado', group: 'Certificación' },
+  { term: 'CAS', spanish_term: 'Collector Archive Services', definition: 'Servicio profesional independiente de preservación, certificación y graduado de figuras vintage y modernas.', category: 'Estado', group: 'Certificación' },
+
+  // ─── 3. MERCADO ───────────────────────────────────────────────────────────────
+  // Esenciales (6)
+  { term: 'Chase', spanish_term: 'Chase / Variante rara', definition: 'Variante deliberadamente más difícil de conseguir, distribuida al azar en proporciones reducidas dentro de una tirada estándar.', category: 'Mercado', is_essential: true },
+  { term: 'Pre-Order', spanish_term: 'Preventa', definition: 'Reserva anticipada antes del lanzamiento comercial. La fecha de entrega es estimada y sujeta a logística internacional.', category: 'Mercado', is_essential: true },
+  { term: 'Grail', spanish_term: 'Santo Grial', definition: 'La pieza más codiciada, difícil y representativa que un coleccionista busca para coronar su colección.', category: 'Mercado', is_essential: true },
+  { term: 'Reissue', spanish_term: 'Reedición', definition: 'Nueva tanda de producción oficial autorizada por la marca tras haberse agotado el tiraje inicial.', category: 'Mercado', is_essential: true },
+  { term: 'Aftermarket', spanish_term: 'Mercado secundario', definition: 'Mercado de reventa entre coleccionistas y tiendas especializadas una vez finalizada la distribución oficial.', category: 'Mercado', is_essential: true },
+  { term: 'Variant / Repaint', spanish_term: 'Variante / Repintado', definition: 'Versión alternativa que utiliza el mismo molde con un esquema de color diferente o detalles exclusivos.', category: 'Mercado', is_essential: true },
+  // Lanzamientos (4)
+  { term: 'Restock', spanish_term: 'Reposición de stock', definition: 'Entrada de nuevas unidades disponibles para compra en tiendas oficiales tras haberse agotado.', category: 'Mercado', group: 'Lanzamientos' },
+  { term: 'Sold Out', spanish_term: 'Agotado', definition: 'Producto sin existencias en los canales de venta primarios.', category: 'Mercado', group: 'Lanzamientos' },
+  { term: 'Waitlist', spanish_term: 'Lista de espera', definition: 'Registro de compradores interesados en acceder a una unidad reservada en caso de cancelaciones.', category: 'Mercado', group: 'Lanzamientos' },
+  { term: 'Pre-Owned', spanish_term: 'Segunda mano', definition: 'Pieza que anteriormente perteneció a otro coleccionista antes de volver a ingresar al mercado.', category: 'Mercado', group: 'Lanzamientos' },
+  // Ediciones (3)
+  { term: 'Exclusive / Exclusiva', spanish_term: 'Edición Exclusiva', definition: 'Pieza distribuida únicamente por un canal o evento determinado (Retailer Exclusive en cadenas específicas, Convention Exclusive en eventos como SDCC o NYCC, o Event Exclusive).', category: 'Mercado', group: 'Ediciones' },
+  { term: 'Limited Edition', spanish_term: 'Edición Limitada', definition: 'Producto cuya fabricación está restringida por cantidad de unidades o ventana temporal estricta.', category: 'Mercado', group: 'Ediciones' },
+  { term: 'Numbered Edition', spanish_term: 'Edición Numerada', definition: 'Edición de colección donde cada pieza tiene grabado su número individual dentro de la tirada total (ej: 245/1000).', category: 'Mercado', group: 'Ediciones' },
+  // Comportamiento del mercado (3)
+  { term: 'Peg Warmer', spanish_term: 'Estancado en góndola', definition: 'Figura con baja demanda que permanece durante meses en los estantes comerciales sin venderse.', category: 'Mercado', group: 'Comportamiento del mercado' },
+  { term: 'Bundle / Set', spanish_term: 'Pack / Set', definition: 'Conjunto de múltiples figuras o accesorios complementarios vendidos conjuntamente.', category: 'Mercado', group: 'Comportamiento del mercado' },
+  { term: 'Army Builder', spanish_term: 'Constructor de ejércitos', definition: 'Personajes genéricos o soldados (Stormtroopers, Clones, Ninjas) diseñados para comprar en volumen y armar dioramas masivos.', category: 'Mercado', group: 'Comportamiento del mercado' },
+
+  // ─── 4. TÉCNICO ───────────────────────────────────────────────────────────────
+  // Esenciales (6)
+  { term: 'Pinless Joints', spanish_term: 'Articulación sin pernos', definition: 'Sistema moderno de articulación sin remaches metálicos ni orificios visibles en codos y rodillas.', category: 'Técnico', is_essential: true },
+  { term: 'Double Jointed', spanish_term: 'Doble articulación', definition: 'Mecanismo con dos ejes de giro en codos o rodillas que permite doblar la extremidad casi 180°.', category: 'Técnico', is_essential: true },
+  { term: 'Butterfly Joint', spanish_term: 'Articulación mariposa', definition: 'Pivote en el interior del hombro que permite llevar los brazos hacia adelante para poses de tiro o cruce de brazos.', category: 'Técnico', is_essential: true },
+  { term: 'PERS', spanish_term: 'Parallel Eyeball Rolling System', definition: 'Mecanismo interno con palanca que permite mover y fijar ambos ojos de la figura de forma independiente y realista.', category: 'Técnico', is_essential: true },
+  { term: 'BAF', spanish_term: 'Build-A-Figure', definition: 'Figura de gran tamaño cuyas piezas individuales vienen repartidas entre los distintos personajes de una misma wave.', category: 'Técnico', is_essential: true },
+  { term: 'Custom / Kitbash', spanish_term: 'Custom / Combinación de piezas', definition: 'Pieza personalizada o creada combinando partes de diferentes figuras, modelado 3D y pintura artesanal.', category: 'Técnico', is_essential: true },
+  // Articulación (4)
+  { term: 'Ball Joint', spanish_term: 'Rótula esférica', definition: 'Articulación de bola que permite rotación e inclinación multidireccional en cuello, muñecas y tobillos.', category: 'Técnico', group: 'Articulación' },
+  { term: 'Ankle Rocker', spanish_term: 'Inclinación de tobillo', definition: 'Movimiento lateral en los pies indispensable para mantener las plantas firmes sobre la repisa en poses abiertas.', category: 'Técnico', group: 'Articulación' },
+  { term: 'Drop-Down Hips', spanish_term: 'Caderas extensibles', definition: 'Mecanismo que desciende la pierna unos milímetros para lograr patadas altas sin rozar la entrepierna.', category: 'Técnico', group: 'Articulación' },
+  { term: 'Ratchet Joint', spanish_term: 'Articulación dentada (clic)', definition: 'Engranaje interno con clics audibles diseñado para soportar piezas pesadas sin vencerse por gravedad.', category: 'Técnico', group: 'Articulación' },
+  // Diseño y acabado (5)
+  { term: 'Swappable Parts', spanish_term: 'Partes intercambiables', definition: 'Manos, cabezas, armas y rostros diseñados para cambiarse a presión de forma rápida y segura.', category: 'Técnico', group: 'Diseño y acabado' },
+  { term: 'Likeness', spanish_term: 'Parecido / Fidelidad facial', definition: 'Nivel de exactitud con el que la escultura facial reproduce las facciones reales del actor o personaje.', category: 'Técnico', group: 'Diseño y acabado' },
+  { term: 'Paint Apps', spanish_term: 'Aplicaciones de pintura', definition: 'Calidad, sombreados, tampografía y degradados aplicados en fábrica sobre la figura.', category: 'Técnico', group: 'Diseño y acabado' },
+  { term: 'QC', spanish_term: 'Control de Calidad', definition: 'Quality Control: proceso de inspección de fábrica para detectar defectos de pintura o articulaciones flojas.', category: 'Técnico', group: 'Diseño y acabado' },
+  { term: 'Seamless Body', spanish_term: 'Cuerpo continuo sin articulaciones visibles', definition: 'Estructura interna de metal articulado recubierta por silicona médica flexible que oculta articulaciones mecánicas.', category: 'Técnico', group: 'Diseño y acabado' },
+
+  // ─── 5. MATERIALES ────────────────────────────────────────────────────────────
+  { term: 'PVC', spanish_term: 'Policloruro de vinilo', definition: 'Plástico flexible y resistente ideal para extremidades, cabellos, capas y detalles exteriores.', category: 'Materiales' },
+  { term: 'ABS', spanish_term: 'Acrilonitrilo Butadieno Estireno', definition: 'Plástico rígido de alta densidad utilizado en esqueletos internos, armaduras y articulaciones mecánicas.', category: 'Materiales' },
+  { term: 'Diecast', spanish_term: 'Metal fundido a presión', definition: 'Aleación de zinc y aluminio que aporta peso real, estabilidad estructural y acabados metálicos auténticos.', category: 'Materiales' },
+  { term: 'Resin', spanish_term: 'Resina', definition: 'Material de escultura premium que captura detalles microscópicos y texturas orgánicas, aunque es rígido y frágil ante caídas.', category: 'Materiales' },
+  { term: 'Polystone', spanish_term: 'Polystone (Resina con polvo de piedra)', definition: 'Compuesto pesado y frío al tacto utilizado en estatuas de museo por su estabilidad y sensación pétrea.', category: 'Materiales' },
+  { term: 'Silicone', spanish_term: 'Silicona médica de grado platino', definition: 'Material suave de alta durabilidad usado en torsos realistas y bustos 1:1 por su textura idéntica a la piel humana.', category: 'Materiales' },
+  { term: 'Soft Goods', spanish_term: 'Ropa de tela real', definition: 'Prendas confeccionadas a escala en telas auténticas, cuero sintético o alambres para poses dinámicas.', category: 'Materiales' },
+  { term: 'Rooted Hair', spanish_term: 'Pelo injertado mechón por mechón', definition: 'Cabello de fibra natural o sintética implantado manualmente en la cabeza para un hiperrealismo cinematográfico.', category: 'Materiales' }
 ];
+
+const GLOSSARY_CATEGORIES = [
+  'Autenticidad',
+  'Estado',
+  'Mercado',
+  'Técnico',
+  'Materiales',
+  'Todos'
+] as const;
+
+type GlossaryCategory = typeof GLOSSARY_CATEGORIES[number];
+
+const CATEGORY_ICONS: Record<string, any> = {
+  'Autenticidad': ShieldCheck,
+  'Estado': Box,
+  'Mercado': Tag,
+  'Técnico': Wrench,
+  'Materiales': Layers,
+  'Todos': BookOpen
+};
+
+const CATEGORY_DESCRIPTIONS: Record<string, string> = {
+  'Autenticidad': 'Guía para diferenciar piezas oficiales y licenciadas de copias, falsificaciones, recasts y réplicas.',
+  'Estado': 'Nomenclatura estándar del mercado para describir la condición física y empaque de figuras.',
+  'Mercado': 'Términos comerciales clave sobre preventas, rareza, ediciones limitadas y mercado secundario.',
+  'Técnico': 'Ingeniería, tipos de articulaciones, sistemas de posado y terminología de escultura.',
+  'Materiales': 'Diferencias clave entre plásticos, aleaciones metálicas, resinas y textiles a escala.',
+  'Todos': 'Índice general estructurado de toda la terminología del coleccionismo.'
+};
 
 const CATEGORY_TABS = [
   { key: 'all', label: 'Todas las Guías', icon: BookOpen },
@@ -480,12 +533,13 @@ export default function AcademyHome() {
   const [activeTab, setActiveTab] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedGlossaryCategory, setSelectedGlossaryCategory] = useState<string>('TODOS');
+  const [selectedGlossaryCategory, setSelectedGlossaryCategory] = useState<GlossaryCategory>('Autenticidad');
   const [glossarySearch, setGlossarySearch] = useState<string>('');
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [selectedScaleIndex, setSelectedScaleIndex] = useState<number>(1); // Default to 1:12
   
   const [scales, setScales] = useState<any[]>([]);
-  const [glossary, setGlossary] = useState<any[]>([]);
+  const [glossary, setGlossary] = useState<GlossaryTerm[]>(DEFAULT_GLOSSARY);
   const [imageOverrides, setImageOverrides] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -496,9 +550,8 @@ export default function AcademyHome() {
   const loadAcademyData = async () => {
     try {
       setLoading(true);
-      const [scaRes, gloRes, imgRes] = await Promise.all([
+      const [scaRes, imgRes] = await Promise.all([
         supabase.from('academy_scales').select('*').order('created_at', { ascending: true }),
-        supabase.from('academy_glossary').select('*').eq('status', 'PUBLISHED').limit(50),
         supabase.from('academy_article_images').select('article_id, image_url')
       ]);
 
@@ -522,27 +575,7 @@ export default function AcademyHome() {
         setImageOverrides(overrideMap);
       }
 
-      // Combinar términos de DB con DEFAULT_GLOSSARY para que ningún término quede afuera
-      const dbGlossary = gloRes.data || [];
-      const termsMap = new Map<string, any>();
-      
-      // Primero agregamos todos los DEFAULT_GLOSSARY
-      DEFAULT_GLOSSARY.forEach(item => {
-        termsMap.set(item.term.toLowerCase(), item);
-      });
-
-      // Luego sobreescribimos o agregamos los de DB si existen
-      dbGlossary.forEach((item: any) => {
-        if (item && item.term) {
-          termsMap.set(item.term.toLowerCase(), {
-            term: item.term,
-            definition: item.definition,
-            category: item.category || 'GENERAL'
-          });
-        }
-      });
-
-      setGlossary(Array.from(termsMap.values()));
+      setGlossary(DEFAULT_GLOSSARY);
     } catch (err) {
       console.error(err);
       setGlossary(DEFAULT_GLOSSARY);
@@ -551,6 +584,12 @@ export default function AcademyHome() {
     }
   };
 
+  const toggleGroup = (groupName: string) => {
+    setOpenGroups(prev => ({
+      ...prev,
+      [groupName]: !prev[groupName]
+    }));
+  };
 
   // Filtrado de artículos según tab y buscador (con override de imagen aplicado)
   const filteredArticles = useMemo(() => {
@@ -569,23 +608,44 @@ export default function AcademyHome() {
       }));
   }, [activeTab, searchQuery, imageOverrides]);
 
+  // Búsqueda en el glosario
+  const glossarySearchResults = useMemo(() => {
+    if (!glossarySearch.trim()) return [];
+    const q = glossarySearch.toLowerCase().trim();
+    return DEFAULT_GLOSSARY.filter(item => 
+      item.term.toLowerCase().includes(q) ||
+      (item.spanish_term && item.spanish_term.toLowerCase().includes(q)) ||
+      item.definition.toLowerCase().includes(q) ||
+      item.category.toLowerCase().includes(q) ||
+      (item.group && item.group.toLowerCase().includes(q))
+    );
+  }, [glossarySearch]);
 
-  // Categorías de glosario únicas
-  const glossaryCategories = useMemo(() => {
-    const cats = Array.from(new Set(glossary.map(g => g.category || 'GENERAL')));
-    return ['TODOS', ...cats];
-  }, [glossary]);
+  // Términos de la categoría activa
+  const currentCategoryTerms = useMemo(() => {
+    if (selectedGlossaryCategory === 'Todos') return DEFAULT_GLOSSARY;
+    return DEFAULT_GLOSSARY.filter(item => item.category === selectedGlossaryCategory);
+  }, [selectedGlossaryCategory]);
 
-  // Filtrado de glosario
-  const filteredGlossary = useMemo(() => {
-    return glossary.filter(g => {
-      const matchesCategory = selectedGlossaryCategory === 'TODOS' || g.category === selectedGlossaryCategory;
-      const matchesSearch = glossarySearch.trim() === '' ||
-        g.term.toLowerCase().includes(glossarySearch.toLowerCase()) ||
-        g.definition.toLowerCase().includes(glossarySearch.toLowerCase());
-      return matchesCategory && matchesSearch;
+  const essentialTerms = useMemo(() => {
+    return currentCategoryTerms.filter(item => item.is_essential);
+  }, [currentCategoryTerms]);
+
+  const secondaryGroups = useMemo(() => {
+    const groupsMap = new Map<string, GlossaryTerm[]>();
+    currentCategoryTerms.forEach(item => {
+      if (item.group) {
+        if (!groupsMap.has(item.group)) {
+          groupsMap.set(item.group, []);
+        }
+        groupsMap.get(item.group)!.push(item);
+      }
     });
-  }, [glossary, selectedGlossaryCategory, glossarySearch]);
+    return Array.from(groupsMap.entries()).map(([groupName, items]) => ({
+      groupName,
+      items
+    }));
+  }, [currentCategoryTerms]);
 
   const activeScale = scales[selectedScaleIndex] || scales[0];
 
@@ -945,68 +1005,316 @@ export default function AcademyHome() {
         </div>
       </div>
 
-      {/* ── 4. DICCIONARIO INTERACTIVO Y GLOSARIO (COMPACTO) ────────────────────── */}
-      <div className="max-w-7xl mx-auto space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+      {/* ── 4. DICCIONARIO RÁPIDO DEL COLECCIONISTA (REDISEÑO EDITORIAL) ─────── */}
+      <div className="max-w-7xl mx-auto space-y-6">
+        
+        {/* Cabecera del Diccionario & Buscador */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
           <div>
-            <h2 className="text-lg sm:text-xl font-black flex items-center gap-2 text-white">
+            <div className="flex items-center gap-2">
               <HelpCircle size={20} className="text-amber-400" />
-              <span>Diccionario Rápido del Coleccionista</span>
-            </h2>
-            <p className="text-xs text-zinc-400 mt-0.5">Términos esenciales para calificar estado de figuras (MISB, MIB) y compras.</p>
+              <h2 className="text-lg sm:text-2xl font-black text-white tracking-tight">
+                Diccionario del Coleccionista
+              </h2>
+              <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                {glossarySearch.trim() 
+                  ? `${glossarySearchResults.length} ${glossarySearchResults.length === 1 ? 'resultado' : 'resultados'}` 
+                  : selectedGlossaryCategory === 'Todos'
+                    ? `${DEFAULT_GLOSSARY.length} términos totales`
+                    : `${currentCategoryTerms.length} términos`}
+              </span>
+            </div>
+            <p className="text-xs text-zinc-400 mt-1 max-w-xl">
+              {CATEGORY_DESCRIPTIONS[selectedGlossaryCategory]}
+            </p>
           </div>
 
-          <div className="w-full sm:w-64 relative">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+          {/* Buscador de términos */}
+          <div className="w-full md:w-80 relative">
+            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
             <input
               type="text"
               value={glossarySearch}
               onChange={(e) => setGlossarySearch(e.target.value)}
-              placeholder="Buscar: MISB, Chase, Loose..."
-              className="w-full pl-8 pr-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500 transition"
+              placeholder="Buscar: bootleg, MIB, resina, chase..."
+              className="w-full pl-9 pr-8 py-2 bg-zinc-900 border border-zinc-700/80 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500 transition shadow-inner"
             />
+            {glossarySearch && (
+              <button 
+                onClick={() => setGlossarySearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-zinc-400 hover:text-white"
+              >
+                ✕
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Category filters */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          {glossaryCategories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setSelectedGlossaryCategory(cat)}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase tracking-wider transition ${
-                selectedGlossaryCategory === cat
-                  ? 'bg-amber-500 text-black'
-                  : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
+        {/* Barra de Tabs de Categorías Ordenadas (1. Autenticidad, 2. Estado, 3. Mercado, 4. Técnico, 5. Materiales, 6. Todos) */}
+        {!glossarySearch && (
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+            {GLOSSARY_CATEGORIES.map((cat) => {
+              const Icon = CATEGORY_ICONS[cat];
+              const isSelected = selectedGlossaryCategory === cat;
+              return (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedGlossaryCategory(cat)}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                    isSelected
+                      ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20'
+                      : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+                  }`}
+                >
+                  <Icon size={14} />
+                  <span>{cat}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
-        {/* Glossary Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {filteredGlossary.map((g, idx) => (
-            <div key={idx} className="bg-zinc-900/90 border border-zinc-800/80 hover:border-zinc-700 rounded-xl p-3.5 space-y-1.5 transition">
-              <div className="flex items-center justify-between">
-                <span className="font-black text-sm text-white">{g.term}</span>
-                <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-zinc-800 text-amber-400 border border-zinc-700">
-                  {g.category}
-                </span>
+        {/* ── VISTA 1: RESULTADOS DE BÚSQUEDA ── */}
+        {glossarySearch.trim() !== '' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between text-xs text-zinc-400">
+              <span>
+                Mostrando resultados para <strong className="text-white">"{glossarySearch}"</strong>
+              </span>
+              <button
+                onClick={() => setGlossarySearch('')}
+                className="text-amber-400 hover:underline cursor-pointer"
+              >
+                Limpiar búsqueda
+              </button>
+            </div>
+
+            {glossarySearchResults.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                {glossarySearchResults.map((g, idx) => (
+                  <div
+                    key={idx}
+                    className="bg-zinc-900/90 border border-zinc-800/80 hover:border-amber-500/40 rounded-2xl p-4 flex flex-col justify-between space-y-2 transition shadow-sm"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className="font-black text-sm text-white tracking-tight leading-snug">
+                          {g.term}
+                        </h4>
+                        <span className="text-[9px] uppercase font-bold px-2 py-0.5 rounded bg-zinc-800 text-amber-400 border border-zinc-700/80 flex-shrink-0">
+                          {g.category}
+                        </span>
+                      </div>
+                      {g.spanish_term && (
+                        <div className="text-[11px] font-semibold text-amber-400/90">
+                          {g.spanish_term}
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-zinc-400 leading-relaxed pt-1">
+                      {g.definition}
+                    </p>
+                  </div>
+                ))}
               </div>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                {g.definition}
-              </p>
-            </div>
-          ))}
+            ) : (
+              <div className="py-12 text-center rounded-2xl bg-zinc-900 border border-zinc-800 space-y-2">
+                <Search size={28} className="mx-auto text-zinc-600" />
+                <div className="text-sm font-bold text-zinc-300">No se encontraron términos</div>
+                <p className="text-xs text-zinc-500 max-w-sm mx-auto">
+                  No hay coincidencias para "{glossarySearch}". Intenta con palabras clave como bootleg, resina, MIB, loose o chase.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
-          {filteredGlossary.length === 0 && (
-            <div className="col-span-full py-6 text-center text-zinc-500 text-xs">
-              No se encontraron términos para "{glossarySearch}"
+        {/* ── VISTA 2: ÍNDICE GENERAL "TODOS" ── */}
+        {!glossarySearch && selectedGlossaryCategory === 'Todos' && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {(['Autenticidad', 'Estado', 'Mercado', 'Técnico', 'Materiales'] as const).map((catName) => {
+                const catTerms = DEFAULT_GLOSSARY.filter(t => t.category === catName);
+                const Icon = CATEGORY_ICONS[catName];
+                return (
+                  <div
+                    key={catName}
+                    className="bg-zinc-900 border border-zinc-800/80 rounded-2xl p-5 flex flex-col justify-between space-y-4 hover:border-amber-500/40 transition shadow-lg group"
+                  >
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Icon size={18} className="text-amber-400" />
+                          <h3 className="font-black text-base text-white">{catName}</h3>
+                        </div>
+                        <span className="text-[11px] font-mono font-bold text-zinc-400 bg-zinc-800 px-2 py-0.5 rounded">
+                          {catTerms.length} términos
+                        </span>
+                      </div>
+                      
+                      <p className="text-xs text-zinc-400 leading-relaxed line-clamp-2">
+                        {CATEGORY_DESCRIPTIONS[catName]}
+                      </p>
+
+                      <div className="pt-2 text-[11px] text-zinc-500 leading-relaxed line-clamp-3">
+                        {catTerms.map(t => t.term).join(' · ')}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setSelectedGlossaryCategory(catName)}
+                      className="w-full py-2 px-3 bg-zinc-800 hover:bg-amber-500 hover:text-black text-zinc-300 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer mt-2"
+                    >
+                      <span>Explorar {catName}</span>
+                      <ArrowRight size={12} />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* ── VISTA 3: CATEGORÍA "MATERIALES" (LISTA DIRECTA) ── */}
+        {!glossarySearch && selectedGlossaryCategory === 'Materiales' && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+              {currentCategoryTerms.map((g, idx) => (
+                <div
+                  key={idx}
+                  className="bg-zinc-900/90 border border-zinc-800/80 hover:border-amber-500/40 rounded-2xl p-4 flex flex-col justify-between space-y-2 transition shadow-sm"
+                >
+                  <div className="space-y-1">
+                    <h4 className="font-black text-sm text-white tracking-tight leading-snug">
+                      {g.term}
+                    </h4>
+                    {g.spanish_term && (
+                      <div className="text-[11px] font-semibold text-amber-400/90">
+                        {g.spanish_term}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-zinc-400 leading-relaxed pt-1">
+                    {g.definition}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── VISTA 4: CATEGORÍAS ESTRUCTURADAS (AUTENTICIDAD, ESTADO, MERCADO, TÉCNICO) ── */}
+        {!glossarySearch && selectedGlossaryCategory !== 'Todos' && selectedGlossaryCategory !== 'Materiales' && (
+          <div className="space-y-6">
+            
+            {/* Sección 1: Términos Esenciales */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-amber-400" />
+                <h3 className="text-xs font-black uppercase tracking-wider text-zinc-300">
+                  Términos Esenciales ({essentialTerms.length})
+                </h3>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                {essentialTerms.map((g, idx) => (
+                  <div
+                    key={idx}
+                    className="bg-zinc-900/90 border border-zinc-800/80 hover:border-amber-500/40 rounded-2xl p-4 flex flex-col justify-between space-y-2 transition shadow-sm"
+                  >
+                    <div className="space-y-1">
+                      <h4 className="font-black text-sm text-white tracking-tight leading-snug">
+                        {g.term}
+                      </h4>
+                      {g.spanish_term && (
+                        <div className="text-[11px] font-semibold text-amber-400/90">
+                          {g.spanish_term}
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-zinc-400 leading-relaxed pt-1">
+                      {g.definition}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Sección 2: Grupos Secundarios Desplegables (Acordeones) */}
+            {secondaryGroups.length > 0 && (
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center gap-2 border-t border-zinc-800/80 pt-4">
+                  <span className="w-2 h-2 rounded-full bg-zinc-500" />
+                  <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400">
+                    Grupos Complementarios
+                  </h3>
+                </div>
+
+                <div className="space-y-3">
+                  {secondaryGroups.map(({ groupName, items }) => {
+                    const isOpen = !!openGroups[groupName];
+                    return (
+                      <div
+                        key={groupName}
+                        className="rounded-2xl border border-zinc-800 bg-zinc-900/70 overflow-hidden transition"
+                      >
+                        {/* Accordion trigger button */}
+                        <button
+                          onClick={() => toggleGroup(groupName)}
+                          className="w-full px-5 py-3.5 flex items-center justify-between text-left hover:bg-zinc-850 transition cursor-pointer"
+                        >
+                          <div>
+                            <div className="font-bold text-sm text-white flex items-center gap-2">
+                              <span>{groupName}</span>
+                              <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">
+                                {items.length} {items.length === 1 ? 'término' : 'términos'}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-zinc-500 mt-0.5">
+                              {isOpen ? 'Ocultar términos ↑' : 'Ver términos ↓'}
+                            </div>
+                          </div>
+
+                          <div className="p-1 rounded-lg bg-zinc-800 text-zinc-400">
+                            {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                          </div>
+                        </button>
+
+                        {/* Accordion items grid */}
+                        {isOpen && (
+                          <div className="p-4 pt-2 border-t border-zinc-800/60 bg-zinc-950/40">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {items.map((g, idx) => (
+                                <div
+                                  key={idx}
+                                  className="bg-zinc-900/90 border border-zinc-800/80 hover:border-zinc-700 rounded-xl p-3.5 space-y-1.5 transition"
+                                >
+                                  <div className="space-y-0.5">
+                                    <h5 className="font-black text-xs text-white tracking-tight leading-snug">
+                                      {g.term}
+                                    </h5>
+                                    {g.spanish_term && (
+                                      <div className="text-[10px] font-semibold text-amber-400/90">
+                                        {g.spanish_term}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-zinc-400 leading-relaxed">
+                                    {g.definition}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── 5. CTA BANNER COMPACTO ────────────────────────────────────────────── */}
