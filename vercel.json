@@ -119,27 +119,27 @@
     },
     {
       "source": "/sitemap_index.xml",
-      "destination": "/api/sitemap?type=index"
+      "destination": "/api/sitemap"
     },
     {
       "source": "/sitemap-products.xml",
-      "destination": "/api/sitemap?type=products"
+      "destination": "/api/sitemap"
     },
     {
       "source": "/sitemap-categories.xml",
-      "destination": "/api/sitemap?type=categories"
+      "destination": "/api/sitemap"
     },
     {
       "source": "/sitemap-brands.xml",
-      "destination": "/api/sitemap?type=brands"
+      "destination": "/api/sitemap"
     },
     {
       "source": "/sitemap-academy.xml",
-      "destination": "/api/sitemap?type=academy"
+      "destination": "/api/sitemap"
     },
     {
       "source": "/sitemap-pages.xml",
-      "destination": "/api/sitemap?type=pages"
+      "destination": "/api/sitemap"
     },
     {
       "source": "/merchant-feed.xml",
@@ -155,47 +155,51 @@
     },
     {
       "source": "/assets/(.*):([0-9]+):([0-9]+)",
-      "destination": "/api/seo-prerender?type=asset_garbage"
+      "destination": "/api/seo-prerender"
     },
     {
       "source": "/sample-page(.*)",
-      "destination": "/api/seo-prerender?type=wp_garbage"
+      "destination": "/api/seo-prerender"
     },
     {
       "source": "/wp-includes/(.*)",
-      "destination": "/api/seo-prerender?type=wp_garbage"
+      "destination": "/api/seo-prerender"
     },
     {
       "source": "/wp-content/(.*)",
-      "destination": "/api/seo-prerender?type=wp_garbage"
+      "destination": "/api/seo-prerender"
+    },
+    {
+      "source": "/wp-(.*)",
+      "destination": "/api/seo-prerender"
     },
     {
       "source": "/feed(.*)",
-      "destination": "/api/seo-prerender?type=wp_garbage"
+      "destination": "/api/seo-prerender"
     },
     {
       "source": "/author/(.*)",
-      "destination": "/api/seo-prerender?type=wp_garbage"
+      "destination": "/api/seo-prerender"
     },
     {
       "source": "/blog/(.*)",
-      "destination": "/api/seo-prerender?type=wp_garbage"
+      "destination": "/api/seo-prerender"
     },
     {
       "source": "/2024/(.*)",
-      "destination": "/api/seo-prerender?type=wp_garbage"
+      "destination": "/api/seo-prerender"
     },
     {
       "source": "/2025/(.*)",
-      "destination": "/api/seo-prerender?type=wp_garbage"
+      "destination": "/api/seo-prerender"
     },
     {
       "source": "/2026/(.*)",
-      "destination": "/api/seo-prerender?type=wp_garbage"
+      "destination": "/api/seo-prerender"
     },
     {
       "source": "/page=([0-9]+)(.*)",
-      "destination": "/api/seo-prerender?type=page_garbage"
+      "destination": "/api/seo-prerender"
     },
     {
       "source": "/producto/:slug*",

@@ -152,13 +152,15 @@ async function fetchProducts() {
 export default async function handler(req, res) {
   try {
     const reqUrl = req.url || '';
+    const xForwardedUri = req.headers?.['x-forwarded-uri'] || req.headers?.['x-matched-path'] || '';
+    const fullUri = (reqUrl + ' ' + xForwardedUri).toLowerCase();
     const type = (req.query?.type || '').toLowerCase();
-    const isIndex = type === 'index' || reqUrl.includes('sitemap_index.xml') || reqUrl.includes('type=index');
-    const isProducts = type === 'products' || reqUrl.includes('sitemap-products.xml') || reqUrl.includes('type=products');
-    const isCategories = type === 'categories' || reqUrl.includes('sitemap-categories.xml') || reqUrl.includes('type=categories');
-    const isBrands = type === 'brands' || reqUrl.includes('sitemap-brands.xml') || reqUrl.includes('type=brands');
-    const isPages = type === 'pages' || reqUrl.includes('sitemap-pages.xml') || reqUrl.includes('type=pages');
-    const isAcademy = type === 'academy' || reqUrl.includes('sitemap-academy.xml') || reqUrl.includes('type=academy');
+    const isIndex = type === 'index' || fullUri.includes('sitemap_index.xml') || fullUri.includes('type=index');
+    const isProducts = type === 'products' || fullUri.includes('sitemap-products.xml') || fullUri.includes('type=products');
+    const isCategories = type === 'categories' || fullUri.includes('sitemap-categories.xml') || fullUri.includes('type=categories');
+    const isBrands = type === 'brands' || fullUri.includes('sitemap-brands.xml') || fullUri.includes('type=brands');
+    const isPages = type === 'pages' || fullUri.includes('sitemap-pages.xml') || fullUri.includes('type=pages');
+    const isAcademy = type === 'academy' || fullUri.includes('sitemap-academy.xml') || fullUri.includes('type=academy');
 
     res.setHeader('Content-Type', 'application/xml; charset=utf-8');
     res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=43200');
