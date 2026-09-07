@@ -773,7 +773,7 @@ export default async function handler(req, res) {
         type = 'contact';
       } else if (combinedUri.includes('/shop')) {
         type = 'shop';
-      } else if (combinedUri.includes('type=home') || reqUrl === '/' || xForwardedUri === '/') {
+      } else if (combinedUri.includes('type=home') || parsed.pathname === '/' || xForwardedUri === '/') {
         type = 'home';
       }
     }
@@ -1184,7 +1184,23 @@ export default async function handler(req, res) {
         'envios-devoluciones': 'Envíos y Devoluciones',
         'contact': 'Contacto'
       };
-      const pageName = pageTitles[pageSlug] || pageSlug || 'Página Institucional';
+      let pageName = pageTitles[pageSlug];
+      if (!pageName && type === 'page') {
+        const { data: pageData } = await supabase
+          .from('pages')
+          .select('title, slug, is_active')
+          .eq('slug', pageSlug)
+          .maybeSingle();
+
+        if (pageData && pageData.is_active) {
+          pageName = pageData.title;
+        } else {
+          return renderNotFoundPage(res, htmlTemplate, 'page', pageSlug);
+        }
+      } else if (!pageName && type !== 'contact') {
+        return renderNotFoundPage(res, htmlTemplate, 'page', pageSlug || 'not-found');
+      }
+      pageName = pageName || 'Contacto';
       title = generateMetaTitle('static', pageName);
       description = generateMetaDescription('static', null, pageName);
       canonical = generateCanonical(pageSlug === 'contact' ? 'contact' : 'page', pageSlug);
@@ -1203,7 +1219,7 @@ export default async function handler(req, res) {
       `;
 
     // 12. HOME
-    } else if (type === 'home' || reqUrl === '/' || combinedUri.includes('type=home')) {
+    } else if (type === 'home' || parsed.pathname === '/' || combinedUri.includes('type=home')) {
       title = generateMetaTitle('home');
       description = generateMetaDescription('home');
       canonical = generateCanonical('home');

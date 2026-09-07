@@ -119,27 +119,27 @@
     },
     {
       "source": "/sitemap_index.xml",
-      "destination": "/api/sitemap"
+      "destination": "/api/sitemap?type=index"
     },
     {
       "source": "/sitemap-products.xml",
-      "destination": "/api/sitemap"
+      "destination": "/api/sitemap?type=products"
     },
     {
       "source": "/sitemap-categories.xml",
-      "destination": "/api/sitemap"
+      "destination": "/api/sitemap?type=categories"
     },
     {
       "source": "/sitemap-brands.xml",
-      "destination": "/api/sitemap"
+      "destination": "/api/sitemap?type=brands"
     },
     {
       "source": "/sitemap-academy.xml",
-      "destination": "/api/sitemap"
+      "destination": "/api/sitemap?type=academy"
     },
     {
       "source": "/sitemap-pages.xml",
-      "destination": "/api/sitemap"
+      "destination": "/api/sitemap?type=pages"
     },
     {
       "source": "/merchant-feed.xml",
@@ -155,123 +155,123 @@
     },
     {
       "source": "/assets/(.*):([0-9]+):([0-9]+)",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=asset_garbage"
     },
     {
       "source": "/sample-page(.*)",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=wp_garbage"
     },
     {
       "source": "/wp-includes/(.*)",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=wp_garbage"
     },
     {
       "source": "/wp-content/(.*)",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=wp_garbage"
     },
     {
       "source": "/wp-(.*)",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=wp_garbage"
     },
     {
       "source": "/feed(.*)",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=wp_garbage"
     },
     {
       "source": "/author/(.*)",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=wp_garbage"
     },
     {
       "source": "/blog/(.*)",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=wp_garbage"
     },
     {
       "source": "/2024/(.*)",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=wp_garbage"
     },
     {
       "source": "/2025/(.*)",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=wp_garbage"
     },
     {
       "source": "/2026/(.*)",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=wp_garbage"
     },
     {
       "source": "/page=([0-9]+)(.*)",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=page_garbage"
     },
     {
       "source": "/producto/:slug*",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=producto&slug=:slug*"
     },
     {
       "source": "/categoria/:slug*",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=categoria&slug=:slug*"
     },
     {
       "source": "/marca/:slug*",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=marca&slug=:slug*"
     },
     {
       "source": "/academy/:slug*",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=academy_article&slug=:slug*"
     },
     {
       "source": "/academy",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=academy"
     },
     {
       "source": "/radar/:slug*",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=radar_item&slug=:slug*"
     },
     {
       "source": "/radar",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=radar"
     },
     {
       "source": "/releases",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=releases"
     },
     {
       "source": "/compare",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=compare"
     },
     {
       "source": "/import-hub",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=import-hub"
     },
     {
       "source": "/page/:slug*",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=page&slug=:slug*"
     },
     {
       "source": "/contact",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=contact"
     },
     {
       "source": "/licencias/:slug*",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=licencia_detail&slug=:slug*"
     },
     {
       "source": "/licencias",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=licencias"
     },
     {
       "source": "/themes/:slug*",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=theme_detail&slug=:slug*"
     },
     {
       "source": "/themes",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=themes"
     },
     {
       "source": "/shop",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=shop"
     },
     {
       "source": "/",
-      "destination": "/api/seo-prerender"
+      "destination": "/api/seo-prerender?type=home"
     },
     {
       "source": "/(.*)",
