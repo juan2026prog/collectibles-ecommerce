@@ -1140,6 +1140,58 @@ export default async function handler(req, res) {
         </div>
       `;
 
+    // 9b. LICENCIA DETAIL
+    } else if (type === 'licencia_detail' && slug) {
+      const { data: license } = await supabase
+        .from('licenses')
+        .select('name, slug')
+        .eq('slug', slug)
+        .maybeSingle();
+
+      const licName = license?.name || slug;
+      title = generateMetaTitle('licencias', licName);
+      description = generateMetaDescription('licencias', null, licName);
+      canonical = generateCanonical('licencias', slug);
+
+      const breadcrumbSchema = generateBreadcrumbs('licencias', { name: licName, slug });
+      jsonLdScripts.push(breadcrumbSchema);
+
+      bodyContent = `
+        <div style="padding: 20px; font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto;">
+          <nav style="font-size: 14px; margin-bottom: 15px;">
+            <a href="${BASE_URL}/">Inicio</a> &gt; <a href="${BASE_URL}/licencias">Licencias</a> &gt; <span>${escapeHtml(licName)}</span>
+          </nav>
+          <h1 style="font-size: 28px; font-weight: bold; margin-bottom: 10px;">${escapeHtml(licName)} en Uruguay</h1>
+          <p>${escapeHtml(description)}</p>
+        </div>
+      `;
+
+    // 9c. THEME DETAIL
+    } else if (type === 'theme_detail' && slug) {
+      const { data: theme } = await supabase
+        .from('themes')
+        .select('name, slug')
+        .eq('slug', slug)
+        .maybeSingle();
+
+      const themeName = theme?.name || slug;
+      title = generateMetaTitle('themes', themeName);
+      description = generateMetaDescription('themes', null, themeName);
+      canonical = generateCanonical('themes', slug);
+
+      const breadcrumbSchema = generateBreadcrumbs('themes', { name: themeName, slug });
+      jsonLdScripts.push(breadcrumbSchema);
+
+      bodyContent = `
+        <div style="padding: 20px; font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto;">
+          <nav style="font-size: 14px; margin-bottom: 15px;">
+            <a href="${BASE_URL}/">Inicio</a> &gt; <a href="${BASE_URL}/themes">Temas</a> &gt; <span>${escapeHtml(themeName)}</span>
+          </nav>
+          <h1 style="font-size: 28px; font-weight: bold; margin-bottom: 10px;">${escapeHtml(themeName)} en Uruguay</h1>
+          <p>${escapeHtml(description)}</p>
+        </div>
+      `;
+
     // 10. SHOP
     } else if (type === 'shop') {
       title = generateMetaTitle('shop');
