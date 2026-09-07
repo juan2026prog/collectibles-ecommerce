@@ -871,7 +871,7 @@ export default async function handler(req, res) {
         .eq('slug', slug)
         .maybeSingle();
 
-      if (!category || !category.is_active || category.status !== 'approved') {
+      if (!category || !category.is_active || (category.status && category.status !== 'approved' && category.status !== 'active')) {
         return renderNotFoundPage(res, htmlTemplate, 'categoria', slug);
       }
 
@@ -918,7 +918,7 @@ export default async function handler(req, res) {
         .eq('slug', slug)
         .maybeSingle();
 
-      if (!brand || !brand.is_active || brand.status !== 'approved') {
+      if (!brand || !brand.is_active || (brand.status && brand.status !== 'approved' && brand.status !== 'active')) {
         return renderNotFoundPage(res, htmlTemplate, 'marca', slug);
       }
 
