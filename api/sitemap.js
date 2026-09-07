@@ -54,6 +54,7 @@ async function fetchCategories() {
       .from('categories')
       .select('slug, updated_at, created_at')
       .eq('is_active', true)
+      .eq('status', 'approved')
       .range(page * pageSize, (page + 1) * pageSize - 1);
 
     if (error) {
@@ -83,6 +84,7 @@ async function fetchBrands() {
       .from('brands')
       .select('slug, created_at')
       .eq('is_active', true)
+      .eq('status', 'approved')
       .range(page * pageSize, (page + 1) * pageSize - 1);
 
     if (error) {
