@@ -2,18 +2,11 @@ import { ExternalAccountClient } from 'google-auth-library';
 import { getVercelOidcToken } from '@vercel/oidc';
 
 const GCP_PROJECT_NUMBER = process.env.GCP_PROJECT_NUMBER || '836776591370';
-const GCP_PROJECT_ID = process.env.GCP_PROJECT_ID || 'prueba-463718';
 const GCP_POOL_ID = process.env.GCP_POOL_ID || 'collectibles-vercel';
 const GCP_PROVIDER_ID = process.env.GCP_PROVIDER_ID || 'vercel';
 const GCP_SERVICE_ACCOUNT = process.env.GCP_SERVICE_ACCOUNT || 'collectibles-seo@prueba-463718.iam.gserviceaccount.com';
 
-const AUDIENCE_CANDIDATES = [
-  process.env.GCP_WORKLOAD_IDENTITY_AUDIENCE,
-  `//iam.googleapis.com/projects/${GCP_PROJECT_NUMBER}/locations/global/workloadIdentityPools/${GCP_POOL_ID}/providers/${GCP_PROVIDER_ID}`,
-  `//iam.googleapis.com/projects/${GCP_PROJECT_ID}/locations/global/workloadIdentityPools/${GCP_POOL_ID}/providers/${GCP_PROVIDER_ID}`,
-  `https://iam.googleapis.com/projects/${GCP_PROJECT_NUMBER}/locations/global/workloadIdentityPools/${GCP_POOL_ID}/providers/${GCP_PROVIDER_ID}`
-].filter(Boolean);
-
+const AUDIENCE = `//iam.googleapis.com/projects/${GCP_PROJECT_NUMBER}/locations/global/workloadIdentityPools/${GCP_POOL_ID}/providers/${GCP_PROVIDER_ID}`;
 const TOKEN_URL = 'https://sts.googleapis.com/v1/token';
 const SERVICE_ACCOUNT_IMPERSONATION_URL = `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${GCP_SERVICE_ACCOUNT}:generateAccessToken`;
 
@@ -32,7 +25,6 @@ function parseJwtClaims(token) {
   try {
     const payload = Buffer.from(parts[1], 'base64').toString('utf-8');
     const parsed = JSON.parse(payload);
-    // Exclude any sensitive fields just in case
     return {
       iss: parsed.iss,
       sub: parsed.sub,
@@ -47,13 +39,12 @@ function parseJwtClaims(token) {
 }
 
 /**
- * Creates an ExternalAccountClient with a given audience
+ * Creates an ExternalAccountClient configured for Vercel OIDC -> GCP Workload Identity Federation
  */
-export function createGoogleAuthClient(audienceOverride) {
-  const audience = audienceOverride || AUDIENCE_CANDIDATES[0];
+export function createGoogleAuthClient() {
   return ExternalAccountClient.fromJSON({
     type: 'external_account',
-    audience,
+    audience: AUDIENCE,
     subject_token_type: 'urn:ietf:params:oauth:token-type:jwt',
     token_url: TOKEN_URL,
     service_account_impersonation_url: SERVICE_ACCOUNT_IMPERSONATION_URL,
@@ -79,7 +70,7 @@ export async function testGoogleAuth() {
     googleSts: { status: 'PENDING', error: null },
     serviceAccountImpersonation: { status: 'PENDING', error: null },
     client: null,
-    testedAudiences: []
+    audience: AUDIENCE
   };
 
   // Step 1: Vercel OIDC Token Check
@@ -95,39 +86,41 @@ export async function testGoogleAuth() {
     result.vercelOidc.status = 'FAIL';
     result.vercelOidc.error = {
       stage: 'VERCEL_OIDC',
+      httpStatus: 500,
+      googleErrorCode: null,
       message: err.message || 'Error acquiring Vercel OIDC token'
     };
     return result;
   }
 
-  // Step 2 & 3: Try candidate audiences
-  let lastError = null;
-  for (const aud of AUDIENCE_CANDIDATES) {
-    try {
-      const client = createGoogleAuthClient(aud);
-      const tokenResponse = await client.getAccessToken();
-      if (tokenResponse && tokenResponse.token) {
-        result.googleSts.status = 'PASS';
-        result.serviceAccountImpersonation.status = 'PASS';
-        result.client = client;
-        result.successfulAudience = aud;
-        return result;
-      }
-    } catch (err) {
-      const sanitized = sanitizeGoogleAuthError(err);
-      result.testedAudiences.push({
-        audience: aud,
-        error: sanitized
-      });
-      lastError = err;
+  // Step 2 & 3: STS Exchange and IAM Impersonation
+  try {
+    const client = createGoogleAuthClient();
+    const tokenResponse = await client.getAccessToken();
+    if (!tokenResponse || !tokenResponse.token) {
+      throw new Error('No access token returned from Google Auth exchange.');
+    }
+
+    result.googleSts.status = 'PASS';
+    result.serviceAccountImpersonation.status = 'PASS';
+    result.client = client;
+  } catch (err) {
+    const errorDetails = sanitizeGoogleAuthError(err);
+    if (errorDetails.stage === 'GOOGLE_STS') {
+      result.googleSts.status = 'FAIL';
+      result.googleSts.error = errorDetails;
+      result.serviceAccountImpersonation.status = 'BLOCKED_BY_STS';
+    } else if (errorDetails.stage === 'SERVICE_ACCOUNT_IMPERSONATION') {
+      result.googleSts.status = 'PASS';
+      result.serviceAccountImpersonation.status = 'FAIL';
+      result.serviceAccountImpersonation.error = errorDetails;
+    } else {
+      result.googleSts.status = 'FAIL';
+      result.googleSts.error = errorDetails;
+      result.serviceAccountImpersonation.status = 'FAIL';
+      result.serviceAccountImpersonation.error = errorDetails;
     }
   }
-
-  const errorDetails = sanitizeGoogleAuthError(lastError);
-  result.googleSts.status = errorDetails.stage === 'GOOGLE_STS' ? 'FAIL' : 'UNKNOWN';
-  result.serviceAccountImpersonation.status = errorDetails.stage === 'SERVICE_ACCOUNT_IMPERSONATION' ? 'FAIL' : 'FAIL';
-  result.googleSts.error = errorDetails;
-  result.serviceAccountImpersonation.error = errorDetails;
 
   return result;
 }
@@ -145,13 +138,13 @@ export function sanitizeGoogleAuthError(err) {
   let stage = 'GOOGLE_AUTH_EXCHANGE';
 
   if (typeof responseData === 'object' && responseData !== null) {
-    googleErrorCode = responseData.error?.status || responseData.error?.code || responseData.error || null;
+    googleErrorCode = responseData.error || responseData.error?.status || responseData.error?.code || null;
     if (responseData.error_description) {
       googleErrorCode = `${responseData.error}: ${responseData.error_description}`;
     }
   }
 
-  if (rawMessage.includes('sts.googleapis.com') || (responseData?.error_description && responseData?.error === 'invalid_grant') || responseData?.error === 'invalid_target') {
+  if (rawMessage.includes('sts.googleapis.com') || (responseData?.error_description && responseData?.error === 'invalid_grant') || responseData?.error === 'invalid_target' || responseData?.error === 'invalid_request') {
     stage = 'GOOGLE_STS';
   } else if (rawMessage.includes('iamcredentials.googleapis.com') || rawMessage.includes('generateAccessToken')) {
     stage = 'SERVICE_ACCOUNT_IMPERSONATION';
