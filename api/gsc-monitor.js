@@ -129,7 +129,8 @@ export default async function handler(req, res) {
     // Action 4: Specific URL Inspection
     if (action === 'inspect') {
       const targetUrls = (req.body && req.body.urls) || (req.query?.url ? [req.query.url] : PRIORITY_URL_SAMPLE.slice(0, 5));
-      const inspectionResults = await inspectUrlBatch(client, siteUrl, targetUrls, { delayMs: 400 });
+      const delayMs = (req.body && typeof req.body.delayMs === 'number') ? req.body.delayMs : 120;
+      const inspectionResults = await inspectUrlBatch(client, siteUrl, targetUrls, { delayMs });
       return res.status(200).json({
         status: 'OK',
         siteUrl,

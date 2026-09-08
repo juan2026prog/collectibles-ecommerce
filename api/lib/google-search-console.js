@@ -138,9 +138,11 @@ export async function inspectUrl(client, siteUrl, inspectionUrl) {
       robotsTxtState: indexStatus.robotsTxtState || 'UNKNOWN',
       indexingState: indexStatus.indexingState || 'UNKNOWN',
       lastCrawlTime: indexStatus.lastCrawlTime || null,
+      crawledAs: indexStatus.crawledAs || null,
       pageFetchState: indexStatus.pageFetchState || 'UNKNOWN',
       googleCanonical: indexStatus.googleCanonical || null,
       userCanonical: indexStatus.userCanonical || null,
+      referringUrls: indexStatus.referringUrls || [],
       rawIndexStatusResult: indexStatus
     };
   } catch (err) {
@@ -158,9 +160,11 @@ export async function inspectUrl(client, siteUrl, inspectionUrl) {
       robotsTxtState: 'UNKNOWN',
       indexingState: 'UNKNOWN',
       lastCrawlTime: null,
+      crawledAs: null,
       pageFetchState: 'ERROR',
       googleCanonical: null,
-      userCanonical: null
+      userCanonical: null,
+      referringUrls: []
     };
   }
 }
