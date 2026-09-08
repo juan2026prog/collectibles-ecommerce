@@ -45,7 +45,9 @@ export default async function handler(req, res) {
           details: {
             vercelOidc: authTest.vercelOidc,
             googleSts: authTest.googleSts,
-            serviceAccountImpersonation: authTest.serviceAccountImpersonation
+            serviceAccountImpersonation: authTest.serviceAccountImpersonation,
+            oidcClaims: authTest.vercelOidc.claims,
+            testedAudiences: authTest.testedAudiences
           }
         });
       }
