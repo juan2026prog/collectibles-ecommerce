@@ -43,11 +43,11 @@ export default async function handler(req, res) {
           status: 'ERROR',
           message: 'Google authentication pipeline failed',
           details: {
+            audience: authTest.audience,
             vercelOidc: authTest.vercelOidc,
             googleSts: authTest.googleSts,
             serviceAccountImpersonation: authTest.serviceAccountImpersonation,
-            oidcClaims: authTest.vercelOidc.claims,
-            testedAudiences: authTest.testedAudiences
+            oidcClaims: authTest.vercelOidc.claims
           }
         });
       }
