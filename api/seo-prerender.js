@@ -197,6 +197,7 @@ function generateCanonical(type, slug) {
   if (type === 'compare') return `${BASE_URL}/compare`;
   if (type === 'import-hub') return `${BASE_URL}/import-hub`;
   if (type === 'contact') return `${BASE_URL}/contact`;
+  if (type === 'ai-search' || type === 'ai_search') return `${BASE_URL}/ai-search`;
   if (type === 'page') return `${BASE_URL}/page/${slug}`;
   if (type === 'static') return `${BASE_URL}/${slug}`;
   return `${BASE_URL}/${slug || ''}`;
@@ -205,6 +206,7 @@ function generateCanonical(type, slug) {
 function generateMetaTitle(type, name) {
   if (type === 'home' || !type) return 'Juguetes Retro Uruguay & Coleccionables | Collectibles Store';
   if (type === 'shop') return 'Catálogo de Coleccionables en Uruguay | Collectibles';
+  if (type === 'ai-search' || type === 'ai_search') return 'Buscador con Inteligencia Artificial para Coleccionistas | Collectibles Uruguay';
   if (type === 'licencias') return name ? `${name} | Licencias Oficiales | Collectibles Uruguay` : 'Licencias Oficiales de Coleccionables | Collectibles Uruguay';
   if (type === 'themes') return name ? `${name} | Universos Geek | Collectibles Uruguay` : 'Universos y Temas Geek | Collectibles Uruguay';
   if (type === 'producto' || type === 'product' || type === 'p') return `${name} | Collectibles Uruguay`;
@@ -231,6 +233,9 @@ function generateMetaDescription(type, rawDesc, name) {
   }
   if (type === 'shop') {
     return 'Explora nuestro catálogo completo de figuras de acción, Funkos, cómics y coleccionables en Uruguay con envíos a todo el país.';
+  }
+  if (type === 'ai-search' || type === 'ai_search') {
+    return 'Encuentra figuras, escalas, líneas y piezas de colección en Uruguay utilizando búsqueda asistida por IA especializada en coleccionismo.';
   }
   if (type === 'licencias') {
     return name 
@@ -364,6 +369,13 @@ function generateBreadcrumbs(type, entity) {
         item: `${BASE_URL}/radar/${entity.slug}`
       });
     }
+  } else if (type === 'ai-search' || type === 'ai_search') {
+    itemListElement.push({
+      '@type': 'ListItem',
+      position: 2,
+      name: 'Buscador con IA',
+      item: `${BASE_URL}/ai-search`
+    });
   } else if (type === 'static' || type === 'page') {
     itemListElement.push({
       '@type': 'ListItem',
@@ -1070,6 +1082,78 @@ export default async function handler(req, res) {
           </nav>
           <h1 style="font-size: 32px; font-weight: bold; margin-bottom: 10px;">Collectibles Import Hub Uruguay</h1>
           <p>${escapeHtml(description)}</p>
+        </div>
+      `;
+
+    // 8b. AI SEARCH
+    } else if (type === 'ai-search' || type === 'ai_search' || fullPath.includes('/ai-search') || fullPath.includes('/search/ai')) {
+      title = generateMetaTitle('ai-search');
+      description = generateMetaDescription('ai-search');
+      canonical = generateCanonical('ai-search');
+
+      const breadcrumbSchema = generateBreadcrumbs('ai-search');
+      const webAppSchema = {
+        '@context': 'https://schema.org',
+        '@type': 'WebApplication',
+        name: 'Collectibles AI Search',
+        applicationCategory: 'SearchApplication',
+        operatingSystem: 'All',
+        offers: {
+          '@type': 'Offer',
+          price: '0',
+          priceCurrency: 'UYU'
+        },
+        potentialAction: {
+          '@type': 'SearchAction',
+          target: {
+            '@type': 'EntryPoint',
+            urlTemplate: `${BASE_URL}/ai-search?q={search_term_string}`
+          },
+          'query-input': 'required name=search_term_string'
+        }
+      };
+      jsonLdScripts.push(webAppSchema);
+      jsonLdScripts.push(breadcrumbSchema);
+
+      bodyContent = `
+        <div style="padding: 20px; font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto;">
+          <nav style="font-size: 14px; margin-bottom: 15px;">
+            <a href="${BASE_URL}/">Inicio</a> &gt; <span>Buscador con IA</span>
+          </nav>
+          <h1 style="font-size: 32px; font-weight: bold; margin-bottom: 10px;">Buscador de Coleccionables con IA</h1>
+          <p style="font-size: 18px; color: #4b5563; margin-bottom: 25px;">${escapeHtml(description)}</p>
+          
+          <section style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin-bottom: 30px;">
+            <h2 style="font-size: 20px; font-weight: bold; margin-bottom: 12px; color: #1e293b;">Búsquedas y Consultas Asistidas por Inteligencia Artificial</h2>
+            <ul style="list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;">
+              <li style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; font-size: 14px; color: #334155;">
+                "De la Wave 3 de DC Multiverse de McFarlane, ¿qué tenés disponible?"
+              </li>
+              <li style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; font-size: 14px; color: #334155;">
+                "Mostrame figuras de terror de NECA Ultimate disponibles en Uruguay."
+              </li>
+              <li style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; font-size: 14px; color: #334155;">
+                "Quiero una figura de Batman de unos 18 cm, que no sea Funko y cueste menos de USD 80."
+              </li>
+              <li style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; font-size: 14px; color: #334155;">
+                "¿Qué figuras 1:12 de Marvel tengo disponibles y cuáles combinan mejor entre sí?"
+              </li>
+            </ul>
+          </section>
+
+          <section style="margin-top: 30px;">
+            <h2 style="font-size: 20px; font-weight: bold; margin-bottom: 12px;">Explorar Catálogo y Módulos de Coleccionismo</h2>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+              <a href="${BASE_URL}/shop" style="padding: 8px 16px; background: #2563eb; color: #ffffff; border-radius: 6px; text-decoration: none; font-weight: 500;">Ver Catálogo</a>
+              <a href="${BASE_URL}/academy" style="padding: 8px 16px; background: #f1f5f9; color: #1e293b; border-radius: 6px; text-decoration: none; font-weight: 500;">Collector Academy</a>
+              <a href="${BASE_URL}/radar" style="padding: 8px 16px; background: #f1f5f9; color: #1e293b; border-radius: 6px; text-decoration: none; font-weight: 500;">Radar de Preventas</a>
+              <a href="${BASE_URL}/releases" style="padding: 8px 16px; background: #f1f5f9; color: #1e293b; border-radius: 6px; text-decoration: none; font-weight: 500;">Calendario de Lanzamientos</a>
+              <a href="${BASE_URL}/compare" style="padding: 8px 16px; background: #f1f5f9; color: #1e293b; border-radius: 6px; text-decoration: none; font-weight: 500;">Comparador</a>
+              <a href="${BASE_URL}/import-hub" style="padding: 8px 16px; background: #f1f5f9; color: #1e293b; border-radius: 6px; text-decoration: none; font-weight: 500;">Import Hub</a>
+              <a href="${BASE_URL}/licencias" style="padding: 8px 16px; background: #f1f5f9; color: #1e293b; border-radius: 6px; text-decoration: none; font-weight: 500;">Licencias</a>
+              <a href="${BASE_URL}/themes" style="padding: 8px 16px; background: #f1f5f9; color: #1e293b; border-radius: 6px; text-decoration: none; font-weight: 500;">Temas Geek</a>
+            </div>
+          </section>
         </div>
       `;
 

@@ -230,6 +230,14 @@
       "destination": "/api/seo-prerender?type=academy"
     },
     {
+      "source": "/ai-search",
+      "destination": "/api/seo-prerender?type=ai-search"
+    },
+    {
+      "source": "/search/ai",
+      "destination": "/api/seo-prerender?type=ai-search"
+    },
+    {
       "source": "/radar/:slug*",
       "destination": "/api/seo-prerender?type=radar_item&slug=:slug*"
     },

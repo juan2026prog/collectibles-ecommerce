@@ -1,0 +1,263 @@
+=======================================================
+COLLECTIBLES.UY — ORDEN DE SOLICITUD MANUAL DE INDEXACIÓN (GSC)
+=======================================================
+
+-------------------------------------------------------
+PRIORIDAD 1 (Hubs Nucleares, Módulos Públicos y Pilares SEO):
+-------------------------------------------------------
+1. URL: https://collectibles.uy/
+   Estado Google: Submitted and indexed
+   Motivo: Página de inicio y autoridad máxima del dominio
+   Técnicamente lista: sí
+
+2. URL: https://collectibles.uy/shop
+   Estado Google: Submitted and indexed
+   Motivo: Catálogo general de productos
+   Técnicamente lista: sí
+
+3. URL: https://collectibles.uy/academy
+   Estado Google: Submitted and indexed
+   Motivo: Hub educativo Collector Academy
+   Técnicamente lista: sí
+
+4. URL: https://collectibles.uy/ai-search
+   Estado Google: Page with redirect (Actualizado a SSR)
+   Motivo: Buscador con Inteligencia Artificial especializado
+   Técnicamente lista: sí
+
+5. URL: https://collectibles.uy/radar
+   Estado Google: Submitted and indexed
+   Motivo: Radar de preventas y alta demanda
+   Técnicamente lista: sí
+
+6. URL: https://collectibles.uy/releases
+   Estado Google: URL is unknown to Google
+   Motivo: Calendario oficial de lanzamientos 2026/2027
+   Técnicamente lista: sí
+
+7. URL: https://collectibles.uy/compare
+   Estado Google: Submitted and indexed
+   Motivo: Comparador técnico de figuras y coleccionables
+   Técnicamente lista: sí
+
+8. URL: https://collectibles.uy/import-hub
+   Estado Google: Submitted and indexed
+   Motivo: Calculadora y simulador de importación y franquicias
+   Técnicamente lista: sí
+
+9. URL: https://collectibles.uy/licencias
+   Estado Google: Submitted and indexed
+   Motivo: Directorio de franquicias y licencias oficiales
+   Técnicamente lista: sí
+
+10. URL: https://collectibles.uy/themes
+   Estado Google: Submitted and indexed
+   Motivo: Directorio de temas y universos geek
+   Técnicamente lista: sí
+
+11. URL: https://collectibles.uy/academy/como-empezar-coleccion-figuras
+   Estado Google: Submitted and indexed
+   Motivo: Guía pilar de inicio al coleccionismo
+   Técnicamente lista: sí
+
+12. URL: https://collectibles.uy/academy/figuras-accion-vs-estatuas
+   Estado Google: Submitted and indexed
+   Motivo: Guía comparativa de formatos y materiales
+   Técnicamente lista: sí
+
+13. URL: https://collectibles.uy/academy/guia-escalas-figuras-coleccion
+   Estado Google: Submitted and indexed
+   Motivo: Guía técnica de escalas y proporciones
+   Técnicamente lista: sí
+
+14. URL: https://collectibles.uy/academy/como-reconocer-figura-original-bootleg
+   Estado Google: Submitted and indexed
+   Motivo: Guía de autenticidad y detección de falsificaciones
+   Técnicamente lista: sí
+
+15. URL: https://collectibles.uy/categoria/figuras-de-accion
+   Estado Google: Submitted and indexed
+   Motivo: Categoría principal de figuras de acción
+   Técnicamente lista: sí
+
+16. URL: https://collectibles.uy/categoria/funkos
+   Estado Google: Submitted and indexed
+   Motivo: Categoría principal de Funko Pop
+   Técnicamente lista: sí
+
+17. URL: https://collectibles.uy/marca/neca
+   Estado Google: Submitted and indexed
+   Motivo: Marca líder NECA
+   Técnicamente lista: sí
+
+18. URL: https://collectibles.uy/marca/funko
+   Estado Google: Submitted and indexed
+   Motivo: Marca líder Funko
+   Técnicamente lista: sí
+
+19. URL: https://collectibles.uy/marca/hot-toys
+   Estado Google: Submitted and indexed
+   Motivo: Marca líder Hot Toys 1:6
+   Técnicamente lista: sí
+
+-------------------------------------------------------
+PRIORIDAD 2 (Guías Editoriales, Categorías y Marcas):
+-------------------------------------------------------
+1. URL: https://collectibles.uy/academy/el-arte-del-foco-como-elegir-linea-coleccion
+   Estado Google: Submitted and indexed / Discovered
+   Motivo: Guía estratégica de enfoque
+   Técnicamente lista: sí
+
+2. URL: https://collectibles.uy/academy/completismo-vs-curaduria-coleccionismo
+   Estado Google: Submitted and indexed / Discovered
+   Motivo: Guía de curaduría de colecciones
+   Técnicamente lista: sí
+
+3. URL: https://collectibles.uy/academy/presupuesto-real-coleccionista-costos-ocultos
+   Estado Google: Submitted and indexed / Discovered
+   Motivo: Guía financiera y costos ocultos
+   Técnicamente lista: sí
+
+4. URL: https://collectibles.uy/academy/sindrome-caja-cerrada-open-box-vs-sellado
+   Estado Google: Submitted and indexed / Discovered
+   Motivo: Debate conservación vs apertura
+   Técnicamente lista: sí
+
+5. URL: https://collectibles.uy/academy/el-salto-a-escala-1-6-requisitos-espacio-vitrinas
+   Estado Google: Submitted and indexed / Discovered
+   Motivo: Guía de figuras escala 1:6
+   Técnicamente lista: sí
+
+6. URL: https://collectibles.uy/academy/micro-escalas-miniaturas-figuras-1-18-y-1-24
+   Estado Google: Submitted and indexed / Discovered
+   Motivo: Guía de micro-escalas
+   Técnicamente lista: sí
+
+7. URL: https://collectibles.uy/academy/batalla-escala-1-12-import-japones-vs-retail-americano
+   Estado Google: Submitted and indexed / Discovered
+   Motivo: Comparativa escala 1:12
+   Técnicamente lista: sí
+
+8. URL: https://collectibles.uy/academy/frontera-18-cm-escala-1-10-mcfarlane-neca
+   Estado Google: Submitted and indexed / Discovered
+   Motivo: Guía escala 1:10
+   Técnicamente lista: sí
+
+9. URL: https://collectibles.uy/academy/lineas-entrada-vs-alta-gama-fabricantes-coleccionismo
+   Estado Google: Submitted and indexed / Discovered
+   Motivo: Líneas de entrada vs alta gama
+   Técnicamente lista: sí
+
+10. URL: https://collectibles.uy/academy/guerra-titanes-1-6-hot-toys-vs-inart-ingenieria
+   Estado Google: Submitted and indexed / Discovered
+   Motivo: Ingeniería Hot Toys vs InArt
+   Técnicamente lista: sí
+
+11. URL: https://collectibles.uy/categoria/peluches
+   Estado Google: Submitted and indexed / Discovered
+   Motivo: Categoría peluches y plushies
+   Técnicamente lista: sí
+
+12. URL: https://collectibles.uy/categoria/tcg
+   Estado Google: Submitted and indexed / Discovered
+   Motivo: Categoría cartas coleccionables TCG
+   Técnicamente lista: sí
+
+13. URL: https://collectibles.uy/marca/hasbro
+   Estado Google: Submitted and indexed / Discovered
+   Motivo: Marca oficial Hasbro
+   Técnicamente lista: sí
+
+14. URL: https://collectibles.uy/marca/bandai
+   Estado Google: Submitted and indexed / Discovered
+   Motivo: Marca oficial Bandai
+   Técnicamente lista: sí
+
+15. URL: https://collectibles.uy/marca/mcfarlane
+   Estado Google: Submitted and indexed / Discovered
+   Motivo: Marca oficial McFarlane Toys
+   Técnicamente lista: sí
+
+16. URL: https://collectibles.uy/marca/mattel
+   Estado Google: Submitted and indexed / Discovered
+   Motivo: Marca oficial Mattel
+   Técnicamente lista: sí
+
+17. URL: https://collectibles.uy/page/nosotros
+   Estado Google: Submitted and indexed / Discovered
+   Motivo: Página institucional de confianza
+   Técnicamente lista: sí
+
+18. URL: https://collectibles.uy/page/terminos
+   Estado Google: Submitted and indexed / Discovered
+   Motivo: Términos y condiciones legales
+   Técnicamente lista: sí
+
+19. URL: https://collectibles.uy/page/pol-ticas-de-privacidad
+   Estado Google: Submitted and indexed / Discovered
+   Motivo: Políticas de privacidad
+   Técnicamente lista: sí
+
+20. URL: https://collectibles.uy/page/condiciones-de-compra
+   Estado Google: Submitted and indexed / Discovered
+   Motivo: Condiciones de compra
+   Técnicamente lista: sí
+
+21. URL: https://collectibles.uy/page/envios-devoluciones
+   Estado Google: Submitted and indexed / Discovered
+   Motivo: Políticas de envíos y devoluciones
+   Técnicamente lista: sí
+
+-------------------------------------------------------
+PRIORIDAD 3 (Catálogo de Productos Destacados):
+-------------------------------------------------------
+1. URL: https://collectibles.uy/producto/laurie-strode-ultimate-halloween--2018--neca-2383
+   Estado Google: Submitted and indexed
+   Motivo: Producto destacado NECA Horror
+   Técnicamente lista: sí
+
+2. URL: https://collectibles.uy/producto/figura-de-acci-n-glamrock-fred-security-breach-47490-de-funko-4336
+   Estado Google: Submitted and indexed
+   Motivo: Producto destacado Funko FNAF
+   Técnicamente lista: sí
+
+3. URL: https://collectibles.uy/producto/figura-chucky---tiffany-pack-doble-bride-of-chucky-neca-6773
+   Estado Google: Submitted and indexed
+   Motivo: Producto destacado NECA Chucky
+   Técnicamente lista: sí
+
+4. URL: https://collectibles.uy/producto/peluche-gashouse-pat-ootie-coral-claro
+   Estado Google: Submitted and indexed
+   Motivo: Producto destacado Peluche
+   Técnicamente lista: sí
+
+5. URL: https://collectibles.uy/producto/chucky-tv-series-ultimate-neca-4996
+   Estado Google: Submitted and indexed
+   Motivo: Producto destacado NECA TV Series
+   Técnicamente lista: sí
+
+6. URL: https://collectibles.uy/producto/figura-neca-ultimate---chucky-tv-series-3029
+   Estado Google: Submitted and indexed
+   Motivo: Producto destacado NECA
+   Técnicamente lista: sí
+
+7. URL: https://collectibles.uy/producto/boar-ultimate-predator-2-depredador-neca-7057
+   Estado Google: Submitted and indexed
+   Motivo: Producto destacado Predator 2
+   Técnicamente lista: sí
+
+8. URL: https://collectibles.uy/producto/funko-pop-marvel-eternals-gilgamesh
+   Estado Google: Submitted and indexed
+   Motivo: Producto destacado Marvel Funko
+   Técnicamente lista: sí
+
+9. URL: https://collectibles.uy/producto/feral-ultimate-predator-depredador-prey-neca-dmg-box-5406
+   Estado Google: Submitted and indexed
+   Motivo: Producto destacado Predator Prey
+   Técnicamente lista: sí
+
+10. URL: https://collectibles.uy/producto/fifa-world-cup-2026-mascota-de-ee-uu-clutch-25cm
+   Estado Google: Submitted and indexed
+   Motivo: Producto destacado FIFA World Cup 2026
+   Técnicamente lista: sí
+

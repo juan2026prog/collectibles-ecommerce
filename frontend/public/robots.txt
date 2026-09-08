@@ -10,6 +10,7 @@ Allow: /themes/
 Allow: /themes
 Allow: /academy
 Allow: /academy/
+Allow: /ai-search
 Allow: /radar
 Allow: /radar/
 Allow: /releases

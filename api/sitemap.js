@@ -291,6 +291,7 @@ export default async function handler(req, res) {
       const staticPages = [
         '/',
         '/shop',
+        '/ai-search',
         '/licencias',
         '/themes',
         '/radar',
@@ -306,7 +307,7 @@ export default async function handler(req, res) {
       ];
       let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
       staticPages.forEach(p => {
-        const priority = p === '/' ? '1.0' : (p === '/shop' ? '0.9' : '0.8');
+        const priority = p === '/' ? '1.0' : ((p === '/shop' || p === '/ai-search') ? '0.9' : '0.8');
         const changefreq = p === '/' ? 'daily' : 'weekly';
         xml += `  <url>\n    <loc>${BASE_URL}${p === '/' ? '' : p}</loc>\n    <priority>${priority}</priority>\n    <changefreq>${changefreq}</changefreq>\n  </url>\n`;
       });
