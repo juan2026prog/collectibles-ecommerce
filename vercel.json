@@ -162,6 +162,14 @@
       "destination": "/api/catalog-image?path=:path*"
     },
     {
+      "source": "/api/gsc-monitor",
+      "destination": "/api/gsc-monitor.js"
+    },
+    {
+      "source": "/api/gsc-monitor/:path*",
+      "destination": "/api/gsc-monitor.js"
+    },
+    {
       "source": "/sample-page:slug*",
       "destination": "/api/seo-prerender?type=wp_garbage"
     },
