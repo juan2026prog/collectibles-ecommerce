@@ -177,21 +177,9 @@ function sleep(ms) {
 }
 
 /**
- * Inspect a list of priority URLs in batches with rate-limiting
+ * Inspect a list of URLs concurrently in batches
  */
 export async function inspectUrlBatch(client, siteUrl, urlList = [], options = {}) {
-  const delayMs = options.delayMs || 350;
-  const results = [];
-
-  for (let i = 0; i < urlList.length; i++) {
-    const targetUrl = urlList[i];
-    const res = await inspectUrl(client, siteUrl, targetUrl);
-    results.push(res);
-
-    if (i < urlList.length - 1 && delayMs > 0) {
-      await sleep(delayMs);
-    }
-  }
-
+  const results = await Promise.all(urlList.map(targetUrl => inspectUrl(client, siteUrl, targetUrl)));
   return results;
 }
