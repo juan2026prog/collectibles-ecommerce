@@ -3,7 +3,7 @@ import { getVercelOidcToken } from '@vercel/oidc';
 
 const GCP_PROJECT_NUMBER = process.env.GCP_PROJECT_NUMBER || '836776591370';
 const GCP_POOL_ID = process.env.GCP_POOL_ID || 'collectibles-vercel';
-const GCP_PROVIDER_ID = process.env.GCP_PROVIDER_ID || 'vercel';
+const GCP_PROVIDER_ID = process.env.GCP_PROVIDER_ID || 'vercel-collectibles';
 const GCP_SERVICE_ACCOUNT = process.env.GCP_SERVICE_ACCOUNT || 'collectibles-seo@prueba-463718.iam.gserviceaccount.com';
 
 const AUDIENCE = `//iam.googleapis.com/projects/${GCP_PROJECT_NUMBER}/locations/global/workloadIdentityPools/${GCP_POOL_ID}/providers/${GCP_PROVIDER_ID}`;
