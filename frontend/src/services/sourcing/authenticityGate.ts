@@ -30,7 +30,9 @@ export const RECOGNIZED_OFFICIAL_BRANDS = [
   'lego',
   'square enix',
   'play arts kai',
-  'banpresto'
+  'banpresto',
+  'jada toys',
+  'jada'
 ];
 
 export const RECOGNIZED_MAJOR_LICENSES = [
@@ -57,7 +59,8 @@ export const RECOGNIZED_MAJOR_LICENSES = [
   'warhammer',
   'dune',
   'lord of the rings',
-  'harry potter'
+  'harry potter',
+  'street fighter'
 ];
 
 // Red flag terms strictly indicating bootlegs, replicas, or unlicensed knockoffs

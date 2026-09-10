@@ -1,6 +1,7 @@
 /**
  * SOURCING & IMPORTACIÓN MULTIFUENTE V2 — DOMAIN TYPES
  * Collectibles.uy / Collectibles2026
+ * FASE 1: Sourcing Intelligence — Canonical Product Graph + Multi-Source Offers
  */
 
 export type RetailerSource = 
@@ -12,6 +13,53 @@ export type RetailerSource =
   | 'entertainmentearth' 
   | 'bbts' 
   | 'custom';
+
+// ── Fase 1: Normalized Condition ──────────────────────────────────────────────
+export type ConditionNormalized =
+  | 'NEW'
+  | 'USED'
+  | 'OPEN_BOX'
+  | 'REFURBISHED'
+  | 'UNKNOWN';
+
+// ── Fase 1: Normalized Availability ──────────────────────────────────────────
+export type AvailabilityNormalized =
+  | 'IN_STOCK'
+  | 'LOW_STOCK'
+  | 'OUT_OF_STOCK'
+  | 'PREORDER'
+  | 'BACKORDER'
+  | 'UNKNOWN';
+
+// ── Fase 1: Freshness Status ──────────────────────────────────────────────────
+export type FreshnessStatus =
+  | 'LIVE'      // Verified in the last 15 minutes
+  | 'FRESH'     // Verified in the last 6 hours
+  | 'STALE'     // Older than 6 hours
+  | 'UNKNOWN';  // Never verified or unknown age
+
+// ── Fase 1: Retailer Capability Status ───────────────────────────────────────
+export type RetailerCapabilityStatus =
+  | 'LIVE'           // Active and working
+  | 'ADAPTER_READY'  // Code exists, credentials/config pending
+  | 'NOT_CONFIGURED' // No credentials or not enabled
+  | 'ERROR';         // Attempted but failing
+
+// ── Fase 1: Data Source Status ────────────────────────────────────────────────
+export type DataSourceStatus =
+  | 'LIVE'
+  | 'CACHE'
+  | 'RESEARCH_DATA'
+  | 'NOT_CONFIGURED'
+  | 'ERROR';
+
+// ── Fase 1: Authenticity Product Status ──────────────────────────────────────
+export type AuthenticityProductStatus =
+  | 'VERIFIED'
+  | 'LIKELY_VERIFIED'
+  | 'REVIEW_REQUIRED'
+  | 'REJECTED'
+  | 'UNKNOWN';
 
 export type AuthenticityStatus = 
   | 'VERIFIED_OFFICIAL' 
@@ -90,20 +138,126 @@ export interface SourceOffer {
   source_product_id: string; // ASIN, ItemID, SKU
   url: string;
   seller: string;
+  seller_rating?: number;       // 0-100 — Fase 1
+  seller_reviews?: number;      // Fase 1
+  seller_verified?: boolean;    // Fase 1
+  fulfilled_by_retailer?: boolean; // Fase 1
+  sold_by_retailer?: boolean;   // Fase 1
   price: number;
   currency: string;
   domestic_shipping: number;
+  usa_shipping_usd?: number;    // Fase 1: explicit USA domestic shipping to Miami
   availability: 'in_stock' | 'preorder' | 'limited' | 'out_of_stock' | 'unknown';
+  availability_normalized?: AvailabilityNormalized; // Fase 1
   stock?: number | null;
   condition: 'new' | 'refurbished' | 'used';
+  condition_normalized?: ConditionNormalized; // Fase 1
   status: SourceOfferStatus;
+  data_source?: DataSourceStatus;            // Fase 1
   estimated_delivery?: string;
+  delivery_min?: string;        // Fase 1: ISO date — min delivery to Miami
+  delivery_max?: string;        // Fase 1: ISO date — max delivery to Miami
+  delivery_source?: string;     // Fase 1: origin of delivery data
+  estimated_weight_lbs?: number; // Fase 1
+  weight_status?: 'KNOWN' | 'UNKNOWN'; // Fase 1
+  freshness_status?: FreshnessStatus;  // Fase 1
   is_zinc_compatible: boolean;
   reliability_score: number; // 0 - 100
   last_checked_at: string;
   metadata?: Record<string, any>;
   landed_cost_usd?: number; // Costo puesto con este proveedor
+  authenticity_status?: AuthenticityProductStatus; // Fase 1
 }
+
+// ── Fase 1: Retailer Capabilities Declaration ─────────────────────────────────
+export interface RetailerCapabilities {
+  retailer: string;
+  search_status: RetailerCapabilityStatus;
+  product_status: RetailerCapabilityStatus;
+  price_status: RetailerCapabilityStatus;
+  stock_status: RetailerCapabilityStatus;
+  seller_status: RetailerCapabilityStatus;
+  delivery_status: RetailerCapabilityStatus;
+  live_check_available: boolean;
+  live_check_endpoint?: string;
+  last_health_check_at?: string;
+  last_error?: string;
+  notes?: string;
+}
+
+// ── Fase 1: Offer History Entry ───────────────────────────────────────────────
+export interface OfferHistoryEntry {
+  id: string;
+  normalized_product_id: string;
+  source: RetailerSource;
+  source_product_id: string;
+  change_type: 'INITIAL' | 'PRICE_CHANGE' | 'STOCK_CHANGE' | 'SELLER_CHANGE' | 'CONDITION_CHANGE' | 'AVAILABILITY_CHANGE';
+  previous_value: Record<string, any>;
+  new_value: Record<string, any>;
+  price_usd?: number;
+  availability_normalized?: AvailabilityNormalized;
+  condition_normalized?: ConditionNormalized;
+  seller?: string;
+  checked_at: string;
+  data_source: DataSourceStatus;
+  notes?: string;
+}
+
+// ── Fase 1: Multi-Source Product View (Canonical + Grouped Offers) ────────────
+/**
+ * Represents the Canonical Product with offers grouped by source and condition.
+ * This is the output structure of the Best Source Selector V1.
+ */
+export interface CanonicalProductView {
+  canonical_id: string;
+  canonical_sku: string;
+  title: string;
+  brand: string;
+  manufacturer?: string;
+  license: string;
+  character?: string;
+  line?: string;
+  scale?: string;
+  // Identifiers
+  upc?: string;
+  ean?: string;
+  gtin?: string;
+  mpn?: string;
+  asin?: string;
+  best_buy_sku?: string;
+  ebay_item_id?: string;
+  // Match reasoning (auditability)
+  match_reason?: string;
+  match_confidence?: number; // 0.00 - 1.00
+  // Images
+  image_url: string;
+  gallery_images: string[];
+  // Grouped offers
+  new_offers: SourceOffer[];   // Fase 1: NEW condition offers
+  used_offers: SourceOffer[];  // Fase 1: USED condition offers
+  // Best Source V1 selection
+  best_source: RetailerSource | null;
+  best_source_offer: SourceOffer | null;
+  best_source_reason: string;
+  // Data status per retailer
+  data_status: {
+    amazon: DataSourceStatus;
+    ebay: DataSourceStatus;
+    bestbuy: DataSourceStatus;
+    last_sync_at?: string;
+  };
+  // Freshness
+  freshness_status: FreshnessStatus;
+  last_checked_at: string;
+  // Capabilities
+  capabilities?: {
+    amazon: RetailerCapabilities;
+    ebay: RetailerCapabilities;
+    bestbuy: RetailerCapabilities;
+  };
+}
+
+
 
 export interface UruguayMarketSummary {
   source: 'mercado_libre_uy';
