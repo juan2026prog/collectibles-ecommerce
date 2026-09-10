@@ -69,11 +69,20 @@ function saveCache(cache) {
 }
 
 async function fetchSitemapUrls(sitemapUrl) {
-  const res = await fetch(sitemapUrl, { headers: { 'User-Agent': 'Collectibles-Audit/1.0' } });
-  if (!res.ok) throw new Error(`Failed to fetch ${sitemapUrl}: HTTP ${res.status}`);
-  const text = await res.text();
-  const matches = text.match(/<loc>(.*?)<\/loc>/g) || [];
-  return matches.map(m => m.replace(/<\/?loc>/g, '').trim()).filter(Boolean);
+  let lastErr;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await fetch(sitemapUrl, { headers: { 'User-Agent': 'Collectibles-Audit/1.0' } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      const matches = text.match(/<loc>(.*?)<\/loc>/g) || [];
+      return matches.map(m => m.replace(/<\/?loc>/g, '').trim()).filter(Boolean);
+    } catch (e) {
+      lastErr = e;
+      await sleep(1000 * attempt);
+    }
+  }
+  throw new Error(`Failed to fetch ${sitemapUrl} after 3 attempts: ${lastErr.message}`);
 }
 
 async function runFullAudit() {
@@ -152,19 +161,25 @@ async function runFullAudit() {
     }
   }
 
-  // 4. INSPECCIÓN COMPLETA DE LAS 1.358 URLs
+  // 4. INSPECCIÓN COMPLETA DE LAS URLs
   console.log(`\n[4/5] Ejecutando Google URL Inspection API para ${allUrls.length} URLs...`);
   const cache = loadCache();
-  const cachedCount = Object.keys(cache).filter(u => allUrlsMap.has(u)).length;
-  console.log(`  ℹ️ URLs previamente cacheadas: ${cachedCount} / ${allUrls.length}`);
+  const cachedValidCount = Object.keys(cache).filter(u => allUrlsMap.has(u) && cache[u] && cache[u].verdict && cache[u].verdict !== 'UNKNOWN' && cache[u].verdict !== 'PENDING_QUOTA' && !cache[u].error).length;
+  console.log(`  ℹ️ URLs previamente cacheadas e inspeccionadas con éxito: ${cachedValidCount} / ${allUrls.length}`);
 
-  const urlsToInspect = allUrls.filter(u => !cache[u] || !cache[u].verdict || cache[u].verdict === 'UNKNOWN');
-  console.log(`  ℹ️ URLs pendientes de inspección: ${urlsToInspect.length}`);
+  const urlsToInspect = allUrls.filter(u => {
+    const item = cache[u];
+    if (!item) return true;
+    if (item.error || item.httpStatus === 429) return true;
+    if (!item.verdict || item.verdict === 'UNKNOWN' || item.verdict === 'PENDING_QUOTA') return true;
+    return false;
+  });
+  console.log(`  ℹ️ URLs pendientes de inspección en este ciclo: ${urlsToInspect.length}`);
 
   const BATCH_SIZE = 5;
   const totalBatches = Math.ceil(urlsToInspect.length / BATCH_SIZE);
 
-  let processedCount = cachedCount;
+  let processedCount = cachedValidCount;
   for (let b = 0; b < totalBatches; b++) {
     const chunk = urlsToInspect.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
     const batchNum = b + 1;
