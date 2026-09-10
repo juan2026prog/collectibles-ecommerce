@@ -434,3 +434,167 @@ export interface ColumnDefinition {
   minWidth?: string;
   category: 'core' | 'costs' | 'market' | 'intelligence' | 'metadata';
 }
+
+// ── Fase 2: Canonical Product & Relational Domain Interfaces ──────────────────
+
+export type SellerTrustStatus = 'TRUSTED' | 'ACCEPTABLE' | 'RISKY' | 'UNKNOWN';
+
+export interface SellerTrustEvaluation {
+  status: SellerTrustStatus;
+  score: number; // 0 - 100
+  reasons: string[];
+  dataCompleteness: number; // 0.0 - 1.0
+}
+
+export type MatchConfidenceLevel = 'EXACT' | 'HIGH' | 'MEDIUM' | 'LOW' | 'UNMATCHED';
+
+export type MatchReviewStatus = 'REVIEW_REQUIRED' | 'CONFIRMED' | 'REJECTED' | 'DISCARDED';
+
+export type IdentifierType = 
+  | 'UPC' 
+  | 'EAN' 
+  | 'GTIN' 
+  | 'MPN' 
+  | 'ASIN' 
+  | 'BESTBUY_SKU' 
+  | 'EBAY_ITEM_ID' 
+  | 'RETAILER_SKU';
+
+export interface ProductIdentifier {
+  id?: string;
+  canonical_product_id?: string;
+  identifier_type: IdentifierType;
+  identifier_value: string;
+  source?: string;
+  verified?: boolean;
+}
+
+export interface SourceListing {
+  id: string;
+  source: RetailerSource;
+  external_id: string;
+  url: string;
+  raw_title: string;
+  raw_description?: string;
+  raw_brand?: string;
+  raw_price: number;
+  raw_currency: string;
+  raw_condition?: string;
+  raw_stock?: number;
+  raw_images?: string[];
+  seller_external_id?: string;
+  raw_payload?: Record<string, any>;
+  first_seen_at?: string;
+  last_seen_at?: string;
+}
+
+export interface SourceSeller {
+  id: string;
+  source: RetailerSource;
+  external_seller_id: string;
+  seller_name: string;
+  rating?: number;
+  rating_count?: number;
+  positive_percentage?: number;
+  seller_status: SellerTrustStatus;
+  first_seen_at?: string;
+  last_seen_at?: string;
+}
+
+export interface ProductOffer {
+  id: string;
+  canonical_product_id: string;
+  source_listing_id?: string;
+  retailer: RetailerSource;
+  seller_id?: string;
+  seller_name?: string;
+  condition: string;
+  condition_normalized: ConditionNormalized;
+  price: number;
+  currency: string;
+  original_price?: number;
+  sale_price?: number;
+  shipping_us: number;
+  shipping_estimated?: number;
+  availability: AvailabilityNormalized;
+  estimated_delivery_min?: string;
+  estimated_delivery_max?: string;
+  offer_url: string;
+  is_best_new_offer?: boolean;
+  is_best_used_offer?: boolean;
+  first_seen_at?: string;
+  last_seen_at?: string;
+  updated_at?: string;
+}
+
+export interface ProductFamily {
+  id: string;
+  name: string;
+  franchise: string;
+  brand: string;
+  description?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CanonicalProduct {
+  id: string;
+  family_id?: string;
+  brand: string;
+  manufacturer?: string;
+  franchise: string;
+  series?: string;
+  character: string;
+  product_name: string;
+  canonical_title: string;
+  category?: string;
+  subcategory?: string;
+  scale?: string;
+  edition?: string;
+  variant?: string;
+  color_variant?: string;
+  release_year?: number;
+  gtin?: string;
+  ean?: string;
+  upc?: string;
+  mpn?: string;
+  sku_reference: string;
+  primary_image: string;
+  additional_images?: string[];
+  description?: string;
+  specifications?: Record<string, any>;
+  package_dimensions?: Record<string, any>;
+  package_weight_lbs?: number;
+  product_status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED' | 'REVIEW_REQUIRED';
+  created_at?: string;
+  updated_at?: string;
+  identifiers?: ProductIdentifier[];
+  offers?: ProductOffer[];
+}
+
+export interface MatchReview {
+  id: string;
+  source_listing_id: string;
+  suggested_canonical_product_id?: string;
+  confidence_score: number;
+  reasons: string[];
+  status: MatchReviewStatus;
+  manual_action?: 'LINK_EXISTING' | 'CREATE_NEW' | 'REJECT';
+  reviewed_by?: string;
+  reviewed_at?: string;
+  created_at?: string;
+}
+
+export interface ProductPriceSummary {
+  lowest_new_price: number | null;
+  lowest_used_price: number | null;
+  average_new_price: number | null;
+  median_new_price: number | null;
+  number_of_new_offers: number;
+  number_of_used_offers: number;
+  best_new_offer: ProductOffer | null;
+  best_used_offer: ProductOffer | null;
+  delivery_range_min_days?: number | null;
+  delivery_range_max_days?: number | null;
+}
+
