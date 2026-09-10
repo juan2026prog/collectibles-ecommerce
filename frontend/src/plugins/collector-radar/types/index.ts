@@ -76,8 +76,18 @@ export interface ReleaseEvent {
   milestones?: ReleaseMilestone[];
   brand?: { id: string; name: string; slug?: string };
   license?: { id: string; name: string; slug?: string };
-  // Campos editoriales del Radar (añadidos en migración futura)
+  // Campos editoriales y de IA del Radar
   radar_signal?: RadarSignal | null;
   radar_why?: string | null;       // Frase editorial: por qué está en Radar
   radar_context?: string | null;   // Datos extra: "23.553 backers · Meta: 10.000"
+  franchise?: string | null;
+  scale?: string | null;
+  category?: string | null;
+  image_source_url?: string | null;
+  image_match_score?: number | null;
+  confidence_score?: number | null;
+  approval_status?: 'DRAFT' | 'VERIFIED' | 'PUBLISHED' | 'ARCHIVED';
+  estimated_release_date?: string | null;
+  audit_corrections?: Array<{ field: string; original: any; corrected: any; date: string; by?: string }>;
+  raw_source_data?: any;
 }

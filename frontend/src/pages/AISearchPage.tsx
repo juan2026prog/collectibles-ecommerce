@@ -331,16 +331,34 @@ export default function AISearchPage() {
 
       setProducts(directResults);
 
-      // 3. Radar Matches
-      const lowerQ = queryText.toLowerCase();
-      const matchedDrops = STATIC_RADAR_ITEMS.filter(item => 
-        item.title.toLowerCase().includes(lowerQ) ||
-        item.brand.toLowerCase().includes(lowerQ) ||
-        item.line.toLowerCase().includes(lowerQ) ||
-        (interp.detectedBrand && item.brand.toLowerCase().includes(interp.detectedBrand.toLowerCase())) ||
-        (interp.detectedLicense && item.title.toLowerCase().includes(interp.detectedLicense.toLowerCase()))
-      );
-      setRadarDrops(matchedDrops);
+      // 3. Radar Matches from Supabase release_events
+      try {
+        const { data: radarEvents } = await supabase
+          .from('release_events')
+          .select('id, slug, title, manufacturer, product_line, radar_signal, date_display_text, official_image_url, brand:brands(name)')
+          .eq('is_published', true)
+          .or(`title.ilike.%${searchTerm}%,manufacturer.ilike.%${searchTerm}%,franchise.ilike.%${searchTerm}%`)
+          .limit(6);
+
+        if (radarEvents && radarEvents.length > 0) {
+          const mappedDrops: RadarMatch[] = radarEvents.map((r: any) => ({
+            id: r.id,
+            slug: r.slug,
+            title: r.title,
+            brand: r.brand?.name || r.manufacturer || 'Oficial',
+            line: r.product_line || 'Línea Regular',
+            radar_signal: r.radar_signal || 'NUEVO_ANUNCIO',
+            date_label: r.date_display_text || 'Próximamente',
+            official_image_url: r.official_image_url || '/images/radar/placeholder.jpg'
+          }));
+          setRadarDrops(mappedDrops);
+        } else {
+          setRadarDrops([]);
+        }
+      } catch (radarErr) {
+        console.warn('Could not load radar events for AI search:', radarErr);
+        setRadarDrops([]);
+      }
 
       // 4. Relaxed Fallback when 0 exact results: always provide top featured products
       if (directResults.length === 0) {

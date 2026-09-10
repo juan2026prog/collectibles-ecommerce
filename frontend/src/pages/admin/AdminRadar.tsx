@@ -3,9 +3,16 @@ import { supabase } from '../../lib/supabase';
 import { 
   Radio, Plus, Edit2, Trash2, Calendar, Eye, EyeOff, 
   Save, CheckCircle2, AlertCircle, Sparkles, ExternalLink,
-  Tag, Award, Package, RefreshCw
+  Tag, Award, Package, RefreshCw, Bot, ShieldCheck, X,
+  ShoppingBag, Search, Layers, ChevronDown
 } from 'lucide-react';
 import type { ReleaseEvent, ReleaseStatus, ReleasePrecision, RadarSignal } from '../../plugins/collector-radar/types';
+import { 
+  parseReleaseWithAI, 
+  persistRadarRelease, 
+  validateAndScoreImage,
+  slugify 
+} from '../../plugins/collector-radar/core/radarAIEngine';
 import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
 
@@ -24,6 +31,19 @@ const STATUS_LABELS: Record<ReleaseStatus, { label: string; bg: string; text: st
   RESTOCKED: { label: 'Re-stock', bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-200' }
 };
 
+const RADAR_SIGNALS_LIST: { id: RadarSignal; label: string }[] = [
+  { id: 'PREVENTA_CERRANDO', label: '🔴 Preventa Cerrando' },
+  { id: 'NUEVO_ANUNCIO', label: '🟣 Nuevo Anuncio' },
+  { id: 'ACABA_DE_SALIR', label: '🟢 Acaba de Salir' },
+  { id: 'PREVENTA_ABIERTA', label: '🟩 Preventa Abierta' },
+  { id: 'ALTA_DEMANDA', label: '🔥 Alta Demanda' },
+  { id: 'EXCLUSIVO', label: '⭐ Exclusivo' },
+  { id: 'REEDICION', label: '🔵 Reedición' },
+  { id: 'AGOTADO', label: '⚫ Agotado' },
+  { id: 'VUELVE_A_STOCK', label: '🔄 Vuelve a Stock' },
+  { id: 'MERECE_ATENCION', label: '📡 Merece Atención' }
+];
+
 export default function AdminRadar() {
   const [releases, setReleases] = useState<ReleaseEvent[]>([]);
   const [brands, setBrands] = useState<{ id: string; name: string }[]>([]);
@@ -32,6 +52,15 @@ export default function AdminRadar() {
   const [loading, setLoading] = useState(true);
   const [editingRelease, setEditingRelease] = useState<Partial<ReleaseEvent> | null>(null);
   const [saving, setSaving] = useState(false);
+  const [approvalFilter, setApprovalFilter] = useState<string>('ALL');
+
+  // AI Discovery Modal State
+  const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+  const [aiInputText, setAiInputText] = useState('');
+  const [aiInputUrl, setAiInputUrl] = useState('');
+  const [aiSourceSelect, setAiSourceSelect] = useState('Hasbro Pulse');
+  const [aiExtracting, setAiExtracting] = useState(false);
+  const [aiPreviewResult, setAiPreviewResult] = useState<any | null>(null);
 
   const { toast } = useToast();
   const { confirm } = useConfirmModal();
@@ -46,7 +75,7 @@ export default function AdminRadar() {
       const [brandsRes, licensesRes, productsRes] = await Promise.all([
         supabase.from('brands').select('id, name').order('name'),
         supabase.from('licenses').select('id, name').order('name'),
-        supabase.from('products').select('id, title').limit(50).order('title')
+        supabase.from('products').select('id, title').limit(100).order('title')
       ]);
 
       if (brandsRes.data) setBrands(brandsRes.data);
@@ -82,47 +111,22 @@ export default function AdminRadar() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingRelease || !editingRelease.title || !editingRelease.slug) {
-      toast.error('Completa los campos obligatorios (Título y Slug)');
+    if (!editingRelease || !editingRelease.title) {
+      toast.error('El título es obligatorio');
       return;
     }
     setSaving(true);
     try {
-      const payload: any = {
-        title: editingRelease.title,
-        slug: editingRelease.slug,
-        subtitle: editingRelease.subtitle || null,
-        description: editingRelease.description || null,
-        summary: editingRelease.summary || null,
-        status: editingRelease.status || 'ANNOUNCED',
-        brand_id: editingRelease.brand_id || null,
-        license_id: editingRelease.license_id || null,
-        catalog_product_id: editingRelease.catalog_product_id || null,
-        msrp: editingRelease.msrp || null,
-        release_precision: editingRelease.release_precision || 'QUARTER',
-        date_display_text: editingRelease.date_display_text || null,
-        official_image_url: editingRelease.official_image_url || null,
-        is_published: editingRelease.is_published ?? true,
-        is_featured: editingRelease.is_featured ?? false,
-        radar_signal: editingRelease.radar_signal || null,
-        radar_why: editingRelease.radar_why || null,
-        updated_at: new Date().toISOString()
-      };
+      const slug = editingRelease.slug || slugify(editingRelease.title);
+      
+      const result = await persistRadarRelease({
+        ...editingRelease,
+        slug
+      });
 
-      if (editingRelease.id) {
-        const { error } = await supabase
-          .from('release_events')
-          .update(payload)
-          .eq('id', editingRelease.id);
-        if (error) throw error;
-        toast.success('Lanzamiento actualizado con éxito');
-      } else {
-        const { error } = await supabase
-          .from('release_events')
-          .insert(payload);
-        if (error) throw error;
-        toast.success('Lanzamiento creado en el Radar');
-      }
+      if (!result.success) throw new Error(result.error);
+      
+      toast.success(editingRelease.id ? 'Lanzamiento actualizado con éxito' : 'Lanzamiento creado en Radar');
       setEditingRelease(null);
       loadReleases();
     } catch (err: any) {
@@ -137,11 +141,14 @@ export default function AdminRadar() {
     try {
       const { error } = await supabase
         .from('release_events')
-        .update({ is_published: !currentStatus })
+        .update({ 
+          is_published: !currentStatus,
+          approval_status: !currentStatus ? 'PUBLISHED' : 'DRAFT'
+        })
         .eq('id', id);
 
       if (error) throw error;
-      toast.success(currentStatus ? 'Lanzamiento ocultado' : 'Lanzamiento publicado');
+      toast.success(currentStatus ? 'Lanzamiento ocultado' : 'Lanzamiento publicado en Radar');
       loadReleases();
     } catch (err) {
       toast.error('Error al actualizar estado');
@@ -151,7 +158,7 @@ export default function AdminRadar() {
   const handleDelete = (id: string, title: string) => {
     confirm({
       title: '¿Eliminar lanzamiento del Radar?',
-      message: `Esta acción removerá "${title}" de la cartelera del radar de forma permanente.`,
+      message: `Esta acción removerá "${title}" de la base de datos de Radar y Release Calendar de forma permanente.`,
       confirmLabel: 'Eliminar',
       confirmVariant: 'danger',
       onConfirm: async () => {
@@ -170,6 +177,72 @@ export default function AdminRadar() {
     });
   };
 
+  const handleRunAIDiscovery = async () => {
+    if (!aiInputText.trim() && !aiInputUrl.trim()) {
+      toast.error('Ingresa una URL o descripción de la novedad');
+      return;
+    }
+
+    setAiExtracting(true);
+    setAiPreviewResult(null);
+
+    try {
+      const results = await parseReleaseWithAI({
+        text: aiInputText,
+        url: aiInputUrl,
+        sourceName: aiSourceSelect
+      });
+
+      if (results.length > 0) {
+        const item = results[0];
+        const imgVal = validateAndScoreImage(item, item.official_image_url, item.image_source_url);
+        item.image_match_score = imgVal.score;
+        item.official_image_url = imgVal.finalImageUrl;
+
+        setAiPreviewResult(item);
+        toast.success('Lanzamiento interpretado por IA con éxito');
+      }
+    } catch (err: any) {
+      console.error('Error running AI extraction:', err);
+      toast.error('Error en la extracción por IA');
+    } finally {
+      setAiExtracting(false);
+    }
+  };
+
+  const handleAcceptAIPreview = async (publishDirectly: boolean) => {
+    if (!aiPreviewResult) return;
+    setSaving(true);
+    try {
+      const candidate = {
+        ...aiPreviewResult,
+        is_published: publishDirectly,
+        approval_status: publishDirectly ? 'PUBLISHED' : 'DRAFT'
+      };
+
+      const res = await persistRadarRelease(candidate);
+      if (!res.success) throw new Error(res.error);
+
+      toast.success(publishDirectly ? 'Lanzamiento publicado directamente en Radar' : 'Lanzamiento guardado en Borradores para revisión');
+      setIsAIModalOpen(false);
+      setAiPreviewResult(null);
+      setAiInputText('');
+      setAiInputUrl('');
+      loadReleases();
+    } catch (err: any) {
+      toast.error(err.message || 'Error al guardar');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const filteredReleases = releases.filter(r => {
+    if (approvalFilter === 'PUBLISHED') return r.is_published;
+    if (approvalFilter === 'DRAFT') return !r.is_published || r.approval_status === 'DRAFT';
+    if (approvalFilter === 'ARCHIVED') return r.approval_status === 'ARCHIVED';
+    return true;
+  });
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
@@ -177,19 +250,27 @@ export default function AdminRadar() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Gestión de Radar & Lanzamientos</h1>
-            <span className="text-[11px] font-black uppercase px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-200">
-              Release Engine
+            <span className="text-[11px] font-black uppercase px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-200 flex items-center gap-1">
+              <Bot size={12} />
+              AI Release Engine
             </span>
           </div>
           <p className="text-sm text-gray-500 mt-1">
-            CRUD y cronograma de lanzamientos mundiales, precisión de fechas y señales editoriales del radar.
+            Descubrimiento con IA, control editorial, señales de mercado y sincronización con el Calendario de Lanzamientos.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setIsAIModalOpen(true)}
+            className="px-3.5 py-2 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-2 shadow"
+          >
+            <Sparkles size={15} />
+            <span>Descubrir con IA</span>
+          </button>
+          <button
             onClick={loadReleases}
-            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition border border-gray-200 bg-white"
+            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition border border-gray-200 bg-white"
             title="Recargar"
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
@@ -199,356 +280,159 @@ export default function AdminRadar() {
               title: '',
               slug: '',
               status: 'ANNOUNCED',
-              release_precision: 'QUARTER',
-              date_display_text: 'Q1 2027',
+              radar_signal: 'NUEVO_ANUNCIO',
               is_published: true,
-              is_featured: false
+              approval_status: 'PUBLISHED'
             })}
-            className="px-4 py-2.5 bg-[#f00856] hover:bg-[#d6074c] text-white rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-sm"
+            className="px-3.5 py-2 bg-gray-900 hover:bg-black text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5"
           >
-            <Plus size={16} />
-            <span>Crear Lanzamiento</span>
+            <Plus size={15} />
+            <span>Nuevo Lanzamiento</span>
           </button>
         </div>
       </div>
 
-      {/* Editor Modal */}
-      {editingRelease && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white border border-gray-200 rounded-2xl max-w-3xl w-full shadow-2xl overflow-hidden my-8">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-              <div className="flex items-center gap-2">
-                <Radio className="w-5 h-5 text-[#f00856]" />
-                <h2 className="text-base font-bold text-gray-900">
-                  {editingRelease.id ? 'Editar Lanzamiento en Radar' : 'Nuevo Lanzamiento para Radar'}
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setEditingRelease(null)}
-                className="text-gray-400 hover:text-gray-600 text-lg font-bold p-1"
-              >
-                ✕
-              </button>
-            </div>
+      {/* Filter Tabs */}
+      <div className="flex items-center gap-2 border-b border-gray-200 pb-3">
+        {[
+          { id: 'ALL', label: `Todos (${releases.length})` },
+          { id: 'PUBLISHED', label: `Publicados (${releases.filter(r => r.is_published).length})` },
+          { id: 'DRAFT', label: `Borradores / Revisión (${releases.filter(r => !r.is_published).length})` }
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setApprovalFilter(tab.id)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+              approvalFilter === tab.id
+                ? 'bg-gray-900 text-white'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-            <form onSubmit={handleSave} className="p-6 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-1.5">
-                    Título del Lanzamiento <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ej: Batman Armory (The Dark Knight)"
-                    value={editingRelease.title || ''}
-                    onChange={(e) => {
-                      const title = e.target.value;
-                      const slug = !editingRelease.id 
-                        ? title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
-                        : (editingRelease.slug || '');
-                      setEditingRelease({ ...editingRelease, title, slug });
-                    }}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#f00856] text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-1.5">
-                    Slug URL <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="ej: batman-armory-dark-knight"
-                    value={editingRelease.slug || ''}
-                    onChange={(e) => setEditingRelease({ ...editingRelease, slug: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-900 font-mono text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#f00856]"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-1.5">Estado de Lanzamiento</label>
-                  <select
-                    value={editingRelease.status || 'ANNOUNCED'}
-                    onChange={(e) => setEditingRelease({ ...editingRelease, status: e.target.value as ReleaseStatus })}
-                    className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#f00856]"
-                  >
-                    <option value="PREORDER_OPEN">🟢 Preventa Abierta</option>
-                    <option value="PREORDER_SOON">🟡 Preventa Próxima</option>
-                    <option value="ANNOUNCED">📢 Anunciado</option>
-                    <option value="REVEALED">🔍 Revelado Oficialmente</option>
-                    <option value="COMING_SOON">⏱️ Próximamente</option>
-                    <option value="SHIPPING">📦 En Envíos / Despacho</option>
-                    <option value="RELEASED">🎉 Lanzado al Mercado</option>
-                    <option value="DELAYED">⚠️ Postergado</option>
-                    <option value="SOLD_OUT">⛔ Agotado</option>
-                    <option value="RESTOCKED">🔄 Re-stock</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-1.5">Precisión de Fecha</label>
-                  <select
-                    value={editingRelease.release_precision || 'QUARTER'}
-                    onChange={(e) => setEditingRelease({ ...editingRelease, release_precision: e.target.value as ReleasePrecision })}
-                    className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#f00856]"
-                  >
-                    <option value="EXACT_DATE">Fecha Exacta</option>
-                    <option value="MONTH">Mes (ej: Noviembre 2026)</option>
-                    <option value="QUARTER">Trimestre (ej: Q1 2027)</option>
-                    <option value="HALF_YEAR">Semestre (ej: H2 2026)</option>
-                    <option value="YEAR">Año (ej: 2027)</option>
-                    <option value="TBA">Por Anunciar (TBA)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-1.5">Texto Visible de Fecha</label>
-                  <input
-                    type="text"
-                    value={editingRelease.date_display_text || ''}
-                    onChange={(e) => setEditingRelease({ ...editingRelease, date_display_text: e.target.value })}
-                    placeholder="Ej: Q1 2027, Nov 2026"
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-900 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#f00856]"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-1.5">Marca / Fabricante</label>
-                  <select
-                    value={editingRelease.brand_id || ''}
-                    onChange={(e) => setEditingRelease({ ...editingRelease, brand_id: e.target.value || null })}
-                    className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#f00856]"
-                  >
-                    <option value="">Seleccionar Fabricante...</option>
-                    {brands.map(b => (
-                      <option key={b.id} value={b.id}>{b.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-1.5">Licencia / Franquicia</label>
-                  <select
-                    value={editingRelease.license_id || ''}
-                    onChange={(e) => setEditingRelease({ ...editingRelease, license_id: e.target.value || null })}
-                    className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#f00856]"
-                  >
-                    <option value="">Seleccionar Licencia...</option>
-                    {licenses.map(l => (
-                      <option key={l.id} value={l.id}>{l.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-1.5">MSRP (USD Estimado)</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-2.5 text-gray-400 font-mono text-sm">$</span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={editingRelease.msrp || ''}
-                      onChange={(e) => setEditingRelease({ ...editingRelease, msrp: parseFloat(e.target.value) || undefined })}
-                      className="w-full pl-8 pr-3 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-900 font-mono text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#f00856]"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-1.5">URL Imagen Oficial / Render</label>
-                  <input
-                    type="url"
-                    placeholder="https://..."
-                    value={editingRelease.official_image_url || ''}
-                    onChange={(e) => setEditingRelease({ ...editingRelease, official_image_url: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-900 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#f00856]"
-                  />
-                  {editingRelease.official_image_url && (
-                    <div className="mt-2 p-2 border border-gray-100 rounded-lg bg-gray-50 flex items-center gap-3">
-                      <img 
-                        src={editingRelease.official_image_url} 
-                        alt="Preview" 
-                        className="w-12 h-12 object-contain rounded bg-white border border-gray-200" 
-                        onError={(e) => { (e.target as any).style.display = 'none'; }}
-                      />
-                      <span className="text-[11px] text-gray-500 truncate">Vista previa de imagen cargada</span>
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-1.5">Vincular a Producto de Tienda (Opcional)</label>
-                  <select
-                    value={editingRelease.catalog_product_id || ''}
-                    onChange={(e) => setEditingRelease({ ...editingRelease, catalog_product_id: e.target.value || null })}
-                    className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#f00856]"
-                  >
-                    <option value="">Sin vincular (Solo informativo)</option>
-                    {products.map(p => (
-                      <option key={p.id} value={p.id}>{p.title}</option>
-                    ))}
-                  </select>
-                  <p className="text-[11px] text-gray-400 mt-1">
-                    Permite a los usuarios comprar o reservar directo desde la ficha del radar.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-6 pt-2 text-xs">
-                <label className="flex items-center gap-2 cursor-pointer select-none text-gray-800 font-medium">
-                  <input
-                    type="checkbox"
-                    checked={editingRelease.is_published ?? true}
-                    onChange={(e) => setEditingRelease({ ...editingRelease, is_published: e.target.checked })}
-                    className="w-4 h-4 text-[#f00856] rounded border-gray-300 focus:ring-[#f00856]"
-                  />
-                  Publicado en el Radar
-                </label>
-
-                <label className="flex items-center gap-2 cursor-pointer select-none text-gray-800 font-medium">
-                  <input
-                    type="checkbox"
-                    checked={editingRelease.is_featured ?? false}
-                    onChange={(e) => setEditingRelease({ ...editingRelease, is_featured: e.target.checked })}
-                    className="w-4 h-4 text-[#f00856] rounded border-gray-300 focus:ring-[#f00856]"
-                  />
-                  Destacado en Cabecera
-                </label>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-5 border-t border-gray-200">
-                <button
-                  type="button"
-                  onClick={() => setEditingRelease(null)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition border border-gray-200"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="px-5 py-2.5 bg-[#f00856] hover:bg-[#d6074c] text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition disabled:opacity-50 cursor-pointer"
-                >
-                  <Save size={15} />
-                  <span>{saving ? 'Guardando...' : 'Guardar Lanzamiento'}</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Table Section */}
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+      {/* Releases Table */}
+      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-gray-50/80 text-gray-600 border-b border-gray-200 font-bold uppercase text-[10px] tracking-wider">
+            <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 font-bold uppercase tracking-wider text-[10px]">
               <tr>
-                <th className="px-6 py-3.5">Lanzamiento</th>
-                <th className="px-6 py-3.5">Marca / Licencia</th>
-                <th className="px-6 py-3.5">Estado</th>
-                <th className="px-6 py-3.5">Fecha Estimada</th>
-                <th className="px-6 py-3.5">MSRP</th>
-                <th className="px-6 py-3.5 text-center">Visibilidad</th>
-                <th className="px-6 py-3.5 text-right">Acciones</th>
+                <th className="p-4">Lanzamiento</th>
+                <th className="p-4">Fabricante & Línea</th>
+                <th className="p-4">Señal Radar</th>
+                <th className="p-4">Estado & Fecha</th>
+                <th className="p-4">Fuente / Trazabilidad</th>
+                <th className="p-4">En Tienda</th>
+                <th className="p-4 text-right">Acciones</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 text-gray-700">
+            <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-gray-400">
-                    <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#f00856]" />
-                    Cargando radar de lanzamientos...
+                  <td colSpan={7} className="p-8 text-center text-gray-500 font-mono">
+                    Cargando eventos de Radar...
                   </td>
                 </tr>
-              ) : releases.length === 0 ? (
+              ) : filteredReleases.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-gray-400">
-                    No hay lanzamientos registrados en el radar.
+                  <td colSpan={7} className="p-8 text-center text-gray-400">
+                    No hay eventos registrados. Usa "Descubrir con IA" o "Nuevo Lanzamiento".
                   </td>
                 </tr>
               ) : (
-                releases.map((r) => {
-                  const statusInfo = STATUS_LABELS[r.status] || {
-                    label: r.status,
-                    bg: 'bg-gray-100',
-                    text: 'text-gray-700',
-                    border: 'border-gray-200'
-                  };
-
+                filteredReleases.map(item => {
+                  const statusInfo = STATUS_LABELS[item.status] || STATUS_LABELS.ANNOUNCED;
                   return (
-                    <tr key={r.id} className="hover:bg-gray-50/70 transition">
-                      <td className="px-6 py-4">
+                    <tr key={item.id} className="hover:bg-gray-50/80 transition">
+                      <td className="p-4">
                         <div className="flex items-center gap-3">
-                          {r.official_image_url ? (
-                            <img
-                              src={r.official_image_url}
-                              alt={r.title}
-                              className="w-10 h-10 object-contain rounded-lg border border-gray-200 bg-white shrink-0"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-400 shrink-0">
-                              <Radio size={16} />
-                            </div>
-                          )}
+                          <div className="w-12 h-12 rounded-lg bg-gray-100 border border-gray-200 p-1 flex items-center justify-center shrink-0 overflow-hidden">
+                            {item.official_image_url ? (
+                              <img src={item.official_image_url} alt={item.title} className="max-h-full max-w-full object-contain" />
+                            ) : (
+                              <Radio size={18} className="text-gray-400" />
+                            )}
+                          </div>
                           <div>
-                            <span className="font-bold text-gray-900 block text-sm">{r.title}</span>
-                            <span className="text-[11px] text-gray-400 font-mono">/{r.slug}</span>
+                            <p className="font-bold text-gray-900 text-sm line-clamp-1">{item.title}</p>
+                            <p className="text-[11px] text-gray-500 font-mono">/{item.slug}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="space-y-0.5">
-                          <span className="text-gray-900 font-semibold block">{r.brand?.name || '—'}</span>
-                          <span className="text-[11px] text-gray-500">{r.license?.name || '—'}</span>
-                        </div>
+
+                      <td className="p-4">
+                        <div className="font-bold text-gray-800">{item.brand?.name || item.manufacturer || '—'}</div>
+                        <div className="text-[11px] text-gray-500">{item.product_line || item.franchise || 'Línea Regular'}</div>
                       </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border ${statusInfo.bg} ${statusInfo.text} ${statusInfo.border}`}>
-                          {statusInfo.label}
+
+                      <td className="p-4">
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200">
+                          {item.radar_signal || 'NUEVO_ANUNCIO'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 font-mono font-medium text-gray-800">
-                        {r.date_display_text || 'TBA'}
+
+                      <td className="p-4">
+                        <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded border uppercase mb-1 ${statusInfo.bg} ${statusInfo.text} ${statusInfo.border}`}>
+                          {statusInfo.label}
+                        </span>
+                        <div className="text-[11px] text-gray-500 font-mono">{item.date_display_text || 'TBA'}</div>
                       </td>
-                      <td className="px-6 py-4 font-mono font-bold text-gray-900">
-                        {r.msrp ? `$${r.msrp}` : '—'}
+
+                      <td className="p-4">
+                        {item.source_url ? (
+                          <a
+                            href={item.source_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-indigo-600 hover:underline flex items-center gap-1 text-[11px] font-bold"
+                          >
+                            <ShieldCheck size={13} className="text-emerald-500" />
+                            <span>{item.source_name || 'Fuente Oficial'}</span>
+                            <ExternalLink size={10} />
+                          </a>
+                        ) : (
+                          <span className="text-gray-400 text-[11px]">Sin URL</span>
+                        )}
                       </td>
-                      <td className="px-6 py-4 text-center">
-                        <button
-                          onClick={() => handleTogglePublish(r.id, r.is_published)}
-                          className={`p-1.5 rounded-lg border transition ${
-                            r.is_published 
-                              ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100' 
-                              : 'bg-gray-100 text-gray-400 border-gray-200 hover:bg-gray-200'
-                          }`}
-                          title={r.is_published ? 'Publicado (Clic para ocultar)' : 'Oculto (Clic para publicar)'}
-                        >
-                          {r.is_published ? <Eye size={15} /> : <EyeOff size={15} />}
-                        </button>
+
+                      <td className="p-4">
+                        {item.catalog_product_id ? (
+                          <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold text-[10px] flex items-center gap-1 w-fit">
+                            <CheckCircle2 size={11} /> Vinculado
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-[11px]">No vinculado</span>
+                        )}
                       </td>
-                      <td className="px-6 py-4 text-right">
+
+                      <td className="p-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
-                            onClick={() => setEditingRelease(r)}
-                            className="p-1.5 rounded-lg text-gray-600 hover:text-[#f00856] hover:bg-pink-50 transition border border-transparent hover:border-pink-200"
-                            title="Editar lanzamiento"
+                            onClick={() => handleTogglePublish(item.id, item.is_published)}
+                            className={`p-1.5 rounded-lg border transition ${
+                              item.is_published
+                                ? 'text-emerald-700 hover:bg-emerald-50 border-emerald-200'
+                                : 'text-gray-400 hover:bg-gray-100 border-gray-200'
+                            }`}
+                            title={item.is_published ? 'Publicado (Click para ocultar)' : 'Oculto (Click para publicar)'}
+                          >
+                            {item.is_published ? <Eye size={15} /> : <EyeOff size={15} />}
+                          </button>
+
+                          <button
+                            onClick={() => setEditingRelease(item)}
+                            className="p-1.5 text-gray-700 hover:bg-gray-100 rounded-lg border border-gray-200 transition"
+                            title="Editar"
                           >
                             <Edit2 size={15} />
                           </button>
+
                           <button
-                            onClick={() => handleDelete(r.id, r.title)}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition border border-transparent hover:border-red-200"
-                            title="Eliminar lanzamiento"
+                            onClick={() => handleDelete(item.id, item.title)}
+                            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg border border-rose-200 transition"
+                            title="Eliminar"
                           >
                             <Trash2 size={15} />
                           </button>
@@ -562,7 +446,353 @@ export default function AdminRadar() {
           </table>
         </div>
       </div>
+
+      {/* Edit/Create Modal */}
+      {editingRelease && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-3xl w-full p-6 sm:p-8 shadow-2xl border border-gray-200 my-8">
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-6">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">
+                  {editingRelease.id ? 'Editar Lanzamiento en Radar' : 'Nuevo Lanzamiento en Radar'}
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">Control de campos estructurados, imágenes y trazabilidad.</p>
+              </div>
+              <button
+                onClick={() => setEditingRelease(null)}
+                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSave} className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="font-bold text-gray-700">Título del Lanzamiento *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editingRelease.title || ''}
+                    onChange={(e) => setEditingRelease({ ...editingRelease, title: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 focus:border-gray-900 outline-none text-xs font-semibold"
+                    placeholder="Ej: NECA Ultimate Chucky (TV Series)"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-gray-700">Slug URL *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editingRelease.slug || ''}
+                    onChange={(e) => setEditingRelease({ ...editingRelease, slug: e.target.value })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-gray-200 focus:border-gray-900 outline-none text-xs font-mono"
+                    placeholder="neca-ultimate-chucky"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-gray-700">Fabricante / Marca</label>
+                  <input
+                    type="text"
+                    value={editingRelease.manufacturer || ''}
+                    onChange={(e) => setEditingRelease({ ...editingRelease, manufacturer: e.target.value })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-gray-200 focus:border-gray-900 outline-none text-xs"
+                    placeholder="NECA, Hasbro, Bandai Spirits..."
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-gray-700">Línea de Producto</label>
+                  <input
+                    type="text"
+                    value={editingRelease.product_line || ''}
+                    onChange={(e) => setEditingRelease({ ...editingRelease, product_line: e.target.value })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-gray-200 focus:border-gray-900 outline-none text-xs"
+                    placeholder="Ultimate, S.H.Figuarts, Marvel Legends..."
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-gray-700">Franquicia / Universo</label>
+                  <input
+                    type="text"
+                    value={editingRelease.franchise || ''}
+                    onChange={(e) => setEditingRelease({ ...editingRelease, franchise: e.target.value })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-gray-200 focus:border-gray-900 outline-none text-xs"
+                    placeholder="Marvel, Dragon Ball, Batman, Chucky..."
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-gray-700">Escala</label>
+                  <input
+                    type="text"
+                    value={editingRelease.scale || ''}
+                    onChange={(e) => setEditingRelease({ ...editingRelease, scale: e.target.value })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-gray-200 focus:border-gray-900 outline-none text-xs"
+                    placeholder="1:12, 1:6, 1:10, 18 cm..."
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-gray-700">MSRP (USD)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editingRelease.msrp || ''}
+                    onChange={(e) => setEditingRelease({ ...editingRelease, msrp: parseFloat(e.target.value) || null })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-gray-200 focus:border-gray-900 outline-none text-xs"
+                    placeholder="39.99"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-gray-700">Señal de Radar</label>
+                  <select
+                    value={editingRelease.radar_signal || 'NUEVO_ANUNCIO'}
+                    onChange={(e) => setEditingRelease({ ...editingRelease, radar_signal: e.target.value as RadarSignal })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-gray-200 focus:border-gray-900 outline-none text-xs font-bold"
+                  >
+                    {RADAR_SIGNALS_LIST.map(s => (
+                      <option key={s.id} value={s.id}>{s.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-gray-700">Estado de Lanzamiento</label>
+                  <select
+                    value={editingRelease.status || 'ANNOUNCED'}
+                    onChange={(e) => setEditingRelease({ ...editingRelease, status: e.target.value as ReleaseStatus })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-gray-200 focus:border-gray-900 outline-none text-xs font-bold"
+                  >
+                    {Object.entries(STATUS_LABELS).map(([k, v]) => (
+                      <option key={k} value={k}>{v.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-gray-700">Texto de Fecha para Display</label>
+                  <input
+                    type="text"
+                    value={editingRelease.date_display_text || ''}
+                    onChange={(e) => setEditingRelease({ ...editingRelease, date_display_text: e.target.value })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-gray-200 focus:border-gray-900 outline-none text-xs font-mono"
+                    placeholder="Noviembre 2026, Q1 2027, Inmediato..."
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-gray-700">Vincular con Producto en Tienda</label>
+                  <select
+                    value={editingRelease.catalog_product_id || ''}
+                    onChange={(e) => setEditingRelease({ ...editingRelease, catalog_product_id: e.target.value || null })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-gray-200 focus:border-gray-900 outline-none text-xs"
+                  >
+                    <option value="">No vincular (Solo seguimiento Radar)</option>
+                    {products.map(p => (
+                      <option key={p.id} value={p.id}>{p.title}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="font-bold text-gray-700">Por qué está en Radar (Editorial)</label>
+                  <input
+                    type="text"
+                    value={editingRelease.radar_why || ''}
+                    onChange={(e) => setEditingRelease({ ...editingRelease, radar_why: e.target.value })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-gray-200 focus:border-gray-900 outline-none text-xs"
+                    placeholder="Explicación concisa para coleccionistas..."
+                  />
+                </div>
+
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="font-bold text-gray-700">URL de Imagen Oficial Verificada</label>
+                  <input
+                    type="url"
+                    value={editingRelease.official_image_url || ''}
+                    onChange={(e) => setEditingRelease({ ...editingRelease, official_image_url: e.target.value })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-gray-200 focus:border-gray-900 outline-none text-xs font-mono"
+                    placeholder="https://..."
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-gray-700">Nombre de la Fuente</label>
+                  <input
+                    type="text"
+                    value={editingRelease.source_name || ''}
+                    onChange={(e) => setEditingRelease({ ...editingRelease, source_name: e.target.value })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-gray-200 focus:border-gray-900 outline-none text-xs"
+                    placeholder="NECA Online, Hasbro Pulse..."
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-gray-700">URL Original de la Fuente</label>
+                  <input
+                    type="url"
+                    value={editingRelease.source_url || ''}
+                    onChange={(e) => setEditingRelease({ ...editingRelease, source_url: e.target.value })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-gray-200 focus:border-gray-900 outline-none text-xs font-mono"
+                    placeholder="https://..."
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-6 border-t border-gray-100">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editingRelease.is_published ?? true}
+                    onChange={(e) => setEditingRelease({ ...editingRelease, is_published: e.target.checked })}
+                    className="w-4 h-4 rounded text-gray-900 focus:ring-gray-900"
+                  />
+                  <span className="font-bold text-gray-800">Publicado y visible al público</span>
+                </label>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingRelease(null)}
+                    className="px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-100 text-gray-700 font-bold transition"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="px-5 py-2 rounded-xl bg-gray-900 hover:bg-black text-white font-bold transition flex items-center gap-2 shadow"
+                  >
+                    <Save size={15} />
+                    <span>{saving ? 'Guardando...' : 'Guardar Lanzamiento'}</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* AI Discovery Modal */}
+      {isAIModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-gray-200 my-8">
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-6">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-red-50 text-red-500 flex items-center justify-center border border-red-200">
+                  <Sparkles size={18} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Descubrimiento de Novedades con IA</h3>
+                  <p className="text-xs text-gray-500">Extrae, valida y normaliza lanzamientos desde fuentes oficiales.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setIsAIModalOpen(false); setAiPreviewResult(null); }}
+                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="space-y-1">
+                <label className="font-bold text-gray-700">Fuente Oficial / Fabricante</label>
+                <select
+                  value={aiSourceSelect}
+                  onChange={(e) => setAiSourceSelect(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 focus:border-gray-900 outline-none text-xs font-bold"
+                >
+                  <option value="NECA Official">NECA Official Site</option>
+                  <option value="Hasbro Pulse">Hasbro Pulse / HasLab</option>
+                  <option value="Bandai Tamashii Nations">Bandai Spirits / Tamashii Nations</option>
+                  <option value="Hot Toys Official">Hot Toys Official</option>
+                  <option value="Mattel Creations">Mattel Creations</option>
+                  <option value="McFarlane Toys">McFarlane Toys Store</option>
+                  <option value="Super7">Super7 Official</option>
+                  <option value="LEGO Official">LEGO Icons</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-gray-700">URL del Comunicado o Producto</label>
+                <input
+                  type="url"
+                  value={aiInputUrl}
+                  onChange={(e) => setAiInputUrl(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-gray-200 focus:border-gray-900 outline-none text-xs font-mono"
+                  placeholder="https://hasbropulse.com/products/..."
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-gray-700">Texto o Descripción Oficial del Lanzamiento</label>
+                <textarea
+                  rows={4}
+                  value={aiInputText}
+                  onChange={(e) => setAiInputText(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 focus:border-gray-900 outline-none text-xs"
+                  placeholder="Pega aquí el texto del anuncio, escala, especificaciones y fecha..."
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleRunAIDiscovery}
+                disabled={aiExtracting}
+                className="w-full py-3 rounded-xl bg-gray-900 hover:bg-black text-white font-bold transition flex items-center justify-center gap-2 shadow"
+              >
+                {aiExtracting ? <RefreshCw size={15} className="animate-spin" /> : <Bot size={15} />}
+                <span>{aiExtracting ? 'Procesando con IA...' : 'Extraer y Normalizar Estructura'}</span>
+              </button>
+
+              {/* Preview Card */}
+              {aiPreviewResult && (
+                <div className="mt-6 p-4 rounded-2xl bg-gray-50 border border-gray-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase text-gray-500">Resultado Estructurado IA</span>
+                    <span className="text-[10px] font-mono font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      Confianza: {aiPreviewResult.confidence_score}%
+                    </span>
+                  </div>
+
+                  <div>
+                    <h4 className="font-bold text-gray-900 text-sm">{aiPreviewResult.title}</h4>
+                    <p className="text-gray-500 text-xs mt-0.5">
+                      {aiPreviewResult.manufacturer} · {aiPreviewResult.franchise} · {aiPreviewResult.scale}
+                    </p>
+                    <p className="text-gray-600 text-xs mt-1.5 italic">"{aiPreviewResult.radar_why}"</p>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-200">
+                    <button
+                      type="button"
+                      onClick={() => handleAcceptAIPreview(false)}
+                      disabled={saving}
+                      className="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold transition"
+                    >
+                      Guardar en Borradores
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAcceptAIPreview(true)}
+                      disabled={saving}
+                      className="px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold transition shadow"
+                    >
+                      Publicar Directamente en Radar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
