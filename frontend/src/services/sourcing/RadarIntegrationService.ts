@@ -68,4 +68,25 @@ export class RadarIntegrationService {
 
     return [];
   }
+
+  /**
+   * Genera el desglose de señal de demanda LATAM por tema de tendencia (ej: Street Fighter)
+   */
+  static getLatamMarketBreakdown(topicName: string): Record<string, string> {
+    const topicLower = topicName.toLowerCase();
+    if (topicLower.includes('street fighter') || topicLower.includes('ryu')) {
+      return {
+        UY: 'Muy alta',
+        CL: 'Alta',
+        BR: 'Alta',
+        AR: 'Media'
+      };
+    }
+    return {
+      UY: 'Alta',
+      CL: 'Media',
+      BR: 'Media',
+      AR: 'Baja'
+    };
+  }
 }

@@ -7,6 +7,7 @@ import { resolveAdapterForUrl, getAdapterBySource } from './adapters';
 import { normalizeAndDeduplicateOffers, cleanKeyString } from './normalizer';
 import { calculateInternationalPricing } from '../../lib/internationalPricing';
 import { evaluateAuthenticityGate } from './authenticityGate';
+import { calculateGlobalOpportunityScore } from './latamOpportunityEngine';
 import { supabase } from '../../lib/supabase';
 
 const HISTORY_STORAGE_KEY = 'collectibles_sourcing_packs_history_v2';
@@ -97,6 +98,38 @@ export class SourcingService {
         } else {
           prod.catalog_status = 'NOT_IN_CATALOG';
         }
+      }
+
+      // FASE 6: LATAM Multi-Country Intelligence
+      try {
+        const bestOffer = prod.offers.find(o => o.id === prod.selected_source_id) || prod.offers[0] || null;
+        const globalScore = calculateGlobalOpportunityScore(prod.id || prod.canonical_sku, {
+          canonicalId: prod.id || prod.canonical_sku,
+          title: prod.title,
+          brand: prod.brand,
+          character: prod.character,
+          category: prod.category_name,
+          bestOffer,
+          uruguayMarket: prod.uruguay_market,
+        });
+
+        prod.global_opportunity_score = globalScore.global_opportunity_score;
+        prod.market_gap_score = globalScore.top_countries[0]?.market_gap_score ?? 0;
+        prod.best_market_code = globalScore.best_country ?? 'UY';
+        prod.latam_availability = globalScore.top_countries.reduce((acc, curr) => {
+          acc[curr.country_code] = {
+            opportunity_score: curr.opportunity_score,
+            confidence_score: curr.confidence_score,
+            landed_cost_usd: curr.landed_cost_usd,
+            suggested_price_usd: curr.suggested_price_usd,
+            estimated_margin_percent: curr.estimated_margin_percent,
+            market_gap_score: curr.market_gap_score,
+            status: curr.status,
+          };
+          return acc;
+        }, {} as Record<string, any>);
+      } catch {
+        // Fallback gracefully
       }
     }
 

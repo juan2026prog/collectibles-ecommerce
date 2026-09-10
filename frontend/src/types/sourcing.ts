@@ -380,6 +380,12 @@ export interface NormalizedProduct {
   // Uruguay Market Intelligence
   uruguay_market: UruguayMarketSummary;
 
+  // LATAM Multi-Country Intelligence (Fase 6)
+  latam_availability?: Record<string, any>;
+  global_opportunity_score?: number;
+  market_gap_score?: number;
+  best_market_code?: string;
+
   // Catalog status
   catalog_status: CatalogStatus;
   matched_catalog_product_id?: string;
