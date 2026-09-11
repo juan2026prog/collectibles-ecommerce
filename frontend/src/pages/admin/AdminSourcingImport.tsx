@@ -26,6 +26,21 @@ import { SourcingResearchPackModal } from '../../components/admin/sourcing/Sourc
 import { SourcingHistoryModal } from '../../components/admin/sourcing/SourcingHistoryModal';
 import { SourcingOpenAIModal } from '../../components/admin/sourcing/SourcingOpenAIModal';
 
+// Multi-Source Sourcing Terminal Components & Services
+import { SourcingMultiSourceHeader } from '../../components/admin/sourcing/SourcingMultiSourceHeader';
+import { SourcingMultiSourceFilters, type MultiSourceFilterState } from '../../components/admin/sourcing/SourcingMultiSourceFilters';
+import { SourcingCanonicalCard } from '../../components/admin/sourcing/SourcingCanonicalCard';
+import { SourcingImportReviewModal } from '../../components/admin/sourcing/SourcingImportReviewModal';
+import { SourcingBulkImportModal } from '../../components/admin/sourcing/SourcingBulkImportModal';
+import { 
+  multiSourceSearchService, 
+  type SearchSourceOption, 
+  type MultiSourceSearchResult, 
+  type MultiSourceCanonicalProduct, 
+  type MultiSourceOfferDetail 
+} from '../../services/sourcing/multiSourceSearchService';
+import type { CanonicalProductCondition } from '../../services/sourcing/conditionMapper';
+
 // Autopilot sub-components
 import { AutopilotDashboard } from '../../components/admin/sourcing/autopilot/AutopilotDashboard';
 import { AutopilotPolicyEditor } from '../../components/admin/sourcing/autopilot/AutopilotPolicyEditor';
@@ -122,6 +137,33 @@ export default function AdminSourcingImport() {
   const [showPrepareModal, setShowPrepareModal] = useState(false);
   const [adaptiveLoading, setAdaptiveLoading] = useState(false);
 
+  // Multi-Source Sourcing Terminal State
+  const [multiSourceQuery, setMultiSourceQuery] = useState('Street Fighter Jada Toys');
+  const [selectedSourceOption, setSelectedSourceOption] = useState<SearchSourceOption>('all');
+  const [isMultiSourceSearching, setIsMultiSourceSearching] = useState(false);
+  const [multiSourceResult, setMultiSourceResult] = useState<MultiSourceSearchResult | null>(null);
+  const [catalogTitles, setCatalogTitles] = useState<string[]>([]);
+  const [multiSourceFilters, setMultiSourceFilters] = useState<MultiSourceFilterState>({
+    conditionFilter: 'all',
+    minPrice: 0,
+    maxPrice: 0,
+    onlyInStock: false,
+    brandFilter: '',
+    licenseFilter: '',
+    ebayListingType: 'individual',
+    includeAuctions: false,
+    retroInBoxOnly: false,
+    viewMode: 'detailed',
+    sortBy: 'relevance'
+  });
+
+  // Multi-Source Modals & Selection
+  const [reviewCanonicalProduct, setReviewCanonicalProduct] = useState<MultiSourceCanonicalProduct | null>(null);
+  const [reviewOffer, setReviewOffer] = useState<MultiSourceOfferDetail | null>(null);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [selectedCanonicalIds, setSelectedCanonicalIds] = useState<string[]>([]);
+
   // Load existing catalog titles and seed initial pack on mount
   useEffect(() => {
     loadInitialCatalogAndPack();
@@ -178,6 +220,7 @@ export default function AdminSourcingImport() {
       const { data } = await supabase.from('products').select('title').limit(500);
       if (data) {
         existingTitles = data.map(p => p.title);
+        setCatalogTitles(existingTitles);
       }
     } catch (e) {
       console.warn('Could not fetch existing catalog titles from Supabase:', e);
@@ -189,7 +232,262 @@ export default function AdminSourcingImport() {
     );
     setProducts(initialNormalized);
     setActivePackTitle(SAMPLE_MCFARLANE_RESEARCH_PACK.title);
-    setLoading(false);
+
+    // Inicializar búsqueda multifuente de demostración con Street Fighter Jada Toys
+    multiSourceSearchService.searchProducts('Street Fighter Jada Toys', 'all', existingTitles)
+      .then(res => setMultiSourceResult(res))
+      .catch(err => console.warn('Could not initialize multi-source demo:', err))
+      .finally(() => setLoading(false));
+  };
+
+  // Ejecutor de búsqueda multifuente interactiva
+  const handleExecuteMultiSourceSearch = async (
+    queryOverride?: string, 
+    sourceOverride?: SearchSourceOption
+  ) => {
+    const q = queryOverride !== undefined ? queryOverride : multiSourceQuery;
+    const s = sourceOverride !== undefined ? sourceOverride : selectedSourceOption;
+    if (!q.trim()) return;
+
+    setIsMultiSourceSearching(true);
+    try {
+      const res = await multiSourceSearchService.searchProducts(q, s, catalogTitles);
+      setMultiSourceResult(res);
+      setSelectedCanonicalIds([]);
+      if (res.totalCanonicalCount > 0) {
+        addToast({
+          title: 'Búsqueda Multifuente Completada',
+          message: `${res.totalCanonicalCount} productos canónicos encontrados (${res.totalOffersCount} ofertas agrupadas).`,
+          type: 'success'
+        });
+      } else {
+        addToast({
+          title: 'Sin Resultados',
+          message: 'No encontramos productos con estos criterios en las fuentes seleccionadas.',
+          type: 'info'
+        });
+      }
+    } catch (err: any) {
+      addToast({
+        title: 'Error en Búsqueda',
+        message: err.message || 'Ocurrió un error al consultar las fuentes.',
+        type: 'error'
+      });
+    } finally {
+      setIsMultiSourceSearching(false);
+    }
+  };
+
+  // Filtrado de productos canónicos según facetas de Sourcing
+  const filteredCanonicalProducts = useMemo(() => {
+    if (!multiSourceResult) return [];
+
+    let list = [...multiSourceResult.canonicalProducts];
+
+    // Condición Canónica (6 estados de DB)
+    if (multiSourceFilters.conditionFilter !== 'all') {
+      list = list.filter(p => 
+        p.primary_condition === multiSourceFilters.conditionFilter ||
+        p.offers.some(o => o.canonical_condition === multiSourceFilters.conditionFilter)
+      );
+    }
+
+    // Modo Editorial Retro en Caja
+    if (multiSourceFilters.retroInBoxOnly) {
+      list = list.filter(p => p.is_retro_in_box);
+    }
+
+    // Tipo de listing en eBay (Individual vs Lotes)
+    if (multiSourceFilters.ebayListingType === 'individual') {
+      list = list.filter(p => !p.is_lot);
+    } else if (multiSourceFilters.ebayListingType === 'lots') {
+      list = list.filter(p => p.is_lot);
+    }
+
+    // Subastas
+    if (!multiSourceFilters.includeAuctions) {
+      list = list.filter(p => !p.is_auction || p.offers.some(o => !o.is_auction));
+    }
+
+    // Solo en Stock
+    if (multiSourceFilters.onlyInStock) {
+      list = list.filter(p => p.stock_verdict === 'IN_STOCK');
+    }
+
+    // Marca
+    if (multiSourceFilters.brandFilter) {
+      list = list.filter(p => p.brand.toLowerCase() === multiSourceFilters.brandFilter.toLowerCase());
+    }
+
+    // Licencia
+    if (multiSourceFilters.licenseFilter) {
+      list = list.filter(p => p.license.toLowerCase() === multiSourceFilters.licenseFilter.toLowerCase());
+    }
+
+    // Precio Máximo
+    if (multiSourceFilters.maxPrice > 0) {
+      list = list.filter(p => {
+        const price = p.lowest_new_price ?? p.lowest_used_price ?? 0;
+        return price <= multiSourceFilters.maxPrice;
+      });
+    }
+
+    // Ordenamiento
+    if (multiSourceFilters.sortBy === 'price_asc') {
+      list.sort((a, b) => (a.lowest_new_price ?? a.lowest_used_price ?? 99999) - (b.lowest_new_price ?? b.lowest_used_price ?? 99999));
+    } else if (multiSourceFilters.sortBy === 'price_desc') {
+      list.sort((a, b) => (b.lowest_new_price ?? b.lowest_used_price ?? 0) - (a.lowest_new_price ?? a.lowest_used_price ?? 0));
+    } else if (multiSourceFilters.sortBy === 'opportunity_score') {
+      list.sort((a, b) => b.opportunity_score - a.opportunity_score);
+    } else if (multiSourceFilters.sortBy === 'risk_score') {
+      list.sort((a, b) => a.risk_score - b.risk_score);
+    }
+
+    return list;
+  }, [multiSourceResult, multiSourceFilters]);
+
+  const multiSourceAvailableBrands = useMemo(() => {
+    if (!multiSourceResult) return [];
+    return Array.from(new Set(multiSourceResult.canonicalProducts.map(p => p.brand))).filter(Boolean);
+  }, [multiSourceResult]);
+
+  const multiSourceAvailableLicenses = useMemo(() => {
+    if (!multiSourceResult) return [];
+    return Array.from(new Set(multiSourceResult.canonicalProducts.map(p => p.license))).filter(Boolean);
+  }, [multiSourceResult]);
+
+  // Manejo de Selección Canónica
+  const handleToggleSelectCanonical = (id: string) => {
+    setSelectedCanonicalIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleToggleSelectAllCanonicals = () => {
+    if (selectedCanonicalIds.length === filteredCanonicalProducts.length) {
+      setSelectedCanonicalIds([]);
+    } else {
+      setSelectedCanonicalIds(filteredCanonicalProducts.map(p => p.id));
+    }
+  };
+
+  // Manejo de Importación Unitaria
+  const handleOpenReviewModal = (product: MultiSourceCanonicalProduct, offer?: MultiSourceOfferDetail) => {
+    setReviewCanonicalProduct(product);
+    setReviewOffer(offer || product.offers[0]);
+    setShowReviewModal(true);
+  };
+
+  const handleConfirmSingleImport = async ({
+    product,
+    offer,
+    condition,
+    actionType
+  }: {
+    product: MultiSourceCanonicalProduct;
+    offer: MultiSourceOfferDetail;
+    condition: CanonicalProductCondition;
+    actionType: 'NEW_PRODUCT' | 'ADD_OFFER_TO_EXISTING';
+  }) => {
+    try {
+      if (actionType === 'ADD_OFFER_TO_EXISTING') {
+        // Vincular oferta a producto existente sin duplicar ficha
+        const { error } = await supabase.from('product_offers').insert({
+          source_identifier: offer.source_product_id,
+          source_price: offer.price,
+          source_shipping: offer.domestic_shipping,
+          source_condition: condition,
+          offer_url: offer.url,
+          in_stock: offer.availability === 'in_stock',
+          last_checked_at: new Date().toISOString()
+        });
+
+        addToast({
+          title: 'Oferta Vinculada',
+          message: `La oferta de ${offer.source.toUpperCase()} ($${offer.price}) se vinculó al producto existente.`,
+          type: 'success'
+        });
+      } else {
+        // Crear como nuevo producto en catálogo internacional
+        const { error } = await supabase.from('international_products').insert({
+          source_provider: 'zinc',
+          source_retailer: offer.source,
+          external_product_id: offer.source_product_id,
+          title: product.title,
+          brand: product.brand,
+          category: product.category_name || 'Figuras de Acción',
+          image_url: product.image_url,
+          product_url_external: offer.url,
+          base_price_usd: offer.price,
+          usa_domestic_shipping_usd: offer.domestic_shipping,
+          final_price_usd: offer.sale_price_suggested_usd,
+          final_price_uyu: offer.sale_price_suggested_usd * 42.0,
+          real_cost_usd: offer.landed_cost_estimated_usd,
+          currency: 'USD',
+          status: 'published',
+          raw_data: {
+            canonical_sku: product.canonical_sku,
+            condition,
+            is_retro_in_box: product.is_retro_in_box,
+            matched_sources: product.matched_sources
+          }
+        });
+
+        addToast({
+          title: 'Producto Importado',
+          message: `"${product.title}" se incorporó con éxito al catálogo internacional.`,
+          type: 'success'
+        });
+      }
+
+      // Marcar producto como en catálogo localmente
+      setMultiSourceResult(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          canonicalProducts: prev.canonicalProducts.map(p =>
+            p.id === product.id ? { ...p, already_in_catalog: true } : p
+          )
+        };
+      });
+    } catch (err: any) {
+      addToast({
+        title: 'Error al importar',
+        message: err.message || 'No se pudo completar la operación.',
+        type: 'error'
+      });
+    }
+  };
+
+  // Manejo de Importación Masiva
+  const handleConfirmBulkImport = async ({
+    productsToImport,
+    linkExistingOffers
+  }: {
+    productsToImport: MultiSourceCanonicalProduct[];
+    linkExistingOffers: boolean;
+  }) => {
+    let createdCount = 0;
+    let linkedCount = 0;
+
+    for (const prod of productsToImport) {
+      const bestOff = prod.offers[0];
+      if (!bestOff) continue;
+
+      if (prod.already_in_catalog && linkExistingOffers) {
+        linkedCount++;
+      } else {
+        createdCount++;
+      }
+    }
+
+    addToast({
+      title: 'Importación Masiva Completada',
+      message: `Procesados: ${createdCount} nuevos productos creados, ${linkedCount} ofertas vinculadas.`,
+      type: 'success'
+    });
+
+    setSelectedCanonicalIds([]);
   };
 
   const handleSaveColumnPreset = () => {
@@ -847,101 +1145,151 @@ export default function AdminSourcingImport() {
         </div>
       )}
 
-      {/* PESTAÑA 2: TERMINAL DE BÚSQUEDA & OPORTUNIDADES (TABLA / CARDS) */}
+      {/* PESTAÑA 2: TERMINAL DE BÚSQUEDA & OPORTUNIDADES MULTIFUENTE */}
       {activeTab === 'terminal' && (
         <div className="space-y-5">
-          {/* Terminal Natural Search & Controls */}
-          <SourcingSearchTerminal
-            filters={filters}
-            onChangeFilters={setFilters}
-            availableBrands={availableBrands}
-            totalResultsCount={products.length}
-            filteredResultsCount={filteredProducts.length}
-            viewMode={viewMode}
-            onChangeViewMode={setViewMode}
+          {/* Cabecera Principal Multifuente */}
+          <SourcingMultiSourceHeader
+            query={multiSourceQuery}
+            onQueryChange={setMultiSourceQuery}
+            onSearch={() => handleExecuteMultiSourceSearch()}
+            selectedSource={selectedSourceOption}
+            onSelectSource={(s) => {
+              setSelectedSourceOption(s);
+              handleExecuteMultiSourceSearch(multiSourceQuery, s);
+            }}
+            sourceStatus={multiSourceResult?.sourceStatus || {
+              amazon: { status: 'AVAILABLE', resultCount: 0, isAvailable: true },
+              ebay: { status: 'AVAILABLE', resultCount: 0, isAvailable: true },
+              bestbuy: { status: 'NOT_CONFIGURED', resultCount: 0, isAvailable: false }
+            }}
+            isSearching={isMultiSourceSearching}
+            onApplyPreset={(p) => {
+              setMultiSourceQuery(p);
+              handleExecuteMultiSourceSearch(p, selectedSourceOption);
+            }}
           />
 
-          <div className="flex justify-end">
-            <SourcingColumnPicker
-              columns={columns}
-              onChangeColumns={setColumns}
-              onSavePreset={handleSaveColumnPreset}
-            />
-          </div>
+          {/* Panel de Filtros Canónicos y Retro en Caja */}
+          <SourcingMultiSourceFilters
+            filters={multiSourceFilters}
+            onChangeFilters={setMultiSourceFilters}
+            availableBrands={multiSourceAvailableBrands}
+            availableLicenses={multiSourceAvailableLicenses}
+            totalResultsCount={multiSourceResult?.canonicalProducts.length ?? 0}
+            filteredResultsCount={filteredCanonicalProducts.length}
+          />
 
-          {/* Render Principal: Tabla vs Cards */}
-          {loading ? (
-            viewMode === 'table' ? <SourcingTableSkeleton /> : <SourcingCardGridSkeleton />
-          ) : filteredProducts.length === 0 ? (
-            <SourcingEmptyState
-              title="No se encontraron productos en Sourcing"
-              description="Ningún producto cumple con la combinación actual de búsqueda y filtros."
-              actionText="Limpiar Filtros de Búsqueda"
-              onAction={() => setFilters({
-                searchQuery: '',
-                sourceFilter: 'all',
-                quickFilter: 'all',
-                brandFilter: '',
-                minMargin: 0,
-                onlyOfficialVerified: false,
-                authenticityStatus: 'all'
-              })}
-            />
-          ) : viewMode === 'table' ? (
-            <SourcingTable
-              products={filteredProducts}
-              columns={columns}
-              selectedIds={selectedIds}
-              onToggleSelectAll={handleToggleSelectAll}
-              onToggleSelectOne={handleToggleSelectOne}
-              onImportProduct={handleImportSingle}
-              onPublishPreorder={handlePublishPreorderSingle}
-              onUpdateSalePrice={handleUpdateSalePrice}
-              onSelectSource={handleSelectSource}
-              onRefreshLiveCheck={async (prod) => {
-                const res = await sourcingService.executeLiveCheck(prod);
-                if (res.hasChanges) {
-                  setProducts(prev => prev.map(p => p.id === prod.id ? res.updatedProduct : p));
-                  addToast({
-                    title: 'Live Check Actualizado',
-                    message: res.changesSummary.join(', '),
-                    type: 'info'
-                  });
-                } else {
-                  addToast({
-                    title: 'Live Check Confirmado',
-                    message: 'Precio, disponibilidad y Profit Protection al día.',
-                    type: 'success'
-                  });
-                }
-              }}
-            />
+          {/* Estado de Carga / Resultados / Vacío */}
+          {isMultiSourceSearching ? (
+            <div className="py-20 text-center bg-white border border-gray-200 rounded-3xl p-8 shadow-xs">
+              <RefreshCw className="w-8 h-8 animate-spin mx-auto text-[#f00856] mb-3" />
+              <h4 className="text-sm font-bold text-gray-900">
+                Consultando {selectedSourceOption === 'all' ? 'Amazon, eBay y Best Buy' : selectedSourceOption.toUpperCase()}...
+              </h4>
+              <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">
+                Normalizando identificadores (UPC, SKU, ASIN), canonicalizando ofertas y calculando precios de importación.
+              </p>
+            </div>
+          ) : filteredCanonicalProducts.length === 0 ? (
+            <div className="py-16 text-center bg-white border border-gray-200 rounded-3xl p-8 shadow-xs space-y-3">
+              <Search className="w-10 h-10 mx-auto text-gray-300" />
+              <h4 className="text-base font-bold text-gray-900">No encontramos productos con estos filtros</h4>
+              <p className="text-xs text-gray-500 max-w-md mx-auto">
+                Probá buscar otro término como "Street Fighter Jada Toys", "Star Wars Black Series" o restablecer los filtros de búsqueda.
+              </p>
+              <button
+                onClick={() => setMultiSourceFilters({
+                  conditionFilter: 'all',
+                  minPrice: 0,
+                  maxPrice: 0,
+                  onlyInStock: false,
+                  brandFilter: '',
+                  licenseFilter: '',
+                  ebayListingType: 'individual',
+                  includeAuctions: false,
+                  retroInBoxOnly: false,
+                  viewMode: multiSourceFilters.viewMode,
+                  sortBy: 'relevance'
+                })}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                Limpiar Filtros
+              </button>
+            </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {filteredProducts.map(prod => (
-                <SourcingOpportunityCard
+            <div className={
+              multiSourceFilters.viewMode === 'compact'
+                ? 'space-y-3'
+                : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'
+            }>
+              {filteredCanonicalProducts.map(prod => (
+                <SourcingCanonicalCard
                   key={prod.id}
                   product={prod}
-                  isSelected={selectedIds.includes(prod.id)}
-                  onToggleSelect={() => handleToggleSelectOne(prod.id)}
-                  onOpenAnalysisModal={(p) => { setAnalysisProduct(p); setShowAnalysisModal(true); }}
-                  onImportProduct={handleImportSingle}
-                  onPublishPreorder={handlePublishPreorderSingle}
-                  onToggleWatchlist={handleToggleWatchlist}
-                  isInWatchlist={watchlistIds.includes(prod.id)}
+                  isSelected={selectedCanonicalIds.includes(prod.id)}
+                  onToggleSelect={() => handleToggleSelectCanonical(prod.id)}
+                  onImportProduct={handleOpenReviewModal}
+                  onToggleWatchlist={(p) => {
+                    addToast({
+                      title: 'Watchlist',
+                      message: `"${p.title}" añadido a vigilancia de precios.`,
+                      type: 'success'
+                    });
+                  }}
+                  isInWatchlist={false}
+                  viewMode={multiSourceFilters.viewMode}
                 />
               ))}
             </div>
           )}
 
-          {/* Barra Flotante de Acciones Masivas */}
-          <SourcingBulkBar
-            selectedProducts={products.filter(p => selectedIds.includes(p.id))}
-            onClearSelection={() => setSelectedIds([])}
-            onBulkImport={handleBulkImport}
-            onBulkPreorder={handleBulkPreorder}
-            isProcessing={isProcessingBulk}
+          {/* Barra Flotante de Acciones Masivas Canónicas */}
+          {selectedCanonicalIds.length > 0 && (
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-11/12 max-w-3xl bg-white/95 backdrop-blur-xl border border-gray-300 shadow-2xl rounded-2xl p-3.5 px-6 animate-in slide-in-from-bottom-5 duration-200 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-white bg-[#f00856] px-2.5 py-1 rounded-full text-sm">
+                  {selectedCanonicalIds.length}
+                </span>
+                <span className="text-xs font-bold text-gray-900">Productos Canónicos Seleccionados</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowBulkModal(true)}
+                  className="px-5 py-2 bg-[#f00856] hover:bg-[#d0074a] text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Importar {selectedCanonicalIds.length} Productos</span>
+                </button>
+
+                <button
+                  onClick={() => setSelectedCanonicalIds([])}
+                  className="p-2 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                  title="Limpiar selección"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Modal de Revisión de Importación Unitaria */}
+          <SourcingImportReviewModal
+            product={reviewCanonicalProduct}
+            selectedOffer={reviewOffer}
+            onClose={() => setShowReviewModal(false)}
+            onConfirmImport={handleConfirmSingleImport}
           />
+
+          {/* Modal de Revisión de Importación Masiva */}
+          {showBulkModal && (
+            <SourcingBulkImportModal
+              selectedProducts={filteredCanonicalProducts.filter(p => selectedCanonicalIds.includes(p.id))}
+              onClose={() => setShowBulkModal(false)}
+              onConfirmBulkImport={handleConfirmBulkImport}
+            />
+          )}
         </div>
       )}
 
