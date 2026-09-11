@@ -179,24 +179,17 @@ export class AutopilotPurchasingEngine {
     product: NormalizedProduct,
     livePrice: number
   ): Promise<{ success: boolean; orderId?: string; status: string; message: string }> {
-    // Check if Zinc provider integration credentials exist in environment
-    const zincToken = import.meta.env.VITE_ZINC_API_KEY || import.meta.env.ZINC_API_KEY;
-
-    if (!zincToken) {
-      return {
-        success: false,
-        status: 'NO CONFIGURADO',
-        message: 'Proveedor de compras (Zinc API) NO CONFIGURADO. Se requieren credenciales autorizadas de producción en Vercel/Supabase.'
-      };
-    }
-
-    // Attempt real purchase execution call via backend API
+    // Execute purchase order securely via backend Edge Function / Server-side API.
+    // ZINC_API_KEY lives exclusively in server environment (Deno.env / Supabase Vault).
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const authToken = sessionData?.session?.access_token;
+
       const response = await fetch('/api/zinc/create-order', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${zincToken}`
+          ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
         },
         body: JSON.stringify({
           product_id: product.offers[0]?.source_product_id,

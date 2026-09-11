@@ -25,13 +25,15 @@ interface SourcingConnectionStatusProps {
 }
 
 const DEFAULT_CONNECTIONS: SourcingConnection[] = [
-  { id: 'amazon', name: 'Amazon US', category: 'retailer', status: 'LIVE', latencyMs: 140, details: 'API / Live Scraper activo' },
-  { id: 'ebay', name: 'eBay API', category: 'retailer', status: 'LIVE', latencyMs: 210, details: 'Browse API v1 Conectado' },
-  { id: 'bestbuy', name: 'Best Buy US', category: 'retailer', status: 'LIVE', latencyMs: 180, details: 'Open API Products' },
-  { id: 'zinc', name: 'Zinc API 2.0', category: 'automation', status: 'LIVE', latencyMs: 320, details: 'Auto-fulfillment & Auto-Publish' },
-  { id: 'mercadolibre', name: 'Mercado Libre UY', category: 'market', status: 'LIVE', latencyMs: 195, details: 'Marketplace Intelligence & Precios UY' },
+  { id: 'amazon', name: 'Amazon US', category: 'retailer', status: 'LIVE', latencyMs: 140, details: 'Zinc API v1 Lookup & Live Check' },
+  { id: 'ebay', name: 'eBay API', category: 'retailer', status: 'NOT_CONFIGURED', latencyMs: 0, details: 'Adaptador listo, pendiente de eBay Buy API Key' },
+  { id: 'bestbuy', name: 'Best Buy US', category: 'retailer', status: 'NOT_CONFIGURED', latencyMs: 0, details: 'Adaptador listo, pendiente de Best Buy API Key' },
+  { id: 'zinc_lookup', name: 'Zinc Product Lookup', category: 'automation', status: 'LIVE', latencyMs: 280, details: 'Búsqueda & Catálogo Amazon' },
+  { id: 'zinc_check', name: 'Zinc Live Check', category: 'automation', status: 'LIVE', latencyMs: 310, details: 'Verificación en vivo pre-pago' },
+  { id: 'zinc_purchasing', name: 'Zinc Purchasing', category: 'automation', status: 'NOT_CONFIGURED', latencyMs: 0, details: 'Auto-fulfillment deshabilitado / requiere credencial' },
+  { id: 'mercadolibre', name: 'Mercado Libre UY', category: 'market', status: 'LIVE', latencyMs: 195, details: 'Scroll Scan API & Import Worker UY' },
   { id: 'import_engine', name: 'Import Engine (UruBox)', category: 'logistics', status: 'LIVE', latencyMs: 90, details: 'Flete UY, Aranceles y Tarifas Courier' },
-  { id: 'currency_fx', name: 'FX Currency Engine', category: 'market', status: 'LIVE', latencyMs: 45, details: 'Tasa BCU / Dólar Brou en tiempo real' },
+  { id: 'pricing_engine', name: 'Canonical Pricing Engine', category: 'market', status: 'LIVE', latencyMs: 15, details: 'Profit Protection & Dynamic Landed Cost' },
   { id: 'openai_research', name: 'OpenAI GPT-4o Research', category: 'ai', status: 'LIVE', latencyMs: 850, details: 'Sourcing inteligente & Enriquecimiento' }
 ];
 
