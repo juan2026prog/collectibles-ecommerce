@@ -68,13 +68,13 @@ export class BestBuyLiveSourceAdapter {
       regular_price: 0,
       sale_price: 0,
       currency: 'USD',
-      availability: 'in_stock',
-      stock_status: 'available',
+      availability: 'out_of_stock',
+      stock_status: 'unavailable',
       domestic_shipping: 0,
       product_url: `https://www.bestbuy.com/site/${sku}.p?skuId=${sku}`,
       checked_at: new Date().toISOString(),
-      status: 'LIVE',
-      error_message: undefined
+      status: 'ERROR',
+      error_message: 'Consulta en vivo de Best Buy no disponible o sin credenciales de Zinc API.'
     };
   }
 

@@ -173,7 +173,7 @@ export default async function handler(req, res) {
     const isBrands = typeParam === 'brands' || fullPath.includes('sitemap-brands.xml');
     const isPages = typeParam === 'pages' || fullPath.includes('sitemap-pages.xml');
     const isAcademy = typeParam === 'academy' || fullPath.includes('sitemap-academy.xml');
-    const isIndex = typeParam === 'index' || fullPath.includes('sitemap_index.xml') || fullPath.includes('sitemap.xml') || (!typeParam && (fullPath.includes('/api/sitemap') || fullPath.includes('/sitemap')));
+    const isIndex = typeParam === 'index' || fullPath.includes('sitemap_index.xml') || fullPath.includes('sitemap.xml') || !typeParam || (!isProducts && !isCategories && !isBrands && !isPages && !isAcademy);
 
     // Unknown sitemap -> return 404 (do not fallback to React HTML)
     if (typeParam === 'unknown' || (!isIndex && !isProducts && !isCategories && !isBrands && !isPages && !isAcademy)) {

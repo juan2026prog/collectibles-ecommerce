@@ -1,4 +1,4 @@
-﻿import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
@@ -78,9 +78,9 @@ serve(async (req: Request) => {
     // 2. MPN
     // 3. Marca + Personaje + Línea
     // 4. Título
-    const queryPrimary = gtin || upc || mpn || ${brand} .trim() || title;
+    const queryPrimary = gtin || upc || mpn || `${brand} ${character} ${line}`.trim() || title;
     const encodedQuery = encodeURIComponent(queryPrimary);
-    const mluSearchUrl = https://api.mercadolibre.com/sites/MLU/search?q=&limit=20;
+    const mluSearchUrl = `https://api.mercadolibre.com/sites/MLU/search?q=${encodedQuery}&limit=20`;
 
     let mluData: any = null;
     try {

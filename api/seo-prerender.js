@@ -1086,7 +1086,7 @@ export default async function handler(req, res) {
       `;
 
     // 8b. AI SEARCH
-    } else if (type === 'ai-search' || type === 'ai_search' || fullPath.includes('/ai-search') || fullPath.includes('/search/ai')) {
+    } else if (type === 'ai-search' || type === 'ai_search' || combinedUri.includes('/ai-search') || combinedUri.includes('/search/ai')) {
       title = generateMetaTitle('ai-search');
       description = generateMetaDescription('ai-search');
       canonical = generateCanonical('ai-search');

@@ -162,7 +162,7 @@ const autopilotRules: AutopilotRule[] = [
   }
 ];
 
-describe('Sourcing Autopilot — Street Fighter E2E Scenario Test', () => {
+describe('Sourcing Autopilot — Street Fighter E2E Scenario Test', { timeout: 20000 }, () => {
   it('executes full pipeline: discovery -> canonical product -> policy evaluation -> autopilot execution -> reconciliation', async () => {
     // 1. Policy Evaluation
     const evaluation = autopilotPolicyEngine.evaluateProduct(

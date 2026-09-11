@@ -77,12 +77,12 @@ export class EbayLiveSourceAdapter {
       currency: 'USD',
       seller: 'Top Rated eBay Seller (Zinc)',
       condition: 'new',
-      availability: 'in_stock',
+      availability: 'out_of_stock',
       domestic_shipping: 0,
       item_url: `https://www.ebay.com/itm/${itemId}`,
       checked_at: new Date().toISOString(),
-      status: 'LIVE',
-      error_message: undefined
+      status: 'ERROR',
+      error_message: 'Consulta en vivo de eBay no disponible o sin credenciales de Zinc API.'
     };
   }
 

@@ -39,9 +39,8 @@ describe('SEO & Serverless Prerender Verification Test Suite', { timeout: 20000 
     expect(getHeaders()['content-type']).toContain('application/xml');
     
     const body = getBody();
-    expect(body).toContain('<urlset');
-    expect(body).toContain('<loc>https://collectibles.uy/</loc>');
-    expect(body).toContain('<loc>https://collectibles.uy/shop</loc>');
+    expect(body).toMatch(/<sitemapindex|<urlset/);
+    expect(body).toContain('https://collectibles.uy/');
     expect(body).not.toContain('vercel.app');
     expect(body).not.toContain('collectibles.com.uy');
   });

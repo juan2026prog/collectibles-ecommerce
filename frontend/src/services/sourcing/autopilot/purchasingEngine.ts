@@ -186,24 +186,48 @@ export class AutopilotPurchasingEngine {
       return {
         success: false,
         status: 'NO CONFIGURADO',
-        message: 'Proveedor de compras (Zinc API) NO CONFIGURADO. No existen credenciales activas.'
+        message: 'Proveedor de compras (Zinc API) NO CONFIGURADO. Se requieren credenciales autorizadas de producción en Vercel/Supabase.'
       };
     }
 
-    // Attempt purchase execution call
+    // Attempt real purchase execution call via backend API
     try {
-      const orderId = `ZINC_${Date.now()}_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+      const response = await fetch('/api/zinc/create-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${zincToken}`
+        },
+        body: JSON.stringify({
+          product_id: product.offers[0]?.source_product_id,
+          retailer: product.offers[0]?.source || 'amazon',
+          max_price: livePrice
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.order_id) {
+          return {
+            success: true,
+            orderId: data.order_id,
+            status: 'EXECUTED',
+            message: `Orden de compra enviada y confirmada con éxito. ID: ${data.order_id}`
+          };
+        }
+      }
+      
+      const errBody = await response.json().catch(() => ({}));
       return {
-        success: true,
-        orderId,
-        status: 'EXECUTED',
-        message: `Orden de compra enviada con éxito. ID: ${orderId}`
+        success: false,
+        status: 'ERROR',
+        message: `El proveedor rechazó la orden: ${errBody?.message || errBody?.error || 'Sin confirmación de Zinc'}`
       };
     } catch (err: any) {
       return {
         success: false,
         status: 'ERROR',
-        message: `Falló la ejecución de la orden en el proveedor: ${err.message}`
+        message: `No se pudo conectar con el proveedor de compras: ${err.message}`
       };
     }
   }

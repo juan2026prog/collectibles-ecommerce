@@ -35,8 +35,8 @@ export class AmazonSourceAdapter implements ISourceAdapter {
     upc?: string;
     raw?: any;
   }): RawProductExtraction {
-    const asin = this.extractProductId(input.url) || input.raw?.asin || 'AMZ-' + Math.random().toString(36).substring(2, 9).toUpperCase();
-    const price = Number(input.price ?? input.raw?.price ?? 24.99);
+    const asin = this.extractProductId(input.url) || input.raw?.asin || ('AMZ-UNKNOWN-' + (input.url ? Math.abs(input.url.split('').reduce((acc, char) => (acc * 31 + char.charCodeAt(0)) | 0, 0)).toString(36).toUpperCase() : 'NOID'));
+    const price = Number(input.price ?? input.raw?.price ?? 0);
     const domesticShipping = Number(input.shipping ?? input.raw?.shipping ?? 0); // Amazon Prime default $0
 
     return {
@@ -49,10 +49,10 @@ export class AmazonSourceAdapter implements ISourceAdapter {
       price,
       currency: 'USD',
       domestic_shipping: domesticShipping,
-      seller: input.seller || input.raw?.seller || 'Amazon.com / Shipped by Amazon',
-      availability: (input.raw?.availability || 'in_stock') as any,
+      seller: input.seller || input.raw?.seller || 'Amazon.com',
+      availability: (input.raw?.availability || (price > 0 ? 'in_stock' : 'out_of_stock')) as any,
       condition: 'new',
-      image_url: input.raw?.image_url || input.raw?.images?.[0] || 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop',
+      image_url: input.raw?.image_url || input.raw?.images?.[0] || '',
       gallery_images: input.raw?.images || [],
       estimated_delivery: '2-4 días (USA)',
       raw_metadata: input.raw
