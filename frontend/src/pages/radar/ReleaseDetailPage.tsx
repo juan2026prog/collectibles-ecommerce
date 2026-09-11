@@ -13,6 +13,7 @@ export default function ReleaseDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const [release, setRelease] = useState<ReleaseEvent | null>(null);
   const [linkedProduct, setLinkedProduct] = useState<{ id: string; title: string; slug: string; base_price?: number } | null>(null);
+  const [matchingProducts, setMatchingProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [alertSubscribed, setAlertSubscribed] = useState(false);
   const [imgError, setImgError] = useState(false);
@@ -38,6 +39,57 @@ export default function ReleaseDetailPage() {
       if (!error && data) {
         setRelease(data as any);
 
+        // Track RADAR_OPEN signal & DemandSignalEngine RADAR_CLICK
+        import('../../services/sourcing/personalizationEngine').then(({ recordSignal }) => {
+          recordSignal({
+            eventType: 'RADAR_OPEN',
+            entities: {
+              license: data.license?.name,
+              brand: data.brand?.name || data.manufacturer,
+              character: data.character,
+              line: data.product_line
+            }
+          });
+        }).catch(() => {});
+
+        import('../../services/sourcing/demandSignalEngine').then(({ captureDemandSignal }) => {
+          captureDemandSignal({
+            signal_type: 'RADAR_CLICK',
+            interpreted_query: {
+              brand: data.brand?.name || data.manufacturer,
+              franchise: data.license?.name,
+              license: data.license?.name,
+              line: data.product_line,
+              character: data.character
+            },
+            source: 'radar'
+          }).then(sig => {
+            import('../../services/sourcing/catalogGapEngine').then(({ processSignalIntoCatalogGap }) => {
+              processSignalIntoCatalogGap(sig);
+            });
+          });
+        }).catch(() => {});
+
+        // Fetch matching catalog products for this Radar release
+        const term = data.license?.name || data.character || data.brand?.name || data.product_line;
+        if (term) {
+          const { data: prods } = await supabase
+            .from('products')
+            .select('id, title, slug, base_price, category_id, brand:brands(name)')
+            .ilike('title', `%${term}%`)
+            .limit(6);
+
+          if (prods && prods.length > 0) {
+            import('../../services/sourcing/personalizationEngine').then(({ rankProducts }) => {
+              rankProducts(prods, { surface: 'RADAR' }).then(ranked => {
+                setMatchingProducts(ranked);
+              });
+            }).catch(() => {
+              setMatchingProducts(prods.map(p => ({ product: p, reasons: [] })));
+            });
+          }
+        }
+
         // Si tiene catalog_product_id, consultar el producto en tienda
         if (data.catalog_product_id) {
           const { data: prod } = await supabase
@@ -56,6 +108,7 @@ export default function ReleaseDetailPage() {
       setLoading(false);
     }
   };
+
 
   if (loading) {
     return (
@@ -229,6 +282,52 @@ export default function ReleaseDetailPage() {
           <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-line">{release.description}</p>
         </div>
       )}
+
+      {/* SOURCING INTELLIGENCE — VER PRODUCTOS VINCULADOS */}
+      {matchingProducts.length > 0 && (
+        <div className="bg-zinc-900/80 border border-[#f00856]/30 rounded-3xl p-6 sm:p-8 space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-widest text-[#f00856] flex items-center gap-1.5 mb-1">
+                <Sparkles size={14} /> Sourcing Intelligence · Personalizado
+              </span>
+              <h3 className="text-xl font-black text-white uppercase tracking-tight">PRODUCTOS EN CATÁLOGO DE ESTE EVENTO</h3>
+            </div>
+            <Link
+              to={`/shop?q=${encodeURIComponent(release.license?.name || release.character || release.brand?.name || '')}`}
+              className="px-4 py-2 rounded-xl bg-white/10 hover:bg-[#f00856] text-white text-xs font-black uppercase tracking-wider flex items-center gap-1 transition"
+            >
+              <span>Ver Todos</span>
+              <ArrowRight size={13} />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {matchingProducts.map(({ product, reasons }) => (
+              <div key={product.id} className="bg-zinc-950 border border-white/10 rounded-2xl p-4 flex flex-col justify-between space-y-3 hover:border-[#f00856]/40 transition">
+                <div>
+                  {reasons && reasons.length > 0 && (
+                    <span className="text-[9px] font-bold text-[#f00856] bg-[#f00856]/10 px-2 py-0.5 rounded-full inline-block mb-2">
+                      {reasons[0].label}
+                    </span>
+                  )}
+                  <h4 className="text-sm font-black text-white line-clamp-2">{product.title}</h4>
+                  <p className="text-xs font-mono font-bold text-emerald-400 mt-1">
+                    USD ${product.base_price || 0}
+                  </p>
+                </div>
+                <Link
+                  to={`/producto/${product.slug}`}
+                  className="w-full py-2 rounded-xl bg-white/5 hover:bg-[#f00856] text-white text-xs font-black uppercase tracking-wider text-center transition block"
+                >
+                  VER PRODUCTO
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

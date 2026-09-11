@@ -201,6 +201,25 @@ export default function ProductDetail() {
   // Synchronize quantity with canonical inventory at top-level before early returns
   useEffect(() => {
     if (!product) return;
+
+    // Sourcing Intelligence FASE 3: Dispatch PRODUCT_DETAIL_ENGAGE signal
+    import('../services/sourcing/personalizationEngine').then(({ recordSignal }) => {
+      recordSignal({
+        userId: user?.id,
+        eventType: 'PRODUCT_DETAIL_ENGAGE',
+        productId: product.id,
+        entities: {
+          category: product.category?.name,
+          brand: product.brand?.name,
+          license: product.license?.name,
+          line: product.line || product.product_line,
+          character: product.character,
+          scale: product.scale,
+          manufacturer: product.manufacturer
+        }
+      });
+    }).catch(() => {});
+
     const vars = product.variants && product.variants.length > 0 ? product.variants : [];
     const v = vars[selectedVariantIdx] || null;
     const resolution = resolveProductInventory(product, v);
@@ -216,7 +235,8 @@ export default function ProductDetail() {
     } else if (quantity > maxQty) {
       setQuantity(maxQty);
     }
-  }, [product, selectedVariantIdx, quantity]);
+  }, [product, selectedVariantIdx, quantity, user?.id]);
+
 
   const handleTouchStart = (e: React.TouchEvent) => {
     setTouchStartX(e.targetTouches[0].clientX);

@@ -19,11 +19,11 @@ const inMemoryCatalogGaps = new Map<string, CatalogGap>();
  * -> "street_fighter:ken:jada_toys:1_12"
  */
 export function buildGapDedupeKey(interpreted: DemandSignal['interpreted_query'] = {}, rawQuery: string = ''): string {
-  const franchise = (interpreted.franchise || '').toLowerCase().trim();
-  const character = (interpreted.character || '').toLowerCase().trim();
-  const brand = (interpreted.brand || '').toLowerCase().trim();
-  const line = (interpreted.line || '').toLowerCase().trim();
-  const scale = (interpreted.scale || '').replace(/[\/\:]/g, '_').toLowerCase().trim();
+  const franchise = (interpreted.franchise || '').toLowerCase().trim().replace(/\s+/g, '_');
+  const character = (interpreted.character || '').toLowerCase().trim().replace(/\s+/g, '_');
+  const brand = (interpreted.brand || '').toLowerCase().trim().replace(/\s+/g, '_');
+  const line = (interpreted.line || '').toLowerCase().trim().replace(/\s+/g, '_');
+  const scale = (interpreted.scale || '').replace(/[\/\:\s]/g, '_').toLowerCase().trim();
 
   // If structured attributes exist
   if (character || franchise || brand) {
@@ -183,3 +183,10 @@ export async function getQualifiedCatalogGaps(minScore: number = 50): Promise<Ca
 
   return [];
 }
+
+export const catalogGapEngine = {
+  buildGapDedupeKey,
+  processSignalIntoCatalogGap,
+  getQualifiedCatalogGaps
+};
+

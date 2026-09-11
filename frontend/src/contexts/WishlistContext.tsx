@@ -114,6 +114,28 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {
         console.warn('Meta Pixel Wishlist Error', e);
       }
+
+      // Adaptive Sourcing Demand Signal Engine
+      try {
+        import('../services/sourcing/demandSignalEngine').then(({ captureDemandSignal }) => {
+          captureDemandSignal({
+            signal_type: 'WISHLIST_INTENT',
+            query: product.title,
+            interpreted_query: {
+              brand: product.brand?.name || product.brand,
+              license: product.license?.name || product.license,
+              franchise: product.license?.name || product.license,
+              category: product.category?.name || product.category
+            },
+            entity_id: String(productId),
+            source: 'wishlist'
+          }).then(sig => {
+            import('../services/sourcing/catalogGapEngine').then(({ processSignalIntoCatalogGap }) => {
+              processSignalIntoCatalogGap(sig);
+            });
+          });
+        }).catch(() => {});
+      } catch {}
     }
 
     if (!user) {

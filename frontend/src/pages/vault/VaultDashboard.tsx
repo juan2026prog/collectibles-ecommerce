@@ -152,6 +152,27 @@ export default function VaultDashboard() {
       const dbItems = vaultRes.data || [];
       setItems(dbItems);
 
+      // Sourcing Intelligence FASE 3: Feed Vault items as high-value signals into Personalization Engine
+      if (dbItems.length > 0) {
+        import('../../services/sourcing/personalizationEngine').then(({ recordSignal }) => {
+          dbItems.forEach((item: any) => {
+            const eventType = item.status === 'WISHLIST' ? 'VAULT_WISHLIST' : 'VAULT_OWNED';
+            recordSignal({
+              userId: user?.id,
+              eventType,
+              productId: item.product_id || null,
+              entities: {
+                brand: item.brand_name || item.brand,
+                license: item.franchise || item.license_name,
+                line: item.line,
+                scale: item.scale,
+                character: item.character
+              }
+            });
+          });
+        }).catch(() => {});
+      }
+
       // Si está activada la completitud en Admin, calculamos el % y las piezas faltantes
       if (isEnabled && dbItems.length > 0) {
         const userWaveNames = Array.from(new Set(dbItems.map((i: any) => i.line).filter(Boolean)));
@@ -175,6 +196,7 @@ export default function VaultDashboard() {
           setCompletionPercent(percent);
         }
       }
+
     } catch (err) {
       console.error('Error loading vault:', err);
     } finally {

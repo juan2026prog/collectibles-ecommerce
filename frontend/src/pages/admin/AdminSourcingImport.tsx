@@ -32,6 +32,13 @@ import { AutopilotPolicyEditor } from '../../components/admin/sourcing/autopilot
 import { AutopilotHeaderBar } from '../../components/admin/sourcing/autopilot/AutopilotHeaderBar';
 import { AutopilotQueueView } from '../../components/admin/sourcing/autopilot/AutopilotQueueView';
 
+// Adaptive Sourcing sub-components & service
+import { AdaptiveSourcingDashboard } from '../../components/admin/sourcing/adaptive/AdaptiveSourcingDashboard';
+import { OpportunityCard } from '../../components/admin/sourcing/adaptive/OpportunityCard';
+import { PreparePublicationModal } from '../../components/admin/sourcing/adaptive/PreparePublicationModal';
+import { adaptiveSourcingService } from '../../services/sourcing/adaptiveSourcingService';
+import type { SourcingOpportunity, AdaptiveSettings } from '../../types/sourcingAdaptiveTypes';
+
 import { sourcingService } from '../../services/sourcing/sourcingService';
 import { checkOpenAIStatus } from '../../services/sourcing/openaiResearchService';
 import { SAMPLE_MCFARLANE_RESEARCH_PACK } from '../../data/sampleResearchPacks';
@@ -55,8 +62,11 @@ const DEFAULT_COLUMNS: ColumnDefinition[] = [
   { id: 'sku', label: 'SKU Canónico', visible: false, category: 'metadata' }
 ];
 
+import { SourcingPersonalizationPanel } from '../../components/admin/sourcing/SourcingPersonalizationPanel';
+
 const PREFERENCES_STORAGE_KEY = 'collectibles_sourcing_column_preferences_v2';
-type MainTabType = 'dashboard' | 'terminal' | 'autopilot' | 'watchlist' | 'connections';
+type MainTabType = 'dashboard' | 'terminal' | 'autopilot' | 'watchlist' | 'connections' | 'personalization';
+
 
 export default function AdminSourcingImport() {
   const { addToast } = useToast();
@@ -87,27 +97,60 @@ export default function AdminSourcingImport() {
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
   const [showPackModal, setShowPackModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [showOpenAIModal, setShowOpenAIModal] = useState(false);
-  const [openAIEnabled, setOpenAIEnabled] = useState(false);
-
-  // Filters
-  const [filters, setFilters] = useState<SourcingFilterState>({
-    searchQuery: '',
-    sourceFilter: 'all',
-    quickFilter: 'all',
-    brandFilter: '',
-    minMargin: 0,
-    onlyOfficialVerified: false,
-    authenticityStatus: 'all'
-  });
+  // Adaptive Sourcing State (Fase 4)
+  const [adaptiveOpportunities, setAdaptiveOpportunities] = useState<SourcingOpportunity[]>([]);
+  const [adaptiveSettings, setAdaptiveSettings] = useState<AdaptiveSettings>(() => adaptiveSourcingService.getSettings());
+  const [selectedPrepareOpp, setSelectedPrepareOpp] = useState<SourcingOpportunity | null>(null);
+  const [showPrepareModal, setShowPrepareModal] = useState(false);
+  const [adaptiveLoading, setAdaptiveLoading] = useState(false);
 
   // Load existing catalog titles and seed initial pack on mount
   useEffect(() => {
     loadInitialCatalogAndPack();
+    loadAdaptiveData();
     checkOpenAIStatus()
       .then(st => setOpenAIEnabled(st.enabled))
       .catch(() => setOpenAIEnabled(false));
   }, []);
+
+  const loadAdaptiveData = async () => {
+    setAdaptiveLoading(true);
+    try {
+      await adaptiveSourcingService.processQualifiedGapsToOpportunities();
+      const opps = await adaptiveSourcingService.getOpportunities({ status: 'all' });
+      setAdaptiveOpportunities(opps);
+    } catch (e) {
+      console.warn('Could not load adaptive opportunities:', e);
+    } finally {
+      setAdaptiveLoading(false);
+    }
+  };
+
+  const handleToggleAdaptiveKillSwitch = async (enabled: boolean) => {
+    const updated = await adaptiveSourcingService.updateSettings({ enabled });
+    setAdaptiveSettings(updated);
+    addToast({
+      title: enabled ? 'Adaptive Sourcing Re-activado' : 'Kill Switch Activado',
+      message: enabled ? 'El motor adaptativo reanudó la captura de gaps.' : 'Adaptive Sourcing ha sido desactivado sin afectar el catálogo.',
+      type: enabled ? 'success' : 'warning'
+    });
+  };
+
+  const handleApprovePrepareOpportunity = async (opp: SourcingOpportunity) => {
+    const res = await adaptiveSourcingService.approveOpportunity(opp.id);
+    if (res.success) {
+      addToast({ title: 'Publicación Preparada', message: `"${opp.title}" incorporado al catálogo internacional.`, type: 'success' });
+      loadAdaptiveData();
+    } else {
+      addToast({ title: 'Error al Publicar', message: res.error || 'No se pudo publicar.', type: 'error' });
+    }
+  };
+
+  const handleDismissOpportunity = async (opp: SourcingOpportunity) => {
+    await adaptiveSourcingService.dismissOpportunity(opp.id, 'NOT_RELEVANT');
+    addToast({ title: 'Oportunidad Descartada', message: `"${opp.title}" removida de la cola.`, type: 'info' });
+    loadAdaptiveData();
+  };
 
   const loadInitialCatalogAndPack = async () => {
     setLoading(true);
@@ -466,9 +509,113 @@ export default function AdminSourcingImport() {
             <span>Cargar Investigación</span>
           </button>
         </div>
+
+        {/* Main Tab Switcher */}
+        <div className="flex items-center gap-2 bg-gray-100 p-1.5 rounded-xl border border-gray-200">
+          <button
+            onClick={() => setActiveMainTab('sourcing')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition ${
+              activeMainTab === 'sourcing' 
+                ? 'bg-white text-indigo-600 shadow-sm' 
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <BrainCircuit className="w-4 h-4" />
+            Investigación & Sourcing
+          </button>
+          <button
+            onClick={() => setActiveMainTab('adaptive')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition ${
+              activeMainTab === 'adaptive' 
+                ? 'bg-gradient-to-r from-indigo-600 to-[#f00856] text-white shadow-sm' 
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-amber-300" />
+            Adaptive Sourcing
+          </button>
+          <button
+            onClick={() => setActiveMainTab('autopilot')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition ${
+              activeMainTab === 'autopilot' 
+                ? 'bg-slate-900 text-white shadow-sm' 
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Bot className="w-4 h-4 text-emerald-400" />
+            AUTOPILOT Control Hub
+          </button>
+        </div>
       </div>
 
+      {/* VISTA MAIN TAB 2: ADAPTIVE SOURCING (FASE 4) */}
+      {activeMainTab === 'adaptive' && (
+        <div className="space-y-6">
+          <AdaptiveSourcingDashboard
+            stats={{
+              activeCount: adaptiveOpportunities.length,
+              highDemandCount: adaptiveOpportunities.filter(o => o.demand_score >= 75).length,
+              readyForReviewCount: adaptiveOpportunities.filter(o => o.status === 'READY_FOR_REVIEW').length,
+              noSourceCount: adaptiveOpportunities.filter(o => o.status === 'NO_SOURCE').length,
+              new24hCount: adaptiveOpportunities.filter(o => new Date(o.created_at).getTime() > Date.now() - 86400000).length
+            }}
+            settings={adaptiveSettings}
+            onToggleKillSwitch={handleToggleAdaptiveKillSwitch}
+            onRefresh={loadAdaptiveData}
+          />
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-200 pb-3">
+              <h3 className="text-base font-black text-gray-900 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-[#f00856]" />
+                <span>Cola Inteligente de Oportunidades ({adaptiveOpportunities.length})</span>
+              </h3>
+              <button
+                onClick={loadAdaptiveData}
+                className="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Actualizar Cola</span>
+              </button>
+            </div>
+
+            {adaptiveLoading ? (
+              <div className="py-16 text-center text-gray-400">
+                <RefreshCw className="w-6 h-6 animate-spin mx-auto text-[#f00856] mb-2" />
+                <p className="text-xs font-medium">Analizando demanda de usuarios y buscando oportunidades...</p>
+              </div>
+            ) : adaptiveOpportunities.length === 0 ? (
+              <div className="py-16 text-center bg-gray-50 border border-gray-200 rounded-2xl p-8">
+                <Sparkles className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+                <h4 className="text-sm font-bold text-gray-900">No hay oportunidades activas registradas</h4>
+                <p className="text-xs text-gray-500 max-w-md mx-auto mt-1">
+                  El motor de Adaptive Sourcing procesará automáticamente las búsquedas sin resultado y señales de wishlist cuando los usuarios exploren la tienda.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {adaptiveOpportunities.map(opp => (
+                  <OpportunityCard
+                    key={opp.id}
+                    opportunity={opp}
+                    onPreparePublication={(o) => {
+                      setSelectedPrepareOpp(o);
+                      setShowPrepareModal(true);
+                    }}
+                    onDismiss={handleDismissOpportunity}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* VISTA MAIN TAB 1: INVESTIGACIÓN & SOURCING (FASE 1/2) */}
+      {activeMainTab === 'sourcing' && (
+      <div className="space-y-6">
       {/* PESTAÑAS DE NAVEGACIÓN PRINCIPALES (FASE 7A) */}
+
       <div className="flex items-center gap-2 border-b border-gray-200 overflow-x-auto pb-0.5">
         <button
           onClick={() => setActiveTab('dashboard')}
@@ -527,6 +674,18 @@ export default function AdminSourcingImport() {
         </button>
 
         <button
+          onClick={() => setActiveTab('personalization')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
+            activeTab === 'personalization'
+              ? 'border-[#f00856] text-[#f00856] bg-pink-50/50 rounded-t-xl'
+              : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-xl'
+          }`}
+        >
+          <BrainCircuit className="w-4 h-4" />
+          <span>Personalization Engine</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('connections')}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
             activeTab === 'connections'
@@ -541,6 +700,7 @@ export default function AdminSourcingImport() {
 
       {/* PESTAÑA 1: DASHBOARD & OPPORTUNITY FEED */}
       {activeTab === 'dashboard' && (
+
         <div className="space-y-6">
           {/* Banner de Research Pack Activo y Métricas Operacionales */}
           <div className="bg-white border border-gray-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
@@ -773,12 +933,30 @@ export default function AdminSourcingImport() {
         />
       )}
 
-      {/* PESTAÑA 5: CONEXIONES & INFRAESTRUCTURA */}
+      {/* PESTAÑA 5: PERSONALIZATION ENGINE */}
+      {activeTab === 'personalization' && (
+        <SourcingPersonalizationPanel />
+      )}
+
+      {/* PESTAÑA 6: CONEXIONES & INFRAESTRUCTURA */}
       {activeTab === 'connections' && (
         <SourcingConnectionStatus
           onRefresh={() => addToast({ title: 'Verificación', message: 'Conexiones de sourcing re-verificadas.', type: 'success' })}
         />
       )}
+      </div>
+      )}
+
+
+
+
+      {/* MODAL PREPARAR PUBLICACIÓN ADAPTIVE SOURCING */}
+      <PreparePublicationModal
+        opportunity={selectedPrepareOpp}
+        isOpen={showPrepareModal}
+        onClose={() => { setShowPrepareModal(false); setSelectedPrepareOpp(null); }}
+        onConfirmApprove={handleApprovePrepareOpportunity}
+      />
 
       {/* MODAL FICHA COMPLETA DE ANÁLISIS DE PRODUCTO */}
       <SourcingProductAnalysisModal

@@ -164,3 +164,42 @@ export function markPurchaseAsTracked(orderId: string): void {
     // Fail-safe
   }
 }
+
+/**
+ * Dispatch Sourcing Intelligence behavioral signals.
+ */
+export function trackPersonalizationSignal(
+  eventType: any,
+  productOrEntities?: any,
+  userId?: string | null
+) {
+  try {
+    import('../services/sourcing/personalizationEngine').then(({ recordSignal }) => {
+      let entities: any = {};
+      let productId: string | null = null;
+
+      if (productOrEntities) {
+        if (productOrEntities.id) productId = productOrEntities.id;
+        entities = {
+          category: productOrEntities.category?.name || productOrEntities.category_name || productOrEntities.category,
+          brand: productOrEntities.brand?.name || productOrEntities.brand_name || productOrEntities.brand,
+          license: productOrEntities.license?.name || productOrEntities.license_name || productOrEntities.license,
+          line: productOrEntities.line || productOrEntities.product_line,
+          character: productOrEntities.character,
+          scale: productOrEntities.scale,
+          manufacturer: productOrEntities.manufacturer
+        };
+      }
+
+      recordSignal({
+        userId,
+        eventType,
+        productId,
+        entities
+      });
+    }).catch(() => {});
+  } catch {
+    // Fail-safe
+  }
+}
+

@@ -15,6 +15,8 @@ import HeroSlider from '../components/HeroSlider';
 import { resolveCartItemPrice } from '../lib/priceResolver';
 import { trackClarityEvent } from '../lib/analyticsTracker';
 import SEO from '../components/SEO';
+import { getPersonalizedShelves, type DynamicShelfConfig } from '../services/sourcing/personalizationEngine';
+
 
 // Lazy load heavy module components
 const MiniBannerCard = lazy(() => import('../components/home/MiniBannerCard'));
@@ -251,6 +253,15 @@ export default function Home() {
   const { formatCurrencyPrice } = useCurrency();
   const { features } = useFeatures();
   const { isModuleVisible } = useCollectorPermissions();
+
+  const [personalizedShelves, setPersonalizedShelves] = useState<DynamicShelfConfig[]>([]);
+
+  useEffect(() => {
+    if (featured && featured.length > 0) {
+      getPersonalizedShelves(featured).then(setPersonalizedShelves).catch(() => {});
+    }
+  }, [featured]);
+
 
   const displayedCategories = useMemo(() =>
     parseHomeCategories(settings['home_categories_config_json'], categories),
@@ -772,7 +783,47 @@ export default function Home() {
             <div className="absolute top-0 right-0 w-[300px] h-[300px] bg-[#f00856]/[.02] blur-[120px] rounded-full pointer-events-none" />
 
             <div className="max-w-[1500px] mx-auto px-4 md:px-6">
+              {/* Dynamic Personalized Shelves from Sourcing Intelligence FASE 3 */}
+              {personalizedShelves.map((shelf) => (
+                <div key={shelf.id} className="mb-14 pb-10 border-b border-white/10">
+                  <div className="flex flex-row items-end justify-between mb-6">
+                    <div>
+                      <div className="text-[9px] md:text-[10px] text-[#f00856] font-black tracking-[0.25em] uppercase mb-1 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-[#f00856]" />
+                        {shelf.badge || 'Personalizado para vos'}
+                      </div>
+                      <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight uppercase">
+                        {shelf.title}
+                      </h2>
+                      {shelf.subtitle && (
+                        <p className="text-slate-400 text-xs md:text-sm mt-1">{shelf.subtitle}</p>
+                      )}
+                    </div>
+                    <Link to="/shop" className="inline-flex items-center gap-1 text-xs font-black text-[#f00856] hover:text-white uppercase">
+                      VER MÁS <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
+                    {shelf.products.slice(0, 4).map((rankedItem) => (
+                      <div key={rankedItem.product.id} className="relative group">
+                        {rankedItem.reasons.length > 0 && (
+                          <div className="absolute top-2 left-2 z-20 bg-black/80 backdrop-blur-md border border-[#f00856]/40 text-[#f00856] text-[9px] font-black px-2 py-0.5 rounded-full">
+                            {rankedItem.reasons[0].label}
+                          </div>
+                        )}
+                        <ProductGridCard
+                          product={rankedItem.product}
+                          onAddToCart={handleAddToCart}
+                          formatPrice={formatCurrencyPrice}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
               <div className="flex flex-row items-end justify-between mb-6">
+
                 <div>
                   <div className="text-[9px] md:text-[10px] text-[#f00856] font-black tracking-[0.25em] uppercase mb-1">
                     Catálogo Reciente

@@ -20,6 +20,8 @@ import { useCartContext } from '../contexts/CartContext';
 import { getProductImage } from '../lib/imageUtils';
 import { resolveCartItemPrice } from '../lib/priceResolver';
 import SEO from '../components/SEO';
+import { captureDemandSignal } from '../services/sourcing/demandSignalEngine';
+import { processSignalIntoCatalogGap } from '../services/sourcing/catalogGapEngine';
 
 const HERO_SUGGESTION_CHIPS = [
   'Dragon Ball',
@@ -257,8 +259,24 @@ export default function AISearchPage() {
     const interp = interpretUserQuery(queryText);
     setInterpretation(interp);
 
+    // Record SEARCH_INTENT signal in Personalization Engine
+    import('../services/sourcing/personalizationEngine').then(({ recordSignal }) => {
+      recordSignal({
+        eventType: 'SEARCH_INTENT',
+        entities: {
+          brand: interp.detectedBrand,
+          license: interp.detectedLicense,
+          line: interp.detectedLine,
+          scale: interp.detectedScale,
+          category: interp.detectedCategory
+        },
+        metadata: { query: queryText }
+      });
+    }).catch(() => {});
+
     try {
       const searchTerm = interp.cleanedQuery || interp.detectedLicense || interp.detectedBrand || interp.detectedLine || queryText.trim();
+
 
       // 1. Query Local Products with full relations
       let localQuery = supabase
@@ -401,7 +419,7 @@ export default function AISearchPage() {
         setAcademyMatch(null);
       }
 
-      // Log search for AI telemetry
+      // Log search for AI telemetry & Adaptive Sourcing Demand Signal Engine
       await supabase.from('ai_search_logs').insert({
         query: queryText,
         results_count: directResults.length,
@@ -412,6 +430,29 @@ export default function AISearchPage() {
           scale: interp.detectedScale,
           priceRange: [interp.priceMin, interp.priceMax]
         }
+      }).catch(() => {});
+
+      // Dispatch to Adaptive Sourcing Demand Signal Engine
+      const signalType = directResults.length === 0 
+        ? 'ZERO_RESULT_SEARCH' 
+        : (directResults.length < 3 ? 'LOW_RESULT_SEARCH' : 'HIGH_INTENT_SEARCH');
+
+      captureDemandSignal({
+        signal_type: signalType,
+        query: queryText,
+        interpreted_query: {
+          brand: interp.detectedBrand,
+          license: interp.detectedLicense,
+          franchise: interp.detectedLicense,
+          line: interp.detectedLine,
+          scale: interp.detectedScale,
+          priceMin: interp.priceMin,
+          priceMax: interp.priceMax
+        },
+        results_count: directResults.length,
+        source: 'ai_search'
+      }).then(sig => {
+        processSignalIntoCatalogGap(sig);
       }).catch(() => {});
 
     } catch (err) {

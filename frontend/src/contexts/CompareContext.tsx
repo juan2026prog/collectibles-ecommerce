@@ -45,8 +45,30 @@ export const CompareProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return false;
     }
     setComparedIds(prev => [...prev, id]);
+
+    // Dispatch COMPARE signal (+4) to Sourcing Intelligence Personalization Engine & DemandSignalEngine
+    import('../services/sourcing/personalizationEngine').then(({ recordSignal }) => {
+      recordSignal({
+        eventType: 'COMPARE',
+        productId: id
+      });
+    }).catch(() => {});
+
+    import('../services/sourcing/demandSignalEngine').then(({ captureDemandSignal }) => {
+      captureDemandSignal({
+        signal_type: 'COMPARE_INTENT',
+        entity_id: id,
+        source: 'compare'
+      }).then(sig => {
+        import('../services/sourcing/catalogGapEngine').then(({ processSignalIntoCatalogGap }) => {
+          processSignalIntoCatalogGap(sig);
+        });
+      });
+    }).catch(() => {});
+
     return true;
   };
+
 
   const removeFromCompare = (id: string) => {
     setComparedIds(prev => prev.filter(x => x !== id));

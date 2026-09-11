@@ -14,10 +14,11 @@ import { getProductImage } from '../lib/imageUtils';
 import { supabase } from '../lib/supabase';
 import { trackSearch, generateMetaEventId } from '../lib/meta/metaPixel';
 import { trackGA4Event, trackClarityEvent, mapCartItemsToGA4 } from '../lib/analyticsTracker';
-import SEO from '../components/SEO';
-import { generateBreadcrumbs, generateMetaTitle, generateMetaDescription, generateCanonical } from '../utils/seoHelpers';
 import { resolveCartItemPrice } from '../lib/priceResolver';
 import { useImageProtection } from '../hooks/useImageProtection';
+import { rankProducts } from '../services/sourcing/personalizationEngine';
+import { trackPersonalizationSignal } from '../lib/analyticsTracker';
+
 
 function getVisiblePages(currentPage: number, total: number) {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i);
@@ -249,18 +250,40 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
 
   // Accumulated products for mobile "Cargar más"
   const [accumulatedProducts, setAccumulatedProducts] = useState<any[]>([]);
+  const [rankedProducts, setRankedProducts] = useState<any[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    if (!products || products.length === 0) {
+      setRankedProducts([]);
+      return;
+    }
+    if (sortBy === 'default' || sortBy === 'relevance') {
+      rankProducts(products, { surface: 'SHOP' }).then(ranked => {
+        if (active) {
+          setRankedProducts(ranked.map(r => r.product));
+        }
+      }).catch(() => {
+        if (active) setRankedProducts(products);
+      });
+    } else {
+      setRankedProducts(products);
+    }
+    return () => { active = false; };
+  }, [products, sortBy]);
 
   useEffect(() => {
     if (page === 0) {
-      setAccumulatedProducts(products || []);
+      setAccumulatedProducts(rankedProducts.length > 0 ? rankedProducts : (products || []));
     } else if (products && products.length > 0) {
       setAccumulatedProducts(prev => {
         const existingIds = new Set(prev.map(p => p.id));
-        const newItems = products.filter(p => !existingIds.has(p.id));
+        const newItems = (rankedProducts.length > 0 ? rankedProducts : products).filter(p => !existingIds.has(p.id));
         return [...prev, ...newItems];
       });
     }
-  }, [products, page]);
+  }, [products, rankedProducts, page]);
+
 
   // Scroll & State restoration on back navigation
   useEffect(() => {
@@ -1470,7 +1493,8 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                 gridCols === 4 ? 'grid-cols-4' :
                 'grid-cols-5'
               }`}>
-                {products.map(p => {
+                {(rankedProducts.length > 0 ? rankedProducts : products).map(p => {
+
                   const applicablePromos = getApplicablePromotions({
                     product_id: p.id,
                     category_id: p.category_id,
