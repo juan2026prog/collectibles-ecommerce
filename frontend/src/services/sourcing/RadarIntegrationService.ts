@@ -26,7 +26,7 @@ export class RadarIntegrationService {
 
     if (franchise) {
       const fLower = franchise.toLowerCase();
-      filtered = filtered.filter(p => p.franchise.toLowerCase().includes(fLower));
+      filtered = filtered.filter(p => (p.franchise || (p as any).license || '').toLowerCase().includes(fLower));
     }
     if (brand) {
       const bLower = brand.toLowerCase();

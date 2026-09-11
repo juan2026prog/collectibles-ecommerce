@@ -129,11 +129,11 @@ export function interpretUserQuery(query: string): AISearchQueryInterpretation {
   // 6. Detect Price Hints
   let priceMax: number | undefined;
   let priceMin: number | undefined;
-  const maxPriceMatch = lower.match(/(menos de|hasta|menor a|bajo|under|máximo|maximo)\s*\$?(\d+)/i);
+  const maxPriceMatch = lower.match(/(menos de|hasta|menor a|bajo|under|máximo|maximo)\s*(?:usd|\$)?\s*(\d+)/i);
   if (maxPriceMatch) {
     priceMax = parseInt(maxPriceMatch[2], 10);
   }
-  const minPriceMatch = lower.match(/(mas de|más de|desde|mayor a|sobre|above|mínimo|minimo)\s*\$?(\d+)/i);
+  const minPriceMatch = lower.match(/(mas de|más de|desde|mayor a|sobre|above|mínimo|minimo)\s*(?:usd|\$)?\s*(\d+)/i);
   if (minPriceMatch) {
     priceMin = parseInt(minPriceMatch[2], 10);
   }

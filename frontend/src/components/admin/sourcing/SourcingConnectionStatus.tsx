@@ -4,6 +4,8 @@ import {
   CheckCircle2, Server, Key, DollarSign, BrainCircuit, ShoppingBag, Truck
 } from 'lucide-react';
 
+import { ecosystemOrchestrator } from '../../../services/sourcing/ecosystemOrchestrator';
+
 export type SystemConnectionStatusType = 'LIVE' | 'NOT_CONFIGURED' | 'ERROR' | 'UNCHECKED' | 'DEGRADED';
 
 export interface SourcingConnection {
