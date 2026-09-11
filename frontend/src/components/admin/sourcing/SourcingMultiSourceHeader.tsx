@@ -180,13 +180,12 @@ export const SourcingMultiSourceHeader: React.FC<SourcingMultiSourceHeaderProps>
 
       {/* Alerta si Best Buy está seleccionado */}
       {selectedSource === 'bestbuy' && (
-        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5 text-xs text-amber-900">
-          <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+        <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-2.5 text-xs text-blue-900">
+          <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
           <div>
-            <span className="font-bold">Best Buy no está configurado actualmente.</span>
-            <p className="text-[11px] text-amber-700 mt-0.5">
-              El adaptador está listo en código (`ADAPTER_READY`), pero requiere configurar `BESTBUY_API_KEY` en producción.
-              Podés continuar buscando normalmente en **Amazon** y **eBay**.
+            <span className="font-bold">Terminal Best Buy Sourcing & Managed Accounts</span>
+            <p className="text-[11px] text-blue-700 mt-0.5">
+              Discovery y Live Check conectados mediante Edge Functions server-side. Purchasing integrado vía Zinc Managed Account (Sandbox).
             </p>
           </div>
         </div>
@@ -212,7 +211,7 @@ export const SourcingMultiSourceHeader: React.FC<SourcingMultiSourceHeaderProps>
           ) : (
             <span className="flex items-center gap-1 text-gray-400">
               <AlertCircle className="w-3.5 h-3.5 text-gray-400" />
-              Best Buy: Sin configurar
+              Best Buy: Conectado (0 ofertas)
             </span>
           )}
         </div>

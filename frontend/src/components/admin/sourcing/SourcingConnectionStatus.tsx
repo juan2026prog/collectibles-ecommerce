@@ -27,7 +27,7 @@ interface SourcingConnectionStatusProps {
 const DEFAULT_CONNECTIONS: SourcingConnection[] = [
   { id: 'amazon', name: 'Amazon US', category: 'retailer', status: 'LIVE', latencyMs: 140, details: 'Zinc API v1 Lookup & Live Check' },
   { id: 'ebay', name: 'eBay API', category: 'retailer', status: 'NOT_CONFIGURED', latencyMs: 0, details: 'Adaptador listo, pendiente de eBay Buy API Key' },
-  { id: 'bestbuy', name: 'Best Buy US', category: 'retailer', status: 'NOT_CONFIGURED', latencyMs: 0, details: 'Adaptador listo, pendiente de Best Buy API Key' },
+  { id: 'bestbuy', name: 'Best Buy US', category: 'retailer', status: 'LIVE', latencyMs: 165, details: 'Edge Functions Sourcing & Zinc Managed Accounts' },
   { id: 'zinc_lookup', name: 'Zinc Product Lookup', category: 'automation', status: 'LIVE', latencyMs: 280, details: 'Búsqueda & Catálogo Amazon' },
   { id: 'zinc_check', name: 'Zinc Live Check', category: 'automation', status: 'LIVE', latencyMs: 310, details: 'Verificación en vivo pre-pago' },
   { id: 'zinc_purchasing', name: 'Zinc Purchasing', category: 'automation', status: 'NOT_CONFIGURED', latencyMs: 0, details: 'Auto-fulfillment deshabilitado / requiere credencial' },

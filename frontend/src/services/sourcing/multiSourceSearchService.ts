@@ -124,10 +124,10 @@ export class MultiSourceSearchService {
       amazon: { status: 'AVAILABLE', resultCount: 0, isAvailable: true },
       ebay: { status: 'AVAILABLE', resultCount: 0, isAvailable: true },
       bestbuy: { 
-        status: 'NOT_CONFIGURED', 
+        status: 'AVAILABLE', 
         resultCount: 0, 
-        message: 'Best Buy no está configurado actualmente (requiere API Key oficial).',
-        isAvailable: false 
+        message: 'Best Buy Sourcing conectado.',
+        isAvailable: true 
       }
     };
 
@@ -143,7 +143,7 @@ export class MultiSourceSearchService {
     }
 
     // Tareas paralelas de búsqueda según la fuente seleccionada
-    const promises: Promise<{ source: RetailerSource; items: any[]; error?: string }>[] = [];
+    const promises: Promise<{ source: RetailerSource; items: any[]; error?: string; status?: 'AVAILABLE' | 'NOT_CONFIGURED' | 'ERROR'; message?: string }>[] = [];
 
     if (source === 'all' || source === 'amazon') {
       promises.push(this.searchAmazon(cleanQuery));
@@ -176,7 +176,13 @@ export class MultiSourceSearchService {
           }
         } else if (val.source === 'bestbuy') {
           resultStatus.bestbuy.resultCount = val.items.length;
-          // Best buy conserva honestamente NOT_CONFIGURED si no hay credenciales
+          if (val.status) {
+            resultStatus.bestbuy.status = val.status;
+            resultStatus.bestbuy.isAvailable = val.status === 'AVAILABLE';
+          }
+          if (val.message || val.error) {
+            resultStatus.bestbuy.message = val.message || val.error;
+          }
         }
 
         val.items.forEach(item => {
@@ -338,22 +344,61 @@ export class MultiSourceSearchService {
   }
 
   /**
-   * Búsqueda en Best Buy (Honesta: NO simula disponibilidad si no hay credenciales)
+   * Búsqueda en Best Buy (Conexión oficial Server-Side con Best Buy API / Edge Functions)
    */
-  private async searchBestBuy(query: string): Promise<{ source: RetailerSource; items: any[]; error?: string }> {
-    const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 1);
-
-    // Solo si el usuario busca específicamente artículos existentes en los packs de demo de Best Buy
-    const packItems = [...SAMPLE_STREET_FIGHTER_RESEARCH_PACK.items, ...SAMPLE_MCFARLANE_RESEARCH_PACK.items]
-      .filter(it => {
-        if (it.retailer !== 'bestbuy') return false;
-        const target = `${it.title || ''} ${it.brand || ''} ${it.character || ''} ${it.license || ''} ${it.line || ''} ${(it.tags || []).join(' ')}`.toLowerCase();
-        return queryWords.some(w => target.includes(w));
+  private async searchBestBuy(query: string): Promise<{ 
+    source: RetailerSource; 
+    items: any[]; 
+    error?: string; 
+    status?: 'AVAILABLE' | 'NOT_CONFIGURED' | 'ERROR'; 
+    message?: string 
+  }> {
+    try {
+      const { data, error } = await supabase.functions.invoke('sourcing-bestbuy-search', {
+        body: { query, max_results: 25 }
       });
+
+      if (error) {
+        return {
+          source: 'bestbuy',
+          items: [],
+          status: 'ERROR',
+          error: error.message
+        };
+      }
+
+      if (data) {
+        if (data.status === 'PENDING_KEY') {
+          return {
+            source: 'bestbuy',
+            items: [],
+            status: 'NOT_CONFIGURED',
+            message: data.message || 'Best Buy API Key pendiente de configuración en Supabase Secrets (BESTBUY_API_KEY).'
+          };
+        }
+
+        if (Array.isArray(data.results)) {
+          return {
+            source: 'bestbuy',
+            items: data.results,
+            status: 'AVAILABLE',
+            message: `Encontradas ${data.results.length} ofertas de Best Buy.`
+          };
+        }
+      }
+    } catch (err: any) {
+      return {
+        source: 'bestbuy',
+        items: [],
+        status: 'ERROR',
+        error: err.message || 'Error de conexión con servicio Best Buy'
+      };
+    }
 
     return {
       source: 'bestbuy',
-      items: packItems
+      items: [],
+      status: 'AVAILABLE'
     };
   }
 

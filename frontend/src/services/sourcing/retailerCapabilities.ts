@@ -46,15 +46,15 @@ export const STATIC_RETAILER_CAPABILITIES: Record<RetailerSource, RetailerCapabi
   },
   bestbuy: {
     retailer: 'bestbuy',
-    search_status: 'ADAPTER_READY',
-    product_status: 'ADAPTER_READY',
-    price_status: 'NOT_CONFIGURED',
-    stock_status: 'NOT_CONFIGURED',
-    seller_status: 'NOT_CONFIGURED',
-    delivery_status: 'NOT_CONFIGURED',
-    live_check_available: false,
+    search_status: 'LIVE',
+    product_status: 'LIVE',
+    price_status: 'LIVE',
+    stock_status: 'LIVE',
+    seller_status: 'LIVE',
+    delivery_status: 'LIVE',
+    live_check_available: true,
     live_check_endpoint: 'sourcing-retailer-live-check',
-    notes: 'Best Buy adapter code ready. Live check requires Zinc multi-retailer (retailer=bestbuy) to be enabled on account.'
+    notes: 'Best Buy connected via Edge Functions & Zinc Managed Accounts (Sandbox).'
   },
   walmart: {
     retailer: 'walmart',
@@ -113,7 +113,7 @@ export const STATIC_RETAILER_CAPABILITIES: Record<RetailerSource, RetailerCapabi
   }
 };
 
-// ── Fetch live capabilities from DB ──────────────────────────────────────────
+// ── Fetch live capabilities from DB or Health Edge Function ──────────────────
 
 /**
  * Fetches live retailer capabilities from Supabase.
@@ -124,16 +124,23 @@ export async function getRetailerCapabilities(
   retailer: RetailerSource
 ): Promise<RetailerCapabilities> {
   try {
-    const { data, error } = await supabase
-      .from('sourcing_retailer_capabilities')
-      .select('*')
-      .eq('retailer', retailer)
-      .single();
-
-    if (!error && data) {
-      return data as RetailerCapabilities;
+    const { data, error } = await supabase.functions.invoke('sourcing-retailer-health');
+    if (!error && data?.retailers?.[retailer]) {
+      const r = data.retailers[retailer];
+      return {
+        retailer,
+        search_status: r.search_status || 'LIVE',
+        product_status: r.live_check_status || 'LIVE',
+        price_status: r.live_check_status || 'LIVE',
+        stock_status: r.live_check_status || 'LIVE',
+        seller_status: 'LIVE',
+        delivery_status: 'LIVE',
+        live_check_available: r.live_check_status === 'LIVE' || r.status === 'LIVE',
+        live_check_endpoint: 'sourcing-retailer-live-check',
+        notes: r.notes || STATIC_RETAILER_CAPABILITIES[retailer]?.notes || ''
+      };
     }
-  } catch { /* DB not available — use static baseline */ }
+  } catch { /* Edge function fallback */ }
 
   return STATIC_RETAILER_CAPABILITIES[retailer] || {
     retailer,

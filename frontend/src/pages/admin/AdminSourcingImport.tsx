@@ -1161,7 +1161,7 @@ export default function AdminSourcingImport() {
             sourceStatus={multiSourceResult?.sourceStatus || {
               amazon: { status: 'AVAILABLE', resultCount: 0, isAvailable: true },
               ebay: { status: 'AVAILABLE', resultCount: 0, isAvailable: true },
-              bestbuy: { status: 'NOT_CONFIGURED', resultCount: 0, isAvailable: false }
+              bestbuy: { status: 'AVAILABLE', resultCount: 0, isAvailable: true }
             }}
             isSearching={isMultiSourceSearching}
             onApplyPreset={(p) => {

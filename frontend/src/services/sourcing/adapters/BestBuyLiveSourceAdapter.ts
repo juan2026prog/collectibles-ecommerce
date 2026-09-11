@@ -1,4 +1,5 @@
 import type { SourceOffer } from '../../../types/sourcing';
+import { supabase } from '../../../lib/supabase';
 
 export interface BestBuyLiveLookupParams {
   sku: string;
@@ -26,8 +27,7 @@ export interface BestBuyLiveProductDetails {
 
 /**
  * BestBuyLiveSourceAdapter
- * Resolución oficial de Best Buy mediante Zinc API (retailer: bestbuy).
- * Utiliza la infraestructura de fulfillment y live check activa en Zinc.
+ * Resolución oficial de Best Buy mediante Edge Functions server-side y Zinc Managed Accounts.
  */
 export class BestBuyLiveSourceAdapter {
   source = 'bestbuy' as const;
@@ -36,26 +36,37 @@ export class BestBuyLiveSourceAdapter {
     const checkedAt = new Date().toISOString();
 
     try {
-      const response = await fetch('/api/sourcing/zinc-live-check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+      // 1. Invocar Edge Function de Live Check directamente
+      const { data, error } = await supabase.functions.invoke('sourcing-retailer-live-check', {
+        body: { 
           product_id: params.sku, 
           retailer: 'bestbuy',
-          force_refresh: params.forceRefresh 
-        })
+          force_refresh: params.forceRefresh ?? true 
+        }
       });
 
-      if (response.ok) {
-        const data = await response.json();
+      if (!error && data && (data.data_source === 'LIVE' || data.title)) {
         return {
-          ...data,
+          sku: data.source_product_id || params.sku,
+          title: data.title || `Best Buy Item ${params.sku}`,
+          regular_price: data.price_usd || 0,
+          sale_price: data.price_usd || 0,
+          currency: data.currency || 'USD',
+          availability: data.availability_normalized === 'IN_STOCK' ? 'in_stock' : 'out_of_stock',
+          stock_status: data.availability_normalized === 'IN_STOCK' ? 'available' : 'unavailable',
+          domestic_shipping: data.usa_shipping_usd ?? 0,
+          brand: data.brand,
+          model: data.mpn,
+          upc: data.upc,
+          image_url: data.image_url,
+          product_url: data.product_url || `https://www.bestbuy.com/site/${params.sku}.p?skuId=${params.sku}`,
+          checked_at: data.last_checked_at || checkedAt,
           status: 'LIVE',
-          checked_at: checkedAt
+          error_message: undefined
         };
       }
     } catch {
-      // Fallback transparente a status previo / cache
+      // Fallback transparente
     }
 
     return this.createFallbackItem(params.sku);

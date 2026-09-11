@@ -390,6 +390,94 @@ async function updateRetailerHealth(supabase: any, retailer: string, success: bo
   } catch { /* do not propagate */ }
 }
 
+// ── Best Buy Direct API Live Check ───────────────────────────────────────────
+async function bestBuyDirectLiveCheck(product_id: string, apiKey: string): Promise<NormalizedLiveOffer> {
+  const checkedAt = new Date().toISOString();
+  try {
+    const showFields = "sku,name,salePrice,regularPrice,upc,url,image,largeFrontImage,inStoreAvailability,onlineAvailability,manufacturer,modelNumber";
+    const res = await fetch(`https://api.bestbuy.com/v1/products/${encodeURIComponent(product_id)}.json?apiKey=${encodeURIComponent(apiKey)}&show=${showFields}`, {
+      method: "GET",
+      headers: { "Accept": "application/json" },
+      signal: AbortSignal.timeout(12000),
+    });
+
+    if (res.status === 404) {
+      return {
+        source: "bestbuy",
+        source_product_id: product_id,
+        title: "",
+        price_usd: 0,
+        currency: "USD",
+        condition_normalized: "UNKNOWN",
+        availability_normalized: "OUT_OF_STOCK",
+        seller: "Best Buy",
+        fulfilled_by_retailer: true,
+        sold_by_retailer: true,
+        usa_shipping_usd: 0,
+        weight_status: "UNKNOWN",
+        product_url: buildProductUrl(product_id, "bestbuy"),
+        freshness_status: "LIVE",
+        last_checked_at: checkedAt,
+        data_source: "LIVE",
+        error_message: "Product not found on Best Buy"
+      };
+    }
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || err?.errorMessage || `Best Buy HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    const effectivePrice = Number(data.salePrice ?? data.regularPrice ?? 0);
+    const inStock = data.onlineAvailability === true || data.inStoreAvailability === true;
+    const shipping = effectivePrice >= 35 ? 0 : 4.99;
+
+    return {
+      source: "bestbuy",
+      source_product_id: product_id,
+      title: data.name || `Best Buy Item ${product_id}`,
+      brand: data.manufacturer || "Best Buy",
+      upc: data.upc,
+      mpn: data.modelNumber,
+      price_usd: effectivePrice,
+      currency: "USD",
+      condition_normalized: "NEW",
+      availability_normalized: inStock ? "IN_STOCK" : "OUT_OF_STOCK",
+      seller: "Best Buy Official Store",
+      fulfilled_by_retailer: true,
+      sold_by_retailer: true,
+      usa_shipping_usd: shipping,
+      weight_status: "UNKNOWN",
+      image_url: data.largeFrontImage || data.image,
+      product_url: data.url || buildProductUrl(product_id, "bestbuy"),
+      freshness_status: "LIVE",
+      last_checked_at: checkedAt,
+      data_source: "LIVE"
+    };
+  } catch (err: any) {
+    return {
+      source: "bestbuy",
+      source_product_id: product_id,
+      title: "",
+      price_usd: 0,
+      currency: "USD",
+      condition_normalized: "UNKNOWN",
+      availability_normalized: "UNKNOWN",
+      seller: "Best Buy",
+      fulfilled_by_retailer: true,
+      sold_by_retailer: true,
+      usa_shipping_usd: 0,
+      weight_status: "UNKNOWN",
+      product_url: buildProductUrl(product_id, "bestbuy"),
+      freshness_status: "UNKNOWN",
+      last_checked_at: checkedAt,
+      data_source: "ERROR",
+      error_message: err.message
+    };
+  }
+}
+
 // ── MAIN HANDLER ──────────────────────────────────────────────────────────────
 serve(async (req: Request) => {
   const optionsResponse = handleOptions(req);
@@ -420,7 +508,33 @@ serve(async (req: Request) => {
       });
     }
 
-    // 1. Check capabilities
+    // Best Buy direct check handling
+    if (retailer === "bestbuy") {
+      let bbyKey = Deno.env.get("BESTBUY_API_KEY") || "";
+      if (!bbyKey) {
+        try {
+          const { data: vKey } = await supabase.rpc("get_zinc_vault_secret", {
+            p_environment: "production",
+            p_secret_type: "bestbuy_api_key",
+          });
+          if (vKey) bbyKey = String(vKey).trim();
+        } catch { /* vault fallback */ }
+      }
+
+      if (bbyKey) {
+        const liveOffer = await bestBuyDirectLiveCheck(product_id, bbyKey);
+        const elapsed = Date.now() - startedAt;
+        return new Response(JSON.stringify({
+          ...liveOffer,
+          elapsed_ms: elapsed
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    }
+
+    // 1. Check capabilities for Zinc retailers
     const capabilities = await getRetailerCapabilities(supabase, retailer);
     if (!capabilities.live_check_available && !force_refresh) {
       // Return honest NOT_CONFIGURED without attempting Zinc
