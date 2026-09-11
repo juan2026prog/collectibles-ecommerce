@@ -109,3 +109,81 @@ export const SAMPLE_MCFARLANE_RESEARCH_PACK: ResearchPack = {
     }
   ]
 };
+
+export const SAMPLE_STREET_FIGHTER_RESEARCH_PACK: ResearchPack = {
+  schema_version: '1.0',
+  pack_id: 'street-fighter-jada-2026',
+  title: 'Street Fighter Jada Toys · Sourcing Showcase',
+  generated_at: '2026-09-10T15:00:00Z',
+  source: 'jada-street-fighter-line',
+  status: 'READY',
+  items_count: 5,
+  items: [
+    {
+      url: 'https://www.amazon.com/dp/B0C8StreetFighterRyu',
+      retailer: 'amazon',
+      brand: 'Jada Toys',
+      license: 'Capcom',
+      character: 'Ryu',
+      line: 'Ultra Street Fighter II 1:12',
+      scale: '6"',
+      upc: '801310342244',
+      reason: 'TRENDING',
+      tags: ['street-fighter', 'jada-toys', 'capcom'],
+      price: 24.99
+    },
+    {
+      url: 'https://www.ebay.com/itm/394812345678',
+      retailer: 'ebay',
+      brand: 'Jada Toys',
+      license: 'Capcom',
+      character: 'Ryu',
+      line: 'Ultra Street Fighter II 1:12',
+      scale: '6"',
+      upc: '801310342244',
+      reason: 'TRENDING',
+      tags: ['street-fighter', 'jada-toys', 'capcom'],
+      price: 22.50
+    },
+    {
+      url: 'https://www.bestbuy.com/site/jada-toys-street-fighter-chun-li-6-figure/6543210.p?skuId=6543210',
+      retailer: 'bestbuy',
+      brand: 'Jada Toys',
+      license: 'Capcom',
+      character: 'Chun-Li',
+      line: 'Ultra Street Fighter II 1:12',
+      scale: '6"',
+      upc: '801310342251',
+      reason: 'HIGH_DEMAND',
+      tags: ['street-fighter', 'jada-toys', 'capcom'],
+      price: 24.99
+    },
+    {
+      url: 'https://www.amazon.com/dp/B0C8StreetFighterKen',
+      retailer: 'amazon',
+      brand: 'Jada Toys',
+      license: 'Capcom',
+      character: 'Ken Masters',
+      line: 'Ultra Street Fighter II 1:12',
+      scale: '6"',
+      upc: '801310342268',
+      reason: 'EVERGREEN',
+      tags: ['street-fighter', 'jada-toys', 'capcom'],
+      price: 26.99
+    },
+    {
+      url: 'https://www.ebay.com/itm/394898765432',
+      retailer: 'ebay',
+      brand: 'Jada Toys',
+      license: 'Capcom',
+      character: 'Ken Masters',
+      line: 'Ultra Street Fighter II 1:12',
+      scale: '6"',
+      upc: '801310342268',
+      reason: 'EVERGREEN',
+      tags: ['street-fighter', 'jada-toys', 'capcom'],
+      price: 28.00
+    }
+  ]
+};
+

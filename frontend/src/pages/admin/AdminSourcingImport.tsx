@@ -41,8 +41,16 @@ import type { SourcingOpportunity, AdaptiveSettings } from '../../types/sourcing
 
 import { sourcingService } from '../../services/sourcing/sourcingService';
 import { checkOpenAIStatus } from '../../services/sourcing/openaiResearchService';
-import { SAMPLE_MCFARLANE_RESEARCH_PACK } from '../../data/sampleResearchPacks';
+import { SAMPLE_MCFARLANE_RESEARCH_PACK, SAMPLE_STREET_FIGHTER_RESEARCH_PACK } from '../../data/sampleResearchPacks';
 import { calculateInternationalPricing } from '../../lib/internationalPricing';
+
+import { SourcingPipelineView } from '../../components/admin/sourcing/SourcingPipelineView';
+import { SourcingAlertsView } from '../../components/admin/sourcing/SourcingAlertsView';
+import { SourcingOportunidadesView } from '../../components/admin/sourcing/SourcingOportunidadesView';
+import { SourcingProductosView } from '../../components/admin/sourcing/SourcingProductosView';
+import { SourcingPersonalizationPanel } from '../../components/admin/sourcing/SourcingPersonalizationPanel';
+
+const PREFERENCES_STORAGE_KEY = 'collectibles_sourcing_column_preferences_v2';
 
 const DEFAULT_COLUMNS: ColumnDefinition[] = [
   { id: 'select', label: '□', visible: true, category: 'core' },
@@ -62,10 +70,20 @@ const DEFAULT_COLUMNS: ColumnDefinition[] = [
   { id: 'sku', label: 'SKU Canónico', visible: false, category: 'metadata' }
 ];
 
-import { SourcingPersonalizationPanel } from '../../components/admin/sourcing/SourcingPersonalizationPanel';
+type MainTabType = 
 
-const PREFERENCES_STORAGE_KEY = 'collectibles_sourcing_column_preferences_v2';
-type MainTabType = 'dashboard' | 'terminal' | 'autopilot' | 'watchlist' | 'connections' | 'personalization';
+  | 'dashboard' 
+  | 'terminal' 
+  | 'oportunidades' 
+  | 'productos' 
+  | 'watchlist' 
+  | 'pipeline' 
+  | 'historial' 
+  | 'alertas' 
+  | 'autopilot' 
+  | 'conexiones' 
+  | 'personalization';
+
 
 
 export default function AdminSourcingImport() {
@@ -478,6 +496,15 @@ export default function AdminSourcingImport() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => handleLoadNewPack(SAMPLE_STREET_FIGHTER_RESEARCH_PACK)}
+            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-amber-500 to-[#f00856] hover:from-amber-600 hover:to-[#d0074a] text-white shadow-2xs transition-all cursor-pointer"
+            title="Cargar pack de referencia: Jada Toys Street Fighter (Ryu, Chun-Li, Ken)"
+          >
+            <Sparkles className="w-4 h-4 text-amber-200" />
+            <span>Street Fighter Jada Demo</span>
+          </button>
+
           <div className="relative group">
             <button
               onClick={() => openAIEnabled && setShowOpenAIModal(true)}
@@ -509,6 +536,7 @@ export default function AdminSourcingImport() {
             <span>Cargar Investigación</span>
           </button>
         </div>
+
 
         {/* Main Tab Switcher */}
         <div className="flex items-center gap-2 bg-gray-100 p-1.5 rounded-xl border border-gray-200">
@@ -626,7 +654,7 @@ export default function AdminSourcingImport() {
           }`}
         >
           <LayoutDashboard className="w-4 h-4" />
-          <span>Dashboard & Opportunities Feed</span>
+          <span>Dashboard</span>
         </button>
 
         <button
@@ -638,22 +666,34 @@ export default function AdminSourcingImport() {
           }`}
         >
           <Search className="w-4 h-4" />
-          <span>Buscador / Terminal & Oportunidades</span>
-          <span className="text-[10px] bg-gray-200 text-gray-700 px-1.5 py-0.2 rounded-full font-extrabold">
-            {products.length}
-          </span>
+          <span>Terminal</span>
         </button>
 
         <button
-          onClick={() => setActiveTab('autopilot')}
+          onClick={() => setActiveTab('oportunidades')}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
-            activeTab === 'autopilot'
+            activeTab === 'oportunidades'
               ? 'border-[#f00856] text-[#f00856] bg-pink-50/50 rounded-t-xl'
               : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-xl'
           }`}
         >
-          <Activity className="w-4 h-4" />
-          <span>Auto Publish / Autopilot</span>
+          <Sparkles className="w-4 h-4 text-emerald-600" />
+          <span>Oportunidades</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('productos')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
+            activeTab === 'productos'
+              ? 'border-[#f00856] text-[#f00856] bg-pink-50/50 rounded-t-xl'
+              : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-xl'
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          <span>Productos</span>
+          <span className="text-[10px] bg-gray-200 text-gray-700 px-1.5 py-0.2 rounded-full font-extrabold">
+            {products.length}
+          </span>
         </button>
 
         <button
@@ -664,8 +704,8 @@ export default function AdminSourcingImport() {
               : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-xl'
           }`}
         >
-          <Bookmark className="w-4 h-4" />
-          <span>Watchlist & Lifecycle</span>
+          <Bookmark className="w-4 h-4 text-amber-600" />
+          <span>Watchlist</span>
           {watchlistIds.length > 0 && (
             <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded-full font-bold">
               {watchlistIds.length}
@@ -674,29 +714,62 @@ export default function AdminSourcingImport() {
         </button>
 
         <button
-          onClick={() => setActiveTab('personalization')}
+          onClick={() => setActiveTab('pipeline')}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
-            activeTab === 'personalization'
+            activeTab === 'pipeline'
               ? 'border-[#f00856] text-[#f00856] bg-pink-50/50 rounded-t-xl'
               : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-xl'
           }`}
         >
-          <BrainCircuit className="w-4 h-4" />
-          <span>Personalization Engine</span>
+          <SlidersHorizontal className="w-4 h-4 text-indigo-600" />
+          <span>Pipeline</span>
         </button>
 
         <button
-          onClick={() => setActiveTab('connections')}
+          onClick={() => setShowHistoryModal(true)}
+          className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-xl shrink-0 cursor-pointer"
+        >
+          <History className="w-4 h-4 text-purple-600" />
+          <span>Historial</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('alertas')}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
-            activeTab === 'connections'
+            activeTab === 'alertas'
               ? 'border-[#f00856] text-[#f00856] bg-pink-50/50 rounded-t-xl'
               : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-xl'
           }`}
         >
-          <Server className="w-4 h-4" />
-          <span>Conexiones & Infraestructura</span>
+          <AlertTriangle className="w-4 h-4 text-rose-600" />
+          <span>Alertas</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('autopilot')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
+            activeTab === 'autopilot'
+              ? 'border-[#f00856] text-[#f00856] bg-pink-50/50 rounded-t-xl'
+              : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-xl'
+          }`}
+        >
+          <Activity className="w-4 h-4 text-emerald-600" />
+          <span>Autopilot</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('conexiones')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
+            activeTab === 'conexiones'
+              ? 'border-[#f00856] text-[#f00856] bg-pink-50/50 rounded-t-xl'
+              : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-xl'
+          }`}
+        >
+          <Server className="w-4 h-4 text-blue-600" />
+          <span>Conexiones</span>
         </button>
       </div>
+
 
       {/* PESTAÑA 1: DASHBOARD & OPPORTUNITY FEED */}
       {activeTab === 'dashboard' && (
@@ -872,7 +945,68 @@ export default function AdminSourcingImport() {
         </div>
       )}
 
-      {/* PESTAÑA 3: AUTO PUBLISH / AUTOPILOT */}
+      {/* PESTAÑA 3: OPORTUNIDADES */}
+      {activeTab === 'oportunidades' && (
+        <SourcingOportunidadesView
+          products={products}
+          selectedIds={selectedIds}
+          watchlistIds={watchlistIds}
+          onToggleSelectOne={handleToggleSelectOne}
+          onOpenAnalysisModal={(p) => { setAnalysisProduct(p); setShowAnalysisModal(true); }}
+          onImportProduct={handleImportSingle}
+          onPublishPreorder={handlePublishPreorderSingle}
+          onToggleWatchlist={handleToggleWatchlist}
+        />
+      )}
+
+      {/* PESTAÑA 4: PRODUCTOS */}
+      {activeTab === 'productos' && (
+        <SourcingProductosView
+          products={products}
+          filteredProducts={filteredProducts}
+          loading={loading}
+          filters={filters}
+          setFilters={setFilters}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          columns={columns}
+          setColumns={setColumns}
+          onSaveColumnPreset={handleSaveColumnPreset}
+          selectedIds={selectedIds}
+          watchlistIds={watchlistIds}
+          onToggleSelectAll={handleToggleSelectAll}
+          onToggleSelectOne={handleToggleSelectOne}
+          onImportSingle={handleImportSingle}
+          onPublishPreorderSingle={handlePublishPreorderSingle}
+          onUpdateSalePrice={handleUpdateSalePrice}
+          onSelectSource={handleSelectSource}
+          onOpenAnalysisModal={(p) => { setAnalysisProduct(p); setShowAnalysisModal(true); }}
+          onToggleWatchlist={handleToggleWatchlist}
+          handleBulkImport={handleBulkImport}
+          handleBulkPreorder={handleBulkPreorder}
+          isProcessingBulk={isProcessingBulk}
+          availableBrands={availableBrands}
+        />
+      )}
+
+      {/* PESTAÑA 5: PIPELINE */}
+      {activeTab === 'pipeline' && (
+        <SourcingPipelineView
+          products={products}
+          onOpenAnalysisModal={(p) => { setAnalysisProduct(p); setShowAnalysisModal(true); }}
+          onImportProduct={handleImportSingle}
+        />
+      )}
+
+      {/* PESTAÑA 6: ALERTAS */}
+      {activeTab === 'alertas' && (
+        <SourcingAlertsView
+          products={products}
+          onOpenAnalysisModal={(p) => { setAnalysisProduct(p); setShowAnalysisModal(true); }}
+        />
+      )}
+
+      {/* PESTAÑA 7: AUTO PUBLISH / AUTOPILOT */}
       {activeTab === 'autopilot' && (
         <div className="space-y-6">
           <AutopilotHeaderBar
@@ -923,7 +1057,7 @@ export default function AdminSourcingImport() {
         </div>
       )}
 
-      {/* PESTAÑA 4: WATCHLIST & TIMELINE DE HISTORIAL */}
+      {/* PESTAÑA 8: WATCHLIST */}
       {activeTab === 'watchlist' && (
         <SourcingWatchlistHistoryView
           watchlistProducts={watchlistProducts}
@@ -933,17 +1067,18 @@ export default function AdminSourcingImport() {
         />
       )}
 
-      {/* PESTAÑA 5: PERSONALIZATION ENGINE */}
+      {/* PESTAÑA 9: PERSONALIZATION ENGINE */}
       {activeTab === 'personalization' && (
         <SourcingPersonalizationPanel />
       )}
 
-      {/* PESTAÑA 6: CONEXIONES & INFRAESTRUCTURA */}
+      {/* PESTAÑA 10: CONEXIONES & INFRAESTRUCTURA */}
       {activeTab === 'connections' && (
         <SourcingConnectionStatus
           onRefresh={() => addToast({ title: 'Verificación', message: 'Conexiones de sourcing re-verificadas.', type: 'success' })}
         />
       )}
+
       </div>
       )}
 
