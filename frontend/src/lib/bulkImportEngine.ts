@@ -166,7 +166,7 @@ export async function parseAndPreviewImportFile(
 
   if (rawRows.length === 0) {
     return {
-      summary: { totalRows: 0, newCount: 0, updateCount: 0, unchangedCount: 0, errorCount: 0, warningCount: 0 },
+      summary: { totalRows: 0, newCount: 0, updateCount: 0, unchangedCount: 0, skippedCount: 0, errorCount: 0, warningCount: 0 },
       rows: [],
       headersFound,
       includedFieldKeys
@@ -623,8 +623,8 @@ export async function parseAndPreviewImportFile(
 
       const matchedLicense = metadata.licenses.find(l => 
         l.name.toLowerCase().trim() === lNameLower || 
-        l.slug === targetSlug || 
-        l.slug === lSlug
+        (l as any).slug === targetSlug || 
+        (l as any).slug === lSlug
       );
 
       if (matchedLicense) {

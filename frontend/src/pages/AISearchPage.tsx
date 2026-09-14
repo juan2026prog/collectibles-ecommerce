@@ -400,7 +400,7 @@ export default function AISearchPage() {
       }
 
       // 5. Direct Editorial Answer Generation
-      const directAnswer = generateDirectEditorialAnswer(interp, directResults, matchedDrops);
+      const directAnswer = generateDirectEditorialAnswer(interp, directResults, []);
       setEditorialAnswer(directAnswer);
 
       // 6. Contextual Related Questions
@@ -420,17 +420,21 @@ export default function AISearchPage() {
       }
 
       // Log search for AI telemetry & Adaptive Sourcing Demand Signal Engine
-      await supabase.from('ai_search_logs').insert({
-        query: queryText,
-        results_count: directResults.length,
-        filters_detected: {
-          brand: interp.detectedBrand,
-          license: interp.detectedLicense,
-          line: interp.detectedLine,
-          scale: interp.detectedScale,
-          priceRange: [interp.priceMin, interp.priceMax]
-        }
-      }).catch(() => {});
+      try {
+        await supabase.from('ai_search_logs').insert({
+          query: queryText,
+          results_count: directResults.length,
+          filters_detected: {
+            brand: interp.detectedBrand,
+            license: interp.detectedLicense,
+            line: interp.detectedLine,
+            scale: interp.detectedScale,
+            priceRange: [interp.priceMin, interp.priceMax]
+          }
+        });
+      } catch (err) {
+        console.warn('Failed to log AI search:', err);
+      }
 
       // Dispatch to Adaptive Sourcing Demand Signal Engine
       const signalType = directResults.length === 0 

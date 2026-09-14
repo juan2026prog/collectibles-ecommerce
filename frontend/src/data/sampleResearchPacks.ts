@@ -115,7 +115,7 @@ export const SAMPLE_STREET_FIGHTER_RESEARCH_PACK: ResearchPack = {
   pack_id: 'street-fighter-jada-2026',
   title: 'Street Fighter Jada Toys · Sourcing Showcase',
   generated_at: '2026-09-10T15:00:00Z',
-  source: 'jada-street-fighter-line',
+  source: 'manual-urls',
   status: 'READY',
   items_count: 5,
   items: [

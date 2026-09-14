@@ -18,6 +18,8 @@ import { resolveCartItemPrice } from '../lib/priceResolver';
 import { useImageProtection } from '../hooks/useImageProtection';
 import { rankProducts } from '../services/sourcing/personalizationEngine';
 import { trackPersonalizationSignal } from '../lib/analyticsTracker';
+import { SEO } from '../components/SEO';
+import { generateBreadcrumbs, generateMetaTitle, generateMetaDescription, generateCanonical } from '../utils/seoHelpers';
 
 
 function getVisiblePages(currentPage: number, total: number) {
@@ -59,7 +61,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   const conditionFilter = searchParams.get('condition') || '';
   const availabilityFilter = searchParams.get('availability') || '';
 
-  const effectiveAvailability = isInternational ? 'international' : (intlPublicEnabled ? (availabilityFilter || 'all') : 'local');
+  const effectiveAvailability: 'all' | 'local' | 'international' = isInternational ? 'international' : (intlPublicEnabled ? ((availabilityFilter as 'all' | 'local' | 'international') || 'all') : 'local');
 
   const {
     categoryFacets,

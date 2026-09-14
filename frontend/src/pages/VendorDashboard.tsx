@@ -204,21 +204,21 @@ export default function VendorDashboard() {
   return (
     <div className="animation-fade-in">
       {activeTab === 'overview' && <VOverview onChangeTab={setActiveTab} activeStoreId={activeStoreId} />}
-      {activeTab === 'products' && <VProducts activeStoreId={activeStoreId} />}
-      {activeTab === 'imports' && <VImports activeStoreId={activeStoreId} />}
-      {activeTab === 'mercadolibre' && <VMercadoLibre activeStoreId={activeStoreId} />}
-      {activeTab === 'inventory' && <VInventory mode="inventory" activeStoreId={activeStoreId} />}
-      {activeTab === 'orders' && <VOrders activeStoreId={activeStoreId} />}
+      {activeTab === 'products' && <VProducts {...({ activeStoreId } as any)} />}
+      {activeTab === 'imports' && <VImports {...({ activeStoreId } as any)} />}
+      {activeTab === 'mercadolibre' && <VMercadoLibre {...({ activeStoreId } as any)} />}
+      {activeTab === 'inventory' && <VInventory mode="inventory" {...({ activeStoreId } as any)} />}
+      {activeTab === 'orders' && <VOrders {...({ activeStoreId } as any)} />}
       {activeTab === 'shipments' && <VEnvios activeStoreId={activeStoreId} />}
-      {activeTab === 'shipping' && <VShipping activeStoreId={activeStoreId} />}
-      {activeTab === 'sla' && <VSLA activeStoreId={activeStoreId} />}
-      {activeTab === 'finances' && <VFinances mode="finances" activeStoreId={activeStoreId} />}
-      {activeTab === 'settlements' && <VFinances mode="settlements" activeStoreId={activeStoreId} />}
+      {activeTab === 'shipping' && <VShipping {...({ activeStoreId } as any)} />}
+      {activeTab === 'sla' && <VSLA {...({ activeStoreId } as any)} />}
+      {activeTab === 'finances' && <VFinances mode="finances" {...({ activeStoreId } as any)} />}
+      {activeTab === 'settlements' && <VFinances mode="settlements" {...({ activeStoreId } as any)} />}
       {activeTab === 'analytics' && <VAnalytics activeStoreId={activeStoreId} />}
       {activeTab === 'incidents' && <VIncidents />}
       {activeTab === 'audit' && <VAudit />}
       {activeTab === 'rules' && <VRules />}
-      {activeTab === 'warehouses' && <VInventory mode="warehouses" activeStoreId={activeStoreId} />}
+      {activeTab === 'warehouses' && <VInventory mode="warehouses" {...({ activeStoreId } as any)} />}
       {activeTab === 'team' && <VTeam />}
       {activeTab === 'settings' && <VSettings />}
       {activeTab === 'kyc' && <VKyc />}
@@ -226,7 +226,7 @@ export default function VendorDashboard() {
 
       {activeTab === 'categories' && <VCategories />}
       {activeTab === 'brands' && <VBrands />}
-      {activeTab === 'stores' && <VStores activeStoreId={activeStoreId} />}
+      {activeTab === 'stores' && <VStores {...({ activeStoreId } as any)} />}
       {activeTab === 'promotions' && <VPromotions />}
       {activeTab === 'media' && <VMedia />}
       {activeTab === 'collections' && <VCollections activeStoreId={activeStoreId} />}

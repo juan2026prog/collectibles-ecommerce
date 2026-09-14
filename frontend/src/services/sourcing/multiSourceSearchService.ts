@@ -240,9 +240,9 @@ export class MultiSourceSearchService {
     // 2. Fallback de catálogo interno y packs precargados que coincidan
     const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 1);
     const mockItems = [...SAMPLE_STREET_FIGHTER_RESEARCH_PACK.items, ...SAMPLE_MCFARLANE_RESEARCH_PACK.items]
-      .filter(it => {
+      .filter((it: any) => {
         if (it.retailer !== 'amazon') return false;
-        const target = `${it.title || ''} ${it.brand || ''} ${it.character || ''} ${it.license || ''} ${it.line || ''} ${(it.tags || []).join(' ')}`.toLowerCase();
+        const target = `${it.title || it.raw_title || ''} ${it.brand || ''} ${it.character || ''} ${it.license || ''} ${it.line || ''} ${(it.tags || []).join(' ')}`.toLowerCase();
         return queryWords.some(w => target.includes(w));
       });
 
@@ -289,9 +289,9 @@ export class MultiSourceSearchService {
 
     // Items de eBay desde packs de referencia (ej: Street Fighter Jada Ryu / Ken)
     const packItems = [...SAMPLE_STREET_FIGHTER_RESEARCH_PACK.items, ...SAMPLE_MCFARLANE_RESEARCH_PACK.items]
-      .filter(it => {
+      .filter((it: any) => {
         if (it.retailer !== 'ebay') return false;
-        const target = `${it.title || ''} ${it.brand || ''} ${it.character || ''} ${it.license || ''} ${it.line || ''} ${(it.tags || []).join(' ')}`.toLowerCase();
+        const target = `${it.title || it.raw_title || ''} ${it.brand || ''} ${it.character || ''} ${it.license || ''} ${it.line || ''} ${(it.tags || []).join(' ')}`.toLowerCase();
         return queryWords.some(w => target.includes(w));
       });
 
@@ -303,12 +303,6 @@ export class MultiSourceSearchService {
           url: 'https://www.ebay.com/itm/129988776655',
           retailer: 'ebay',
           title: 'Lot of 4 Street Fighter Figures Jada Toys Ryu Ken Chun-Li Guile',
-          price: 79.99,
-          brand: 'Jada Toys',
-          license: 'Capcom',
-          character: 'Multiple',
-          line: 'Ultra Street Fighter II',
-          upc: '801310342299',
           is_lot: true,
           condition: 'used',
           seller: 'ToyCollectorUSA',
@@ -359,21 +353,31 @@ export class MultiSourceSearchService {
       });
 
       if (error) {
+        const isRuntimeFailure = error.message?.toLowerCase().includes('timeout') || error.message?.toLowerCase().includes('500') || error.message?.toLowerCase().includes('server error');
+        if (isRuntimeFailure) {
+          return {
+            source: 'bestbuy',
+            items: [],
+            status: 'ERROR',
+            error: error.message
+          };
+        }
         return {
           source: 'bestbuy',
           items: [],
-          status: 'ERROR',
+          status: 'NOT_CONFIGURED',
+          message: 'Best Buy requiere API Key de desarrollador configurada en el backend (BESTBUY_API_KEY).',
           error: error.message
         };
       }
 
       if (data) {
-        if (data.status === 'PENDING_KEY') {
+        if (data.status === 'PENDING_KEY' || data.status === 'NOT_CONFIGURED') {
           return {
             source: 'bestbuy',
             items: [],
             status: 'NOT_CONFIGURED',
-            message: data.message || 'Best Buy API Key pendiente de configuración en Supabase Secrets (BESTBUY_API_KEY).'
+            message: data.message || 'Best Buy requiere API Key de desarrollador configurada en el backend (BESTBUY_API_KEY).'
           };
         }
 
@@ -387,18 +391,29 @@ export class MultiSourceSearchService {
         }
       }
     } catch (err: any) {
+      const isRuntimeFailure = err.message?.toLowerCase().includes('timeout') || err.message?.toLowerCase().includes('500') || err.message?.toLowerCase().includes('server error');
+      if (isRuntimeFailure) {
+        return {
+          source: 'bestbuy',
+          items: [],
+          status: 'ERROR',
+          error: err.message || 'Error de conexión con servicio Best Buy'
+        };
+      }
       return {
         source: 'bestbuy',
         items: [],
-        status: 'ERROR',
-        error: err.message || 'Error de conexión con servicio Best Buy'
+        status: 'NOT_CONFIGURED',
+        message: 'Best Buy requiere API Key de desarrollador configurada en el backend (BESTBUY_API_KEY).',
+        error: err.message
       };
     }
 
     return {
       source: 'bestbuy',
       items: [],
-      status: 'AVAILABLE'
+      status: 'NOT_CONFIGURED',
+      message: 'Best Buy requiere API Key de desarrollador configurada en el backend (BESTBUY_API_KEY).'
     };
   }
 
@@ -461,8 +476,8 @@ export class MultiSourceSearchService {
         is_retro_in_box: retroCheck.isRetroInBox,
         is_lot: Boolean(baseOffer.metadata?.is_lot),
         is_auction: Boolean(baseOffer.metadata?.is_auction),
-        landed_cost_estimated_usd: pricing.costoPuestoUY,
-        sale_price_suggested_usd: pricing.precioVentaSugerido
+        landed_cost_estimated_usd: pricing.realCost,
+        sale_price_suggested_usd: pricing.finalPrice
       };
 
       // Normalizar título e identificadores canónicos

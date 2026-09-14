@@ -3,7 +3,9 @@ import { ShoppingBag, ShieldCheck, Truck, Store, Tag, Sparkles, Check, Lock } fr
 
 export interface ShipmentSummaryProps {
   items: Array<{
-    id: string;
+    id?: string;
+    product_id?: string;
+    variant_id?: string;
     title: string;
     image_url?: string;
     price: number;

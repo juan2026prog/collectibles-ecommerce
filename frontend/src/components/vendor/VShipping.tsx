@@ -146,61 +146,75 @@ export default function VShipping() {
     try {
       // Run queries in parallel
       const [vendorRes, addrRes, mlRes, provRes, distrilogicRes, dacRes, soyDeliveryRes] = await Promise.all([
-        supabase
-          .from('vendors')
-          .select('store_name, logo_url, slug, contact_phone, pickup_address, shipping_settings, ships_to_argentina')
-          .eq('id', user.id)
-          .single()
+        Promise.resolve(
+          supabase
+            .from('vendors')
+            .select('store_name, logo_url, slug, contact_phone, pickup_address, shipping_settings, ships_to_argentina')
+            .eq('id', user.id)
+            .single()
+        )
           .then(res => ({ success: true, data: res.data, error: res.error }))
           .catch(err => ({ success: false, data: null, error: err })),
 
-        supabase
-          .from('vendor_dispatch_addresses')
-          .select('*')
-          .eq('vendor_id', user.id)
-          .order('is_default', { ascending: false })
-          .order('created_at', { ascending: false })
+        Promise.resolve(
+          supabase
+            .from('vendor_dispatch_addresses')
+            .select('*')
+            .eq('vendor_id', user.id)
+            .order('is_default', { ascending: false })
+            .order('created_at', { ascending: false })
+        )
           .then(res => ({ success: true, data: res.data, error: res.error }))
           .catch(err => ({ success: false, data: null, error: err })),
 
-        supabase
-          .from('ml_seller_accounts')
-          .select('id, nickname, seller_id')
-          .eq('vendor_id', user.id)
-          .maybeSingle()
+        Promise.resolve(
+          supabase
+            .from('ml_seller_accounts')
+            .select('id, nickname, seller_id')
+            .eq('vendor_id', user.id)
+            .maybeSingle()
+        )
           .then(res => ({ success: true, data: res.data, error: res.error }))
           .catch(err => ({ success: false, data: null, error: err })),
 
-        supabase
-          .from('shipping_providers')
-          .select('code, name, is_active, status')
+        Promise.resolve(
+          supabase
+            .from('shipping_providers')
+            .select('code, name, is_active, status')
+        )
           .then(res => ({ success: true, data: res.data, error: res.error }))
           .catch(err => ({ success: false, data: null, error: err })),
 
-        supabase
-          .from('vendor_shipping_connections')
-          .select('*')
-          .eq('vendor_id', user.id)
-          .eq('provider', 'distrilogic')
-          .maybeSingle()
+        Promise.resolve(
+          supabase
+            .from('vendor_shipping_connections')
+            .select('*')
+            .eq('vendor_id', user.id)
+            .eq('provider', 'distrilogic')
+            .maybeSingle()
+        )
           .then(res => ({ success: true, data: res.data, error: res.error }))
           .catch(err => ({ success: false, data: null, error: err })),
 
-        supabase
-          .from('vendor_shipping_connections')
-          .select('*')
-          .eq('vendor_id', user.id)
-          .eq('provider', 'dac')
-          .maybeSingle()
+        Promise.resolve(
+          supabase
+            .from('vendor_shipping_connections')
+            .select('*')
+            .eq('vendor_id', user.id)
+            .eq('provider', 'dac')
+            .maybeSingle()
+        )
           .then(res => ({ success: true, data: res.data, error: res.error }))
           .catch(err => ({ success: false, data: null, error: err })),
 
-        supabase
-          .from('vendor_shipping_connections')
-          .select('*')
-          .eq('vendor_id', user.id)
-          .eq('provider', 'soydelivery')
-          .maybeSingle()
+        Promise.resolve(
+          supabase
+            .from('vendor_shipping_connections')
+            .select('*')
+            .eq('vendor_id', user.id)
+            .eq('provider', 'soydelivery')
+            .maybeSingle()
+        )
           .then(res => ({ success: true, data: res.data, error: res.error }))
           .catch(err => ({ success: false, data: null, error: err }))
       ]);
@@ -283,7 +297,8 @@ export default function VShipping() {
               min_amount: s.free_shipping?.min_amount !== undefined && s.free_shipping?.min_amount !== null ? String(s.free_shipping.min_amount) : ''
             },
             cutoff_time: s.cutoff_time || '14:00',
-            dispatch_days: Array.isArray(s.dispatch_days) ? s.dispatch_days : ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']
+            dispatch_days: Array.isArray(s.dispatch_days) ? s.dispatch_days : ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'],
+            preparation_days: typeof s.preparation_days === 'number' ? s.preparation_days : 0
           });
         }
       } else if (vendorRes.error) {
@@ -525,7 +540,7 @@ export default function VShipping() {
 
     setShippingData(prev => ({
       ...prev,
-      dac: { active: mode === 'me2' ? true : prev.dac.active },
+      dac: { ...prev.dac, active: mode === 'me2' ? true : prev.dac.active },
       ues: { active: mode === 'me2' ? true : prev.ues.active },
       soydelivery: { active: hasFlex }, // Set explicitly to false if not available
       correo_uruguayo: { active: (!isSoyDeliveryAvailable && (tags.includes('flex') || tags.includes('envios_rapidos'))) ? true : prev.correo_uruguayo.active },

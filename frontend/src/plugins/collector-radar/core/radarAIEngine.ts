@@ -226,7 +226,7 @@ export function deduplicateRelease(
     // 3. Coincidencia por fabricante + título normalizado
     const itemNormTitle = item.title.toLowerCase().replace(/[^a-z0-9]/g, '');
     const itemManuf = (item.manufacturer || (item as any).brand?.name || '').toLowerCase();
-    const candManuf = (candidate.manufacturer || candidate.brand_name || '').toLowerCase();
+    const candManuf = (candidate.manufacturer || (candidate as any).brand_name || '').toLowerCase();
 
     if (itemNormTitle === normTitle && (itemManuf === candManuf || !itemManuf || !candManuf)) {
       return { isDuplicate: true, matchedRelease: item, similarityReason: 'Mismo fabricante y título normalizado' };

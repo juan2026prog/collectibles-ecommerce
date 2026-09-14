@@ -9,14 +9,18 @@ import { AlertTriangle, X } from 'lucide-react';
 //   const reason = await prompt('Razón de cancelación:');
 // ═══════════════════════════════════════════════════════════
 
-interface ConfirmOptions {
+export interface ConfirmOptions {
   title?: string;
   danger?: boolean;
+  type?: string;
   confirmText?: string;
   cancelText?: string;
+  confirmLabel?: string;
+  confirmVariant?: string;
+  onConfirm?: () => Promise<void> | void;
 }
 
-interface PromptOptions extends ConfirmOptions {
+export interface PromptOptions extends ConfirmOptions {
   placeholder?: string;
   defaultValue?: string;
 }
@@ -24,13 +28,13 @@ interface PromptOptions extends ConfirmOptions {
 interface ModalState {
   type: 'confirm' | 'prompt';
   message: string;
-  options: ConfirmOptions & PromptOptions;
+  options: PromptOptions;
   resolve: (value: any) => void;
 }
 
-interface ConfirmModalContextType {
-  confirm: (message: string, options?: ConfirmOptions) => Promise<boolean>;
-  prompt: (message: string, options?: PromptOptions) => Promise<string | null>;
+export interface ConfirmModalContextType {
+  confirm: (messageOrOptions: string | (ConfirmOptions & { message?: string }), options?: ConfirmOptions) => Promise<boolean>;
+  prompt: (messageOrOptions: string | (PromptOptions & { message?: string }), options?: PromptOptions | string) => Promise<string | null>;
 }
 
 const ConfirmModalContext = createContext<ConfirmModalContextType | null>(null);
@@ -39,20 +43,59 @@ export function ConfirmModalProvider({ children }: { children: React.ReactNode }
   const [modal, setModal] = useState<ModalState | null>(null);
   const [inputValue, setInputValue] = useState('');
 
-  const confirmFn = useCallback((message: string, options: ConfirmOptions = {}) => {
+  const confirmFn = useCallback((messageOrOptions: string | (ConfirmOptions & { message?: string }), options: ConfirmOptions = {}) => {
+    let msg = '';
+    let opts: ConfirmOptions = { ...options };
+
+    if (typeof messageOrOptions === 'string') {
+      msg = messageOrOptions;
+    } else if (messageOrOptions && typeof messageOrOptions === 'object') {
+      msg = messageOrOptions.message || '';
+      opts = { ...messageOrOptions, ...options };
+    }
+
+    if (opts.confirmLabel && !opts.confirmText) opts.confirmText = opts.confirmLabel;
+    if (opts.confirmVariant === 'destructive' || opts.type === 'warning') opts.danger = true;
+
     return new Promise<boolean>((resolve) => {
-      setModal({ type: 'confirm', message, options, resolve });
+      setModal({ type: 'confirm', message: msg, options: opts, resolve });
     });
   }, []);
 
-  const promptFn = useCallback((message: string, options: PromptOptions = {}) => {
+  const promptFn = useCallback((
+    messageOrOptions: string | (PromptOptions & { message?: string }),
+    optionsOrPlaceholder?: PromptOptions | string
+  ) => {
+    let msg = '';
+    let opts: PromptOptions = {};
+
+    if (typeof optionsOrPlaceholder === 'string') {
+      opts.defaultValue = optionsOrPlaceholder;
+    } else if (optionsOrPlaceholder && typeof optionsOrPlaceholder === 'object') {
+      opts = { ...optionsOrPlaceholder };
+    }
+
+    if (typeof messageOrOptions === 'string') {
+      msg = messageOrOptions;
+    } else if (messageOrOptions && typeof messageOrOptions === 'object') {
+      msg = messageOrOptions.message || '';
+      opts = { ...messageOrOptions, ...opts };
+    }
+
     return new Promise<string | null>((resolve) => {
-      setInputValue(options.defaultValue || '');
-      setModal({ type: 'prompt', message, options, resolve });
+      setInputValue(opts.defaultValue || '');
+      setModal({ type: 'prompt', message: msg, options: opts, resolve });
     });
   }, []);
 
-  const handleClose = (result: any) => {
+  const handleClose = async (result: any) => {
+    if (result && modal?.options.onConfirm) {
+      try {
+        await modal.options.onConfirm();
+      } catch (err) {
+        console.error('Error in confirm onConfirm handler:', err);
+      }
+    }
     modal?.resolve(result);
     setModal(null);
     setInputValue('');

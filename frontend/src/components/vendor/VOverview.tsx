@@ -203,10 +203,13 @@ export default function VOverview({ onChangeTab, activeStoreId }: VOverviewProps
         .select('id, status, parentOrder:orders(payment_status, status)')
         .eq('vendor_id', vendorId);
 
-      const pendingPrep = (subordersData || []).filter(s => 
-        (s.parentOrder?.payment_status === 'approved' || s.parentOrder?.status === 'paid') &&
-        (!s.status || s.status === 'pendiente' || s.status === 'preparando')
-      ).length;
+      const pendingPrep = (subordersData || []).filter(s => {
+        const order: any = Array.isArray(s.parentOrder) ? s.parentOrder[0] : s.parentOrder;
+        const paymentStatus = order?.payment_status;
+        const status = order?.status;
+        return (paymentStatus === 'approved' || status === 'paid') &&
+          (!s.status || s.status === 'pendiente' || s.status === 'preparando');
+      }).length;
 
       const preparedDispatch = (subordersData || []).filter(s => 
         s.status === 'preparado'

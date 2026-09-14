@@ -36,33 +36,36 @@ export default function VAnalytics({ activeStoreId }: VAnalyticsProps) {
         const { data: items } = await query;
         const allItems = items || [];
 
-        // 2. Filter active items
-        const nonCancelledItems = allItems.filter(item => item.order?.status !== 'cancelled');
+        // 2. Filter valid sales (confirmed / processing / ready_to_ship / shipped / delivered)
+        const validItems = (allItems as any[]).filter(item => 
+          item.order && ['confirmed', 'processing', 'ready_to_ship', 'shipped', 'delivered'].includes(item.order.status)
+        );
 
         // Total orders
-        const uniqueOrderIds = new Set(nonCancelledItems.map(item => item.order?.id).filter(Boolean));
+        const uniqueOrderIds = new Set(validItems.map(item => item.order?.id).filter(Boolean));
         const totalOrders = uniqueOrderIds.size;
 
         // Total sales revenue
-        const totalSales = nonCancelledItems.reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0);
+        const totalSales = validItems.reduce((sum, item) => sum + Number(item.unit_price || 0) * Number(item.quantity || 1), 0);
 
         // Average ticket
         const avgTicket = totalOrders > 0 ? Math.round(totalSales / totalOrders) : 0;
 
         // Cancellations count
-        const cancellations = allItems.filter(item => item.order?.status === 'cancelled').length;
+        const cancellations = (allItems as any[]).filter(item => item.order?.status === 'cancelled').length;
 
         // Top products calculation
         const productSales: Record<string, { name: string; sold: number; revenue: number }> = {};
-        nonCancelledItems.forEach(item => {
-          const prodId = item.product?.id;
+        validItems.forEach(item => {
+          const prodId = item.product?.id || item.product_id;
           if (!prodId) return;
           const title = item.product?.title || 'Producto';
           if (!productSales[prodId]) {
             productSales[prodId] = { name: title, sold: 0, revenue: 0 };
           }
-          productSales[prodId].sold += item.quantity;
-          productSales[prodId].revenue += Number(item.unit_price || item.price || 0) * item.quantity;
+          const qty = Number(item.quantity || 1);
+          productSales[prodId].sold += qty;
+          productSales[prodId].revenue += Number(item.unit_price || 0) * qty;
         });
         const topProducts = Object.values(productSales)
           .sort((a, b) => b.revenue - a.revenue)
@@ -72,14 +75,16 @@ export default function VAnalytics({ activeStoreId }: VAnalyticsProps) {
         const days = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
         const daySales: Record<string, number> = { Lun: 0, Mar: 0, Mie: 0, Jue: 0, Vie: 0, Sab: 0, Dom: 0 };
         
-        // Let's populate the last 7 days of sales
+        // Populate the last 7 days of sales
         const oneWeekAgo = new Date();
         oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-        nonCancelledItems.forEach(item => {
-          const date = new Date(item.created_at);
-          if (date >= oneWeekAgo) {
-            const dayName = days[date.getDay()];
-            daySales[dayName] = (daySales[dayName] || 0) + Number(item.price) * item.quantity;
+        validItems.forEach(item => {
+          if (item.order?.created_at) {
+            const date = new Date(item.order.created_at);
+            if (date >= oneWeekAgo) {
+              const dayName = days[date.getDay()];
+              daySales[dayName] = (daySales[dayName] || 0) + Number(item.unit_price || 0) * Number(item.quantity || 1);
+            }
           }
         });
         const salesByDay = Object.entries(daySales).map(([day, amount]) => ({ day, amount }));
@@ -95,18 +100,18 @@ export default function VAnalytics({ activeStoreId }: VAnalyticsProps) {
           .eq('inventory_count', 0); // Out of stock
 
         const { data: rawLowStock } = await lowStockQuery.limit(50);
-        let filteredDeadStock = rawLowStock || [];
+        let filteredDeadStock: any[] = rawLowStock || [];
         if (activeStoreId && filteredDeadStock.length > 0) {
-          const prodIds = filteredDeadStock.map(x => x.product.product_id).filter(Boolean);
+          const prodIds = filteredDeadStock.map(x => x.product?.product_id).filter(Boolean);
           const { data: storeProds } = await supabase
             .from('products')
             .select('id, vendor_store_id')
             .in('id', prodIds);
             
           const validProdIds = new Set(
-            storeProds?.filter(p => p.vendor_store_id === activeStoreId).map(p => p.id) || []
+            storeProds?.filter((p: any) => p.vendor_store_id === activeStoreId).map((p: any) => p.id) || []
           );
-          filteredDeadStock = filteredDeadStock.filter(x => validProdIds.has(x.product.product_id));
+          filteredDeadStock = filteredDeadStock.filter(x => validProdIds.has(x.product?.product_id));
         }
 
         const deadStock = filteredDeadStock.map(x => ({

@@ -1,6 +1,7 @@
 import type { 
   CountryCode, 
   CountryOpportunityScore, 
+  CountryStatus,
   GlobalOpportunityScore, 
   RiskLevel 
 } from '../../types/sourcingLatam';
@@ -120,7 +121,7 @@ export function calculateCountryOpportunityScore(
   const finalOpportunity = Math.min(100, Math.max(0, Math.round(opportunity)));
   const finalConfidence = Math.min(100, Math.max(0, Math.round(confidence)));
 
-  let status = config.enabled ? ('OPERATIVO' as const) : ('CONFIGURADO' as const);
+  let status: CountryStatus = config.enabled ? 'OPERATIVO' : 'CONFIGURADO';
   if (finalConfidence < 40) status = 'NO_VERIFICADO';
 
   return {

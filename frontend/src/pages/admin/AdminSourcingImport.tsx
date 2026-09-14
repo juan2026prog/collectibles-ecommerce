@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Sparkles, History, RefreshCw, UploadCloud, SlidersHorizontal, 
   CheckCircle2, AlertTriangle, ArrowRight, ShieldCheck, Download, Clock,
-  Layers, Filter, BrainCircuit, LayoutDashboard, Search, Bookmark, Server, Activity
+  Layers, Filter, BrainCircuit, LayoutDashboard, Search, Bookmark, Server, Activity,
+  Bot, X
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../components/admin/Toast';
@@ -105,8 +106,19 @@ export default function AdminSourcingImport() {
   const { addToast } = useToast();
 
   // Active Main Navigation Tab
+  const [activeMainTab, setActiveMainTab] = useState<'sourcing' | 'adaptive' | 'autopilot'>('sourcing');
   const [activeTab, setActiveTab] = useState<MainTabType>('dashboard');
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
+  const [openAIEnabled, setOpenAIEnabled] = useState(false);
+  const [showOpenAIModal, setShowOpenAIModal] = useState(false);
+  const [filters, setFilters] = useState<any>({
+    searchQuery: '',
+    sourceFilter: 'all',
+    quickFilter: 'all',
+    brandFilter: '',
+    minMargin: 0,
+    authenticityStatus: 'all'
+  });
 
   // Columns & Preferences
   const [columns, setColumns] = useState<ColumnDefinition[]>(() => {
@@ -1369,10 +1381,10 @@ export default function AdminSourcingImport() {
               requireHumanApproval: true,
               profitProtectionRulesEnabled: true,
               zincAutoFulfillEnabled: true
-            }}
-            onToggleEnabled={() => addToast({ title: 'Auto Publish', message: 'Configuración actualizada', type: 'info' })}
-            onSaveSettings={() => addToast({ title: 'Configuración Guardada', message: 'Reglas de Auto Publish actualizadas', type: 'success' })}
-            onOpenPolicyEditor={() => {}}
+            } as any}
+            onUpdateSettings={() => addToast({ title: 'Auto Publish', message: 'Configuración actualizada', type: 'info' })}
+            onEngageKillSwitch={() => addToast({ title: 'Kill Switch', message: 'Autopilot pausado inmediatamente', type: 'warning' })}
+            onResetKillSwitch={() => addToast({ title: 'Kill Switch', message: 'Autopilot reactivado', type: 'info' })}
             onOpenDryRun={() => {}}
           />
 
@@ -1388,7 +1400,7 @@ export default function AdminSourcingImport() {
               requireHumanApproval: true,
               profitProtectionRulesEnabled: true,
               zincAutoFulfillEnabled: true
-            }}
+            } as any}
             kpis={{
               discoveredToday: products.length,
               publishedCount: 12,
@@ -1421,7 +1433,7 @@ export default function AdminSourcingImport() {
       )}
 
       {/* PESTAÑA 10: CONEXIONES & INFRAESTRUCTURA */}
-      {activeTab === 'connections' && (
+      {((activeTab as string) === 'conexiones' || (activeTab as string) === 'connections') && (
         <SourcingConnectionStatus
           onRefresh={() => addToast({ title: 'Verificación', message: 'Conexiones de sourcing re-verificadas.', type: 'success' })}
         />

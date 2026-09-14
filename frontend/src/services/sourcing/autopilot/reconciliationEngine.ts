@@ -1,7 +1,6 @@
 import type { NormalizedProduct, SourceOffer } from '../../../types/sourcing';
 import type { AutopilotSettings, AutopilotRule } from '../../../types/sourcingAutopilot';
 import { calculateInternationalPricing } from '../../../lib/internationalPricing';
-import { selectBestSourceV1 } from '../bestSourceSelector';
 import { auditService } from './auditService';
 import { actionQueueManager } from './actionQueue';
 

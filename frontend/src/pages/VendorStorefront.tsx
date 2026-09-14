@@ -93,11 +93,13 @@ export default function VendorStorefront() {
       setLoading(false);
 
       // Fetch KYC asynchronously without blocking store load
-      supabase
-        .from('vendors')
-        .select('kyc_status, promotions_opt_in')
-        .eq('id', storeData.vendor_id)
-        .maybeSingle()
+      Promise.resolve(
+        supabase
+          .from('vendors')
+          .select('kyc_status, promotions_opt_in')
+          .eq('id', storeData.vendor_id)
+          .maybeSingle()
+      )
         .then(({ data: vendorKyc }) => {
           if (vendorKyc) {
             setKycStatus(vendorKyc.kyc_status);

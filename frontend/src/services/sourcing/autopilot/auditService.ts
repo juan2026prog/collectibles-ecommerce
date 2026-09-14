@@ -9,9 +9,9 @@ const LOCAL_AUDIT_STORAGE_KEY = 'collectibles_sourcing_autopilot_audit_v1';
 const LOCAL_ALERTS_STORAGE_KEY = 'collectibles_sourcing_autopilot_alerts_v1';
 
 // Helper for fast DB call timeout
-function withTimeout<T>(promise: Promise<T>, ms = 300): Promise<T> {
+async function withTimeout<T>(promise: PromiseLike<T> | Promise<T>, ms = 3000): Promise<T> {
   return Promise.race([
-    promise,
+    Promise.resolve(promise),
     new Promise<T>((_, reject) => setTimeout(() => reject(new Error('DB Timeout')), ms))
   ]);
 }

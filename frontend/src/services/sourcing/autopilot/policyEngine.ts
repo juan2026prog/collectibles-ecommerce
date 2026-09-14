@@ -71,7 +71,7 @@ export class AutopilotPolicyEngine {
 
     // 2. Strict Rule Evaluations
     // Authenticity Gate Check
-    if (product.authenticity.status !== 'VERIFIED_OFFICIAL' && product.authenticity.status !== 'VERIFIED') {
+    if (product.authenticity.status !== 'VERIFIED_OFFICIAL') {
       blockedReasons.push(`Autenticidad no verificada como oficial (Estado: ${product.authenticity.status}).`);
     } else {
       passedRules.push('Authenticity Gate OK');
@@ -118,20 +118,14 @@ export class AutopilotPolicyEngine {
       blockedReasons.push(`Condición USADO requiere revisión manual previa.`);
     }
 
-    // 3. Determine Analytical Decision
-    let decision: 'PUBLICAR' | 'COMPRAR' | 'VIGILAR' | 'DESCARTAR';
+    // 3. Final Decision Logic
     const isViable = blockedReasons.length === 0;
+    let decision: 'PUBLICAR' | 'VIGILAR' | 'DESCARTAR' = 'DESCARTAR';
 
     if (isViable) {
-      if (product.catalog_status === 'ALREADY_IN_CATALOG') {
-        decision = 'VIGILAR';
-      } else {
-        decision = 'PUBLICAR';
-      }
-    } else if (opportunityScore >= 70 && margin >= 8) {
+      decision = 'PUBLICAR';
+    } else if (stock === 0 || margin < minMargin) {
       decision = 'VIGILAR';
-    } else {
-      decision = 'DESCARTAR';
     }
 
     // 4. Map Decision & Autopilot Settings to Execution Mode
@@ -145,8 +139,6 @@ export class AutopilotPolicyEngine {
       executionMode = 'REQUIRES_APPROVAL';
     } else if (settings.mode === 'AUTOPILOT') {
       if (decision === 'PUBLICAR' && !settings.auto_publish) {
-        executionMode = 'REQUIRES_APPROVAL';
-      } else if (decision === 'COMPRAR' && !settings.auto_purchase) {
         executionMode = 'REQUIRES_APPROVAL';
       } else if (!isViable) {
         executionMode = 'RECOMMENDATION_ONLY';

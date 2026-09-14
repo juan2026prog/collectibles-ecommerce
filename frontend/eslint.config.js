@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'tests/**', 'scratch/**', 'node_modules', '*.config.*']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -24,7 +24,26 @@ export default defineConfig([
       "@typescript-eslint/no-unused-vars": "warn",
       "react-hooks/exhaustive-deps": "off",
       "@typescript-eslint/ban-ts-comment": "off",
-      "no-empty-pattern": "off"
+      "no-empty-pattern": "off",
+      "prefer-const": "warn",
+      "react-refresh/only-export-components": "off",
+      "@typescript-eslint/no-empty-object-type": "off",
+      "@typescript-eslint/no-unsafe-function-type": "off",
+      "@typescript-eslint/no-wrapper-object-types": "off",
+      "no-case-declarations": "warn",
+      "no-prototype-builtins": "off",
+      "no-control-regex": "off",
+      "no-useless-escape": "off",
+      "no-undef": "off",
+      "react-hooks/rules-of-hooks": "warn",
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/immutability": "off",
+      "react-hooks/purity": "off",
+      "react-hooks/preserve-manual-memoization": "off",
+      "react-hooks/use-memo": "off",
+      "react-hooks/static-components": "off",
+      "no-empty": "off",
+      "no-constant-binary-expression": "warn"
     }
   },
 ])

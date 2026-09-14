@@ -127,7 +127,7 @@ export default function AdminPromotions() {
       ]);
       setBrands(b || []);
       setCategories(c || []);
-      setVendors((v || []).map(item => ({ id: item.id, name: item.store_name || item.name || 'Vendor' })));
+      setVendors((v || []).map(item => ({ id: item.id, name: item.store_name || (item as any).name || 'Vendor' })));
       setTags(t || []);
       setGroups(g || []);
     } catch(e) {

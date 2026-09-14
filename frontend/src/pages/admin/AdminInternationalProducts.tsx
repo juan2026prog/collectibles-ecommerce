@@ -346,7 +346,7 @@ export default function AdminInternationalProducts() {
                   },
                   {
                     ...settings,
-                    pricing_mode: p.pricing_mode || settings?.pricing_mode,
+                    pricing_mode: (p as any).pricing_mode || (settings as any)?.pricing_mode,
                     min_profit_usd: Number(p.expected_profit_usd || settings?.min_profit_usd || 3.99),
                     fixed_markup_usd: Number(settings?.fixed_markup_usd || 6.00)
                   }

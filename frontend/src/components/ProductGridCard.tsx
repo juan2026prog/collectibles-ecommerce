@@ -189,7 +189,7 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
            if (!condBadge) return null;
            return (
               <div className="absolute bottom-2 left-2 z-20 pointer-events-none">
-                 <span className={`px-2 py-0.5 text-[8px] font-black uppercase tracking-widest rounded shadow-md border ${condBadge.badgeClass}`}>
+                 <span className={`px-2 py-0.5 text-[8px] font-black uppercase tracking-widest rounded shadow-md border ${condBadge.className}`}>
                     {condBadge.label}
                  </span>
               </div>

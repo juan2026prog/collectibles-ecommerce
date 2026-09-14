@@ -5,6 +5,7 @@ import { trackAddToCart, generateMetaEventId } from '../lib/meta/metaPixel';
 interface CartContextType {
   items: CartItem[];
   addItem: (item: CartItem) => void;
+  addToCart: (item: CartItem | any) => void;
   updateQuantity: (variantId: string, vendorId: string | undefined, quantity: number) => void;
   removeItem: (variantId: string, vendorId?: string) => void;
   clearCart: () => void;
@@ -40,6 +41,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const value = useMemo(() => ({
     ...cart,
     addItem,
+    addToCart: addItem,
     isDrawerOpen,
     setIsDrawerOpen
   }), [cart, addItem, isDrawerOpen]);

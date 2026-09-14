@@ -175,7 +175,7 @@ export default function VOrders() {
 
       if (error) throw error;
       toast.success(`Estado actualizado a: ${newStatus}`);
-      if (activeSuborderNumber) loadSuborderDetailByNumber(activeSuborderNumber);
+      if (activeSuborderNumber) loadSuborderDetailByParam(activeSuborderNumber);
       fetchSuborders();
     } catch (err: any) {
       toast.error(`Error actualizando preparación: ${err.message}`);

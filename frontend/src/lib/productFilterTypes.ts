@@ -1,5 +1,6 @@
 import { sanitizeMbePackagingType } from './mbeLogisticsUtils';
 import { calculateArgentinaShippingStatus } from './mbeLogisticsUtils';
+import { getCanonicalProductStock } from './canonicalStock';
 
 export interface ProductFilterState {
   search: string;

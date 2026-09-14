@@ -684,13 +684,13 @@ export default function CustomerPortal() {
                       <item.icon className={`w-4 h-4 ${isActive ? 'text-white' : item.color}`} />
                       <span>{item.label}</span>
                     </div>
-                    {item.badge && (
+                    {(item as any).badge && (
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
                         isActive 
                           ? 'bg-white/20 text-white' 
                           : 'bg-white/10 text-slate-300'
                       }`}>
-                        {item.badge}
+                        {(item as any).badge}
                       </span>
                     )}
                   </button>

@@ -132,9 +132,8 @@ export class AdaptiveDiscoveryService {
     const authenticity = evaluateAuthenticityGate({
       title: titleConstructed,
       brand: gap.brand || 'Jada Toys',
-      url: bestOffer.url,
       seller: bestOffer.seller,
-      hasIdentifier: true
+      metadata: { url: bestOffer.url, hasIdentifier: true }
     });
 
     const isOfficial = authenticity.status === 'VERIFIED_OFFICIAL';

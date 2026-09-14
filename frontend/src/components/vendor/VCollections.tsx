@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Layers, Plus, Trash2, Save, X, Package, Search, Link2, Copy, Check, Upload, Store } from 'lucide-react';
+import { Layers, Plus, Trash2, Save, X, Package, Search, Link2, Copy, Check, Upload, Store, Pencil } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface StoreCollection {
@@ -408,7 +408,7 @@ export default function VCollections({ activeStoreId }: VCollectionsProps) {
                   <div>
                     <h3 className="font-bold text-lg text-gray-900 leading-snug">{c.name}</h3>
                     <p className="text-[10px] font-mono text-blue-600 mt-1 flex items-center gap-1">
-                      <LinkIcon className="w-3 h-3 text-slate-400" /> slug: {c.slug}
+                      <Link2 className="w-3 h-3 text-slate-400" /> slug: {c.slug}
                     </p>
                   </div>
                   <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${c.is_active ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-150 text-gray-500 border-gray-250'}`}>

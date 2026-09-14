@@ -373,7 +373,7 @@ export async function getPushStatus(): Promise<PushStatusInfo> {
       };
     }
 
-    if (browserPerm === 'denied') {
+    if (!hasPermission) {
       return { state: 'denied', isIOSNonStandalone, subscriptionId, optedIn, appIdConfigured: true };
     }
 

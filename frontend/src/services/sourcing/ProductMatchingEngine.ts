@@ -170,8 +170,8 @@ export class ProductMatchingEngine {
    * - 1:12 vs 1:10 vs 1/6
    */
   static checkVariantConflict(
-    inputAttrs: ReturnType<typeof ProductNormalizationService.extractAttributesFromTitle>,
-    canonical: CanonicalProduct
+    inputAttrs: any,
+    canonical: any
   ): { hasConflict: boolean; reason?: string } {
     // 1. Escalas diferentes
     if (inputAttrs.scale && canonical.scale) {

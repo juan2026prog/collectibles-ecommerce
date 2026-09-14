@@ -21,15 +21,15 @@ export default function Contact() {
   const [error, setError] = useState('');
 
   const whatsappUrl = useMemo(() => {
-    const raw = settings['social_whatsapp_url'];
-    if (!raw) return 'https://wa.me/59899000000';
+    const raw = settings['social_whatsapp_url'] || settings['whatsapp_number'] || settings['contact_phone'];
+    if (!raw) return null;
     const trimmed = raw.trim();
     if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
     if (trimmed.includes('wa.me') || trimmed.includes('whatsapp.com')) {
       return `https://${trimmed.replace(/^(https?:\/\/)?/, '')}`;
     }
     const cleanNumber = trimmed.replace(/[\s\-\(\)\+]/g, '');
-    return `https://wa.me/${cleanNumber}`;
+    return cleanNumber ? `https://wa.me/${cleanNumber}` : null;
   }, [settings]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -266,26 +266,28 @@ export default function Contact() {
           </div>
 
           {/* WhatsApp Card */}
-          <a
-            href={whatsappUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => trackContact(generateMetaEventId(), { contact_method: 'whatsapp' })}
-            className="block rounded-3xl border border-[#25D366]/20 bg-[#25D366]/5 p-6 shadow-xl hover:bg-[#25D366]/10 transition-all group"
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-[#25D366] flex items-center justify-center">
-                <MessageCircle className="w-5 h-5 text-white" />
+          {whatsappUrl && (
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => trackContact(generateMetaEventId(), { contact_method: 'whatsapp' })}
+              className="block rounded-3xl border border-[#25D366]/20 bg-[#25D366]/5 p-6 shadow-xl hover:bg-[#25D366]/10 transition-all group"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-full bg-[#25D366] flex items-center justify-center">
+                  <MessageCircle className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <div className="text-white font-black text-sm">WhatsApp</div>
+                  <div className="text-[10px] text-[#25D366] font-bold uppercase tracking-widest">Respuesta rápida</div>
+                </div>
               </div>
-              <div>
-                <div className="text-white font-black text-sm">WhatsApp</div>
-                <div className="text-[10px] text-[#25D366] font-bold uppercase tracking-widest">Respuesta rápida</div>
-              </div>
-            </div>
-            <p className="text-slate-400 text-sm font-medium leading-relaxed">
-              Si necesitás una respuesta inmediata, escribinos por WhatsApp. Te atendemos al instante en horario comercial.
-            </p>
-          </a>
+              <p className="text-slate-400 text-sm font-medium leading-relaxed">
+                Si necesitás una respuesta inmediata, escribinos por WhatsApp. Te atendemos al instante en horario comercial.
+              </p>
+            </a>
+          )}
 
           {/* Trust Card */}
           <div className="rounded-3xl border border-white/10 bg-[#0b0f18] p-6 shadow-xl">

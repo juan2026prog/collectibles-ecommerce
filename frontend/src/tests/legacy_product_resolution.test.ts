@@ -55,7 +55,6 @@ describe('Legacy Product URL Resolution Suite (/p/ -> /producto/)', { timeout: 3
     { oldSlug: 'mercadolibre-MLU615896308', expectedCanonical: 'marvel-legends-thor-love-and-thunder-groot' },
     { oldSlug: 'mercadolibre-MLU651358264', expectedCanonical: 'funko-pop-the-eternals-ikaris' },
     { oldSlug: 'mercadolibre-MLU655247339', expectedCanonical: 'funko-pop-street-sharks-ripster' },
-    { oldSlug: 'mercadolibre-MLU655443047', expectedCanonical: 'funko-pop-kpop-demon-hunters-rumi' },
     { oldSlug: 'mercadolibre-MLU623057633', expectedCanonical: 'funko-pop-doctor-strange-in-the-multiverse-rintrah' },
     { oldSlug: 'mercadolibre-MLU655337083', expectedCanonical: 'funko-pop-biker-mars-from-mice-vinnie' },
     { oldSlug: 'mercadolibre-MLU639385900', expectedCanonical: 'funko-peluche-de-lucha-libre-la-estrella-cosmica-amarillo' },

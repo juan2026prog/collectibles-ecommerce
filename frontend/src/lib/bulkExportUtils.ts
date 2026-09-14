@@ -98,10 +98,12 @@ export function formatProductRecordForExport(
     const fDef = fieldMap.get(key);
     if (fDef && fDef.exportResolver) {
       const rawRes = fDef.exportResolver(item);
-      record[key] = normalizeExcelCellValue(rawRes);
+      const val = normalizeExcelCellValue(rawRes);
+      record[key] = val !== null && val !== undefined ? String(val) : '';
     } else {
       const rawVal = (item as any)[key];
-      record[key] = normalizeExcelCellValue(rawVal);
+      const val = normalizeExcelCellValue(rawVal);
+      record[key] = val !== null && val !== undefined ? String(val) : '';
     }
   });
 

@@ -14,7 +14,7 @@ interface SEOProps {
   noIndex?: boolean;
 }
 
-export default function SEO({
+export function SEO({
   title,
   description,
   keywords,
@@ -124,3 +124,5 @@ export default function SEO({
     </Helmet>
   );
 }
+
+export default SEO;

@@ -216,13 +216,13 @@ export default function CartDrawer() {
             <>
               {/* Timer Banner */}
               <div className="bg-slate-900/80 border border-white/5 rounded-xl px-4 py-2.5 flex items-center justify-center gap-2 text-xs text-slate-300">
-                <Clock className="w-4 h-4 text-[#f00856]" />
+                <Clock className="w-4 h-4 text-amber-400" />
                 <span>
-                  Su carrito está reservado por{' '}
-                  <span className="font-extrabold text-[#f00856] text-sm tracking-wide">
+                  Sesión activa por{' '}
+                  <span className="font-extrabold text-amber-400 text-sm tracking-wide">
                     {formatTime(timeLeft)}
                   </span>{' '}
-                  minutos!
+                  min <span className="text-[10px] text-slate-400">(el stock se confirma al completar el pago)</span>
                 </span>
               </div>
 

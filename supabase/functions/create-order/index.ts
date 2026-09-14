@@ -404,7 +404,7 @@ function sanitizePayloadForLogging(data: any) {
           if (pvError || !pvVariant) {
             return new Response(JSON.stringify({
               success: false,
-              error: `La variante del producto del vendedor no existe.`,
+              error: `La variante del producto del vendedor no existe o no pertenece al producto.`,
               details: {
                 product_id: productId,
                 variant_id: item.variant_id,
@@ -419,7 +419,14 @@ function sanitizePayloadForLogging(data: any) {
           serverPrice = Number(dbProduct.base_price) + adjustment;
           serverStock = Number(pvVariant.inventory_count || 0);
         } else {
-          serverStock = 9999; // Fallback if no variant
+          // Resolve stock from default product variant
+          const { data: defaultVariant } = await supabase
+            .from("product_variants")
+            .select("inventory_count")
+            .eq("product_id", productId)
+            .limit(1)
+            .maybeSingle();
+          serverStock = defaultVariant ? Number(defaultVariant.inventory_count || 0) : 0;
         }
       }
       // Case B: Platform product offered by a vendor (Buy Box variant)
@@ -464,7 +471,7 @@ function sanitizePayloadForLogging(data: any) {
           if (vvError || !vVariant) {
             return new Response(JSON.stringify({
               success: false,
-              error: `La variante del vendedor no está disponible.`,
+              error: `La variante del vendedor no está disponible para este producto.`,
               details: {
                 product_id: productId,
                 variant_id: item.variant_id,
@@ -477,10 +484,18 @@ function sanitizePayloadForLogging(data: any) {
           }
           adjustment = Number(vVariant.price_adjustment || 0);
           serverStock = Number(vVariant.inventory_count || 0);
+        } else {
+          const { data: defaultVVariant } = await supabase
+            .from("vendor_product_variants")
+            .select("inventory_count")
+            .eq("vendor_product_id", vProduct.id)
+            .limit(1)
+            .maybeSingle();
+          serverStock = defaultVVariant ? Number(defaultVVariant.inventory_count || 0) : 0;
         }
         serverPrice = Number(vProduct.price) + adjustment;
       }
-      // Case C: Platform/Collectibles product
+      // Case C: Platform/Collectibles product or International product
       else {
         resolvedVendorId = null;
         resolvedStoreId = null;
@@ -502,17 +517,20 @@ function sanitizePayloadForLogging(data: any) {
         }
 
         serverPrice = dbBasePrice;
-        if (item.variant_id) {
+        if (dbProduct.is_international) {
+          serverStock = 99; // Managed via Zinc live check and capacity commits
+        } else if (item.variant_id) {
           const { data: pvVariant, error: pvError } = await supabase
             .from("product_variants")
             .select("price_adjustment, inventory_count")
             .eq("id", item.variant_id)
+            .eq("product_id", productId)
             .maybeSingle();
 
           if (pvError || !pvVariant) {
             return new Response(JSON.stringify({
               success: false,
-              error: `La variante de la plataforma no existe.`,
+              error: `La variante de la plataforma no existe o no corresponde al producto.`,
               details: {
                 product_id: productId,
                 variant_id: item.variant_id,
@@ -526,6 +544,14 @@ function sanitizePayloadForLogging(data: any) {
           const adjustment = pvVariant.price_adjustment || 0;
           serverPrice = dbBasePrice + adjustment;
           serverStock = Number(pvVariant.inventory_count || 0);
+        } else {
+          const { data: defaultVariant } = await supabase
+            .from("product_variants")
+            .select("inventory_count")
+            .eq("product_id", productId)
+            .limit(1)
+            .maybeSingle();
+          serverStock = defaultVariant ? Number(defaultVariant.inventory_count || 0) : 0;
         }
       }
 

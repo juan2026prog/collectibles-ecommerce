@@ -132,8 +132,9 @@ export default function Checkout() {
   const { items, total, addItem, updateQuantity, removeItem } = useCartContext();
   const { settings, loaded: settingsLoaded } = useSiteSettings();
   const freeShippingThreshold = Number(settings['free_shipping_threshold'] || 4000);
-  const { formatCurrencyPrice, selectedCurrency, setSelectedCurrency, convertUSDToARS } = useCurrency();
+  const { formatCurrencyPrice, selectedCurrency, setSelectedCurrency, convertUSDToARS, convertARSToUSD, getFxRateUsdToArs } = useCurrency();
   const { user } = useAuth();
+  const [internationalShippingRate, setInternationalShippingRate] = useState<number>(0);
 
   const [form, setForm] = useState({
     email: user?.email || '',
@@ -161,7 +162,7 @@ export default function Checkout() {
     // Priority 0: Check if any product belongs to an inactive or suspended vendor
     let inactiveVendorItem: any = null;
     items.forEach(item => {
-      const prod = item.product || item;
+      const prod = (item as any).product || item;
       const vendorId = (prod as any)?.vendor_id || (prod as any)?.vendor?.id;
       const isCollectibles = !vendorId || vendorId === 'platform';
       if (!isCollectibles) {
@@ -174,9 +175,9 @@ export default function Checkout() {
     });
 
     if (inactiveVendorItem) {
-      const vendorName = (inactiveVendorItem.product?.vendor as any)?.store_name || (inactiveVendorItem as any)?.vendor?.store_name || 'Vendedor Marketplace';
-      const prodTitle = inactiveVendorItem.product?.title || inactiveVendorItem.title || 'Producto';
-      const statusStr = (inactiveVendorItem.product?.vendor as any)?.status === 'suspended' ? 'suspendido' : 'inactivo';
+      const vendorName = ((inactiveVendorItem as any).product?.vendor as any)?.store_name || (inactiveVendorItem as any)?.vendor?.store_name || 'Vendedor Marketplace';
+      const prodTitle = (inactiveVendorItem as any).product?.title || (inactiveVendorItem as any).title || 'Producto';
+      const statusStr = ((inactiveVendorItem as any).product?.vendor as any)?.status === 'suspended' ? 'suspendido' : 'inactivo';
       return {
         realWeightKg: 0,
         volumetricWeightKg: 0,
@@ -195,7 +196,7 @@ export default function Checkout() {
     // Priority 1: Check if any product belongs to an external vendor that has ships_to_argentina = false
     let disabledVendorItem: any = null;
     items.forEach(item => {
-      const prod = item.product || item;
+      const prod = (item as any).product || item;
       const vendorId = (prod as any)?.vendor_id || (prod as any)?.vendor?.id;
       const isCollectibles = !vendorId || vendorId === 'platform';
       if (!isCollectibles) {
@@ -208,8 +209,8 @@ export default function Checkout() {
     });
 
     if (disabledVendorItem) {
-      const vendorName = (disabledVendorItem.product?.vendor as any)?.store_name || (disabledVendorItem as any)?.vendor?.store_name || 'Vendedor Marketplace';
-      const prodTitle = disabledVendorItem.product?.title || disabledVendorItem.title || 'Producto';
+      const vendorName = ((disabledVendorItem as any).product?.vendor as any)?.store_name || (disabledVendorItem as any)?.vendor?.store_name || 'Vendedor Marketplace';
+      const prodTitle = (disabledVendorItem as any).product?.title || (disabledVendorItem as any).title || 'Producto';
       return {
         realWeightKg: 0,
         volumetricWeightKg: 0,
@@ -236,14 +237,14 @@ export default function Checkout() {
     const isMultiItemUnconsolidatedCart = items.length > 1 || totalUnits > 1;
 
     items.forEach(item => {
-      const weight = Number(item.product?.weight_kg || item.product?.weight || (item as any).weight || 0);
+      const weight = Number((item as any).product?.weight_kg || (item as any).product?.weight || (item as any).weight || 0);
       if (!weight || weight <= 0) {
         missingData = true;
         if (item.sku) missingSkus.push(item.sku);
       }
       realWeightKg += weight * item.quantity;
 
-      const dim = (item.product as any)?.dimensions || (item as any).dimensions || {};
+      const dim = (item as any).product?.dimensions || (item as any).dimensions || {};
       const l = Number(dim.length || dim.l || 0);
       const w = Number(dim.width || dim.w || 0);
       const h = Number(dim.height || dim.h || 0);
@@ -252,7 +253,7 @@ export default function Checkout() {
         volumetricWeightKg += ((l * w * h) / 5000) * item.quantity;
       }
 
-      const pkgType = String((item.product as any)?.packaging_type || (item as any).packaging_type || (item.product as any)?.metadata?.packaging_type || (item.product as any)?.metadata?.mbe_service_type || '').toLowerCase();
+      const pkgType = String((item as any).product?.packaging_type || (item as any).packaging_type || (item as any).product?.metadata?.packaging_type || (item as any).product?.metadata?.mbe_service_type || '').toLowerCase();
       if (pkgType === 'mbe_caja' || pkgType === 'caja' || pkgType === 'box') {
         serviceType = 'mbe_caja';
       } else if (pkgType === 'mbe_pak' || pkgType === 'pak') {
@@ -345,11 +346,11 @@ export default function Checkout() {
     const itemRules: { id: string; title: string; providers: string[] | null; restriction: string }[] = [];
 
     for (const item of items) {
-      const prod = item.product || item;
+      const prod = (item as any).product || item;
       const { allowedProviders, restrictionType } = getProductPaymentRestrictions(prod);
       itemRules.push({
-        id: prod.id || item.id,
-        title: prod.title || item.title || 'Producto',
+        id: (prod as any).id || item.product_id || (item as any).id || '',
+        title: (prod as any).title || item.title || 'Producto',
         providers: allowedProviders,
         restriction: restrictionType
       });
@@ -625,7 +626,7 @@ export default function Checkout() {
     }> = [];
 
     if (form.country === 'Argentina') {
-      const serviceName = mbeShippingDetails.serviceType === 'mbe_caja' ? 'MBE Caja' : 'MBE PAK';
+      const serviceName = (mbeShippingDetails.serviceType as string) === 'mbe_caja' ? 'MBE Caja' : 'MBE PAK';
       return [{
         id: 'manual',
         name: mbeShippingDetails.isQuoteRequired 
@@ -683,7 +684,7 @@ export default function Checkout() {
     }
 
     // 2. SoyDelivery (Strict BYOC per vendor)
-    const sdActive = isPlatform ? false : !!v?.has_soydelivery_byoc;
+    const sdActive = isPlatform ? false : !!(v as any)?.has_soydelivery_byoc;
     const sdGlobalActive = !!globalProviders['soydelivery'];
     if (sdActive && sdGlobalActive) {
       const cov = isSoyDeliveryAvailableForVendor(
@@ -1051,7 +1052,7 @@ export default function Checkout() {
               defaultMethod = 'correo_uruguayo';
             } else if (settings.manual?.active) {
               defaultMethod = 'manual';
-            } else if (v?.has_soydelivery_byoc) {
+            } else if ((v as any)?.has_soydelivery_byoc) {
               defaultMethod = 'delivery';
             }
           }
@@ -1316,7 +1317,7 @@ export default function Checkout() {
           const isVendorFreeShipping = vendorFreeShippingActive && vendorMinAmount > 0 && groupTotal >= vendorMinAmount;
           const isGroupFreeShipping = isFreeShipping || isVendorFreeShipping;
 
-          const hasSD = isMontevideo && v && v.has_soydelivery_byoc && globalProviders['soydelivery'] && isSoyDeliveryAvailableForVendor(
+          const hasSD = isMontevideo && v && (v as any).has_soydelivery_byoc && globalProviders['soydelivery'] && isSoyDeliveryAvailableForVendor(
             v.default_address, 
             { department: form.department, city: resolvedCityForShipping }
           ).available;
@@ -1666,8 +1667,9 @@ export default function Checkout() {
     // Recalcular el subtotal elegible verificando exclusiones del banco y las no acumulables
     items.forEach(item => {
       let isExcluded = false;
-      if (selectedPromo.exclusions) {
-         for (const exc of selectedPromo.exclusions) {
+      const exclusions = (selectedPromo as any).exclusions;
+      if (exclusions && Array.isArray(exclusions)) {
+         for (const exc of exclusions) {
            if (exc.target_type === 'product' && exc.target_id === item.product_id) isExcluded = true;
            if (exc.target_type === 'category' && item.category_id === exc.target_id) isExcluded = true;
            if (exc.target_type === 'brand' && item.brand_id === exc.target_id) isExcluded = true;
@@ -1703,7 +1705,7 @@ export default function Checkout() {
     items.forEach(item => {
       const isCollectibles = !item.vendor_id || item.vendor_id === 'platform';
       const storeKey = getStoreKey(item);
-      const isOptedIn = vendorsData[storeKey]?.promotions_opt_in || false;
+      const isOptedIn = (vendorsData[storeKey] as any)?.promotions_opt_in || false;
       
       if (isCollectibles || isOptedIn) {
         const itemDiscount = evaluateItemDiscount(item as any, promotions);
@@ -2262,7 +2264,7 @@ export default function Checkout() {
       // 1. ZINC LIVE CHECK & CAPITAL CAPACITY RESERVATION
       let activeReservationId: string | null = null;
       const { data: { session } } = await supabase.auth.getSession();
-      const hasIntlItems = items.some(i => i.is_international || i.product?.is_international || i.product?.source_provider === 'zinc');
+      const hasIntlItems = items.some(i => i.is_international || (i as any).product?.is_international || (i as any).product?.source_provider === 'zinc');
 
       if (session && hasIntlItems) {
          const { data: zincCheck, error: zincErr } = await supabase.functions.invoke('zinc-live-check-before-payment', {
@@ -3967,7 +3969,7 @@ export default function Checkout() {
                               vendorName={vendorName}
                               vendorLogo={vData?.default_address?.address ? null : null}
                               items={groupItems.map(gi => ({
-                                id: gi.id,
+                                id: gi.product_id || (gi as any).id || (gi as any).variant_id || '',
                                 title: gi.title,
                                 image_url: getProductImage(gi),
                                 price: gi.price,
@@ -4360,7 +4362,7 @@ export default function Checkout() {
                     const groupShippingCost = vendorShippingCosts[storeKey] ?? 0;
 
                     const v = vendorsData[storeKey];
-                    const hasSD = isMontevideo && v && v.has_soydelivery_byoc && globalProviders['soydelivery'] && isSoyDeliveryAvailableForVendor(
+                    const hasSD = isMontevideo && v && (v as any).has_soydelivery_byoc && globalProviders['soydelivery'] && isSoyDeliveryAvailableForVendor(
                       v.default_address, 
                       { department: form.department, city: resolvedCityForShipping }
                     ).available;

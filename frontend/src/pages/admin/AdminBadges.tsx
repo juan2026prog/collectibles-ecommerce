@@ -211,7 +211,7 @@ export default function AdminBadges() {
 
     // 1. Find the badge in our local state to resolve its key (slug or id)
     const badgeToDelete = badges.find(b => b.id === badgeId);
-    const key = badgeToDelete?.slug || badgeToDelete?.id || badgeId;
+    const key = (badgeToDelete as any)?.slug || badgeToDelete?.id || badgeId;
 
     // 2. Fetch all products that have badges assigned to remove the deleted badge
     const { data: productsWithBadges } = await supabase

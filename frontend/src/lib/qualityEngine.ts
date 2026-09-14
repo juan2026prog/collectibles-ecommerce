@@ -250,7 +250,7 @@ export function runQualityEngineCheck(
   let brandError = '';
   
   const brandAudit = auditProductBrand(p);
-  const detectedBrand = brandAudit.suggestedBrandName || detection.detectedBrand;
+  const detectedBrand = brandAudit.suggestedBrandName || (p as any).detectedBrand || '';
 
   if (!assignedBrandId || brandAudit.classification === 'MISSING_BRAND') {
     brandResult = 'Incompleto';

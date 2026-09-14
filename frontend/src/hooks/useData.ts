@@ -767,13 +767,15 @@ export function useCategories() {
     }
 
     if (!hasValidCache && !_categoriesPromise) {
-      _categoriesPromise = supabase
-        .from('categories')
-        .select('id, name, slug, parent_id, sort_order, status, is_active, metadata, image_url, products(count)')
-        .eq('is_active', true)
-        .eq('status', 'approved')
-        .order('sort_order')
-        .order('name')
+      _categoriesPromise = Promise.resolve(
+        supabase
+          .from('categories')
+          .select('id, name, slug, parent_id, sort_order, status, is_active, metadata, image_url, products(count)')
+          .eq('is_active', true)
+          .eq('status', 'approved')
+          .order('sort_order')
+          .order('name')
+      )
         .then(({ data, error }) => {
           if (!error && data) {
             const formatted = data.map((cat: any) => ({
@@ -820,13 +822,15 @@ export function useBrands() {
     }
 
     if (!hasValidCache && !_brandsPromise) {
-      _brandsPromise = supabase
-        .from('brands')
-        .select('*')
-        .eq('status', 'approved')
-        .eq('is_active', true)
-        .eq('is_public', true)
-        .order('sort_order')
+      _brandsPromise = Promise.resolve(
+        supabase
+          .from('brands')
+          .select('*')
+          .eq('status', 'approved')
+          .eq('is_active', true)
+          .eq('is_public', true)
+          .order('sort_order')
+      )
         .then(({ data, error }) => {
           if (!error && data) {
             _brandsCache = data;
@@ -1007,11 +1011,13 @@ export function useBanners() {
     const hasValidCache = cacheObj && !cacheObj.isStale && cacheObj.data.length > 0;
 
     if (!hasValidCache && !_bannersPromise) {
-      _bannersPromise = supabase
-        .from('banners')
-        .select('*')
-        .eq('is_active', true)
-        .order('sort_order')
+      _bannersPromise = Promise.resolve(
+        supabase
+          .from('banners')
+          .select('*')
+          .eq('is_active', true)
+          .order('sort_order')
+      )
         .then(({ data, error }) => {
           if (!error && data && data.length > 0) {
             _bannersCache = data;

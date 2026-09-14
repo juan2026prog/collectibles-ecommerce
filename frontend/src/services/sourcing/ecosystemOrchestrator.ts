@@ -113,7 +113,7 @@ export class EcosystemOrchestrator {
     if (mlUruguay) {
       if (mlUruguay.market_position === 'CHEAPER') marketGapScore = 90;
       else if (mlUruguay.total_listings === 0) marketGapScore = 95;
-      else if (mlUruguay.market_position === 'EXPENSIVE') marketGapScore = 20;
+      else if (mlUruguay.market_position === 'MORE_EXPENSIVE') marketGapScore = 20;
     }
     logStep('4. MARKET_INTELLIGENCE', `Comparación MercadoLibre UY: ${mlUruguay?.market_verdict || 'Sin competencia'} (Market Gap Score: ${marketGapScore})`);
 
@@ -164,7 +164,7 @@ export class EcosystemOrchestrator {
           product,
           settings,
           rules,
-          actor
+          (actor as 'AUTOPILOT' | 'USER' | 'ADMIN' | 'SYSTEM') || 'SYSTEM'
         );
         autopilotExecutedAction = execRes.executedAction;
         logStep('7. AUTOPILOT', `Acción Autopilot: ${execRes.executedAction} - ${execRes.message}`);
@@ -191,7 +191,7 @@ export class EcosystemOrchestrator {
     // 8. Radar Direct Linkage
     let radarLinked = false;
     try {
-      const searchFranchise = product.franchise || product.license || product.brand;
+      const searchFranchise = (product as any).franchise || product.license || product.brand;
       if (searchFranchise) {
         const radarEvents = await RadarIntegrationService.getCanonicalProductsForRadar(
           { franchise: searchFranchise, limit: 1 },
@@ -207,7 +207,7 @@ export class EcosystemOrchestrator {
     // 9. Personalization Signal Registration
     try {
       recordSignal({
-        eventType: 'PRODUCT_VIEW',
+        eventType: 'VIEW',
         entities: {
           brand: product.brand,
           license: product.license,

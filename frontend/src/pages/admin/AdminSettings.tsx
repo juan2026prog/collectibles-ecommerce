@@ -7,6 +7,7 @@ import { MediaPickerModal } from '../../components/MediaPickerModal';
 import { useToast } from '../../components/admin/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { useFeatures } from '../../contexts/FeatureToggleContext';
+import { updateCachedSetting } from '../../hooks/useSiteSettings';
 import { EmailRecipientsModal, type EmailRecipient } from '../../components/common/EmailRecipientsModal';
 import { MobilePushSetup } from '../../components/common/MobilePushSetup';
 import {
@@ -1443,7 +1444,7 @@ export default function AdminSettings() {
                     </div>
                     <div>
                        <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Secret Key</label>
-                       <input type="password" sx={{WebkitTextSecurity: 'disc'}} className="form-input w-full font-mono text-xs" value={settings['payments_dlocal_go_secret_key'] || ''} onChange={e => setSettings({ ...settings, payments_dlocal_go_secret_key: e.target.value })} onBlur={() => saveSetting('payments_dlocal_go_secret_key', settings['payments_dlocal_go_secret_key'] || '')} placeholder="sk_..." />
+                       <input type="password" style={{WebkitTextSecurity: 'disc'} as any} className="form-input w-full font-mono text-xs" value={settings['payments_dlocal_go_secret_key'] || ''} onChange={e => setSettings({ ...settings, payments_dlocal_go_secret_key: e.target.value })} onBlur={() => saveSetting('payments_dlocal_go_secret_key', settings['payments_dlocal_go_secret_key'] || '')} placeholder="sk_..." />
                     </div>
                     <div>
                        <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Webhook X-Login</label>
@@ -1493,7 +1494,7 @@ export default function AdminSettings() {
                  <div className="space-y-4">
                     <div>
                        <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Access Token</label>
-                       <input type="password" sx={{WebkitTextSecurity: 'disc'}} className="form-input w-full font-mono text-xs" value={settings['payments_mercadopago_access_token'] || ''} onChange={e => setSettings({ ...settings, payments_mercadopago_access_token: e.target.value })} onBlur={() => saveSetting('payments_mercadopago_access_token', settings['payments_mercadopago_access_token'] || '')} placeholder="APP_USR-..." />
+                       <input type="password" style={{WebkitTextSecurity: 'disc'} as any} className="form-input w-full font-mono text-xs" value={settings['payments_mercadopago_access_token'] || ''} onChange={e => setSettings({ ...settings, payments_mercadopago_access_token: e.target.value })} onBlur={() => saveSetting('payments_mercadopago_access_token', settings['payments_mercadopago_access_token'] || '')} placeholder="APP_USR-..." />
                        <p className="text-[10px] text-gray-400 mt-1">Obtenlo en <a href="https://www.mercadopago.com.uy/developers/panel/app" target="_blank" className="text-sky-600 underline">Mercado Pago Developers</a>. Usá un token TEST- para sandbox.</p>
                     </div>
                     <div className="p-3 bg-gray-50 rounded-lg border flex items-center justify-between">
@@ -1546,7 +1547,7 @@ export default function AdminSettings() {
                     </div>
                     <div>
                        <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Secret Key</label>
-                       <input type="password" sx={{WebkitTextSecurity: 'disc'}} className="form-input w-full font-mono text-xs" value={settings['payments_paypal_secret_key'] || ''} onChange={e => setSettings({ ...settings, payments_paypal_secret_key: e.target.value })} onBlur={() => saveSetting('payments_paypal_secret_key', settings['payments_paypal_secret_key'] || '')} placeholder="EKj..." />
+                       <input type="password" style={{WebkitTextSecurity: 'disc'} as any} className="form-input w-full font-mono text-xs" value={settings['payments_paypal_secret_key'] || ''} onChange={e => setSettings({ ...settings, payments_paypal_secret_key: e.target.value })} onBlur={() => saveSetting('payments_paypal_secret_key', settings['payments_paypal_secret_key'] || '')} placeholder="EKj..." />
                     </div>
                     <div className="p-3 bg-gray-50 rounded-lg border flex items-center justify-between">
                        <div className="flex items-center gap-2">
@@ -2042,7 +2043,7 @@ export default function AdminSettings() {
                   </div>
                   <div>
                      <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">API Key</label>
-                     <input type="password" sx={{WebkitTextSecurity: 'disc'}} className="form-input w-full font-mono text-xs" value={settings['shipping_soydelivery_api_key'] || ''} onChange={e => setSettings({ ...settings, shipping_soydelivery_api_key: e.target.value })} onBlur={() => saveSetting('shipping_soydelivery_api_key', settings['shipping_soydelivery_api_key'] || '')} placeholder="8IZpb..." />
+                     <input type="password" style={{ WebkitTextSecurity: 'disc' } as any} className="form-input w-full font-mono text-xs" value={settings['shipping_soydelivery_api_key'] || ''} onChange={e => setSettings({ ...settings, shipping_soydelivery_api_key: e.target.value })} onBlur={() => saveSetting('shipping_soydelivery_api_key', settings['shipping_soydelivery_api_key'] || '')} placeholder="8IZpb..." />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -2052,7 +2053,7 @@ export default function AdminSettings() {
                   </div>
                   <div>
                      <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Negocio Clave</label>
-                     <input type="password" sx={{WebkitTextSecurity: 'disc'}} className="form-input w-full font-mono text-xs" value={settings['shipping_soydelivery_negocio_clave'] || ''} onChange={e => setSettings({ ...settings, shipping_soydelivery_negocio_clave: e.target.value })} onBlur={() => saveSetting('shipping_soydelivery_negocio_clave', settings['shipping_soydelivery_negocio_clave'] || '')} placeholder="1234..." />
+                     <input type="password" style={{ WebkitTextSecurity: 'disc' } as any} className="form-input w-full font-mono text-xs" value={settings['shipping_soydelivery_negocio_clave'] || ''} onChange={e => setSettings({ ...settings, shipping_soydelivery_negocio_clave: e.target.value })} onBlur={() => saveSetting('shipping_soydelivery_negocio_clave', settings['shipping_soydelivery_negocio_clave'] || '')} placeholder="1234..." />
                   </div>
                 </div>
                 <div className="p-3 bg-gray-50 rounded-lg border flex items-center justify-between mt-4">

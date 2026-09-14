@@ -198,13 +198,13 @@ export async function buildDynamicXlsxWorkbook(options: BuildExcelOptions): Prom
     const source = field.controlledValidation.source;
 
     if (source === 'brands' && brandNames.length > 0) {
-      mainSheet.dataValidations.add(range, {
+      (mainSheet as any).dataValidations?.add(range, {
         type: 'list',
         allowBlank: true,
         formulae: [`Listas!$C$2:$C$${brandNames.length + 1}`]
       });
     } else if (source === 'categories' && mainCatNames.length > 0) {
-      mainSheet.dataValidations.add(range, {
+      (mainSheet as any).dataValidations?.add(range, {
         type: 'list',
         allowBlank: true,
         formulae: [`Listas!$D$2:$D$${mainCatNames.length + 1}`]
@@ -213,49 +213,49 @@ export async function buildDynamicXlsxWorkbook(options: BuildExcelOptions): Prom
       // Dependent list formula referencing Category cell (categoryColLetter)
       // Substitutes spaces, ampersands, exclamation marks, hyphens, and diacritics into Excel Defined Name format
       const formula = `=INDIRECT("CAT_" & UPPER(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(${categoryColLetter}2, "á", "A"), "é", "E"), "í", "I"), "ó", "O"), "ú", "U"), " ", "_"), "&", "_"), "!", "_"), "-", "_")))`;
-      mainSheet.dataValidations.add(range, {
+      (mainSheet as any).dataValidations?.add(range, {
         type: 'list',
         allowBlank: true,
         formulae: [formula]
       });
     } else if (source === 'licenses' && licenseNames.length > 0) {
-      mainSheet.dataValidations.add(range, {
+      (mainSheet as any).dataValidations?.add(range, {
         type: 'list',
         allowBlank: true,
         formulae: [`Listas!$F$2:$F$${licenseNames.length + 1}`]
       });
     } else if (source === 'vendors' && vendorNames.length > 0) {
-      mainSheet.dataValidations.add(range, {
+      (mainSheet as any).dataValidations?.add(range, {
         type: 'list',
         allowBlank: true,
         formulae: [`Listas!$G$2:$G$${vendorNames.length + 1}`]
       });
     } else if (source === 'conditions' && conditions.length > 0) {
-      mainSheet.dataValidations.add(range, {
+      (mainSheet as any).dataValidations?.add(range, {
         type: 'list',
         allowBlank: true,
         formulae: [`Listas!$H$2:$H$${conditions.length + 1}`]
       });
     } else if (source === 'status' && statuses.length > 0) {
-      mainSheet.dataValidations.add(range, {
+      (mainSheet as any).dataValidations?.add(range, {
         type: 'list',
         allowBlank: true,
         formulae: [`Listas!$I$2:$I$${statuses.length + 1}`]
       });
     } else if (source === 'badges' && badges.length > 0) {
-      mainSheet.dataValidations.add(range, {
+      (mainSheet as any).dataValidations?.add(range, {
         type: 'list',
         allowBlank: true,
         formulae: [`Listas!$J$2:$J$${badges.length + 1}`]
       });
     } else if (source === 'destacado' && destacadoOptions.length > 0) {
-      mainSheet.dataValidations.add(range, {
+      (mainSheet as any).dataValidations?.add(range, {
         type: 'list',
         allowBlank: true,
         formulae: [`Listas!$K$2:$K$${destacadoOptions.length + 1}`]
       });
     } else if (source === 'mbe_packaging' && mbeTypes.length > 0) {
-      mainSheet.dataValidations.add(range, {
+      (mainSheet as any).dataValidations?.add(range, {
         type: 'list',
         allowBlank: true,
         formulae: [`Listas!$A$2:$A$${mbeTypes.length + 1}`]

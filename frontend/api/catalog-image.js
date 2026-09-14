@@ -5,7 +5,13 @@ const ALLOWED_HOSTS = [
   'cobtsgkwcftvexaarwmo.supabase.co',
   'http2.mlstatic.com',
   'mlstatic.com',
-  'collectibles.uy'
+  'collectibles.uy',
+  'amazon.com',
+  'media-amazon.com',
+  'ssl-images-amazon.com',
+  'images-amazon.com',
+  'ebayimg.com',
+  'walmartimages.com'
 ];
 
 function isHostAllowed(hostname) {

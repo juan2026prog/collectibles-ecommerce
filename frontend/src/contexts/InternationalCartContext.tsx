@@ -7,8 +7,11 @@ export interface InternationalCartItem {
   price_usd: number;
   image_url: string;
   quantity: number;
+  brand_name?: string;
+  is_international?: boolean;
   weight_lb?: number;
   weight_kg?: number;
+  amazon_price?: number;
   raw_data?: any;
   international_data?: any;
 }

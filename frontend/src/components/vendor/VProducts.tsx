@@ -148,6 +148,7 @@ export default function VProducts() {
     title: '', slug: '', description: '', short_description: '',
     base_price: '', compare_at_price: '', sku: '', stock: '10', status: 'published',
     badge: '', is_featured: false, is_active: true, category_id: '', brand_id: '',
+    license_id: '',
     vendor_store_id: '',
     condition: '',
     condition_notes: '',
@@ -475,6 +476,7 @@ export default function VProducts() {
     }
 
     // 3. Save Product (Draft or Published)
+    let createdProductId: string | null = null;
     try {
       setLoading(true);
       const normalizedCondition = normalizeCondition(form.condition);
@@ -512,7 +514,6 @@ export default function VProducts() {
       console.log('[VENDOR_PRODUCTS_SAVE_PAYLOAD]', payload);
 
       let productId = editing?.id;
-      let createdProductId: string | null = null;
       const targetStatus = form.status;
 
       if (editing) {
@@ -807,8 +808,8 @@ export default function VProducts() {
       const newTitle = `${product.title} (Copia)`;
       const newSlug = await generateUniqueSlug(newTitle);
 
-      const brandId = product.brand?.id || product.brand_id || null;
-      const catId = product.category?.id || product.category_id || null;
+      const brandId = product.brand?.id || (product as any).brand_id || null;
+      const catId = product.category?.id || (product as any).category_id || null;
       const payload = {
         vendor_id: user.id,
         title: newTitle,
@@ -1089,13 +1090,13 @@ export default function VProducts() {
     return products.filter(p => {
       // Brand name resolution
       const rawBrandName = (Array.isArray(p.brand) ? p.brand[0]?.name : p.brand?.name) ||
-        brands.find(b => b.id === (p.brand_id || p.brand?.id))?.name || '';
+        brands.find(b => b.id === ((p as any).brand_id || p.brand?.id))?.name || '';
       const brandName = rawBrandName.toLowerCase();
 
       // Category name resolution
-      const rawCatName = (Array.isArray(p.product_categories) ? p.product_categories[0]?.categories?.name : null) ||
+      const rawCatName = (Array.isArray((p as any).product_categories) ? (p as any).product_categories[0]?.categories?.name : null) ||
         p.category?.name ||
-        categories.find(c => c.id === (p.category_id || p.category?.id))?.name || '';
+        categories.find(c => c.id === ((p as any).category_id || p.category?.id))?.name || '';
       const categoryName = rawCatName.toLowerCase();
 
       const matchesSearch = !sLower || 
@@ -1111,8 +1112,8 @@ export default function VProducts() {
           (v.legacy_sku && String(v.legacy_sku).toLowerCase().includes(sLower)) ||
           (v.sku_vendedor && String(v.sku_vendedor).toLowerCase().includes(sLower))
         );
-      const matchesCategory = filterCategory === '' || p.category_id === filterCategory || p.product_categories?.[0]?.categories?.id === filterCategory || p.category?.id === filterCategory;
-      const matchesBrand = filterBrand === '' || p.brand?.id === filterBrand || p.brand_id === filterBrand;
+      const matchesCategory = filterCategory === '' || (p as any).category_id === filterCategory || (p as any).product_categories?.[0]?.categories?.id === filterCategory || p.category?.id === filterCategory;
+      const matchesBrand = filterBrand === '' || p.brand?.id === filterBrand || (p as any).brand_id === filterBrand;
       return matchesSearch && matchesCategory && matchesBrand;
     });
   }, [products, search, filterCategory, filterBrand, brands, categories]);
@@ -1808,7 +1809,7 @@ export default function VProducts() {
                              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs font-mono bg-slate-800/80 p-3 rounded-lg border border-slate-700">
                                 <div><span className="text-slate-400 block text-[10px]">ML Item ID:</span> {editing.ml_item_id || '—'}</div>
                                 <div><span className="text-slate-400 block text-[10px]">ID Externo:</span> {editing.metadata?.amazon_asin || editing.metadata?.external_product_id || '—'}</div>
-                                <div><span className="text-slate-400 block text-[10px]">Vendor SKU:</span> {editing.variants?.[0]?.sku_vendedor || '—'}</div>
+                                <div><span className="text-slate-400 block text-[10px]">Vendor SKU:</span> {(editing.variants?.[0] as any)?.sku_vendedor || '—'}</div>
                                 <div><span className="text-slate-400 block text-[10px]">UUID Interno:</span> {editing.id ? `${editing.id.substring(0, 8)}...` : '—'}</div>
                              </div>
                           </div>
@@ -2096,7 +2097,7 @@ export default function VProducts() {
             fetchProducts();
           }}
           userRole="vendor"
-          currentVendorId={vendor?.id || null}
+          currentVendorId={user?.id || null}
         />
       )}
 
@@ -2107,14 +2108,14 @@ export default function VProducts() {
             search: search || '',
             categoryId: filterCategory || '',
             brandId: filterBrand || '',
-            vendorId: vendor?.id || 'all',
+            vendorId: user?.id || 'all',
             mbeType: '',
             argentinaStatus: '',
             status: ''
           }}
           selectedProductIds={selectedProducts}
           userRole="vendor"
-          vendorId={vendor?.id || null}
+          vendorId={user?.id || null}
         />
       )}
 

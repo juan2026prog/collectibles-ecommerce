@@ -20,13 +20,17 @@ interface ToastItem {
   duration?: number;
 }
 
-interface ToastContextType {
-  toast: {
-    success: (msg: string, duration?: number) => void;
-    error: (msg: string, duration?: number) => void;
-    warning: (msg: string, duration?: number) => void;
-    info: (msg: string, duration?: number) => void;
-  };
+export interface ToastMethods {
+  (msgOrObj: string | { message?: string; title?: string; description?: string; type?: ToastType; variant?: string }, durationOrType?: number | ToastType): void;
+  success: (msg: string, duration?: number) => void;
+  error: (msg: string, duration?: number) => void;
+  warning: (msg: string, duration?: number) => void;
+  info: (msg: string, duration?: number) => void;
+}
+
+export interface ToastContextType {
+  toast: ToastMethods;
+  addToast: (msgOrObj: string | { message?: string; title?: string; type?: ToastType; variant?: string; description?: string }, type?: ToastType, duration?: number) => void;
 }
 
 const ToastContext = createContext<ToastContextType | null>(null);
@@ -65,7 +69,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const addToast = useCallback((type: ToastType, message: string, duration = 4000) => {
+  const triggerToast = useCallback((type: ToastType, message: string, duration = 4000) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     setToasts(prev => [...prev, { id, type, message, duration }]);
 
@@ -75,15 +79,30 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     }
   }, [removeToast]);
 
-  const toast = {
-    success: (msg: string, duration?: number) => addToast('success', msg, duration),
-    error: (msg: string, duration?: number) => addToast('error', msg, duration ?? 6000),
-    warning: (msg: string, duration?: number) => addToast('warning', msg, duration ?? 5000),
-    info: (msg: string, duration?: number) => addToast('info', msg, duration),
-  };
+  const addToast = useCallback((
+    msgOrObj: string | { message?: string; title?: string; type?: ToastType; variant?: string; description?: string },
+    explicitType: ToastType = 'info',
+    duration = 4000
+  ) => {
+    if (typeof msgOrObj === 'string') {
+      triggerToast(explicitType, msgOrObj, duration);
+    } else if (msgOrObj && typeof msgOrObj === 'object') {
+      const msg = msgOrObj.message || msgOrObj.description || msgOrObj.title || 'Notificación';
+      const resolvedType: ToastType = (msgOrObj.type || (msgOrObj.variant === 'destructive' ? 'error' : 'info')) as ToastType;
+      triggerToast(resolvedType, msg, duration);
+    }
+  }, [triggerToast]);
+
+  const toastBase = (msg: string, duration?: number) => triggerToast('info', msg, duration);
+  toastBase.success = (msg: string, duration?: number) => triggerToast('success', msg, duration);
+  toastBase.error = (msg: string, duration?: number) => triggerToast('error', msg, duration ?? 6000);
+  toastBase.warning = (msg: string, duration?: number) => triggerToast('warning', msg, duration ?? 5000);
+  toastBase.info = (msg: string, duration?: number) => triggerToast('info', msg, duration);
+
+  const toast = toastBase as ToastMethods;
 
   return (
-    <ToastContext.Provider value={{ toast }}>
+    <ToastContext.Provider value={{ toast, addToast }}>
       {children}
       {/* Toast Container */}
       <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-3 pointer-events-none max-w-sm w-full">

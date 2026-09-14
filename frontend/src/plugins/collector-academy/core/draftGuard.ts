@@ -25,6 +25,7 @@ export interface GroundedKnowledgeItem {
   title: string;
   summary: string;
   url: string;
+  suggestedSlug?: string;
   keyDetails: string[];
 }
 

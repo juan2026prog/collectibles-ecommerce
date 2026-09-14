@@ -453,10 +453,12 @@ const AdminImportHub: React.FC = () => {
                     </div>
                     <div className="text-2xl font-black text-gray-900 font-mono">${c.estimate.totalCostUsd.toFixed(2)}</div>
                     <div className="text-[11px] text-gray-500 mt-2 space-y-1 font-mono">
-                      <div>Flete: ${c.estimate.freightCostUsd.toFixed(2)}</div>
-                      <div>Handling: ${c.estimate.handlingFeeUsd.toFixed(2)}</div>
-                      <div>Aduana / IVA: ${c.estimate.customsTaxUsd.toFixed(2)}</div>
-                      {c.estimate.ursecFeeUsd > 0 && <div>URSEC: ${c.estimate.ursecFeeUsd.toFixed(2)}</div>}
+                      <div>Flete: ${(c.estimate.courier?.baseFreightUsd ?? 0).toFixed(2)}</div>
+                      <div>Handling: ${(c.estimate.courier?.handlingUsd ?? 0).toFixed(2)}</div>
+                      <div>Aduana / IVA: ${(c.estimate.customsTaxUsd || 0).toFixed(2)}</div>
+                      {((c.estimate.courier?.ursecUsd ?? 0) > 0) && (
+                        <div>URSEC: ${(c.estimate.courier?.ursecUsd ?? 0).toFixed(2)}</div>
+                      )}
                     </div>
                   </div>
                 );

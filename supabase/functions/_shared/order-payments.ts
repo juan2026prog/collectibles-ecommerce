@@ -1,4 +1,5 @@
 import { enqueueMlSyncEvent } from "./mercadolibre.ts";
+import { canTransitionOrder, canTransitionPayment, type OrderStatus, type PaymentStatus } from "./state-machine.ts";
 
 export function orderSummary(order: any, isAuthorized: boolean = true) {
   if (!order) return null;
@@ -25,12 +26,109 @@ export function orderSummary(order: any, isAuthorized: boolean = true) {
   };
 }
 
+/**
+ * Helper to record/execute a durable outbox job idempotently
+ */
+async function recordAndExecuteJob(
+  supabaseClient: any,
+  params: {
+    orderId: string;
+    suborderId?: string | null;
+    jobType: string;
+    eventId: string;
+    payload?: Record<string, any>;
+    executor: () => Promise<any>;
+  }
+) {
+  const { orderId, suborderId, jobType, eventId, payload = {}, executor } = params;
+
+  // 1. Try to insert pending job into order_execution_jobs
+  const { data: existingJob } = await supabaseClient
+    .from("order_execution_jobs")
+    .select("id, status, attempts")
+    .eq("job_type", jobType)
+    .eq("event_id", eventId)
+    .maybeSingle();
+
+  if (existingJob && existingJob.status === "COMPLETED") {
+    console.log(`[Outbox] Job ${jobType} (${eventId}) already COMPLETED. Skipping.`);
+    return existingJob;
+  }
+
+  let jobId = existingJob?.id;
+  if (!jobId) {
+    const { data: inserted, error: insertErr } = await supabaseClient
+      .from("order_execution_jobs")
+      .insert({
+        order_id: orderId,
+        suborder_id: suborderId || null,
+        job_type: jobType,
+        event_id: eventId,
+        status: "PROCESSING",
+        payload,
+        attempts: 1,
+      })
+      .select("id")
+      .single();
+
+    if (insertErr) {
+      console.warn(`[Outbox] Job record insert conflict for ${jobType} (${eventId}):`, insertErr.message);
+    } else {
+      jobId = inserted?.id;
+    }
+  } else {
+    await supabaseClient
+      .from("order_execution_jobs")
+      .update({
+        status: "PROCESSING",
+        attempts: (existingJob.attempts || 0) + 1,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", jobId);
+  }
+
+  // 2. Execute the downstream task
+  try {
+    const result = await executor();
+    if (jobId) {
+      await supabaseClient
+        .from("order_execution_jobs")
+        .update({
+          status: "COMPLETED",
+          processed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          last_error: null,
+        })
+        .eq("id", jobId);
+    }
+    return result;
+  } catch (err: any) {
+    console.error(`[Outbox] Error executing job ${jobType} (${eventId}):`, err);
+    if (jobId) {
+      await supabaseClient
+        .from("order_execution_jobs")
+        .update({
+          status: "FAILED",
+          last_error: err?.message || String(err),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", jobId);
+    }
+  }
+}
+
 export async function triggerPostPaymentActions(
   supabaseClient: any,
   supabaseUrl: string,
   supabaseServiceRoleKey: string,
   orderId: string,
 ) {
+  const functionHeaders = {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${supabaseServiceRoleKey}`,
+  };
+
+  // 1. Enqueue ML Stock Sync Jobs
   const { data: orderItems } = await supabaseClient
     .from("order_items")
     .select("*")
@@ -39,24 +137,36 @@ export async function triggerPostPaymentActions(
   if (orderItems) {
     for (const item of orderItems) {
       if (item.variant_id) {
-        // Enqueue ML stock sync event without blocking (physical stock decremented in confirm_payment_atomic RPC)
-        await enqueueMlSyncEvent(supabaseClient, item.variant_id).catch((e: any) => console.error("ML Sync error:", e));
+        await recordAndExecuteJob(supabaseClient, {
+          orderId,
+          jobType: "ml_stock_sync",
+          eventId: `${orderId}_ml_sync_${item.variant_id}`,
+          payload: { variant_id: item.variant_id },
+          executor: async () => {
+            await enqueueMlSyncEvent(supabaseClient, item.variant_id);
+          },
+        });
       }
     }
   }
 
-  const functionHeaders = {
-    "Content-Type": "application/json",
-    "Authorization": `Bearer ${supabaseServiceRoleKey}`,
-  };
+  // 2. Enqueue Commissions Calculation Job
+  await recordAndExecuteJob(supabaseClient, {
+    orderId,
+    jobType: "commissions_calc",
+    eventId: `${orderId}_commissions`,
+    payload: { order_id: orderId },
+    executor: async () => {
+      const res = await fetch(`${supabaseUrl}/functions/v1/calculate-commissions`, {
+        method: "POST",
+        headers: functionHeaders,
+        body: JSON.stringify({ order_id: orderId }),
+      });
+      if (!res.ok) throw new Error(`Commissions HTTP ${res.status}: ${await res.text()}`);
+    },
+  });
 
-  await fetch(`${supabaseUrl}/functions/v1/calculate-commissions`, {
-    method: "POST",
-    headers: functionHeaders,
-    body: JSON.stringify({ order_id: orderId }),
-  }).catch((err: any) => console.error("Commissions error:", err));
-
-  // Trigger post-payment shipment automation per suborder
+  // 3. Post-payment shipment automation per suborder
   try {
     const { data: fullOrder } = await supabaseClient
       .from("orders")
@@ -85,85 +195,105 @@ export async function triggerPostPaymentActions(
         const method = (sub.shipping_method || "").toLowerCase();
         const provider = (sub.shipping_provider || "").toLowerCase();
         
-        // Resolve provider code
         let resolvedCode = "";
         if (provider.includes("dac") || method.includes("dac")) resolvedCode = "dac";
         else if (provider.includes("soydelivery") || method.includes("soydelivery")) resolvedCode = "soydelivery";
         else if (provider.includes("ues") || method.includes("ues")) resolvedCode = "ues";
         else if (provider.includes("distrilogic") || method.includes("distrilogic")) resolvedCode = "distrilogic";
         
-        // Only trigger if provider is active globally
         if (resolvedCode && activeCodes.includes(resolvedCode)) {
-          console.log(`[Post-Payment] Enqueueing shipment for suborder ${sub.suborder_number} (${sub.id}) using ${resolvedCode}`);
+          await recordAndExecuteJob(supabaseClient, {
+            orderId,
+            suborderId: sub.id,
+            jobType: "shipping_creation",
+            eventId: `${orderId}_shipping_${sub.id}_${resolvedCode}`,
+            payload: { suborder_id: sub.id, provider: resolvedCode },
+            executor: async () => {
+              console.log(`[Post-Payment] Enqueueing shipment for suborder ${sub.suborder_number} (${sub.id}) using ${resolvedCode}`);
 
-          // A. Build customer details
-          const addr = fullOrder.shipping_address || {};
-          const customerName = `${addr.first_name || ''} ${addr.last_name || ''}`.trim() || 'Cliente';
-          const customerPhone = fullOrder.customer_phone || addr.phone || '';
-          const customerAddress = addr.street || '';
-          const customerCity = addr.city || '';
-          const customerDepartment = addr.department || '';
-          
-          let labelType = 'courier';
-          if (resolvedCode === 'soydelivery') {
-            labelType = 'flex';
-          }
+              const addr = fullOrder.shipping_address || {};
+              const customerName = `${addr.first_name || ''} ${addr.last_name || ''}`.trim() || 'Cliente';
+              const customerPhone = fullOrder.customer_phone || addr.phone || '';
+              const customerAddress = addr.street || '';
+              const customerCity = addr.city || '';
+              const customerDepartment = addr.department || '';
+              
+              let labelType = 'courier';
+              if (resolvedCode === 'soydelivery') {
+                labelType = 'flex';
+              }
 
-          // B. Create the shipment row in state 'queued'
-          const { data: createdShip, error: createErr } = await supabaseClient
-            .from('shipments')
-            .insert({
-              order_id: orderId,
-              suborder_id: sub.id,
-              provider_key: resolvedCode,
-              tracking_code: null,
-              internal_reference: `COL-${sub.suborder_number}`,
-              shipping_status: 'queued',
-              customer_name: customerName,
-              customer_phone: customerPhone,
-              customer_address: customerAddress,
-              customer_city: customerCity,
-              customer_department: customerDepartment,
-              barcode_value: `COL-${sub.suborder_number}`,
-              qr_value: `COL-${sub.suborder_number}`,
-              label_type: labelType,
-              label_version: 1,
-              label_generated_at: new Date().toISOString()
-            })
-            .select()
-            .single();
+              // Check if shipment already created for this suborder
+              const { data: existingShip } = await supabaseClient
+                .from('shipments')
+                .select('id')
+                .eq('suborder_id', sub.id)
+                .maybeSingle();
 
-          if (createErr || !createdShip) {
-            console.error(`[Post-Payment] Failed to create shipment row for suborder ${sub.suborder_number}:`, createErr?.message);
-            continue;
-          }
+              let shipmentId = existingShip?.id;
+              if (!shipmentId) {
+                const { data: createdShip, error: createErr } = await supabaseClient
+                  .from('shipments')
+                  .insert({
+                    order_id: orderId,
+                    suborder_id: sub.id,
+                    provider_key: resolvedCode,
+                    tracking_code: null,
+                    internal_reference: `COL-${sub.suborder_number}`,
+                    shipping_status: 'queued',
+                    customer_name: customerName,
+                    customer_phone: customerPhone,
+                    customer_address: customerAddress,
+                    customer_city: customerCity,
+                    customer_department: customerDepartment,
+                    barcode_value: `COL-${sub.suborder_number}`,
+                    qr_value: `COL-${sub.suborder_number}`,
+                    label_type: labelType,
+                    label_version: 1,
+                    label_generated_at: new Date().toISOString()
+                  })
+                  .select()
+                  .single();
 
-          // C. Log the 'queued' event in shipment_events
-          await supabaseClient.from('shipment_events').insert({
-            shipment_id: createdShip.id,
-            event_type: 'queued',
-            description: `Envío encolado para registro automático en ${resolvedCode.toUpperCase()}`,
-            provider_status: 'queued'
+                if (createErr || !createdShip) {
+                  throw new Error(`Failed to create shipment row: ${createErr?.message}`);
+                }
+                shipmentId = createdShip.id;
+
+                await supabaseClient.from('shipment_events').insert({
+                  shipment_id: shipmentId,
+                  event_type: 'queued',
+                  description: `Envío encolado para registro automático en ${resolvedCode.toUpperCase()}`,
+                  provider_status: 'queued'
+                });
+              }
+
+              // Insert into shipping_queue if not exists
+              const { data: existingQueue } = await supabaseClient
+                .from('shipping_queue')
+                .select('id')
+                .eq('shipment_id', shipmentId)
+                .maybeSingle();
+
+              if (!existingQueue) {
+                const { error: queueErr } = await supabaseClient
+                  .from('shipping_queue')
+                  .insert({
+                    shipment_id: shipmentId,
+                    provider_code: resolvedCode,
+                    action: 'create_shipment',
+                    priority: 0,
+                    attempts: 0,
+                    status: 'queued',
+                    next_attempt_at: new Date().toISOString()
+                  });
+
+                if (queueErr) {
+                  throw new Error(`Failed to insert queue item: ${queueErr.message}`);
+                }
+              }
+            },
           });
-
-          // D. Insert into shipping_queue
-          const { error: queueErr } = await supabaseClient
-            .from('shipping_queue')
-            .insert({
-              shipment_id: createdShip.id,
-              provider_code: resolvedCode,
-              action: 'create_shipment',
-              priority: 0,
-              attempts: 0,
-              status: 'queued',
-              next_attempt_at: new Date().toISOString()
-            });
-
-          if (queueErr) {
-            console.error(`[Post-Payment] Failed to insert queue item for suborder ${sub.suborder_number}:`, queueErr.message);
-          } else {
-            console.log(`[Post-Payment] Shipment and queue item created for suborder ${sub.suborder_number}`);
-          }
         }
       }
     }
@@ -171,29 +301,45 @@ export async function triggerPostPaymentActions(
     console.error("[Post-Payment] Suborder shipment triggers failed:", err);
   }
 
-  const { data: fullOrder } = await supabaseClient
-    .from("orders")
-    .select("*")
-    .eq("id", orderId)
-    .single();
+  // 4. Enqueue Transactional Confirmation Email
+  await recordAndExecuteJob(supabaseClient, {
+    orderId,
+    jobType: "email_notification",
+    eventId: `${orderId}_email_confirmed`,
+    payload: { order_id: orderId },
+    executor: async () => {
+      const { data: fullOrder } = await supabaseClient
+        .from("orders")
+        .select("*")
+        .eq("id", orderId)
+        .single();
 
-  if (fullOrder) {
-    await fetch(`${supabaseUrl}/functions/v1/transactional-emails`, {
-      method: "POST",
-      headers: functionHeaders,
-      body: JSON.stringify({
-        type: "UPDATE",
-        table: "orders",
-        record: fullOrder,
-        old_record: { ...fullOrder, status: "pending" },
-      }),
-    }).catch((err: any) => console.error("Email error:", err));
-  }
+      if (fullOrder) {
+        const res = await fetch(`${supabaseUrl}/functions/v1/transactional-emails`, {
+          method: "POST",
+          headers: functionHeaders,
+          body: JSON.stringify({
+            type: "UPDATE",
+            table: "orders",
+            record: fullOrder,
+            old_record: { ...fullOrder, status: "pending" },
+          }),
+        });
+        if (!res.ok) throw new Error(`Email HTTP ${res.status}: ${await res.text()}`);
+      }
+    },
+  });
 
-  // MBE logistics flow is now decoupled and handled asynchronously via database triggers on public.orders update
-
-  // Trigger Zinc verification and automatic purchase for international items
-  await triggerZincVerificationIfNeeded(supabaseClient, supabaseUrl, supabaseServiceRoleKey, orderId);
+  // 5. Trigger Zinc verification and automatic purchase for international items
+  await recordAndExecuteJob(supabaseClient, {
+    orderId,
+    jobType: "zinc_fulfillment",
+    eventId: `${orderId}_zinc_verify`,
+    payload: { order_id: orderId },
+    executor: async () => {
+      await triggerZincVerificationIfNeeded(supabaseClient, supabaseUrl, supabaseServiceRoleKey, orderId);
+    },
+  });
 }
 
 export async function finalizeOrderIfNeeded(
@@ -357,20 +503,21 @@ export async function triggerZincVerificationIfNeeded(
     };
 
     const url = `${supabaseUrl}/functions/v1/zinc-verify-after-payment`;
-    await fetch(url, {
+    const res = await fetch(url, {
       method: "POST",
       headers: functionHeaders,
       body: JSON.stringify({ order_id: orderId, is_auto: true }),
-    }).then(async (res) => {
-      if (!res.ok) {
-        console.error(`[Zinc Trigger] failed for order ${orderId}:`, await res.text());
-      } else {
-        console.log(`[Zinc Trigger] successfully invoked for order ${orderId}`);
-      }
-    }).catch((err) => {
-      console.error(`[Zinc Trigger] connection error for order ${orderId}:`, err);
     });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`[Zinc Trigger] failed for order ${orderId}:`, errText);
+      throw new Error(`Zinc HTTP ${res.status}: ${errText}`);
+    } else {
+      console.log(`[Zinc Trigger] successfully invoked for order ${orderId}`);
+    }
   } catch (err: any) {
     console.error(`[Zinc Trigger] error:`, err);
+    throw err;
   }
 }

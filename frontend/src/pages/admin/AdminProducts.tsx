@@ -541,6 +541,10 @@ export default function AdminProducts() {
         mergedMeta.card_details = form.card_details;
       }
 
+      const basePriceParsed = form.base_price !== '' && form.base_price !== null && form.base_price !== undefined ? parseFloat(String(form.base_price)) : 0;
+      const normalizedCondition = normalizeCondition(form.condition || 'new');
+      const normalizedNotes = form.condition_notes ? form.condition_notes.trim() : null;
+
       const payload: any = {
         title: form.title.trim(),
         slug,
@@ -887,8 +891,8 @@ export default function AdminProducts() {
     } catch (err: any) { toast.error(err.message); }
   };
 
-  const handleDuplicate = async (product: Product, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDuplicate = async (product: Product, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     if (!(await confirm(`¿Duplicar el producto "${product.title}"?`))) return;
     
     setLoading(true);
@@ -914,8 +918,8 @@ export default function AdminProducts() {
         is_active: product.is_active !== false,
         badge: product.badge,
         is_featured: product.is_featured,
-        brand_id: product.brand?.id || product.brand_id || null,
-        category_id: product.category?.id || product.category_id || null,
+        brand_id: product.brand?.id || (product as any).brand_id || null,
+        category_id: product.category?.id || (product as any).category_id || null,
         vendor_id: product.vendor_id || null,
         condition: normalizeCondition((product as any).condition),
         condition_notes: (product as any).condition_notes?.trim() || null
@@ -1871,7 +1875,7 @@ export default function AdminProducts() {
                  <h3 className="font-bold text-gray-700">{editing ? 'Editar Producto' : 'Añadir nuevo producto'}</h3>
                  <div className="flex gap-2">
                     <button onClick={() => setShowForm(false)} className="px-4 py-1.5 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-md">Cerrar</button>
-                    <button onClick={handleSave} className="bg-blue-600 px-6 py-1.5 text-sm font-black text-white hover:bg-blue-700 rounded-md shadow-lg shadow-blue-200 transition-all transform active:scale-95 flex items-center gap-2">
+                    <button onClick={() => handleSave()} className="bg-blue-600 px-6 py-1.5 text-sm font-black text-white hover:bg-blue-700 rounded-md shadow-lg shadow-blue-200 transition-all transform active:scale-95 flex items-center gap-2">
                        <Save className="w-4 h-4" /> Guardar Producto
                     </button>
                  </div>

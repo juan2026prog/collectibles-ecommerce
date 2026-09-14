@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useId } from 'react';
 import { X } from 'lucide-react';
 
 interface ResponsiveModalProps {
@@ -20,23 +20,80 @@ export default function ResponsiveModal({
   footer,
   maxWidth = 'max-w-xl'
 }: ResponsiveModalProps) {
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousActiveElementRef = useRef<HTMLElement | null>(null);
+  const idPrefix = useId();
+  const titleId = `${idPrefix}-title`;
+  const subtitleId = subtitle ? `${idPrefix}-subtitle` : undefined;
+
   useEffect(() => {
     if (isOpen) {
+      previousActiveElementRef.current = document.activeElement as HTMLElement;
       document.body.style.overflow = 'hidden';
+
+      // Focus trap initial focus
+      const timer = setTimeout(() => {
+        if (modalRef.current) {
+          const focusable = modalRef.current.querySelectorAll<HTMLElement>(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+          );
+          if (focusable.length > 0) {
+            focusable[0].focus();
+          } else {
+            modalRef.current.focus();
+          }
+        }
+      }, 50);
+
+      return () => clearTimeout(timer);
     } else {
       document.body.style.overflow = '';
+      if (previousActiveElementRef.current && typeof previousActiveElementRef.current.focus === 'function') {
+        previousActiveElementRef.current.focus();
+      }
     }
-    return () => {
-      document.body.style.overflow = '';
-    };
   }, [isOpen]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
+      if (!isOpen) return;
+
+      if (e.key === 'Escape') {
+        e.stopPropagation();
         onClose();
+        return;
+      }
+
+      // Focus trap Tab cycle
+      if (e.key === 'Tab' && modalRef.current) {
+        const focusable = Array.from(
+          modalRef.current.querySelectorAll<HTMLElement>(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+          )
+        ).filter(el => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true');
+
+        if (focusable.length === 0) {
+          e.preventDefault();
+          return;
+        }
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
@@ -44,7 +101,13 @@ export default function ResponsiveModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto flex flex-col justify-end md:justify-center items-center p-0 md:p-4" role="dialog" aria-modal="true">
+    <div 
+      className="fixed inset-0 z-50 overflow-y-auto flex flex-col justify-end md:justify-center items-center p-0 md:p-4" 
+      role="dialog" 
+      aria-modal="true"
+      aria-labelledby={titleId}
+      aria-describedby={subtitleId}
+    >
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300"
@@ -53,12 +116,16 @@ export default function ResponsiveModal({
       />
 
       {/* Modal Dialog Box */}
-      <div className={`relative w-full ${maxWidth} bg-white rounded-t-2xl md:rounded-2xl shadow-2xl flex flex-col max-h-[92vh] md:max-h-[85vh] z-10 animate-slideUp md:animate-scaleUp overflow-hidden border border-gray-100`}>
+      <div 
+        ref={modalRef}
+        tabIndex={-1}
+        className={`relative w-full ${maxWidth} bg-white rounded-t-2xl md:rounded-2xl shadow-2xl flex flex-col max-h-[92vh] md:max-h-[85vh] z-10 animate-slideUp md:animate-scaleUp overflow-hidden border border-gray-100 outline-none`}
+      >
         {/* Sticky Header */}
         <div className="p-4 md:p-5 border-b border-gray-200 bg-white sticky top-0 z-20 flex items-center justify-between">
           <div className="min-w-0 pr-4">
-            <h3 className="font-bold text-gray-900 text-base md:text-lg truncate">{title}</h3>
-            {subtitle && <p className="text-xs text-gray-500 truncate mt-0.5">{subtitle}</p>}
+            <h3 id={titleId} className="font-bold text-gray-900 text-base md:text-lg truncate">{title}</h3>
+            {subtitle && <p id={subtitleId} className="text-xs text-gray-500 truncate mt-0.5">{subtitle}</p>}
           </div>
           <button
             onClick={onClose}

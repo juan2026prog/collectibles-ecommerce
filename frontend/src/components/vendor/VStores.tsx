@@ -144,7 +144,7 @@ export default function VStores() {
     }
   }
 
-  async function uploadImage(file: File, type: 'logo' | 'banner'): Promise<string> {
+  async function uploadImage(file: File, type: 'logo' | 'banner' | 'banner_mobile'): Promise<string> {
     const ext = file.name.split('.').pop();
     const sanitized = file.name.replace(`.${ext}`, '').toLowerCase().replace(/[^a-z0-9]/g, '-');
     const path = `stores/${user!.id}-${Date.now()}-${type}-${sanitized}.${ext}`;

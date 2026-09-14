@@ -137,7 +137,7 @@ export default function StorefrontSearchBar({
           .limit(5);
 
         if (!error && data) {
-          setProducts(data as ProductItem[]);
+          setProducts(data as unknown as ProductItem[]);
         }
       } catch (err) {
         console.error("Error fetching autocomplete products:", err);
