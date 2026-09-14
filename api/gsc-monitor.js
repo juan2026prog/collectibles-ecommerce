@@ -26,10 +26,26 @@ export default async function handler(req, res) {
   // CORS & Security headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-cron-secret');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
+  }
+
+  // Security gate: Require valid CRON_SECRET, GSC_MONITOR_SECRET, or admin authorization
+  const authHeader = req.headers['authorization'] || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  const cronSecretHeader = req.headers['x-cron-secret'] || '';
+  const querySecret = req.query?.secret || '';
+
+  const configuredSecret = process.env.CRON_SECRET || process.env.GSC_MONITOR_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const isAuthorizedSecret = configuredSecret && (token === configuredSecret || cronSecretHeader === configuredSecret || querySecret === configuredSecret);
+
+  if (!isAuthorizedSecret) {
+    return res.status(401).json({
+      status: 'UNAUTHORIZED',
+      error: 'Access denied: Valid authorization secret or token required.'
+    });
   }
 
   const action = req.query?.action || (req.body && req.body.action) || 'health';

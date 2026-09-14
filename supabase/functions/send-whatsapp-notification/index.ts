@@ -7,9 +7,9 @@ const corsHeaders = {
 };
 
 /**
- * COMPATIBILITY WRAPPER: send-whatsapp-notification
- * Forwards requests to notification-dispatcher to maintain backwards compatibility
- * with existing PostgreSQL database triggers (fn_trigger_whatsapp_notification)
+ * SECURE WRAPPER: send-whatsapp-notification
+ * Forwards authenticated requests to notification-dispatcher.
+ * Enforces that anonymous callers CANNOT obtain privileged access.
  */
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -18,12 +18,18 @@ serve(async (req: Request) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const authHeader = req.headers.get('Authorization');
+
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized: Missing Authorization header.' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     const payload = await req.json();
-    const authHeader = req.headers.get('Authorization') || `Bearer ${supabaseServiceKey}`;
 
-    // Delegate execution to notification-dispatcher
+    // Forward to notification-dispatcher preserving caller token
     const dispatcherUrl = `${supabaseUrl}/functions/v1/notification-dispatcher`;
 
     const response = await fetch(dispatcherUrl, {
@@ -41,7 +47,7 @@ serve(async (req: Request) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error: any) {
-    console.error("[send-whatsapp-notification Wrapper Error]:", error.message);
+    console.error("[send-whatsapp-notification Error]:", error.message);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

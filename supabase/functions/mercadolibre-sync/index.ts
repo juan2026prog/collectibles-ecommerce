@@ -334,8 +334,9 @@ Deno.serve(async (req) => {
   // Create supabase client inside the handler to avoid cold-start issues
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  const bypassSecret = Deno.env.get('TEST_BYPASS_SECRET');
-  const isTestBypass = bypassSecret && req.headers.get('x-test-bypass') === bypassSecret;
+  const isDev = Deno.env.get('ENVIRONMENT') === 'development' || Deno.env.get('ALLOW_TEST_BYPASS') === 'true';
+  const bypassSecret = isDev ? Deno.env.get('TEST_BYPASS_SECRET') : null;
+  const isTestBypass = !!(bypassSecret && req.headers.get('x-test-bypass') === bypassSecret);
 
   // Mock data for sandbox testing
   const mockItem1 = {

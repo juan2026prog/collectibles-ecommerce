@@ -40,7 +40,8 @@ export async function verifyOptionalAuth(req: Request) {
 }
 
 export async function verifyAdmin(req: Request) {
-  const bypassSecret = Deno.env.get('TEST_BYPASS_SECRET');
+  const isDev = Deno.env.get('ENVIRONMENT') === 'development' || Deno.env.get('ALLOW_TEST_BYPASS') === 'true';
+  const bypassSecret = isDev ? Deno.env.get('TEST_BYPASS_SECRET') : null;
   if (bypassSecret && req.headers.get('x-test-bypass') === bypassSecret) {
     console.log("[Auth] Bypassing admin user check via test header");
     return { id: 'test_bypass', email: 'test_bypass@supabase.local' };

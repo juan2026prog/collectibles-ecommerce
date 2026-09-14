@@ -1,7 +1,16 @@
 import { enqueueMlSyncEvent } from "./mercadolibre.ts";
 
-export function orderSummary(order: any) {
+export function orderSummary(order: any, isAuthorized: boolean = true) {
   if (!order) return null;
+
+  const addr = order.shipping_address || {};
+  const safeAddress = isAuthorized ? addr : {
+    city: addr.city || null,
+    department: addr.department || null,
+    country: addr.country || "Uruguay",
+    first_name: addr.first_name ? `${addr.first_name[0]}***` : null,
+  };
+
   return {
     id: order.id,
     status: order.status,
@@ -9,9 +18,9 @@ export function orderSummary(order: any) {
     total_amount: order.total_amount,
     currency: order.currency || "UYU",
     payment_method: order.payment_method,
-    customer_email: order.customer_email,
-    customer_phone: order.customer_phone,
-    shipping_address: order.shipping_address,
+    customer_email: isAuthorized ? order.customer_email : (order.customer_email ? `${order.customer_email.split('@')[0].slice(0, 2)}***@${order.customer_email.split('@')[1]}` : null),
+    customer_phone: isAuthorized ? order.customer_phone : null,
+    shipping_address: safeAddress,
     payment_id: order.payment_id,
   };
 }

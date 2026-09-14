@@ -1,102 +1,91 @@
-const RICH_TAGS = new Set([
+import DOMPurify from 'dompurify';
+
+/**
+ * COLLECTIBLES HTML SANITIZER (DOMPurify-based)
+ * 
+ * Protects against XSS, SVG-based script injection, event handlers (onclick, onerror),
+ * javascript: and data: URLs, nested payload evasion, and DOM clobbering.
+ */
+
+// Allowlist for standard storefront rich text formatting
+const RICH_TAGS = [
   'a', 'abbr', 'b', 'blockquote', 'br', 'code', 'div', 'em', 'figure', 'figcaption',
   'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'iframe', 'img', 'li', 'ol', 'p', 'pre',
   'section', 'small', 'span', 'strong', 'sub', 'sup', 'table', 'tbody', 'td', 'th',
   'thead', 'tr', 'u', 'ul',
-]);
+];
 
-const HEAD_TAGS = new Set(['meta', 'link', 'title', 'script']);
-const GLOBAL_ATTRS = new Set(['class', 'id', 'lang', 'dir', 'aria-label', 'role']);
-const URL_ATTRS = new Set(['href', 'src']);
+const RICH_ATTRS = [
+  'href', 'target', 'rel', 'src', 'alt', 'title', 'width', 'height', 'loading',
+  'class', 'id', 'aria-label', 'role', 'frameborder', 'allowfullscreen',
+  'tabindex', 'style'
+];
 
-const TAG_ATTRS: Record<string, Set<string>> = {
-  a: new Set(['href', 'target', 'rel']),
-  iframe: new Set(['src', 'title', 'width', 'height', 'loading', 'allow', 'allowfullscreen', 'referrerpolicy']),
-  img: new Set(['src', 'alt', 'title', 'width', 'height', 'loading']),
-  meta: new Set(['name', 'content', 'property', 'charset', 'http-equiv']),
-  link: new Set(['rel', 'href', 'type', 'media', 'sizes']),
-  script: new Set(['type']),
-};
+/**
+ * Sanitizes rich HTML for storefront and user-facing dynamic pages.
+ * - Strips all executable scripts (<script>, <object>, <embed>, <applet>).
+ * - Disallows unsafe URI schemes (javascript:, data:, vbscript:).
+ * - Strips all event handler attributes (on*).
+ * - Sanitizes iframes and embeds strictly.
+ */
+export function sanitizeRichHtml(markup?: string | null): string {
+  if (!markup) return '';
+  if (typeof window === 'undefined') return '';
 
-function isSafeUrl(value: string) {
-  const normalized = value.trim().toLowerCase();
-  return normalized.startsWith('http://')
-    || normalized.startsWith('https://')
-    || normalized.startsWith('/')
-    || normalized.startsWith('mailto:')
-    || normalized.startsWith('tel:')
-    || normalized.startsWith('#');
+  return DOMPurify.sanitize(markup, {
+    ALLOWED_TAGS: RICH_TAGS,
+    ALLOWED_ATTR: RICH_ATTRS,
+    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel|#|\/|sms):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+    ALLOW_DATA_ATTR: false,
+    ADD_ATTR: ['target'],
+    FORBID_TAGS: ['script', 'style', 'object', 'embed', 'form', 'input', 'button', 'svg', 'math'],
+    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur', 'srcdoc'],
+    USE_PROFILES: { html: true },
+  });
 }
 
-function sanitizeNode(node: Node, allowedTags: Set<string>) {
-  if (node.nodeType === Node.TEXT_NODE) {
-    return;
-  }
-
-  if (node.nodeType !== Node.ELEMENT_NODE) {
-    node.parentNode?.removeChild(node);
-    return;
-  }
-
-  const element = node as HTMLElement;
-  const tag = element.tagName.toLowerCase();
-
-  if (!allowedTags.has(tag)) {
-    element.replaceWith(...Array.from(element.childNodes));
-    return;
-  }
-
-  for (const attr of Array.from(element.attributes)) {
-    const name = attr.name.toLowerCase();
-    const value = attr.value;
-    const allowedForTag = TAG_ATTRS[tag];
-    const isAllowed = GLOBAL_ATTRS.has(name) || allowedForTag?.has(name);
-
-    if (!isAllowed || name.startsWith('on')) {
-      element.removeAttribute(attr.name);
-      continue;
-    }
-
-    if (URL_ATTRS.has(name) && value && !isSafeUrl(value)) {
-      element.removeAttribute(attr.name);
-      continue;
-    }
-
-    if (tag === 'script' && value && name === 'type' && value !== 'application/ld+json') {
-      element.remove();
-      return;
-    }
-  }
-
-  if (tag === 'script' && element.getAttribute('type') !== 'application/ld+json') {
-    element.remove();
-    return;
-  }
-
-  for (const child of Array.from(element.childNodes)) {
-    sanitizeNode(child, allowedTags);
-  }
-}
-
-function sanitizeMarkup(markup: string, allowedTags: Set<string>) {
-  if (!markup || typeof window === 'undefined') {
-    return markup || '';
-  }
+/**
+ * Sanitizes <head> metadata injected from site settings.
+ * Only allows safe meta, link, title, and application/ld+json scripts.
+ */
+export function sanitizeHeadMarkup(markup?: string | null): string {
+  if (!markup) return '';
+  if (typeof window === 'undefined') return '';
 
   const parser = new DOMParser();
-  const doc = parser.parseFromString(markup, 'text/html');
+  const doc = parser.parseFromString(`<div>${markup}</div>`, 'text/html');
+  const container = doc.body.firstElementChild;
+  if (!container) return '';
 
-  for (const child of Array.from(doc.body.childNodes)) {
-    sanitizeNode(child, allowedTags);
-  }
+  const allowedTags = new Set(['meta', 'link', 'title', 'script']);
+  const allowedAttrs = new Set(['name', 'content', 'property', 'charset', 'http-equiv', 'rel', 'href', 'type', 'media', 'sizes', 'id']);
 
-  return doc.body.innerHTML;
-}
+  Array.from(container.children).forEach((el) => {
+    const tagName = el.tagName.toLowerCase();
+    if (!allowedTags.has(tagName)) {
+      el.remove();
+      return;
+    }
 
-export function sanitizeRichHtml(markup?: string | null) {
-  return sanitizeMarkup(markup || '', RICH_TAGS);
-}
+    if (tagName === 'script') {
+      const type = el.getAttribute('type');
+      if (type !== 'application/ld+json') {
+        el.remove();
+        return;
+      }
+    }
 
-export function sanitizeHeadMarkup(markup?: string | null) {
-  return sanitizeMarkup(markup || '', HEAD_TAGS);
+    // Clean attributes
+    Array.from(el.attributes).forEach((attr) => {
+      const attrName = attr.name.toLowerCase();
+      if (!allowedAttrs.has(attrName) || attrName.startsWith('on')) {
+        el.removeAttribute(attr.name);
+      }
+      if (attrName === 'href' && !attr.value.trim().startsWith('http://') && !attr.value.trim().startsWith('https://') && !attr.value.trim().startsWith('/')) {
+        el.removeAttribute(attr.name);
+      }
+    });
+  });
+
+  return container.innerHTML;
 }

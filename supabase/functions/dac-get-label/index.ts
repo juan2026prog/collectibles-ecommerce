@@ -15,6 +15,25 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Caller authentication check
+    const authHeader = req.headers.get("Authorization");
+    let callerUser: any = null;
+    let isAdmin = false;
+
+    if (authHeader) {
+      const token = authHeader.replace("Bearer ", "").trim();
+      if (token === supabaseKey) {
+        isAdmin = true;
+      } else {
+        const { data: { user } } = await supabase.auth.getUser(token);
+        if (user) {
+          callerUser = user;
+          const { data: profile } = await supabase.from("profiles").select("is_admin, is_vendor").eq("id", user.id).maybeSingle();
+          if (profile?.is_admin) isAdmin = true;
+        }
+      }
+    }
+
     const body = await req.json();
     const { shipment_id, tracking_code, order_id } = body;
 
@@ -33,6 +52,26 @@ serve(async (req) => {
     const { data: shipment, error: findErr } = await query.maybeSingle();
     if (findErr || !shipment) {
       throw new Error("Shipment not found for the provided details");
+    }
+
+    // Check authorization: Admin, Vendor owner, or Customer order owner
+    if (!isAdmin) {
+      if (!callerUser) {
+        throw new Error("Acceso denegado: Se requiere autenticación para acceder a etiquetas de envío.");
+      }
+      let isAuthorized = false;
+      if (shipment.vendor_id && shipment.vendor_id === callerUser.id) {
+        isAuthorized = true;
+      }
+      if (!isAuthorized && shipment.order_id) {
+        const { data: order } = await supabase.from("orders").select("customer_id").eq("id", shipment.order_id).maybeSingle();
+        if (order?.customer_id === callerUser.id) {
+          isAuthorized = true;
+        }
+      }
+      if (!isAuthorized) {
+        throw new Error("Acceso denegado: No tienes permisos para ver esta etiqueta.");
+      }
     }
 
     const kGuia = shipment.external_guide;
@@ -118,15 +157,18 @@ serve(async (req) => {
 
     if (uploadErr) throw uploadErr;
 
-    const { data: { publicUrl } } = supabase.storage
+    const { data: signedData } = await supabase.storage
       .from('shipping-labels')
-      .getPublicUrl(labelPath);
+      .createSignedUrl(labelPath, 900);
 
-    // Update shipment with label URL and base64
+    const labelUrl = signedData?.signedUrl || '';
+
+    // Update shipment with label storage path and base64
     await supabase
       .from('shipments')
       .update({
-        shipping_label_url: publicUrl,
+        shipping_label_url: labelUrl,
+        label_storage_path: labelPath,
         shipping_label_base64: labelBase64,
         updated_at: new Date().toISOString()
       })
@@ -134,7 +176,7 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({
       success: true,
-      labelUrl: publicUrl,
+      labelUrl: labelUrl,
       trackingCode: trackingCode
     }), {
       status: 200,

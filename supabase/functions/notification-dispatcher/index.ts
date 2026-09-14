@@ -80,6 +80,8 @@ serve(async (req: Request) => {
     let isAuthorized = false;
     let authUserId: string | null = null;
     let authUser: any = null;
+    let isAdmin = false;
+    let isVendor = false;
 
     if (token === supabaseServiceKey) {
       isAuthorized = true;
@@ -94,15 +96,21 @@ serve(async (req: Request) => {
       }
     }
 
-    if (token) {
+    if (token && token !== supabaseServiceKey) {
       try {
         const { data: userData } = await supabaseAdmin.auth.getUser(token);
         if (userData?.user) {
           authUser = userData.user;
           authUserId = authUser.id;
-          if (token !== supabaseServiceKey) {
-            isAuthorized = true;
-          }
+          isAuthorized = true;
+
+          const { data: prof } = await supabaseAdmin
+            .from('profiles')
+            .select('is_admin, is_vendor')
+            .eq('id', authUserId)
+            .maybeSingle();
+          isAdmin = !!prof?.is_admin;
+          isVendor = !!prof?.is_vendor;
         }
       } catch (err) {
         console.error("[Notification Dispatcher] Auth token check error:", err);
@@ -112,6 +120,29 @@ serve(async (req: Request) => {
     if (!isAuthorized) {
       console.error("[Notification Dispatcher] Unauthorized invocation.");
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
+    }
+
+    // Granular operation-level permission check for non-service_role callers
+    const isServiceRole = token === supabaseServiceKey;
+    if (!isServiceRole) {
+      if (body.scope === 'admin' || ['admin_daily_summary', 'order_dispute_opened', 'vendor_payout_processed', 'campaign_broadcast'].includes(event_type)) {
+        if (!isAdmin) {
+          return new Response(JSON.stringify({ error: 'Forbidden: Admin privileges required for this event.' }), { status: 403, headers: corsHeaders });
+        }
+      }
+
+      if (body.scope === 'vendor' || event_type.startsWith('vendor_')) {
+        if (!isAdmin && (!isVendor || (body_vendor_id && body_vendor_id !== authUserId))) {
+          return new Response(JSON.stringify({ error: 'Forbidden: Unauthorized vendor scope.' }), { status: 403, headers: corsHeaders });
+        }
+      }
+
+      if (order_id && !isAdmin) {
+        const { data: orderOwner } = await supabaseAdmin.from('orders').select('customer_id').eq('id', order_id).maybeSingle();
+        if (!orderOwner || orderOwner.customer_id !== authUserId) {
+          return new Response(JSON.stringify({ error: 'Forbidden: Cannot trigger notifications for orders you do not own.' }), { status: 403, headers: corsHeaders });
+        }
+      }
     }
 
     // 2. Load Secrets

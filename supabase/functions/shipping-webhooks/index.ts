@@ -47,6 +47,20 @@ serve(async (req) => {
       throw new Error(`Shipment not found for tracking: ${tracking_code} / shipment_id: ${shipment_id}`);
     }
 
+    // Check webhook secret if configured
+    const courierSecret = Deno.env.get("COURIER_WEBHOOK_SECRET") || Deno.env.get("SHIPPING_WEBHOOK_SECRET");
+    if (courierSecret) {
+      const headerSecret = req.headers.get("x-shipping-secret") || req.headers.get("x-webhook-secret") || req.headers.get("Authorization")?.replace("Bearer ", "") || "";
+      const urlSecret = new URL(req.url).searchParams.get("secret") || "";
+      if (headerSecret !== courierSecret && urlSecret !== courierSecret) {
+        console.warn("[Shipping Webhook] Unauthorized request rejected.");
+        return new Response(JSON.stringify({ success: false, error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    }
+
     // 2. Map status to platform shipping_status
     let mappedStatus = status_name || "in_transit";
     const statusLower = String(mappedStatus).toLowerCase();
@@ -61,6 +75,16 @@ serve(async (req) => {
       mappedStatus = "returned";
     } else if (statusLower.includes("retiro") || statusLower.includes("pickup") || statusLower.includes("recolect")) {
       mappedStatus = "picked_up";
+    }
+
+    // State transition matrix: Do not regress terminal states
+    const terminalStates = ['delivered', 'cancelled', 'returned'];
+    if (terminalStates.includes(shipment.shipping_status) && !terminalStates.includes(mappedStatus)) {
+      console.warn(`[Shipping Webhook] Ignoring regressive state transition from ${shipment.shipping_status} to ${mappedStatus} for shipment ${shipment.id}`);
+      return new Response(JSON.stringify({ success: true, message: "Ignored regressive transition" }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
     }
 
     // 3. Update shipment status and SLA timestamps

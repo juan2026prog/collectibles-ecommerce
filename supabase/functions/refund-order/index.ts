@@ -111,7 +111,8 @@ Deno.serve(async (req: Request) => {
     const config = Object.fromEntries((settings || []).map((s: any) => [s.key, s.value]));
       
     let mpAccessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || config.payments_mercadopago_access_token;
-    const isMockPayment = order.payment_id?.startsWith('MP-MOCK') || order.payment_id?.startsWith('DLG-MOCK') || mpAccessToken?.includes('mock') || !mpAccessToken;
+    const isEnvTestOrDev = Deno.env.get("ENVIRONMENT") === "development" || Deno.env.get("ENVIRONMENT") === "test";
+    const isMockPayment = isEnvTestOrDev && (order.payment_id?.startsWith('MP-MOCK') || order.payment_id?.startsWith('DLG-MOCK'));
 
     let refundSuccess = false;
     let refundDetails: any = null;
@@ -286,6 +287,9 @@ Deno.serve(async (req: Request) => {
       refundDetails = { refund_id: gatewayRefundId, mock: true };
     } 
     else if (order.payment_method === 'mercadopago') {
+      if (!mpAccessToken) {
+        throw new Error("NOT_CONFIGURED: Credenciales de Mercado Pago no configuradas para procesar el reembolso.");
+      }
       let actualPaymentId = order.payment_id;
       if (!actualPaymentId || isNaN(Number(actualPaymentId))) {
         // Search payment by reference

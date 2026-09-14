@@ -65,9 +65,23 @@ export function mapCartItemsToGA4(items: any[]): any[] {
   }));
 }
 
+// Helper to check user cookie consent
+export function hasConsent(category: 'analytics' | 'marketing' = 'analytics'): boolean {
+  try {
+    if (typeof localStorage === 'undefined') return true;
+    const consent = localStorage.getItem('cookieSettings');
+    if (consent === 'declined') return false;
+  } catch {
+    // Fail-safe
+  }
+  return true;
+}
+
 // Dispatch GA4 standard or custom events
 export function trackGA4Event(eventName: string, params: Record<string, any> = {}) {
   try {
+    if (!hasConsent('analytics')) return;
+
     const isInternal = checkIsInternalUser();
     const eventParams = {
       ...params,
@@ -93,6 +107,7 @@ export function trackGA4Event(eventName: string, params: Record<string, any> = {
 // Safe wrappers for Microsoft Clarity to prevent runtime crashes
 export function safeClaritySet(key: string, value: string) {
   try {
+    if (!hasConsent('analytics')) return;
     if (!key || typeof key !== 'string' || key.trim() === '') return;
     if (!value || typeof value !== 'string' || value.trim() === '') return;
 
@@ -109,6 +124,7 @@ export function safeClaritySet(key: string, value: string) {
 
 export function safeClarityEvent(name: string) {
   try {
+    if (!hasConsent('analytics')) return;
     if (!name || typeof name !== 'string' || name.trim() === '') return;
 
     const clarityFn = (window as any).clarity;
@@ -124,6 +140,7 @@ export function safeClarityEvent(name: string) {
 
 // Dispatch Clarity custom events
 export function trackClarityEvent(eventName: string) {
+  if (!hasConsent('analytics')) return;
   const isInternal = checkIsInternalUser();
   safeClaritySet('traffic_type', isInternal ? 'internal' : 'commercial');
 

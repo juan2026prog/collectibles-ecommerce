@@ -225,9 +225,33 @@ Deno.serve(async (req) => {
       throw new Error("Selecciona una agencia DAC para el retiro.");
     }
 
-    // 1. Agregar logs seguros antes de la verificación
-    console.log("create-order payload:", JSON.stringify(payload, null, 2));
-    console.log("items received:", payload.items);
+function sanitizePayloadForLogging(data: any) {
+  if (!data || typeof data !== 'object') return data;
+  const clone = { ...data };
+  if (clone.customer_email) {
+    const parts = String(clone.customer_email).split('@');
+    clone.customer_email = parts.length === 2 ? `${parts[0].slice(0, 2)}***@${parts[1]}` : '[REDACTED_EMAIL]';
+  }
+  if (clone.customer_phone) clone.customer_phone = '[REDACTED_PHONE]';
+  if (clone.shipping_address) {
+    clone.shipping_address = {
+      city: clone.shipping_address.city,
+      department: clone.shipping_address.department,
+      country: clone.shipping_address.country,
+      first_name: '[REDACTED_NAME]',
+      last_name: '[REDACTED_NAME]',
+      street: '[REDACTED_STREET]',
+      apartment: '[REDACTED_APT]',
+      ci: '[REDACTED_CI]',
+      phone: '[REDACTED_PHONE]',
+    };
+  }
+  return clone;
+}
+
+    // 1. Logs seguros sin PII
+    console.log("create-order payload (sanitized):", JSON.stringify(sanitizePayloadForLogging(payload), null, 2));
+    console.log("items count:", payload.items.length);
 
     const productIds = payload.items.map((item) => item.product_id || item.id).filter(Boolean);
     console.log("product ids:", productIds);

@@ -18,6 +18,25 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Caller authentication check
+    const authHeader = req.headers.get("Authorization");
+    let callerUser: any = null;
+    let isAdmin = false;
+
+    if (authHeader) {
+      const token = authHeader.replace("Bearer ", "").trim();
+      if (token === supabaseKey) {
+        isAdmin = true;
+      } else {
+        const { data: { user } } = await supabase.auth.getUser(token);
+        if (user) {
+          callerUser = user;
+          const { data: profile } = await supabase.from("profiles").select("is_admin, is_vendor").eq("id", user.id).maybeSingle();
+          if (profile?.is_admin) isAdmin = true;
+        }
+      }
+    }
+
     const { shipment_id, tracking_number } = await req.json();
 
     if (!shipment_id && !tracking_number) {
@@ -31,6 +50,26 @@ serve(async (req) => {
     const { data: shipment, error: shipErr } = await query.single();
     if (shipErr || !shipment) {
       throw new Error("No se encontró el envío especificado");
+    }
+
+    // Check authorization: Admin, Vendor owner, or Customer order owner
+    if (!isAdmin) {
+      if (!callerUser) {
+        throw new Error("Acceso denegado: Se requiere autenticación para acceder a etiquetas de envío.");
+      }
+      let isAuthorized = false;
+      if (shipment.vendor_id && shipment.vendor_id === callerUser.id) {
+        isAuthorized = true;
+      }
+      if (!isAuthorized && shipment.order_id) {
+        const { data: order } = await supabase.from("orders").select("customer_id").eq("id", shipment.order_id).maybeSingle();
+        if (order?.customer_id === callerUser.id) {
+          isAuthorized = true;
+        }
+      }
+      if (!isAuthorized) {
+        throw new Error("Acceso denegado: No tienes permisos para ver esta etiqueta.");
+      }
     }
 
     const trkNum = tracking_number || shipment.external_tracking_number || shipment.tracking_code;
@@ -94,8 +133,11 @@ serve(async (req) => {
 
     let labelUrl = shipment.shipping_label_url;
     if (!uploadErr && storageUpload) {
-      const { data: urlData } = supabase.storage.from('shipping-labels').getPublicUrl(storageUpload.path);
-      labelUrl = urlData.publicUrl;
+      const { data: signedData } = await supabase.storage
+        .from('shipping-labels')
+        .createSignedUrl(storageUpload.path, 900);
+
+      labelUrl = signedData?.signedUrl || '';
 
       await supabase.from('shipments').update({
         shipping_label_url: labelUrl,

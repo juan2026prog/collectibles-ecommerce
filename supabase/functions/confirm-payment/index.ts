@@ -39,16 +39,24 @@ Deno.serve(async (req: Request) => {
       throw new Error("La orden no existe.");
     }
 
+    // Check if user is admin
+    let isAdmin = false;
+    if (user) {
+      const { data: prof } = await supabaseClient.from("profiles").select("is_admin").eq("id", user.id).maybeSingle();
+      if (prof?.is_admin) isAdmin = true;
+    }
+
     const reqEmail = (customer_email || "").trim().toLowerCase();
     const orderEmail = String(currentOrder.customer_email || "").trim().toLowerCase();
     const isEmailMatched = reqEmail.length > 0 && reqEmail === orderEmail;
     const isUserMatched = Boolean(user && currentOrder.customer_id && user.id === currentOrder.customer_id);
+    const isFullyAuthorized = isAdmin || isUserMatched;
 
     if (currentOrder.customer_id) {
-      if (!isUserMatched && !isEmailMatched) {
+      if (!isFullyAuthorized && !isEmailMatched) {
         throw new Error("No tienes permisos para consultar esta orden.");
       }
-    } else if (customer_email && !isEmailMatched) {
+    } else if (customer_email && !isEmailMatched && !isAdmin) {
       throw new Error("No se pudo validar el email de la orden.");
     }
 
@@ -61,7 +69,7 @@ Deno.serve(async (req: Request) => {
       }
 
       if (currentOrder.payment_processed_at || ['paid', 'confirmed'].includes(currentOrder.status)) {
-        return new Response(JSON.stringify({ success: true, status: "paid", order: orderSummary(currentOrder) }), {
+        return new Response(JSON.stringify({ success: true, status: "paid", order: orderSummary(currentOrder, isFullyAuthorized) }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -108,14 +116,14 @@ Deno.serve(async (req: Request) => {
         captureData.id || external_id,
       );
 
-      return new Response(JSON.stringify({ success: true, status: "paid", order: orderSummary(paidOrder) }), {
+      return new Response(JSON.stringify({ success: true, status: "paid", order: orderSummary(paidOrder, isFullyAuthorized) }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     if (provider === "mercadopago") {
       if (currentOrder.payment_processed_at || ['paid', 'confirmed'].includes(currentOrder.status)) {
-        return new Response(JSON.stringify({ success: true, status: "paid", order: orderSummary(currentOrder) }), {
+        return new Response(JSON.stringify({ success: true, status: "paid", order: orderSummary(currentOrder, isFullyAuthorized) }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -139,27 +147,27 @@ Deno.serve(async (req: Request) => {
               String(latestPayment.id),
             );
 
-            return new Response(JSON.stringify({ success: true, status: "paid", order: orderSummary(paidOrder) }), {
+            return new Response(JSON.stringify({ success: true, status: "paid", order: orderSummary(paidOrder, isFullyAuthorized) }), {
               headers: { ...corsHeaders, "Content-Type": "application/json" },
             });
           }
         }
       }
 
-      return new Response(JSON.stringify({ success: true, status: currentOrder.status || "pending", order: orderSummary(currentOrder) }), {
+      return new Response(JSON.stringify({ success: true, status: currentOrder.status || "pending", order: orderSummary(currentOrder, isFullyAuthorized) }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     if (provider === "dlocalgo" || provider === "dlocal") {
-      return new Response(JSON.stringify({ success: true, status: currentOrder.status || "pending", order: orderSummary(currentOrder) }), {
+      return new Response(JSON.stringify({ success: true, status: currentOrder.status || "pending", order: orderSummary(currentOrder, isFullyAuthorized) }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     if (provider === "handy") {
       if (currentOrder.payment_processed_at || ['paid', 'confirmed'].includes(currentOrder.status)) {
-        return new Response(JSON.stringify({ success: true, status: "paid", order: orderSummary(currentOrder) }), {
+        return new Response(JSON.stringify({ success: true, status: "paid", order: orderSummary(currentOrder, isFullyAuthorized) }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -182,7 +190,7 @@ Deno.serve(async (req: Request) => {
           handyPayment.provider_transaction_id || handyPayment.transaction_external_id || handyPayment.id,
         );
 
-        return new Response(JSON.stringify({ success: true, status: "paid", order: orderSummary(paidOrder) }), {
+        return new Response(JSON.stringify({ success: true, status: "paid", order: orderSummary(paidOrder, isFullyAuthorized) }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -190,7 +198,7 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({
         success: true,
         status: currentOrder.payment_status || currentOrder.status || "pending_payment",
-        order: orderSummary(currentOrder),
+        order: orderSummary(currentOrder, isFullyAuthorized),
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

@@ -75,6 +75,20 @@ serve(async (req) => {
       });
     }
 
+    // Check webhook secret if configured
+    const distriSecret = Deno.env.get("DISTRILOGIC_WEBHOOK_SECRET");
+    if (distriSecret) {
+      const headerSecret = req.headers.get("x-distrilogic-secret") || req.headers.get("x-webhook-secret") || "";
+      const urlSecret = new URL(req.url).searchParams.get("secret") || "";
+      if (headerSecret !== distriSecret && urlSecret !== distriSecret) {
+        console.warn("[distrilogic-webhook] Unauthorized request rejected.");
+        return new Response(JSON.stringify({ success: false, message: "Unauthorized" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 401,
+        });
+      }
+    }
+
     // Find shipment
     const { data: shipment } = await supabase
       .from('shipments')
@@ -90,6 +104,16 @@ serve(async (req) => {
     }
 
     const mapped = mapStatusCodeToInternal(statusCode || statusName);
+
+    // State transition matrix: Do not regress terminal states
+    const terminalStates = ['delivered', 'cancelled', 'returned'];
+    if (terminalStates.includes(shipment.shipping_status) && !terminalStates.includes(mapped.internalStatus)) {
+      console.warn(`[distrilogic-webhook] Ignoring regressive state transition from ${shipment.shipping_status} to ${mapped.internalStatus} for shipment ${shipment.id}`);
+      return new Response(JSON.stringify({ success: true, message: "Ignored regressive transition" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
 
     // Update shipment status
     await supabase.from('shipments').update({

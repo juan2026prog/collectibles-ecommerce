@@ -17,6 +17,21 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
+    // 1. Webhook signature/secret verification
+    const handySecret = Deno.env.get("HANDY_WEBHOOK_SECRET");
+    if (handySecret) {
+      const authHeader = req.headers.get("x-handy-secret") || req.headers.get("x-handy-signature") || "";
+      const urlObj = new URL(req.url);
+      const querySecret = urlObj.searchParams.get("secret") || urlObj.searchParams.get("token") || "";
+      if (authHeader !== handySecret && querySecret !== handySecret) {
+        console.warn("[Handy Webhook] Unauthorized webhook invocation rejected.");
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: responseHeaders,
+        });
+      }
+    }
+
     const rawBody = await req.text();
     let payload: Record<string, any>;
     try {
@@ -36,7 +51,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: payment, error: paymentError } = await supabaseAdmin
       .from("payments")
-      .select("id, order_id, status, transaction_external_id")
+      .select("id, order_id, status, amount, currency, transaction_external_id")
       .eq("provider", "handy")
       .eq("transaction_external_id", webhookData.transactionExternalId)
       .single();
@@ -44,6 +59,15 @@ Deno.serve(async (req: Request) => {
     if (paymentError || !payment) {
       console.warn("[Handy Webhook] Payment not found", webhookData.transactionExternalId);
       return new Response(JSON.stringify({ received: true, skipped: true }), {
+        status: 200,
+        headers: responseHeaders,
+      });
+    }
+
+    // Idempotency: If payment was already approved and processed, acknowledge immediately
+    if (payment.status === "approved" && webhookData.mappedStatus === "approved") {
+      console.log(`[Handy Webhook] Payment ${payment.id} already approved. Skipping redundant finalization.`);
+      return new Response(JSON.stringify({ received: true, already_processed: true }), {
         status: 200,
         headers: responseHeaders,
       });

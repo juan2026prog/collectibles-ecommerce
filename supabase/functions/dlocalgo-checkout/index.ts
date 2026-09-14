@@ -25,24 +25,14 @@ serve(async (req) => {
     if (error || !order) throw new Error('Order not found')
     if (order.status !== 'pending') throw new Error('Order is not in pending state')
 
-    const DLOCALGO_API_KEY = Deno.env.get('DLOCALGO_API_KEY') || 'mock-dlocalgo-key'
-    
-    const paymentPayload = {
-      amount: order.total_amount,
-      currency: order.currency || "UYU",
-      country: "UY",
-      order_id: order.id,
-      success_url: `${req.headers.get("origin") || 'http://localhost:5173'}/checkout/success?order_id=${order.id}`,
-      back_url: `${req.headers.get("origin") || 'http://localhost:5173'}/checkout`,
-      notification_url: `${Deno.env.get('SUPABASE_URL')}/functions/v1/dlocalgo-webhook`,
-      payer: {
-        name: `${order.shipping_address?.first_name || ''} ${order.shipping_address?.last_name || ''}`.trim() || 'Guest Customer',
-        email: order.customer_email || 'guest@example.com'
-      }
-    }
+    const DLOCALGO_API_KEY = Deno.env.get('DLOCALGO_API_KEY')
+    const isDev = Deno.env.get('ENVIRONMENT') === 'development' || Deno.env.get('ALLOW_MOCK_PAYMENTS') === 'true'
 
-    if (DLOCALGO_API_KEY === 'mock-dlocalgo-key') {
-      console.log('Simulating dLocal Go API call to generate SmartLink/Redirect URL', paymentPayload);
+    if (!DLOCALGO_API_KEY) {
+      if (!isDev) {
+        throw new Error('DLOCALGO_API_KEY is not configured on the server.')
+      }
+      console.log('[Dev Mode] Simulating dLocal Go API call to generate SmartLink/Redirect URL', paymentPayload);
       
       const mockPaymentId = "DLG-MOCK-" + Math.floor(Math.random() * 100000);
       await supabaseClient.from('orders').update({ payment_id: mockPaymentId }).eq('id', order.id);

@@ -23,12 +23,16 @@ declare global {
 
 /**
  * Validates if Meta Tracking is allowed.
- * We are enabling tracking by default as per user request for Meta Events.
+ * Respects user cookie consent (declined = Solo Esenciales).
  */
 export function canTrackMeta(): boolean {
   if (!PIXEL_ID) return false;
-  // If explicitly rejected, we could block it, but for now we force track
-  // to ensure Facebook Events Manager registers the events correctly.
+  try {
+    const consent = typeof localStorage !== 'undefined' ? localStorage.getItem('cookieSettings') : null;
+    if (consent === 'declined') return false;
+  } catch {
+    // Fail-safe
+  }
   return true;
 }
 

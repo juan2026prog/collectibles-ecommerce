@@ -4,7 +4,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import * as XLSX from "https://esm.sh/xlsx@0.18.5";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "mock-resend-key";
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
+const isDev = Deno.env.get("ENVIRONMENT") === "development" || Deno.env.get("ALLOW_TEST_BYPASS") === "true";
 
 interface LogisticsRequestBody {
   order_id?: string;
@@ -214,7 +215,7 @@ serve(async (req: Request) => {
     // 1. Strict Token and Authentication Checks
     let isAuthorized = false;
     const bypassHeader = req.headers.get("x-mbe-logistics-bypass");
-    const isBypass = bypassHeader === "collectibles-mbe-logistics-secret";
+    const isBypass = isDev && bypassHeader === "collectibles-mbe-logistics-secret";
 
     if (isBypass) {
       isAuthorized = true;
@@ -691,20 +692,25 @@ async function sendMbeEmail(supabase: any, orderId: string, isResend: boolean) {
         .eq("id", logRecordId);
     }
 
-    if (RESEND_API_KEY === "mock-resend-key") {
-      console.log(`[Dev Mode] Simulated MBE shipping email to info@mbe.uy for order ${order.order_number} (Size: ${size} bytes, Checksum: ${checksum})`);
-      
-      if (logRecordId) {
-        await supabase
-          .from("mbe_shipping_logs")
-          .update({
-            status: logStatus,
-            email_provider_id: "mock-email-id-1234",
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", logRecordId);
+    if (!RESEND_API_KEY) {
+      if (isDev) {
+        console.log(`[Dev Mode] Simulated MBE shipping email to info@mbe.uy for order ${order.order_number} (Size: ${size} bytes, Checksum: ${checksum})`);
+        
+        if (logRecordId) {
+          await supabase
+            .from("mbe_shipping_logs")
+            .update({
+              status: logStatus,
+              email_provider_id: "mock-email-id-1234",
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", logRecordId);
+        }
+        return true;
       }
-      return true;
+      throw new SafeLogError("RESEND_NOT_CONFIGURED", "Resend API key is not configured on the server", {
+        orderNumber: order.order_number
+      });
     }
 
     const res = await fetch("https://api.resend.com/emails", {

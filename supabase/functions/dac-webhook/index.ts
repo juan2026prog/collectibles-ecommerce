@@ -52,6 +52,20 @@ serve(async (req) => {
     console.error("[DAC Webhook] Body parsing failed:", e.message);
   }
 
+  // Check webhook secret if configured
+  const dacSecret = Deno.env.get("DAC_WEBHOOK_SECRET");
+  if (dacSecret) {
+    const headerSecret = req.headers.get("x-dac-secret") || req.headers.get("x-webhook-secret") || "";
+    const urlSecret = new URL(req.url).searchParams.get("secret") || "";
+    if (headerSecret !== dacSecret && urlSecret !== dacSecret) {
+      console.warn("[DAC Webhook] Unauthorized request rejected.");
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+  }
+
   // Extract keys
   const kGuia = bodyData.K_Guia || bodyData.k_guia || bodyData.kGuia || "";
   const trackingCode = bodyData.Codigo_Rastreo || bodyData.codigo_rastreo || bodyData.tracking_code || bodyData.trackingCode || "";
@@ -75,6 +89,16 @@ serve(async (req) => {
       if (shipment) {
         const internalStatus = mapDacStatus(rawEstado);
         const oldStatus = shipment.shipping_status;
+
+        // State transition matrix: Do not regress terminal states
+        const terminalStates = ['delivered', 'cancelled', 'returned'];
+        if (terminalStates.includes(oldStatus) && !terminalStates.includes(internalStatus)) {
+          console.warn(`[DAC Webhook] Ignoring regressive state transition from ${oldStatus} to ${internalStatus} for shipment ${shipment.id}`);
+          return new Response(JSON.stringify({ result: 0, Fecha: formatDacDate(new Date()), note: "Ignored regressive transition" }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
 
         // 1. Update Shipment record
         await supabase
