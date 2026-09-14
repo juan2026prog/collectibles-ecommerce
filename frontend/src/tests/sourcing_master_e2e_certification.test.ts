@@ -386,6 +386,28 @@ describe('COLLECTIBLES 2026 — MASTER E2E SOURCING & RADAR CERTIFICATION SUITE'
       const removeRes = await sourcingWatchlistService.removeFromWatchlist('WATCH-001');
       expect(removeRes.success).toBe(true);
     });
+
+    it('survives simulated browser refresh and session reload using DB as authority', async () => {
+      vi.spyOn(supabase, 'from').mockImplementation((table: string) => {
+        if (table === 'sourcing_watchlist') {
+          return {
+            select: vi.fn().mockReturnValue({
+              order: vi.fn().mockResolvedValue({
+                data: [{ product_id: 'WATCH-DB-RELOAD', canonical_sku: 'SF-CANON-RELOAD' }],
+                error: null
+              })
+            })
+          } as any;
+        }
+        return { select: vi.fn().mockResolvedValue({ data: [], error: null }) } as any;
+      });
+
+      // Clear secondary cache to simulate new device/browser
+      localStorage.clear();
+
+      const ids = await sourcingWatchlistService.getWatchlistProductIds();
+      expect(ids).toContain('WATCH-DB-RELOAD');
+    });
   });
 
   // =========================================================================
