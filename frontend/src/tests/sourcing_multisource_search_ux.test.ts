@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { ebaySourceAdapter } from '../services/sourcing/adapters/EbaySourceAdapter';
 import { bestBuySourceAdapter } from '../services/sourcing/adapters/BestBuySourceAdapter';
 import { 
@@ -139,6 +139,42 @@ describe('Sourcing Intelligence — Multi-Source Search & Import UX', () => {
     });
 
     it('en modo TODOS debe agrupar ofertas de Amazon y eBay en 1 producto canónico', async () => {
+      vi.spyOn(multiSourceSearchService as any, 'searchAmazon').mockResolvedValue({
+        source: 'amazon',
+        items: [
+          {
+            id: 'amz-1',
+            title: 'Jada Toys Capcom Ultra Street Fighter II Ryu 1:12 Scale Action Figure',
+            price: 24.99,
+            shipping: 0,
+            seller: 'Amazon.com',
+            condition: 'new',
+            url: 'https://amazon.com/dp/B01',
+            image_url: 'https://example.com/ryu.jpg',
+            availability: 'in_stock'
+          }
+        ],
+        status: 'AVAILABLE'
+      });
+
+      vi.spyOn(multiSourceSearchService as any, 'searchEbay').mockResolvedValue({
+        source: 'ebay',
+        items: [
+          {
+            id: 'ebay-1',
+            title: 'Jada Toys Capcom Ultra Street Fighter II Ryu 1:12 Scale Action Figure',
+            price: 28.50,
+            shipping: 4.99,
+            seller: 'TopCollector',
+            condition: 'new',
+            url: 'https://ebay.com/itm/123',
+            image_url: 'https://example.com/ryu.jpg',
+            availability: 'in_stock'
+          }
+        ],
+        status: 'AVAILABLE'
+      });
+
       const res = await multiSourceSearchService.searchProducts('Street Fighter Jada Toys', 'all');
 
       expect(res.totalCanonicalCount).toBeGreaterThan(0);
@@ -158,6 +194,30 @@ describe('Sourcing Intelligence — Multi-Source Search & Import UX', () => {
     });
 
     it('debe marcar correctamente productos que ya existen en el catálogo', async () => {
+      vi.spyOn(multiSourceSearchService as any, 'searchAmazon').mockResolvedValue({
+        source: 'amazon',
+        items: [
+          {
+            id: 'amz-1',
+            title: 'Jada Toys Capcom Ultra Street Fighter II Ryu 1:12',
+            price: 24.99,
+            shipping: 0,
+            seller: 'Amazon.com',
+            condition: 'new',
+            url: 'https://amazon.com/dp/B01',
+            image_url: 'https://example.com/ryu.jpg',
+            availability: 'in_stock'
+          }
+        ],
+        status: 'AVAILABLE'
+      });
+
+      vi.spyOn(multiSourceSearchService as any, 'searchEbay').mockResolvedValue({
+        source: 'ebay',
+        items: [],
+        status: 'AVAILABLE'
+      });
+
       const catalogTitles = [
         'Jada Toys Capcom Ultra Street Fighter II Ryu 1:12',
         'McFarlane Toys DC Comics Batman'

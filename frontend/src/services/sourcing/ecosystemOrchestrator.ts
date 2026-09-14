@@ -175,9 +175,9 @@ export class EcosystemOrchestrator {
       logStep('7. AUTOPILOT_SKIPPED', `Autopilot omitido o requiere aprobación manual.`);
     }
 
-    // 7. Catalog Publication Integration (si fue aprobado/publicado)
+    // 7. Catalog Publication Integration (solo si fue auto-publicado por Autopilot o actor manual explícito)
     let catalogProductId: string | undefined = undefined;
-    if (recommendation === 'PUBLISH' || autopilotExecutedAction === 'AUTO_PUBLISHED') {
+    if (autopilotExecutedAction === 'AUTO_PUBLISHED' || (actor === 'USER' && recommendation === 'PUBLISH')) {
       try {
         const importRes = await sourcingService.importProductsToCatalog([product]);
         if (importRes.success) {
@@ -186,6 +186,8 @@ export class EcosystemOrchestrator {
       } catch (err: any) {
         logStep('8. CATALOG_ERROR', `Fallo al publicar en catálogo: ${err.message}`);
       }
+    } else {
+      logStep('8. CATALOG_PUBLICATION_SKIPPED', `Publicación en catálogo omitida (Autopilot no ejecutó publicación automática o requiere aprobación).`);
     }
 
     // 8. Radar Direct Linkage

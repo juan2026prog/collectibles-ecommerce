@@ -27,12 +27,15 @@ serve(async (req) => {
     let keywords = [];
 
     if (!OPENAI_API_KEY || OPENAI_API_KEY.includes('mock')) {
-       // Mock Mode
-       console.log("Generando sin llave OpenAI válida (Mock).");
-       generatedTitle = `[MOCK AI] ${rawText.substring(0, 30)}...`;
-       generatedDescription = `Este es un texto auto-generado mock porque no se detectó una llave OpenAI productiva.\n\n### Aspectos Destacados\n- Característica 1 detectada de: ${rawText.substring(0, 10)}\n- Calidad Premium garantizada.`;
-       keywords = ["mock", "test", "ai"];
-    } else {
+       return new Response(JSON.stringify({ 
+         success: false, 
+         status: "PENDING_CREDENTIAL", 
+         error: "OPENAI_API_KEY no configurada en Supabase Secrets." 
+       }), {
+         status: 503,
+         headers: { ...corsHeaders, "Content-Type": "application/json" }
+       });
+    }
        // Producción
        const systemPrompt = `You are an expert eCommerce copywriter for a premium collectibles store.
        Tone: ${vendorTone || 'Professional and persuasive, focusing on FOMO and rarity'}. 

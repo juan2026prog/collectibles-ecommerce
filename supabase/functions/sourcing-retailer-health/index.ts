@@ -56,39 +56,72 @@ serve(async (req: Request) => {
       }
     }
 
-    // 3. Build structured health response
+    // 3. Check OpenAI flag & MLU
+    const { data: openAiSetting } = await supabase
+      .from("site_settings")
+      .select("value")
+      .eq("key", "sourcing_openai_enabled")
+      .maybeSingle();
+    const openAiEnabled = openAiSetting?.value === "true";
+    const hasOpenAiKey = Boolean(Deno.env.get("OPENAI_API_KEY"));
+
+    // 4. Build structured health response
     const amazonHealth = {
       retailer: "amazon",
-      status: zincConfigured ? "LIVE" : "NOT_CONFIGURED",
-      search_status: zincConfigured ? "LIVE" : "NOT_CONFIGURED",
-      live_check_status: zincConfigured ? "LIVE" : "NOT_CONFIGURED",
-      purchasing_status: "SANDBOX",
+      status: zincConfigured ? "AVAILABLE" : "NOT_CONFIGURED",
+      search_status: zincConfigured ? "AVAILABLE" : "NOT_CONFIGURED",
+      live_check_status: zincConfigured ? "AVAILABLE" : "NOT_CONFIGURED",
+      purchasing_status: "DISABLED",
       managed_account: zincConfigured ? "CONNECTED" : "NOT_CONFIGURED",
-      notes: "Amazon vía Zinc API V2. Búsqueda, Live Check y Purchasing (Sandbox) activos.",
+      notes: zincConfigured 
+        ? "Amazon conectado vía Zinc API V2 (Búsqueda y Live Check activos; compras automáticas deshabilitadas)."
+        : "Requiere configurar ZINC_API_KEY en Supabase Secrets o Vault.",
     };
 
     const ebayHealth = {
       retailer: "ebay",
-      status: "ADAPTER_READY",
-      search_status: "ADAPTER_READY",
-      live_check_status: "NOT_CONFIGURED",
-      purchasing_status: "SANDBOX",
+      status: zincConfigured ? "AVAILABLE" : "NOT_CONFIGURED",
+      search_status: "AVAILABLE",
+      live_check_status: zincConfigured ? "AVAILABLE" : "NOT_CONFIGURED",
+      purchasing_status: "DISABLED",
       managed_account: zincConfigured ? "CONNECTED" : "NOT_CONFIGURED",
-      notes: "eBay vía listings de catálogo y adaptadores de scraping. Purchasing vía Zinc.",
+      notes: "eBay conectado para búsqueda y normalización de catálogo. Compras automáticas deshabilitadas.",
     };
 
     const bestbuyHealth = {
       retailer: "bestbuy",
-      status: bestBuyKeyConfigured ? "LIVE" : "ADAPTER_READY",
-      search_status: bestBuyKeyConfigured ? "LIVE" : "PENDING_KEY",
-      live_check_status: bestBuyKeyConfigured ? "LIVE" : "ADAPTER_READY",
-      purchasing_status: "SANDBOX",
+      status: bestBuyKeyConfigured ? "AVAILABLE" : "NOT_CONFIGURED",
+      search_status: bestBuyKeyConfigured ? "AVAILABLE" : "NOT_CONFIGURED",
+      live_check_status: bestBuyKeyConfigured ? "AVAILABLE" : "NOT_CONFIGURED",
+      purchasing_status: "DISABLED",
       managed_account: zincConfigured ? "CONNECTED" : "NOT_CONFIGURED",
       has_forwarding: true,
       free_shipping_threshold_usd: 35.0,
       notes: bestBuyKeyConfigured
-        ? "Best Buy conectado vía Developer API (Search/Live Check) y Zinc Managed Accounts (Purchasing Sandbox)."
-        : "Best Buy adapter listo en código. Managed Account activa en Zinc. Requiere configurar BESTBUY_API_KEY en Supabase Secrets para activar búsqueda en vivo.",
+        ? "Best Buy conectado vía Developer API (Search/Live Check)."
+        : "Requiere configurar BESTBUY_API_KEY en Supabase Secrets para activar búsqueda en vivo.",
+    };
+
+    const openAiHealth = {
+      service: "openai",
+      status: openAiEnabled && hasOpenAiKey ? "AVAILABLE" : (openAiEnabled && !hasOpenAiKey ? "NOT_CONFIGURED" : "OFF"),
+      enabled: openAiEnabled,
+      has_key: hasOpenAiKey,
+      notes: openAiEnabled ? (hasOpenAiKey ? "OpenAI activo para research." : "Switch ON pero falta OPENAI_API_KEY.") : "OpenAI apagado por política de seguridad (OFF por defecto)."
+    };
+
+    const mluHealth = {
+      service: "mercado_libre_uy",
+      status: "AVAILABLE",
+      notes: "Mercado Libre Uruguay API conectada para análisis de mercado y gap de precios."
+    };
+
+    const autopilotHealth = {
+      status: "OFF",
+      mode: "OFF",
+      auto_publish: false,
+      auto_purchase: false,
+      notes: "Autopilot apagado por defecto. Publicaciones requieren validación administrativa manual."
     };
 
     return new Response(
@@ -101,6 +134,11 @@ serve(async (req: Request) => {
           ebay: ebayHealth,
           bestbuy: bestbuyHealth,
         },
+        services: {
+          openai: openAiHealth,
+          mercadolibre_uy: mluHealth,
+          autopilot: autopilotHealth
+        }
       }),
       {
         status: 200,

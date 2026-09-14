@@ -237,9 +237,9 @@ export function deduplicateRelease(
 }
 
 /**
- * Parser de Inteligencia Artificial para extraer datos estructurados desde texto o URLs de novedades.
+ * Parser heurístico determinístico para extraer datos estructurados desde texto o URLs de novedades.
  */
-export async function parseReleaseWithAI(input: {
+export async function parseReleaseHeuristically(input: {
   text?: string;
   url?: string;
   sourceName?: string;
@@ -249,7 +249,7 @@ export async function parseReleaseWithAI(input: {
   const sourceUrl = (input.url || '').trim();
   const sourceName = input.sourceName || 'Sitio Oficial';
 
-  // Detección heurística inteligente estructurada
+  // Detección heurística estructurada
   const lower = (content + ' ' + sourceUrl).toLowerCase();
 
   // 1. Detectar Fabricante
@@ -326,24 +326,29 @@ export async function parseReleaseWithAI(input: {
     status,
     currency: 'USD',
     region: 'GLOBAL',
-    release_precision: 'QUARTER',
-    date_display_text: 'Q1 2027',
+    release_precision: 'UNKNOWN',
+    date_display_text: null,
     source_name: sourceName,
     source_url: sourceUrl || 'https://collectibles.uy',
-    image_match_score: 0.95,
-    confidence_score: 92,
+    image_match_score: 0.50,
+    confidence_score: 50,
     radar_signal,
     radar_why,
     radar_context: `${scale} · ${franchise}`,
-    approval_status: 'PUBLISHED',
-    is_verified: true,
-    is_published: true,
+    approval_status: 'DRAFT',
+    is_verified: false,
+    is_published: false,
     is_featured: false,
     raw_source_data: { input }
   };
 
   return [item];
 }
+
+/**
+ * Alias de compatibilidad hacia parseReleaseHeuristically
+ */
+export const parseReleaseWithAI = parseReleaseHeuristically;
 
 /**
  * Guarda o actualiza un lanzamiento en Supabase, registrando correcciones de auditoría cuando existan.

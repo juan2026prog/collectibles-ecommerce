@@ -105,7 +105,7 @@ export default function AdminLayout() {
         <div className="pt-3 pb-1">
           <p className="px-3.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">Internacional</p>
           <Link
-            to="/admin/internacional/sourcing"
+            to="/admin/sourcing"
             onClick={() => closeOnClick && setMobileDrawerOpen(false)}
             className="flex items-center px-3.5 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-xl transition-colors min-h-[44px]"
           >

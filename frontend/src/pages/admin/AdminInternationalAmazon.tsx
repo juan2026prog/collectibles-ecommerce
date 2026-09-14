@@ -715,7 +715,7 @@ export default function AdminInternationalAmazon() {
           </div>
         </div>
         <a
-          href="/admin/internacional/sourcing"
+          href="/admin/sourcing"
           className="px-4 py-2 bg-[#f00856] hover:bg-[#d0074a] text-white rounded-lg text-xs font-bold whitespace-nowrap shadow-sm transition-all"
         >
           Ir a Sourcing & Importación →

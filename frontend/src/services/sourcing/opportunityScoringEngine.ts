@@ -16,6 +16,7 @@ export interface OpportunityEvaluationInput {
   matchConfidence: number; // 0.00 - 1.00
   inStock: boolean;
   isOfficialVerified: boolean;
+  uruguayMarketGapScore?: number; // 0 - 100
   priceVolatilityScore?: number; // 0 - 100
   retailerTrustScore?: number; // 0 - 100
   zeroResultCount?: number;
@@ -29,24 +30,25 @@ export interface OpportunityScoreResult {
   profitabilityStatus: ProfitabilityStatus;
   reasonCodes: OpportunityReasonCode[];
   breakdown: {
-    demandContribution: number;
-    sellerTrustContribution: number;
-    marginContribution: number;
-    stockContribution: number;
-    matchContribution: number;
+    demand: number;        // 0 - 25
+    margin: number;        // 0 - 20
+    market_gap: number;    // 0 - 15
+    seller: number;        // 0 - 10
+    availability: number;  // 0 - 10
+    authenticity: number;  // 0 - 10
+    trend: number;         // 0 - 10
   };
 }
 
 /**
- * Evalúa una Oportunidad de Sourcing y retorna un scoring explicable con reason codes.
+ * Evalúa una Oportunidad de Sourcing y retorna un scoring explicable con reason codes y breakdown oficial de 7 componentes.
  */
 export function evaluateOpportunityScore(input: OpportunityEvaluationInput): OpportunityScoreResult {
   const reasonCodes: OpportunityReasonCode[] = [];
 
-  const demandScore = Math.min(100, Math.max(0, input.demandScore));
+  const demandRaw = Math.min(100, Math.max(0, input.demandScore));
   const sellerTrust = Math.min(100, Math.max(0, input.sellerTrustScore ?? input.retailerTrustScore ?? 85));
-  const matchConf = Math.min(1.0, Math.max(0, input.matchConfidence));
-  const marginPct = input.marginPercent;
+  const marginPct = Math.max(0, input.marginPercent);
   const profitUsd = input.profitUsd;
 
   // 1. Profitability Gate Evaluation
@@ -76,105 +78,68 @@ export function evaluateOpportunityScore(input: OpportunityEvaluationInput): Opp
     });
   }
 
-  // 2. Authenticity & Seller Evaluation
-  if (!input.isOfficialVerified) {
+  // Reason code for catalog gap
+  const gapRaw = input.uruguayMarketGapScore ?? 80;
+  if (gapRaw >= 70 || (input.zeroResultCount ?? 0) > 0) {
     reasonCodes.push({
-      code: 'AUTHENTICITY_RISK',
-      label: 'Licencia o fabricante requiere verificación editorial',
-      type: 'negative',
-      weight: -15
+      code: 'CATALOG_GAP',
+      label: 'Demanda insatisfecha o gap de catálogo detectado en Uruguay',
+      type: 'positive',
+      weight: 10
     });
   }
 
-  if (sellerTrust < 80) {
+  // 2. Componentes Oficiales (0 - 100 Total)
+  // Componente 1: Demand (0 - 25)
+  const demandComponent = Number(((demandRaw / 100) * 25).toFixed(1));
+
+  // Componente 2: Margin / Profitability (0 - 20)
+  // 30% margin or higher gets max 20 pts
+  const marginComponent = Number((Math.min(20, (marginPct / 30) * 20)).toFixed(1));
+
+  // Componente 3: Uruguay Market Gap (0 - 15)
+  const marketGapComponent = Number(((gapRaw / 100) * 15).toFixed(1));
+
+  // Componente 4: Seller Confidence (0 - 10)
+  const sellerComponent = Number(((sellerTrust / 100) * 10).toFixed(1));
+  let sellerPenalty = 0;
+  if (sellerTrust < 60) {
+    sellerPenalty = 15;
     reasonCodes.push({
       code: 'UNRELIABLE_SELLER',
-      label: `Reputación de vendedor inferior al umbral recomendado (${sellerTrust}%)`,
+      label: `Vendedor con confiabilidad baja o dudosa (${sellerTrust}%)`,
       type: 'negative',
       weight: -20
     });
   }
 
-  if (!input.inStock) {
-    reasonCodes.push({
-      code: 'NO_STOCK',
-      label: 'Sin stock inmediato confirmado en el proveedor',
-      type: 'negative',
-      weight: -20
-    });
-  }
+  // Componente 5: Availability / Stock (0 - 10)
+  const availabilityComponent = input.inStock ? 10 : 0;
 
-  // 3. Positive Demand Reason Attribution
-  if ((input.zeroResultCount ?? 0) > 0) {
-    reasonCodes.push({
-      code: 'HIGH_ZERO_RESULT_SEARCH',
-      label: `${input.zeroResultCount} búsquedas sin resultados registrados`,
-      type: 'positive',
-      weight: 15
-    });
-  }
+  // Componente 6: Authenticity (0 - 10)
+  const authenticityComponent = input.isOfficialVerified ? 10 : 4;
 
-  if ((input.trendVelocity ?? 0) > 20) {
-    reasonCodes.push({
-      code: 'RAPID_DEMAND_GROWTH',
-      label: `Crecimiento acelerado de demanda (+${Math.round(input.trendVelocity!)}%)`,
-      type: 'positive',
-      weight: 10
-    });
-  }
+  // Componente 7: Radar / Trend (0 - 10)
+  let trendPoints = 0;
+  if ((input.radarInterest ?? 0) > 0 || (input.wishlistInterest ?? 0) > 0) trendPoints += 5;
+  if ((input.zeroResultCount ?? 0) > 0 || (input.trendVelocity ?? 0) > 10) trendPoints += 5;
+  const trendComponent = Math.min(10, trendPoints);
 
-  if ((input.wishlistInterest ?? 0) > 0) {
-    reasonCodes.push({
-      code: 'HIGH_WISHLIST_INTEREST',
-      label: `Solicitado en wishlist / vitrina por usuarios`,
-      type: 'positive',
-      weight: 10
-    });
-  }
-
-  if ((input.radarInterest ?? 0) > 0) {
-    reasonCodes.push({
-      code: 'RADAR_TRAFFIC',
-      label: 'Impulsado por tráfico e interés en Radar',
-      type: 'positive',
-      weight: 10
-    });
-  }
-
-  reasonCodes.push({
-    code: 'CATALOG_GAP',
-    label: 'Producto no presente en el catálogo local de Uruguay',
-    type: 'positive',
-    weight: 10
-  });
-
-  // 4. Mathematical Opportunity Score Computation (0-100)
-  const demandContrib = demandScore * 0.35;
-  const sellerContrib = sellerTrust * 0.20;
-  const marginContrib = Math.min(25, Math.max(0, marginPct * 0.8)) * (20 / 25);
-  const stockContrib = input.inStock ? 15 : 0;
-  const matchContrib = matchConf * 10;
-
-  const rawScore = demandContrib + sellerContrib + marginContrib + stockContrib + matchContrib;
-
-  // Apply negative penalties
-  let penaltySum = 0;
-  reasonCodes.filter(r => r.type === 'negative').forEach(r => {
-    penaltySum += Math.abs(r.weight || 0);
-  });
-
-  const finalScore = Math.min(100, Math.max(0, Math.round(rawScore - penaltySum)));
+  const rawSum = demandComponent + marginComponent + marketGapComponent + sellerComponent + availabilityComponent + authenticityComponent + trendComponent - sellerPenalty;
+  const finalScore = Math.min(100, Math.max(0, Math.round(rawSum)));
 
   return {
     opportunityScore: finalScore,
     profitabilityStatus,
     reasonCodes,
     breakdown: {
-      demandContribution: Number(demandContrib.toFixed(1)),
-      sellerTrustContribution: Number(sellerContrib.toFixed(1)),
-      marginContribution: Number(marginContrib.toFixed(1)),
-      stockContribution: Number(stockContrib.toFixed(1)),
-      matchContribution: Number(matchContrib.toFixed(1))
+      demand: demandComponent,
+      margin: marginComponent,
+      market_gap: marketGapComponent,
+      seller: sellerComponent,
+      availability: availabilityComponent,
+      authenticity: authenticityComponent,
+      trend: trendComponent
     }
   };
 }

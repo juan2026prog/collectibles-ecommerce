@@ -1,4 +1,4 @@
-﻿import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { verifyAdmin } from "../_shared/auth.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
@@ -65,12 +65,15 @@ serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
   );
 
+  const traceId = req.headers.get("x-trace-id") || crypto.randomUUID();
+  const requestId = crypto.randomUUID();
+
   try {
     adminUser = await verifyAdmin(req);
   } catch {
-    return new Response(JSON.stringify({ error: "Unauthorized", status: "FORBIDDEN" }), {
+    return new Response(JSON.stringify({ error: "Unauthorized", status: "FORBIDDEN", trace_id: traceId, request_id: requestId }), {
       status: 403,
-      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json", "X-Trace-Id": traceId }
     });
   }
 
@@ -83,18 +86,28 @@ serve(async (req) => {
       .single();
 
     if (!enabledRow || enabledRow.value !== "true") {
-      return new Response(JSON.stringify({ error: "OpenAI Research está desactivado.", status: "FEATURE_DISABLED" }), {
+      return new Response(JSON.stringify({ 
+        error: "OpenAI Research está desactivado.", 
+        status: "FEATURE_DISABLED",
+        trace_id: traceId,
+        request_id: requestId
+      }), {
         status: 403,
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json", "X-Trace-Id": traceId }
       });
     }
 
     // 2. Check API key
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     if (!OPENAI_API_KEY) {
-      return new Response(JSON.stringify({ error: "OPENAI_API_KEY no configurada en Supabase Secrets.", status: "PENDING_CREDENTIAL" }), {
+      return new Response(JSON.stringify({ 
+        error: "OPENAI_API_KEY no configurada en Supabase Secrets.", 
+        status: "PENDING_CREDENTIAL",
+        trace_id: traceId,
+        request_id: requestId
+      }), {
         status: 503,
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json", "X-Trace-Id": traceId }
       });
     }
 
@@ -215,30 +228,67 @@ serve(async (req) => {
     }
 
     const VALID_RETAILERS = ["amazon", "ebay", "bestbuy", "official", "other"];
+    const ALLOWED_HOSTS = [
+      "amazon.com", "www.amazon.com",
+      "ebay.com", "www.ebay.com",
+      "bestbuy.com", "www.bestbuy.com",
+      "hasbropulse.com", "www.hasbropulse.com",
+      "entertainmentearth.com", "www.entertainmentearth.com",
+      "bigbadtoystore.com", "www.bigbadtoystore.com",
+      "necaonline.com", "www.necaonline.com",
+      "mcfarlanetoysstore.com", "www.mcfarlanetoysstore.com",
+      "goodsmileus.com", "www.goodsmileus.com",
+      "bandainamcoent.com", "www.bandainamcoent.com",
+      "tamashiiweb.com", "www.tamashiiweb.com",
+      "sideshow.com", "www.sideshow.com",
+      "ironstudios.com", "www.ironstudios.com",
+      "funko.com", "www.funko.com",
+      "collectibles.uy", "www.collectibles.uy"
+    ];
+
+    function isValidHttpsUrl(rawUrl: string): boolean {
+      try {
+        const u = new URL(rawUrl.trim());
+        if (u.protocol !== "https:") return false;
+        const host = u.hostname.toLowerCase();
+        return ALLOWED_HOSTS.some(h => host === h || host.endsWith("." + h));
+      } catch {
+        return false;
+      }
+    }
+
     let itemsValid = 0;
     let itemsInvalid = 0;
     const validatedItems: any[] = [];
 
     for (const item of (pack.items ?? [])) {
-      const hasUrl = typeof item.url === "string" && item.url.startsWith("http");
-      const hasBrand = typeof item.brand === "string" && item.brand.length > 0;
-      const hasName = typeof item.name === "string" && item.name.length > 0;
+      const hasValidUrl = typeof item.url === "string" && isValidHttpsUrl(item.url);
+      const hasBrand = typeof item.brand === "string" && item.brand.trim().length > 0;
+      const hasName = typeof item.name === "string" && item.name.trim().length > 0;
 
-      if (!hasUrl || !hasBrand || !hasName) {
-        validatedItems.push({ ...item, candidate_status: "INVALID_RESEARCH_ITEM", validation_error: "Missing url, brand or name" });
+      if (!hasValidUrl || !hasBrand || !hasName) {
+        validatedItems.push({ 
+          ...item, 
+          candidate_status: "INVALID_RESEARCH_ITEM", 
+          validation_error: !hasValidUrl ? "URL inválida o no permitida (requiere HTTPS en retailers autorizados)" : "Falta brand o name" 
+        });
         itemsInvalid++;
         continue;
       }
 
-      const guessedRetailer = item.url.includes("amazon.com") ? "amazon"
-        : item.url.includes("ebay.com") ? "ebay"
-        : item.url.includes("bestbuy.com") ? "bestbuy"
+      const lowerUrl = item.url.toLowerCase();
+      const guessedRetailer = lowerUrl.includes("amazon.com") ? "amazon"
+        : lowerUrl.includes("ebay.com") ? "ebay"
+        : lowerUrl.includes("bestbuy.com") ? "bestbuy"
         : (item.retailer || "other");
 
       validatedItems.push({
         ...item,
         retailer: VALID_RETAILERS.includes(guessedRetailer) ? guessedRetailer : "other",
-        candidate_status: "URL_UNVERIFIED"
+        price: null, // IA NO puede certificar precio comercial
+        stock: null, // IA NO puede certificar stock comercial
+        candidate_status: "URL_UNVERIFIED",
+        verification_status: "UNVERIFIED"
       });
       itemsValid++;
     }

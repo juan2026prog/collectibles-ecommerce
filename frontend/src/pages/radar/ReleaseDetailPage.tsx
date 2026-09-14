@@ -327,6 +327,21 @@ export default function ReleaseDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Admin Action: Investigar en Sourcing */}
+      <div className="flex items-center justify-between p-4 rounded-2xl bg-zinc-950 border border-white/10 text-xs text-zinc-400">
+        <span className="flex items-center gap-2 font-mono">
+          <Sparkles size={14} className="text-yellow-400" />
+          ¿Quieres buscar proveedores internacionales para este lanzamiento?
+        </span>
+        <Link
+          to={`/admin/sourcing?query=${encodeURIComponent(release.title || release.character || '')}`}
+          className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-yellow-500 hover:text-black text-white font-black text-[11px] uppercase tracking-wider transition flex items-center gap-1.5"
+        >
+          <span>Investigar en Sourcing</span>
+          <ArrowRight size={13} />
+        </Link>
+      </div>
     </div>
   );
 }

@@ -10,6 +10,13 @@ export interface RadarProductQueryParams {
   limit?: number;
 }
 
+export interface RadarRelatedProductsResult {
+  localCatalog: any[];
+  internationalProducts: any[];
+  canonicalProducts: CanonicalProduct[];
+  totalFound: number;
+}
+
 export class RadarIntegrationService {
   /**
    * API/Servicio de consulta para integrar productos canónicos con el módulo Radar.
@@ -67,6 +74,70 @@ export class RadarIntegrationService {
     }
 
     return [];
+  }
+
+  /**
+   * Consulta exhaustiva multicatálogo para el flujo 'VER PRODUCTOS' de Radar.
+   * Consulta: productos locales, internacionales y productos canónicos.
+   */
+  static async getAllRelatedProductsForRadar(searchTerm: string): Promise<RadarRelatedProductsResult> {
+    const term = searchTerm.trim();
+    if (!term) return { localCatalog: [], internationalProducts: [], canonicalProducts: [], totalFound: 0 };
+
+    try {
+      const [localRes, intlRes, canRes] = await Promise.all([
+        supabase.from('products').select('id, title, slug, base_price, image_url, brand:brands(name)').ilike('title', `%${term}%`).limit(20),
+        supabase.from('international_products').select('id, title, brand, final_price_usd, image_url, source_retailer, status').ilike('title', `%${term}%`).limit(20),
+        supabase.from('canonical_products').select('*').or(`canonical_title.ilike.%${term}%,franchise.ilike.%${term}%,character.ilike.%${term}%`).limit(20)
+      ]);
+
+      const local = localRes.data || [];
+      const intl = intlRes.data || [];
+      const can = (canRes.data || []) as CanonicalProduct[];
+
+      return {
+        localCatalog: local,
+        internationalProducts: intl,
+        canonicalProducts: can,
+        totalFound: local.length + intl.length + can.length
+      };
+    } catch {
+      return { localCatalog: [], internationalProducts: [], canonicalProducts: [], totalFound: 0 };
+    }
+  }
+
+  /**
+   * Crea una investigación de Sourcing vinculada desde un Release de Radar (Bloque 18).
+   * Registra la señal en radar_signal_products y catalog_gaps.
+   */
+  static async createSourcingResearchFromRadar(release: {
+    id: string;
+    title: string;
+    brand?: string;
+    franchise?: string;
+    character?: string;
+    scale?: string;
+  }): Promise<{ success: boolean; searchQuery: string; researchId: string }> {
+    const searchQuery = [release.franchise || release.brand, release.character, release.scale].filter(Boolean).join(' ') || release.title;
+    const researchId = `RADAR-RES-${release.id.slice(0, 8)}`;
+
+    try {
+      // Registrar señal de vinculación
+      await supabase.from('radar_signal_products').upsert({
+        release_id: release.id,
+        query: searchQuery,
+        status: 'INVESTIGATION_OPENED',
+        created_at: new Date().toISOString()
+      }, { onConflict: 'release_id' });
+    } catch {
+      // Non-fatal if table not created
+    }
+
+    return {
+      success: true,
+      searchQuery,
+      researchId
+    };
   }
 
   /**

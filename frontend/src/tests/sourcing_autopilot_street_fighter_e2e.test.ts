@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { autopilotPolicyEngine } from '../services/sourcing/autopilot/policyEngine';
 import { autopilotExecutionEngine } from '../services/sourcing/autopilot/executionEngine';
 import { autopilotReconciliationEngine } from '../services/sourcing/autopilot/reconciliationEngine';
+import { sourcingService } from '../services/sourcing/sourcingService';
 import type { NormalizedProduct } from '../types/sourcing';
 import type { AutopilotSettings, AutopilotRule } from '../types/sourcingAutopilot';
 
@@ -177,6 +178,13 @@ describe('Sourcing Autopilot — Street Fighter E2E Scenario Test', { timeout: 2
     expect(evaluation.explainability.expectedMargin).toBe(30.15);
 
     // 2. Execution Engine Processing
+    vi.spyOn(sourcingService, 'importProductsToCatalog').mockResolvedValue({
+      success: true,
+      importedCount: 1,
+      preordersCount: 0,
+      errors: []
+    });
+
     const execRes = await autopilotExecutionEngine.processProductExecution(
       streetFighterCanonicalProduct,
       autopilotSettings,

@@ -39,11 +39,16 @@ export async function queryMercadoLibreUruguayReal(input: UruguayQueryInput): Pr
       }
     });
 
-    if (!error && data && data.status) {
+    if (error) {
+      console.warn('Edge function sourcing-market-intelligence error:', error);
+      return createNoDataMarketSummary(input.title, error.message || 'Error en servicio de inteligencia de mercado');
+    }
+    if (data && data.status) {
       return data as UruguayMarketSummary;
     }
-  } catch (err) {
-    console.warn('Edge function sourcing-market-intelligence no disponible o error:', err);
+  } catch (err: any) {
+    console.warn('Edge function sourcing-market-intelligence exception:', err);
+    return createNoDataMarketSummary(input.title, err?.message || 'Excepción al consultar inteligencia de mercado');
   }
 
   // 2. Fallback de cliente: consultar cache local en supabase table si existe
@@ -68,7 +73,7 @@ export async function queryMercadoLibreUruguayReal(input: UruguayQueryInput): Pr
     // Cache de tabla no accesible
   }
 
-  // 3. Respuesta honesta cuando no hay datos disponibles o falla la conexión
+  // 3. Respuesta honesta cuando no hay datos disponibles
   return createNoDataMarketSummary(input.title);
 }
 

@@ -21,8 +21,8 @@ export class AutopilotPolicyEngine {
     const activeOffer = product.offers.find(o => o.id === product.selected_source_id) || product.offers[0];
     const sourceName = activeOffer?.source || 'unknown';
     const originPrice = activeOffer?.price || 0;
-    const sellerScore = activeOffer?.seller_rating ?? 95;
-    const stock = activeOffer?.stock ?? (activeOffer?.availability === 'in_stock' ? 5 : 0);
+    const sellerScore = activeOffer?.seller_rating ?? activeOffer?.reliability_score ?? 0;
+    const stock = activeOffer?.stock ?? (activeOffer?.availability === 'in_stock' ? 1 : 0);
     const condition = activeOffer?.condition_normalized || (activeOffer?.condition === 'new' ? 'NEW' : 'USED');
     
     const landedCost = product.financials.real_cost_puesto_usd || 0;

@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { captureDemandSignal, normalizeDemandSignal } from '../services/sourcing/demandSignalEngine';
 import { buildGapDedupeKey, processSignalIntoCatalogGap, getQualifiedCatalogGaps } from '../services/sourcing/catalogGapEngine';
 import { computeDemandScore, calculateTimeDecayMultiplier, calculateTrendVelocity } from '../services/sourcing/demandScoringEngine';
 import { evaluateOpportunityScore } from '../services/sourcing/opportunityScoringEngine';
 import { adaptiveDiscoveryService } from '../services/sourcing/adaptiveDiscoveryService';
 import { adaptiveSourcingService } from '../services/sourcing/adaptiveSourcingService';
+import { sourcingService } from '../services/sourcing/sourcingService';
 import { ProductMatchingEngine } from '../services/sourcing/ProductMatchingEngine';
 import type { DemandSignal, CatalogGap } from '../types/sourcingAdaptiveTypes';
 
@@ -78,6 +79,13 @@ describe('SOURCING INTELLIGENCE — FASE 4 — ADAPTIVE SOURCING SUITE', () => {
     expect(opp.status).toBe('READY_FOR_REVIEW');
 
     // Step 6: Admin Approval (Preparar Publicación)
+    vi.spyOn(sourcingService, 'importProductsToCatalog').mockResolvedValue({
+      success: true,
+      importedCount: 1,
+      preordersCount: 0,
+      errors: []
+    });
+
     const approveResult = await adaptiveSourcingService.approveOpportunity(opp.id);
     expect(approveResult.success).toBe(true);
   });

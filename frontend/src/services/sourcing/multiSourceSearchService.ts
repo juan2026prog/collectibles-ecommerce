@@ -26,7 +26,8 @@ import {
   type CanonicalProductCondition,
   type ConditionDisplayInfo 
 } from './conditionMapper';
-import { SAMPLE_STREET_FIGHTER_RESEARCH_PACK, SAMPLE_MCFARLANE_RESEARCH_PACK } from '../../data/sampleResearchPacks';
+import { SourcingRiskEngine } from './riskScoringEngine';
+import { evaluateOpportunityScore } from './opportunityScoringEngine';
 
 export type SearchSourceOption = 'all' | 'amazon' | 'ebay' | 'bestbuy';
 
@@ -207,65 +208,78 @@ export class MultiSourceSearchService {
   }
 
   /**
-   * Búsqueda en Amazon
+   * Búsqueda en Amazon vía Zinc API / Edge Functions
    */
-  private async searchAmazon(query: string): Promise<{ source: RetailerSource; items: any[]; error?: string }> {
+  private async searchAmazon(query: string): Promise<{ source: RetailerSource; items: any[]; error?: string; status?: 'AVAILABLE' | 'UNAVAILABLE' | 'NOT_CONFIGURED' | 'ERROR' }> {
     try {
-      // 1. Intentar llamar a Edge Function zinc-search-products
       const { data, error } = await supabase.functions.invoke('zinc-search-products', {
         body: { query, max_results: 25, retailer: 'amazon' }
       });
 
-      if (!error && data?.results && Array.isArray(data.results) && data.results.length > 0) {
+      if (error) {
         return {
           source: 'amazon',
-          items: data.results.map((r: any) => ({
-            url: r.url || `https://www.amazon.com/dp/${r.product_id}`,
-            retailer: 'amazon',
-            title: r.title,
-            price: r.price ? r.price / 100 : 0,
-            brand: r.brand,
-            upc: r.upc,
-            asin: r.product_id,
-            image_url: r.image_url || r.image || r.main_image_url_external,
-            availability: r.availability || (r.prime ? 'in_stock' : 'unknown'),
-            condition: 'new'
-          }))
+          items: [],
+          status: 'UNAVAILABLE',
+          error: error.message
         };
       }
-    } catch {
-      // Continuar a fallback de catálogo/packs
+
+      const rawResults = (data?.results || data?.candidates || []);
+      if (Array.isArray(rawResults) && rawResults.length > 0) {
+        return {
+          source: 'amazon',
+          items: rawResults.map((r: any) => ({
+            url: r.url || r.product_url_external || `https://www.amazon.com/dp/${r.external_product_id || r.product_id}`,
+            retailer: 'amazon',
+            title: r.title,
+            price: r.price !== undefined && r.price !== null ? (r.price > 1000 ? r.price / 100 : r.price) : (r.price_usd ?? null),
+            brand: r.brand,
+            upc: r.upc,
+            asin: r.external_product_id || r.product_id,
+            image_url: r.image_url || r.main_image_url_external || r.image,
+            availability: r.availability || (r.prime ? 'in_stock' : 'unknown'),
+            condition: 'new'
+          })),
+          status: 'AVAILABLE'
+        };
+      }
+
+      return {
+        source: 'amazon',
+        items: [],
+        status: 'AVAILABLE'
+      };
+    } catch (err: any) {
+      return {
+        source: 'amazon',
+        items: [],
+        status: 'UNAVAILABLE',
+        error: err.message
+      };
     }
-
-    // 2. Fallback de catálogo interno y packs precargados que coincidan
-    const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 1);
-    const mockItems = [...SAMPLE_STREET_FIGHTER_RESEARCH_PACK.items, ...SAMPLE_MCFARLANE_RESEARCH_PACK.items]
-      .filter((it: any) => {
-        if (it.retailer !== 'amazon') return false;
-        const target = `${it.title || it.raw_title || ''} ${it.brand || ''} ${it.character || ''} ${it.license || ''} ${it.line || ''} ${(it.tags || []).join(' ')}`.toLowerCase();
-        return queryWords.some(w => target.includes(w));
-      });
-
-    return {
-      source: 'amazon',
-      items: mockItems
-    };
   }
 
   /**
    * Búsqueda en eBay
    */
-  private async searchEbay(query: string): Promise<{ source: RetailerSource; items: any[]; error?: string }> {
-    const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 1);
-
-    // Consultar listings de eBay existentes en base de datos o packs
+  private async searchEbay(query: string): Promise<{ source: RetailerSource; items: any[]; error?: string; status?: 'AVAILABLE' | 'UNAVAILABLE' | 'NOT_CONFIGURED' | 'ERROR' }> {
     try {
-      const { data: dbOffers } = await supabase
+      const { data: dbOffers, error } = await supabase
         .from('source_listings')
         .select('*')
         .ilike('retailer', '%ebay%')
         .ilike('raw_title', `%${query}%`)
         .limit(25);
+
+      if (error) {
+        return {
+          source: 'ebay',
+          items: [],
+          status: 'ERROR',
+          error: error.message
+        };
+      }
 
       if (dbOffers && dbOffers.length > 0) {
         return {
@@ -274,67 +288,32 @@ export class MultiSourceSearchService {
             url: d.source_url,
             retailer: 'ebay',
             title: d.raw_title,
-            price: d.raw_price_cents ? d.raw_price_cents / 100 : 0,
+            price: d.raw_price_cents ? d.raw_price_cents / 100 : (d.raw_payload?.price ?? null),
             brand: d.raw_brand,
             upc: d.raw_payload?.upc,
             image_url: d.raw_payload?.image_url,
             seller: d.raw_payload?.seller,
-            condition: d.raw_condition || 'used'
-          }))
+            condition: d.raw_condition || 'used',
+            is_lot: Boolean(d.raw_payload?.is_lot),
+            is_auction: Boolean(d.raw_payload?.is_auction)
+          })),
+          status: 'AVAILABLE'
         };
       }
-    } catch {
-      // Fallback a packs
-    }
 
-    // Items de eBay desde packs de referencia (ej: Street Fighter Jada Ryu / Ken)
-    const packItems = [...SAMPLE_STREET_FIGHTER_RESEARCH_PACK.items, ...SAMPLE_MCFARLANE_RESEARCH_PACK.items]
-      .filter((it: any) => {
-        if (it.retailer !== 'ebay') return false;
-        const target = `${it.title || it.raw_title || ''} ${it.brand || ''} ${it.character || ''} ${it.license || ''} ${it.line || ''} ${(it.tags || []).join(' ')}`.toLowerCase();
-        return queryWords.some(w => target.includes(w));
-      });
-
-    // Agregar ejemplos didácticos de eBay si es Street Fighter o similar
-    const qLower = query.toLowerCase();
-    if (qLower.includes('street fighter') || qLower.includes('jada') || qLower.includes('ryu')) {
-      const additionalEbayDemo = [
-        {
-          url: 'https://www.ebay.com/itm/129988776655',
-          retailer: 'ebay',
-          title: 'Lot of 4 Street Fighter Figures Jada Toys Ryu Ken Chun-Li Guile',
-          is_lot: true,
-          condition: 'used',
-          seller: 'ToyCollectorUSA',
-          feedback_percentage: 99.4,
-          feedback_score: 3420
-        },
-        {
-          url: 'https://www.ebay.com/itm/129988776656',
-          retailer: 'ebay',
-          title: 'Jada Toys Street Fighter Ryu Action Figure 1/12 MOC Mint on Card Vintage 2023',
-          price: 28.50,
-          brand: 'Jada Toys',
-          license: 'Capcom',
-          character: 'Ryu',
-          line: 'Ultra Street Fighter II 1:12',
-          upc: '801310342244',
-          condition: 'new',
-          seller: 'ActionFiguresHub',
-          feedback_percentage: 98.9,
-          feedback_score: 1250
-        }
-      ];
       return {
         source: 'ebay',
-        items: [...packItems, ...additionalEbayDemo]
+        items: [],
+        status: 'AVAILABLE'
+      };
+    } catch (err: any) {
+      return {
+        source: 'ebay',
+        items: [],
+        status: 'ERROR',
+        error: err.message
       };
     }
-
-    return {
-      source: 'ebay',
-      items: packItems
-    };
   }
 
   /**
@@ -469,13 +448,16 @@ export class MultiSourceSearchService {
         usaShipping: baseOffer.domestic_shipping
       });
 
+      const isLotDetected = Boolean(baseOffer.metadata?.is_lot || rawItem.is_lot || /\b(lote|bundle|lot of|set of|pack of)\b/i.test(rawExtraction.title));
+      const isAuctionDetected = Boolean(baseOffer.metadata?.is_auction || rawItem.is_auction || /\b(subasta|auction)\b/i.test(rawExtraction.title));
+
       const offerDetail: MultiSourceOfferDetail = {
         ...baseOffer,
         canonical_condition: mapped.condition,
         condition_meta: conditionMeta,
         is_retro_in_box: retroCheck.isRetroInBox,
-        is_lot: Boolean(baseOffer.metadata?.is_lot),
-        is_auction: Boolean(baseOffer.metadata?.is_auction),
+        is_lot: isLotDetected,
+        is_auction: isAuctionDetected,
         landed_cost_estimated_usd: pricing.realCost,
         sale_price_suggested_usd: pricing.finalPrice
       };
@@ -485,19 +467,23 @@ export class MultiSourceSearchService {
       const attrs = cleanResult.extractedAttributes;
 
       // Fingerprint de deduplicación canónica:
-      // Prioridad 1: UPC / EAN / GTIN
-      // Prioridad 2: MPN + Brand
-      // Prioridad 3: Brand + Franchise + Character
-      const charName = rawItem.character || attrs.character;
-      const franchiseName = rawItem.license || attrs.franchise;
+      // Prioridad 1: UPC / EAN / GTIN + Variant/Scale Protection
+      // Prioridad 2: MPN + Brand + Variant
+      // Prioridad 3: Brand + Franchise + Character + Scale + Variant + Edition + Lot
+      const charName = (rawItem.character || attrs.character || '').trim();
+      const franchiseName = (rawItem.license || attrs.franchise || '').trim();
+      const scaleName = (rawItem.scale || attrs.scale || '').replace(/\s+/g, '').toLowerCase();
+      const variantName = (attrs.variant || (rawExtraction.title.toLowerCase().includes('player 2') ? 'player 2' : '') || '').toLowerCase().trim();
+      const editionName = (attrs.edition || (rawExtraction.title.toLowerCase().includes('exclusive') ? 'exclusive' : '') || '').toLowerCase().trim();
+      const isLot = isLotDetected;
 
       let canonicalKey = '';
       if (rawExtraction.upc && rawExtraction.upc.trim().length >= 8) {
-        canonicalKey = `UPC:${rawExtraction.upc.trim()}`;
+        canonicalKey = `UPC:${rawExtraction.upc.trim()}:${variantName || 'standard'}:${scaleName || 'std'}:${isLot ? 'LOT' : 'SINGLE'}`;
       } else if (rawExtraction.brand && charName) {
-        canonicalKey = `CHAR:${rawExtraction.brand.toLowerCase()}:${(franchiseName || '').toLowerCase()}:${charName.toLowerCase()}`;
+        canonicalKey = `CHAR:${rawExtraction.brand.toLowerCase()}:${franchiseName.toLowerCase()}:${charName.toLowerCase()}:${scaleName || '1:12'}:${variantName || 'standard'}:${editionName || 'standard'}:${isLot ? 'LOT' : 'SINGLE'}`;
       } else {
-        canonicalKey = `TITLE:${cleanResult.normalizedTitle.toLowerCase()}`;
+        canonicalKey = `TITLE:${cleanResult.normalizedTitle.toLowerCase()}:${scaleName}:${variantName}:${isLot ? 'LOT' : 'SINGLE'}`;
       }
 
       if (canonicalMap.has(canonicalKey)) {
@@ -513,6 +499,32 @@ export class MultiSourceSearchService {
         const titleFormatted = cleanResult.normalizedTitle || rawExtraction.title;
         const brand = rawExtraction.brand || attrs.brand || 'Collectibles';
         const license = rawItem.license || attrs.franchise || brand;
+
+        // Calcular scoring oficial inicial para este producto canónico
+        const oppEval = evaluateOpportunityScore({
+          demandScore: 70,
+          sellerTrustScore: baseOffer.reliability_score ?? 85,
+          marginPercent: pricing.netMarginPercentage,
+          profitUsd: pricing.estimatedProfit,
+          matchConfidence: 0.95,
+          inStock: baseOffer.availability === 'in_stock',
+          isOfficialVerified: true,
+          uruguayMarketGapScore: 75
+        });
+
+        const riskEval = SourcingRiskEngine.evaluateRisk({
+          authenticityStatus: 'LIKELY_OFFICIAL',
+          sellerTrustScore: baseOffer.reliability_score ?? 85,
+          matchingConfidence: 0.95,
+          isPriceMissing: baseOffer.price === null || baseOffer.price <= 0,
+          isStockMissing: baseOffer.availability === 'unknown',
+          isShippingMissing: baseOffer.domestic_shipping === null,
+          isLot: offerDetail.is_lot,
+          isAuction: offerDetail.is_auction,
+          condition: mapped.condition,
+          marginPercent: pricing.netMarginPercentage,
+          profitUsd: pricing.estimatedProfit
+        });
 
         // Verificar si ya existe en catálogo
         const titleLower = titleFormatted.toLowerCase();
@@ -535,7 +547,7 @@ export class MultiSourceSearchService {
           license,
           character: rawItem.character || attrs.character,
           line: rawItem.line || attrs.edition,
-          scale: rawItem.scale || attrs.scale,
+          scale: rawItem.scale || attrs.scale || (scaleName ? scaleName.toUpperCase() : undefined),
           category_name: rawItem.category || 'Figuras de Acción',
           image_url: rawExtraction.image_url,
           gallery_images: rawExtraction.gallery_images,
@@ -556,8 +568,8 @@ export class MultiSourceSearchService {
           retro_reason: retroCheck.reason,
           is_lot: offerDetail.is_lot,
           is_auction: offerDetail.is_auction,
-          opportunity_score: 85,
-          risk_score: offerDetail.is_lot ? 40 : 15,
+          opportunity_score: oppEval.opportunityScore,
+          risk_score: riskEval.riskScore,
           already_in_catalog: Boolean(exactMatch),
           catalog_match_title: exactMatch
         });

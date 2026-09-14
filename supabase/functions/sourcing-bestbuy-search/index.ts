@@ -146,8 +146,11 @@ serve(async (req: Request) => {
     // 3. Normalize products to standard Sourcing schema
     const results = rawProducts.map((p: any) => {
       const skuStr = String(p.sku || "");
-      const effectivePrice = Number(p.salePrice ?? p.regularPrice ?? 0);
-      const domesticShipping = effectivePrice >= 35 ? 0 : 4.99; // Best Buy standard policy ($35+ free shipping)
+      const rawPrice = p.salePrice ?? p.regularPrice ?? null;
+      const effectivePrice = rawPrice !== null ? Number(rawPrice) : null;
+      const domesticShipping = effectivePrice !== null ? (effectivePrice >= 35 ? 0 : 4.99) : null;
+      const isOnlineAvailable = p.onlineAvailability === true;
+      const availability = isOnlineAvailable ? "in_stock" : (p.onlineAvailability === false ? "out_of_stock" : "unknown");
 
       return {
         url: p.url || `https://www.bestbuy.com/site/${skuStr}.p?skuId=${skuStr}`,
@@ -155,17 +158,25 @@ serve(async (req: Request) => {
         source_product_id: skuStr,
         title: p.name || `Best Buy Item ${skuStr}`,
         price: effectivePrice,
-        regular_price: Number(p.regularPrice ?? effectivePrice),
-        brand: p.manufacturer || "Best Buy",
+        regular_price: p.regularPrice !== null && p.regularPrice !== undefined ? Number(p.regularPrice) : effectivePrice,
+        brand: p.manufacturer || null,
         upc: p.upc || null,
         model: p.modelNumber || null,
         image_url: p.largeFrontImage || p.image || null,
-        availability: p.onlineAvailability === true || p.inStoreAvailability === true ? "in_stock" : "out_of_stock",
-        stock: p.onlineAvailability === true ? 10 : 0,
+        availability,
+        stock_status: availability,
+        stock_quantity: null, // Best Buy API no reporta conteo numérico exacto de unidades
+        stock: null,
         condition: "new",
         domestic_shipping: domesticShipping,
+        shipping: domesticShipping,
         estimated_delivery: "3-5 días (USA)",
         is_zinc_compatible: true,
+        verification_status: effectivePrice !== null ? "VERIFIED_LIVE" : "NO_DATA",
+        raw_source_data: {
+          onlineAvailability: p.onlineAvailability,
+          inStoreAvailability: p.inStoreAvailability
+        }
       };
     });
 

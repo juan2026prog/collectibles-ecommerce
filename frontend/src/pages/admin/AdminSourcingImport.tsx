@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Sparkles, History, RefreshCw, UploadCloud, SlidersHorizontal, 
   CheckCircle2, AlertTriangle, ArrowRight, ShieldCheck, Download, Clock,
@@ -104,10 +105,12 @@ type MainTabType =
 
 export default function AdminSourcingImport() {
   const { addToast } = useToast();
+  const [searchParams] = useSearchParams();
+  const urlQuery = searchParams.get('query') || searchParams.get('q') || '';
 
   // Active Main Navigation Tab
   const [activeMainTab, setActiveMainTab] = useState<'sourcing' | 'adaptive' | 'autopilot'>('sourcing');
-  const [activeTab, setActiveTab] = useState<MainTabType>('dashboard');
+  const [activeTab, setActiveTab] = useState<MainTabType>(urlQuery ? 'terminal' : 'dashboard');
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [openAIEnabled, setOpenAIEnabled] = useState(false);
   const [showOpenAIModal, setShowOpenAIModal] = useState(false);
@@ -133,7 +136,13 @@ export default function AdminSourcingImport() {
   const [activePackTitle, setActivePackTitle] = useState<string>('McFarlane US · Septiembre 2026');
   const [products, setProducts] = useState<NormalizedProduct[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [watchlistIds, setWatchlistIds] = useState<string[]>([]);
+  const [watchlistIds, setWatchlistIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('collectibles_sourcing_watchlist_ids');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
   const [loading, setLoading] = useState(false);
   const [isProcessingBulk, setIsProcessingBulk] = useState(false);
 
@@ -150,7 +159,7 @@ export default function AdminSourcingImport() {
   const [adaptiveLoading, setAdaptiveLoading] = useState(false);
 
   // Multi-Source Sourcing Terminal State
-  const [multiSourceQuery, setMultiSourceQuery] = useState('Street Fighter Jada Toys');
+  const [multiSourceQuery, setMultiSourceQuery] = useState(urlQuery || 'Street Fighter Jada Toys');
   const [selectedSourceOption, setSelectedSourceOption] = useState<SearchSourceOption>('all');
   const [isMultiSourceSearching, setIsMultiSourceSearching] = useState(false);
   const [multiSourceResult, setMultiSourceResult] = useState<MultiSourceSearchResult | null>(null);
@@ -245,8 +254,9 @@ export default function AdminSourcingImport() {
     setProducts(initialNormalized);
     setActivePackTitle(SAMPLE_MCFARLANE_RESEARCH_PACK.title);
 
-    // Inicializar búsqueda multifuente de demostración con Street Fighter Jada Toys
-    multiSourceSearchService.searchProducts('Street Fighter Jada Toys', 'all', existingTitles)
+    // Inicializar búsqueda multifuente (con urlQuery si proviene de Radar o query por defecto)
+    const initialQuery = urlQuery || 'Street Fighter Jada Toys';
+    multiSourceSearchService.searchProducts(initialQuery, 'all', existingTitles)
       .then(res => setMultiSourceResult(res))
       .catch(err => console.warn('Could not initialize multi-source demo:', err))
       .finally(() => setLoading(false));
@@ -622,13 +632,18 @@ export default function AdminSourcingImport() {
   const handleToggleWatchlist = (product: NormalizedProduct) => {
     setWatchlistIds(prev => {
       const exists = prev.includes(product.id);
+      let next: string[];
       if (exists) {
         addToast({ title: 'Watchlist', message: `"${product.title}" removido de vigilancia.`, type: 'info' });
-        return prev.filter(id => id !== product.id);
+        next = prev.filter(id => id !== product.id);
       } else {
         addToast({ title: 'Watchlist', message: `"${product.title}" añadido a vigilancia.`, type: 'success' });
-        return [...prev, product.id];
+        next = [...prev, product.id];
       }
+      try {
+        localStorage.setItem('collectibles_sourcing_watchlist_ids', JSON.stringify(next));
+      } catch {}
+      return next;
     });
   };
 

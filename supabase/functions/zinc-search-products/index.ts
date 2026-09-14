@@ -195,7 +195,13 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, candidates }),
+      JSON.stringify({ 
+        success: true, 
+        source: 'amazon',
+        results: candidates, 
+        candidates, 
+        meta: { total: candidates.length, search_id: searchRecord?.id } 
+      }),
       { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   } catch (error: any) {

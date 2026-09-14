@@ -8,6 +8,7 @@ import { normalizeAndDeduplicateOffers, cleanKeyString } from './normalizer';
 import { calculateInternationalPricing } from '../../lib/internationalPricing';
 import { evaluateAuthenticityGate } from './authenticityGate';
 import { calculateGlobalOpportunityScore } from './latamOpportunityEngine';
+import { CurrencyService } from './currencyService';
 import { supabase } from '../../lib/supabase';
 
 const HISTORY_STORAGE_KEY = 'collectibles_sourcing_packs_history_v2';
@@ -23,6 +24,15 @@ export interface SourcingHistoryEntry {
   preorder_count: number;
   source?: string;
   provider?: string;
+}
+
+export interface CatalogCheckEvaluation {
+  status: 'EXACT_PRODUCT' | 'SAME_PRODUCT_NEW_OFFER' | 'POSSIBLE_MATCH' | 'NEW_VARIANT' | 'NEW_PRODUCT' | 'CONFLICT';
+  matchedCatalogId?: string;
+  matchedTitle?: string;
+  matchedSource?: 'products' | 'international_products' | 'canonical_products';
+  confidence: number;
+  reason: string;
 }
 
 export class SourcingService {
@@ -217,10 +227,11 @@ export class SourcingService {
       }
 
       const isPreorder = options.asPreorderOnly || prod.product_type === 'PREORDER';
+      const uyuConversion = CurrencyService.getInstance().convertUsdToLocal(prod.financials.current_sale_price_usd, 'UYU');
 
       try {
-        // Registrar en international_products
-        const { error } = await supabase
+        // Registrar en international_products y ejecutar read-back de confirmación
+        const { data: inserted, error } = await supabase
           .from('international_products')
           .insert({
             source_provider: 'zinc',
@@ -234,9 +245,9 @@ export class SourcingService {
             base_price_usd: activeOffer.price,
             amazon_current_price_usd: activeOffer.price,
             usa_domestic_shipping_usd: activeOffer.domestic_shipping,
-            collectibles_fee_usd: prod.financials.current_sale_price_usd - activeOffer.price - activeOffer.domestic_shipping,
+            collectibles_fee_usd: prod.financials.current_sale_price_usd - activeOffer.price - (activeOffer.domestic_shipping || 0),
             final_price_usd: prod.financials.current_sale_price_usd,
-            final_price_uyu: prod.financials.current_sale_price_usd * 42.0,
+            final_price_uyu: uyuConversion.amountLocal,
             real_cost_usd: prod.financials.real_cost_puesto_usd,
             expected_profit_usd: prod.financials.profit_usd,
             currency: 'USD',
@@ -249,20 +260,14 @@ export class SourcingService {
               offers: prod.offers,
               selected_source: activeOffer
             }
-          });
+          })
+          .select('id, external_product_id')
+          .maybeSingle();
 
         if (error) {
-          const isTestEnv = (typeof process !== 'undefined' && (process.env?.NODE_ENV === 'test' || process.env?.VITEST)) || 
-                            (typeof window !== 'undefined' && (window as any).__VITEST__) ||
-                            error.message?.includes('placeholder') ||
-                            error.message?.includes('fetch');
-          if (isTestEnv) {
-            console.warn('[Test Environment] DB Insert mock fallback:', error.message);
-          } else {
-            console.error('Error inserting product to DB:', error.message);
-            errors.push(`${prod.title}: Error al guardar en base de datos: ${error.message}`);
-            continue;
-          }
+          console.error('Error inserting product to DB:', error.message);
+          errors.push(`${prod.title}: Error al guardar en base de datos: ${error.message}`);
+          continue;
         }
 
         if (isPreorder) {
@@ -276,7 +281,7 @@ export class SourcingService {
     }
 
     return {
-      success: errors.length === 0,
+      success: errors.length === 0 && (importedCount > 0 || preordersCount > 0),
       importedCount,
       preordersCount,
       errors

@@ -371,7 +371,8 @@ function App() {
                   <Route path="vendor-payouts" element={<Navigate to="/admin/marketplace?tab=liquidaciones" replace />} />
                   <Route path="vendor-kyc" element={<Navigate to="/admin/marketplace?tab=kyc" replace />} />
                   <Route path="buybox" element={<Navigate to="/admin/marketplace?tab=analytics" replace />} />
-                  <Route path="internacional/sourcing" element={<AdminSourcingImport />} />
+                  <Route path="sourcing" element={<AdminSourcingImport />} />
+                  <Route path="internacional/sourcing" element={<Navigate to="/admin/sourcing" replace />} />
                   <Route path="internacional/amazon" element={<AdminInternationalAmazon />} />
                   <Route path="internacional/productos" element={<AdminInternationalProducts />} />
                   <Route path="internacional/sync" element={<AdminInternationalSync />} />
