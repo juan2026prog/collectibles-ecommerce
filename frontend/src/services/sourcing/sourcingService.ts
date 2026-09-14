@@ -230,13 +230,28 @@ export class SourcingService {
       const uyuConversion = CurrencyService.getInstance().convertUsdToLocal(prod.financials.current_sale_price_usd, 'UYU');
 
       try {
+        const extId = activeOffer.source_product_id || prod.canonical_sku;
+
+        // Idempotency check: prevent duplicate publications on concurrent double-click
+        const { data: existing } = await supabase
+          .from('international_products')
+          .select('id, external_product_id')
+          .eq('external_product_id', extId)
+          .maybeSingle();
+
+        if (existing) {
+          if (isPreorder) preordersCount++;
+          else importedCount++;
+          continue;
+        }
+
         // Registrar en international_products y ejecutar read-back de confirmación
         const { data: inserted, error } = await supabase
           .from('international_products')
           .insert({
             source_provider: 'zinc',
             source_retailer: activeOffer.source,
-            external_product_id: activeOffer.source_product_id,
+            external_product_id: extId,
             title: isPreorder && !prod.title.toLowerCase().includes('preventa') ? `[PREVENTA] ${prod.title}` : prod.title,
             brand: prod.brand,
             category: prod.category_name,

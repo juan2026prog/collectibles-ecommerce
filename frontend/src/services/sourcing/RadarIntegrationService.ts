@@ -122,13 +122,29 @@ export class RadarIntegrationService {
     const researchId = `RADAR-RES-${release.id.slice(0, 8)}`;
 
     try {
-      // Registrar señal de vinculación
+      // Registrar señal de vinculación en radar_signal_products
       await supabase.from('radar_signal_products').upsert({
         release_id: release.id,
         query: searchQuery,
         status: 'INVESTIGATION_OPENED',
         created_at: new Date().toISOString()
       }, { onConflict: 'release_id' });
+
+      // Registrar solicitud de investigación durable en sourcing_research_requests
+      await supabase.from('sourcing_research_requests').insert({
+        radar_release_id: release.id,
+        search_query: searchQuery,
+        status: 'PENDING',
+        requested_by: 'admin',
+        metadata: {
+          release_title: release.title,
+          brand: release.brand,
+          franchise: release.franchise,
+          character: release.character,
+          scale: release.scale
+        },
+        created_at: new Date().toISOString()
+      });
     } catch {
       // Non-fatal if table not created
     }

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import type { ReleaseEvent } from '../../plugins/collector-radar/types';
 import { formatReleaseDatePrecision, getStatusBadgeConfig } from '../../plugins/collector-radar/core/releaseEngine';
+import { RadarIntegrationService } from '../../services/sourcing/RadarIntegrationService';
 import SEO from '../../components/SEO';
 
 export default function ReleaseDetailPage() {
@@ -70,24 +71,26 @@ export default function ReleaseDetailPage() {
           });
         }).catch(() => {});
 
-        // Fetch matching catalog products for this Radar release
-        const term = data.license?.name || data.character || data.brand?.name || data.product_line;
+        // Fetch matching catalog products across local, international and canonical catalogs
+        const term = data.license?.name || data.character || data.brand?.name || data.product_line || data.title;
         if (term) {
-          const { data: prods } = await supabase
-            .from('products')
-            .select('id, title, slug, base_price, category_id, brand:brands(name)')
-            .ilike('title', `%${term}%`)
-            .limit(6);
+          const { localCatalog, internationalProducts, canonicalProducts } = await RadarIntegrationService.getAllRelatedProductsForRadar(term);
+          
+          const combined = [
+            ...localCatalog.map(p => ({ product: p, type: 'local', reasons: [{ label: '🇺🇾 Catálogo Local' }] })),
+            ...internationalProducts.map(p => ({ 
+              product: { id: p.id, title: p.title, slug: p.id, base_price: p.final_price_usd, image_url: p.image_url, brand: { name: p.brand } }, 
+              type: 'international', 
+              reasons: [{ label: `🌎 ${p.source_retailer?.toUpperCase() || 'IMPORTACIÓN'}` }] 
+            })),
+            ...canonicalProducts.map(p => ({
+              product: { id: p.id, title: (p as any).canonical_title || (p as any).title, slug: p.id, base_price: (p as any).best_offer_price_usd || 0, image_url: (p as any).image_url, brand: { name: p.brand } },
+              type: 'canonical',
+              reasons: [{ label: '📡 Sourcing Canónico' }]
+            }))
+          ];
 
-          if (prods && prods.length > 0) {
-            import('../../services/sourcing/personalizationEngine').then(({ rankProducts }) => {
-              rankProducts(prods, { surface: 'RADAR' }).then(ranked => {
-                setMatchingProducts(ranked);
-              });
-            }).catch(() => {
-              setMatchingProducts(prods.map(p => ({ product: p, reasons: [] })));
-            });
-          }
+          setMatchingProducts(combined.slice(0, 6));
         }
 
         // Si tiene catalog_product_id, consultar el producto en tienda
@@ -336,7 +339,17 @@ export default function ReleaseDetailPage() {
         </span>
         <Link
           to={`/admin/sourcing?query=${encodeURIComponent(release.title || release.character || '')}`}
-          className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-yellow-500 hover:text-black text-white font-black text-[11px] uppercase tracking-wider transition flex items-center gap-1.5"
+          onClick={() => {
+            RadarIntegrationService.createSourcingResearchFromRadar({
+              id: release.id,
+              title: release.title,
+              brand: release.brand?.name || release.manufacturer,
+              franchise: release.license?.name,
+              character: release.character,
+              scale: release.scale
+            }).catch(() => {});
+          }}
+          className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-yellow-500 hover:text-black text-white font-black text-[11px] uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer"
         >
           <span>Investigar en Sourcing</span>
           <ArrowRight size={13} />

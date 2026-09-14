@@ -20,6 +20,7 @@ import { SourcingSearchTerminal } from '../../components/admin/sourcing/Sourcing
 import { SourcingConnectionStatus } from '../../components/admin/sourcing/SourcingConnectionStatus';
 import { SourcingProductAnalysisModal } from '../../components/admin/sourcing/SourcingProductAnalysisModal';
 import { SourcingWatchlistHistoryView } from '../../components/admin/sourcing/SourcingWatchlistHistoryView';
+import { sourcingWatchlistService } from '../../services/sourcing/sourcingWatchlistService';
 import { SourcingTableSkeleton, SourcingCardGridSkeleton, SourcingEmptyState } from '../../components/admin/sourcing/SourcingSkeletons';
 import type { SourcingFilterState } from '../../components/admin/sourcing/SourcingFilters';
 import { SourcingColumnPicker } from '../../components/admin/sourcing/SourcingColumnPicker';
@@ -136,13 +137,7 @@ export default function AdminSourcingImport() {
   const [activePackTitle, setActivePackTitle] = useState<string>('McFarlane US · Septiembre 2026');
   const [products, setProducts] = useState<NormalizedProduct[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [watchlistIds, setWatchlistIds] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('collectibles_sourcing_watchlist_ids');
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return [];
-  });
+  const [watchlistIds, setWatchlistIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [isProcessingBulk, setIsProcessingBulk] = useState(false);
 
@@ -189,6 +184,9 @@ export default function AdminSourcingImport() {
   useEffect(() => {
     loadInitialCatalogAndPack();
     loadAdaptiveData();
+    sourcingWatchlistService.getWatchlistProductIds()
+      .then(ids => setWatchlistIds(ids))
+      .catch(() => {});
     checkOpenAIStatus()
       .then(st => setOpenAIEnabled(st.enabled))
       .catch(() => setOpenAIEnabled(false));
@@ -628,22 +626,17 @@ export default function AdminSourcingImport() {
     }));
   };
 
-  // Watchlist Toggle
-  const handleToggleWatchlist = (product: NormalizedProduct) => {
+  // Watchlist Toggle (Database-First)
+  const handleToggleWatchlist = async (product: NormalizedProduct) => {
+    const { isInWatchlist } = await sourcingWatchlistService.toggleWatchlist(product);
     setWatchlistIds(prev => {
-      const exists = prev.includes(product.id);
-      let next: string[];
-      if (exists) {
-        addToast({ title: 'Watchlist', message: `"${product.title}" removido de vigilancia.`, type: 'info' });
-        next = prev.filter(id => id !== product.id);
+      if (isInWatchlist) {
+        addToast({ title: 'Watchlist', message: `"${product.title}" añadido a vigilancia en base de datos.`, type: 'success' });
+        return [...prev.filter(id => id !== product.id), product.id];
       } else {
-        addToast({ title: 'Watchlist', message: `"${product.title}" añadido a vigilancia.`, type: 'success' });
-        next = [...prev, product.id];
+        addToast({ title: 'Watchlist', message: `"${product.title}" removido de vigilancia en base de datos.`, type: 'info' });
+        return prev.filter(id => id !== product.id);
       }
-      try {
-        localStorage.setItem('collectibles_sourcing_watchlist_ids', JSON.stringify(next));
-      } catch {}
-      return next;
     });
   };
 
