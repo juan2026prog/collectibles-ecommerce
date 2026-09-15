@@ -326,7 +326,7 @@ export async function parseReleaseHeuristically(input: {
     status,
     currency: 'USD',
     region: 'GLOBAL',
-    release_precision: 'UNKNOWN',
+    release_precision: 'TBA',
     date_display_text: null,
     source_name: sourceName,
     source_url: sourceUrl || 'https://collectibles.uy',

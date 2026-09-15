@@ -27,37 +27,76 @@ function generateCanonical(type, slug) {
 }
 
 function generateMetaTitle(type, name) {
-  if (type === 'home' || !type) return 'Juguetes Retro Uruguay & Coleccionables | Collectibles Store';
+  if (type === 'home' || !type) return 'Collectibles Uruguay | Figuras de Acción, Funko y Coleccionables';
   if (type === 'shop') return 'Catálogo de Coleccionables en Uruguay | Collectibles';
+  if (type === 'ai-search' || type === 'ai_search') return 'Buscador con Inteligencia Artificial para Coleccionistas | Collectibles Uruguay';
+  if (type === 'licencias' || type === 'license') return name ? `${name} | Licencias Oficiales | Collectibles Uruguay` : 'Licencias Oficiales de Coleccionables | Collectibles Uruguay';
+  if (type === 'themes' || type === 'theme') return name ? `${name} | Universos Geek | Collectibles Uruguay` : 'Universos y Temas Geek | Collectibles Uruguay';
   if (type === 'producto' || type === 'product') return `${name} | Collectibles Uruguay`;
-  if (type === 'marca' || type === 'brand') return `${name} en Uruguay | Collectibles`;
-  if (type === 'categoria' || type === 'category') return `${name} en Uruguay | Collectibles`;
-  if (type === 'static' || type === 'page') return `${name} | Collectibles`;
+  if (type === 'marca' || type === 'brand') {
+    const lower = (name || '').toLowerCase();
+    if (lower === 'funko') return 'Funko Pop Uruguay | Figuras y Coleccionables Funko | Collectibles';
+    if (lower === 'neca') return 'NECA Uruguay | Figuras de Acción NECA | Collectibles';
+    if (lower === 'bandai') return 'Bandai Uruguay | Figuras Anime y Model Kits | Collectibles';
+    if (lower.includes('mcfarlane')) return 'McFarlane Toys Uruguay | DC Multiverse y Figuras | Collectibles';
+    if (lower === 'hasbro') return 'Hasbro Uruguay | Marvel Legends, Star Wars | Collectibles';
+    if (lower.includes('iron studios')) return 'Iron Studios Uruguay | Estatuas de Colección | Collectibles';
+    return `${name} en Uruguay | Figuras y Coleccionables | Collectibles`;
+  }
+  if (type === 'categoria' || type === 'category') {
+    const lower = (name || '').toLowerCase();
+    if (lower.includes('figura')) return 'Figuras de Acción en Uruguay | NECA, Bandai y más | Collectibles';
+    if (lower.includes('funko')) return 'Funko Pop Uruguay | Figuras y Coleccionables | Collectibles';
+    if (lower === 'tcg' || lower.includes('carta')) return 'Cartas Coleccionables TCG en Uruguay | Collectibles';
+    if (lower.includes('estatua')) return 'Estatuas de Colección en Uruguay | Collectibles';
+    return `${name} en Uruguay | Figuras y Coleccionables | Collectibles`;
+  }
+  if (type === 'static' || type === 'page') return `${name} | Collectibles Uruguay`;
   return `${name} | Collectibles Uruguay`;
 }
 
 function generateMetaDescription(type, rawDesc, name) {
   const cleaned = cleanText(rawDesc);
-  if (cleaned && cleaned.length > 10) {
+  if (cleaned && cleaned.length > 20) {
     return cleaned.length > 160 ? cleaned.slice(0, 157) + '...' : cleaned;
   }
 
   if (type === 'home' || !type) {
-    return 'Tu tienda N°1 de juguetes retro en Uruguay, figuras vintage, cartas de colección, merchandising geek y figuras de acción. Envíos a todo el país.';
+    return 'Collectibles Uruguay. Figuras de acción, Funko Pop, NECA y coleccionables de tus personajes y franquicias favoritas. Stock local y envíos a todo Uruguay. Figuras que cuentan historias.';
   }
   if (type === 'shop') {
-    return 'Explora nuestro catálogo completo de figuras de acción, Funkos, cómics y coleccionables en Uruguay.';
+    return 'Explorá nuestro catálogo de figuras de acción, Funko Pop, NECA y coleccionables en Uruguay con stock local y envíos a todo el país.';
   }
   if (type === 'producto' || type === 'product') {
-    return `Comprar ${name} en Collectibles Uruguay. Envíos a todo el país.`;
+    return `Comprar ${name} en Collectibles Uruguay. Pieza 100% oficial con garantía de autenticidad, stock local y envíos a todo el país.`;
   }
   if (type === 'categoria' || type === 'category') {
-    return `Explora nuestra colección de ${name} en Collectibles Uruguay. Figuras de colección y merchandising con envíos a todo el país.`;
+    const lower = (name || '').toLowerCase();
+    if (lower.includes('figura')) {
+      return 'Explorá la mayor colección de figuras de acción en Uruguay: NECA, Bandai, McFarlane, Marvel Legends y más. Figuras originales con envíos a todo el país.';
+    }
+    if (lower.includes('funko')) {
+      return 'Catálogo oficial de Funko Pop en Uruguay. Figuras coleccionables de tus series, películas, anime y videojuegos favoritos con envíos a todo el país.';
+    }
+    if (lower === 'tcg' || lower.includes('carta')) {
+      return 'Cartas coleccionables y TCG en Uruguay: Pokémon, Magic: The Gathering, Yu-Gi-Oh! y accesorios para coleccionistas con envíos a todo el país.';
+    }
+    return `Explorá nuestra colección de ${name} en Collectibles Uruguay. Figuras de colección, merchandising oficial y envíos a todo el país.`;
   }
   if (type === 'marca' || type === 'brand') {
-    return `Comprar productos oficiales de ${name} en Collectibles Uruguay. Figuras y coleccionables con envíos a todo el país.`;
+    const lower = (name || '').toLowerCase();
+    if (lower === 'funko') {
+      return 'Comprar Funko Pop originales en Uruguay. Gran catálogo de figuras de vinilo Funko, ediciones exclusivas y lanzamientos en Collectibles Uruguay.';
+    }
+    if (lower === 'neca') {
+      return 'Figuras de acción NECA oficiales en Uruguay. Líneas Ultimate, Reel Toys, Terror, Sci-Fi y clásicos del cine con stock y envíos a todo el país.';
+    }
+    if (lower === 'bandai') {
+      return 'Figuras oficiales Bandai, Gunpla y coleccionables de anime en Uruguay. Dragon Ball, One Piece, Saint Seiya y más con envíos a todo el país.';
+    }
+    return `Comprar productos oficiales de ${name} en Collectibles Uruguay. Figuras, estatuas y coleccionables con stock local y envíos a todo el país.`;
   }
-  return `Collectibles Uruguay - ${name}`;
+  return `Collectibles Uruguay - ${name || 'Figuras de Acción y Coleccionables'}`;
 }
 
 /**

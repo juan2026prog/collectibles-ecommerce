@@ -32,7 +32,7 @@ import { evaluateOpportunityScore } from './opportunityScoringEngine';
 export type SearchSourceOption = 'all' | 'amazon' | 'ebay' | 'bestbuy';
 
 export interface SourceSearchStatus {
-  status: 'AVAILABLE' | 'NOT_CONFIGURED' | 'SEARCHING' | 'ERROR';
+  status: 'AVAILABLE' | 'NOT_CONFIGURED' | 'SEARCHING' | 'ERROR' | 'UNAVAILABLE';
   resultCount: number;
   message?: string;
   isAvailable: boolean;
@@ -144,7 +144,7 @@ export class MultiSourceSearchService {
     }
 
     // Tareas paralelas de búsqueda según la fuente seleccionada
-    const promises: Promise<{ source: RetailerSource; items: any[]; error?: string; status?: 'AVAILABLE' | 'NOT_CONFIGURED' | 'ERROR'; message?: string }>[] = [];
+    const promises: Promise<{ source: RetailerSource; items: any[]; error?: string; status?: 'AVAILABLE' | 'NOT_CONFIGURED' | 'ERROR' | 'UNAVAILABLE'; message?: string }>[] = [];
 
     if (source === 'all' || source === 'amazon') {
       promises.push(this.searchAmazon(cleanQuery));

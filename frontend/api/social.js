@@ -15,8 +15,8 @@ export default async function handler(req, res) {
     const url = new URL(originalPathUrl);
     const pathname = url.pathname;
     
-    let title = 'Collectibles Store';
-    let description = 'Tu Tienda de Coleccionables Premium';
+    let title = 'Collectibles Uruguay | Figuras de Acción, Funko y Coleccionables';
+    let description = 'Collectibles Uruguay. Figuras de acción, Funko Pop, NECA y coleccionables de tus personajes y franquicias favoritas. Stock local y envíos a todo Uruguay. Figuras que cuentan historias.';
     let image = 'https://cobtsgkwcftvexaarwmo.supabase.co/storage/v1/object/public/public-assets/1775828705619-isologocolle.jpg';
     let urlCanonical = `https://collectibles.uy${pathname}`;
     let jsonLd = '';
@@ -84,7 +84,7 @@ export default async function handler(req, res) {
             "price": finalPrice || 0,
             "availability": "https://schema.org/InStock",
             "itemCondition": "https://schema.org/NewCondition",
-            "seller": { "@type": "Organization", "name": "Collectibles Uruguay" }
+            "seller": { "@type": "Organization", "name": "Collectibles" }
           }
         };
         jsonLd = JSON.stringify(productSchema);
@@ -92,15 +92,15 @@ export default async function handler(req, res) {
     } else if (type === 'categoria' && slug) {
       const { data: category } = await supabase.from('categories').select('name, description, seo_title, seo_description, image_url').eq('slug', slug).single();
       if (category) {
-        title = category.seo_title || `${category.name} | Collectibles Uruguay`;
-        description = category.seo_description || category.description || `Explora nuestra colección de ${category.name}`;
+        title = category.seo_title || `${category.name} en Uruguay | Collectibles`;
+        description = category.seo_description || category.description || `Explora nuestra colección de ${category.name} en Collectibles Uruguay.`;
         image = category.image_url ? (category.image_url.startsWith('http') ? category.image_url : `${supabaseUrl}/storage/v1/object/public/categories/${category.image_url}`) : image;
       }
     } else if (type === 'marca' && slug) {
       const { data: brand } = await supabase.from('brands').select('name, description, seo_title, seo_description, logo_url').eq('slug', slug).single();
       if (brand) {
-        title = brand.seo_title || `${brand.name} | Collectibles Uruguay`;
-        description = brand.seo_description || brand.description || `Coleccionables de ${brand.name}`;
+        title = brand.seo_title || `${brand.name} en Uruguay | Collectibles`;
+        description = brand.seo_description || brand.description || `Coleccionables oficiales de ${brand.name} en Collectibles Uruguay.`;
         image = brand.logo_url ? (brand.logo_url.startsWith('http') ? brand.logo_url : `${supabaseUrl}/storage/v1/object/public/brands/${brand.logo_url}`) : image;
       }
     }
@@ -117,7 +117,7 @@ export default async function handler(req, res) {
   <link rel="canonical" href="${urlCanonical}">
   
   <meta property="og:type" content="website">
-  <meta property="og:site_name" content="Collectibles Store">
+  <meta property="og:site_name" content="Collectibles">
   <meta property="og:title" content="${safeTitle}">
   <meta property="og:description" content="${safeDesc}">
   <meta property="og:url" content="${urlCanonical}">
@@ -131,11 +131,11 @@ export default async function handler(req, res) {
   ${jsonLd ? `<script type="application/ld+json">${jsonLd}</script>` : ''}
 </head>
 <body>
-  <div style="display:none">
+  <main style="padding: 20px; font-family: system-ui, -apple-system, sans-serif;">
     <h1>${safeTitle}</h1>
     <p>${safeDesc}</p>
-    <img src="${image}" alt="${safeTitle}">
-  </div>
+    <img src="${image}" alt="${safeTitle}" style="max-width: 400px; height: auto;">
+  </main>
 </body>
 </html>`;
 

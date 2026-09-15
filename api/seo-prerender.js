@@ -204,14 +204,30 @@ function generateCanonical(type, slug) {
 }
 
 function generateMetaTitle(type, name) {
-  if (type === 'home' || !type) return 'Juguetes Retro Uruguay & Coleccionables | Collectibles Store';
+  if (type === 'home' || !type) return 'Collectibles Uruguay | Figuras de Acción, Funko y Coleccionables';
   if (type === 'shop') return 'Catálogo de Coleccionables en Uruguay | Collectibles';
   if (type === 'ai-search' || type === 'ai_search') return 'Buscador con Inteligencia Artificial para Coleccionistas | Collectibles Uruguay';
   if (type === 'licencias') return name ? `${name} | Licencias Oficiales | Collectibles Uruguay` : 'Licencias Oficiales de Coleccionables | Collectibles Uruguay';
   if (type === 'themes') return name ? `${name} | Universos Geek | Collectibles Uruguay` : 'Universos y Temas Geek | Collectibles Uruguay';
   if (type === 'producto' || type === 'product' || type === 'p') return `${name} | Collectibles Uruguay`;
-  if (type === 'marca' || type === 'brand') return `${name} en Uruguay | Collectibles`;
-  if (type === 'categoria' || type === 'category') return `${name} en Uruguay | Collectibles`;
+  if (type === 'marca' || type === 'brand') {
+    const lower = (name || '').toLowerCase();
+    if (lower === 'funko') return 'Funko Pop Uruguay | Figuras y Coleccionables Funko | Collectibles';
+    if (lower === 'neca') return 'NECA Uruguay | Figuras de Acción NECA | Collectibles';
+    if (lower === 'bandai') return 'Bandai Uruguay | Figuras Anime y Model Kits | Collectibles';
+    if (lower.includes('mcfarlane')) return 'McFarlane Toys Uruguay | DC Multiverse y Figuras | Collectibles';
+    if (lower === 'hasbro') return 'Hasbro Uruguay | Marvel Legends, Star Wars | Collectibles';
+    if (lower.includes('iron studios')) return 'Iron Studios Uruguay | Estatuas de Colección | Collectibles';
+    return `${name} en Uruguay | Figuras y Coleccionables | Collectibles`;
+  }
+  if (type === 'categoria' || type === 'category') {
+    const lower = (name || '').toLowerCase();
+    if (lower.includes('figura')) return 'Figuras de Acción en Uruguay | NECA, Bandai y más | Collectibles';
+    if (lower.includes('funko')) return 'Funko Pop Uruguay | Figuras y Coleccionables | Collectibles';
+    if (lower === 'tcg' || lower.includes('carta')) return 'Cartas Coleccionables TCG en Uruguay | Collectibles';
+    if (lower.includes('estatua')) return 'Estatuas de Colección en Uruguay | Collectibles';
+    return `${name} en Uruguay | Figuras y Coleccionables | Collectibles`;
+  }
   if (type === 'academy') return name ? `${name} | Collector Academy Uruguay` : 'Collector Academy — Guías de Coleccionismo y Conservación | Collectibles Uruguay';
   if (type === 'radar') return name ? `${name} | Radar de Coleccionables Uruguay` : 'Collectibles Radar — Qué está pasando ahora en coleccionismo | Collectibles Uruguay';
   if (type === 'releases') return 'Calendario de Lanzamientos 2026 / 2027 | Collectibles Uruguay';
@@ -224,15 +240,15 @@ function generateMetaTitle(type, name) {
 
 function generateMetaDescription(type, rawDesc, name) {
   const cleaned = cleanText(rawDesc);
-  if (cleaned && cleaned.length > 15) {
+  if (cleaned && cleaned.length > 20) {
     return cleaned.length > 160 ? cleaned.slice(0, 157) + '...' : cleaned;
   }
 
   if (type === 'home' || !type) {
-    return 'Tu tienda N°1 de juguetes retro en Uruguay, figuras vintage, cartas de colección, merchandising geek y figuras de acción. Envíos a todo el país.';
+    return 'Collectibles Uruguay. Figuras de acción, Funko Pop, NECA y coleccionables de tus personajes y franquicias favoritas. Stock local y envíos a todo Uruguay. Figuras que cuentan historias.';
   }
   if (type === 'shop') {
-    return 'Explora nuestro catálogo completo de figuras de acción, Funkos, cómics y coleccionables en Uruguay con envíos a todo el país.';
+    return 'Explorá nuestro catálogo de figuras de acción, Funko Pop, NECA y coleccionables en Uruguay con stock local y envíos a todo el país.';
   }
   if (type === 'ai-search' || type === 'ai_search') {
     return 'Encuentra figuras, escalas, líneas y piezas de colección en Uruguay utilizando búsqueda asistida por IA especializada en coleccionismo.';
@@ -248,13 +264,33 @@ function generateMetaDescription(type, rawDesc, name) {
       : 'Descubre coleccionables por universo, temática y sagas: Anime, Terror, Cine, Series, Deportes y Gaming en Collectibles Uruguay.';
   }
   if (type === 'producto' || type === 'product' || type === 'p') {
-    return `Comprar ${name} en Collectibles Uruguay. Pieza 100% oficial con garantía de autenticidad y envíos a todo el país.`;
+    return `Comprar ${name} en Collectibles Uruguay. Pieza 100% oficial con garantía de autenticidad, stock local y envíos a todo el país.`;
   }
   if (type === 'categoria' || type === 'category') {
+    const lower = (name || '').toLowerCase();
+    if (lower.includes('figura')) {
+      return 'Explorá la mayor colección de figuras de acción en Uruguay: NECA, Bandai, McFarlane, Marvel Legends y más. Figuras originales con envíos a todo el país.';
+    }
+    if (lower.includes('funko')) {
+      return 'Catálogo oficial de Funko Pop en Uruguay. Figuras coleccionables de tus series, películas, anime y videojuegos favoritos con envíos a todo el país.';
+    }
+    if (lower === 'tcg' || lower.includes('carta')) {
+      return 'Cartas coleccionables y TCG en Uruguay: Pokémon, Magic: The Gathering, Yu-Gi-Oh! y accesorios para coleccionistas con envíos a todo el país.';
+    }
     return `Explora nuestra colección de ${name} en Collectibles Uruguay. Figuras de colección, merchandising oficial y envíos a todo el país.`;
   }
   if (type === 'marca' || type === 'brand') {
-    return `Comprar productos oficiales de ${name} en Collectibles Uruguay. Figuras, estatuas y coleccionables con envíos a todo el país.`;
+    const lower = (name || '').toLowerCase();
+    if (lower === 'funko') {
+      return 'Comprar Funko Pop originales en Uruguay. Gran catálogo de figuras de vinilo Funko, ediciones exclusivas y lanzamientos en Collectibles Uruguay.';
+    }
+    if (lower === 'neca') {
+      return 'Figuras de acción NECA oficiales en Uruguay. Líneas Ultimate, Reel Toys, Terror, Sci-Fi y clásicos del cine con stock y envíos a todo el país.';
+    }
+    if (lower === 'bandai') {
+      return 'Figuras oficiales Bandai, Gunpla y coleccionables de anime en Uruguay. Dragon Ball, One Piece, Saint Seiya y más con envíos a todo el país.';
+    }
+    return `Comprar productos oficiales de ${name} en Collectibles Uruguay. Figuras, estatuas y coleccionables con stock local y envíos a todo el país.`;
   }
   if (type === 'academy') {
     return name
@@ -1360,6 +1396,73 @@ export default async function handler(req, res) {
       description = generateMetaDescription('home');
       canonical = generateCanonical('home');
 
+      const orgSchema = {
+        '@context': 'https://schema.org',
+        '@type': 'Organization',
+        '@id': 'https://collectibles.uy/#organization',
+        'name': 'Collectibles',
+        'alternateName': 'Collectibles Uruguay',
+        'url': BASE_URL,
+        'logo': {
+          '@type': 'ImageObject',
+          'url': 'https://cobtsgkwcftvexaarwmo.supabase.co/storage/v1/object/public/public-assets/1775828705619-isologocolle.jpg'
+        },
+        'description': 'Tienda especializada en figuras de acción, Funko Pop, NECA y coleccionables en Uruguay. Figuras que cuentan historias.',
+        'sameAs': [
+          'https://listado.mercadolibre.com.uy/_CustId_2013898864',
+          'https://instagram.com/collectibles.uy',
+          'https://facebook.com/collectibles.uy'
+        ],
+        'contactPoint': {
+          '@type': 'ContactPoint',
+          'contactType': 'customer service',
+          'areaServed': 'UY',
+          'availableLanguage': 'es'
+        }
+      };
+
+      const siteSchema = {
+        '@context': 'https://schema.org',
+        '@type': 'WebSite',
+        '@id': 'https://collectibles.uy/#website',
+        'name': 'Collectibles Uruguay',
+        'url': BASE_URL,
+        'description': 'Tienda especializada en figuras de acción, Funko Pop, NECA y coleccionables en Uruguay. Figuras que cuentan historias.',
+        'publisher': {
+          '@id': 'https://collectibles.uy/#organization'
+        },
+        'potentialAction': {
+          '@type': 'SearchAction',
+          'target': {
+            '@type': 'EntryPoint',
+            'urlTemplate': `${BASE_URL}/shop?q={search_term_string}`
+          },
+          'query-input': 'required name=search_term_string'
+        }
+      };
+
+      const storeSchema = {
+        '@context': 'https://schema.org',
+        '@type': 'Store',
+        '@id': 'https://collectibles.uy/#store',
+        'name': 'Collectibles Uruguay',
+        'url': BASE_URL,
+        'description': 'Tienda online especializada en figuras de acción, Funko Pop, NECA y coleccionables en Uruguay.',
+        'image': 'https://cobtsgkwcftvexaarwmo.supabase.co/storage/v1/object/public/public-assets/1775828705619-isologocolle.jpg',
+        'priceRange': '$$',
+        'currenciesAccepted': 'UYU',
+        'paymentAccepted': 'Cash, Credit Card, Mercado Pago',
+        'parentOrganization': {
+          '@id': 'https://collectibles.uy/#organization'
+        },
+        'address': {
+          '@type': 'PostalAddress',
+          'addressCountry': 'UY'
+        }
+      };
+
+      jsonLdScripts.push(siteSchema, orgSchema, storeSchema);
+
       const [{ data: featuredProducts }, { data: topCategories }, { data: topBrands }] = await Promise.all([
         supabase.from('products').select('title, slug, base_price').eq('is_active', true).eq('status', 'published').limit(12),
         supabase.from('categories').select('name, slug').eq('is_active', true).eq('status', 'approved').limit(10),
@@ -1368,7 +1471,7 @@ export default async function handler(req, res) {
 
       bodyContent = `
         <div style="padding: 20px; font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto;">
-          <h1 style="font-size: 28px; font-weight: bold; margin-bottom: 10px;">Juguetes, Figuras y Coleccionables en Uruguay</h1>
+          <h1 style="font-size: 28px; font-weight: bold; margin-bottom: 10px;">Figuras de Acción, Funko y Coleccionables en Uruguay | Collectibles</h1>
           <p>${escapeHtml(description)}</p>
           
           ${topCategories && topCategories.length > 0 ? `
@@ -1432,7 +1535,7 @@ export default async function handler(req, res) {
     // 4. OpenGraph Tags
     const ogTagsHtml = `
   <meta property="og:type" content="${ogType}" />
-  <meta property="og:site_name" content="Collectibles Store Uruguay" />
+  <meta property="og:site_name" content="Collectibles" />
   <meta property="og:title" content="${escapeHtml(title)}" />
   <meta property="og:description" content="${escapeHtml(description)}" />
   <meta property="og:url" content="${escapeHtml(canonical)}" />

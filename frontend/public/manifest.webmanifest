@@ -1,7 +1,7 @@
 {
-  "name": "Collectibles Store",
+  "name": "Collectibles",
   "short_name": "Collectibles",
-  "description": "Tu tienda N°1 de juguetes retro, figuras vintage, cartas de colección y merchandising geek en Uruguay.",
+  "description": "Figuras de acción, Funko Pop, NECA y coleccionables en Uruguay. Figuras que cuentan historias.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

@@ -1128,9 +1128,9 @@ export default function Home() {
   return (
     <div className="bg-[#05070f] text-white">
       <SEO
-        title="Juguetes Retro Uruguay & Coleccionables"
-        description="La tienda N°1 en Uruguay de juguetes retro, figuras de acción vintage, merchandising geek, cartas y objetos de colección con envíos a todo el país."
-        keywords="juguetes retro uruguay, juguetes vintage uruguay, coleccionables uruguay, figuras de accion uruguay, tienda de juguetes retro uruguay, figuras retro, anime uruguay, memorabilia uruguay"
+        title="Collectibles Uruguay | Figuras de Acción, Funko y Coleccionables"
+        description="Collectibles Uruguay. Figuras de acción, Funko Pop, NECA y coleccionables de tus personajes y franquicias favoritas. Stock local y envíos a todo Uruguay. Figuras que cuentan historias."
+        keywords="figuras de accion uruguay, funko pop uruguay, neca uruguay, coleccionables uruguay, bandai uruguay, marvel legends uruguay, anime uruguay, collectibles.uy"
       />
 
       {layoutBlocks.filter((b: any) => b.visible !== false).map((b: any) => (

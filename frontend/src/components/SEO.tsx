@@ -46,23 +46,35 @@ export function SEO({
   const organizationSchema = {
     "@context": "https://schema.org",
     "@type": "Organization",
-    "name": "Collectibles Uruguay - Juguetes Retro y Coleccionables",
-    "alternateName": "Juguetes Retro Uruguay",
+    "@id": "https://collectibles.uy/#organization",
+    "name": "Collectibles",
+    "alternateName": "Collectibles Uruguay",
     "url": BASE_URL,
     "logo": "https://cobtsgkwcftvexaarwmo.supabase.co/storage/v1/object/public/public-assets/1775828705619-isologocolle.jpg",
-    "description": "La tienda N°1 de juguetes retro, figuras vintage, cartas y coleccionables en Uruguay.",
+    "description": "Tienda especializada en figuras de acción, Funko Pop, NECA y coleccionables en Uruguay. Figuras que cuentan historias.",
     "sameAs": [
+      settings['social_mercadolibre'] || "https://listado.mercadolibre.com.uy/_CustId_2013898864",
       settings['social_instagram'] || "https://instagram.com/collectibles.uy",
       settings['social_facebook'] || "https://facebook.com/collectibles.uy"
-    ]
+    ],
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "contactType": "customer service",
+      "areaServed": "UY",
+      "availableLanguage": "es"
+    }
   };
 
   const webSiteSchema = {
     "@context": "https://schema.org",
     "@type": "WebSite",
+    "@id": "https://collectibles.uy/#website",
     "name": "Collectibles Uruguay",
-    "alternateName": "Juguetes Retro Uruguay",
     "url": BASE_URL,
+    "description": "Tienda especializada en figuras de acción, Funko Pop, NECA y coleccionables en Uruguay. Figuras que cuentan historias.",
+    "publisher": {
+      "@id": "https://collectibles.uy/#organization"
+    },
     "potentialAction": {
       "@type": "SearchAction",
       "target": {
@@ -73,9 +85,29 @@ export function SEO({
     }
   };
 
+  const storeSchema = {
+    "@context": "https://schema.org",
+    "@type": "Store",
+    "@id": "https://collectibles.uy/#store",
+    "name": "Collectibles Uruguay",
+    "url": BASE_URL,
+    "description": "Tienda online especializada en figuras de acción, Funko Pop, NECA y coleccionables en Uruguay.",
+    "image": "https://cobtsgkwcftvexaarwmo.supabase.co/storage/v1/object/public/public-assets/1775828705619-isologocolle.jpg",
+    "priceRange": "$$",
+    "currenciesAccepted": "UYU",
+    "paymentAccepted": "Cash, Credit Card, Mercado Pago",
+    "parentOrganization": {
+      "@id": "https://collectibles.uy/#organization"
+    },
+    "address": {
+      "@type": "PostalAddress",
+      "addressCountry": "UY"
+    }
+  };
+
   const schemas: any[] = [];
   if (type === 'website') {
-    schemas.push(organizationSchema, webSiteSchema);
+    schemas.push(organizationSchema, webSiteSchema, storeSchema);
   }
 
   if (schema) {

@@ -503,6 +503,7 @@ export default function ProductDetail() {
         image={displayImage}
         url={productCanonical}
         type="product"
+        schema={[productSchema, breadcrumbSchema]}
       />
       <AdminTechnicalPanel product={product} />
 
