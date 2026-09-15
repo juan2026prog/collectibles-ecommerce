@@ -268,11 +268,11 @@ export function useProducts(filters: ProductFilters = {}) {
       }
 
       switch (filters.sortBy) {
-        case 'price-low': query = query.order('final_price_usd', { ascending: true }); break;
-        case 'price-high': query = query.order('final_price_usd', { ascending: false }); break;
-        case 'newest': query = query.order('created_at', { ascending: false }); break;
-        case 'name': query = query.order('title', { ascending: true }); break;
-        default: query = query.order('created_at', { ascending: false });
+        case 'price-low': query = query.order('final_price_usd', { ascending: true }).order('id', { ascending: true }); break;
+        case 'price-high': query = query.order('final_price_usd', { ascending: false }).order('id', { ascending: true }); break;
+        case 'newest': query = query.order('created_at', { ascending: false }).order('id', { ascending: true }); break;
+        case 'name': query = query.order('title', { ascending: true }).order('id', { ascending: true }); break;
+        default: query = query.order('created_at', { ascending: false }).order('id', { ascending: true });
       }
 
       const limit = filters.limit || 12;
@@ -535,14 +535,25 @@ export function useProducts(filters: ProductFilters = {}) {
       query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
     }
 
-    query = query.order('vendor_id', { ascending: true, nullsFirst: true });
-
     switch (filters.sortBy) {
-      case 'price-low': query = query.order('base_price', { ascending: true }); break;
-      case 'price-high': query = query.order('base_price', { ascending: false }); break;
-      case 'newest': query = query.order('created_at', { ascending: false }); break;
-      case 'name': query = query.order('title', { ascending: true }); break;
-      default: query = query.order('is_featured', { ascending: false }).order('created_at', { ascending: false });
+      case 'price-low':
+        query = query.order('base_price', { ascending: true }).order('id', { ascending: true });
+        break;
+      case 'price-high':
+        query = query.order('base_price', { ascending: false }).order('id', { ascending: true });
+        break;
+      case 'newest':
+        query = query.order('created_at', { ascending: false }).order('id', { ascending: true });
+        break;
+      case 'name':
+        query = query.order('title', { ascending: true }).order('id', { ascending: true });
+        break;
+      default:
+        query = query
+          .order('vendor_id', { ascending: true, nullsFirst: true })
+          .order('is_featured', { ascending: false })
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: true });
     }
 
     const limit = filters.limit || 12;

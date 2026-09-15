@@ -99,7 +99,18 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
     }
   }, [intlPublicEnabled, availabilityFilter]);
 
-  const [sortBy, setSortBy] = useState('default');
+  const sortBy = searchParams.get('sort') || 'default';
+  const setSortBy = (newSort: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (newSort && newSort !== 'default') {
+      params.set('sort', newSort);
+    } else {
+      params.delete('sort');
+    }
+    params.delete('page');
+    setSearchParams(params);
+  };
+
   const [mobileFilters, setMobileFilters] = useState(false);
   const [gridCols, setGridCols] = useState<number>(() => {
     try { const saved = localStorage.getItem('shop_grid_cols'); return saved ? Number(saved) : 5; } catch { return 5; }
@@ -108,7 +119,24 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   useEffect(() => {
     try { localStorage.setItem('shop_grid_cols', String(gridCols)); } catch {}
   }, [gridCols]);
-  const [page, setPage] = useState(0);
+
+  const pageParam = searchParams.get('page');
+  const parsedPage = parseInt(pageParam || '1', 10);
+  const currentPage = !isNaN(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const page = currentPage - 1;
+
+  const setPage = (newPageIndex: number) => {
+    const newPageNum = newPageIndex + 1;
+    const params = new URLSearchParams(searchParams);
+    if (newPageNum > 1) {
+      params.set('page', String(newPageNum));
+    } else {
+      params.delete('page');
+    }
+    setSearchParams(params);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const [priceMin, setPriceMin] = useState('');
   const [priceMax, setPriceMax] = useState('');
   const [searchInput, setSearchInput] = useState(searchQ);
@@ -123,8 +151,8 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
         } else {
           params.delete('q');
         }
+        params.delete('page');
         setSearchParams(params);
-        setPage(0);
       }
     }, 400);
     return () => clearTimeout(timer);
@@ -230,6 +258,8 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   const fxRate = exchangeRates?.USD ? (1 / exchangeRates.USD) : undefined;
   const navigate = useNavigate();
 
+  const offset = page * limit;
+
   // ✅ Fully server-side — useProducts now resolves slug → id internally
   const { products, count, loading } = useProducts({
     category: categorySlug || undefined,
@@ -244,6 +274,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
     maxPrice: priceMax ? Number(priceMax) : undefined,
     sortBy,
     limit,
+    offset,
     availability: effectiveAvailability,
     exchangeRate: fxRate,
   });
@@ -391,8 +422,8 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   function setFilter(key: string, value: string) {
     const params = new URLSearchParams(searchParams);
     if (value) params.set(key, value); else params.delete(key);
+    params.delete('page');
     setSearchParams(params);
-    setPage(0);
   }
 
   function handleSearch(e: React.FormEvent) {
@@ -401,8 +432,8 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   }
 
   function handleCategorySelect(slug: string) {
-    setPage(0);
     const params = new URLSearchParams(searchParams);
+    params.delete('page');
     
     if (isInternational) {
       if (slug) {
@@ -446,8 +477,8 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   }
 
   function handleBrandSelect(slug: string) {
-    setPage(0);
     const params = new URLSearchParams(searchParams);
+    params.delete('page');
     
     if (isInternational) {
       if (slug) {
@@ -491,8 +522,8 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   }
 
   function handleLicenseSelect(slug: string) {
-    setPage(0);
     const params = new URLSearchParams(searchParams);
+    params.delete('page');
     if (isLicenseRoute) {
       if (slug) {
         navigate(`/licencias/${slug}?${params.toString()}`);
@@ -510,8 +541,8 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   }
 
   function handleThemeSelect(slug: string) {
-    setPage(0);
     const params = new URLSearchParams(searchParams);
+    params.delete('page');
     if (isThemeRoute) {
       if (slug) {
         navigate(`/themes/${slug}?${params.toString()}`);
@@ -529,8 +560,8 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   }
 
   function handleAvailabilitySelect(val: string) {
-    setPage(0);
     const params = new URLSearchParams(searchParams);
+    params.delete('page');
     if (val) {
       params.set('availability', val);
     } else {
@@ -1441,7 +1472,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
               <span className="text-sm font-bold text-slate-500">{count} productos encontrados</span>
               <select
                 value={sortBy}
-                onChange={e => { setSortBy(e.target.value); setPage(0); }}
+                onChange={e => setSortBy(e.target.value)}
                 className="bg-[#0e1525] rounded-full px-5 py-2 text-xs font-black uppercase tracking-widest text-white border border-white/10 hover:border-white/20 focus:outline-none cursor-pointer"
               >
                 <option value="default" className="bg-[#0e1525] text-white">Recomendados</option>
@@ -1452,13 +1483,13 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
               </select>
             </div>
 
-          {loading && page === 0 ? (
+          {loading ? (
             <div className={`grid gap-x-6 gap-y-12 grid-cols-2 ${
               gridCols === 3 ? 'md:grid-cols-3' :
               gridCols === 4 ? 'md:grid-cols-3 lg:grid-cols-4' :
               'md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
             }`}>
-              {[...Array(gridCols * 2)].map((_, i) => <ProductSkeleton key={i} />)}
+              {[...Array(limit)].map((_, i) => <ProductSkeleton key={i} />)}
             </div>
           ) : products.length === 0 && accumulatedProducts.length === 0 ? (
             <div className="glass rounded-[2rem] p-20 text-center">
@@ -1548,7 +1579,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
               <button
                 onClick={() => {
                   trackClarityEvent('load_more');
-                  setPage(prev => prev + 1);
+                  setPage(page + 1);
                 }}
                 disabled={loading}
                 className="btn-primary w-full max-w-xs py-3.5 rounded-full text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-[#f00856]/20 disabled:opacity-50"
