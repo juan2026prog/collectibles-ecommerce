@@ -919,7 +919,7 @@ export default async function handler(req, res) {
         .eq('slug', slug)
         .maybeSingle();
 
-      if (!category || !category.is_active || (category.status && category.status !== 'approved' && category.status !== 'active')) {
+      if (!category || !category.is_active) {
         return renderNotFoundPage(res, htmlTemplate, 'categoria', slug);
       }
 
