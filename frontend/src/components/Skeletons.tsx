@@ -53,3 +53,10 @@ export const PageSkeleton = () => (
     </div>
   </div>
 );
+
+export const RouteTransitionFallback = () => (
+  <div className="fixed inset-x-0 top-0 z-[9999] pointer-events-none">
+    <div className="h-[3px] w-full bg-[#f00856] shadow-[0_0_10px_#f00856] animate-timeline-progress" style={{ animationDuration: '800ms' }} />
+  </div>
+);
+

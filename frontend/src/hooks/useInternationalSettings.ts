@@ -69,43 +69,45 @@ function setupRealtimeSubscription() {
   }
 }
 
-export async function fetchInternationalSettings(forceRefresh = false): Promise<InternationalSettings | null> {
+export async function fetchInternationalSettings(forceRefresh = false, isAdminContext = false): Promise<InternationalSettings | null> {
   if (_cachedSettings && !forceRefresh) return _cachedSettings;
   if (_pendingPromise && !forceRefresh) return _pendingPromise;
 
   _pendingPromise = (async () => {
     try {
-      const query = supabase
-        .from('international_sync_settings')
-        .select('*')
-        .eq('id', 1);
+      if (isAdminContext) {
+        const query = supabase
+          .from('international_sync_settings')
+          .select('*')
+          .eq('id', 1);
 
-      const { data, error } = await (typeof (query as any).maybeSingle === 'function' 
-        ? (query as any).maybeSingle() 
-        : (query as any).single());
+        const { data, error } = await (typeof (query as any).maybeSingle === 'function' 
+          ? (query as any).maybeSingle() 
+          : (query as any).single());
 
-      if (data) {
-        _cachedSettings = {
-          ...data,
-          international_public_enabled: !!data.international_public_enabled,
-          international_purchases_enabled: data.international_purchases_enabled ?? true,
-          international_capacity_enabled: data.international_capacity_enabled ?? true,
-          target_margin_percent: Number(data.target_margin_percent || 15),
-          min_absolute_profit_usd: Number(data.min_absolute_profit_usd || 3.99),
-          min_profit_usd: Number(data.min_profit_usd || 3.99),
-          zinc_fee_usd: Number(data.zinc_fee_usd || 1),
-          fixed_markup_usd: Number(data.fixed_markup_usd || 6),
-          financial_fee_percent: Number(data.financial_fee_percent || 2.5),
-          financial_fee_fixed_usd: Number(data.financial_fee_fixed_usd || 0.5),
-          financial_fee_tax_rate: Number(data.financial_fee_tax_rate || 0.22),
-          florida_sales_tax_percent: Number(data.florida_sales_tax_percent || 0),
-          never_sell_at_loss: data.never_sell_at_loss ?? true
-        };
-        _listeners.forEach(fn => fn(_cachedSettings));
-        return _cachedSettings;
+        if (data) {
+          _cachedSettings = {
+            ...data,
+            international_public_enabled: !!data.international_public_enabled,
+            international_purchases_enabled: data.international_purchases_enabled ?? true,
+            international_capacity_enabled: data.international_capacity_enabled ?? true,
+            target_margin_percent: Number(data.target_margin_percent || 15),
+            min_absolute_profit_usd: Number(data.min_absolute_profit_usd || 3.99),
+            min_profit_usd: Number(data.min_profit_usd || 3.99),
+            zinc_fee_usd: Number(data.zinc_fee_usd || 1),
+            fixed_markup_usd: Number(data.fixed_markup_usd || 6),
+            financial_fee_percent: Number(data.financial_fee_percent || 2.5),
+            financial_fee_fixed_usd: Number(data.financial_fee_fixed_usd || 0.5),
+            financial_fee_tax_rate: Number(data.financial_fee_tax_rate || 0.22),
+            florida_sales_tax_percent: Number(data.florida_sales_tax_percent || 0),
+            never_sell_at_loss: data.never_sell_at_loss ?? true
+          };
+          _listeners.forEach(fn => fn(_cachedSettings));
+          return _cachedSettings;
+        }
       }
 
-      // Non-admin / public context: fetch safe public status RPC (no financial secrets)
+      // Fast public RPC without table permission errors or RLS roundtrips
       try {
         const { data: pubData } = await supabase.rpc('get_international_public_status');
         if (pubData) {
@@ -137,12 +139,14 @@ export async function fetchInternationalSettings(forceRefresh = false): Promise<
   return _pendingPromise;
 }
 
-export function useInternationalSettings() {
+export function useInternationalSettings(enableRealtime = false, isAdminContext = false) {
   const [settings, setSettings] = useState<InternationalSettings | null>(_cachedSettings);
   const [loaded, setLoaded] = useState(!!_cachedSettings);
 
   useEffect(() => {
-    setupRealtimeSubscription();
+    if (enableRealtime) {
+      setupRealtimeSubscription();
+    }
 
     const listener = (s: InternationalSettings | null) => {
       setSettings(s);
@@ -151,7 +155,7 @@ export function useInternationalSettings() {
     _listeners.add(listener);
 
     if (!_cachedSettings) {
-      fetchInternationalSettings().then(s => {
+      fetchInternationalSettings(false, isAdminContext).then(s => {
         setSettings(s);
         setLoaded(true);
       });
@@ -163,7 +167,7 @@ export function useInternationalSettings() {
     return () => {
       _listeners.delete(listener);
     };
-  }, []);
+  }, [enableRealtime, isAdminContext]);
 
   const publicEnabled = !!settings?.international_public_enabled;
   const purchasesEnabled = settings ? (settings.international_purchases_enabled ?? true) : true;

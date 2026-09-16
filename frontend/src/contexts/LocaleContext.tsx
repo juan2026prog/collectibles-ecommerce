@@ -227,13 +227,12 @@ const i18n: Record<Language, Record<string, string>> = {
 //   USD: 1 UYU costs ~0.025 USD  (1 / 40 UYU per dollar)
 //   ARS: 1 UYU costs ~25 ARS     (1000 ARS per 40 UYU = 25:1)
 //
-// ⚠️ These are DISPLAY ONLY. All transactions are processed in UYU.
-const FALLBACK_RATES: Record<Currency, number> = {
-  UYU: 1,
-  USD: 1 / 42,    // ≈ $42 UYU per USD
-  ARS: 25,        // ≈ 25 ARS per UYU
-};
-
+import { 
+  getExchangeRatesSync, 
+  subscribeToExchangeRates, 
+  fetchUnifiedExchangeRates,
+  FALLBACK_RATES as UNIFIED_FALLBACK_RATES
+} from '../services/exchangeRates';
 
 export function LocaleProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -253,46 +252,21 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
     return 'LATAM';
   });
 
-  // Live exchange rates — cached in localStorage for 1 hour
-  const [rates, setRates] = useState<Record<Currency, number>>(FALLBACK_RATES);
+  // Live exchange rates from central service
+  const [rates, setRates] = useState<Record<Currency, number>>(() => getExchangeRatesSync());
 
   useEffect(() => {
-    const CACHE_KEY = 'exchange_rates_cache';
-    const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+    const unsubscribe = subscribeToExchangeRates((liveRates) => {
+      setRates(liveRates);
+    });
 
-    const cached = localStorage.getItem(CACHE_KEY);
-    if (cached) {
-      try {
-        const { ts, data } = JSON.parse(cached);
-        if (Date.now() - ts < CACHE_TTL) {
-          setRates(data);
-          return;
-        }
-      } catch {}
-    }
+    fetchUnifiedExchangeRates().then(liveRates => {
+      setRates(liveRates);
+    });
 
-    // Defer API fetch until after page load/paint
-    const timer = setTimeout(() => {
-      fetch('https://open.er-api.com/v6/latest/UYU')
-        .then(r => r.json())
-        .then(json => {
-          if (json?.rates) {
-            const liveRates: Record<Currency, number> = {
-              UYU: 1,
-              USD: json.rates.USD || FALLBACK_RATES.USD,
-              ARS: json.rates.ARS || FALLBACK_RATES.ARS,
-            };
-            setRates(liveRates);
-            localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: liveRates }));
-          }
-        })
-        .catch(() => {
-          // API unavailable — keep fallback rates silently
-          if (import.meta.env.DEV) console.log('Exchange rate API unavailable, using fallback rates');
-        });
-    }, 2000);
-
-    return () => clearTimeout(timer);
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {

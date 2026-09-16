@@ -1,6 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import { 
+  Currency, 
+  FALLBACK_RATES, 
+  getExchangeRatesSync, 
+  fetchUnifiedExchangeRates, 
+  subscribeToExchangeRates 
+} from '../services/exchangeRates';
 
-export type Currency = 'UYU' | 'USD' | 'ARS' | 'BRL';
+export type { Currency };
 
 interface CurrencyContextProps {
   selectedCurrency: Currency;
@@ -16,69 +23,32 @@ interface CurrencyContextProps {
 
 const CurrencyContext = createContext<CurrencyContextProps | undefined>(undefined);
 
-const FALLBACK_RATES: Record<Currency, number> = {
-  UYU: 1,
-  USD: 1 / 40,   // 1 USD = 40 UYU
-  ARS: 28.5,     // 1 UYU = 28.5 ARS (Implies ~1140 ARS per USD)
-  BRL: 1 / 7,
-};
-
 export function CurrencyProvider({ children }: { children: React.ReactNode }) {
   const [selectedCurrency, setSelectedCurrencyState] = useState<Currency>(() => {
     return (localStorage.getItem('collectibles_currency') as Currency) || 'UYU';
   });
 
-  const [exchangeRates, setExchangeRates] = useState<Record<Currency, number>>(FALLBACK_RATES);
+  const [exchangeRates, setExchangeRates] = useState<Record<Currency, number>>(() => getExchangeRatesSync());
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const CACHE_KEY = 'collectibles_exchange_rates';
-    const CACHE_TS_KEY = 'collectibles_exchange_rates_updated_at';
-    const CACHE_TTL = 12 * 60 * 60 * 1000; // 12 hours
+    const unsubscribe = subscribeToExchangeRates((rates) => {
+      setExchangeRates(rates);
+      setLoading(false);
+    });
 
-    const cached = localStorage.getItem(CACHE_KEY);
-    const cachedTs = localStorage.getItem(CACHE_TS_KEY);
-
-    if (cached && cachedTs) {
-      try {
-        const ts = parseInt(cachedTs, 10);
-        if (Date.now() - ts < CACHE_TTL) {
-          setExchangeRates(JSON.parse(cached));
-          setLoading(false);
-          return;
-        }
-      } catch (e) {
-        console.warn('Failed to parse cached exchange rates', e);
-      }
-    }
-
+    // Defer non-critical exchange rate refresh until after initial render
     const timer = setTimeout(() => {
-      fetch('https://open.er-api.com/v6/latest/UYU')
-        .then(res => res.json())
-        .then(data => {
-          if (data && data.rates) {
-            const liveRates: Record<Currency, number> = {
-              UYU: 1,
-              USD: data.rates.USD || FALLBACK_RATES.USD,
-              ARS: data.rates.ARS || FALLBACK_RATES.ARS,
-              BRL: data.rates.BRL || FALLBACK_RATES.BRL,
-            };
-            setExchangeRates(liveRates);
-            localStorage.setItem(CACHE_KEY, JSON.stringify(liveRates));
-            localStorage.setItem(CACHE_TS_KEY, Date.now().toString());
-          }
-        })
-        .catch((err) => {
-          if (import.meta.env.DEV) {
-            console.error('Exchange rate API unavailable, using fallback rates', err);
-          }
-        })
-        .finally(() => {
-          setLoading(false);
-        });
+      fetchUnifiedExchangeRates().then(rates => {
+        setExchangeRates(rates);
+        setLoading(false);
+      });
     }, 2000);
 
-    return () => clearTimeout(timer);
+    return () => {
+      unsubscribe();
+      clearTimeout(timer);
+    };
   }, []);
 
   const setSelectedCurrency = useCallback((currency: Currency) => {

@@ -15,10 +15,11 @@ export default defineConfig({
       output: {
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) return 'vendor-react';
-            if (id.includes('@supabase')) return 'vendor-supabase';
             if (id.includes('lucide-react')) return 'vendor-icons';
             if (id.includes('xlsx') || id.includes('exceljs')) return 'vendor-excel';
+            if (id.includes('@supabase')) return 'vendor-supabase';
+            if (id.includes('react-router') || id.includes('react-router-dom') || id.includes('@remix-run')) return 'vendor-router';
+            if (id.includes('react') || id.includes('react-dom') || id.includes('scheduler')) return 'vendor-react';
             return 'vendor-libs';
           }
           if (id.includes('/src/pages/admin/') || id.includes('/src/components/admin/') || id.includes('/src/layouts/AdminLayout')) return 'admin-chunk';

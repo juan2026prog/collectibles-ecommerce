@@ -42,21 +42,29 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
     }
   }, [activeBanners.length, activeIndex]);
 
-  // Comprehensive image preloading to guarantee zero image decode delay on transitions
+  // Viewport-aware smart preloader: only preload the immediate NEXT slide based on device width
   useEffect(() => {
     if (activeBanners.length <= 1) return;
-    
-    activeBanners.forEach(banner => {
-      if (banner.image_url) {
+
+    const nextIndex = (activeIndex + 1) % activeBanners.length;
+    const nextBanner = activeBanners[nextIndex];
+    if (!nextBanner) return;
+
+    // Use requestIdleCallback or delayed timer to not block critical path
+    const timer = setTimeout(() => {
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+      const targetUrl = (isMobile && nextBanner.mobile_image_url) 
+        ? nextBanner.mobile_image_url 
+        : nextBanner.image_url;
+
+      if (targetUrl) {
         const img = new Image();
-        img.src = banner.image_url;
+        img.src = targetUrl;
       }
-      if (banner.mobile_image_url) {
-        const mobImg = new Image();
-        mobImg.src = banner.mobile_image_url;
-      }
-    });
-  }, [activeBanners]);
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [activeIndex, activeBanners]);
 
   // Autoplay management
   const startAutoplay = useCallback(() => {
@@ -175,8 +183,8 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
     >
       {/* Base Background grid texture & ambient glow (stable behind all slides) */}
       <div className="absolute inset-0 bg-[#05070f] z-0" />
-      <div className="absolute -right-40 -top-40 w-[800px] h-[800px] bg-[#f00856]/[.07] blur-[180px] rounded-full pointer-events-none z-0" />
-      <div className="absolute -left-60 bottom-0 w-[500px] h-[500px] bg-[#f00856]/[.04] blur-[140px] rounded-full pointer-events-none z-0" />
+      <div className="absolute -right-40 -top-40 w-[800px] h-[800px] bg-[#f00856]/[.07] blur-[180px] rounded-full pointer-events-none z-0 transform-gpu" />
+      <div className="absolute -left-60 bottom-0 w-[500px] h-[500px] bg-[#f00856]/[.04] blur-[140px] rounded-full pointer-events-none z-0 transform-gpu" />
       <div className="absolute inset-0 opacity-[0.025] pointer-events-none z-0" style={{
         backgroundImage: 'linear-gradient(rgba(255,255,255,.15) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.15) 1px, transparent 1px)',
         backgroundSize: '60px 60px'
@@ -196,7 +204,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
         return (
           <div
             key={banner.id || `slide-${index}`}
-            className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
+            className={`absolute inset-0 transition-opacity duration-700 ease-in-out transform-gpu ${
               isCurrent 
                 ? 'opacity-100 z-10 pointer-events-auto' 
                 : 'opacity-0 z-0 pointer-events-none'
@@ -215,7 +223,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
                   transform: isCurrent ? 'scale(1.05)' : 'scale(1.00)'
                 }}
                 loading={index === 0 ? "eager" : "lazy"}
-                fetchPriority={index === 0 ? "high" : "auto"}
+                fetchPriority={index === 0 ? "high" : "low"}
                 decoding="async"
                 {...getImageProps("absolute inset-0 w-full h-full object-cover object-center transition-transform duration-[7000ms] ease-out")}
               />

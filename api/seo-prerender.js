@@ -612,7 +612,7 @@ function renderNotFoundPage(res, htmlTemplate, type, slug) {
   }
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300');
   return res.status(404).send(renderedHtml);
 }
 
@@ -1565,13 +1565,11 @@ export default async function handler(req, res) {
     }
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('X-SEO-Version', '2026.09.07-v4');
+    res.setHeader('X-SEO-Version', '2026.09.16-v5');
     if (isBot) {
       res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400');
     } else {
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
+      res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=3600, stale-while-revalidate=86400');
     }
     return res.status(200).send(renderedHtml);
   } catch (error) {

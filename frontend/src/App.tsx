@@ -9,7 +9,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import { LocaleProvider } from './contexts/LocaleContext';
 import { CurrencyProvider } from './contexts/CurrencyContext';
 import ErrorBoundary from './components/ErrorBoundary';
-import { PageSkeleton } from './components/Skeletons';
+import { PageSkeleton, RouteTransitionFallback } from './components/Skeletons';
 import ScrollToTop from './components/ScrollToTop';
 import { AdminModeProvider } from './contexts/AdminModeContext';
 import { InternationalCartProvider } from './contexts/InternationalCartContext';
@@ -162,7 +162,7 @@ function App() {
               <FeatureToggleProvider>
               <LocaleProvider>
                 <CurrencyProvider>
-                  <Suspense fallback={null}>
+                  <Suspense fallback={<RouteTransitionFallback />}>
                   <Routes>
                   {/* Public Storefront */}
                   <Route element={<StorefrontLayout />}>

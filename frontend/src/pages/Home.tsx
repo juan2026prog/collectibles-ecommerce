@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Truck, Shield, Package, ShoppingCart, Sparkles, Radio, GraduationCap, Archive, Scale } from 'lucide-react';
 import { useState, useEffect, useMemo, lazy, Suspense, useRef } from 'react';
-import { useProducts, useCategories, useBrands, useBanners, useProductGroups } from '../hooks/useData';
+import { useProducts, useProductCards, useCategories, useBrands, useBanners, useProductGroups } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
 import { useLocale } from '../contexts/LocaleContext';
 import { useCurrency } from '../contexts/CurrencyContext';
@@ -15,7 +15,7 @@ import HeroSlider from '../components/HeroSlider';
 import { resolveCartItemPrice } from '../lib/priceResolver';
 import { trackClarityEvent } from '../lib/analyticsTracker';
 import SEO from '../components/SEO';
-import { getPersonalizedShelves, type DynamicShelfConfig } from '../services/sourcing/personalizationEngine';
+import type { DynamicShelfConfig } from '../services/sourcing/personalizationEngine';
 
 
 // Lazy load heavy module components
@@ -244,8 +244,8 @@ export default function Home() {
   const { categories, loading: catsLoading } = useCategories();
   const { country } = useLocale();
 
-  const { products: featured, loading: featuredLoading } = useProducts({ featured: true, limit: 10, skipCount: true });
-  const { products: newArrivals, loading: newArrivalsLoading } = useProducts({ badge: 'new', limit: 8, skipCount: true });
+  const { products: featured, loading: featuredLoading } = useProductCards({ featured: true, limit: 10, skipCount: true });
+  const { products: newArrivals, loading: newArrivalsLoading } = useProductCards({ badge: 'new', limit: 8, skipCount: true });
   const { brands, loading: brandsLoading } = useBrands();
   const { groups, loading: groupsLoading } = useProductGroups();
   const cart = useCartContext();
@@ -258,7 +258,10 @@ export default function Home() {
 
   useEffect(() => {
     if (featured && featured.length > 0) {
-      getPersonalizedShelves(featured).then(setPersonalizedShelves).catch(() => {});
+      import('../services/sourcing/personalizationEngine')
+        .then(({ getPersonalizedShelves }) => getPersonalizedShelves(featured))
+        .then(setPersonalizedShelves)
+        .catch(() => {});
     }
   }, [featured]);
 
@@ -442,7 +445,7 @@ export default function Home() {
     };
   }, [settings['featured_new_arrivals']]);
 
-  const { products: defaultProducts } = useProducts({ limit: 8, skipCount: true });
+  const { products: defaultProducts } = useProductCards({ limit: 8, skipCount: true });
 
   const displayedNewArrivals = useMemo(() => {
     if (manualNewArrivals.length > 0) {

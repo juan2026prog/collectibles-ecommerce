@@ -25,6 +25,7 @@ interface ProductFilters {
   vendor_store_id?: string;
   collection_id?: string;
   skipCount?: boolean;
+  lightweight?: boolean;
 }
 
 export function useProducts(filters: ProductFilters = {}) {
@@ -310,17 +311,26 @@ export function useProducts(filters: ProductFilters = {}) {
     }
 
     if (availMode === 'all') {
-      const selectStr = `
-          id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, condition_notes, created_at,
-          category:categories(id, name, slug),
-          brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
-          images:product_images(id, url, alt_text, is_primary),
-          variants:product_variants(id, sku, price_adjustment, inventory_count),
-          vendor:vendors(id, store_name, slug, logo_url),
-          vendor_store:vendor_stores(id, store_name, slug, logo_url, is_official),
-          product_group_items(group_id, group:product_groups(id, name, slug, is_active, sort_order, badge_image_url, badge_storage_path, badge_alt_text, allowed_payment_providers, payment_method_restriction))
-          ${categoryId ? ', product_categories!inner(category_id)' : ''}
-      `;
+      const selectStr = filters.lightweight
+        ? `
+            id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, created_at,
+            category:categories(id, name, slug),
+            brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
+            images:product_images(id, url, alt_text, is_primary),
+            variants:product_variants(id, sku, price_adjustment, inventory_count)
+            ${categoryId ? ', product_categories!inner(category_id)' : ''}
+        `
+        : `
+            id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, condition_notes, created_at,
+            category:categories(id, name, slug),
+            brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
+            images:product_images(id, url, alt_text, is_primary),
+            variants:product_variants(id, sku, price_adjustment, inventory_count),
+            vendor:vendors(id, store_name, slug, logo_url),
+            vendor_store:vendor_stores(id, store_name, slug, logo_url, is_official),
+            product_group_items(group_id, group:product_groups(id, name, slug, is_active, sort_order, badge_image_url, badge_storage_path, badge_alt_text, allowed_payment_providers, payment_method_restriction))
+            ${categoryId ? ', product_categories!inner(category_id)' : ''}
+        `;
 
       const limit = filters.limit || 12;
       const offset = filters.offset || 0;
@@ -492,17 +502,26 @@ export function useProducts(filters: ProductFilters = {}) {
       return;
     }
 
-    const selectStr = `
-        id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, condition_notes, created_at,
-        category:categories(id, name, slug),
-        brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
-        images:product_images(id, url, alt_text, is_primary),
-        variants:product_variants(id, sku, price_adjustment, inventory_count),
-        vendor:vendors(id, store_name, slug, logo_url),
-        vendor_store:vendor_stores(id, store_name, slug, logo_url, is_official),
-        product_group_items(group_id, group:product_groups(id, name, slug, is_active, sort_order, badge_image_url, badge_storage_path, badge_alt_text, allowed_payment_providers, payment_method_restriction))
-        ${categoryId ? ', product_categories!inner(category_id)' : ''}
-    `;
+    const selectStr = filters.lightweight
+      ? `
+          id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, created_at,
+          category:categories(id, name, slug),
+          brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
+          images:product_images(id, url, alt_text, is_primary),
+          variants:product_variants(id, sku, price_adjustment, inventory_count)
+          ${categoryId ? ', product_categories!inner(category_id)' : ''}
+      `
+      : `
+          id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, condition_notes, created_at,
+          category:categories(id, name, slug),
+          brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
+          images:product_images(id, url, alt_text, is_primary),
+          variants:product_variants(id, sku, price_adjustment, inventory_count),
+          vendor:vendors(id, store_name, slug, logo_url),
+          vendor_store:vendor_stores(id, store_name, slug, logo_url, is_official),
+          product_group_items(group_id, group:product_groups(id, name, slug, is_active, sort_order, badge_image_url, badge_storage_path, badge_alt_text, allowed_payment_providers, payment_method_restriction))
+          ${categoryId ? ', product_categories!inner(category_id)' : ''}
+      `;
 
     const shouldCount = !filters.skipCount && !filters.featured;
     let query = supabase
@@ -580,6 +599,11 @@ export function useProducts(filters: ProductFilters = {}) {
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
   return { products, count, loading, refetch: fetchProducts };
+}
+
+// ═══ useProductCards (Lightweight version of useProducts for grids & carousels) ═══
+export function useProductCards(filters: ProductFilters = {}) {
+  return useProducts({ ...filters, lightweight: true });
 }
 
 // ═══ useProduct (single) ═══
@@ -762,6 +786,14 @@ let _categoriesPromise: Promise<any[]> | null = null;
 const _initialBrands = readSessionCache('app_brands_cache');
 let _brandsCache: any[] | null = _initialBrands?.data || null;
 let _brandsPromise: Promise<any[]> | null = null;
+
+const _initialLicenses = readSessionCache('app_licenses_cache');
+let _licensesCache: any[] | null = _initialLicenses?.data || null;
+let _licensesPromise: Promise<any[]> | null = null;
+
+const _initialThemes = readSessionCache('app_themes_cache');
+let _themesCache: any[] | null = _initialThemes?.data || null;
+let _themesPromise: Promise<any[]> | null = null;
 
 // ═══ useCategories ═══
 export function useCategories() {
@@ -1497,51 +1529,75 @@ export function getProductPaymentRestrictions(product: any) {
 
 // ═══ useLicenses ═══
 export function useLicenses(onlyPublicWithProducts = false) {
-  const [licenses, setLicenses] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [licenses, setLicenses] = useState<any[]>(_licensesCache || []);
+  const [loading, setLoading] = useState(!_licensesCache);
 
   useEffect(() => {
-    async function fetch() {
-      setLoading(true);
-      let res = await supabase
-        .from('licenses_with_counts')
-        .select('*')
-        .order('sort_order', { ascending: true })
-        .order('name', { ascending: true });
+    const cacheObj = readSessionCache('app_licenses_cache');
+    const hasValidCache = cacheObj && !cacheObj.isStale;
 
-      if (res.error || !res.data) {
-        res = await supabase
-          .from('licenses')
-          .select('*')
-          .order('sort_order', { ascending: true })
-          .order('name', { ascending: true });
-      }
-
-      let list = res.data || [];
-      if (onlyPublicWithProducts) {
-        list = list.filter((l: any) => l.is_active !== false && (l.published_product_count === undefined || l.published_product_count > 0));
-      }
-
-      list.sort((a: any, b: any) => {
-        const featA = a.is_featured ? 1 : 0;
-        const featB = b.is_featured ? 1 : 0;
-        if (featA !== featB) return featB - featA;
-
-        const sortA = a.sort_order ?? 999;
-        const sortB = b.sort_order ?? 999;
-        if (sortA !== sortB) return sortA - sortB;
-
-        const countA = a.published_product_count ?? 0;
-        const countB = b.published_product_count ?? 0;
-        if (countA !== countB) return countB - countA;
-
-        return (a.name || '').localeCompare(b.name || '');
-      });
-
-      setLicenses(list);
+    if (_licensesCache) {
+      const filtered = onlyPublicWithProducts
+        ? _licensesCache.filter((l: any) => l.is_active !== false && (l.published_product_count === undefined || l.published_product_count > 0))
+        : _licensesCache;
+      setLicenses(filtered);
       setLoading(false);
     }
-    fetch();
+
+    if (!hasValidCache && !_licensesPromise) {
+      _licensesPromise = Promise.resolve(
+        supabase
+          .from('licenses_with_counts')
+          .select('*')
+          .order('sort_order', { ascending: true })
+          .order('name', { ascending: true })
+      )
+        .then(async (res) => {
+          if (res.error || !res.data) {
+            res = await supabase
+              .from('licenses')
+              .select('*')
+              .order('sort_order', { ascending: true })
+              .order('name', { ascending: true });
+          }
+
+          let list = res.data || [];
+          list.sort((a: any, b: any) => {
+            const featA = a.is_featured ? 1 : 0;
+            const featB = b.is_featured ? 1 : 0;
+            if (featA !== featB) return featB - featA;
+
+            const sortA = a.sort_order ?? 999;
+            const sortB = b.sort_order ?? 999;
+            if (sortA !== sortB) return sortA - sortB;
+
+            const countA = a.published_product_count ?? 0;
+            const countB = b.published_product_count ?? 0;
+            if (countA !== countB) return countB - countA;
+
+            return (a.name || '').localeCompare(b.name || '');
+          });
+
+          _licensesCache = list;
+          writeSessionCache('app_licenses_cache', list);
+          _licensesPromise = null;
+          return list;
+        })
+        .catch(() => {
+          _licensesPromise = null;
+          return _licensesCache || [];
+        });
+    }
+
+    if (_licensesPromise) {
+      _licensesPromise.then(list => {
+        const filtered = onlyPublicWithProducts
+          ? list.filter((l: any) => l.is_active !== false && (l.published_product_count === undefined || l.published_product_count > 0))
+          : list;
+        setLicenses(filtered);
+        setLoading(false);
+      });
+    }
   }, [onlyPublicWithProducts]);
 
   return { licenses, loading };
@@ -1549,34 +1605,59 @@ export function useLicenses(onlyPublicWithProducts = false) {
 
 // ═══ useThemes ═══
 export function useThemes(onlyPublicWithProducts = false) {
-  const [themes, setThemes] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [themes, setThemes] = useState<any[]>(_themesCache || []);
+  const [loading, setLoading] = useState(!_themesCache);
 
   useEffect(() => {
-    async function fetch() {
-      setLoading(true);
-      let res = await supabase
-        .from('themes_with_counts')
-        .select('*')
-        .order('sort_order', { ascending: true })
-        .order('name', { ascending: true });
+    const cacheObj = readSessionCache('app_themes_cache');
+    const hasValidCache = cacheObj && !cacheObj.isStale;
 
-      if (res.error || !res.data) {
-        res = await supabase
-          .from('themes')
-          .select('*')
-          .order('sort_order', { ascending: true })
-          .order('name', { ascending: true });
-      }
-
-      let list = res.data || [];
-      if (onlyPublicWithProducts) {
-        list = list.filter((t: any) => t.is_active !== false && (t.published_product_count === undefined || t.published_product_count > 0));
-      }
-      setThemes(list);
+    if (_themesCache) {
+      const filtered = onlyPublicWithProducts
+        ? _themesCache.filter((t: any) => t.is_active !== false && (t.published_product_count === undefined || t.published_product_count > 0))
+        : _themesCache;
+      setThemes(filtered);
       setLoading(false);
     }
-    fetch();
+
+    if (!hasValidCache && !_themesPromise) {
+      _themesPromise = Promise.resolve(
+        supabase
+          .from('themes_with_counts')
+          .select('*')
+          .order('sort_order', { ascending: true })
+          .order('name', { ascending: true })
+      )
+        .then(async (res) => {
+          if (res.error || !res.data) {
+            res = await supabase
+              .from('themes')
+              .select('*')
+              .order('sort_order', { ascending: true })
+              .order('name', { ascending: true });
+          }
+
+          let list = res.data || [];
+          _themesCache = list;
+          writeSessionCache('app_themes_cache', list);
+          _themesPromise = null;
+          return list;
+        })
+        .catch(() => {
+          _themesPromise = null;
+          return _themesCache || [];
+        });
+    }
+
+    if (_themesPromise) {
+      _themesPromise.then(list => {
+        const filtered = onlyPublicWithProducts
+          ? list.filter((t: any) => t.is_active !== false && (t.published_product_count === undefined || t.published_product_count > 0))
+          : list;
+        setThemes(filtered);
+        setLoading(false);
+      });
+    }
   }, [onlyPublicWithProducts]);
 
   return { themes, loading };
