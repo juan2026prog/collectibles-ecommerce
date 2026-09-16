@@ -71,4 +71,11 @@ describe('INTERNATIONAL SYNC SETTINGS PRIVACY & SECURITY TEST SUITE', { timeout:
     expect(afterIncrease.netMarginPercentage).toBeGreaterThanOrEqual(15.0);
   });
 
+  it('4. Direct Anonymous Access Defense: Direct SELECT query to international_sync_settings table returns 0 rows due to strict RLS', async () => {
+    // Attempting direct select as anon client
+    const { data, error } = await supabase.from('international_sync_settings').select('*');
+    // Either data is empty array or error is returned, but no sensitive configuration rows must be returned
+    expect(data === null || data.length === 0).toBe(true);
+  });
+
 });

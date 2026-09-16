@@ -1532,7 +1532,7 @@ export default async function handler(req, res) {
       renderedHtml = renderedHtml.replace('</head>', `  <link rel="canonical" href="${escapeHtml(canonical)}" />\n</head>`);
     }
 
-    // 4. OpenGraph Tags
+    // 4. OpenGraph & Twitter Tags
     const ogTagsHtml = `
   <meta property="og:type" content="${ogType}" />
   <meta property="og:site_name" content="Collectibles" />
@@ -1540,9 +1540,14 @@ export default async function handler(req, res) {
   <meta property="og:description" content="${escapeHtml(description)}" />
   <meta property="og:url" content="${escapeHtml(canonical)}" />
   <meta property="og:image" content="${escapeHtml(ogImage)}" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${escapeHtml(title)}" />
+  <meta name="twitter:description" content="${escapeHtml(description)}" />
+  <meta name="twitter:image" content="${escapeHtml(ogImage)}" />
     `;
 
     renderedHtml = renderedHtml.replace(/<meta[^>]*property=["']og:[^"']+["'][^>]*\/?>/gi, '');
+    renderedHtml = renderedHtml.replace(/<meta[^>]*name=["']twitter:[^"']+["'][^>]*\/?>/gi, '');
     renderedHtml = renderedHtml.replace('</head>', `${ogTagsHtml}\n</head>`);
 
     // 5. JSON-LD Schemas
@@ -1565,7 +1570,7 @@ export default async function handler(req, res) {
     }
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('X-SEO-Version', '2026.09.16-v6');
+    res.setHeader('X-SEO-Version', '2026.09.16-v7');
     res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=86400, stale-while-revalidate=604800');
     return res.status(200).send(renderedHtml);
   } catch (error) {
