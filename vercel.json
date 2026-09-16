@@ -26,7 +26,11 @@
       "headers": [
         {
           "key": "Cache-Control",
-          "value": "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400"
+          "value": "public, max-age=0, must-revalidate"
+        },
+        {
+          "key": "CDN-Cache-Control",
+          "value": "public, s-maxage=3600, stale-while-revalidate=86400"
         }
       ]
     }
@@ -212,82 +216,222 @@
     },
     {
       "source": "/producto/:slug*",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(bot|crawler|spider|crawling|googlebot|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|slackbot|vkshare|w3c_validator|whatsapp|telegrambot|discordbot).*"
+        }
+      ],
       "destination": "/api/seo-prerender?type=producto&slug=:slug*"
     },
     {
       "source": "/categoria/:slug*",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(bot|crawler|spider|crawling|googlebot|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|slackbot|vkshare|w3c_validator|whatsapp|telegrambot|discordbot).*"
+        }
+      ],
       "destination": "/api/seo-prerender?type=categoria&slug=:slug*"
     },
     {
       "source": "/marca/:slug*",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(bot|crawler|spider|crawling|googlebot|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|slackbot|vkshare|w3c_validator|whatsapp|telegrambot|discordbot).*"
+        }
+      ],
       "destination": "/api/seo-prerender?type=marca&slug=:slug*"
     },
     {
-      "source": "/academy/:slug*",
-      "destination": "/api/seo-prerender?type=academy_article&slug=:slug*"
-    },
-    {
-      "source": "/academy",
-      "destination": "/api/seo-prerender?type=academy"
-    },
-    {
-      "source": "/ai-search",
-      "destination": "/api/seo-prerender?type=ai-search"
-    },
-    {
-      "source": "/search/ai",
-      "destination": "/api/seo-prerender?type=ai-search"
-    },
-    {
-      "source": "/radar/:slug*",
-      "destination": "/api/seo-prerender?type=radar_item&slug=:slug*"
-    },
-    {
-      "source": "/radar",
-      "destination": "/api/seo-prerender?type=radar"
-    },
-    {
-      "source": "/releases",
-      "destination": "/api/seo-prerender?type=releases"
-    },
-    {
-      "source": "/compare",
-      "destination": "/api/seo-prerender?type=compare"
-    },
-    {
-      "source": "/import-hub",
-      "destination": "/api/seo-prerender?type=import-hub"
-    },
-    {
-      "source": "/page/:slug*",
-      "destination": "/api/seo-prerender?type=page&slug=:slug*"
-    },
-    {
-      "source": "/contact",
-      "destination": "/api/seo-prerender?type=contact"
-    },
-    {
       "source": "/licencias/:slug*",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(bot|crawler|spider|crawling|googlebot|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|slackbot|vkshare|w3c_validator|whatsapp|telegrambot|discordbot).*"
+        }
+      ],
       "destination": "/api/seo-prerender?type=licencia_detail&slug=:slug*"
     },
     {
       "source": "/licencias",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(bot|crawler|spider|crawling|googlebot|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|slackbot|vkshare|w3c_validator|whatsapp|telegrambot|discordbot).*"
+        }
+      ],
       "destination": "/api/seo-prerender?type=licencias"
     },
     {
       "source": "/themes/:slug*",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(bot|crawler|spider|crawling|googlebot|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|slackbot|vkshare|w3c_validator|whatsapp|telegrambot|discordbot).*"
+        }
+      ],
       "destination": "/api/seo-prerender?type=theme_detail&slug=:slug*"
     },
     {
       "source": "/themes",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(bot|crawler|spider|crawling|googlebot|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|slackbot|vkshare|w3c_validator|whatsapp|telegrambot|discordbot).*"
+        }
+      ],
       "destination": "/api/seo-prerender?type=themes"
     },
     {
+      "source": "/academy/:slug*",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(bot|crawler|spider|crawling|googlebot|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|slackbot|vkshare|w3c_validator|whatsapp|telegrambot|discordbot).*"
+        }
+      ],
+      "destination": "/api/seo-prerender?type=academy_article&slug=:slug*"
+    },
+    {
+      "source": "/academy",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(bot|crawler|spider|crawling|googlebot|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|slackbot|vkshare|w3c_validator|whatsapp|telegrambot|discordbot).*"
+        }
+      ],
+      "destination": "/api/seo-prerender?type=academy"
+    },
+    {
+      "source": "/ai-search",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(bot|crawler|spider|crawling|googlebot|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|slackbot|vkshare|w3c_validator|whatsapp|telegrambot|discordbot).*"
+        }
+      ],
+      "destination": "/api/seo-prerender?type=ai-search"
+    },
+    {
+      "source": "/search/ai",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(bot|crawler|spider|crawling|googlebot|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|slackbot|vkshare|w3c_validator|whatsapp|telegrambot|discordbot).*"
+        }
+      ],
+      "destination": "/api/seo-prerender?type=ai-search"
+    },
+    {
+      "source": "/radar/:slug*",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(bot|crawler|spider|crawling|googlebot|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|slackbot|vkshare|w3c_validator|whatsapp|telegrambot|discordbot).*"
+        }
+      ],
+      "destination": "/api/seo-prerender?type=radar_item&slug=:slug*"
+    },
+    {
+      "source": "/radar",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(bot|crawler|spider|crawling|googlebot|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|slackbot|vkshare|w3c_validator|whatsapp|telegrambot|discordbot).*"
+        }
+      ],
+      "destination": "/api/seo-prerender?type=radar"
+    },
+    {
+      "source": "/releases",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(bot|crawler|spider|crawling|googlebot|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|slackbot|vkshare|w3c_validator|whatsapp|telegrambot|discordbot).*"
+        }
+      ],
+      "destination": "/api/seo-prerender?type=releases"
+    },
+    {
+      "source": "/compare",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(bot|crawler|spider|crawling|googlebot|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|slackbot|vkshare|w3c_validator|whatsapp|telegrambot|discordbot).*"
+        }
+      ],
+      "destination": "/api/seo-prerender?type=compare"
+    },
+    {
+      "source": "/import-hub",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(bot|crawler|spider|crawling|googlebot|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|slackbot|vkshare|w3c_validator|whatsapp|telegrambot|discordbot).*"
+        }
+      ],
+      "destination": "/api/seo-prerender?type=import-hub"
+    },
+    {
+      "source": "/page/:slug*",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(bot|crawler|spider|crawling|googlebot|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|slackbot|vkshare|w3c_validator|whatsapp|telegrambot|discordbot).*"
+        }
+      ],
+      "destination": "/api/seo-prerender?type=page&slug=:slug*"
+    },
+    {
+      "source": "/contact",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(bot|crawler|spider|crawling|googlebot|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|slackbot|vkshare|w3c_validator|whatsapp|telegrambot|discordbot).*"
+        }
+      ],
+      "destination": "/api/seo-prerender?type=contact"
+    },
+    {
       "source": "/shop",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(bot|crawler|spider|crawling|googlebot|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|slackbot|vkshare|w3c_validator|whatsapp|telegrambot|discordbot).*"
+        }
+      ],
       "destination": "/api/seo-prerender?type=shop"
     },
     {
       "source": "/",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(bot|crawler|spider|crawling|googlebot|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora link preview|showyoubot|outbrain|pinterest|slackbot|vkshare|w3c_validator|whatsapp|telegrambot|discordbot).*"
+        }
+      ],
       "destination": "/api/seo-prerender?type=home"
     },
     {

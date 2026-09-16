@@ -1565,12 +1565,8 @@ export default async function handler(req, res) {
     }
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('X-SEO-Version', '2026.09.16-v5');
-    if (isBot) {
-      res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400');
-    } else {
-      res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=3600, stale-while-revalidate=86400');
-    }
+    res.setHeader('X-SEO-Version', '2026.09.16-v6');
+    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=86400, stale-while-revalidate=604800');
     return res.status(200).send(renderedHtml);
   } catch (error) {
     console.error('Error in SEO Prerender handler:', error);

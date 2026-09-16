@@ -27,6 +27,7 @@ interface HeroSliderProps {
 
 export default function HeroSlider({ banners, loading = false }: HeroSliderProps) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [loadedIndices, setLoadedIndices] = useState<Set<number>>(() => new Set([0, 1]));
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
   const autoplayTimer = useRef<NodeJS.Timeout | null>(null);
@@ -42,6 +43,17 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
     }
   }, [activeBanners.length, activeIndex]);
 
+  // Expand loaded slides set when activeIndex changes
+  useEffect(() => {
+    if (activeBanners.length === 0) return;
+    setLoadedIndices(prev => {
+      const next = new Set(prev);
+      next.add(activeIndex);
+      next.add((activeIndex + 1) % activeBanners.length);
+      return next;
+    });
+  }, [activeIndex, activeBanners.length]);
+
   // Viewport-aware smart preloader: only preload the immediate NEXT slide based on device width
   useEffect(() => {
     if (activeBanners.length <= 1) return;
@@ -50,7 +62,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
     const nextBanner = activeBanners[nextIndex];
     if (!nextBanner) return;
 
-    // Use requestIdleCallback or delayed timer to not block critical path
+    // Use delayed timer to not compete with critical path
     const timer = setTimeout(() => {
       const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
       const targetUrl = (isMobile && nextBanner.mobile_image_url) 
@@ -200,6 +212,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
         const isCurrent = index === activeIndex;
         const opacityVal = banner.overlay_opacity !== null ? Number(banner.overlay_opacity) : 0.4;
         const alignCenter = banner.content_align === 'center';
+        const isImageEligible = loadedIndices.has(index);
         
         return (
           <div
@@ -212,22 +225,26 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
             aria-hidden={!isCurrent}
           >
             {/* 1. Fullscreen Background Image with Ken-Burns zoom on active */}
-            <picture>
-              {banner.mobile_image_url && (
-                <source media="(max-width: 767px)" srcSet={banner.mobile_image_url} />
-              )}
-              <img
-                src={banner.image_url}
-                alt={banner.title || 'Slide'}
-                style={{
-                  transform: isCurrent ? 'scale(1.05)' : 'scale(1.00)'
-                }}
-                loading={index === 0 ? "eager" : "lazy"}
-                fetchPriority={index === 0 ? "high" : "low"}
-                decoding="async"
-                {...getImageProps("absolute inset-0 w-full h-full object-cover object-center transition-transform duration-[7000ms] ease-out")}
-              />
-            </picture>
+            {isImageEligible ? (
+              <picture>
+                {banner.mobile_image_url && (
+                  <source media="(max-width: 767px)" srcSet={banner.mobile_image_url} />
+                )}
+                <img
+                  src={banner.image_url}
+                  alt={banner.title || 'Slide'}
+                  style={{
+                    transform: isCurrent ? 'scale(1.05)' : 'scale(1.00)'
+                  }}
+                  loading={index === 0 ? "eager" : "lazy"}
+                  fetchPriority={index === 0 ? "high" : "low"}
+                  decoding="async"
+                  {...getImageProps("absolute inset-0 w-full h-full object-cover object-center transition-transform duration-[7000ms] ease-out")}
+                />
+              </picture>
+            ) : (
+              <div className="absolute inset-0 bg-[#05070f]" />
+            )}
 
             {/* 2. Custom dark solid overlay */}
             <div 
