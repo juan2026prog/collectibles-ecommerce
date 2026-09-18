@@ -35,6 +35,7 @@ import { resolveProductInventory } from '../lib/canonicalStock';
 import { AddToCompareButton } from '../components/compare/AddToCompareButton';
 import { ProductUruguayCostDrawer } from '../components/customs/ProductUruguayCostDrawer';
 import { useCollectorPermissions } from '../hooks/useCollectorPermissions';
+import ProductQuestionsSection from '../components/product/ProductQuestionsSection';
 
 // ── COMPONENTE SECCIÓN MISMA WAVE / SERIE (Sourcing & Catalogo) ──
 function WaveProductsSection({ currentProductId, waveName }: { currentProductId: string; waveName?: string | null }) {
@@ -1160,6 +1161,9 @@ export default function ProductDetail() {
           </div>
         )}
       </section>
+
+      {/* 9.1. PREGUNTAS Y RESPUESTAS SOBRE ESTE PRODUCTO (Q&A Marketplace) */}
+      <ProductQuestionsSection product={product} />
 
       {/* MOBILE STICKY BUY BAR */}
       {showStickyBar && isPurchasable && (

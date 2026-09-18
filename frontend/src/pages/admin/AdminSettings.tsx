@@ -622,6 +622,7 @@ export default function AdminSettings() {
     whatsapp_numbers: [] as { label: string; number: string; enabled: boolean }[],
     email_recipients: [] as EmailRecipient[],
     notify_own_sales: false,
+    notify_product_questions: true,
     notify_vendor_sales: false,
     notify_payment_received: false,
     notify_low_stock: false,
@@ -651,6 +652,7 @@ export default function AdminSettings() {
           whatsapp_numbers: paddedNumbers.slice(0, 3),
           email_recipients: dbEmailRecipients,
           notify_own_sales: !!data.notify_own_sales,
+          notify_product_questions: data.notify_product_questions !== undefined ? !!data.notify_product_questions : true,
           notify_vendor_sales: !!data.notify_vendor_sales,
           notify_payment_received: !!data.notify_payment_received,
           notify_low_stock: !!data.notify_low_stock,
@@ -663,6 +665,7 @@ export default function AdminSettings() {
       console.error("Error loading admin notifications:", err);
     }
   }
+
 
   async function fetchNotificationLogs() {
     setLoadingLogs(true);
@@ -727,6 +730,7 @@ export default function AdminSettings() {
         whatsapp_numbers: numbers,
         email_recipients: emails,
         notify_own_sales: targetState.notify_own_sales,
+        notify_product_questions: targetState.notify_product_questions,
         notify_vendor_sales: targetState.notify_vendor_sales,
         notify_payment_received: targetState.notify_payment_received,
         notify_low_stock: targetState.notify_low_stock,
@@ -2414,6 +2418,7 @@ export default function AdminSettings() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {[
                   { key: 'notify_own_sales', label: 'Venta propia Collectibles', desc: 'Cuando una venta propia ya fue pagada y debe prepararse.' },
+                  { key: 'notify_product_questions', label: 'Preguntas sobre productos propios', desc: 'Avisos cuando un comprador hace una pregunta en productos de Collectibles.' },
                   { key: 'notify_vendor_sales', label: 'Resumen diario Marketplace', desc: 'Resumen diario de ventas confirmadas de Vendors a las 22:00.' },
                   { key: 'notify_payment_received', label: 'Pagos recibidos', desc: 'Notificaciones inmediatas al procesar un pago con tarjeta/Mercado Pago.' },
                   { key: 'notify_low_stock', label: 'Stock bajo', desc: 'Alerta general cuando algún producto o variante queda con poco stock (<= 2).' },

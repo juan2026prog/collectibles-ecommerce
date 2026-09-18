@@ -96,6 +96,7 @@ const AdminInternationalProducts = lazy(() => import('./pages/admin/AdminInterna
 const AdminInternationalSync = lazy(() => import('./pages/admin/AdminInternationalSync'));
 const AdminRefunds = lazy(() => import('./pages/admin/AdminRefunds'));
 const AdminZinc = lazy(() => import('./pages/admin/AdminZinc'));
+const AdminQuestions = lazy(() => import('./pages/admin/AdminQuestions'));
 
 // Collector Plugins (6 official modules)
 // 01. AI Search
@@ -345,6 +346,7 @@ function App() {
                   <Route path="licenses" element={<AdminLicenses />} />
                   <Route path="themes" element={<AdminThemes />} />
                   <Route path="customers" element={<AdminCustomers />} />
+                  <Route path="questions" element={<AdminQuestions />} />
                   <Route path="coupons" element={<AdminCoupons />} />
                   <Route path="banners" element={<AdminBanners />} />
                   <Route path="brands" element={<AdminBrands />} />

@@ -81,6 +81,7 @@ export default function VSettings() {
     whatsapp_numbers: [] as { label: string; number: string; enabled: boolean }[],
     email_recipients: [] as EmailRecipient[],
     notify_new_sale: false,
+    notify_product_questions: true,
     notify_payment_received: false,
     notify_order_shipped: false,
     notify_low_stock: false,
@@ -212,6 +213,7 @@ export default function VSettings() {
       whatsapp_numbers: numbers,
       email_recipients: emails,
       notify_new_sale: targetState.notify_new_sale,
+      notify_product_questions: targetState.notify_product_questions,
       notify_payment_received: targetState.notify_payment_received,
       notify_order_shipped: targetState.notify_order_shipped,
       notify_low_stock: targetState.notify_low_stock,
@@ -319,6 +321,7 @@ export default function VSettings() {
           whatsapp_numbers: paddedNumbers.slice(0, 3),
           email_recipients: data.email_recipients || [],
           notify_new_sale: !!data.notify_new_sale,
+          notify_product_questions: data.notify_product_questions !== undefined ? !!data.notify_product_questions : true,
           notify_payment_received: !!data.notify_payment_received,
           notify_order_shipped: !!data.notify_order_shipped,
           notify_low_stock: !!data.notify_low_stock,
@@ -341,6 +344,7 @@ export default function VSettings() {
             { id: 'v-def-1', name: 'Dueño', email: defaultEmail, active: !!defaultEmail }
           ],
           notify_new_sale: true,
+          notify_product_questions: true,
           notify_payment_received: true,
           notify_order_shipped: true,
           notify_low_stock: true,
@@ -975,15 +979,46 @@ export default function VSettings() {
                   </div>
                 </div>
 
-                {/* SMS */}
-                <div className="flex items-center justify-between py-2">
-                  <div>
-                    <span className="text-sm font-bold text-gray-900 block">SMS</span>
-                    <span className="text-xs text-gray-400 font-bold">No configurado</span>
-                  </div>
+              {/* SMS */}
+              <div className="flex items-center justify-between py-2">
+                <div>
+                  <span className="text-sm font-bold text-gray-900 block">SMS</span>
+                  <span className="text-xs text-gray-400 font-bold">No configurado</span>
                 </div>
               </div>
             </div>
+
+            {/* Config Toggles */}
+            <div className="bg-gray-50/50 p-6 rounded-xl border border-gray-200/50 space-y-4 shadow-sm mt-6">
+              <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Avisos Operativos para tu Tienda</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[
+                  { key: 'notify_new_sale', label: 'Nueva venta asignada', desc: 'Aviso inmediato cuando una orden con tus productos fue pagada.' },
+                  { key: 'notify_product_questions', label: 'Preguntas sobre tus productos', desc: 'Avisos cuando un coleccionista hace una consulta sobre tus productos.' },
+                  { key: 'notify_order_shipped', label: 'Estados de envío', desc: 'Actualizaciones logísticas sobre órdenes en camino o entregadas.' },
+                  { key: 'notify_low_stock', label: 'Stock bajo', desc: 'Alerta cuando tus publicaciones quedan con poco inventario (<= 2).' },
+                  { key: 'notify_payout_paid', label: 'Liquidación pagada', desc: 'Confirmación cuando Collectibles procesa el pago de tus ventas.' },
+                ].map(item => (
+                  <label key={item.key} className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm">
+                    <input 
+                      type="checkbox"
+                      checked={!!(notificationSettings as any)[item.key]}
+                      onChange={(e) => {
+                        const next = { ...notificationSettings, [item.key]: e.target.checked };
+                        setNotificationSettings(next);
+                        saveVendorNotifications(false, next).catch(() => {});
+                      }}
+                      className="w-4 h-4 text-black border-gray-300 rounded focus:ring-black mt-0.5 cursor-pointer"
+                    />
+                    <div>
+                      <span className="text-sm font-bold text-gray-800">{item.label}</span>
+                      <p className="text-[11px] text-gray-500 mt-0.5 font-medium leading-relaxed">{item.desc}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
 
             {/* Email Recipients Modal */}
             <EmailRecipientsModal

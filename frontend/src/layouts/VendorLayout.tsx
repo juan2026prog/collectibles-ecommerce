@@ -3,7 +3,7 @@ import { Link, Outlet, useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   LayoutDashboard, ShoppingBag, Settings, LogOut, Package, 
   CreditCard, Truck, Layers, HelpCircle, Store,
-  FolderOpen, Tag, Image, Percent, Sparkles
+  FolderOpen, Tag, Image, Percent, Sparkles, MessageSquare
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LocaleSwitcher from '../components/LocaleSwitcher';
@@ -57,6 +57,7 @@ export default function VendorLayout() {
   const navItems = [
     { name: 'Dashboard', path: '/vendor?tab=overview', tab: 'overview', icon: LayoutDashboard },
     { name: 'Productos', path: '/vendor?tab=products', tab: 'products', icon: Package },
+    { name: 'Preguntas', path: '/vendor?tab=questions', tab: 'questions', icon: MessageSquare },
     { name: 'Pedidos', path: '/vendor?tab=orders', tab: 'orders', icon: ShoppingBag },
     { name: 'Mis Envíos', path: '/vendor?tab=shipments', tab: 'shipments', icon: Truck },
     { name: 'Finanzas', path: '/vendor?tab=finances', tab: 'finances', icon: CreditCard },

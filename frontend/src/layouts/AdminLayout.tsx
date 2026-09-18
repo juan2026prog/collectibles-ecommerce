@@ -5,7 +5,7 @@ import {
   Tag, Image, CreditCard, LayoutTemplate, Star, Percent, Megaphone,
   Mail, BarChart3, Search, ShieldCheck, Store, Share2, ExternalLink, Library, FileText,
   Globe, Download, RefreshCw, Award, Layers, KeyRound, Scale,
-  Sparkles, Radio, Archive, GraduationCap, Sliders, Truck
+  Sparkles, Radio, Archive, GraduationCap, Sliders, Truck, MessageSquare
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LocaleSwitcher from '../components/LocaleSwitcher';
@@ -51,6 +51,7 @@ export default function AdminLayout() {
     { name: 'Configuracion', path: '/admin/settings', icon: Settings },
     { name: 'Módulos & Plugins', path: '/admin/settings?tab=modules', icon: Sliders },
     { name: 'Clientes & CRM', path: '/admin/customers', icon: Users },
+    { name: 'Preguntas / Q&A', path: '/admin/questions', icon: MessageSquare },
     { name: 'Mailing', path: '/admin/mailing', icon: Mail },
     { name: 'Finanzas & Facturas', path: '/admin/finances', icon: CreditCard },
     { name: 'Reembolsos', path: '/admin/refunds', icon: RefreshCw },

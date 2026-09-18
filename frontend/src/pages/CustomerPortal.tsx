@@ -15,10 +15,10 @@ import { useLocale } from '../contexts/LocaleContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { URUGUAY_LOCATIONS, DEPARTAMENTOS } from '../utils/uruguayLocations';
 import AddressAutocomplete from '../components/AddressAutocomplete';
-import { useImageProtection } from '../hooks/useImageProtection';
-import { BackofficePageHeader, BackofficeTabs, BackofficeStatusBadge, BackofficeCompactRow, BackofficePrimaryAction } from '../components/backoffice';
 import { FranchiseStatusCard } from '../components/customs/FranchiseStatusCard';
 import { ImportHub } from '../components/customs/ImportHub';
+import CustomerQuestionsTab from '../components/customer/CustomerQuestionsTab';
+import { MessageSquare } from 'lucide-react';
 
 function getOrderItemImage(item: any): string {
   const img = item.products?.images?.[0];
@@ -55,7 +55,7 @@ export default function CustomerPortal() {
   
   // Supported tabs
   const tabFromUrl = searchParams.get('tab');
-  const validTabs = ['orders', 'import_hub', 'profile', 'franchise', 'couriers', 'security'] as const;
+  const validTabs = ['orders', 'questions', 'import_hub', 'profile', 'franchise', 'couriers', 'security'] as const;
   type TabType = typeof validTabs[number];
   
   const initialTab: TabType = validTabs.includes(tabFromUrl as any) ? (tabFromUrl as TabType) : 'orders';
@@ -665,6 +665,7 @@ export default function CustomerPortal() {
             <nav className="mt-6 space-y-1.5">
               {([
                 { key: 'orders', icon: Package, label: 'Mis Pedidos', badge: orders.length > 0 ? String(orders.length) : undefined, color: 'text-blue-400' },
+                { key: 'questions', icon: MessageSquare, label: 'Mis Preguntas', color: 'text-pink-400' },
                 { key: 'import_hub', icon: Globe, label: 'Importador HUB (Aduana & Casilla)', badge: '2026', color: 'text-sky-400' },
                 { key: 'profile', icon: User, label: 'Mis Datos y Direcciones', color: 'text-purple-400' },
                 { key: 'security', icon: Lock, label: 'Seguridad y Acceso', color: 'text-rose-400' },
@@ -824,6 +825,11 @@ export default function CustomerPortal() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* ═══ TAB: Mis Preguntas ═══ */}
+          {activeTab === 'questions' && (
+            <CustomerQuestionsTab />
           )}
 
           {/* ═══ TAB: Mis Pedidos ═══ */}

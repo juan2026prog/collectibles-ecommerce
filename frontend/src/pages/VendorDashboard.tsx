@@ -29,6 +29,7 @@ import VStores from '../components/vendor/VStores';
 import VPromotions from '../components/vendor/VPromotions';
 import VMedia from '../components/vendor/VMedia';
 import VCollections from '../components/vendor/VCollections';
+import VQuestions from '../components/vendor/VQuestions';
 
 export default function VendorDashboard() {
   const { user, profile } = useAuth();
@@ -230,6 +231,8 @@ export default function VendorDashboard() {
       {activeTab === 'promotions' && <VPromotions />}
       {activeTab === 'media' && <VMedia />}
       {activeTab === 'collections' && <VCollections activeStoreId={activeStoreId} />}
+      {activeTab === 'questions' && <VQuestions {...({ activeStoreId } as any)} />}
     </div>
   );
 }
+

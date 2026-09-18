@@ -747,7 +747,122 @@ serve(async (req: Request) => {
               const vendorUserIds = product.vendors?.user_id ? [product.vendors.user_id] : [];
               await dispatchPushProvider(vendorUserIds, vendorId, title, message, targetUrl, cooldownKey, 'vendor');
             }
+    } else if (event_type === 'product_question_received') {
+      const { data: question } = await supabaseAdmin
+        .from('product_questions')
+        .select(`
+          id, question, product_id, vendor_id,
+          product:products(id, title, slug)
+        `)
+        .eq('id', body.product_id || body.variant_id || body.order_id || (body as any).question_id)
+        .maybeSingle();
+
+      if (question && question.product) {
+        const isVendor = Boolean(question.vendor_id);
+        const tpl = notificationTemplates.product_question_received({
+          productTitle: question.product.title,
+          productId: question.product.id,
+          questionText: question.question,
+          isVendor
+        });
+
+        if (isVendor && question.vendor_id) {
+          const { data: vSettings } = await supabaseAdmin
+            .from('vendor_notification_settings')
+            .select('*')
+            .eq('vendor_id', question.vendor_id)
+            .maybeSingle();
+
+          const isActive = vSettings ? (vSettings.is_active && vSettings.notify_product_questions !== false) : true;
+          if (isActive) {
+            const channelPrefs = vSettings?.channel_preferences || { push: true, email: true };
+            
+            // Push
+            if (channelPrefs.push !== false) {
+              const pushKey = `question_received:${question.id}:vendor:push`;
+              await dispatchPushProvider([question.vendor_id], question.vendor_id, tpl.push.title, tpl.push.body, tpl.deepLink, pushKey, 'vendor');
+            }
+            // Email
+            if (channelPrefs.email !== false) {
+              const activeEmails = await getActiveEmailRecipients('vendor', question.vendor_id);
+              for (let i = 0; i < activeEmails.length; i++) {
+                const r = activeEmails[i];
+                const emailKey = `question_received:${question.id}:vendor:email:${i}`;
+                await dispatchEmailProvider(r.email, tpl.email.subject, tpl.email.html, emailKey, 'vendor', question.vendor_id);
+              }
+            }
           }
+        } else {
+          // Admin Question Notification
+          const { data: adminSettings } = await supabaseAdmin
+            .from('admin_notification_settings')
+            .select('*')
+            .eq('is_singleton', true)
+            .maybeSingle();
+
+          const isActive = adminSettings ? (adminSettings.is_active && adminSettings.notify_product_questions !== false) : true;
+          if (isActive) {
+            const channelPrefs = adminSettings?.channel_preferences || { push: true, email: true };
+            // Push Admin
+            if (channelPrefs.push !== false) {
+              const adminPushKey = `question_received:${question.id}:admin:push`;
+              await dispatchPushProvider([], null, tpl.push.title, tpl.push.body, tpl.deepLink, adminPushKey, 'admin');
+            }
+            // Email Admin
+            if (channelPrefs.email !== false) {
+              const activeAdminEmails = await getActiveEmailRecipients('admin', null);
+              for (let i = 0; i < activeAdminEmails.length; i++) {
+                const r = activeAdminEmails[i];
+                const emailKey = `question_received:${question.id}:admin:email:${i}`;
+                await dispatchEmailProvider(r.email, tpl.email.subject, tpl.email.html, emailKey, 'admin', null);
+              }
+            }
+          }
+        }
+      }
+
+    } else if (event_type === 'product_question_answered') {
+      const { data: answer } = await supabaseAdmin
+        .from('product_question_answers')
+        .select(`
+          id, answer, answered_by_user_id, is_admin_answer, vendor_id,
+          question:product_questions(
+            id, question, asked_by_user_id,
+            product:products(id, title, slug)
+          )
+        `)
+        .eq('id', body.product_id || body.variant_id || body.order_id || (body as any).answer_id)
+        .maybeSingle();
+
+      if (answer && answer.question && answer.question.product) {
+        const answeredByName = answer.is_admin_answer ? 'Collectibles.uy' : 'El Vendedor';
+        const tpl = notificationTemplates.product_question_answered({
+          productTitle: answer.question.product.title,
+          productSlug: answer.question.product.slug,
+          questionId: answer.question.id,
+          questionText: answer.question.question,
+          answerText: answer.answer,
+          answeredBy: answeredByName
+        });
+
+        const buyerUserId = answer.question.asked_by_user_id;
+        const pushKey = `question_answered:${answer.id}:buyer:push`;
+
+        // Dispatch push to buyer
+        if (buyerUserId) {
+          await dispatchPushProvider([buyerUserId], null, tpl.push.title, tpl.push.body, tpl.deepLink, pushKey, 'vendor');
+        }
+
+        // Send email to buyer if available in auth.users
+        const { data: buyerProfile } = await supabaseAdmin
+          .from('profiles')
+          .select('email')
+          .eq('id', buyerUserId)
+          .maybeSingle();
+
+        if (buyerProfile?.email) {
+          const emailKey = `question_answered:${answer.id}:buyer:email`;
+          await dispatchEmailProvider(buyerProfile.email, tpl.email.subject, tpl.email.html, emailKey, 'vendor', null);
         }
       }
 

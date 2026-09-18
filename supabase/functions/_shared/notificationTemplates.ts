@@ -292,4 +292,78 @@ export const notificationTemplates = {
       deepLink,
     };
   },
+
+  product_question_received: (data: { productTitle: string; productId: string; questionText: string; isVendor?: boolean }) => {
+    const deepLink = data.isVendor 
+      ? `https://collectibles.uy/vendor?tab=questions`
+      : `https://collectibles.uy/admin/questions`;
+
+    const recipientLabel = data.isVendor ? 'Vendor' : 'Administración';
+
+    return {
+      push: {
+        title: `❓ Nueva pregunta sobre un producto`,
+        body: `Recibiste una pregunta en "${data.productTitle}": "${data.questionText.slice(0, 80)}${data.questionText.length > 80 ? '...' : ''}"`,
+      },
+      email: {
+        subject: `❓ Nueva pregunta en: ${data.productTitle}`,
+        text: `¡Hola ${recipientLabel}!\n\nUn comprador ha realizado una nueva pregunta sobre tu producto:\n\nProducto: ${data.productTitle}\n\nPregunta:\n"${data.questionText}"\n\nPodés responderla directamente ingresando a: ${deepLink}`,
+        html: `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1f2937; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px;">
+  <h2 style="color: #4f46e5; margin-top: 0; font-size: 20px;">Nueva pregunta sobre tu producto</h2>
+  <p style="font-size: 15px; line-height: 1.5; color: #374151;">
+    Un usuario realizó una consulta sobre: <strong>${data.productTitle}</strong>
+  </p>
+  
+  <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-left: 4px solid #4f46e5; border-radius: 6px; padding: 16px; margin: 20px 0;">
+    <p style="margin: 0 0 6px 0; font-size: 13px; color: #6b7280; text-transform: uppercase; font-weight: 600;">Pregunta del comprador</p>
+    <p style="margin: 0; font-size: 16px; font-style: italic; color: #111827;">"${data.questionText}"</p>
+  </div>
+
+  <div style="text-align: center; margin-top: 28px;">
+    <a href="${deepLink}" style="background-color: #4f46e5; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; font-size: 15px;">Responder pregunta</a>
+  </div>
+</div>
+        `.trim(),
+      },
+      deepLink,
+    };
+  },
+
+  product_question_answered: (data: { productTitle: string; productSlug: string; questionId: string; questionText: string; answerText: string; answeredBy: string }) => {
+    const deepLink = `https://collectibles.uy/p/${data.productSlug}#pregunta-${data.questionId}`;
+
+    return {
+      push: {
+        title: `💬 Respondieron tu pregunta`,
+        body: `En "${data.productTitle}": "${data.answerText.slice(0, 80)}${data.answerText.length > 80 ? '...' : ''}"`,
+      },
+      email: {
+        subject: `💬 Respondieron tu pregunta en: ${data.productTitle}`,
+        text: `¡Hola!\n\nEl vendedor ha respondido a tu pregunta en ${data.productTitle}.\n\nTu pregunta:\n"${data.questionText}"\n\nRespuesta de ${data.answeredBy}:\n"${data.answerText}"\n\nPodés ver la publicación aquí: ${deepLink}`,
+        html: `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1f2937; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px;">
+  <h2 style="color: #059669; margin-top: 0; font-size: 20px;">¡Respondieron tu pregunta!</h2>
+  <p style="font-size: 15px; line-height: 1.5; color: #374151;">
+    El vendedor ha respondido a tu consulta sobre: <strong>${data.productTitle}</strong>
+  </p>
+  
+  <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px; margin: 16px 0;">
+    <p style="margin: 0 0 4px 0; font-size: 12px; color: #6b7280; text-transform: uppercase; font-weight: 600;">Tu pregunta</p>
+    <p style="margin: 0 0 12px 0; font-size: 14px; color: #4b5563;">"${data.questionText}"</p>
+    
+    <p style="margin: 0 0 4px 0; font-size: 12px; color: #059669; text-transform: uppercase; font-weight: 600;">Respuesta de ${data.answeredBy}</p>
+    <p style="margin: 0; font-size: 15px; font-weight: 500; color: #111827;">"${data.answerText}"</p>
+  </div>
+
+  <div style="text-align: center; margin-top: 28px;">
+    <a href="${deepLink}" style="background-color: #059669; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; font-size: 15px;">Ver producto</a>
+  </div>
+</div>
+        `.trim(),
+      },
+      deepLink,
+    };
+  },
 };
+
