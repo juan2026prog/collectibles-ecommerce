@@ -199,3 +199,28 @@ export function isMarketInPreview(market: MarketResolution | MarketRecord): bool
   }
   return market.market_status === 'PREVIEW';
 }
+
+/**
+ * Resolves logistics routing and status for a destination country.
+ */
+export function resolveMarketRouting(
+  countryCode: string,
+  markets: MarketRecord[] = INITIAL_DEFAULT_MARKETS
+) {
+  const resolved = resolveMarket(countryCode, markets);
+  const found = markets.find(m => m.country_code.toUpperCase() === (countryCode || '').toUpperCase());
+
+  return {
+    countryCode: resolved.countryCode,
+    countryName: resolved.countryName,
+    logisticsMode: resolved.logisticsMode,
+    provider: resolved.provider,
+    status: resolved.marketStatus,
+    isConfigured: !!found,
+    isSkyPostal: resolved.logisticsMode === 'SKYPOSTAL',
+    isImportHub: resolved.logisticsMode === 'IMPORT_HUB',
+    canCheckout: resolved.canCheckout,
+    canBrowse: resolved.canBrowse
+  };
+}
+

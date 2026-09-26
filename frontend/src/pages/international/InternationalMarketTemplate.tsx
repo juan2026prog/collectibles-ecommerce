@@ -5,6 +5,7 @@ import { useParams, Navigate, Link } from 'react-router-dom';
 import { useInternationalMarkets } from '../../hooks/useInternationalMarkets';
 import MarketPreviewBanner from '../../components/international/MarketPreviewBanner';
 import SEO from '../../components/SEO';
+import SkyPostalQuoteSimulator from '../../components/international/SkyPostalQuoteSimulator';
 import Shop from '../Shop';
 import { Globe, Plane, ShieldCheck, ArrowRight, Package } from 'lucide-react';
 
@@ -83,6 +84,18 @@ export default function InternationalMarketTemplate() {
           </div>
         </div>
       </div>
+
+      {/* SkyPostal Shipping & Compliance Simulator (for SkyPostal enabled/preview markets) */}
+      {market.logisticsMode === 'SKYPOSTAL' && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <SkyPostalQuoteSimulator
+            countryCode={market.countryCode}
+            countryName={market.countryName}
+            currency={market.currency}
+            isAdminMode={market.isPreview}
+          />
+        </div>
+      )}
 
       {/* Catalog listing */}
       <div className="py-6">
