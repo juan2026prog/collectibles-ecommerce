@@ -423,7 +423,7 @@ export default function SkyPostalQuoteSimulator({
             )}
           </div>
 
-          {/* Super Admin Financial & Contractual Breakdown Accordion */}
+          {/* Admin Financial & Contractual Breakdown Accordion */}
           <div className="border border-surface-800 rounded-xl overflow-hidden bg-surface-950/40">
             <button
               type="button"
@@ -432,7 +432,7 @@ export default function SkyPostalQuoteSimulator({
             >
               <div className="flex items-center gap-2">
                 <Layers className="w-3.5 h-3.5 text-primary-400" />
-                <span>Desglose Financiero & Snapshot Interno (Super Admin)</span>
+                <span>Desglose Financiero & Snapshot Interno (Admin)</span>
               </div>
               {showAdminBreakdown ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>

@@ -11,19 +11,19 @@ describe('SkyPostal Phase 2 — Authoritative Rate Engine (Contractual Excel)', 
       expect(calculateTransportationCharge('CL', 1.0).transportationChargeUsd).toBe(14.73);
       expect(calculateTransportationCharge('CL', 2.0).transportationChargeUsd).toBe(19.67);
       expect(calculateTransportationCharge('CL', 5.0).transportationChargeUsd).toBe(36.12);
-      expect(calculateTransportationCharge('CL', 10.0).transportationChargeUsd).toBe(66.07);
+      expect(calculateTransportationCharge('CL', 10.0).transportationChargeUsd).toBe(61.98);
     });
 
-    it('should extrapolate weights above 10.0 kg using additional 500g fee ($2.42)', () => {
-      // 11.0 kg -> 10.0 kg ($66.07) + 2 * $2.42 = $70.91
+    it('should extrapolate weights above 10.0 kg using additional 500g fee ($3.90)', () => {
+      // 11.0 kg -> 10.0 kg ($61.98) + 2 * $3.90 = $69.78
       const res11 = calculateTransportationCharge('CL', 11.0);
       expect(res11.isExtrapolated).toBe(true);
       expect(res11.additionalUnitsCount).toBe(2);
-      expect(res11.transportationChargeUsd).toBe(70.91);
+      expect(res11.transportationChargeUsd).toBe(69.78);
 
-      // 12.5 kg -> 10.0 kg ($66.07) + 5 * $2.42 = $78.17
+      // 12.5 kg -> 10.0 kg ($61.98) + 5 * $3.90 = $81.48
       const res125 = calculateTransportationCharge('CL', 12.5);
-      expect(res125.transportationChargeUsd).toBe(78.17);
+      expect(res125.transportationChargeUsd).toBe(81.48);
     });
   });
 
@@ -32,7 +32,7 @@ describe('SkyPostal Phase 2 — Authoritative Rate Engine (Contractual Excel)', 
       expect(calculateTransportationCharge('PE', 0.1).transportationChargeUsd).toBe(11.11);
       expect(calculateTransportationCharge('PE', 0.5).transportationChargeUsd).toBe(12.31);
       expect(calculateTransportationCharge('PE', 1.0).transportationChargeUsd).toBe(13.81);
-      expect(calculateTransportationCharge('PE', 10.0).transportationChargeUsd).toBe(47.13);
+      expect(calculateTransportationCharge('PE', 10.0).transportationChargeUsd).toBe(47.17);
     });
   });
 
@@ -41,7 +41,7 @@ describe('SkyPostal Phase 2 — Authoritative Rate Engine (Contractual Excel)', 
       expect(calculateTransportationCharge('BR', 0.1).transportationChargeUsd).toBe(7.97);
       expect(calculateTransportationCharge('BR', 0.5).transportationChargeUsd).toBe(10.53);
       expect(calculateTransportationCharge('BR', 1.0).transportationChargeUsd).toBe(13.92);
-      expect(calculateTransportationCharge('BR', 10.0).transportationChargeUsd).toBe(71.92);
+      expect(calculateTransportationCharge('BR', 10.0).transportationChargeUsd).toBe(71.75);
     });
   });
 

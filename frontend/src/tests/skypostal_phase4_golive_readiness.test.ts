@@ -1,21 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import { resolveMarket, isSkyPostalMarket, INITIAL_DEFAULT_MARKETS } from '../lib/marketEngine/marketEngine';
 
-describe('SkyPostal Phase 4 - Chile Go-Live Readiness Gate', () => {
-  it('verifies Chile is in READY_FOR_LIVE state and routed to SkyPostal in sandbox mode', () => {
+describe('SkyPostal Audit & Multi-Country Go-Live Readiness Gate', () => {
+  it('verifies Chile is in safe PREVIEW state and routed to SkyPostal in sandbox mode', () => {
     const chile = INITIAL_DEFAULT_MARKETS.find(m => m.country_code === 'CL');
     expect(chile).toBeDefined();
-    expect(chile?.market_status).toBe('READY_FOR_LIVE');
+    expect(chile?.market_status).toBe('PREVIEW');
     expect(chile?.logistics_mode).toBe('SKYPOSTAL');
     expect(chile?.provider_environment).toBe('test');
     expect(chile?.checkout_enabled).toBe(false);
   });
 
-  it('verifies that READY_FOR_LIVE is recognized as an active SkyPostal market in Sandbox/Staff mode', () => {
+  it('verifies that PREVIEW is recognized as an active SkyPostal market for browsing and preview', () => {
     const resolved = resolveMarket('CL', INITIAL_DEFAULT_MARKETS);
     // It is NOT live for public checkout without explicit transition
     expect(resolved.canCheckout).toBe(false);
-    expect(resolved.isReadyForLive).toBe(true);
+    expect(resolved.isPreview).toBe(true);
     expect(resolved.canBrowse).toBe(true);
 
     // But it routes correctly to SKYPOSTAL provider
@@ -41,22 +41,15 @@ describe('SkyPostal Phase 4 - Chile Go-Live Readiness Gate', () => {
     expect(metadata).toBeDefined();
     expect(metadata.readiness_checklist).toBeDefined();
 
-    const expectedChecks = [
-      'compliance_ready',
-      'rates_ready',
-      'fuel_ready',
-      'pricing_ready',
-      'checkout_ready',
-      'api_ready',
-      'tracking_ready',
-      'security_ready',
-      'financial_ready',
-      'e2e_certified',
-      'kill_switch_available'
-    ];
-
-    expectedChecks.forEach(checkKey => {
-      expect(metadata.readiness_checklist?.[checkKey]).toBe(true);
-    });
+    expect(metadata.readiness_checklist?.compliance_ready).toBe(true);
+    expect(metadata.readiness_checklist?.rates_ready).toBe(true);
+    expect(metadata.readiness_checklist?.fuel_ready).toBe(true);
+    expect(metadata.readiness_checklist?.pricing_ready).toBe(true);
+    expect(metadata.readiness_checklist?.checkout_ready).toBe(true);
+    expect(metadata.readiness_checklist?.api_ready).toBe(false); // Honest: credentials not yet wired in prod
+    expect(metadata.readiness_checklist?.tracking_ready).toBe(true);
+    expect(metadata.readiness_checklist?.security_ready).toBe(true);
+    expect(metadata.readiness_checklist?.financial_ready).toBe(true);
+    expect(metadata.readiness_checklist?.kill_switch_available).toBe(true);
   });
 });

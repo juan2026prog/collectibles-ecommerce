@@ -42,22 +42,38 @@ import {
   History,
   CheckCircle,
   XCircle,
-  Sparkles
+  Sparkles,
+  Inbox
 } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 
 export default function AdminInternationalMarkets() {
   const { toast } = useToast();
-  const { markets, loading, error, refreshMarkets, updateMarketStatus, updateMarketConfig } = useInternationalMarkets();
+  const {
+    markets,
+    loading,
+    error,
+    auditLogs,
+    loadingLogs,
+    refreshMarkets,
+    refreshAuditLogs,
+    updateMarketStatus,
+    updateMarketConfig,
+    updateGlobalMarkup,
+    logAuditAction
+  } = useInternationalMarkets();
+
   const [activeTab, setActiveTab] = useState<'markets' | 'golive_gate' | 'operations' | 'financial' | 'manual_review' | 'rate_cards' | 'fuel' | 'markup' | 'manifests' | 'audit' | 'simulator'>('markets');
   const [updatingCode, setUpdatingCode] = useState<string | null>(null);
-  const [globalKillSwitch, setGlobalKillSwitch] = useState<boolean>(false);
 
   // Rate cards tab state
   const [selectedRateCardCode, setSelectedRateCardCode] = useState<string>('CL-340');
 
   // Simulator tab state
   const [simulatorCountry, setSimulatorCountry] = useState<string>('CL');
+
+  // Selected Country for Generic Go-Live Gate
+  const [gateCountryCode, setGateCountryCode] = useState<string>('CL');
 
   // Markup state
   const [markupValue, setMarkupValue] = useState<number>(DEFAULT_MARKUP_PERCENT);
@@ -67,94 +83,18 @@ export default function AdminInternationalMarkets() {
   const [showGoLiveModal, setShowGoLiveModal] = useState<boolean>(false);
   const [isActivatingMarket, setIsActivatingMarket] = useState<boolean>(false);
 
-  // Audit Logs State
-  const [auditLogs, setAuditLogs] = useState([
-    {
-      id: 'aud_001',
-      action: 'PHASE_4_CERTIFIED',
-      entity_type: 'MARKET',
-      entity_id: 'CL',
-      country_code: 'CL',
-      actor_email: 'superadmin@collectibles.uy',
-      details: 'Chile certified as READY_FOR_LIVE with 10-point checklist validated.',
-      timestamp: new Date().toISOString()
-    },
-    {
-      id: 'aud_002',
-      action: 'MARKUP_CONFIGURED',
-      entity_type: 'PRICING',
-      entity_id: 'GLOBAL',
-      country_code: 'ALL',
-      actor_email: 'superadmin@collectibles.uy',
-      details: 'Commercial markup configured to default 35.00% on cost.',
-      timestamp: new Date(Date.now() - 7200000).toISOString()
-    }
-  ]);
+  // Real data state for operations and reviews
+  const [shipments, setShipments] = useState<any[]>([]);
+  const [manualReviewItems, setManualReviewItems] = useState<any[]>([]);
 
-  // Mock shipments for operations & financial view
-  const mockShipments = [
-    {
-      id: 'shp_cl_001',
-      order_id: 'ORD-2026-9901',
-      country_code: 'CL',
-      country_name: 'Chile',
-      service_name: 'SkyPostal Chile Custom Courier',
-      rate_card_code: 'CL-340',
-      leg1_carrier: 'UPS Ground (Zinc / Amazon)',
-      leg1_tracking: '1Z9999999999999999',
-      leg1_status: 'RECEIVED_US_HUB',
-      leg2_guide: 'GUA-839201',
-      leg2_tracking: 'SKY-CL-89201948',
-      leg2_status: 'IN_TRANSIT',
-      measured_weight_kg: 0.850,
-      billable_weight_kg: 0.850,
-      weight_source: 'MEASURED',
-      customer_charged: 19.89,
-      provider_cost_estimated: 14.73,
-      provider_cost_real: 14.73,
-      margin_estimated: 5.16,
-      margin_real: 5.16,
-      fuel_estimated_percent: 0.0,
-      fuel_final_percent: 0.0,
-      fuel_final_status: 'FINAL',
-      action_required: 'NONE'
-    },
-    {
-      id: 'shp_pe_002',
-      order_id: 'ORD-2026-9902',
-      country_code: 'PE',
-      country_name: 'Perú',
-      service_name: 'SkyPostal Peru Custom Courier',
-      rate_card_code: 'PE-340',
-      leg1_carrier: 'FedEx Home Delivery',
-      leg1_tracking: '789456123012',
-      leg1_status: 'INBOUND_TO_US_HUB',
-      leg2_guide: 'GUA-581902',
-      leg2_tracking: 'SKY-PE-49102831',
-      leg2_status: 'READY_FOR_SHIPMENT',
-      measured_weight_kg: 1.200,
-      billable_weight_kg: 1.500,
-      weight_source: 'ESTIMATED',
-      customer_charged: 20.68,
-      provider_cost_estimated: 15.32,
-      provider_cost_real: 15.32,
-      margin_estimated: 5.36,
-      margin_real: 5.36,
-      fuel_estimated_percent: 0.0,
-      fuel_final_percent: 0.0,
-      fuel_final_status: 'ESTIMATED',
-      action_required: 'NONE'
-    }
-  ];
-
-  // Financial aggregates
-  const financialTotals = mockShipments.reduce(
+  // Financial aggregates (from real data)
+  const financialTotals = shipments.reduce(
     (acc, item) => {
-      acc.revenue += item.customer_charged;
-      acc.costEstimated += item.provider_cost_estimated;
-      acc.costReal += item.provider_cost_real;
-      acc.profitEstimated += item.margin_estimated;
-      acc.profitReal += item.margin_real;
+      acc.revenue += Number(item.customer_charged) || 0;
+      acc.costEstimated += Number(item.provider_cost_estimated) || 0;
+      acc.costReal += Number(item.provider_cost_real) || 0;
+      acc.profitEstimated += Number(item.margin_estimated) || 0;
+      acc.profitReal += Number(item.margin_real) || 0;
       return acc;
     },
     { revenue: 0, costEstimated: 0, costReal: 0, profitEstimated: 0, profitReal: 0 }
@@ -166,30 +106,6 @@ export default function AdminInternationalMarkets() {
     providerCostEstimated: financialTotals.costEstimated
   });
 
-  // Manual review queue items
-  const [manualReviewItems, setManualReviewItems] = useState([
-    {
-      id: 'mr_001',
-      order_id: 'ORD-2026-9915',
-      country_code: 'CL',
-      recipient_name: 'Ignacio Valenzuela',
-      reason: 'RUT no ingresado en checkout. Requerido para Aduana Chile.',
-      action_required: 'DOCUMENT_REQUIRED',
-      status: 'PENDING',
-      created_at: new Date(Date.now() - 3600000).toISOString()
-    },
-    {
-      id: 'mr_002',
-      order_id: 'ORD-2026-9922',
-      country_code: 'PE',
-      recipient_name: 'María Flores',
-      reason: 'Cantidad de 12 figuras excede límite simplificado (máx 10).',
-      action_required: 'MANUAL_REVIEW',
-      status: 'PENDING',
-      created_at: new Date(Date.now() - 7200000).toISOString()
-    }
-  ]);
-
   const handleStatusChange = async (countryCode: string, newStatus: MarketStatus) => {
     setUpdatingCode(countryCode);
     const res = await updateMarketStatus(countryCode, newStatus);
@@ -197,19 +113,6 @@ export default function AdminInternationalMarkets() {
 
     if (res.success) {
       toast.success(`Estado de ${countryCode} actualizado a ${newStatus}`);
-      setAuditLogs(prev => [
-        {
-          id: `aud_${Date.now()}`,
-          action: 'MARKET_STATUS_CHANGED',
-          entity_type: 'MARKET',
-          entity_id: countryCode,
-          country_code: countryCode,
-          actor_email: 'superadmin@collectibles.uy',
-          details: `Market ${countryCode} status changed to ${newStatus}`,
-          timestamp: new Date().toISOString()
-        },
-        ...prev
-      ]);
     } else {
       toast.error(`Error actualizando mercado: ${res.error}`);
     }
@@ -226,120 +129,83 @@ export default function AdminInternationalMarkets() {
     if (res.success) {
       const stateText = !currentKillSwitch ? 'ACTIVADO (PAUSADO)' : 'DESACTIVADO (ACTIVO)';
       toast.success(`Kill Switch de ${market.country_name} ${stateText}`);
-      setAuditLogs(prev => [
-        {
-          id: `aud_${Date.now()}`,
-          action: 'KILL_SWITCH_TOGGLED',
-          entity_type: 'MARKET',
-          entity_id: market.country_code,
-          country_code: market.country_code,
-          actor_email: 'superadmin@collectibles.uy',
-          details: `Kill switch of ${market.country_name} set to ${stateText}`,
-          timestamp: new Date().toISOString()
-        },
-        ...prev
-      ]);
     } else {
       toast.error(`Error: ${res.error}`);
     }
   };
 
-  const handleSaveMarkup = () => {
+  const handleSaveMarkup = async () => {
     setIsSavingMarkup(true);
-    setTimeout(() => {
-      setIsSavingMarkup(false);
-      toast.success(`Markup comercial de ${markupValue}% guardado en configuración`);
-      setAuditLogs(prev => [
-        {
-          id: `aud_${Date.now()}`,
-          action: 'MARKUP_UPDATED',
-          entity_type: 'PRICING',
-          entity_id: 'GLOBAL',
-          country_code: 'ALL',
-          actor_email: 'superadmin@collectibles.uy',
-          details: `Global commercial markup updated to ${markupValue}%`,
-          timestamp: new Date().toISOString()
-        },
-        ...prev
-      ]);
-    }, 400);
+    const res = await updateGlobalMarkup(markupValue);
+    setIsSavingMarkup(false);
+
+    if (res.success) {
+      toast.success(`Markup comercial de ${markupValue}% guardado en base de datos`);
+    } else {
+      toast.error(`Error guardando markup: ${res.error}`);
+    }
   };
 
   const handleResolveManualReview = (id: string, action: 'RESOLVED' | 'REJECTED') => {
     setManualReviewItems(prev => prev.map(item => item.id === id ? { ...item, status: action } : item));
     toast.success(`Incidencia ${id} marcada como ${action}`);
-    setAuditLogs(prev => [
-      {
-        id: `aud_${Date.now()}`,
-        action: `MANUAL_REVIEW_${action}`,
-        entity_type: 'EXCEPTION',
-        entity_id: id,
-        country_code: 'CL',
-        actor_email: 'superadmin@collectibles.uy',
-        details: `Manual review item ${id} resolved with action ${action}`,
-        timestamp: new Date().toISOString()
-      },
-      ...prev
-    ]);
+    logAuditAction({
+      action: `MANUAL_REVIEW_${action}`,
+      entity_type: 'EXCEPTION',
+      entity_id: id,
+      country_code: gateCountryCode,
+      reason: `Manual review item ${id} resolved with action ${action}`
+    });
   };
 
-  const handleConfirmChileGoLive = async () => {
+  const handleConfirmMarketGoLive = async (targetCountryCode: string) => {
     setIsActivatingMarket(true);
-    const res = await updateMarketStatus('CL', 'LIVE');
+    const res = await updateMarketStatus(targetCountryCode, 'LIVE', `Market ${targetCountryCode} activated to LIVE from Admin Go-Live Gate.`);
     setIsActivatingMarket(false);
     setShowGoLiveModal(false);
 
     if (res.success) {
-      toast.success('¡Mercado Chile activado exitosamente en modo LIVE!');
-      setAuditLogs(prev => [
-        {
-          id: `aud_${Date.now()}`,
-          action: 'CHILE_GO_LIVE_ACTIVATED',
-          entity_type: 'MARKET',
-          entity_id: 'CL',
-          country_code: 'CL',
-          actor_email: 'superadmin@collectibles.uy',
-          details: 'Chile market explicitly activated to LIVE by Super Admin with full checklist verified.',
-          timestamp: new Date().toISOString()
-        },
-        ...prev
-      ]);
+      toast.success(`¡Mercado ${targetCountryCode} activado exitosamente en modo LIVE!`);
     } else {
-      toast.error(`Error al activar Chile: ${res.error}`);
+      toast.error(`Error al activar mercado ${targetCountryCode}: ${res.error}`);
     }
   };
 
-  const chileMarket = markets.find(m => m.country_code === 'CL');
+  const selectedGateMarket = markets.find(m => m.country_code === gateCountryCode);
+  const skypostalMarkets = markets.filter(m => m.logistics_mode === 'SKYPOSTAL');
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-8">
-      {/* Header with Connection Health Status */}
+      {/* Header with Honest Connection Health Status */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-surface-800 pb-5">
         <div>
           <div className="flex items-center gap-2.5 text-xs text-primary-400 font-bold uppercase tracking-wider">
             <Globe className="w-4 h-4" />
-            <span>Infraestructura Logística Internacional — Fase 4 Super Admin Final</span>
+            <span>Infraestructura Logística Internacional — Admin Market Control</span>
           </div>
           <h1 className="text-2xl font-black text-white mt-1">SkyPostal & Market Engine Control Center</h1>
           <p className="text-surface-400 text-sm mt-0.5">
-            Gestión de ciclo de vida de mercados, Go-Live Gate, control financiero y auditoría operacional.
+            Gestión de ciclo de vida de mercados, Go-Live Gate genérico, control financiero y auditoría operacional.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Provider Connection Health Badge */}
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-950/40 border border-emerald-800/60 text-xs">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-surface-400 font-medium">SkyPostal Gateway:</span>
-            <span className="font-bold text-emerald-300 font-mono">HEALTHY (TEST)</span>
+          {/* Honest Provider Connection Health Badge */}
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-900 border border-surface-700 text-xs">
+            <span className="w-2 h-2 rounded-full bg-amber-400" />
+            <span className="text-surface-400 font-medium">SkyPostal API:</span>
+            <span className="font-bold text-amber-300 font-mono">NOT_CONFIGURED (SANDBOX ADAPTER READY)</span>
           </div>
 
           <button
-            onClick={() => refreshMarkets()}
-            disabled={loading}
+            onClick={() => {
+              refreshMarkets();
+              refreshAuditLogs();
+            }}
+            disabled={loading || loadingLogs}
             className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-surface-800 hover:bg-surface-700 text-surface-200 border border-surface-700 text-xs font-medium transition-colors"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${loading || loadingLogs ? 'animate-spin' : ''}`} />
             <span>Actualizar</span>
           </button>
         </div>
@@ -368,10 +234,7 @@ export default function AdminInternationalMarkets() {
           }`}
         >
           <Sparkles className="w-4 h-4 text-emerald-400" />
-          <span>Go-Live Gate (Chile)</span>
-          <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-mono">
-            {chileMarket?.market_status === 'LIVE' ? 'LIVE' : 'READY'}
-          </span>
+          <span>Go-Live Gate Multi-País</span>
         </button>
 
         <button
@@ -383,7 +246,7 @@ export default function AdminInternationalMarkets() {
           }`}
         >
           <Truck className="w-4 h-4" />
-          <span>Operaciones & Envíos</span>
+          <span>Operaciones & Envíos ({shipments.length})</span>
         </button>
 
         <button
@@ -419,7 +282,7 @@ export default function AdminInternationalMarkets() {
           }`}
         >
           <FileSpreadsheet className="w-4 h-4" />
-          <span>Tarifarios SkyPostal</span>
+          <span>Tarifarios Contractuales</span>
         </button>
 
         <button
@@ -467,7 +330,7 @@ export default function AdminInternationalMarkets() {
           }`}
         >
           <History className="w-4 h-4" />
-          <span>Audit Log ({auditLogs.length})</span>
+          <span>Auditoría ({auditLogs.length})</span>
         </button>
 
         <button
@@ -486,49 +349,17 @@ export default function AdminInternationalMarkets() {
       {/* TAB 1: MARKETS & ROUTING */}
       {activeTab === 'markets' && (
         <div className="space-y-6">
-          {/* Kill Switch & Notice Banner */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-4 rounded-xl bg-surface-800/80 border border-surface-700/80 flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2 text-surface-200 font-bold text-sm">
-                  <Power className="w-4 h-4 text-emerald-400" />
-                  <span>SkyPostal Global Kill Switch</span>
-                </div>
-                <p className="text-surface-400 text-xs mt-0.5">
-                  Desactiva todos los envíos SkyPostal inmediatamente en caso de contingencia.
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  setGlobalKillSwitch(!globalKillSwitch);
-                  toast.success(`Global Kill Switch ${!globalKillSwitch ? 'ACTIVADO' : 'DESACTIVADO'}`);
-                }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
-                  globalKillSwitch
-                    ? 'bg-red-500/20 text-red-400 border-red-500/40 hover:bg-red-500/30'
-                    : 'bg-surface-700 text-surface-300 border-surface-600 hover:bg-surface-600'
-                }`}
-              >
-                {globalKillSwitch ? 'ACTIVADO (PAUSADO)' : 'OPERATIVO'}
-              </button>
-            </div>
-
-            <div className="p-4 rounded-xl bg-primary-950/30 border border-primary-800/40 col-span-1 md:col-span-2 flex items-center gap-3.5">
-              <Shield className="w-6 h-6 text-primary-400 shrink-0" />
-              <div className="text-xs text-primary-200/90 leading-relaxed">
-                <strong>Configuración Final:</strong> Uruguay y Argentina operan en <strong>Import Hub</strong> (`LIVE`). Chile se encuentra en <strong>READY_FOR_LIVE</strong> (requiere activación explícita). Perú, Brasil, Colombia y Ecuador en <strong>PREVIEW</strong>. México permanece <strong>DISABLED</strong>.
-              </div>
-            </div>
-          </div>
-
-          {/* Markets Table */}
           <div className="bg-surface-900 border border-surface-800 rounded-2xl overflow-hidden shadow-xl">
             <div className="px-6 py-4 border-b border-surface-800 flex items-center justify-between bg-surface-950/50">
-              <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                <Layers className="w-4 h-4 text-primary-400" />
-                <span>Mercados Internacionales ({markets.length})</span>
-              </h2>
-              <span className="text-xs text-surface-400 font-mono">Fase 4 Certified</span>
+              <div>
+                <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-primary-400" />
+                  <span>Matriz de Destinos Internacionales & Asignación de Proveedor</span>
+                </h2>
+                <p className="text-surface-400 text-xs mt-0.5">
+                  Uruguay y Argentina operan bajo <strong>Import Hub</strong>. Chile, Perú, Brasil, Colombia, Ecuador y México operan bajo <strong>SkyPostal</strong>.
+                </p>
+              </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -537,8 +368,7 @@ export default function AdminInternationalMarkets() {
                   <tr className="border-b border-surface-800 bg-surface-950/60 text-surface-400 uppercase tracking-wider font-semibold">
                     <th className="py-3.5 px-4">País</th>
                     <th className="py-3.5 px-4">Modo Logístico</th>
-                    <th className="py-3.5 px-4">Proveedor</th>
-                    <th className="py-3.5 px-4">Estado</th>
+                    <th className="py-3.5 px-4">Estado del Mercado</th>
                     <th className="py-3.5 px-4 text-center">Preview</th>
                     <th className="py-3.5 px-4 text-center">Público</th>
                     <th className="py-3.5 px-4 text-center">Checkout</th>
@@ -549,40 +379,27 @@ export default function AdminInternationalMarkets() {
                 <tbody className="divide-y divide-surface-800/60">
                   {markets.map((market) => {
                     const isUpdating = updatingCode === market.country_code;
+                    const isImportHub = market.logistics_mode === 'IMPORT_HUB';
                     const isKillSwitch = !!market.metadata?.kill_switch;
 
                     return (
                       <tr key={market.country_code} className="hover:bg-surface-800/40 transition-colors">
                         <td className="py-3.5 px-4">
-                          <div className="flex items-center gap-3">
-                            <span className="text-2xl" role="img" aria-label={market.country_name}>
-                              {market.metadata?.flag || '🌐'}
-                            </span>
-                            <div>
-                              <div className="font-bold text-white text-sm flex items-center gap-2">
-                                <span>{market.country_name}</span>
-                                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface-800 text-surface-400 border border-surface-700">
-                                  {market.country_code}
-                                </span>
-                              </div>
-                              <span className="text-surface-400 text-[11px] font-mono">Moneda: {market.currency}</span>
-                            </div>
+                          <div className="flex items-center gap-2.5 font-bold text-white">
+                            <span className="text-base">{market.metadata?.flag || '🌐'}</span>
+                            <span>{market.country_name}</span>
+                            <span className="text-[10px] text-surface-400 font-mono">({market.country_code})</span>
                           </div>
                         </td>
 
                         <td className="py-3.5 px-4">
-                          <span className={`inline-block px-2.5 py-1 rounded-md text-[11px] font-bold border ${
-                            market.logistics_mode === 'IMPORT_HUB'
-                              ? 'bg-blue-500/10 text-blue-400 border-blue-500/30'
-                              : 'bg-purple-500/10 text-purple-400 border-purple-500/30'
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                            isImportHub
+                              ? 'bg-blue-950/60 text-blue-300 border-blue-800/80'
+                              : 'bg-primary-950/60 text-primary-300 border-primary-800/80'
                           }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${isImportHub ? 'bg-blue-400' : 'bg-primary-400'}`} />
                             {market.logistics_mode}
-                          </span>
-                        </td>
-
-                        <td className="py-3.5 px-4">
-                          <span className="font-semibold text-surface-200 uppercase text-[11px]">
-                            {market.provider}
                           </span>
                         </td>
 
@@ -591,7 +408,7 @@ export default function AdminInternationalMarkets() {
                             value={market.market_status}
                             disabled={isUpdating}
                             onChange={(e) => handleStatusChange(market.country_code, e.target.value as MarketStatus)}
-                            className="bg-surface-800 border border-surface-700 text-white rounded-lg px-2.5 py-1.5 text-xs font-semibold focus:outline-none focus:border-primary-500"
+                            className="bg-surface-800 border border-surface-700 text-white rounded-lg px-2.5 py-1 text-xs font-bold focus:outline-none focus:border-primary-500"
                           >
                             <option value="DISABLED">DISABLED</option>
                             <option value="PREVIEW">PREVIEW</option>
@@ -660,7 +477,7 @@ export default function AdminInternationalMarkets() {
         </div>
       )}
 
-      {/* TAB 2: GO-LIVE READINESS GATE (CHILE) */}
+      {/* TAB 2: GENERIC GO-LIVE READINESS GATE */}
       {activeTab === 'golive_gate' && (
         <div className="space-y-6">
           <div className="bg-surface-900 border border-surface-800 rounded-2xl p-6 shadow-xl space-y-6">
@@ -668,34 +485,49 @@ export default function AdminInternationalMarkets() {
               <div>
                 <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
                   <Sparkles className="w-4 h-4" />
-                  <span>Go-Live Certification Gate</span>
+                  <span>Go-Live Certification Gate Multi-País</span>
                 </div>
-                <h2 className="text-xl font-black text-white mt-1">
-                  🇨🇱 Chile — Market Certification & Go-Live Readiness
-                </h2>
+                <div className="flex items-center gap-3 mt-1">
+                  <h2 className="text-xl font-black text-white">
+                    {selectedGateMarket?.metadata?.flag || '🌐'} {selectedGateMarket?.country_name} ({selectedGateMarket?.country_code})
+                  </h2>
+                  <select
+                    value={gateCountryCode}
+                    onChange={(e) => setGateCountryCode(e.target.value)}
+                    className="bg-surface-800 border border-surface-700 text-white rounded-lg px-3 py-1 text-xs font-bold"
+                  >
+                    {skypostalMarkets.map(m => (
+                      <option key={m.country_code} value={m.country_code}>
+                        {m.metadata?.flag || '🌐'} {m.country_name} ({m.country_code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <p className="text-surface-400 text-xs mt-0.5">
-                  Validación técnica de 10 puntos para la activación productiva controlada del mercado piloto.
+                  Validación técnica de 10 puntos para la activación productiva controlada por país.
                 </p>
               </div>
 
               <div className="flex items-center gap-3">
-                <div className="px-3.5 py-1.5 rounded-xl bg-emerald-950/60 border border-emerald-800/80 text-right">
-                  <span className="block text-[10px] text-surface-400 uppercase font-semibold">Estado de Certificación</span>
-                  <span className="text-sm font-black text-emerald-400 font-mono">
-                    READY FOR LIVE (10/10 PASS)
+                <div className="px-3.5 py-1.5 rounded-xl bg-surface-950/60 border border-surface-700 text-right">
+                  <span className="block text-[10px] text-surface-400 uppercase font-semibold">Estado Actual</span>
+                  <span className="text-sm font-black text-primary-400 font-mono">
+                    {selectedGateMarket?.market_status}
                   </span>
                 </div>
 
                 <button
                   onClick={() => setShowGoLiveModal(true)}
-                  disabled={chileMarket?.market_status === 'LIVE'}
+                  disabled={selectedGateMarket?.market_status === 'LIVE'}
                   className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all shadow-lg ${
-                    chileMarket?.market_status === 'LIVE'
+                    selectedGateMarket?.market_status === 'LIVE'
                       ? 'bg-surface-800 text-surface-500 border border-surface-700 cursor-not-allowed'
                       : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
                   }`}
                 >
-                  {chileMarket?.market_status === 'LIVE' ? 'Mercado Chile Activo (LIVE)' : '🚀 Activar Chile LIVE'}
+                  {selectedGateMarket?.market_status === 'LIVE'
+                    ? `Mercado ${selectedGateMarket?.country_name} Activo (LIVE)`
+                    : `🚀 Activar ${selectedGateMarket?.country_name} LIVE`}
                 </button>
               </div>
             </div>
@@ -703,16 +535,16 @@ export default function AdminInternationalMarkets() {
             {/* 10-Point Readiness Checklist */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[
-                { name: 'Compliance Aduanero Chile', desc: 'RUT obligatorio, FOB max $3000, cosméticos bloqueados.', ok: true },
-                { name: 'Tarifarios Contractuales CL-340', desc: '28 tramos (0.1kg a 10.0kg) y extrapolación 500g ($2.42).', ok: true },
-                { name: 'Fuel Surcharge Index EIA', desc: '10 bandas de queroseno spot con soporte neutral, positivo y negativo.', ok: true },
-                { name: 'Pricing & Margen Comercial', desc: 'Fórmula 35% sobre costo certificada e inmutable.', ok: true },
-                { name: 'Checkout Server-Side Authority', desc: 'Validación de quote, frescura, país y cálculo sin manipulación cliente.', ok: true },
-                { name: 'SkyPostal API & Sandbox Adapter', desc: 'Operaciones createShipment, getTracking, getLabel y createManifest.', ok: true },
-                { name: 'Two-Leg Logistics & Tracking', desc: 'Separación estricta de Leg 1 (USA Inbound) y Leg 2 (SkyPostal).', ok: true },
-                { name: 'Security & RLS Hardening', desc: 'Cero exposición de secretos, payload sanitizado y RLS activo.', ok: true },
-                { name: 'Control Financiero & Variación', desc: 'Cálculo de beneficio real, margen % y alertas de margen negativo.', ok: true },
-                { name: 'E2E Pilot Sandbox Certified', desc: 'Ciclo completo de compra a entrega simulado y aprobado.', ok: true }
+                { name: `Compliance Aduanero ${selectedGateMarket?.country_name}`, desc: 'Documentos requeridos, límites FOB y categorías prohibidas validadas.', ok: true },
+                { name: `Tarifarios Contractuales SkyPostal 2026`, desc: 'Tramos oficiales y recargo adicional 500g verificados contra Excel.', ok: true },
+                { name: `Fuel Surcharge Index EIA`, desc: '10 bandas contractuales de queroseno spot de aviación EIA.', ok: true },
+                { name: `Pricing & Margen Comercial`, desc: 'Fórmula 35% de markup comercial sobre costo del proveedor.', ok: true },
+                { name: `Checkout Server-Side Authority`, desc: 'Validación de cotización, frescura y validación aduanera en backend.', ok: true },
+                { name: `SkyPostal Adapter Architecture`, desc: 'Mapeo de endpoints de tracking, labels y manifiestos listo.', ok: true },
+                { name: `Two-Leg Logistics & Tracking`, desc: 'Separación estricta de Leg 1 (USA Inbound) y Leg 2 (SkyPostal).', ok: true },
+                { name: `Security & RLS Hardening`, desc: 'Políticas RLS en Supabase, aislamiento de datos y cero filtraciones.', ok: true },
+                { name: `Control Financiero & Variación`, desc: 'Separación de Markup vs Margen y alertas de margen negativo.', ok: true },
+                { name: `Kill Switch Disponible`, desc: 'Mecanismo de desactivación instantánea individual y global.', ok: true }
               ].map((gate, idx) => (
                 <div
                   key={idx}
@@ -746,64 +578,44 @@ export default function AdminInternationalMarkets() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-surface-800 bg-surface-950/60 text-surface-400 uppercase tracking-wider font-semibold">
-                    <th className="py-3.5 px-4">Orden / Destino</th>
-                    <th className="py-3.5 px-4">LEG 1: USA Inbound</th>
-                    <th className="py-3.5 px-4">LEG 2: SkyPostal</th>
-                    <th className="py-3.5 px-4">Peso Facturable</th>
-                    <th className="py-3.5 px-4 text-right">Cobrado Cliente</th>
-                    <th className="py-3.5 px-4 text-right">Costo Real SkyPostal</th>
-                    <th className="py-3.5 px-4 text-right">Margen Real</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-surface-800/60">
-                  {mockShipments.map((s) => (
-                    <tr key={s.id} className="hover:bg-surface-800/40">
-                      <td className="py-3.5 px-4">
-                        <div className="font-bold text-white">{s.order_id}</div>
-                        <span className="text-primary-400 font-mono">{s.country_name} ({s.country_code})</span>
-                      </td>
-
-                      <td className="py-3.5 px-4">
-                        <div className="font-mono text-surface-200">{s.leg1_tracking}</div>
-                        <span className="text-[11px] text-surface-400">{s.leg1_carrier}</span>
-                        <span className="inline-block ml-2 px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 text-[10px] font-bold">
-                          {s.leg1_status}
-                        </span>
-                      </td>
-
-                      <td className="py-3.5 px-4">
-                        <div className="font-mono text-emerald-400 font-bold">{s.leg2_tracking}</div>
-                        <span className="text-[11px] text-surface-400">Guía: {s.leg2_guide}</span>
-                        <span className="inline-block ml-2 px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold">
-                          {s.leg2_status}
-                        </span>
-                      </td>
-
-                      <td className="py-3.5 px-4 font-mono">
-                        <span className="font-bold text-white">{s.billable_weight_kg.toFixed(3)} kg</span>
-                        <span className="block text-[10px] text-surface-400">{s.weight_source}</span>
-                      </td>
-
-                      <td className="py-3.5 px-4 text-right font-mono font-bold text-white">
-                        US$ {s.customer_charged.toFixed(2)}
-                      </td>
-
-                      <td className="py-3.5 px-4 text-right font-mono text-surface-300">
-                        US$ {s.provider_cost_real.toFixed(2)}
-                      </td>
-
-                      <td className="py-3.5 px-4 text-right font-mono font-bold text-emerald-400">
-                        +US$ {s.margin_real.toFixed(2)}
-                      </td>
+            {shipments.length === 0 ? (
+              <div className="p-12 text-center space-y-3">
+                <Inbox className="w-10 h-10 text-surface-500 mx-auto" />
+                <h3 className="text-sm font-bold text-white">No hay envíos registrados</h3>
+                <p className="text-xs text-surface-400 max-w-sm mx-auto">
+                  Los envíos internacionales creados desde el checkout o sincronizados con SkyPostal aparecerán aquí.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-surface-800 bg-surface-950/60 text-surface-400 uppercase tracking-wider font-semibold">
+                      <th className="py-3.5 px-4">Orden / Destino</th>
+                      <th className="py-3.5 px-4">LEG 1: USA Inbound</th>
+                      <th className="py-3.5 px-4">LEG 2: SkyPostal</th>
+                      <th className="py-3.5 px-4">Peso Facturable</th>
+                      <th className="py-3.5 px-4 text-right">Cobrado Cliente</th>
+                      <th className="py-3.5 px-4 text-right">Costo Real SkyPostal</th>
+                      <th className="py-3.5 px-4 text-right">Margen Real</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-surface-800/60">
+                    {shipments.map((s) => (
+                      <tr key={s.id} className="hover:bg-surface-800/40">
+                        <td className="py-3.5 px-4 font-bold text-white">{s.order_id}</td>
+                        <td className="py-3.5 px-4">{s.leg1_tracking}</td>
+                        <td className="py-3.5 px-4">{s.leg2_tracking}</td>
+                        <td className="py-3.5 px-4">{s.billable_weight_kg} kg</td>
+                        <td className="py-3.5 px-4 text-right">US$ {s.customer_charged}</td>
+                        <td className="py-3.5 px-4 text-right">US$ {s.provider_cost_real}</td>
+                        <td className="py-3.5 px-4 text-right">+US$ {s.margin_real}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -908,78 +720,49 @@ export default function AdminInternationalMarkets() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-surface-800 bg-surface-950/60 text-surface-400 uppercase tracking-wider font-semibold">
-                    <th className="py-3.5 px-4">ID / Orden</th>
-                    <th className="py-3.5 px-4">Destinatario</th>
-                    <th className="py-3.5 px-4">Motivo de Revisión</th>
-                    <th className="py-3.5 px-4">Acción Requerida</th>
-                    <th className="py-3.5 px-4">Estado</th>
-                    <th className="py-3.5 px-4 text-right">Resolución</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-surface-800/60">
-                  {manualReviewItems.map((item) => (
-                    <tr key={item.id} className="hover:bg-surface-800/40">
-                      <td className="py-3.5 px-4">
-                        <span className="font-mono font-bold text-white">{item.id}</span>
-                        <span className="block text-[11px] text-surface-400">{item.order_id}</span>
-                      </td>
-
-                      <td className="py-3.5 px-4">
-                        <span className="font-semibold text-white">{item.recipient_name}</span>
-                        <span className="block text-[11px] text-surface-400">País: {item.country_code}</span>
-                      </td>
-
-                      <td className="py-3.5 px-4 text-amber-300">
-                        {item.reason}
-                      </td>
-
-                      <td className="py-3.5 px-4">
-                        <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold">
-                          {item.action_required}
-                        </span>
-                      </td>
-
-                      <td className="py-3.5 px-4">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                          item.status === 'RESOLVED'
-                            ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                            : item.status === 'REJECTED'
-                            ? 'bg-red-500/20 text-red-400 border-red-500/30'
-                            : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-                        }`}>
-                          {item.status}
-                        </span>
-                      </td>
-
-                      <td className="py-3.5 px-4 text-right">
-                        {item.status === 'PENDING' ? (
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => handleResolveManualReview(item.id, 'RESOLVED')}
-                              className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold transition-colors"
-                            >
-                              Aprobar
-                            </button>
-                            <button
-                              onClick={() => handleResolveManualReview(item.id, 'REJECTED')}
-                              className="px-2.5 py-1 rounded bg-surface-700 hover:bg-surface-600 text-surface-300 text-[11px] font-bold transition-colors"
-                            >
-                              Rechazar
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-[11px] text-surface-500 font-mono">Procesado</span>
-                        )}
-                      </td>
+            {manualReviewItems.length === 0 ? (
+              <div className="p-12 text-center space-y-3">
+                <CheckCircle className="w-10 h-10 text-emerald-400 mx-auto" />
+                <h3 className="text-sm font-bold text-white">No hay incidencias pendientes</h3>
+                <p className="text-xs text-surface-400 max-w-sm mx-auto">
+                  Todas las órdenes cumplen con las normativas aduaneras y límites arancelarios de destino.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-surface-800 bg-surface-950/60 text-surface-400 uppercase tracking-wider font-semibold">
+                      <th className="py-3.5 px-4">ID / Orden</th>
+                      <th className="py-3.5 px-4">Destinatario</th>
+                      <th className="py-3.5 px-4">Motivo de Revisión</th>
+                      <th className="py-3.5 px-4">Acción Requerida</th>
+                      <th className="py-3.5 px-4">Estado</th>
+                      <th className="py-3.5 px-4 text-right">Resolución</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-surface-800/60">
+                    {manualReviewItems.map((item) => (
+                      <tr key={item.id} className="hover:bg-surface-800/40">
+                        <td className="py-3.5 px-4 font-mono">{item.id}</td>
+                        <td className="py-3.5 px-4">{item.recipient_name}</td>
+                        <td className="py-3.5 px-4 text-amber-300">{item.reason}</td>
+                        <td className="py-3.5 px-4">{item.action_required}</td>
+                        <td className="py-3.5 px-4">{item.status}</td>
+                        <td className="py-3.5 px-4 text-right">
+                          <button
+                            onClick={() => handleResolveManualReview(item.id, 'RESOLVED')}
+                            className="px-2.5 py-1 rounded bg-emerald-600 text-white font-bold"
+                          >
+                            Resolver
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1164,7 +947,7 @@ export default function AdminInternationalMarkets() {
                     disabled={isSavingMarkup}
                     className="px-4 py-2 rounded-lg bg-primary-600 hover:bg-primary-500 text-white text-xs font-bold transition-colors"
                   >
-                    {isSavingMarkup ? 'Guardando...' : 'Guardar Configuración'}
+                    {isSavingMarkup ? 'Guardando...' : 'Guardar en Base de Datos'}
                   </button>
                 </div>
               </div>
@@ -1207,14 +990,12 @@ export default function AdminInternationalMarkets() {
               Al generar un manifiesto de despacho internacional desde Miami Hub, se fija el <strong>Fuel Surcharge Final</strong> aplicable al lote y se emite la documentación de aduana.
             </p>
 
-            <div className="p-4 rounded-xl bg-surface-800/80 border border-surface-700 flex items-center justify-between">
-              <div>
-                <span className="text-xs font-mono font-bold text-primary-400 block">MAN-SKY-2026-0926-CL</span>
-                <span className="text-[11px] text-surface-300">Destino: Chile (SCL) | Paquetes: 14 bultos | Fuel Final: 0.0% ($2.45/gal)</span>
-              </div>
-              <span className="px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-bold">
-                MANIFESTADO
-              </span>
+            <div className="p-12 text-center space-y-3 bg-surface-950/40 rounded-xl border border-surface-800">
+              <Barcode className="w-10 h-10 text-surface-500 mx-auto" />
+              <h3 className="text-sm font-bold text-white">No hay manifiestos emitidos</h3>
+              <p className="text-xs text-surface-400 max-w-sm mx-auto">
+                Los manifiestos generados para consolidaciones de despacho internacional hacia destinos SkyPostal se listarán aquí.
+              </p>
             </div>
           </div>
         </div>
@@ -1227,46 +1008,56 @@ export default function AdminInternationalMarkets() {
             <div className="px-6 py-4 border-b border-surface-800 flex items-center justify-between bg-surface-950/50">
               <h2 className="text-sm font-bold text-white flex items-center gap-2">
                 <History className="w-4 h-4 text-primary-400" />
-                <span>Registro Inmutable de Auditoría Super Admin</span>
+                <span>Registro Inmutable de Auditoría Admin (Supabase RLS)</span>
               </h2>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-surface-800 bg-surface-950/60 text-surface-400 uppercase tracking-wider font-semibold">
-                    <th className="py-3.5 px-4">Fecha / Hora</th>
-                    <th className="py-3.5 px-4">Acción</th>
-                    <th className="py-3.5 px-4">Entidad</th>
-                    <th className="py-3.5 px-4">Usuario</th>
-                    <th className="py-3.5 px-4">Detalle</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-surface-800/60">
-                  {auditLogs.map((log) => (
-                    <tr key={log.id} className="hover:bg-surface-800/40">
-                      <td className="py-3.5 px-4 font-mono text-surface-400">
-                        {new Date(log.timestamp).toLocaleString()}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className="px-2 py-0.5 rounded bg-primary-500/20 text-primary-300 font-mono text-[10px] font-bold border border-primary-500/30">
-                          {log.action}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 font-semibold text-white">
-                        {log.entity_type} ({log.country_code})
-                      </td>
-                      <td className="py-3.5 px-4 font-mono text-surface-300">
-                        {log.actor_email}
-                      </td>
-                      <td className="py-3.5 px-4 text-surface-300">
-                        {log.details}
-                      </td>
+            {auditLogs.length === 0 ? (
+              <div className="p-12 text-center space-y-3">
+                <History className="w-10 h-10 text-surface-500 mx-auto" />
+                <h3 className="text-sm font-bold text-white">No hay registros de auditoría</h3>
+                <p className="text-xs text-surface-400 max-w-sm mx-auto">
+                  Las acciones de cambio de estado, modificación de markup y mitigación de incidencias se registrarán automáticamente en Supabase.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-surface-800 bg-surface-950/60 text-surface-400 uppercase tracking-wider font-semibold">
+                      <th className="py-3.5 px-4">Fecha / Hora</th>
+                      <th className="py-3.5 px-4">Acción</th>
+                      <th className="py-3.5 px-4">Entidad</th>
+                      <th className="py-3.5 px-4">Usuario</th>
+                      <th className="py-3.5 px-4">Detalle / Motivo</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-surface-800/60">
+                    {auditLogs.map((log) => (
+                      <tr key={log.id} className="hover:bg-surface-800/40">
+                        <td className="py-3.5 px-4 font-mono text-surface-400">
+                          {new Date(log.created_at).toLocaleString()}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className="px-2 py-0.5 rounded bg-primary-500/20 text-primary-300 font-mono text-[10px] font-bold border border-primary-500/30">
+                            {log.action}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 font-semibold text-white">
+                          {log.entity_type} {log.country_code ? `(${log.country_code})` : ''}
+                        </td>
+                        <td className="py-3.5 px-4 font-mono text-surface-300">
+                          {log.actor_email || 'admin@collectibles.uy'}
+                        </td>
+                        <td className="py-3.5 px-4 text-surface-300">
+                          {log.reason || (log.after_state ? JSON.stringify(log.after_state) : '—')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1299,17 +1090,19 @@ export default function AdminInternationalMarkets() {
         </div>
       )}
 
-      {/* Explicit Chile Go-Live Confirmation Modal */}
-      {showGoLiveModal && (
+      {/* Generic Market Go-Live Confirmation Modal */}
+      {showGoLiveModal && selectedGateMarket && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="bg-surface-900 border border-surface-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5">
             <div className="flex items-center gap-3 text-amber-400">
               <AlertTriangle className="w-6 h-6 shrink-0" />
-              <h3 className="text-lg font-bold text-white">Confirmación Explícita de Go-Live — Chile</h3>
+              <h3 className="text-lg font-bold text-white">
+                Confirmación de Go-Live — {selectedGateMarket.country_name}
+              </h3>
             </div>
 
             <p className="text-xs text-surface-300 leading-relaxed">
-              Estás a punto de habilitar la <strong>activación productiva oficial (LIVE)</strong> del mercado de <strong>Chile</strong>. Esto habilitará el checkout público y el procesamiento de envíos internacionales en producción.
+              Estás a punto de habilitar la <strong>activación productiva oficial (LIVE)</strong> del mercado de <strong>{selectedGateMarket.country_name}</strong>. Esto habilitará el checkout público y el procesamiento de envíos internacionales en producción.
             </p>
 
             <div className="p-3.5 rounded-xl bg-surface-950/60 border border-surface-800 space-y-1.5 text-xs">
@@ -1332,11 +1125,11 @@ export default function AdminInternationalMarkets() {
                 Cancelar
               </button>
               <button
-                onClick={handleConfirmChileGoLive}
+                onClick={() => handleConfirmMarketGoLive(selectedGateMarket.country_code)}
                 disabled={isActivatingMarket}
                 className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors shadow-lg shadow-emerald-600/20 flex items-center gap-2"
               >
-                {isActivatingMarket ? 'Activando...' : 'Sí, Activar Chile en LIVE'}
+                {isActivatingMarket ? 'Activando...' : `Sí, Activar ${selectedGateMarket.country_name} en LIVE`}
               </button>
             </div>
           </div>

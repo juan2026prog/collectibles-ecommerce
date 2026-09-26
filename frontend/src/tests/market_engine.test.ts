@@ -29,15 +29,15 @@ describe('Market Engine — Phase 1 Destination Resolution', () => {
     expect(isSkyPostalMarket(market)).toBe(false);
   });
 
-  it('resolves Chile (CL) to SKYPOSTAL in READY_FOR_LIVE state', () => {
+  it('resolves Chile (CL) to SKYPOSTAL in PREVIEW state', () => {
     const market = resolveMarket('CL', INITIAL_DEFAULT_MARKETS);
     expect(market.countryCode).toBe('CL');
     expect(market.countryName).toBe('Chile');
     expect(market.logisticsMode).toBe('SKYPOSTAL');
-    expect(market.marketStatus).toBe('READY_FOR_LIVE');
-    expect(market.canCheckout).toBe(false); // No real purchases allowed in READY_FOR_LIVE without explicit live transition
-    expect(market.canBrowse).toBe(true); // Super Admin and preview navigation allowed
-    expect(market.isReadyForLive).toBe(true);
+    expect(market.marketStatus).toBe('PREVIEW');
+    expect(market.canCheckout).toBe(false); // No real purchases allowed in PREVIEW
+    expect(market.canBrowse).toBe(true); // Admin and preview navigation allowed
+    expect(market.isPreview).toBe(true);
     expect(isMarketInPreview(market)).toBe(true);
     expect(isSkyPostalMarket(market)).toBe(true);
     expect(market.currency).toBe('CLP');

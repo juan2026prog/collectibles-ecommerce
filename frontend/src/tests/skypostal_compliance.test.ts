@@ -44,15 +44,16 @@ describe('SkyPostal Phase 2 — Authoritative Compliance Engine', () => {
       expect(res.requiredDocuments).toContain('RUT_BENEFICIARIO');
     });
 
-    it('should prohibit FOB values over US$ 3000 for simplified courier in Chile', () => {
+    it('should restrict FOB values over US$ 1000 for standard courier in Chile', () => {
       const res = evaluateProductCompliance({
         title: 'Life Size Collectible Statue',
-        fobValueUsd: 3500,
+        fobValueUsd: 1500,
         quantity: 1
       }, 'CL');
 
-      expect(res.status).toBe('PROHIBITED');
+      expect(res.status).toBe('RESTRICTED');
       expect(res.matchedRule).toBe('CL_MAX_VALUE_EXCEEDED');
+      expect(res.warnings[0]).toContain('US$ 1000');
     });
 
     it('should prohibit cosmetics and supplements for courier into Chile', () => {
