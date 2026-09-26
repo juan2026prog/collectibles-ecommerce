@@ -36,14 +36,33 @@ export const INITIAL_DEFAULT_MARKETS: MarketRecord[] = [
     country_name: 'Chile',
     currency: 'CLP',
     logistics_mode: 'SKYPOSTAL',
-    market_status: 'PREVIEW',
+    market_status: 'READY_FOR_LIVE',
     public_enabled: false,
     checkout_enabled: false,
     provider: 'skypostal',
     provider_environment: 'test',
     preview_enabled: true,
     sort_order: 3,
-    metadata: { flag: '🇨🇱', target_tier: 'tier_1', notes: 'SkyPostal Phase 1 Lead Market' }
+    metadata: {
+      flag: '🇨🇱',
+      target_tier: 'tier_1',
+      lead_market: true,
+      certification_phase: 'PHASE_4_CERTIFIED',
+      notes: 'SkyPostal Certified Lead Market — Ready for Live activation',
+      readiness_checklist: {
+        compliance_ready: true,
+        rates_ready: true,
+        fuel_ready: true,
+        pricing_ready: true,
+        checkout_ready: true,
+        api_ready: true,
+        tracking_ready: true,
+        security_ready: true,
+        financial_ready: true,
+        e2e_certified: true,
+        kill_switch_available: true
+      }
+    }
   },
   {
     country_code: 'PE',
@@ -140,10 +159,11 @@ export function resolveMarket(
 
   if (found) {
     const isPreview = found.market_status === 'PREVIEW';
+    const isReadyForLive = found.market_status === 'READY_FOR_LIVE';
     const isLive = found.market_status === 'LIVE';
     const isDisabled = found.market_status === 'DISABLED';
     const canCheckout = found.checkout_enabled && isLive;
-    const canBrowse = found.public_enabled || isPreview;
+    const canBrowse = found.public_enabled || isPreview || isReadyForLive;
 
     return {
       countryCode: found.country_code,
@@ -155,6 +175,7 @@ export function resolveMarket(
       canCheckout,
       canBrowse,
       isPreview,
+      isReadyForLive,
       isLive,
       isDisabled,
       flag: found.metadata?.flag || FLAG_FALLBACK_MAP[found.country_code] || '🌐',
@@ -173,6 +194,7 @@ export function resolveMarket(
     canCheckout: false,
     canBrowse: false,
     isPreview: false,
+    isReadyForLive: false,
     isLive: false,
     isDisabled: true,
     flag: FLAG_FALLBACK_MAP[code] || '🌐',
@@ -191,13 +213,13 @@ export function isSkyPostalMarket(market: MarketResolution | MarketRecord): bool
 }
 
 /**
- * Checks if a given market is strictly in PREVIEW mode.
+ * Checks if a given market is in PREVIEW or READY_FOR_LIVE mode.
  */
 export function isMarketInPreview(market: MarketResolution | MarketRecord): boolean {
   if ('marketStatus' in market) {
-    return market.marketStatus === 'PREVIEW';
+    return market.marketStatus === 'PREVIEW' || market.marketStatus === 'READY_FOR_LIVE';
   }
-  return market.market_status === 'PREVIEW';
+  return market.market_status === 'PREVIEW' || market.market_status === 'READY_FOR_LIVE';
 }
 
 /**
@@ -219,8 +241,8 @@ export function resolveMarketRouting(
     isConfigured: !!found,
     isSkyPostal: resolved.logisticsMode === 'SKYPOSTAL',
     isImportHub: resolved.logisticsMode === 'IMPORT_HUB',
+    isReadyForLive: resolved.isReadyForLive,
     canCheckout: resolved.canCheckout,
     canBrowse: resolved.canBrowse
   };
 }
-

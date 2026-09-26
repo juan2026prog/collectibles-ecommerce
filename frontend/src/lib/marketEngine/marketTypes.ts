@@ -1,6 +1,6 @@
 // frontend/src/lib/marketEngine/marketTypes.ts
 
-export type MarketStatus = 'DISABLED' | 'PREVIEW' | 'SANDBOX' | 'LIVE';
+export type MarketStatus = 'DISABLED' | 'PREVIEW' | 'SANDBOX' | 'READY_FOR_LIVE' | 'LIVE';
 
 export type LogisticsMode = 'IMPORT_HUB' | 'SKYPOSTAL';
 
@@ -25,6 +25,21 @@ export interface MarketRecord {
     tax_regime?: string;
     notes?: string;
     kill_switch?: boolean;
+    lead_market?: boolean;
+    certification_phase?: string;
+    readiness_checklist?: {
+      compliance_ready: boolean;
+      rates_ready: boolean;
+      fuel_ready: boolean;
+      pricing_ready: boolean;
+      checkout_ready: boolean;
+      api_ready: boolean;
+      tracking_ready: boolean;
+      security_ready: boolean;
+      financial_ready: boolean;
+      e2e_certified: boolean;
+      kill_switch_available: boolean;
+    };
     [key: string]: any;
   };
   created_at?: string;
@@ -41,6 +56,7 @@ export interface MarketResolution {
   canCheckout: boolean;
   canBrowse: boolean;
   isPreview: boolean;
+  isReadyForLive: boolean;
   isLive: boolean;
   isDisabled: boolean;
   flag: string;

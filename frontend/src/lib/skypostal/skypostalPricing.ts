@@ -1170,3 +1170,67 @@ export function normalizeSkyPostalTrackingStatus(statusOrCode: string): {
   }
 }
 
+// ------------------------------------------------------------------------------------------------
+// PHASE 4 HELPERS: FINANCIAL CONTROL, MARGIN ANALYTICS & VARIANCE
+// ------------------------------------------------------------------------------------------------
+
+export interface FinancialMetricsInput {
+  customerShippingCharged: number;
+  providerCostReal: number;
+  providerCostEstimated?: number;
+}
+
+export interface FinancialMetricsResult {
+  customerShippingChargedUsd: number;
+  providerCostEstimatedUsd: number;
+  providerCostRealUsd: number;
+  grossProfitEstimatedUsd: number;
+  grossProfitRealUsd: number;
+  effectiveMarkupPercent: number; // (Profit / Cost) * 100
+  effectiveMarginPercent: number; // (Profit / Revenue) * 100
+  costVarianceUsd: number; // Real Cost - Estimated Cost
+  profitVarianceUsd: number; // Real Profit - Estimated Profit
+  isNegativeProfit: boolean;
+  alertReason?: string;
+}
+
+/**
+ * Calculates authoritative financial KPIs distinguishing Markup from Margin.
+ */
+export function calculateFinancialMetrics(input: FinancialMetricsInput): FinancialMetricsResult {
+  const charged = Math.max(0, Number(input.customerShippingCharged) || 0);
+  const costReal = Math.max(0, Number(input.providerCostReal) || 0);
+  const costEst = input.providerCostEstimated !== undefined ? Math.max(0, Number(input.providerCostEstimated) || 0) : costReal;
+
+  const profitReal = Number((charged - costReal).toFixed(2));
+  const profitEst = Number((charged - costEst).toFixed(2));
+  const costVariance = Number((costReal - costEst).toFixed(2));
+  const profitVariance = Number((profitReal - profitEst).toFixed(2));
+
+  // Effective Markup on Cost: (Profit / Cost) * 100
+  const effectiveMarkup = costReal > 0 ? Number(((profitReal / costReal) * 100).toFixed(2)) : 0;
+
+  // Effective Margin on Revenue: (Profit / Revenue) * 100
+  const effectiveMargin = charged > 0 ? Number(((profitReal / charged) * 100).toFixed(2)) : 0;
+
+  const isNegativeProfit = profitReal < 0;
+  const alertReason = isNegativeProfit
+    ? `Alerta Financiera: Margen negativo de US$ ${Math.abs(profitReal).toFixed(2)} (Costo Real US$ ${costReal.toFixed(2)} > Cobrado US$ ${charged.toFixed(2)}).`
+    : undefined;
+
+  return {
+    customerShippingChargedUsd: charged,
+    providerCostEstimatedUsd: costEst,
+    providerCostRealUsd: costReal,
+    grossProfitEstimatedUsd: profitEst,
+    grossProfitRealUsd: profitReal,
+    effectiveMarkupPercent: effectiveMarkup,
+    effectiveMarginPercent: effectiveMargin,
+    costVarianceUsd: costVariance,
+    profitVarianceUsd: profitVariance,
+    isNegativeProfit,
+    alertReason
+  };
+}
+
+
