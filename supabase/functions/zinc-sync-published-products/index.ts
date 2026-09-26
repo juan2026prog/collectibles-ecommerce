@@ -10,10 +10,15 @@ serve(async (req) => {
 
   try {
     const bypassHeader = req.headers.get("x-zinc-sync-bypass");
-    if (bypassHeader !== "collectibles-zinc-sync-secret") {
-      // In case it's called manually by admin
-      const authHeader = req.headers.get('Authorization')!;
-      if (!authHeader) throw new Error('No authorization header');
+    const authHeader = req.headers.get("Authorization") || "";
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    const configuredBypassSecret = Deno.env.get("ZINC_SYNC_BYPASS_SECRET") || "collectibles-zinc-sync-secret";
+
+    const isBypass = !!bypassHeader && (bypassHeader === configuredBypassSecret);
+    const isServiceCall = !!serviceRoleKey && authHeader.includes(serviceRoleKey);
+
+    if (!isBypass && !isServiceCall && !authHeader) {
+      throw new Error('No authorization header');
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";

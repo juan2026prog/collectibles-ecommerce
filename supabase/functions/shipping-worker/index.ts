@@ -5,6 +5,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { DACAdapter, SoyDeliveryAdapter } from "../_shared/adapters/shipping-adapter.ts";
+import { SkyPostalAdapter } from "../_shared/adapters/skypostal-adapter.ts";
+import { sanitizeProviderPayload } from "../_shared/skypostal/skypostal-sanitizer.ts";
 import { validateShipmentBeforeDispatch } from "../_shared/logistics-rules.ts";
 
 serve(async (req) => {
@@ -167,6 +169,21 @@ serve(async (req) => {
             }
           }
         }
+        else if (providerCode === "skypostal") {
+          const { data: globalProv } = await supabase
+            .from("shipping_providers")
+            .select("*")
+            .eq("code", "skypostal")
+            .single();
+
+          creds = {
+            apiKey: Deno.env.get("SKYPOSTAL_API_KEY") || globalProv?.settings?.apiKey || "",
+            username: Deno.env.get("SKYPOSTAL_USERNAME") || globalProv?.username || "",
+            password: Deno.env.get("SKYPOSTAL_PASSWORD") || globalProv?.password_encrypted || "",
+            environment: globalProv?.environment || "test",
+            isSandbox: globalProv?.environment !== "production"
+          };
+        }
 
         // Pre-validation check
         const validation = validateShipmentBeforeDispatch(shipment, creds);
@@ -182,6 +199,12 @@ serve(async (req) => {
           const adapter = new DACAdapter();
           if (adapter.checkExistingShipment) {
             console.log(`[Shipping Worker] Checking if guide already exists for suborder ${suborder.id} on DAC...`);
+            existingResult = await adapter.checkExistingShipment(supabase, suborder.id, creds);
+          }
+        } else if (providerCode === "skypostal") {
+          const adapter = new SkyPostalAdapter();
+          if (adapter.checkExistingShipment) {
+            console.log(`[Shipping Worker] Checking if guide already exists for suborder ${suborder.id} on SkyPostal...`);
             existingResult = await adapter.checkExistingShipment(supabase, suborder.id, creds);
           }
         }
@@ -235,7 +258,21 @@ serve(async (req) => {
               suborder.observations || "",
               { name: shipment.customer_name, phone: shipment.customer_phone }
             );
-          } 
+          }
+          else if (providerCode === "skypostal") {
+            const adapter = new SkyPostalAdapter();
+            if (!adapter.validateConfig(creds)) throw new Error("SkyPostal credentials or configuration is invalid");
+            result = await adapter.createShipment(
+              supabase,
+              suborder.id,
+              creds,
+              resolvedAddress,
+              Number(shipment.package_weight) || 1.0,
+              Number(shipment.package_quantity) || 1,
+              suborder.observations || "",
+              { name: shipment.customer_name, phone: shipment.customer_phone }
+            );
+          }
           else {
             throw new Error(`Unsupported queue provider: ${item.provider_code}`);
           }
@@ -255,6 +292,8 @@ serve(async (req) => {
             trackingUrl = `https://www.dac.com.uy/seguimiento-de-envio?guia=${tracking}`;
           } else if (providerCode === 'soydelivery' && tracking) {
             trackingUrl = `https://soydelivery.com.uy/tracking/${tracking}`;
+          } else if (providerCode === 'skypostal' && tracking) {
+            trackingUrl = `https://www.skypostal.com/tracking?track=${tracking}`;
           }
 
           const isCollectiblesEnvios = providerCode === 'dac' || providerCode === 'soydelivery';
@@ -263,6 +302,8 @@ serve(async (req) => {
           const margin = isCollectiblesEnvios ? Number((chargedToCustomer - providerCost).toFixed(2)) : 0.00;
           const billingMode = isCollectiblesEnvios ? 'collectibles_envios' : 'vendor_own_account';
           const paidBy = isCollectiblesEnvios ? 'collectibles' : 'vendor';
+
+          const sanitizedRawResponse = sanitizeProviderPayload(result.rawResponse || null);
 
           // A. Update shipments table
           await supabase
@@ -275,7 +316,7 @@ serve(async (req) => {
               shipping_status: labelUrl ? "label_generated" : "created",
               guide_created_at: new Date().toISOString(),
               tracking_assigned_at: new Date().toISOString(),
-              provider_response: result.rawResponse || null,
+              provider_response: sanitizedRawResponse,
               shipping_quote_to_customer: chargedToCustomer,
               shipping_charged_to_customer: chargedToCustomer,
               shipping_provider_cost_estimated: providerCost,

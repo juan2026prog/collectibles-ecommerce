@@ -94,6 +94,8 @@ const AdminSourcingImport = lazy(() => import('./pages/admin/AdminSourcingImport
 const AdminInternationalAmazon = lazy(() => import('./pages/admin/AdminInternationalAmazon'));
 const AdminInternationalProducts = lazy(() => import('./pages/admin/AdminInternationalProducts'));
 const AdminInternationalSync = lazy(() => import('./pages/admin/AdminInternationalSync'));
+const AdminInternationalMarkets = lazy(() => import('./pages/admin/AdminInternationalMarkets'));
+const InternationalMarketTemplate = lazy(() => import('./pages/international/InternationalMarketTemplate'));
 const AdminRefunds = lazy(() => import('./pages/admin/AdminRefunds'));
 const AdminZinc = lazy(() => import('./pages/admin/AdminZinc'));
 const AdminQuestions = lazy(() => import('./pages/admin/AdminQuestions'));
@@ -183,6 +185,7 @@ function App() {
                     <Route path="/page/:slug" element={<DynamicPage />} />
                     <Route path="/collection/:slug" element={<Shop />} />
                     <Route path="/intl" element={<InternationalStorefront />} />
+                    <Route path="/intl/:countryCode" element={<InternationalMarketTemplate />} />
                     <Route path="/internacional" element={<ProtectedRoute requireAdmin><InternationalLaboratory /></ProtectedRoute>} />
                     <Route path="/about" element={<Navigate to="/page/nosotros" replace />} />
                     <Route path="/contact" element={<Contact />} />
@@ -379,6 +382,8 @@ function App() {
                   <Route path="internacional/productos" element={<AdminInternationalProducts />} />
                   <Route path="internacional/sync" element={<AdminInternationalSync />} />
                   <Route path="internacional/zinc" element={<AdminZinc />} />
+                  <Route path="markets" element={<AdminInternationalMarkets />} />
+                  <Route path="markets/:countryCode/preview" element={<InternationalMarketTemplate />} />
                 </Route>
                   </Routes>
                 </Suspense>

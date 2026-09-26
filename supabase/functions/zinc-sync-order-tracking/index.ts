@@ -7,13 +7,14 @@ serve(async (req) => {
   if (optionsResponse) return optionsResponse;
 
   try {
-    // Check bypass or authorization
+    // Check bypass or authorization safely via environment or service role
     const bypassHeader = req.headers.get("x-zinc-sync-bypass");
     const authHeader = req.headers.get("Authorization") || "";
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    const configuredBypassSecret = Deno.env.get("ZINC_SYNC_BYPASS_SECRET") || "collectibles-zinc-sync-secret";
     
-    const isBypass = bypassHeader === "collectibles-zinc-sync-secret";
-    const isServiceCall = authHeader.includes(serviceRoleKey);
+    const isBypass = !!bypassHeader && (bypassHeader === configuredBypassSecret);
+    const isServiceCall = !!serviceRoleKey && authHeader.includes(serviceRoleKey);
 
     if (!isBypass && !isServiceCall) {
       // If called manually by an admin, verify they are admin
