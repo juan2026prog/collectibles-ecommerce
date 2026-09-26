@@ -6,6 +6,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { corsHeaders, handleOptions } from "../_shared/cors.ts";
 import { verifyAuth } from "../_shared/auth.ts";
+import { executeSkyPostalPricingPipeline } from "../_shared/skypostal/skypostal-pricing-pipeline.ts";
 
 const checkoutSchema = z.object({
   items: z.array(z.object({
@@ -14,10 +15,12 @@ const checkoutSchema = z.object({
     quantity: z.number().int().min(1),
     price: z.number().min(0), // Client-sent price (will be verified server-side)
     title: z.string().optional(),
+    weight_kg: z.number().optional(),
   })).min(1),
   coupon_code: z.string().optional(),
   affiliate_code: z.string().optional(),
-  payment_method: z.enum(['dlocalgo', 'mercadopago', 'transfer', 'handy']),
+  quote_id: z.string().optional(),
+  payment_method: z.enum(['dlocalgo', 'mercadopago', 'transfer', 'handy', 'paypal']),
   currency: z.string().default('UYU'),
   shipping_address: z.object({
     first_name: z.string().min(1),
@@ -30,13 +33,18 @@ const checkoutSchema = z.object({
     reference: z.string().optional(),
     postal_code: z.string().optional(),
     country: z.string().default('Uruguay'),
+    country_code: z.string().optional(),
     ci: z.string().optional(),
+    rut: z.string().optional(),
+    dni: z.string().optional(),
+    cpf: z.string().optional(),
+    rfc: z.string().optional(),
   }),
   customer_email: z.string().email(),
   customer_phone: z.string().optional(),
 });
 
-// ═══ Shipping zones (mirrors frontend uruguayLocations.ts) ═══
+// ═══ Domestic Shipping zones (mirrors frontend uruguayLocations.ts) ═══
 const FLEX_NEAR = new Set([
   'Buceo','Carrasco','Carrasco Norte','Flor de Maroñas','Las Canteras','Malvín','Malvín Norte','Maroñas','Playa Verde','Pocitos Nuevo','Puerto Buceo','Punta Gorda','Unión',
   'Aguada','Barrio Sur','Centro','Ciudad Vieja','Cordón','Goes','Jacinto Vera','La Blanqueada','La Comercial','La Figurita','Larrañaga','Palermo','Parque Batlle','Parque Rodó','Pocitos','Punta Carretas','Reducto','Tres Cruces','Villa Biarritz','Villa Dolores','Villa Muñoz',
@@ -55,7 +63,7 @@ const FLEX_FAR = new Set([
   'Ciudad de Canelones','Canelones'
 ]);
 
-function calculateShipping(city: string, department: string, subtotal: number, freeShippingThreshold = 4000): number {
+function calculateDomesticShipping(city: string, department: string, subtotal: number, freeShippingThreshold = 4000): number {
   if (subtotal >= freeShippingThreshold) return 0;
   if (!city || !department) return 350;
   const c = city.trim();
@@ -77,7 +85,7 @@ Deno.serve(async (req: any) => {
   if (options) return options;
 
   try {
-    // 1. Verify the user is authenticated
+    // 1. Verify user authentication
     const user = await verifyAuth(req);
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -85,18 +93,43 @@ Deno.serve(async (req: any) => {
     const body = await req.json();
     const payload = checkoutSchema.parse(body);
 
-    // ═══ FUNC-HIGH-03: Server-side price verification ═══
-    // Fetch real prices from database — NEVER trust client-sent prices
+    // 3. Resolve destination country & logistics mode
+    const countryRaw = payload.shipping_address.country_code || payload.shipping_address.country || 'UY';
+    const countryCode = countryRaw.length === 2 ? countryRaw.toUpperCase() : (countryRaw.toLowerCase().includes('chile') ? 'CL' : countryRaw.toLowerCase().includes('per') ? 'PE' : countryRaw.toLowerCase().includes('brasil') || countryRaw.toLowerCase().includes('brazil') ? 'BR' : countryRaw.toLowerCase().includes('colombia') ? 'CO' : countryRaw.toLowerCase().includes('ecuador') ? 'EC' : countryRaw.toLowerCase().includes('m') ? 'MX' : countryRaw.toLowerCase().includes('arg') ? 'AR' : 'UY');
+
+    const isSkyPostal = ['CL', 'PE', 'BR', 'CO', 'EC'].includes(countryCode);
+    const isImportHub = ['UY', 'AR'].includes(countryCode);
+
+    // Check market status if international
+    if (isSkyPostal || countryCode === 'MX') {
+      const { data: market } = await supabase
+        .from('international_markets')
+        .select('*')
+        .eq('country_code', countryCode)
+        .maybeSingle();
+
+      if (!market || market.market_status === 'DISABLED') {
+        return new Response(JSON.stringify({
+          success: false,
+          error: `El mercado de destino (${countryCode}) no está disponible para compras.`
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    // 4. Server-side price verification
     const productIds = payload.items.map((i: any) => i.product_id);
     const variantIds = payload.items.map((i: any) => i.variant_id).filter(Boolean) as string[];
 
     const { data: products, error: prodErr } = await supabase
       .from('products')
-      .select('id, price, product_group_items(group:product_groups(allowed_payment_providers, payment_method_restriction, is_active))')
+      .select('id, price, weight_kg, dimensions, product_group_items(group:product_groups(allowed_payment_providers, payment_method_restriction, is_active))')
       .in('id', productIds);
 
     if (prodErr || !products) {
-      throw new Error('No se pudieron verificar los precios de los productos.');
+      throw new Error('No se pudieron verificar los productos en la base de datos.');
     }
 
     // Server-side payment restrictions verification
@@ -122,7 +155,7 @@ Deno.serve(async (req: any) => {
       });
     }
 
-    // Build price lookup: variant price > product price
+    // Build price lookup
     const productPriceMap = new Map<string, number>();
     for (const p of products) {
       productPriceMap.set(p.id, p.price);
@@ -141,7 +174,6 @@ Deno.serve(async (req: any) => {
       }
     }
 
-    // Verify each item price matches server price
     const verifiedItems = payload.items.map((item: any) => {
       const serverPrice = item.variant_id && variantPriceMap.has(item.variant_id)
         ? variantPriceMap.get(item.variant_id)!
@@ -151,18 +183,16 @@ Deno.serve(async (req: any) => {
         throw new Error(`Producto ${item.product_id} no encontrado.`);
       }
 
-      // Allow 1 UYU tolerance for rounding
       if (Math.abs(item.price - serverPrice) > 1) {
-        throw new Error(
-          `Precio del producto no coincide. Esperado: ${serverPrice}, Recibido: ${item.price}. ` +
-          `Recargá la página e intentá de nuevo.`
-        );
+        throw new Error(`Precio no coincide. Esperado: ${serverPrice}, Recibido: ${item.price}.`);
       }
 
-      return { ...item, price: serverPrice }; // Use server-verified price
+      return { ...item, price: serverPrice };
     });
 
-    // 3. Resolve coupon if provided
+    // 5. Calculate Subtotal & Coupons
+    const subtotal = verifiedItems.reduce((s: number, i: any) => s + i.price * i.quantity, 0);
+
     let discountAmount = 0;
     let couponId: string | null = null;
     if (payload.coupon_code) {
@@ -178,14 +208,12 @@ Deno.serve(async (req: any) => {
           throw new Error('El cupón ha expirado.');
         }
         couponId = coupon.id;
-        const subtotal = verifiedItems.reduce((s: number, i: any) => s + i.price * i.quantity, 0);
         discountAmount = coupon.discount_type === 'percentage'
           ? subtotal * (coupon.discount_value / 100)
           : coupon.discount_value;
       }
     }
 
-    // 4. Resolve affiliate if code provided
     let affiliateId: string | null = null;
     if (payload.affiliate_code) {
       const { data: affiliate } = await supabase
@@ -197,28 +225,84 @@ Deno.serve(async (req: any) => {
       if (affiliate) affiliateId = affiliate.id;
     }
 
-    // 5. Calculate totals with SERVER-VERIFIED prices
-    const subtotal = verifiedItems.reduce((s: number, i: any) => s + i.price * i.quantity, 0);
+    // 6. Calculate Shipping Rate Server-Side
+    let shippingRate = 0;
+    let quoteSnapshot: any = null;
 
-    // Fetch free shipping threshold setting from DB
-    const { data: thresholdSetting } = await supabase
-      .from('site_settings')
-      .select('value')
-      .eq('key', 'free_shipping_threshold')
-      .maybeSingle();
+    if (isSkyPostal) {
+      // Calculate server-side authoritative SkyPostal quote
+      const totalWeight = verifiedItems.reduce((sum: number, it: any) => sum + (Number(it.weight_kg) || 0.5) * it.quantity, 0);
+      const quoteResult = executeSkyPostalPricingPipeline({
+        countryCode,
+        product: {
+          title: verifiedItems[0]?.title || 'Coleccionable Internacional',
+          fobValueUsd: subtotal,
+          quantity: verifiedItems.reduce((sum: number, it: any) => sum + it.quantity, 0),
+          actualWeightKg: totalWeight
+        }
+      });
 
-    const freeShippingThreshold = thresholdSetting?.value ? Number(thresholdSetting.value) : 4000;
+      if (!quoteResult.isEligible) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: `Restricción de envío internacional: ${quoteResult.blockReason || 'Producto no elegible para el destino'}`
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
 
-    // ═══ FUNC-HIGH-04: Use location-based shipping (matches frontend) ═══
-    const shippingCity = payload.shipping_address.department === 'Montevideo'
-      ? (payload.shipping_address.barrio || '')
-      : (payload.shipping_address.city || '');
-    const shippingDept = payload.shipping_address.department || '';
-    const shippingRate = calculateShipping(shippingCity, shippingDept, subtotal, freeShippingThreshold);
+      shippingRate = quoteResult.pricingBreakdown.customerShippingPriceUsd;
+      quoteSnapshot = quoteResult;
+
+      // Persist quote snapshot in database for audit
+      await supabase
+        .from('skypostal_quote_snapshots')
+        .insert({
+          quote_id: quoteResult.quoteId,
+          country_code: countryCode,
+          currency: 'USD',
+          provider: 'skypostal',
+          service_name: quoteResult.serviceName,
+          service_code: quoteResult.serviceCode,
+          rate_card_code: quoteResult.rateCardCode,
+          rate_version: quoteResult.rateVersion,
+          actual_weight_kg: quoteResult.packageDetails.actualWeightKg,
+          dimensional_weight_kg: quoteResult.packageDetails.dimensionalWeightKg,
+          billable_weight_kg: quoteResult.packageDetails.billableWeightKg,
+          transportation_charge: quoteResult.pricingBreakdown.transportationChargeUsd,
+          fuel_index_value: 2.45,
+          fuel_percentage: quoteResult.pricingBreakdown.fuelAdjustmentPercent,
+          fuel_amount: quoteResult.pricingBreakdown.fuelAmountUsd,
+          fuel_status: quoteResult.pricingBreakdown.fuelStatus,
+          provider_estimated_cost: quoteResult.pricingBreakdown.providerCostUsd,
+          markup_percentage: quoteResult.pricingBreakdown.markupPercent,
+          markup_amount: quoteResult.pricingBreakdown.markupAmountUsd,
+          customer_shipping_price: quoteResult.pricingBreakdown.customerShippingPriceUsd,
+          compliance_status: quoteResult.compliance.status,
+          compliance_reason: quoteResult.compliance.reason,
+          expires_at: quoteResult.expiresAt,
+          raw_snapshot: quoteResult
+        });
+    } else {
+      // Domestic Uruguay shipping calculation
+      const { data: thresholdSetting } = await supabase
+        .from('site_settings')
+        .select('value')
+        .eq('key', 'free_shipping_threshold')
+        .maybeSingle();
+
+      const freeShippingThreshold = thresholdSetting?.value ? Number(thresholdSetting.value) : 4000;
+      const shippingCity = payload.shipping_address.department === 'Montevideo'
+        ? (payload.shipping_address.barrio || '')
+        : (payload.shipping_address.city || '');
+      const shippingDept = payload.shipping_address.department || '';
+      shippingRate = calculateDomesticShipping(shippingCity, shippingDept, subtotal, freeShippingThreshold);
+    }
 
     const totalAmount = Math.max(subtotal - discountAmount + shippingRate, 0);
 
-    // 6. Create order ATOMICALLY via RPC (prevents ghost orders)
+    // 7. Create order atomically
     const orderItems = verifiedItems.map((item: any) => ({
       product_id: item.product_id,
       variant_id: item.variant_id || '',
@@ -244,7 +328,19 @@ Deno.serve(async (req: any) => {
       throw new Error(rpcError.message || 'Error creating order');
     }
 
-    // 7. Return the created order for frontend to continue with payment
+    // 8. If international, update order with quote reference and logistics mode
+    if (isSkyPostal && quoteSnapshot) {
+      await supabase
+        .from('orders')
+        .update({
+          international_quote_id: quoteSnapshot.quoteId,
+          logistics_mode: 'SKYPOSTAL',
+          destination_country_code: countryCode,
+          recipient_tax_id: payload.shipping_address.rut || payload.shipping_address.dni || payload.shipping_address.cpf || payload.shipping_address.rfc || payload.shipping_address.ci
+        })
+        .eq('id', orderResult.order_id);
+    }
+
     return new Response(JSON.stringify({
       success: true,
       order: {
@@ -256,6 +352,7 @@ Deno.serve(async (req: any) => {
         status: orderResult.status,
         payment_status: orderResult.payment_status,
         items_count: orderResult.items_count,
+        quote_id: quoteSnapshot?.quoteId
       }
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

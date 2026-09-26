@@ -297,11 +297,23 @@ serve(async (req) => {
           }
 
           const isCollectiblesEnvios = providerCode === 'dac' || providerCode === 'soydelivery';
+          const isSkyPostal = providerCode === 'skypostal';
           const chargedToCustomer = Number(suborder.shipping_cost) || 0.00;
-          const providerCost = isCollectiblesEnvios ? Number((chargedToCustomer * 0.90).toFixed(2)) : chargedToCustomer;
-          const margin = isCollectiblesEnvios ? Number((chargedToCustomer - providerCost).toFixed(2)) : 0.00;
-          const billingMode = isCollectiblesEnvios ? 'collectibles_envios' : 'vendor_own_account';
-          const paidBy = isCollectiblesEnvios ? 'collectibles' : 'vendor';
+          
+          let providerCost = chargedToCustomer;
+          let margin = 0.00;
+
+          if (isCollectiblesEnvios) {
+            providerCost = Number((chargedToCustomer * 0.90).toFixed(2));
+            margin = Number((chargedToCustomer - providerCost).toFixed(2));
+          } else if (isSkyPostal) {
+            // SkyPostal 35% markup on cost formula: providerCost = chargedToCustomer / 1.35
+            providerCost = Number((chargedToCustomer / 1.35).toFixed(2));
+            margin = Number((chargedToCustomer - providerCost).toFixed(2));
+          }
+
+          const billingMode = isCollectiblesEnvios ? 'collectibles_envios' : isSkyPostal ? 'skypostal_direct' : 'vendor_own_account';
+          const paidBy = isCollectiblesEnvios || isSkyPostal ? 'collectibles' : 'vendor';
 
           const sanitizedRawResponse = sanitizeProviderPayload(result.rawResponse || null);
 
@@ -314,6 +326,8 @@ serve(async (req) => {
               shipping_label_url: labelUrl,
               shipping_label_path: labelPath,
               shipping_status: labelUrl ? "label_generated" : "created",
+              leg2_skypostal_tracking: isSkyPostal ? tracking : undefined,
+              leg2_skypostal_guide: isSkyPostal ? extGuide : undefined,
               guide_created_at: new Date().toISOString(),
               tracking_assigned_at: new Date().toISOString(),
               provider_response: sanitizedRawResponse,
@@ -339,6 +353,9 @@ serve(async (req) => {
               tracking_number: tracking,
               tracking_url: trackingUrl,
               shipping_status: "processing",
+              leg2_skypostal_tracking: isSkyPostal ? tracking : undefined,
+              leg2_skypostal_guide: isSkyPostal ? extGuide : undefined,
+              leg2_status: isSkyPostal ? (labelUrl ? 'LABEL_CREATED' : 'SHIPMENT_CREATED') : undefined,
               shipping_quote_to_customer: chargedToCustomer,
               shipping_charged_to_customer: chargedToCustomer,
               shipping_provider_cost_estimated: providerCost,

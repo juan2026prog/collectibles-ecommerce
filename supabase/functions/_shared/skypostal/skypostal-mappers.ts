@@ -1,6 +1,13 @@
 // supabase/functions/_shared/skypostal/skypostal-mappers.ts
 
-import { SkyPostalAddress, SkyPostalCreateShipmentRequest, SkyPostalPackage } from './skypostal-types.ts';
+import {
+  SkyPostalAddress,
+  SkyPostalCreateShipmentRequest,
+  SkyPostalPackage,
+  Leg2SkyPostalStatus,
+  ActionRequiredType,
+  SkyPostalErrorClassification
+} from './skypostal-types.ts';
 
 export function mapCollectiblesAddressToSkyPostal(
   shippingAddress: any,
@@ -81,4 +88,165 @@ export function buildSkyPostalShipmentRequest(
     package: pkg,
     instructions: observations
   };
+}
+
+/**
+ * Normalizes SkyPostal tracking event codes and statuses into standard Collectibles status and action required.
+ */
+export function normalizeSkyPostalTrackingStatus(statusOrCode: string): {
+  normalizedStatus: Leg2SkyPostalStatus;
+  actionRequired: ActionRequiredType;
+  description: string;
+} {
+  const code = (statusOrCode || '').toUpperCase().trim();
+
+  switch (code) {
+    case 'CREATED':
+    case 'LABEL_CREATED':
+    case 'MANIFEST_GENERATED':
+    case 'REGISTERED':
+      return {
+        normalizedStatus: 'SHIPMENT_CREATED',
+        actionRequired: 'NONE',
+        description: 'Envío internacional registrado en SkyPostal.'
+      };
+
+    case 'MANIFESTED':
+    case 'MANIFEST_DISPATCHED':
+      return {
+        normalizedStatus: 'MANIFESTED',
+        actionRequired: 'NONE',
+        description: 'Paquete manifestado y despachado desde Miami Hub.'
+      };
+
+    case 'RECEIVED_MIAMI':
+    case 'DEPARTED_MIAMI':
+    case 'IN_TRANSIT':
+    case 'TRANSIT':
+    case 'FLIGHT_DEPARTED':
+    case 'ARRIVED_DESTINATION_AIRPORT':
+      return {
+        normalizedStatus: 'IN_TRANSIT',
+        actionRequired: 'NONE',
+        description: 'Paquete en tránsito aéreo internacional hacia el país de destino.'
+      };
+
+    case 'CUSTOMS_RECEIVED':
+    case 'CUSTOMS_PROCESSING':
+    case 'IN_CUSTOMS':
+    case 'ADUANA_INGRESO':
+      return {
+        normalizedStatus: 'CUSTOMS',
+        actionRequired: 'NONE',
+        description: 'Envío en proceso de revisión y desaduanamiento.'
+      };
+
+    case 'CUSTOMS_CLEARED':
+    case 'ADUANA_LIBERADO':
+      return {
+        normalizedStatus: 'CUSTOMS',
+        actionRequired: 'NONE',
+        description: 'Despacho aduanero completado con éxito.'
+      };
+
+    case 'OUT_FOR_DELIVERY':
+    case 'ON_ROUTE':
+    case 'EN_REPARTO':
+      return {
+        normalizedStatus: 'OUT_FOR_DELIVERY',
+        actionRequired: 'NONE',
+        description: 'En reparto de última milla hacia el domicilio de entrega.'
+      };
+
+    case 'DELIVERED':
+    case 'ENTREGADO':
+      return {
+        normalizedStatus: 'DELIVERED',
+        actionRequired: 'NONE',
+        description: 'Paquete entregado al destinatario.'
+      };
+
+    case 'MISSING_DOCUMENT':
+    case 'RUT_REQUIRED':
+    case 'DNI_REQUIRED':
+    case 'TAX_ID_REQUIRED':
+      return {
+        normalizedStatus: 'EXCEPTION',
+        actionRequired: 'DOCUMENT_REQUIRED',
+        description: 'Se requiere documento de identidad (RUT/DNI/CPF/Cédula) para liberación aduanera.'
+      };
+
+    case 'CUSTOMS_HOLD':
+    case 'CUSTOMS_INVOICE_REQUIRED':
+    case 'CUSTOMS_INFO_REQUIRED':
+      return {
+        normalizedStatus: 'EXCEPTION',
+        actionRequired: 'CUSTOMS_INFORMATION_REQUIRED',
+        description: 'Aduana solicita información comercial o comprobante de compra adicional.'
+      };
+
+    case 'ADDRESS_NOT_FOUND':
+    case 'INCOMPLETE_ADDRESS':
+    case 'BAD_ADDRESS':
+      return {
+        normalizedStatus: 'EXCEPTION',
+        actionRequired: 'ADDRESS_CORRECTION_REQUIRED',
+        description: 'Dirección incompleta o no localizada. Se requiere corrección de domicilio.'
+      };
+
+    case 'PAYMENT_REQUIRED':
+    case 'DUTIES_PENDING':
+      return {
+        normalizedStatus: 'EXCEPTION',
+        actionRequired: 'PAYMENT_REQUIRED',
+        description: 'Pago de aranceles o tasas aduaneras pendiente.'
+      };
+
+    case 'EXCEPTION':
+    case 'MANUAL_REVIEW':
+    case 'HOLD':
+    default:
+      return {
+        normalizedStatus: 'EXCEPTION',
+        actionRequired: 'MANUAL_REVIEW',
+        description: 'Incidencia operativa o aduanera en revisión.'
+      };
+  }
+}
+
+/**
+ * Authoritative error classification for retry / dead-letter policy
+ */
+export function classifySkyPostalError(error: any): SkyPostalErrorClassification {
+  const msg = (error?.message || String(error)).toLowerCase();
+  const code = Number(error?.statusCode || error?.status || error?.code);
+
+  // Network / timeout / 5xx -> Retryable
+  if (
+    msg.includes('timeout') ||
+    msg.includes('econnaborted') ||
+    msg.includes('econnreset') ||
+    msg.includes('network') ||
+    code === 408 ||
+    code === 429 ||
+    (code >= 500 && code <= 599)
+  ) {
+    return 'RETRYABLE';
+  }
+
+  // Missing documents / address issues -> Manual review
+  if (
+    msg.includes('document') ||
+    msg.includes('rut') ||
+    msg.includes('dni') ||
+    msg.includes('tax id') ||
+    msg.includes('address') ||
+    msg.includes('postal code') ||
+    msg.includes('manual_review')
+  ) {
+    return 'MANUAL_REVIEW';
+  }
+
+  // 4xx validation or prohibited items -> Non-retryable
+  return 'NON_RETRYABLE';
 }

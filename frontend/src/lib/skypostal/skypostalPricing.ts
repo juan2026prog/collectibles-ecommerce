@@ -983,3 +983,190 @@ export function calculateSkyPostalQuote(input: PricingQuoteInput): QuoteSnapshot
     marketEnvironment: input.options?.marketEnvironment || 'test'
   };
 }
+
+// ------------------------------------------------------------------------------------------------
+// PHASE 3 HELPERS: QUOTE VALIDATION, TWO-LEG TRACKING & RECIPIENT DOCUMENTS
+// ------------------------------------------------------------------------------------------------
+
+/**
+ * Validates whether a quote snapshot is valid and unexpired before accepting it in Checkout.
+ */
+export function validateQuoteSnapshot(
+  snapshot: QuoteSnapshotData,
+  options?: {
+    expectedCountryCode?: string;
+    maxAgeSeconds?: number;
+  }
+): { isValid: boolean; reason?: string } {
+  if (!snapshot || !snapshot.quoteId) {
+    return { isValid: false, reason: 'Snapshot de cotización inexistente' };
+  }
+
+  // Expiration check
+  const now = new Date();
+  const expiresAt = new Date(snapshot.expiresAt);
+  if (now > expiresAt) {
+    return { isValid: false, reason: 'La cotización de envío ha expirado. Por favor recotizá el pedido.' };
+  }
+
+  // Country match check
+  if (options?.expectedCountryCode) {
+    const expected = options.expectedCountryCode.toUpperCase().trim();
+    if (snapshot.countryCode.toUpperCase() !== expected) {
+      return { isValid: false, reason: `El país de la cotización (${snapshot.countryCode}) no coincide con el destino (${expected}).` };
+    }
+  }
+
+  // Compliance check
+  if (!snapshot.isEligible || snapshot.compliance.status === 'PROHIBITED') {
+    return { isValid: false, reason: snapshot.blockReason || 'Producto no elegible para importación bajo reglas aduaneras.' };
+  }
+
+  // Positive price check
+  if (snapshot.pricingBreakdown.customerShippingPriceUsd <= 0) {
+    return { isValid: false, reason: 'Importe de envío inválido.' };
+  }
+
+  return { isValid: true };
+}
+
+/**
+ * Returns document requirements and placeholder per destination country.
+ */
+export function getRecipientDocumentPrompt(countryCode: string = 'CL'): {
+  docName: string;
+  fieldKey: 'rut' | 'dni' | 'cpf' | 'rfc' | 'ci';
+  placeholder: string;
+  required: boolean;
+  helperText: string;
+} {
+  const code = countryCode.toUpperCase().trim();
+
+  switch (code) {
+    case 'CL':
+      return {
+        docName: 'RUT',
+        fieldKey: 'rut',
+        placeholder: 'Ej: 12.345.678-9',
+        required: true,
+        helperText: 'Obligatorio por Servicio Nacional de Aduanas de Chile para desaduanamiento courier.'
+      };
+    case 'PE':
+      return {
+        docName: 'DNI / RUC',
+        fieldKey: 'dni',
+        placeholder: 'Ej: 12345678',
+        required: true,
+        helperText: 'Obligatorio por SUNAT Perú para importaciones personales.'
+      };
+    case 'BR':
+      return {
+        docName: 'CPF / CNPJ',
+        fieldKey: 'cpf',
+        placeholder: 'Ej: 123.456.789-00',
+        required: true,
+        helperText: 'Obligatorio por Receita Federal do Brasil.'
+      };
+    case 'MX':
+      return {
+        docName: 'RFC / CURP',
+        fieldKey: 'rfc',
+        placeholder: 'Ej: ABCD123456XYZ',
+        required: true,
+        helperText: 'Obligatorio por SAT México para despacho courier.'
+      };
+    case 'CO':
+    case 'EC':
+    case 'UY':
+    default:
+      return {
+        docName: 'Cédula de Identidad',
+        fieldKey: 'ci',
+        placeholder: 'Ej: 1.234.567-8',
+        required: true,
+        helperText: 'Requerido para el despacho aduanero y entrega de última milla.'
+      };
+  }
+}
+
+/**
+ * Normalizes SkyPostal tracking event code into standardized lifecycle status.
+ */
+export function normalizeSkyPostalTrackingStatus(statusOrCode: string): {
+  normalizedStatus: 'PENDING' | 'READY_FOR_SHIPMENT' | 'SHIPMENT_CREATED' | 'LABEL_CREATED' | 'MANIFESTED' | 'IN_TRANSIT' | 'CUSTOMS' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'EXCEPTION';
+  actionRequired: 'NONE' | 'DOCUMENT_REQUIRED' | 'CUSTOMS_INFORMATION_REQUIRED' | 'PAYMENT_REQUIRED' | 'ADDRESS_CORRECTION_REQUIRED' | 'MANUAL_REVIEW';
+  description: string;
+} {
+  const code = (statusOrCode || '').toUpperCase().trim();
+
+  switch (code) {
+    case 'CREATED':
+    case 'LABEL_CREATED':
+    case 'REGISTERED':
+      return {
+        normalizedStatus: 'SHIPMENT_CREATED',
+        actionRequired: 'NONE',
+        description: 'Envío internacional registrado en SkyPostal.'
+      };
+    case 'MANIFESTED':
+    case 'MANIFEST_DISPATCHED':
+      return {
+        normalizedStatus: 'MANIFESTED',
+        actionRequired: 'NONE',
+        description: 'Paquete manifestado y despachado desde Miami Hub.'
+      };
+    case 'RECEIVED_MIAMI':
+    case 'DEPARTED_MIAMI':
+    case 'IN_TRANSIT':
+    case 'TRANSIT':
+      return {
+        normalizedStatus: 'IN_TRANSIT',
+        actionRequired: 'NONE',
+        description: 'En tránsito aéreo internacional hacia país de destino.'
+      };
+    case 'CUSTOMS_RECEIVED':
+    case 'CUSTOMS_PROCESSING':
+    case 'IN_CUSTOMS':
+      return {
+        normalizedStatus: 'CUSTOMS',
+        actionRequired: 'NONE',
+        description: 'En proceso de desaduanamiento en aduana de destino.'
+      };
+    case 'OUT_FOR_DELIVERY':
+    case 'EN_REPARTO':
+      return {
+        normalizedStatus: 'OUT_FOR_DELIVERY',
+        actionRequired: 'NONE',
+        description: 'En reparto de última milla al domicilio.'
+      };
+    case 'DELIVERED':
+    case 'ENTREGADO':
+      return {
+        normalizedStatus: 'DELIVERED',
+        actionRequired: 'NONE',
+        description: 'Entregado al destinatario.'
+      };
+    case 'MISSING_DOCUMENT':
+    case 'RUT_REQUIRED':
+    case 'DNI_REQUIRED':
+      return {
+        normalizedStatus: 'EXCEPTION',
+        actionRequired: 'DOCUMENT_REQUIRED',
+        description: 'Documento de identidad requerido para liberación aduanera.'
+      };
+    case 'CUSTOMS_HOLD':
+    case 'CUSTOMS_INFO_REQUIRED':
+      return {
+        normalizedStatus: 'EXCEPTION',
+        actionRequired: 'CUSTOMS_INFORMATION_REQUIRED',
+        description: 'Información comercial adicional solicitada por la aduana.'
+      };
+    default:
+      return {
+        normalizedStatus: 'EXCEPTION',
+        actionRequired: 'MANUAL_REVIEW',
+        description: 'En revisión operativa o aduanera.'
+      };
+  }
+}
+

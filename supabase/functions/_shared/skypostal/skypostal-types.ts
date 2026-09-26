@@ -6,6 +6,30 @@ export type SkyPostalMarketStatus = 'DISABLED' | 'PREVIEW' | 'SANDBOX' | 'LIVE';
 
 export type SkyPostalLogisticsMode = 'IMPORT_HUB' | 'SKYPOSTAL';
 
+export type SkyPostalErrorClassification = 'RETRYABLE' | 'NON_RETRYABLE' | 'MANUAL_REVIEW';
+
+export type Leg1InboundStatus = 'AWAITING_RETAILER' | 'INBOUND_TO_US_HUB' | 'RECEIVED_US_HUB';
+
+export type Leg2SkyPostalStatus =
+  | 'PENDING'
+  | 'READY_FOR_SHIPMENT'
+  | 'SHIPMENT_CREATED'
+  | 'LABEL_CREATED'
+  | 'MANIFESTED'
+  | 'IN_TRANSIT'
+  | 'CUSTOMS'
+  | 'OUT_FOR_DELIVERY'
+  | 'DELIVERED'
+  | 'EXCEPTION';
+
+export type ActionRequiredType =
+  | 'NONE'
+  | 'DOCUMENT_REQUIRED'
+  | 'CUSTOMS_INFORMATION_REQUIRED'
+  | 'PAYMENT_REQUIRED'
+  | 'ADDRESS_CORRECTION_REQUIRED'
+  | 'MANUAL_REVIEW';
+
 export interface SkyPostalCredentials {
   apiKey?: string;
   username?: string;
@@ -77,6 +101,7 @@ export interface SkyPostalShipmentResponse {
   carrierServiceName?: string;
   error?: string;
   errorCode?: string;
+  errorClassification?: SkyPostalErrorClassification;
   rawResponse?: any;
 }
 
@@ -86,6 +111,8 @@ export interface SkyPostalTrackingEvent {
   description: string;
   location?: string;
   timestamp: string;
+  normalizedStatus?: Leg2SkyPostalStatus;
+  actionRequired?: ActionRequiredType;
   rawDetails?: any;
 }
 
@@ -93,7 +120,9 @@ export interface SkyPostalTrackingResponse {
   success: boolean;
   trackingNumber: string;
   currentStatus: string;
+  normalizedStatus: Leg2SkyPostalStatus;
   statusDescription?: string;
+  actionRequired?: ActionRequiredType;
   estimatedDelivery?: string;
   deliveredAt?: string;
   events: SkyPostalTrackingEvent[];
@@ -126,6 +155,7 @@ export interface SkyPostalManifestRequest {
   shipmentIds: string[];
   manifestDate?: string;
   dispatchLocation?: string;
+  countryCode?: string;
 }
 
 export interface SkyPostalManifestResponse {
@@ -133,6 +163,9 @@ export interface SkyPostalManifestResponse {
   manifestId?: string;
   manifestUrl?: string;
   totalPackages?: number;
+  manifestDate?: string;
+  fuelIndexValue?: number;
+  fuelAdjustmentPercent?: number;
   rawResponse?: any;
 }
 
@@ -150,4 +183,17 @@ export interface MarketConfiguration {
   previewEnabled: boolean;
   sortOrder: number;
   metadata?: Record<string, any>;
+}
+
+export interface QuoteValidationResult {
+  isValid: boolean;
+  reason?: string;
+  quoteId?: string;
+  customerShippingPriceUsd: number;
+  providerCostUsd: number;
+  markupPercent: number;
+  billableWeightKg: number;
+  complianceStatus: string;
+  serviceCode: number;
+  rateCardCode: string;
 }

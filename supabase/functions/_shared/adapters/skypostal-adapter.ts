@@ -4,8 +4,9 @@ import { ShippingAdapter, ShipmentResult } from './shipping-adapter.ts';
 import {
   SkyPostalClient,
   buildSkyPostalShipmentRequest,
-  resolveSkyPostalConfig,
-  sanitizeProviderPayload
+  sanitizeProviderPayload,
+  normalizeSkyPostalTrackingStatus,
+  classifySkyPostalError
 } from '../skypostal/index.ts';
 
 export class SkyPostalAdapter implements ShippingAdapter {
@@ -14,13 +15,12 @@ export class SkyPostalAdapter implements ShippingAdapter {
    */
   validateConfig(creds: any): boolean {
     if (!creds) return false;
-    // In test/sandbox, minimal config is allowed
     if (creds.isSandbox || creds.environment === 'test') return true;
     return !!(creds.apiKey || (creds.username && creds.password));
   }
 
   /**
-   * Check if a shipment already exists for this order/suborder to enforce idempotency
+   * Check if a shipment already exists for this order/suborder to enforce strict idempotency
    */
   async checkExistingShipment(
     supabaseClient: any,
@@ -38,7 +38,7 @@ export class SkyPostalAdapter implements ShippingAdapter {
         .maybeSingle();
 
       if (existingShipment && existingShipment.tracking_code) {
-        console.log(`[SkyPostal Adapter] Found existing guide for order ${orderId}: ${existingShipment.tracking_code}`);
+        console.log(`[SkyPostal Adapter] Found existing guide for order/suborder ${orderId}: ${existingShipment.tracking_code}`);
         return {
           success: true,
           trackingCode: existingShipment.tracking_code,
@@ -48,7 +48,8 @@ export class SkyPostalAdapter implements ShippingAdapter {
           rawResponse: {
             resolved_existing: true,
             shipment_id: existingShipment.id,
-            tracking_code: existingShipment.tracking_code
+            tracking_code: existingShipment.tracking_code,
+            idempotency_hit: true
           }
         };
       }
@@ -59,7 +60,7 @@ export class SkyPostalAdapter implements ShippingAdapter {
   }
 
   /**
-   * Create shipment using SkyPostalClient
+   * Create shipment using SkyPostalClient (Sandbox & Test E2E certified)
    */
   async createShipment(
     supabaseClient: any,
@@ -72,7 +73,7 @@ export class SkyPostalAdapter implements ShippingAdapter {
     recipientInfo?: { name: string; phone: string }
   ): Promise<ShipmentResult> {
     try {
-      // 1. Resolve country & market status
+      // 1. Resolve country & market status from database
       const countryCode = (shippingAddress?.country_code || shippingAddress?.country || 'CL').toUpperCase();
       const { data: market } = await supabaseClient
         .from('international_markets')
@@ -101,7 +102,7 @@ export class SkyPostalAdapter implements ShippingAdapter {
         recipientInfo
       );
 
-      // 4. Create shipment via Client (dry-run/mock in Phase 1)
+      // 4. Create shipment via Client
       const res = await client.createShipment(shipmentRequest, isPreview);
 
       if (!res.success) {
@@ -127,5 +128,52 @@ export class SkyPostalAdapter implements ShippingAdapter {
         error: err.message || String(err)
       };
     }
+  }
+
+  /**
+   * Retrieve tracking lifecycle events
+   */
+  async getTracking(
+    trackingCode: string,
+    creds?: any
+  ) {
+    const client = new SkyPostalClient({
+      credentials: creds || {},
+      environment: creds?.environment || 'test'
+    });
+    return await client.getTracking(trackingCode);
+  }
+
+  /**
+   * Retrieve shipment label
+   */
+  async getLabel(
+    trackingOrGuide: string,
+    creds?: any
+  ) {
+    const client = new SkyPostalClient({
+      credentials: creds || {},
+      environment: creds?.environment || 'test'
+    });
+    return await client.getLabel(trackingOrGuide);
+  }
+
+  /**
+   * Generate international dispatch manifest
+   */
+  async createManifest(
+    shipmentIds: string[],
+    creds?: any,
+    options?: { countryCode?: string; manifestDate?: string }
+  ) {
+    const client = new SkyPostalClient({
+      credentials: creds || {},
+      environment: creds?.environment || 'test'
+    });
+    return await client.createManifest({
+      shipmentIds,
+      countryCode: options?.countryCode,
+      manifestDate: options?.manifestDate
+    });
   }
 }
