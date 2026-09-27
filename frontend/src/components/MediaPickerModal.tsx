@@ -182,6 +182,53 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
         }
       }
 
+      // Apply the same safe migration to historical banner assets.
+      const { data: bannerRows, error: bannerListError } = await supabase
+        .from('banners')
+        .select('id,image_url,mobile_image_url');
+      if (bannerListError) throw bannerListError;
+
+      const bannerUrls = Array.from(new Set(
+        (bannerRows || []).flatMap((row: any) => [row.image_url, row.mobile_image_url]).filter(Boolean)
+      ));
+      for (const oldUrl of bannerUrls) {
+        try {
+          const publicMarker = '/storage/v1/object/public/public-assets/';
+          const pos = oldUrl.indexOf(publicMarker);
+          if (pos < 0) { skipped++; continue; }
+          const objectPath = decodeURIComponent(oldUrl.slice(pos + publicMarker.length));
+          if (objectPath.startsWith('optimized/')) { skipped++; continue; }
+
+          const { data: blob, error: downloadError } = await supabase.storage.from(BUCKET_NAME).download(objectPath);
+          if (downloadError || !blob || blob.size <= 600 * 1024) { skipped++; continue; }
+
+          const sourceName = objectPath.split('/').pop() || 'banner.jpg';
+          const source = new File([blob], sourceName, { type: blob.type || 'image/jpeg' });
+          const optimizedFile = await optimizeImageForUpload(source);
+          if (optimizedFile.size >= blob.size) { skipped++; continue; }
+
+          const stem = objectPath.replace(/\.[^.]+$/, '');
+          const optimizedPath = `optimized/banners/${stem.replace(/^banners\//, '')}.webp`;
+          const { error: uploadError } = await supabase.storage.from(BUCKET_NAME).upload(optimizedPath, optimizedFile, {
+            cacheControl: '31536000',
+            upsert: true,
+            contentType: 'image/webp'
+          });
+          if (uploadError) throw uploadError;
+
+          const newUrl = supabase.storage.from(BUCKET_NAME).getPublicUrl(optimizedPath).data.publicUrl;
+          const [{ error: desktopError }, { error: mobileError }] = await Promise.all([
+            supabase.from('banners').update({ image_url: newUrl }).eq('image_url', oldUrl),
+            supabase.from('banners').update({ mobile_image_url: newUrl }).eq('mobile_image_url', oldUrl)
+          ]);
+          if (desktopError || mobileError) throw desktopError || mobileError;
+          optimized++;
+        } catch (itemError) {
+          skipped++;
+          console.warn('[MediaPicker] Existing banner optimization skipped:', itemError);
+        }
+      }
+
       toast.success(`Optimización terminada: ${optimized} imágenes migradas; ${skipped} omitidas. Originales conservados.`);
       fetchMedia(currentPath);
     } catch (err: any) {
@@ -520,7 +567,7 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
               <FolderPlus className="w-5 h-5" />
             </button>
             {profile?.is_admin && (
-              <button onClick={optimizeExistingProductImages} disabled={uploading} className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-500/10 transition-colors disabled:opacity-50" title="Optimizar imágenes existentes >1 MB">
+              <button onClick={optimizeExistingProductImages} disabled={uploading} className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-500/10 transition-colors disabled:opacity-50" title="Optimizar imágenes y banners existentes">
                 <RefreshCw className="w-5 h-5" />
               </button>
             )}
