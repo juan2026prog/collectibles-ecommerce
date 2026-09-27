@@ -40,25 +40,16 @@ function resolveImageUrl(url: string | null | undefined, variant: ImageSizeVaria
     rawUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}${cleanPath}`;
   }
 
-  // If raw, or data URI, return full original URL
-  if (variant === 'raw' || rawUrl.startsWith('data:')) {
-    return rawUrl;
-  }
-
-  // Apply Supabase Storage Render transformation if it's a Supabase Storage URL
-  if (rawUrl.includes(`${SUPABASE_URL}/storage/v1/object/public/`)) {
-    const renderUrl = rawUrl.replace(
-      `${SUPABASE_URL}/storage/v1/object/public/`,
-      `${SUPABASE_URL}/storage/v1/render/image/public/`
-    );
-    const params = variant === 'thumbnail'
-      ? '?width=240&height=240&resize=contain&quality=80'
-      : variant === 'card'
-      ? '?width=500&height=500&resize=contain&quality=80'
-      : '?width=1200&height=1200&resize=contain&quality=85';
-    return `${renderUrl}${params}`;
-  }
-
+  // Always serve the original public object URL.
+  //
+  // IMPORTANT: Supabase Image Transformations (/render/image/) are a paid-plan
+  // feature. Collectibles must remain functional on the Free plan, so image
+  // rendering must never depend on that endpoint. The browser can still size
+  // images through the existing UI/CSS without changing the stored asset.
+  //
+  // Keeping the variant parameter in the API preserves compatibility with
+  // callers; variants can be reintroduced later through a plan-independent
+  // image CDN/optimizer with the original URL as a fallback.
   return rawUrl;
 }
 
