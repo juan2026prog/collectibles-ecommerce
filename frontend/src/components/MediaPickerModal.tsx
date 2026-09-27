@@ -4,6 +4,7 @@ import { RefreshCw, ImageIcon, FileIcon, X, Folder, ChevronRight, Upload, Check,
 import { useToast } from './admin/Toast';
 import { useConfirmModal } from './admin/ConfirmModal';
 import { useAuth } from '../contexts/AuthContext';
+import { optimizeImageForUpload } from '../lib/imageUploadOptimizer';
 
 interface MediaPickerModalProps {
   isOpen: boolean;
@@ -107,13 +108,18 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
     const targetPath = destPath !== undefined ? destPath : currentPath;
     try {
       for (const file of filesToUpload) {
-        const fileExt = file.name.split('.').pop();
-        const rawName = file.name.replace(`.${fileExt}`, '');
+        const optimizedFile = await optimizeImageForUpload(file);
+        const fileExt = optimizedFile.name.split('.').pop() || 'webp';
+        const rawName = optimizedFile.name.replace(/\.[^.]+$/, '');
         const sanitizedName = rawName.toLowerCase().replace(/[^a-z0-9]/g, '-');
         const fileName = `${Date.now()}-${sanitizedName}.${fileExt}`;
         const filePath = rootPathPrefix + targetPath + fileName;
         
-        const { error } = await supabase.storage.from(BUCKET_NAME).upload(filePath, file, { cacheControl: '3600', upsert: false });
+        const { error } = await supabase.storage.from(BUCKET_NAME).upload(filePath, optimizedFile, {
+          cacheControl: '31536000',
+          upsert: false,
+          contentType: optimizedFile.type
+        });
         if (error) throw error;
       }
       fetchMedia(currentPath);
