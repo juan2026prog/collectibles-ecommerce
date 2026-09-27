@@ -122,6 +122,7 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
             referrerPolicy="no-referrer"
             loading="lazy"
             decoding="async"
+            fetchPriority="low"
             {...getImageProps('max-w-full max-h-full object-contain transition-transform duration-300 group-hover:scale-105')}
           />
         </Link>
@@ -152,6 +153,9 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
                     src={gb.url}
                     alt={gb.alt}
                     draggable={false}
+                    loading="lazy"
+                    decoding="async"
+                    fetchPriority="low"
                     onDragStart={handleDragStart}
                     className="w-full h-full object-contain img-protected"
                   />
