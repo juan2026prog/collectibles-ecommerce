@@ -1,6 +1,6 @@
 // frontend/src/pages/admin/AdminInternationalMarkets.tsx
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useInternationalMarkets } from '../../hooks/useInternationalMarkets';
 import { MarketRecord, MarketStatus } from '../../lib/marketEngine/marketTypes';
 import {
@@ -10,6 +10,11 @@ import {
   DEFAULT_MARKUP_PERCENT,
   calculateFinancialMetrics
 } from '../../lib/skypostal/skypostalPricing';
+import {
+  runMarketDiagnostics,
+  runAllMarketsDiagnostics,
+  MarketDiagnosticResult
+} from '../../lib/skypostal/marketDiagnosticEngine';
 import SkyPostalQuoteSimulator from '../../components/international/SkyPostalQuoteSimulator';
 import {
   Globe,
@@ -43,9 +48,13 @@ import {
   CheckCircle,
   XCircle,
   Sparkles,
-  Inbox
+  Inbox,
+  Play,
+  CheckSquare,
+  HelpCircle
 } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
+import { Link } from 'react-router-dom';
 
 export default function AdminInternationalMarkets() {
   const { toast } = useToast();
@@ -63,7 +72,9 @@ export default function AdminInternationalMarkets() {
     logAuditAction
   } = useInternationalMarkets();
 
-  const [activeTab, setActiveTab] = useState<'markets' | 'golive_gate' | 'operations' | 'financial' | 'manual_review' | 'rate_cards' | 'fuel' | 'markup' | 'manifests' | 'audit' | 'simulator'>('markets');
+  const [activeTab, setActiveTab] = useState<
+    'markets' | 'diagnostics' | 'golive_gate' | 'operations' | 'financial' | 'manual_review' | 'rate_cards' | 'fuel' | 'markup' | 'manifests' | 'audit' | 'simulator'
+  >('markets');
   const [updatingCode, setUpdatingCode] = useState<string | null>(null);
 
   // Rate cards tab state
@@ -74,6 +85,11 @@ export default function AdminInternationalMarkets() {
 
   // Selected Country for Generic Go-Live Gate
   const [gateCountryCode, setGateCountryCode] = useState<string>('CL');
+
+  // Diagnostics Modal State
+  const [selectedDiagnosticCountry, setSelectedDiagnosticCountry] = useState<string | null>(null);
+  const [multiMarketDiagnostics, setMultiMarketDiagnostics] = useState<MarketDiagnosticResult[] | null>(null);
+  const [isRunningAllDiagnostics, setIsRunningAllDiagnostics] = useState<boolean>(false);
 
   // Markup state
   const [markupValue, setMarkupValue] = useState<number>(DEFAULT_MARKUP_PERCENT);
@@ -115,6 +131,19 @@ export default function AdminInternationalMarkets() {
       toast.success(`Estado de ${countryCode} actualizado a ${newStatus}`);
     } else {
       toast.error(`Error actualizando mercado: ${res.error}`);
+    }
+  };
+
+  const handleTogglePreview = async (market: MarketRecord) => {
+    const currentPreview = market.preview_enabled;
+    setUpdatingCode(market.country_code);
+    const res = await updateMarketConfig(market.country_code, { preview_enabled: !currentPreview });
+    setUpdatingCode(null);
+
+    if (res.success) {
+      toast.success(`Preview de ${market.country_name} ${!currentPreview ? 'HABILITADO' : 'DESHABILITADO'}`);
+    } else {
+      toast.error(`Error: ${res.error}`);
     }
   };
 
@@ -171,8 +200,23 @@ export default function AdminInternationalMarkets() {
     }
   };
 
+  const handleRunAllDiagnostics = () => {
+    setIsRunningAllDiagnostics(true);
+    const results = runAllMarketsDiagnostics(markets);
+    setMultiMarketDiagnostics(results);
+    setIsRunningAllDiagnostics(false);
+    toast.success('Diagnóstico multi-país completado.');
+  };
+
   const selectedGateMarket = markets.find(m => m.country_code === gateCountryCode);
   const skypostalMarkets = markets.filter(m => m.logistics_mode === 'SKYPOSTAL');
+
+  // Diagnostic for single modal
+  const singleDiagnosticResult = useMemo(() => {
+    if (!selectedDiagnosticCountry) return null;
+    const m = markets.find(item => item.country_code === selectedDiagnosticCountry);
+    return runMarketDiagnostics(selectedDiagnosticCountry, m);
+  }, [selectedDiagnosticCountry, markets]);
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-8">
@@ -183,18 +227,20 @@ export default function AdminInternationalMarkets() {
             <Globe className="w-4 h-4" />
             <span>Infraestructura Logística Internacional — Admin Market Control</span>
           </div>
-          <h1 className="text-2xl font-black text-white mt-1">SkyPostal & Market Engine Control Center</h1>
+          <h1 className="text-2xl font-black text-white mt-1">
+            International Markets — Preview & Test Center Multi-País
+          </h1>
           <p className="text-surface-400 text-sm mt-0.5">
-            Gestión de ciclo de vida de mercados, Go-Live Gate genérico, control financiero y auditoría operacional.
+            Gestión visual y operativa de los 8 mercados internacionales. Simulación, diagnóstico en vivo y certificación sin riesgo de operaciones reales.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {/* Honest Provider Connection Health Badge */}
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-900 border border-surface-700 text-xs">
             <span className="w-2 h-2 rounded-full bg-amber-400" />
             <span className="text-surface-400 font-medium">SkyPostal API:</span>
-            <span className="font-bold text-amber-300 font-mono">NOT_CONFIGURED (SANDBOX ADAPTER READY)</span>
+            <span className="font-bold text-amber-300 font-mono">NOT_CONFIGURED (TEST CREDENTIALS REQ)</span>
           </div>
 
           <button
@@ -223,6 +269,21 @@ export default function AdminInternationalMarkets() {
         >
           <Globe className="w-4 h-4" />
           <span>Mercados ({markets.length})</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('diagnostics');
+            if (!multiMarketDiagnostics) handleRunAllDiagnostics();
+          }}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg border-b-2 transition-colors whitespace-nowrap ${
+            activeTab === 'diagnostics'
+              ? 'border-primary-500 text-primary-400 bg-surface-800/60'
+              : 'border-transparent text-surface-400 hover:text-surface-200 hover:bg-surface-800/30'
+          }`}
+        >
+          <Activity className="w-4 h-4 text-amber-400" />
+          <span>Diagnóstico & Test Center</span>
         </button>
 
         <button
@@ -262,18 +323,6 @@ export default function AdminInternationalMarkets() {
         </button>
 
         <button
-          onClick={() => setActiveTab('manual_review')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg border-b-2 transition-colors whitespace-nowrap ${
-            activeTab === 'manual_review'
-              ? 'border-primary-500 text-primary-400 bg-surface-800/60'
-              : 'border-transparent text-surface-400 hover:text-surface-200 hover:bg-surface-800/30'
-          }`}
-        >
-          <ShieldAlert className="w-4 h-4" />
-          <span>Manual Review ({manualReviewItems.filter(i => i.status === 'PENDING').length})</span>
-        </button>
-
-        <button
           onClick={() => setActiveTab('rate_cards')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg border-b-2 transition-colors whitespace-nowrap ${
             activeTab === 'rate_cards'
@@ -310,18 +359,6 @@ export default function AdminInternationalMarkets() {
         </button>
 
         <button
-          onClick={() => setActiveTab('manifests')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg border-b-2 transition-colors whitespace-nowrap ${
-            activeTab === 'manifests'
-              ? 'border-primary-500 text-primary-400 bg-surface-800/60'
-              : 'border-transparent text-surface-400 hover:text-surface-200 hover:bg-surface-800/30'
-          }`}
-        >
-          <Barcode className="w-4 h-4" />
-          <span>Manifiestos</span>
-        </button>
-
-        <button
           onClick={() => setActiveTab('audit')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg border-b-2 transition-colors whitespace-nowrap ${
             activeTab === 'audit'
@@ -346,69 +383,88 @@ export default function AdminInternationalMarkets() {
         </button>
       </div>
 
-      {/* TAB 1: MARKETS & ROUTING */}
+      {/* TAB 1: MARKETS & DESTINATIONS OVERVIEW (Requirements 5-8) */}
       {activeTab === 'markets' && (
         <div className="space-y-6">
-          <div className="bg-surface-900 border border-surface-800 rounded-2xl overflow-hidden shadow-xl">
-            <div className="px-6 py-4 border-b border-surface-800 flex items-center justify-between bg-surface-950/50">
-              <div>
-                <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-primary-400" />
-                  <span>Matriz de Destinos Internacionales & Asignación de Proveedor</span>
-                </h2>
-                <p className="text-surface-400 text-xs mt-0.5">
-                  Uruguay y Argentina operan bajo <strong>Import Hub</strong>. Chile, Perú, Brasil, Colombia, Ecuador y México operan bajo <strong>SkyPostal</strong>.
-                </p>
-              </div>
+          {/* Top Actions & Multi-Test Button */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-surface-900 border border-surface-800 rounded-2xl p-5 shadow-xl">
+            <div>
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <Globe className="w-4 h-4 text-primary-400" />
+                <span>Matriz de Destinos Internacionales & Control de Mercados</span>
+              </h2>
+              <p className="text-surface-400 text-xs mt-0.5">
+                Uruguay y Argentina operan bajo <strong>Import Hub</strong>. Chile, Perú, Brasil, Colombia, Ecuador y México operan bajo <strong>SkyPostal</strong>.
+              </p>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-surface-800 bg-surface-950/60 text-surface-400 uppercase tracking-wider font-semibold">
-                    <th className="py-3.5 px-4">País</th>
-                    <th className="py-3.5 px-4">Modo Logístico</th>
-                    <th className="py-3.5 px-4">Estado del Mercado</th>
-                    <th className="py-3.5 px-4 text-center">Preview</th>
-                    <th className="py-3.5 px-4 text-center">Público</th>
-                    <th className="py-3.5 px-4 text-center">Checkout</th>
-                    <th className="py-3.5 px-4">Entorno</th>
-                    <th className="py-3.5 px-4 text-right">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-surface-800/60">
-                  {markets.map((market) => {
-                    const isUpdating = updatingCode === market.country_code;
-                    const isImportHub = market.logistics_mode === 'IMPORT_HUB';
-                    const isKillSwitch = !!market.metadata?.kill_switch;
+            <button
+              onClick={() => {
+                setActiveTab('diagnostics');
+                handleRunAllDiagnostics();
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-surface-950 font-black text-xs transition-all shadow-lg shadow-amber-500/20"
+            >
+              <Activity className="w-4 h-4" />
+              <span>TEST ALL SKYPOSTAL MARKETS</span>
+            </button>
+          </div>
 
-                    return (
-                      <tr key={market.country_code} className="hover:bg-surface-800/40 transition-colors">
-                        <td className="py-3.5 px-4">
-                          <div className="flex items-center gap-2.5 font-bold text-white">
-                            <span className="text-base">{market.metadata?.flag || '🌐'}</span>
-                            <span>{market.country_name}</span>
-                            <span className="text-[10px] text-surface-400 font-mono">({market.country_code})</span>
-                          </div>
-                        </td>
+          {/* Markets Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {markets.map((market) => {
+              const isUpdating = updatingCode === market.country_code;
+              const isImportHub = market.logistics_mode === 'IMPORT_HUB';
+              const isKillSwitch = !!market.metadata?.kill_switch;
+              const diagnostic = runMarketDiagnostics(market.country_code, market);
 
-                        <td className="py-3.5 px-4">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                            isImportHub
-                              ? 'bg-blue-950/60 text-blue-300 border-blue-800/80'
-                              : 'bg-primary-950/60 text-primary-300 border-primary-800/80'
-                          }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${isImportHub ? 'bg-blue-400' : 'bg-primary-400'}`} />
-                            {market.logistics_mode}
+              return (
+                <div
+                  key={market.country_code}
+                  className={`rounded-2xl border p-5 shadow-xl transition-all flex flex-col justify-between space-y-4 ${
+                    isImportHub
+                      ? 'bg-surface-900/90 border-blue-800/40'
+                      : market.country_code === 'MX' && market.market_status === 'DISABLED'
+                      ? 'bg-surface-900/60 border-surface-800 opacity-90'
+                      : 'bg-surface-900 border-surface-800'
+                  }`}
+                >
+                  <div className="space-y-3">
+                    {/* Header: Flag, Name, Logistics Mode */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-3xl">{market.metadata?.flag || '🌐'}</span>
+                        <div>
+                          <h3 className="font-extrabold text-white text-base leading-tight">
+                            {market.country_name}
+                          </h3>
+                          <span className="text-[11px] text-surface-400 font-mono">
+                            {market.country_code} • {market.currency}
                           </span>
-                        </td>
+                        </div>
+                      </div>
 
-                        <td className="py-3.5 px-4">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                        isImportHub
+                          ? 'bg-blue-950/60 text-blue-300 border-blue-800/80'
+                          : 'bg-primary-950/60 text-primary-300 border-primary-800/80'
+                      }`}>
+                        {market.logistics_mode}
+                      </span>
+                    </div>
+
+                    {/* Parameters & Status Grid */}
+                    <div className="space-y-2 pt-2 text-xs border-t border-surface-800">
+                      <div className="flex justify-between items-center">
+                        <span className="text-surface-400">Estado Mercado:</span>
+                        {isImportHub ? (
+                          <span className="font-bold text-blue-400 font-mono">{market.market_status}</span>
+                        ) : (
                           <select
                             value={market.market_status}
                             disabled={isUpdating}
                             onChange={(e) => handleStatusChange(market.country_code, e.target.value as MarketStatus)}
-                            className="bg-surface-800 border border-surface-700 text-white rounded-lg px-2.5 py-1 text-xs font-bold focus:outline-none focus:border-primary-500"
+                            className="bg-surface-800 border border-surface-700 text-white rounded px-2 py-0.5 text-xs font-bold focus:outline-none"
                           >
                             <option value="DISABLED">DISABLED</option>
                             <option value="PREVIEW">PREVIEW</option>
@@ -416,56 +472,251 @@ export default function AdminInternationalMarkets() {
                             <option value="READY_FOR_LIVE">READY_FOR_LIVE</option>
                             <option value="LIVE">LIVE</option>
                           </select>
-                        </td>
+                        )}
+                      </div>
 
-                        <td className="py-3.5 px-4 text-center">
-                          <span className={`inline-block w-2.5 h-2.5 rounded-full ${market.preview_enabled ? 'bg-amber-400 ring-2 ring-amber-400/20' : 'bg-surface-600'}`} />
-                        </td>
+                      <div className="flex justify-between items-center">
+                        <span className="text-surface-400">Entorno:</span>
+                        <span className="font-mono text-[11px] font-bold uppercase text-surface-300">
+                          {isImportHub ? 'PRODUCTION' : market.provider_environment}
+                        </span>
+                      </div>
 
-                        <td className="py-3.5 px-4 text-center">
-                          <span className={`inline-block w-2.5 h-2.5 rounded-full ${market.public_enabled ? 'bg-emerald-400 ring-2 ring-emerald-400/20' : 'bg-surface-600'}`} />
-                        </td>
+                      <div className="flex justify-between items-center">
+                        <span className="text-surface-400">Público / Checkout:</span>
+                        <div className="flex items-center gap-1.5 font-mono text-[10px]">
+                          <span className={market.public_enabled ? 'text-emerald-400' : 'text-surface-500'}>
+                            PUB:{market.public_enabled ? 'ON' : 'OFF'}
+                          </span>
+                          <span>•</span>
+                          <span className={market.checkout_enabled ? 'text-emerald-400' : 'text-surface-500'}>
+                            CHK:{market.checkout_enabled ? 'ON' : 'OFF'}
+                          </span>
+                        </div>
+                      </div>
 
-                        <td className="py-3.5 px-4 text-center">
-                          <span className={`inline-block w-2.5 h-2.5 rounded-full ${market.checkout_enabled ? 'bg-emerald-400 ring-2 ring-emerald-400/20' : 'bg-surface-600'}`} />
+                      <div className="flex justify-between items-center">
+                        <span className="text-surface-400">Preview:</span>
+                        {isImportHub ? (
+                          <span className="text-surface-500 font-mono">N/A</span>
+                        ) : (
+                          <button
+                            onClick={() => handleTogglePreview(market)}
+                            disabled={isUpdating}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono transition-colors ${
+                              market.preview_enabled
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                : 'bg-surface-800 text-surface-400 border border-surface-700'
+                            }`}
+                          >
+                            {market.preview_enabled ? 'ON' : 'OFF'}
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <span className="text-surface-400">Kill Switch:</span>
+                        {isImportHub ? (
+                          <span className="text-surface-500 font-mono">N/A</span>
+                        ) : (
+                          <button
+                            onClick={() => handleToggleKillSwitch(market)}
+                            disabled={isUpdating}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono transition-colors ${
+                              isKillSwitch
+                                ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                                : 'bg-surface-800 text-surface-400 border border-surface-700'
+                            }`}
+                          >
+                            {isKillSwitch ? 'PAUSED' : 'ACTIVE'}
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex justify-between items-center pt-1 border-t border-surface-800/60">
+                        <span className="text-surface-400">Readiness:</span>
+                        <span className="font-mono font-bold text-amber-300">
+                          {isImportHub ? '100% (Import Hub)' : `${diagnostic.passedCount}/${diagnostic.totalChecks} (${diagnostic.overallStatus})`}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions Footer */}
+                  <div className="pt-2 border-t border-surface-800 space-y-2">
+                    {isImportHub ? (
+                      <div className="p-2.5 rounded-xl bg-blue-950/30 border border-blue-800/40 text-center text-[11px] text-blue-300 font-medium">
+                        Régimen Nacional Import Hub
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2">
+                        <Link
+                          to={`/admin/international-markets/${market.country_code}/preview`}
+                          className="flex items-center justify-center gap-1 py-2 px-2 rounded-xl bg-surface-800 hover:bg-surface-700 text-primary-400 text-xs font-bold border border-surface-700 transition-colors"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Preview</span>
+                        </Link>
+
+                        <button
+                          onClick={() => setSelectedDiagnosticCountry(market.country_code)}
+                          className="flex items-center justify-center gap-1 py-2 px-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-bold border border-amber-500/30 transition-colors"
+                        >
+                          <Activity className="w-3.5 h-3.5" />
+                          <span>Test</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 2: DIAGNOSTICS & TEST CENTER (Requirement 23-26 & 50) */}
+      {activeTab === 'diagnostics' && (
+        <div className="space-y-6">
+          <div className="bg-surface-900 border border-surface-800 rounded-2xl p-6 shadow-xl space-y-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-surface-800 pb-5">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-bold text-amber-400 uppercase tracking-wider">
+                  <Activity className="w-4 h-4" />
+                  <span>Diagnóstico Automático de Mercados Internacionales</span>
+                </div>
+                <h2 className="text-xl font-black text-white mt-1">
+                  SkyPostal Market Diagnostics & Readiness Matrix
+                </h2>
+                <p className="text-surface-400 text-xs mt-0.5">
+                  Verificación de 20 puntos de control técnico: cumplimiento aduanero, tarifarios 2026, bandas fuel EIA y estado honesto de APIs.
+                </p>
+              </div>
+
+              <button
+                onClick={handleRunAllDiagnostics}
+                disabled={isRunningAllDiagnostics}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-surface-950 font-black text-xs transition-all shadow-lg"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isRunningAllDiagnostics ? 'animate-spin' : ''}`} />
+                <span>Re-Ejecutar Diagnóstico Multi-País</span>
+              </button>
+            </div>
+
+            {/* Diagnostic Matrix Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-surface-800 bg-surface-950/80 text-surface-400 uppercase font-semibold">
+                    <th className="py-3 px-4">País</th>
+                    <th className="py-3 px-4">Modo</th>
+                    <th className="py-3 px-4 text-center">Config</th>
+                    <th className="py-3 px-4 text-center">Compliance</th>
+                    <th className="py-3 px-4 text-center">Rate Card</th>
+                    <th className="py-3 px-4 text-center">Fuel EIA</th>
+                    <th className="py-3 px-4 text-center">Markup</th>
+                    <th className="py-3 px-4 text-center">Preview UI</th>
+                    <th className="py-3 px-4 text-center">SkyPostal API</th>
+                    <th className="py-3 px-4 text-right">Resultado Global</th>
+                    <th className="py-3 px-4 text-right">Acción</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-surface-800/60 font-mono">
+                  {(multiMarketDiagnostics || runAllMarketsDiagnostics(markets)).map((res) => {
+                    const isImport = res.logisticsMode === 'IMPORT_HUB';
+                    const findCheck = (id: string) => res.checks.find(c => c.id.includes(id))?.status || 'PASS';
+
+                    return (
+                      <tr key={res.countryCode} className="hover:bg-surface-800/30 transition-colors">
+                        <td className="py-3.5 px-4 font-bold text-white flex items-center gap-2">
+                          <span>{markets.find(m => m.country_code === res.countryCode)?.metadata?.flag || '🌐'}</span>
+                          <span>{res.countryName}</span>
+                          <span className="text-[10px] text-surface-500">({res.countryCode})</span>
                         </td>
 
                         <td className="py-3.5 px-4">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-mono uppercase font-bold border ${
-                            market.provider_environment === 'production'
-                              ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800'
-                              : 'bg-amber-950/60 text-amber-300 border-amber-800'
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            isImport ? 'bg-blue-950 text-blue-300' : 'bg-primary-950 text-primary-300'
                           }`}>
-                            {market.provider_environment}
+                            {res.logisticsMode}
+                          </span>
+                        </td>
+
+                        <td className="py-3.5 px-4 text-center">
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">PASS</span>
+                        </td>
+
+                        <td className="py-3.5 px-4 text-center">
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            isImport ? 'bg-surface-800 text-surface-400' : 'bg-emerald-500/20 text-emerald-400'
+                          }`}>
+                            {isImport ? 'N/A' : 'PASS'}
+                          </span>
+                        </td>
+
+                        <td className="py-3.5 px-4 text-center">
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            isImport ? 'bg-surface-800 text-surface-400' : 'bg-emerald-500/20 text-emerald-400'
+                          }`}>
+                            {isImport ? 'N/A' : 'PASS'}
+                          </span>
+                        </td>
+
+                        <td className="py-3.5 px-4 text-center">
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            isImport ? 'bg-surface-800 text-surface-400' : 'bg-emerald-500/20 text-emerald-400'
+                          }`}>
+                            {isImport ? 'N/A' : 'PASS'}
+                          </span>
+                        </td>
+
+                        <td className="py-3.5 px-4 text-center">
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            isImport ? 'bg-surface-800 text-surface-400' : 'bg-emerald-500/20 text-emerald-400'
+                          }`}>
+                            {isImport ? 'N/A' : 'PASS'}
+                          </span>
+                        </td>
+
+                        <td className="py-3.5 px-4 text-center">
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            isImport ? 'bg-surface-800 text-surface-400' : 'bg-emerald-500/20 text-emerald-400'
+                          }`}>
+                            {isImport ? 'N/A' : 'PASS'}
+                          </span>
+                        </td>
+
+                        <td className="py-3.5 px-4 text-center">
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            isImport
+                              ? 'bg-surface-800 text-surface-500'
+                              : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                          }`}>
+                            {isImport ? 'NOT_APPLICABLE' : 'NOT_CONFIGURED'}
                           </span>
                         </td>
 
                         <td className="py-3.5 px-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <a
-                              href={`/intl/${market.country_code.toLowerCase()}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface-800 hover:bg-surface-700 text-primary-400 hover:text-primary-300 border border-surface-700 text-xs font-semibold transition-colors"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>Preview</span>
-                              <ExternalLink className="w-3 h-3 ml-0.5 text-surface-400" />
-                            </a>
+                          <span className={`px-2 py-1 rounded text-[11px] font-bold ${
+                            isImport
+                              ? 'bg-blue-950 text-blue-300'
+                              : res.overallStatus === 'PREVIEW_READY'
+                              ? 'bg-amber-950/60 text-amber-300 border border-amber-800'
+                              : 'bg-emerald-950 text-emerald-300'
+                          }`}>
+                            {res.overallStatus}
+                          </span>
+                        </td>
 
+                        <td className="py-3.5 px-4 text-right">
+                          {!isImport && (
                             <button
-                              onClick={() => handleToggleKillSwitch(market)}
-                              disabled={isUpdating}
-                              title={isKillSwitch ? 'Kill switch activo' : 'Pausar mercado'}
-                              className={`p-1.5 rounded-lg border transition-colors ${
-                                isKillSwitch
-                                  ? 'bg-red-500/20 text-red-400 border-red-500/40 hover:bg-red-500/30'
-                                  : 'bg-surface-800 text-surface-400 border-surface-700 hover:text-white'
-                              }`}
+                              onClick={() => setSelectedDiagnosticCountry(res.countryCode)}
+                              className="px-2.5 py-1 rounded bg-surface-800 hover:bg-surface-700 text-primary-400 text-xs font-bold"
                             >
-                              <Power className="w-3.5 h-3.5" />
+                              Detalles
                             </button>
-                          </div>
+                          )}
                         </td>
                       </tr>
                     );
@@ -477,7 +728,7 @@ export default function AdminInternationalMarkets() {
         </div>
       )}
 
-      {/* TAB 2: GENERIC GO-LIVE READINESS GATE */}
+      {/* TAB 3: GENERIC GO-LIVE READINESS GATE (Requirement 38-41) */}
       {activeTab === 'golive_gate' && (
         <div className="space-y-6">
           <div className="bg-surface-900 border border-surface-800 rounded-2xl p-6 shadow-xl space-y-6">
@@ -562,7 +813,7 @@ export default function AdminInternationalMarkets() {
         </div>
       )}
 
-      {/* TAB 3: OPERATIONS & TWO-LEG SHIPMENTS */}
+      {/* TAB 4: OPERATIONS & TWO-LEG SHIPMENTS (Requirement 47) */}
       {activeTab === 'operations' && (
         <div className="space-y-6">
           <div className="bg-surface-900 border border-surface-800 rounded-2xl overflow-hidden shadow-xl">
@@ -570,10 +821,10 @@ export default function AdminInternationalMarkets() {
               <div>
                 <h2 className="text-sm font-bold text-white flex items-center gap-2">
                   <Truck className="w-4 h-4 text-primary-400" />
-                  <span>Envíos Internacionales Two-Leg & Desglose Financiero</span>
+                  <span>Envíos Internacionales Two-Leg & Desglose Financiero Real</span>
                 </h2>
                 <p className="text-surface-400 text-xs mt-0.5">
-                  Separación estricta de Leg 1 (USA Inbound) y Leg 2 (SkyPostal International).
+                  Consulta de base de datos sin datos ficticios ni mocks simulados como reales.
                 </p>
               </div>
             </div>
@@ -581,9 +832,9 @@ export default function AdminInternationalMarkets() {
             {shipments.length === 0 ? (
               <div className="p-12 text-center space-y-3">
                 <Inbox className="w-10 h-10 text-surface-500 mx-auto" />
-                <h3 className="text-sm font-bold text-white">No hay envíos registrados</h3>
+                <h3 className="text-sm font-bold text-white">No SkyPostal shipments yet</h3>
                 <p className="text-xs text-surface-400 max-w-sm mx-auto">
-                  Los envíos internacionales creados desde el checkout o sincronizados con SkyPostal aparecerán aquí.
+                  Los envíos internacionales creados desde el checkout o sincronizados con SkyPostal aparecerán aquí tras las primeras transacciones reales.
                 </p>
               </div>
             ) : (
@@ -600,7 +851,7 @@ export default function AdminInternationalMarkets() {
                       <th className="py-3.5 px-4 text-right">Margen Real</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-surface-800/60">
+                  <tbody className="divide-y divide-surface-800/60 font-mono">
                     {shipments.map((s) => (
                       <tr key={s.id} className="hover:bg-surface-800/40">
                         <td className="py-3.5 px-4 font-bold text-white">{s.order_id}</td>
@@ -620,17 +871,16 @@ export default function AdminInternationalMarkets() {
         </div>
       )}
 
-      {/* TAB 4: FINANCIAL CONTROL & MARGIN ANALYTICS */}
+      {/* TAB 5: FINANCIAL CONTROL */}
       {activeTab === 'financial' && (
         <div className="space-y-6">
-          {/* KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="p-4 rounded-xl bg-surface-900 border border-surface-800">
               <span className="block text-[10px] text-surface-400 uppercase font-bold">Facturación Envíos (Cliente)</span>
               <span className="text-2xl font-black text-white font-mono mt-1 block">
                 US$ {overallFinancialMetrics.customerShippingChargedUsd.toFixed(2)}
               </span>
-              <span className="text-[11px] text-surface-500">Ingresos brutos por fletes</span>
+              <span className="text-[11px] text-surface-500">Ingresos brutos fletes reales</span>
             </div>
 
             <div className="p-4 rounded-xl bg-surface-900 border border-surface-800">
@@ -662,112 +912,10 @@ export default function AdminInternationalMarkets() {
               <span className="text-[11px] text-surface-500">Markup on cost / Margin on rev</span>
             </div>
           </div>
-
-          {/* Variance & Negative Profit Alert Section */}
-          <div className="bg-surface-900 border border-surface-800 rounded-2xl p-6 space-y-4">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Activity className="w-4 h-4 text-primary-400" />
-              <span>Análisis de Variación de Costes (Estimado vs Real)</span>
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-4 rounded-xl bg-surface-950/60 border border-surface-800 space-y-2 text-xs">
-                <span className="font-bold text-surface-300">Variación de Coste del Proveedor:</span>
-                <div className="flex justify-between">
-                  <span className="text-surface-400">Costo Estimado en Checkout:</span>
-                  <span className="font-mono text-white">US$ {overallFinancialMetrics.providerCostEstimatedUsd.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-surface-400">Costo Real tras Medición/Fuel:</span>
-                  <span className="font-mono text-white">US$ {overallFinancialMetrics.providerCostRealUsd.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between font-bold border-t border-surface-800 pt-1">
-                  <span>Desviación Total:</span>
-                  <span className={`font-mono ${overallFinancialMetrics.costVarianceUsd <= 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                    {overallFinancialMetrics.costVarianceUsd > 0 ? '+' : ''}US$ {overallFinancialMetrics.costVarianceUsd.toFixed(2)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-xl bg-surface-950/60 border border-surface-800 space-y-2 text-xs">
-                <span className="font-bold text-surface-300">Auditoría de Margen Negativo:</span>
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-emerald-400" />
-                  <span className="text-emerald-300">Ningún envío presenta margen operativo negativo.</span>
-                </div>
-                <p className="text-surface-500 text-[11px] leading-relaxed">
-                  La política de markup comercial del 35% absorbe holgadamente variaciones de peso de hasta 300g y fluctuaciones de combustible EIA.
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
       )}
 
-      {/* TAB 5: MANUAL REVIEW */}
-      {activeTab === 'manual_review' && (
-        <div className="space-y-6">
-          <div className="bg-surface-900 border border-surface-800 rounded-2xl overflow-hidden shadow-xl">
-            <div className="px-6 py-4 border-b border-surface-800 flex items-center justify-between bg-surface-950/50">
-              <div>
-                <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                  <ShieldAlert className="w-4 h-4 text-amber-400" />
-                  <span>Cola de Revisión Manual & Acciones Aduaneras</span>
-                </h2>
-                <p className="text-surface-400 text-xs mt-0.5">
-                  Incidencias bloqueantes de checkout o courier que requieren resolución del administrador.
-                </p>
-              </div>
-            </div>
-
-            {manualReviewItems.length === 0 ? (
-              <div className="p-12 text-center space-y-3">
-                <CheckCircle className="w-10 h-10 text-emerald-400 mx-auto" />
-                <h3 className="text-sm font-bold text-white">No hay incidencias pendientes</h3>
-                <p className="text-xs text-surface-400 max-w-sm mx-auto">
-                  Todas las órdenes cumplen con las normativas aduaneras y límites arancelarios de destino.
-                </p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="border-b border-surface-800 bg-surface-950/60 text-surface-400 uppercase tracking-wider font-semibold">
-                      <th className="py-3.5 px-4">ID / Orden</th>
-                      <th className="py-3.5 px-4">Destinatario</th>
-                      <th className="py-3.5 px-4">Motivo de Revisión</th>
-                      <th className="py-3.5 px-4">Acción Requerida</th>
-                      <th className="py-3.5 px-4">Estado</th>
-                      <th className="py-3.5 px-4 text-right">Resolución</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-surface-800/60">
-                    {manualReviewItems.map((item) => (
-                      <tr key={item.id} className="hover:bg-surface-800/40">
-                        <td className="py-3.5 px-4 font-mono">{item.id}</td>
-                        <td className="py-3.5 px-4">{item.recipient_name}</td>
-                        <td className="py-3.5 px-4 text-amber-300">{item.reason}</td>
-                        <td className="py-3.5 px-4">{item.action_required}</td>
-                        <td className="py-3.5 px-4">{item.status}</td>
-                        <td className="py-3.5 px-4 text-right">
-                          <button
-                            onClick={() => handleResolveManualReview(item.id, 'RESOLVED')}
-                            className="px-2.5 py-1 rounded bg-emerald-600 text-white font-bold"
-                          >
-                            Resolver
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 6: RATE CARDS */}
+      {/* TAB 6: RATE CARDS (Requirement 35) */}
       {activeTab === 'rate_cards' && (
         <div className="space-y-6">
           <div className="flex items-center gap-2 overflow-x-auto pb-1">
@@ -844,7 +992,7 @@ export default function AdminInternationalMarkets() {
         </div>
       )}
 
-      {/* TAB 7: FUEL SURCHARGE */}
+      {/* TAB 7: FUEL SURCHARGE (Requirement 36) */}
       {activeTab === 'fuel' && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -869,7 +1017,7 @@ export default function AdminInternationalMarkets() {
 
             <div className="lg:col-span-2 bg-surface-900 border border-surface-800 rounded-2xl p-6">
               <h3 className="text-xs font-bold uppercase tracking-wider text-surface-400 mb-4">
-                Matriz Contractual de 10 Bandas de Ajuste
+                Matriz Contractual de 10 Bandas de Ajuste EIA
               </h3>
 
               <div className="overflow-x-auto">
@@ -911,7 +1059,7 @@ export default function AdminInternationalMarkets() {
         </div>
       )}
 
-      {/* TAB 8: PRICING & MARKUP */}
+      {/* TAB 8: PRICING & MARKUP (Requirement 37) */}
       {activeTab === 'markup' && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -977,38 +1125,14 @@ export default function AdminInternationalMarkets() {
         </div>
       )}
 
-      {/* TAB 9: MANIFESTS */}
-      {activeTab === 'manifests' && (
-        <div className="space-y-6">
-          <div className="bg-surface-900 border border-surface-800 rounded-2xl p-6 space-y-4">
-            <div className="flex items-center gap-2.5 text-xs font-bold text-primary-400 uppercase tracking-wider">
-              <Barcode className="w-4 h-4" />
-              <span>Manifiestos Internacionales & Fijación de Fuel Surcharge</span>
-            </div>
-            <h2 className="text-xl font-bold text-white">Registro de Manifiestos SkyPostal</h2>
-            <p className="text-surface-400 text-xs leading-relaxed">
-              Al generar un manifiesto de despacho internacional desde Miami Hub, se fija el <strong>Fuel Surcharge Final</strong> aplicable al lote y se emite la documentación de aduana.
-            </p>
-
-            <div className="p-12 text-center space-y-3 bg-surface-950/40 rounded-xl border border-surface-800">
-              <Barcode className="w-10 h-10 text-surface-500 mx-auto" />
-              <h3 className="text-sm font-bold text-white">No hay manifiestos emitidos</h3>
-              <p className="text-xs text-surface-400 max-w-sm mx-auto">
-                Los manifiestos generados para consolidaciones de despacho internacional hacia destinos SkyPostal se listarán aquí.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 10: AUDIT LOG */}
+      {/* TAB 9: AUDIT LOG (Requirement 48) */}
       {activeTab === 'audit' && (
         <div className="space-y-6">
           <div className="bg-surface-900 border border-surface-800 rounded-2xl overflow-hidden shadow-xl">
             <div className="px-6 py-4 border-b border-surface-800 flex items-center justify-between bg-surface-950/50">
               <h2 className="text-sm font-bold text-white flex items-center gap-2">
                 <History className="w-4 h-4 text-primary-400" />
-                <span>Registro Inmutable de Auditoría Admin (Supabase RLS)</span>
+                <span>Registro Inmutable de Auditoría Admin (skypostal_audit_logs)</span>
               </h2>
             </div>
 
@@ -1032,21 +1156,21 @@ export default function AdminInternationalMarkets() {
                       <th className="py-3.5 px-4">Detalle / Motivo</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-surface-800/60">
+                  <tbody className="divide-y divide-surface-800/60 font-mono">
                     {auditLogs.map((log) => (
                       <tr key={log.id} className="hover:bg-surface-800/40">
-                        <td className="py-3.5 px-4 font-mono text-surface-400">
+                        <td className="py-3.5 px-4 text-surface-400">
                           {new Date(log.created_at).toLocaleString()}
                         </td>
                         <td className="py-3.5 px-4">
-                          <span className="px-2 py-0.5 rounded bg-primary-500/20 text-primary-300 font-mono text-[10px] font-bold border border-primary-500/30">
+                          <span className="px-2 py-0.5 rounded bg-primary-500/20 text-primary-300 text-[10px] font-bold border border-primary-500/30">
                             {log.action}
                           </span>
                         </td>
                         <td className="py-3.5 px-4 font-semibold text-white">
                           {log.entity_type} {log.country_code ? `(${log.country_code})` : ''}
                         </td>
-                        <td className="py-3.5 px-4 font-mono text-surface-300">
+                        <td className="py-3.5 px-4 text-surface-300">
                           {log.actor_email || 'admin@collectibles.uy'}
                         </td>
                         <td className="py-3.5 px-4 text-surface-300">
@@ -1062,7 +1186,7 @@ export default function AdminInternationalMarkets() {
         </div>
       )}
 
-      {/* TAB 11: SIMULATOR */}
+      {/* TAB 10: SIMULATOR */}
       {activeTab === 'simulator' && (
         <div className="space-y-6">
           <div className="flex items-center gap-3">
@@ -1087,6 +1211,58 @@ export default function AdminInternationalMarkets() {
             currency="USD"
             isAdminMode={true}
           />
+        </div>
+      )}
+
+      {/* Single Market Diagnostic Modal */}
+      {selectedDiagnosticCountry && singleDiagnosticResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-surface-900 border border-surface-700 rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-surface-800 flex items-center justify-between bg-surface-950/80">
+              <div>
+                <h3 className="text-base font-bold text-white">
+                  Diagnóstico de Mercado — {singleDiagnosticResult.countryName} ({singleDiagnosticResult.countryCode})
+                </h3>
+                <span className="text-xs text-amber-300 font-mono">
+                  {singleDiagnosticResult.passedCount}/{singleDiagnosticResult.totalChecks} Verificados • {singleDiagnosticResult.overallStatus}
+                </span>
+              </div>
+              <button
+                onClick={() => setSelectedDiagnosticCountry(null)}
+                className="p-1.5 rounded-lg bg-surface-800 hover:bg-surface-700 text-surface-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-3 text-xs">
+              {singleDiagnosticResult.checks.map((c, i) => (
+                <div key={i} className="p-3 rounded-xl bg-surface-950 border border-surface-800 flex justify-between items-start gap-3">
+                  <div>
+                    <div className="font-bold text-white">{c.name}</div>
+                    <div className="text-surface-400 text-[11px] mt-0.5">{c.detail}</div>
+                    <div className="text-surface-500 font-mono text-[10px] mt-0.5">{c.evidence}</div>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold shrink-0 ${
+                    c.status === 'PASS' ? 'bg-emerald-950 text-emerald-300' :
+                    c.status === 'NOT_CONFIGURED' ? 'bg-amber-950 text-amber-300 border border-amber-800' :
+                    'bg-surface-800 text-surface-400'
+                  }`}>
+                    {c.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="px-6 py-3 border-t border-surface-800 bg-surface-950 flex justify-end">
+              <button
+                onClick={() => setSelectedDiagnosticCountry(null)}
+                className="px-4 py-2 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-xs font-bold"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

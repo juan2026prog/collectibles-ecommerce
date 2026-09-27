@@ -1572,6 +1572,10 @@ export function calculateSkyPostalQuote(input: PricingQuoteInput): QuoteSnapshot
   };
 }
 
+export const generateQuoteSnapshot = calculateSkyPostalQuote;
+export const calculateCommercialPricing = calculateSkyPostalQuote;
+
+
 // ------------------------------------------------------------------------------------------------
 // PHASE 3 HELPERS: QUOTE VALIDATION, TWO-LEG TRACKING & RECIPIENT DOCUMENTS
 // ------------------------------------------------------------------------------------------------

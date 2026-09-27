@@ -95,6 +95,7 @@ const AdminInternationalAmazon = lazy(() => import('./pages/admin/AdminInternati
 const AdminInternationalProducts = lazy(() => import('./pages/admin/AdminInternationalProducts'));
 const AdminInternationalSync = lazy(() => import('./pages/admin/AdminInternationalSync'));
 const AdminInternationalMarkets = lazy(() => import('./pages/admin/AdminInternationalMarkets'));
+const AdminInternationalMarketPreview = lazy(() => import('./pages/admin/AdminInternationalMarketPreview'));
 const InternationalMarketTemplate = lazy(() => import('./pages/international/InternationalMarketTemplate'));
 const AdminRefunds = lazy(() => import('./pages/admin/AdminRefunds'));
 const AdminZinc = lazy(() => import('./pages/admin/AdminZinc'));
@@ -382,8 +383,10 @@ function App() {
                   <Route path="internacional/productos" element={<AdminInternationalProducts />} />
                   <Route path="internacional/sync" element={<AdminInternationalSync />} />
                   <Route path="internacional/zinc" element={<AdminZinc />} />
-                  <Route path="markets" element={<AdminInternationalMarkets />} />
-                  <Route path="markets/:countryCode/preview" element={<InternationalMarketTemplate />} />
+                  <Route path="international-markets" element={<AdminInternationalMarkets />} />
+                  <Route path="international-markets/:countryCode/preview" element={<AdminInternationalMarketPreview />} />
+                  <Route path="markets" element={<Navigate to="/admin/international-markets" replace />} />
+                  <Route path="markets/:countryCode/preview" element={<AdminInternationalMarketPreview />} />
                 </Route>
                   </Routes>
                 </Suspense>
