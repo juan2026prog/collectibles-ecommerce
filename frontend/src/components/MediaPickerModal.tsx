@@ -132,6 +132,66 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
     }
   }
 
+  async function optimizeExistingProductImages() {
+    if (!profile?.is_admin) return;
+    if (!(await confirm('Optimizar imágenes de producto mayores a 1 MB? Se conservarán los originales para rollback.'))) return;
+
+    setUploading(true);
+    let optimized = 0;
+    let skipped = 0;
+    try {
+      const { data: rows, error: listError } = await supabase
+        .from('product_images')
+        .select('url')
+        .like('url', '%/storage/v1/object/public/public-assets/%');
+      if (listError) throw listError;
+
+      const uniqueUrls = Array.from(new Set((rows || []).map((row: any) => row.url).filter(Boolean)));
+      for (const oldUrl of uniqueUrls) {
+        try {
+          const publicMarker = '/storage/v1/object/public/public-assets/';
+          const pos = oldUrl.indexOf(publicMarker);
+          if (pos < 0) { skipped++; continue; }
+          const objectPath = decodeURIComponent(oldUrl.slice(pos + publicMarker.length));
+          if (objectPath.startsWith('optimized/')) { skipped++; continue; }
+
+          const { data: blob, error: downloadError } = await supabase.storage.from(BUCKET_NAME).download(objectPath);
+          if (downloadError || !blob || blob.size <= 1024 * 1024) { skipped++; continue; }
+
+          const sourceName = objectPath.split('/').pop() || 'image.jpg';
+          const source = new File([blob], sourceName, { type: blob.type || 'image/jpeg' });
+          const optimizedFile = await optimizeImageForUpload(source);
+          if (optimizedFile.size >= blob.size) { skipped++; continue; }
+
+          const stem = objectPath.replace(/\.[^.]+$/, '');
+          const optimizedPath = `optimized/${stem}.webp`;
+          const { error: uploadError } = await supabase.storage.from(BUCKET_NAME).upload(optimizedPath, optimizedFile, {
+            cacheControl: '31536000',
+            upsert: true,
+            contentType: 'image/webp'
+          });
+          if (uploadError) throw uploadError;
+
+          const newUrl = supabase.storage.from(BUCKET_NAME).getPublicUrl(optimizedPath).data.publicUrl;
+          const { error: updateError } = await supabase.from('product_images').update({ url: newUrl }).eq('url', oldUrl);
+          if (updateError) throw updateError;
+          optimized++;
+        } catch (itemError) {
+          skipped++;
+          console.warn('[MediaPicker] Existing image optimization skipped:', itemError);
+        }
+      }
+
+      toast.success(`Optimización terminada: ${optimized} imágenes migradas; ${skipped} omitidas. Originales conservados.`);
+      fetchMedia(currentPath);
+    } catch (err: any) {
+      console.error('[MediaPicker] Existing image optimization error:', err);
+      toast.error('Error al optimizar imágenes existentes: ' + err.message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
   function handleDragStart(e: React.DragEvent, itemName: string, isFolder: boolean) {
     e.dataTransfer.setData('itemName', itemName);
     e.dataTransfer.setData('isFolder', isFolder ? 'true' : 'false');
@@ -459,6 +519,11 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
             <button onClick={handleCreateFolder} className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-500/10  transition-colors" title="Crear carpeta">
               <FolderPlus className="w-5 h-5" />
             </button>
+            {profile?.is_admin && (
+              <button onClick={optimizeExistingProductImages} disabled={uploading} className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-500/10 transition-colors disabled:opacity-50" title="Optimizar imágenes existentes >1 MB">
+                <RefreshCw className="w-5 h-5" />
+              </button>
+            )}
             <button onClick={() => fileInputRef.current?.click()} className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-500/10  transition-colors" title="Subir archivos">
               <Upload className="w-5 h-5" />
             </button>
