@@ -99,10 +99,14 @@ export default async function handler(req, res) {
       const latencyMs = Date.now() - startTime;
       const isExpectedResponse = result.outputText.includes('OPENAI_COLLECTIBLES_OK');
 
-      // Record telemetry in ai_usage_events
-      if (supabase) {
+      // Record telemetry in ai_usage_events using the authenticated context unless a true service role is present.
+      // Supabase insert errors must be inspected explicitly: the client does not throw by default.
+      let telemetryRecorded = false;
+      let telemetryError = null;
+      const telemetryClient = process.env.SUPABASE_SERVICE_ROLE_KEY ? supabase : authClient;
+      if (telemetryClient) {
         try {
-          await supabase.from('ai_usage_events').insert({
+          const { error: usageInsertError } = await telemetryClient.from('ai_usage_events').insert({
             engine: 'AI_SEARCH',
             country_code: 'GLOBAL',
             provider: 'OPENAI',
@@ -124,8 +128,11 @@ export default async function handler(req, res) {
               output_cost_usd: result.pricing.output_cost_usd
             }
           });
+          if (usageInsertError) throw usageInsertError;
+          telemetryRecorded = true;
         } catch (logErr) {
-          console.warn('[OpenAI Test] Telemetry logging failed:', logErr.message);
+          telemetryError = logErr?.message || 'Telemetry insert failed';
+          console.warn('[OpenAI Test] Telemetry logging failed:', telemetryError);
         }
       }
 
@@ -141,6 +148,8 @@ export default async function handler(req, res) {
         latencyMs,
         requestId: result.requestId,
         responseId: result.responseId,
+        telemetryRecorded,
+        telemetryError,
         timestamp: new Date().toISOString()
       });
 
