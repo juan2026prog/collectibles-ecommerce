@@ -446,6 +446,10 @@ export default function AdminSettings() {
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTab = (searchParams.get('tab') as any) || 'general';
   const currentSubtab = searchParams.get('subtab') || 'zinc';
+
+  useEffect(() => {
+    if (currentTab === 'modules' && !isSuperAdmin) setSearchParams({ tab: 'general' }, { replace: true });
+  }, [currentTab, isSuperAdmin, setSearchParams]);
   
   const setTab = (tab: string) => {
     setSearchParams({ tab });
@@ -463,7 +467,7 @@ export default function AdminSettings() {
   const [loading, setLoading] = useState(true);
   const [showMediaPicker, setShowMediaPicker] = useState<false | 'logo'>(false);
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const { updateFeatureToggle } = useFeatures();
 
   const [registeringPush, setRegisteringPush] = useState(false);
@@ -893,7 +897,7 @@ export default function AdminSettings() {
             className="w-full bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-900 dark:text-white shadow-2xs focus:ring-2 focus:ring-[#f00856] outline-none min-h-[44px] cursor-pointer"
           >
             <option value="general">Store Details / General</option>
-            <option value="modules">Módulos & Plugins (On/Off)</option>
+            {isSuperAdmin && <option value="modules">Módulos & Plugins (On/Off)</option>}
             <option value="internacional">Compras Internacionales (Publicación y Cupos)</option>
             <option value="appearance">Theme Builder & Identidad</option>
             <option value="payments">Pasarelas de Pago</option>
@@ -908,7 +912,7 @@ export default function AdminSettings() {
         <div className="hidden sm:grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 bg-gray-50 dark:bg-slate-900/60 p-2 rounded-2xl border border-gray-200 dark:border-slate-800">
           {[
             { key: 'general', label: 'General', icon: Store },
-            { key: 'modules', label: 'Módulos & Plugins', icon: Sliders },
+            ...(isSuperAdmin ? [{ key: 'modules', label: 'Módulos & Plugins', icon: Sliders }] : []),
             { key: 'internacional', label: 'Internacional', icon: Globe },
             { key: 'appearance', label: 'Theme Builder', icon: LayoutTemplate },
             { key: 'payments', label: 'Pasarelas de Pago', icon: CreditCard },
@@ -1809,7 +1813,7 @@ export default function AdminSettings() {
       )}
       
       {/* Modules Settings */}
-      {currentTab === 'modules' && (
+      {currentTab === 'modules' && isSuperAdmin && (
         <div className="space-y-6 max-w-3xl">
           {/* Seccion 1: Plugins de Coleccionista */}
           <div className="space-y-3">
