@@ -187,7 +187,7 @@ function App() {
                     <Route path="/collection/:slug" element={<Shop />} />
                     <Route path="/intl" element={<InternationalStorefront />} />
                     <Route path="/intl/:countryCode" element={<InternationalMarketTemplate />} />
-                    <Route path="/internacional" element={<ProtectedRoute requireAdmin><InternationalLaboratory /></ProtectedRoute>} />
+                    <Route path="/internacional" element={<ProtectedRoute requireSuperAdmin><InternationalLaboratory /></ProtectedRoute>} />
                     <Route path="/about" element={<Navigate to="/page/nosotros" replace />} />
                     <Route path="/contact" element={<Contact />} />
                     <Route path="/vendor_prueba" element={<VendorPrueba />} />
@@ -337,12 +337,12 @@ function App() {
                   </ProtectedRoute>
                 }>
                   <Route index element={<AdminDashboard />} />
-                  <Route path="compare" element={<AdminCompare />} />
-                  <Route path="ai-search" element={<AdminAISearch />} />
-                  <Route path="radar" element={<AdminRadar />} />
-                  <Route path="vault" element={<AdminVault />} />
-                  <Route path="academy" element={<AdminAcademy />} />
-                  <Route path="import-hub" element={<AdminImportHub />} />
+                  <Route path="compare" element={<ProtectedRoute requireSuperAdmin><AdminCompare /></ProtectedRoute>} />
+                  <Route path="ai-search" element={<ProtectedRoute requireSuperAdmin><AdminAISearch /></ProtectedRoute>} />
+                  <Route path="radar" element={<ProtectedRoute requireSuperAdmin><AdminRadar /></ProtectedRoute>} />
+                  <Route path="vault" element={<ProtectedRoute requireSuperAdmin><AdminVault /></ProtectedRoute>} />
+                  <Route path="academy" element={<ProtectedRoute requireSuperAdmin><AdminAcademy /></ProtectedRoute>} />
+                  <Route path="import-hub" element={<ProtectedRoute requireSuperAdmin><AdminImportHub /></ProtectedRoute>} />
                   <Route path="products" element={<AdminProducts />} />
                   <Route path="pages" element={<AdminPages />} />
                   <Route path="orders" element={<AdminOrders />} />
@@ -377,16 +377,16 @@ function App() {
                   <Route path="vendor-payouts" element={<Navigate to="/admin/marketplace?tab=liquidaciones" replace />} />
                   <Route path="vendor-kyc" element={<Navigate to="/admin/marketplace?tab=kyc" replace />} />
                   <Route path="buybox" element={<Navigate to="/admin/marketplace?tab=analytics" replace />} />
-                  <Route path="sourcing" element={<AdminSourcingImport />} />
-                  <Route path="internacional/sourcing" element={<Navigate to="/admin/sourcing" replace />} />
-                  <Route path="internacional/amazon" element={<AdminInternationalAmazon />} />
-                  <Route path="internacional/productos" element={<AdminInternationalProducts />} />
-                  <Route path="internacional/sync" element={<AdminInternationalSync />} />
-                  <Route path="internacional/zinc" element={<AdminZinc />} />
-                  <Route path="international-markets" element={<AdminInternationalMarkets />} />
-                  <Route path="international-markets/:countryCode/preview" element={<AdminInternationalMarketPreview />} />
-                  <Route path="markets" element={<Navigate to="/admin/international-markets" replace />} />
-                  <Route path="markets/:countryCode/preview" element={<AdminInternationalMarketPreview />} />
+                  <Route path="sourcing" element={<ProtectedRoute requireSuperAdmin><AdminSourcingImport /></ProtectedRoute>} />
+                  <Route path="internacional/sourcing" element={<ProtectedRoute requireSuperAdmin><Navigate to="/admin/sourcing" replace /></ProtectedRoute>} />
+                  <Route path="internacional/amazon" element={<ProtectedRoute requireSuperAdmin><AdminInternationalAmazon /></ProtectedRoute>} />
+                  <Route path="internacional/productos" element={<ProtectedRoute requireSuperAdmin><AdminInternationalProducts /></ProtectedRoute>} />
+                  <Route path="internacional/sync" element={<ProtectedRoute requireSuperAdmin><AdminInternationalSync /></ProtectedRoute>} />
+                  <Route path="internacional/zinc" element={<ProtectedRoute requireSuperAdmin><AdminZinc /></ProtectedRoute>} />
+                  <Route path="international-markets" element={<ProtectedRoute requireSuperAdmin><AdminInternationalMarkets /></ProtectedRoute>} />
+                  <Route path="international-markets/:countryCode/preview" element={<ProtectedRoute requireSuperAdmin><AdminInternationalMarketPreview /></ProtectedRoute>} />
+                  <Route path="markets" element={<ProtectedRoute requireSuperAdmin><Navigate to="/admin/international-markets" replace /></ProtectedRoute>} />
+                  <Route path="markets/:countryCode/preview" element={<ProtectedRoute requireSuperAdmin><AdminInternationalMarketPreview /></ProtectedRoute>} />
                 </Route>
                   </Routes>
                 </Suspense>
