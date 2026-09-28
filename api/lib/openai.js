@@ -133,9 +133,14 @@ export async function callOpenAIResponses(options = {}) {
     const requestBody = {
       model: selectedModel,
       input,
-      store: false,
-      temperature: typeof temperature === 'number' ? temperature : 0.2
+      store: false
     };
+
+    // GPT-5.6 Responses models reject the temperature parameter.
+    // Keep it only for model families that explicitly support it.
+    if (!/^gpt-5\.6(?:-|$)/i.test(selectedModel) && typeof temperature === 'number') {
+      requestBody.temperature = temperature;
+    }
 
     if (maxTokens) {
       requestBody.max_output_tokens = maxTokens;
