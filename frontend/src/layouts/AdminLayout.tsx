@@ -22,11 +22,12 @@ import MobileHeader from '../components/admin/MobileHeader';
 export default function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut, profile, user } = useAuth();
+  const { signOut, profile, user, isSuperAdmin } = useAuth();
   const { settings, loaded: settingsLoaded } = useSiteSettings();
   const { features } = useFeatures();
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
+  const superAdminPaths = new Set(['/admin/ai-search', '/admin/radar', '/admin/compare', '/admin/vault', '/admin/academy', '/admin/import-hub']);
   const navItems = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
     { name: 'Biblioteca de Medios', path: '/admin/media', icon: Library },
@@ -66,7 +67,7 @@ export default function AdminLayout() {
     { name: 'Collector Academy', path: '/admin/academy', icon: GraduationCap },
     { name: 'Import Hub', path: '/admin/import-hub', icon: Truck },
     { name: 'Usuarios & Auditoria', path: '/admin/users', icon: ShieldCheck },
-  ];
+  ].filter(item => isSuperAdmin || !superAdminPaths.has(item.path));
 
   const handleSignOut = async () => {
     await signOut();
@@ -102,8 +103,8 @@ export default function AdminLayout() {
           );
         })}
 
-        {/* Internacional */}
-        <div className="pt-3 pb-1">
+        {/* Internacional — strategic controls are Super Admin only */}
+        {isSuperAdmin && <div className="pt-3 pb-1">
           <p className="px-3.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">Internacional</p>
           <Link
             to="/admin/sourcing"
@@ -140,7 +141,7 @@ export default function AdminLayout() {
           >
             <KeyRound className="mr-2.5 h-[18px] w-[18px] shrink-0" /> Zinc API 2.0
           </Link>
-        </div>
+        </div>}
 
         {/* Otros Portales */}
         <div className="pt-3 pb-1">
