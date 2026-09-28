@@ -104,6 +104,22 @@ export class AutopilotActionQueueManager {
     }
   }
 
+
+  /**
+   * Explicit admin approval gate. The database RPC verifies admin identity,
+   * transition state and writes the immutable audit entry.
+   */
+  async approveAction(id: string, note?: string): Promise<AutopilotQueueItem> {
+    const { data, error } = await supabase.rpc('approve_sourcing_autopilot_action', {
+      p_queue_id: id,
+      p_note: note || null
+    });
+    if (error || !data) {
+      throw new Error(`No se pudo aprobar la acción: ${error?.message || 'Error desconocido'}`);
+    }
+    return data as AutopilotQueueItem;
+  }
+
   private async getQueueItemByIdempotencyKey(key: string): Promise<AutopilotQueueItem | null> {
     const { data, error } = await supabase
       .from('sourcing_autopilot_queue')
