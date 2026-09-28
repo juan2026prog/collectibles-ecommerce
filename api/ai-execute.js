@@ -187,7 +187,7 @@ export default async function handler(req, res) {
     // 3. Log Success Telemetry to ai_usage_events
     if (client) {
       try {
-        await client.from('ai_usage_events').insert({
+        const usagePayload = {
           engine,
           country_code: country || 'GLOBAL',
           provider: 'OPENAI',
@@ -209,7 +209,26 @@ export default async function handler(req, res) {
             output_cost_usd: result.pricing.output_cost_usd,
             context
           }
-        });
+        };
+        const { error: usageInsertError } = await client.from('ai_usage_events').insert(usagePayload);
+        if (usageInsertError) {
+          const { error: usageRpcError } = await client.rpc('log_ai_usage_event', {
+            p_engine: usagePayload.engine,
+            p_country_code: usagePayload.country_code,
+            p_provider: usagePayload.provider,
+            p_model: usagePayload.model,
+            p_request_id: usagePayload.request_id,
+            p_input_tokens: usagePayload.input_tokens,
+            p_output_tokens: usagePayload.output_tokens,
+            p_total_tokens: usagePayload.total_tokens,
+            p_estimated_cost_usd: usagePayload.estimated_cost_usd,
+            p_latency_ms: usagePayload.latency_ms,
+            p_status: usagePayload.status,
+            p_fallback_used: usagePayload.fallback_used,
+            p_metadata: usagePayload.metadata
+          });
+          if (usageRpcError) throw usageRpcError;
+        }
       } catch (logErr) {
         console.warn('[AI Execute] Telemetry logging error:', logErr.message);
       }
@@ -279,7 +298,7 @@ export default async function handler(req, res) {
     // Log Error Telemetry to ai_error_events
     if (client) {
       try {
-        await client.from('ai_error_events').insert({
+        const errorPayload = {
           engine,
           country_code: country || 'GLOBAL',
           provider: 'OPENAI',
@@ -294,7 +313,23 @@ export default async function handler(req, res) {
             context,
             details: err.details || {}
           }
-        });
+        };
+        const { error: errorInsertError } = await client.from('ai_error_events').insert(errorPayload);
+        if (errorInsertError) {
+          const { error: errorRpcError } = await client.rpc('log_ai_error_event', {
+            p_engine: errorPayload.engine,
+            p_country_code: errorPayload.country_code,
+            p_provider: errorPayload.provider,
+            p_model: errorPayload.model,
+            p_error_type: errorPayload.error_type,
+            p_error_code: errorPayload.error_code,
+            p_safe_message: errorPayload.safe_message,
+            p_latency_ms: errorPayload.latency_ms,
+            p_request_id: errorPayload.request_id,
+            p_metadata: errorPayload.metadata
+          });
+          if (errorRpcError) throw errorRpcError;
+        }
       } catch (logErr) {
         console.warn('[AI Execute] Error telemetry logging failed:', logErr.message);
       }
