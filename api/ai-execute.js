@@ -6,7 +6,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { callOpenAIResponses, OpenAIError } from './lib/openai.js';
-import { createHash } from 'node:crypto';
+import { generateEvidenceFingerprint } from './lib/canonicalJson.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_f_7xF86CT0DFwT7YupNh_Q_TzmemHNf';
@@ -105,7 +105,7 @@ export default async function handler(req, res) {
           return res.status(503).json({
             success: false,
             status: 'CIRCUIT_OPEN',
-            error: 'AI Circuit Breaker is OPEN due to budget/error thresholds.'
+            error: 'AI Circuit Bre Breaker is OPEN due to budget/error thresholds.'
           });
         }
         if (sysData.default_timeout_ms) {
@@ -251,11 +251,12 @@ export default async function handler(req, res) {
       try {
         const evidence = payload?.evidence || {};
         const evidenceCount = Object.values(evidence).reduce((sum, value) => sum + (Array.isArray(value) ? value.length : 0), 0);
+        const evidenceFingerprint = generateEvidenceFingerprint(evidence);
         const intelligencePayload = {
           engine,
           country_code: country || 'GLOBAL',
           objective: payload?.objective || null,
-          evidence_fingerprint: createHash('sha256').update(JSON.stringify(evidence)).digest('hex'),
+          evidence_fingerprint: evidenceFingerprint,
           evidence_count: evidenceCount,
           summary: structuredData.summary || null,
           confidence: Number(structuredData.confidence || 0),
@@ -270,10 +271,13 @@ export default async function handler(req, res) {
           status: 'SUCCESS',
           metadata: { operation, decision_mode: 'ADVISORY_ONLY' }
         };
-        const { error: intelligenceInsertError } = await client.from('ai_intelligence_runs').insert(intelligencePayload);
-        if (intelligenceInsertError) {
-          const { error: intelligenceRpcError } = await client.rpc('log_ai_intelligence_run', { p_payload: intelligencePayload });
-          if (intelligenceRpcError) throw intelligenceRpcError;
+
+        const { error: runInsertError } = await client.from('ai_intelligence_runs').insert(intelligencePayload);
+        if (runInsertError) {
+          const { error: runRpcError } = await client.rpc('log_ai_intelligence_run', {
+            p_payload: intelligencePayload
+          });
+          if (runRpcError) throw runRpcError;
         }
       } catch (logErr) {
         console.warn('[AI Execute] Intelligence run logging error:', logErr.message);

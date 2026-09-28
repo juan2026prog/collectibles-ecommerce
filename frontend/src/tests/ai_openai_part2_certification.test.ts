@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AIGateway, executeAI } from '../services/ai/aiGateway';
 import { NullAIProvider } from '../services/ai/providers/nullProvider';
 import { OpenAIProvider } from '../services/ai/providers/openAIProvider';
-import { calculateOpenAICost } from '../../../api/lib/openaiPricing.js';
+import { calculateOpenAICost } from '../../../server/lib/openaiPricing.js';
 import { supabase } from '../lib/supabase';
 
 vi.mock('../lib/supabase', () => ({
@@ -475,19 +475,19 @@ describe('Collectibles 2026 — OpenAI Part 2 Certification Test Suite (A to P)'
 
   // J. Pricing configurado -> costo calculado correctamente
   it('J. Pricing configured -> accurately calculates USD cost per million tokens', () => {
-    // Test gpt-5.6-terra (2.50 input / 10.00 output per 1M)
+    // Test gpt-5.6-terra (2.00 input / 12.00 output per 1M)
     const cost1 = calculateOpenAICost('gpt-5.6-terra', 1000, 500);
     expect(cost1.pricing_status).toBe('PRICED');
-    expect(cost1.input_cost_usd).toBe(0.0025);
-    expect(cost1.output_cost_usd).toBe(0.005);
-    expect(cost1.estimated_cost_usd).toBe(0.0075);
+    expect(cost1.input_cost_usd).toBe(0.002);
+    expect(cost1.output_cost_usd).toBe(0.006);
+    expect(cost1.estimated_cost_usd).toBe(0.008);
 
-    // Test gpt-5.6-sol (0.15 input / 0.60 output per 1M)
+    // Test gpt-5.6-sol (4.00 input / 20.00 output per 1M)
     const cost2 = calculateOpenAICost('gpt-5.6-sol', 10000, 2000);
     expect(cost2.pricing_status).toBe('PRICED');
-    expect(cost2.input_cost_usd).toBe(0.0015);
-    expect(cost2.output_cost_usd).toBe(0.0012);
-    expect(cost2.estimated_cost_usd).toBe(0.0027);
+    expect(cost2.input_cost_usd).toBe(0.04);
+    expect(cost2.output_cost_usd).toBe(0.04);
+    expect(cost2.estimated_cost_usd).toBe(0.08);
   });
 
   // K. Pricing desconocido -> NO registrar falsamente USD 0 como costo real

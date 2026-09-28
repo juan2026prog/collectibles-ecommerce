@@ -14,9 +14,9 @@ export interface Part3RunResult {
   generatedAt: string;
 }
 
-async function safeRows(table: string, limit = 50, order = 'created_at'): Promise<any[]> {
+async function safeRows(table: string, selectCols = '*', limit = 50, order = 'created_at'): Promise<any[]> {
   try {
-    const { data, error } = await supabase.from(table).select('*').order(order, { ascending: false }).limit(limit);
+    const { data, error } = await supabase.from(table).select(selectCols).order(order, { ascending: false }).limit(limit);
     if (error) {
       console.warn('[Part3Evidence] source unavailable', { table, code: error.code, message: error.message });
       return [];
@@ -29,28 +29,55 @@ async function safeRows(table: string, limit = 50, order = 'created_at'): Promis
 }
 
 async function buildEvidence(engine: AIEngineKey, country: AICountryCode, seed: IntelligenceEvidence = {}): Promise<IntelligenceEvidence> {
-  // Production evidence sources that actually exist today. We derive advisory
-  // signals from searches/wishlists rather than pretending nonexistent aggregate tables exist.
-  const [searches, wishlistRows, opportunities, releases] = await Promise.all([
-    safeRows('international_import_searches', 60),
-    safeRows('wishlists', 60),
-    safeRows('international_import_candidates', 40, 'updated_at'),
-    safeRows('release_events', 40, 'updated_at')
+  // Query only verified production sources with strict PII minimization
+  const [searches, wishlists, candidates, releases] = await Promise.all([
+    safeRows('international_import_searches', 'id, query, retailer, min_price, max_price, created_at', 40),
+    safeRows('wishlists', 'product_id, created_at', 40),
+    safeRows('international_import_candidates', 'id, title, brand, category, retailer, price_usd, currency, rating, review_count, availability, created_at', 40),
+    safeRows('release_events', 'id, title, brand_id, character, product_line, manufacturer, status, msrp, currency, announcement_date, preorder_date, release_date_start, release_precision, date_display_text, radar_signal, radar_why, radar_context, franchise, category, is_verified, created_at', 40, 'updated_at')
   ]);
-  const signals = [
-    ...searches.map((row:any) => ({ id: row.id, type: 'SEARCH', query: row.query, created_at: row.created_at })),
-    ...wishlistRows.map((row:any) => ({ id: row.id, type: 'WISHLIST', product_id: row.product_id, created_at: row.created_at }))
-  ];
-  // A catalog gap is not inferred merely from a search. Until a deterministic gap detector
-  // supplies evidence, keep this empty so AI cannot manufacture "missing catalog" claims.
-  const gaps: any[] = [];
+
+  // Transform searches & wishlists into demand signals (PII stripped)
+  const searchSignals = (searches || []).map((s: any) => ({
+    type: 'SEARCH',
+    id: s.id,
+    query: s.query,
+    retailer: s.retailer,
+    created_at: s.created_at
+  }));
+
+  const wishlistSignals = (wishlists || []).map((w: any) => ({
+    type: 'WISHLIST',
+    product_id: w.product_id,
+    created_at: w.created_at
+  }));
+
+  const demandSignals = [...searchSignals, ...wishlistSignals];
+
+  // Candidates represent products / opportunities
+  const products = (candidates || []).map((c: any) => ({
+    id: c.id,
+    title: c.title,
+    brand: c.brand,
+    category: c.category,
+    retailer: c.retailer,
+    price_usd: c.price_usd,
+    currency: c.currency,
+    rating: c.rating,
+    review_count: c.review_count,
+    availability: c.availability
+  }));
+
+  // Catalog gaps intentionally empty until deterministic detector is built
+  const catalogGaps: unknown[] = [];
 
   const base: IntelligenceEvidence = {
     ...seed,
-    demandSignals: seed.demandSignals || signals,
-    catalogGaps: seed.catalogGaps || gaps,
-    products: seed.products || opportunities,
+    demandSignals: seed.demandSignals || demandSignals,
+    catalogGaps: seed.catalogGaps || catalogGaps,
+    products: seed.products || products,
     releases: seed.releases || releases,
+    radar: seed.radar || releases.filter((r: any) => r.radar_signal),
     market: { ...(seed.market || {}), country }
   };
 

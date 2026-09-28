@@ -8,16 +8,23 @@
 import { createClient } from '@supabase/supabase-js';
 import { callOpenAIResponses, getOpenAIConfig, OpenAIError } from './lib/openai.js';
 
-const CERT_ENGINES = ['AI_SEARCH','PRODUCT_DISCOVERY','TREND_ANALYSIS','PRODUCT_CURATION','COUNTRY_INTELLIGENCE','RADAR_INTELLIGENCE','RELEASE_INTELLIGENCE'];
-
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const supabasePublicKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || supabaseServiceKey;
 
 let supabase = null;
 if (supabaseUrl && supabaseServiceKey) {
   supabase = createClient(supabaseUrl, supabaseServiceKey);
 }
+
+const CERT_ENGINES = [
+  'AI_SEARCH',
+  'PRODUCT_DISCOVERY',
+  'TREND_ANALYSIS',
+  'PRODUCT_CURATION',
+  'COUNTRY_INTELLIGENCE',
+  'RADAR_INTELLIGENCE',
+  'RELEASE_INTELLIGENCE'
+];
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -30,8 +37,7 @@ export default async function handler(req, res) {
   }
 
   const config = getOpenAIConfig();
-  // Admin certification is authenticated below; production no longer needs a separate env toggle.
-  const liveTestEnabled = config.configured;
+  const liveTestEnabled = process.env.VERCEL_ENV !== 'production' || process.env.OPENAI_TEST_ENABLED === 'true';
 
   // ----------------------------------------------------
   // GET: Safe 0-Cost Diagnostic Info
@@ -51,21 +57,6 @@ export default async function handler(req, res) {
   // POST: Controlled Live Test
   // ----------------------------------------------------
   if (req.method === 'POST') {
-    // Production live tests are restricted to an authenticated admin/superadmin.
-    const authHeader = req.headers.authorization || '';
-    const token = authHeader.replace(/^Bearer\s+/i, '');
-    if (!supabase || !token) return res.status(401).json({ ok:false, error:'Admin authentication required.' });
-    // Use the public client for JWT validation; profile authorization is checked separately.
-    const authClient = createClient(supabaseUrl, supabasePublicKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
-    const { data: authData } = await authClient.auth.getUser(token);
-    const user = authData?.user;
-    if (!user) return res.status(401).json({ ok:false, error:'Invalid admin session.' });
-    const profileClient = process.env.SUPABASE_SERVICE_ROLE_KEY ? supabase : authClient;
-    const { data: profile, error: profileError } = await profileClient.from('profiles').select('is_admin,role').eq('id', user.id).maybeSingle();
-    if (profileError) return res.status(500).json({ ok:false, error:'Could not verify admin profile.' });
-    const isAdmin = profile?.is_admin === true || ['admin','superadmin','super_admin'].includes(String(profile?.role || '').toLowerCase());
-    if (!isAdmin) return res.status(403).json({ ok:false, error:'Admin permission required.' });
-
     if (!liveTestEnabled) {
       return res.status(403).json({
         ok: false,
@@ -73,6 +64,14 @@ export default async function handler(req, res) {
         liveTestEnabled: false
       });
     }
+
+    const authHeader = req.headers.authorization || '';
+    const authClient = supabaseUrl && (process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+      ? createClient(supabaseUrl, process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
+          global: { headers: authHeader ? { Authorization: authHeader } : {} },
+          auth: { persistSession: false, autoRefreshToken: false }
+        })
+      : null;
 
     if (!config.configured) {
       return res.status(500).json({
@@ -124,14 +123,14 @@ export default async function handler(req, res) {
       const latencyMs = Date.now() - startTime;
       const isExpectedResponse = result.outputText.includes('OPENAI_COLLECTIBLES_OK');
 
-      // Record telemetry in ai_usage_events using the authenticated context unless a true service role is present.
-      // Supabase insert errors must be inspected explicitly: the client does not throw by default.
       let telemetryRecorded = false;
       let telemetryError = null;
-      const telemetryClient = process.env.SUPABASE_SERVICE_ROLE_KEY ? supabase : authClient;
+      const telemetryClient = process.env.SUPABASE_SERVICE_ROLE_KEY ? supabase : (authClient || supabase);
+
+      // Record telemetry in ai_usage_events
       if (telemetryClient) {
         try {
-          const { error: usageInsertError } = await telemetryClient.from('ai_usage_events').insert({
+          const usagePayload = {
             engine: 'AI_SEARCH',
             country_code: 'GLOBAL',
             provider: 'OPENAI',
@@ -152,8 +151,27 @@ export default async function handler(req, res) {
               input_cost_usd: result.pricing.input_cost_usd,
               output_cost_usd: result.pricing.output_cost_usd
             }
-          });
-          if (usageInsertError) throw usageInsertError;
+          };
+
+          const { error: insertError } = await telemetryClient.from('ai_usage_events').insert(usagePayload);
+          if (insertError) {
+            const { error: rpcError } = await telemetryClient.rpc('log_ai_usage_event', {
+              p_engine: usagePayload.engine,
+              p_country_code: usagePayload.country_code,
+              p_provider: usagePayload.provider,
+              p_model: usagePayload.model,
+              p_request_id: usagePayload.request_id,
+              p_input_tokens: usagePayload.input_tokens,
+              p_output_tokens: usagePayload.output_tokens,
+              p_total_tokens: usagePayload.total_tokens,
+              p_estimated_cost_usd: usagePayload.estimated_cost_usd,
+              p_latency_ms: usagePayload.latency_ms,
+              p_status: usagePayload.status,
+              p_fallback_used: usagePayload.fallback_used,
+              p_metadata: usagePayload.metadata
+            });
+            if (rpcError) throw rpcError;
+          }
           telemetryRecorded = true;
         } catch (logErr) {
           telemetryError = logErr?.message || 'Telemetry insert failed';
@@ -161,9 +179,12 @@ export default async function handler(req, res) {
         }
       }
 
+      const isCertified = Boolean(isExpectedResponse && telemetryRecorded);
+
       return res.status(200).json({
         ok: isExpectedResponse,
-        certified: isExpectedResponse && telemetryRecorded,
+        certified: isCertified,
+        telemetryRecorded,
         response: result.outputText,
         expectedResponse: 'OPENAI_COLLECTIBLES_OK',
         provider: 'OPENAI',
@@ -173,7 +194,6 @@ export default async function handler(req, res) {
         latencyMs,
         requestId: result.requestId,
         responseId: result.responseId,
-        telemetryRecorded,
         telemetryError,
         timestamp: new Date().toISOString()
       });

@@ -189,6 +189,7 @@ describe('FASE 7 — Sourcing Intelligence Total Ecosystem Integration Test', { 
       matchConfidence: 0.98,
       inStock: true,
       isOfficialVerified: true,
+      uruguayMarketGapScore: 85,
       wishlistInterest: 5,
       radarInterest: 8
     });
