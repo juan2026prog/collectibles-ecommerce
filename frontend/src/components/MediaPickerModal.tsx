@@ -716,7 +716,16 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
                         className="w-full h-full flex items-center justify-center p-2 pb-6 bg-gray-50/50"
                       >
                          {img ? (
-                            <img src={url} alt={file.name} className="max-w-full max-h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform" />
+                            <img 
+                              src={url} 
+                              alt={file.name} 
+                              loading="lazy"
+                              decoding="async"
+                              className="max-w-full max-h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform" 
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.opacity = '0.5';
+                              }}
+                            />
                          ) : (
                             <FileIcon className="w-8 h-8 text-slate-400" />
                          )}

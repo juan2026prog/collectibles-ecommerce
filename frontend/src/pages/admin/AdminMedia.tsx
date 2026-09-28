@@ -528,7 +528,16 @@ export default function AdminMedia() {
                     {/* Vista Previa */}
                     <div className="w-full h-full flex items-center justify-center p-2 mb-6 bg-gray-50/50 rounded-lg">
                       {img ? (
-                         <img src={url} alt={file.name} className="w-full h-full object-contain filter group-hover:brightness-95 transition-all mix-blend-multiply" />
+                         <img 
+                           src={url} 
+                           alt={file.name} 
+                           loading="lazy"
+                           decoding="async"
+                           className="w-full h-full object-contain filter group-hover:brightness-95 transition-all mix-blend-multiply" 
+                           onError={(e) => {
+                             (e.target as HTMLImageElement).style.opacity = '0.5';
+                           }}
+                         />
                       ) : (
                          <FileIcon className="w-10 h-10 text-gray-300" />
                       )}
