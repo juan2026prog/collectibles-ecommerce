@@ -87,7 +87,7 @@ export class OpenAIProvider implements AIProviderAdapter {
         provider: 'OPENAI',
         model: data.model,
         text: data.text,
-        data: data.text as unknown as T,
+        data: (data.data ?? data.text) as T,
         latency_ms: data.latency_ms || elapsed,
         usage: data.usage,
         pricing: data.pricing,
@@ -136,14 +136,9 @@ export class OpenAIProvider implements AIProviderAdapter {
     }
   }
 
-  /**
-   * Reference estimation (per 1M tokens)
-   */
-  estimateCost(inputTokens: number, outputTokens: number, model?: string): number {
-    const inputRate = model?.includes('sol') || model?.includes('mini') ? 0.15 : 2.50;
-    const outputRate = model?.includes('sol') || model?.includes('mini') ? 0.60 : 10.00;
-    const cost = (inputTokens / 1_000_000) * inputRate + (outputTokens / 1_000_000) * outputRate;
-    return parseFloat(cost.toFixed(6));
+  /** Pricing is authoritative server-side only. */
+  estimateCost(): number {
+    return Number.NaN;
   }
 }
 
