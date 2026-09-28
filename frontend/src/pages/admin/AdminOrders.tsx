@@ -1039,6 +1039,126 @@ export default function AdminOrders() {
           </div>
         </FilterDrawer>
       </div>
+
+      {/* Orders Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        {loading ? (
+          <div className="p-12 text-center text-gray-500">
+            <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2 text-primary-600" />
+            <p className="text-sm font-medium">Cargando órdenes...</p>
+          </div>
+        ) : orders.length === 0 ? (
+          <div className="p-12 text-center text-gray-500">
+            <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+            <h3 className="text-base font-bold text-gray-700">No se encontraron órdenes</h3>
+            <p className="text-xs text-gray-400 mt-1">Intenta cambiar los filtros de búsqueda</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50/50 text-[11px] font-black uppercase tracking-wider text-gray-400">
+                  <th className="px-6 py-3">Orden & Cliente</th>
+                  <th className="px-6 py-3">Total</th>
+                  <th className="px-6 py-3">Estado de Pago</th>
+                  <th className="px-6 py-3">Estado Logística</th>
+                  <th className="px-6 py-3">Fecha</th>
+                  <th className="px-6 py-3">Canal</th>
+                  <th className="px-6 py-3 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {orders.map(o => {
+                  const statusObj = ORDER_STATUSES.find(s => s.value === o.status) || { label: o.status, color: 'bg-gray-100 text-gray-800' };
+                  const pStat = o.payment_status || 'no_payment_attempt';
+
+                  return (
+                    <tr key={o.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-1.5">
+                          <button 
+                            onClick={() => setSelectedOrder(o)}
+                            className="text-sm font-mono font-bold text-primary-600 hover:text-primary-800 hover:underline transition-all text-left"
+                          >
+                            #{o.order_number || o.id.slice(0,8).toUpperCase()}
+                          </button>
+                          {o.ml_order_id && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] uppercase font-black bg-yellow-100 text-yellow-800 border border-yellow-250 flex items-center gap-0.5" title={`Mercado Libre ID: ${o.ml_order_id}`}>
+                              ML 🛒
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-600">{o.customer?.email || o.customer_email || 'Sin usuario asociado'}</p>
+                        {o.ml_order_id && (
+                          <p className="text-[10px] text-gray-400 font-mono mt-0.5">ML ID: {o.ml_order_id}</p>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-sm font-bold text-gray-900">${o.total_amount} {o.currency || 'UYU'}</span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex flex-col gap-1">
+                          <span className={`inline-flex items-center gap-1 w-fit px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md ${
+                            pStat === 'approved' ? 'bg-emerald-100 text-emerald-800 border border-emerald-250' :
+                            ['initiated', 'pending', 'processing', 'awaiting_payment'].includes(pStat) ? 'bg-amber-100 text-amber-800 border border-amber-250' :
+                            pStat === 'not_started' || pStat === 'no_payment_attempt' ? 'bg-gray-100 text-gray-700 border border-gray-250' :
+                            ['rejected', 'failed'].includes(pStat) ? 'bg-rose-100 text-rose-800 border border-rose-250' :
+                            pStat === 'expired' ? 'bg-slate-200 text-slate-800 border border-slate-300' :
+                            'bg-purple-100 text-purple-800 border border-purple-250'
+                          }`}>
+                            {pStat === 'approved' ? 'Aprobado' : pStat === 'not_started' ? 'Sin iniciar' : pStat === 'awaiting_payment' ? 'Esperando pago' : pStat}
+                          </span>
+                          <span className="text-[10px] text-gray-400 capitalize">
+                            {o.payment_provider || o.payment_method || 'Sin pasarela'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="relative inline-block">
+                          <select
+                            value={o.status}
+                            onChange={e => updateStatus(o.id, e.target.value)}
+                            className={`appearance-none px-3 py-1 pr-7 rounded-full text-xs font-bold cursor-pointer border border-transparent hover:border-gray-300 focus:ring-0 ${statusObj.color}`}
+                          >
+                            {ORDER_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                          </select>
+                          <ChevronDown className={`absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none ${statusObj.color.split(' ')[1]}`} />
+                        </div>
+                        {o.tracking_number && (
+                          <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                            <Truck className="w-3 h-3" /> {o.tracking_provider}: {o.tracking_number}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-500">
+                        {new Date(o.created_at).toLocaleDateString('es-UY', { timeZone: 'America/Montevideo' })}
+                      </td>
+                      <td className="px-6 py-4">
+                        {o.ml_order_id ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] uppercase font-bold bg-yellow-100 text-yellow-800">
+                            Mercado Libre
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] uppercase font-bold bg-blue-50 text-blue-700">
+                            Web
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button onClick={() => setSelectedOrder(o)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg group transition-colors">
+                          <Eye className="w-4 h-4" />
+                          <span className="sr-only">Ver Detalles</span>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {selectedOrder && (
         <>
           <div className="fixed inset-0 bg-black/50 z-40 backdrop-blur-sm" onClick={() => setSelectedOrder(null)} />

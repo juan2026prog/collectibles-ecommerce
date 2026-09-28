@@ -3,11 +3,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { verifyOptionalAuth } from "../_shared/auth.ts";
 import { getHandyProviderConfig } from "../_shared/handy.ts";
+import { finalizeOrderIfNeeded } from "../_shared/order-payments.ts";
 
-const supabaseAdmin = createClient(
-  Deno.env.get("SUPABASE_URL")!,
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-);
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -16,18 +16,29 @@ Deno.serve(async (req: Request) => {
 
   try {
     const user = await verifyOptionalAuth(req);
-    // Verify admin
     if (!user) {
       throw new Error("No autenticado.");
     }
 
+    // Verify admin via profile or user_roles
     const { data: profile } = await supabaseAdmin
       .from("profiles")
       .select("is_admin")
       .eq("id", user.id)
-      .single();
+      .maybeSingle();
 
-    if (!profile?.is_admin) {
+    let isAdmin = Boolean(profile?.is_admin);
+    if (!isAdmin) {
+      const { data: userRole } = await supabaseAdmin
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .in("role", ["god_admin", "admin", "super_admin"])
+        .maybeSingle();
+      if (userRole) isAdmin = true;
+    }
+
+    if (!isAdmin) {
       throw new Error("Se requieren permisos de administrador para ejecutar la conciliación de pagos.");
     }
 
@@ -47,35 +58,72 @@ Deno.serve(async (req: Request) => {
       throw new Error(`Orden no encontrada: ${order_id}`);
     }
 
-    const provider = LOWER(order.payment_provider || order.payment_method || "");
+    const provider = String(order.payment_provider || order.payment_method || "").toLowerCase().trim();
     let externalStatus = "unknown";
     let externalStatusDetail = "";
     let rawApiResponse: any = {};
     let normalizedStatus = order.payment_status || "unknown_legacy";
+    let confirmedPaymentId: string | undefined = undefined;
 
     if (provider === "mercadopago") {
-      const mpToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
-      const paymentId = order.payment_id;
+      let mpToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
+      if (!mpToken) {
+        const { data: settings } = await supabaseAdmin.from("site_settings").select("key, value");
+        const config = Object.fromEntries((settings || []).map((s: any) => [s.key, s.value]));
+        mpToken = config.payments_mercadopago_access_token;
+      }
 
-      if (mpToken && paymentId && !paymentId.includes("MOCK") && !mpToken.includes("mock")) {
-        try {
-          const resp = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-            headers: { Authorization: `Bearer ${mpToken}` },
-          });
-          if (resp.ok) {
-            rawApiResponse = await resp.json();
-            externalStatus = rawApiResponse.status || "unknown";
-            externalStatusDetail = rawApiResponse.status_detail || "";
+      if (mpToken && !mpToken.includes("mock")) {
+        let paymentFound = false;
 
-            const { data: norm } = await supabaseAdmin.rpc("normalize_payment_status", {
-              p_provider: "mercadopago",
-              p_provider_status: externalStatus,
-              p_status_detail: externalStatusDetail,
+        // 1. Try by direct payment ID if numeric
+        const paymentId = order.payment_id;
+        if (paymentId && /^\d+$/.test(paymentId)) {
+          try {
+            const resp = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+              headers: { Authorization: `Bearer ${mpToken}` },
             });
-            normalizedStatus = norm || externalStatus;
+            if (resp.ok) {
+              rawApiResponse = await resp.json();
+              externalStatus = rawApiResponse.status || "unknown";
+              externalStatusDetail = rawApiResponse.status_detail || "";
+              confirmedPaymentId = String(rawApiResponse.id || paymentId);
+              paymentFound = true;
+            }
+          } catch (err: any) {
+            console.error("[Reconciliation] MP direct payment lookup error:", err);
           }
-        } catch (err: any) {
-          console.error("[Reconciliation] Mercado Pago API error:", err);
+        }
+
+        // 2. Try by external_reference search if not found
+        if (!paymentFound) {
+          try {
+            const searchUrl = `https://api.mercadopago.com/v1/payments/search?external_reference=${order_id}&sort=date_created&criteria=desc`;
+            const searchRes = await fetch(searchUrl, {
+              headers: { Authorization: `Bearer ${mpToken}` },
+            });
+            if (searchRes.ok) {
+              const searchData = await searchRes.json();
+              if (searchData.results && searchData.results.length > 0) {
+                rawApiResponse = searchData.results[0];
+                externalStatus = rawApiResponse.status || "unknown";
+                externalStatusDetail = rawApiResponse.status_detail || "";
+                confirmedPaymentId = String(rawApiResponse.id);
+                paymentFound = true;
+              }
+            }
+          } catch (err: any) {
+            console.error("[Reconciliation] MP search payment error:", err);
+          }
+        }
+
+        if (paymentFound) {
+          const { data: norm } = await supabaseAdmin.rpc("normalize_payment_status", {
+            p_provider: "mercadopago",
+            p_provider_status: externalStatus,
+            p_status_detail: externalStatusDetail,
+          });
+          normalizedStatus = norm || externalStatus;
         }
       }
     } else if (provider === "handy") {
@@ -93,19 +141,6 @@ Deno.serve(async (req: Request) => {
       } catch (err: any) {
         console.error("[Reconciliation] Handy query error:", err);
       }
-    }
-
-    // Call get_effective_payment_status to finalize normalized view
-    const { data: effectiveInfo } = await supabaseAdmin.rpc("get_effective_payment_status", {
-      p_order_id: order_id,
-    });
-
-    if (effectiveInfo) {
-      normalizedStatus = effectiveInfo.normalized_status || normalizedStatus;
-    }
-
-    function LOWER(s: string) {
-      return (s || "").toLowerCase();
     }
 
     const nowStr = new Date().toISOString();
@@ -137,7 +172,6 @@ Deno.serve(async (req: Request) => {
         })
         .eq("id", attemptId);
     } else {
-      // Create attempt
       const { data: newAttempt } = await supabaseAdmin
         .from("payment_attempts")
         .insert({
@@ -182,17 +216,30 @@ Deno.serve(async (req: Request) => {
     });
 
     // Update order status
-    await supabaseAdmin
-      .from("orders")
-      .update({
-        payment_status: normalizedStatus,
-        status: normalizedStatus === "approved" ? "paid" : order.status,
-        last_reconciled_at: nowStr,
-        reconciliation_status: "reconciled",
-        last_payment_attempt_id: attemptId,
-        updated_at: nowStr,
-      })
-      .eq("id", order.id);
+    if (normalizedStatus === "approved") {
+      try {
+        await finalizeOrderIfNeeded(
+          supabaseAdmin,
+          SUPABASE_URL,
+          SUPABASE_SERVICE_ROLE_KEY,
+          order.id,
+          confirmedPaymentId || order.payment_id
+        );
+      } catch (finErr: any) {
+        console.error("[Reconciliation] finalizeOrderIfNeeded error:", finErr);
+      }
+    } else {
+      await supabaseAdmin
+        .from("orders")
+        .update({
+          payment_status: normalizedStatus,
+          last_reconciled_at: nowStr,
+          reconciliation_status: "reconciled",
+          last_payment_attempt_id: attemptId,
+          updated_at: nowStr,
+        })
+        .eq("id", order.id);
+    }
 
     return new Response(
       JSON.stringify({
