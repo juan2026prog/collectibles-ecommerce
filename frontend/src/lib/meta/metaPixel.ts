@@ -51,8 +51,12 @@ export function initPixel(userData?: any) {
   }
 
   if (IS_DEBUG) console.log(`[Meta] Initializing Pixel ID: ${PIXEL_ID} with EMQ`, userData);
-  window.fbq('set', 'autoConfig', false, PIXEL_ID);
-  window.fbq('init', PIXEL_ID, userData);
+  try {
+    window.fbq('set', 'autoConfig', false, PIXEL_ID);
+    window.fbq('init', PIXEL_ID, userData);
+  } catch (err) {
+    if (IS_DEBUG) console.warn('[Meta] fbq init blocked or unavailable:', err);
+  }
 
   window._metaPixelInitialized = true;
   window._metaPixelLastUserData = userDataString;
@@ -99,7 +103,11 @@ function trackEvent(eventName: string, data: any = {}, eventId?: string) {
   
   const cleanEventId = normalizeEventId(eventId, eventName);
   const options = { eventID: cleanEventId };
-  window.fbq('track', eventName, data, options);
+  try {
+    window.fbq('track', eventName, data, options);
+  } catch (err) {
+    if (IS_DEBUG) console.warn(`[Meta] fbq track ${eventName} blocked or failed:`, err);
+  }
   
   if (IS_DEBUG) {
     console.log(`[Meta] Track: ${eventName} | ID: ${cleanEventId}`, data);
