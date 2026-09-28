@@ -177,6 +177,25 @@ export default function AdminLayout() {
       </nav>
 
       <div className="p-3 border-t border-dark-800 sticky bottom-0 bg-dark-900 shrink-0">
+        <div className="px-3 py-2 mb-2 bg-dark-800/80 rounded-xl border border-dark-700/60 flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <span className="text-xs font-bold text-white truncate block">
+              {profile?.collector_nickname || profile?.username || user?.email?.split('@')[0] || 'Admin'}
+            </span>
+            <span className="text-[10px] text-gray-400 truncate block">
+              {user?.email}
+            </span>
+          </div>
+          {isSuperAdmin ? (
+            <span className="px-2 py-0.5 rounded-md bg-[#f00856]/20 text-[#f00856] border border-[#f00856]/40 text-[9px] font-black tracking-wider shrink-0 uppercase">
+              Super Admin
+            </span>
+          ) : (
+            <span className="px-2 py-0.5 rounded-md bg-gray-800 text-gray-400 border border-gray-700 text-[9px] font-bold tracking-wider shrink-0 uppercase">
+              Admin
+            </span>
+          )}
+        </div>
         <Link
           to="/"
           onClick={() => closeOnClick && setMobileDrawerOpen(false)}
