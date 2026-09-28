@@ -17,16 +17,22 @@ export interface Part3RunResult {
 async function safeRows(table: string, limit = 50, order = 'created_at'): Promise<any[]> {
   try {
     const { data, error } = await supabase.from(table).select('*').order(order, { ascending: false }).limit(limit);
-    if (error) return [];
+    if (error) {
+      console.warn('[Part3Evidence] source unavailable', { table, code: error.code, message: error.message });
+      return [];
+    }
     return data || [];
-  } catch { return []; }
+  } catch (error) {
+    console.warn('[Part3Evidence] source read failed', { table, error });
+    return [];
+  }
 }
 
 async function buildEvidence(engine: AIEngineKey, country: AICountryCode, seed: IntelligenceEvidence = {}): Promise<IntelligenceEvidence> {
   const [signals, gaps, opportunities, releases] = await Promise.all([
-    safeRows('sourcing_demand_signals', 60),
-    safeRows('sourcing_catalog_gaps', 40, 'last_evaluated_at'),
-    safeRows('sourcing_opportunities', 40, 'last_evaluated_at'),
+    safeRows('demand_signals', 60),
+    safeRows('catalog_gaps', 40, 'updated_at'),
+    safeRows('opportunities', 40, 'updated_at'),
     safeRows('release_events', 40, 'updated_at')
   ]);
 
