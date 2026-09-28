@@ -134,81 +134,43 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
 
   async function optimizeExistingProductImages() {
     if (!profile?.is_admin) return;
-    if (!(await confirm('Optimizar imágenes de producto mayores a 1 MB? Se conservarán los originales para rollback.'))) return;
+    if (!(await confirm('Optimizar imágenes pesadas de productos y banners? Se conservarán los originales para rollback.'))) return;
 
     setUploading(true);
     let optimized = 0;
     let skipped = 0;
     try {
-      const { data: rows, error: listError } = await supabase
-        .from('product_images')
-        .select('url')
-        .like('url', '%/storage/v1/object/public/public-assets/%');
-      if (listError) throw listError;
+      const { data: candidates, error: candidateError } = await supabase.rpc('admin_media_heavy_asset_candidates');
+      if (candidateError) throw candidateError;
 
-      const uniqueUrls = Array.from(new Set((rows || []).map((row: any) => row.url).filter(Boolean)));
-      for (const oldUrl of uniqueUrls) {
-        try {
-          const publicMarker = '/storage/v1/object/public/public-assets/';
-          const pos = oldUrl.indexOf(publicMarker);
-          if (pos < 0) { skipped++; continue; }
-          const objectPath = decodeURIComponent(oldUrl.slice(pos + publicMarker.length));
-          if (objectPath.startsWith('optimized/')) { skipped++; continue; }
+      const heavyAssets = (candidates || []) as Array<{
+        kind: 'product' | 'banner';
+        old_url: string;
+        object_path: string;
+        size_bytes: number;
+      }>;
 
-          const { data: blob, error: downloadError } = await supabase.storage.from(BUCKET_NAME).download(objectPath);
-          if (downloadError || !blob || blob.size <= 1024 * 1024) { skipped++; continue; }
-
-          const sourceName = objectPath.split('/').pop() || 'image.jpg';
-          const source = new File([blob], sourceName, { type: blob.type || 'image/jpeg' });
-          const optimizedFile = await optimizeImageForUpload(source);
-          if (optimizedFile.size >= blob.size) { skipped++; continue; }
-
-          const stem = objectPath.replace(/\.[^.]+$/, '');
-          const optimizedPath = `optimized/${stem}.webp`;
-          const { error: uploadError } = await supabase.storage.from(BUCKET_NAME).upload(optimizedPath, optimizedFile, {
-            cacheControl: '31536000',
-            upsert: true,
-            contentType: 'image/webp'
-          });
-          if (uploadError) throw uploadError;
-
-          const newUrl = supabase.storage.from(BUCKET_NAME).getPublicUrl(optimizedPath).data.publicUrl;
-          const { error: updateError } = await supabase.from('product_images').update({ url: newUrl }).eq('url', oldUrl);
-          if (updateError) throw updateError;
-          optimized++;
-        } catch (itemError) {
-          skipped++;
-          console.warn('[MediaPicker] Existing image optimization skipped:', itemError);
-        }
+      if (heavyAssets.length === 0) {
+        toast.success('No quedan imágenes pesadas pendientes de optimización.');
+        return;
       }
 
-      // Apply the same safe migration to historical banner assets.
-      const { data: bannerRows, error: bannerListError } = await supabase
-        .from('banners')
-        .select('id,image_url,mobile_image_url');
-      if (bannerListError) throw bannerListError;
-
-      const bannerUrls = Array.from(new Set(
-        (bannerRows || []).flatMap((row: any) => [row.image_url, row.mobile_image_url]).filter(Boolean)
-      ));
-      for (const oldUrl of bannerUrls) {
+      for (const asset of heavyAssets) {
         try {
-          const publicMarker = '/storage/v1/object/public/public-assets/';
-          const pos = oldUrl.indexOf(publicMarker);
-          if (pos < 0) { skipped++; continue; }
-          const objectPath = decodeURIComponent(oldUrl.slice(pos + publicMarker.length));
-          if (objectPath.startsWith('optimized/')) { skipped++; continue; }
-
+          const objectPath = decodeURIComponent(asset.object_path);
           const { data: blob, error: downloadError } = await supabase.storage.from(BUCKET_NAME).download(objectPath);
-          if (downloadError || !blob || blob.size <= 600 * 1024) { skipped++; continue; }
+          if (downloadError || !blob) throw downloadError || new Error('No se pudo descargar el archivo');
 
-          const sourceName = objectPath.split('/').pop() || 'banner.jpg';
+          const sourceName = objectPath.split('/').pop() || (asset.kind === 'banner' ? 'banner.jpg' : 'image.jpg');
           const source = new File([blob], sourceName, { type: blob.type || 'image/jpeg' });
           const optimizedFile = await optimizeImageForUpload(source);
           if (optimizedFile.size >= blob.size) { skipped++; continue; }
 
           const stem = objectPath.replace(/\.[^.]+$/, '');
-          const optimizedPath = `optimized/banners/${stem.replace(/^banners\//, '')}.webp`;
+          const optimizedPath = asset.kind === 'banner'
+            ? `optimized/banners/${stem.replace(/^banners\//, '')}.webp`
+            : `optimized/${stem}.webp`;
+
           const { error: uploadError } = await supabase.storage.from(BUCKET_NAME).upload(optimizedPath, optimizedFile, {
             cacheControl: '31536000',
             upsert: true,
@@ -217,15 +179,20 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
           if (uploadError) throw uploadError;
 
           const newUrl = supabase.storage.from(BUCKET_NAME).getPublicUrl(optimizedPath).data.publicUrl;
-          const [{ error: desktopError }, { error: mobileError }] = await Promise.all([
-            supabase.from('banners').update({ image_url: newUrl }).eq('image_url', oldUrl),
-            supabase.from('banners').update({ mobile_image_url: newUrl }).eq('mobile_image_url', oldUrl)
-          ]);
-          if (desktopError || mobileError) throw desktopError || mobileError;
+          if (asset.kind === 'product') {
+            const { error: updateError } = await supabase.from('product_images').update({ url: newUrl }).eq('url', asset.old_url);
+            if (updateError) throw updateError;
+          } else {
+            const [{ error: desktopError }, { error: mobileError }] = await Promise.all([
+              supabase.from('banners').update({ image_url: newUrl }).eq('image_url', asset.old_url),
+              supabase.from('banners').update({ mobile_image_url: newUrl }).eq('mobile_image_url', asset.old_url)
+            ]);
+            if (desktopError || mobileError) throw desktopError || mobileError;
+          }
           optimized++;
         } catch (itemError) {
           skipped++;
-          console.warn('[MediaPicker] Existing banner optimization skipped:', itemError);
+          console.warn('[MediaPicker] Heavy asset optimization skipped:', asset.object_path, itemError);
         }
       }
 
