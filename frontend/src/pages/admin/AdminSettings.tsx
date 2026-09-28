@@ -447,10 +447,6 @@ export default function AdminSettings() {
   const currentTab = (searchParams.get('tab') as any) || 'general';
   const currentSubtab = searchParams.get('subtab') || 'zinc';
 
-  useEffect(() => {
-    if (currentTab === 'modules' && !isSuperAdmin) setSearchParams({ tab: 'general' }, { replace: true });
-  }, [currentTab, isSuperAdmin, setSearchParams]);
-  
   const setTab = (tab: string) => {
     setSearchParams({ tab });
   };
@@ -469,6 +465,10 @@ export default function AdminSettings() {
   const { toast } = useToast();
   const { user, isSuperAdmin } = useAuth();
   const { updateFeatureToggle } = useFeatures();
+
+  useEffect(() => {
+    if (currentTab === 'modules' && !isSuperAdmin) setSearchParams({ tab: 'general' }, { replace: true });
+  }, [currentTab, isSuperAdmin, setSearchParams]);
 
   const [registeringPush, setRegisteringPush] = useState(false);
   const [sendingTest, setSendingTest] = useState(false);
