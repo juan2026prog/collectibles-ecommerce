@@ -6,6 +6,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { callOpenAIResponses, OpenAIError } from './lib/openai.js';
+import { createHash } from 'node:crypto';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_f_7xF86CT0DFwT7YupNh_Q_TzmemHNf';
@@ -250,11 +251,11 @@ export default async function handler(req, res) {
       try {
         const evidence = payload?.evidence || {};
         const evidenceCount = Object.values(evidence).reduce((sum, value) => sum + (Array.isArray(value) ? value.length : 0), 0);
-        await client.from('ai_intelligence_runs').insert({
+        const intelligencePayload = {
           engine,
           country_code: country || 'GLOBAL',
           objective: payload?.objective || null,
-          evidence_fingerprint: finalRequestId,
+          evidence_fingerprint: createHash('sha256').update(JSON.stringify(evidence)).digest('hex'),
           evidence_count: evidenceCount,
           summary: structuredData.summary || null,
           confidence: Number(structuredData.confidence || 0),
@@ -268,7 +269,12 @@ export default async function handler(req, res) {
           model: result.model,
           status: 'SUCCESS',
           metadata: { operation, decision_mode: 'ADVISORY_ONLY' }
-        });
+        };
+        const { error: intelligenceInsertError } = await client.from('ai_intelligence_runs').insert(intelligencePayload);
+        if (intelligenceInsertError) {
+          const { error: intelligenceRpcError } = await client.rpc('log_ai_intelligence_run', { p_payload: intelligencePayload });
+          if (intelligenceRpcError) throw intelligenceRpcError;
+        }
       } catch (logErr) {
         console.warn('[AI Execute] Intelligence run logging error:', logErr.message);
       }
