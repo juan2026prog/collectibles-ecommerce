@@ -12,7 +12,6 @@
 import { supabase } from '../../lib/supabase';
 import type { CatalogGap, SourcingOpportunity, AdaptiveOpportunityStatus } from '../../types/sourcingAdaptiveTypes';
 import type { SourceOffer, RetailerSource } from '../../types/sourcing';
-import { getAdapterBySource } from './adapters';
 import { evaluateAuthenticityGate } from './authenticityGate';
 import { calculateInternationalPricing } from '../../lib/internationalPricing';
 import { evaluateOpportunityScore } from './opportunityScoringEngine';
