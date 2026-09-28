@@ -92,6 +92,11 @@ export interface AutopilotQueueItem {
   locked_by?: string;
   attempts: number;
   max_attempts: number;
+  approved_at?: string;
+  approved_by?: string;
+  approval_note?: string;
+  execution_started_at?: string;
+  execution_completed_at?: string;
   error_message?: string;
   result?: Record<string, any>;
   created_at: string;
