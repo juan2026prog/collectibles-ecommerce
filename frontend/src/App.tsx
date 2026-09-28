@@ -100,6 +100,7 @@ const InternationalMarketTemplate = lazy(() => import('./pages/international/Int
 const AdminRefunds = lazy(() => import('./pages/admin/AdminRefunds'));
 const AdminZinc = lazy(() => import('./pages/admin/AdminZinc'));
 const AdminQuestions = lazy(() => import('./pages/admin/AdminQuestions'));
+const AdminAIControlCenter = lazy(() => import('./pages/superadmin/AdminAIControlCenter'));
 
 // Collector Plugins (6 official modules)
 // 01. AI Search
@@ -387,7 +388,20 @@ function App() {
                   <Route path="international-markets/:countryCode/preview" element={<ProtectedRoute requireSuperAdmin><AdminInternationalMarketPreview /></ProtectedRoute>} />
                   <Route path="markets" element={<ProtectedRoute requireSuperAdmin><Navigate to="/admin/international-markets" replace /></ProtectedRoute>} />
                   <Route path="markets/:countryCode/preview" element={<ProtectedRoute requireSuperAdmin><AdminInternationalMarketPreview /></ProtectedRoute>} />
+                  <Route path="ai" element={<ProtectedRoute requireSuperAdmin><Navigate to="/superadmin/ai" replace /></ProtectedRoute>} />
                 </Route>
+
+                {/* SuperAdmin Specific Portal */}
+                <Route path="/superadmin/ai" element={
+                  <ProtectedRoute requireSuperAdmin>
+                    <Suspense fallback={<PageSkeleton />}>
+                      <AdminLayout />
+                    </Suspense>
+                  </ProtectedRoute>
+                }>
+                  <Route index element={<AdminAIControlCenter />} />
+                </Route>
+
                   </Routes>
                 </Suspense>
                 </CurrencyProvider>

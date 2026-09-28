@@ -5,7 +5,7 @@ import {
   Tag, Image, CreditCard, LayoutTemplate, Star, Percent, Megaphone,
   Mail, BarChart3, Search, ShieldCheck, Store, Share2, ExternalLink, Library, FileText,
   Globe, Download, RefreshCw, Award, Layers, KeyRound, Scale,
-  Sparkles, Radio, Archive, GraduationCap, Sliders, Truck, MessageSquare
+  Sparkles, Radio, Archive, GraduationCap, Sliders, Truck, MessageSquare, Brain
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LocaleSwitcher from '../components/LocaleSwitcher';
@@ -141,7 +141,15 @@ export default function AdminLayout() {
           >
             <KeyRound className="mr-2.5 h-[18px] w-[18px] shrink-0" /> Zinc API 2.0
           </Link>
+          <Link
+            to="/superadmin/ai"
+            onClick={() => closeOnClick && setMobileDrawerOpen(false)}
+            className="flex items-center px-3.5 py-2 text-sm text-[#f00856] hover:text-white hover:bg-dark-800 rounded-xl transition-colors min-h-[44px] font-semibold"
+          >
+            <Brain className="mr-2.5 h-[18px] w-[18px] shrink-0 text-[#f00856]" /> AI Control Center
+          </Link>
         </div>}
+
 
         {/* Otros Portales */}
         <div className="pt-3 pb-1">
