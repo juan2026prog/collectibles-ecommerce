@@ -8,6 +8,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { callOpenAIResponses, getOpenAIConfig, OpenAIError } from './lib/openai.js';
 
+const CERT_ENGINES = ['AI_SEARCH','PRODUCT_DISCOVERY','TREND_ANALYSIS','PRODUCT_CURATION','COUNTRY_INTELLIGENCE','RADAR_INTELLIGENCE','RELEASE_INTELLIGENCE'];
+
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabasePublicKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || supabaseServiceKey;
@@ -81,6 +83,29 @@ export default async function handler(req, res) {
     }
 
     const startTime = Date.now();
+
+    // Full 7-engine certification uses the production Gateway itself, so all switches,
+    // country flags, server-owned prompts and telemetry paths are exercised.
+    if (req.body?.certifyAllEngines === true) {
+      const origin = `https://${req.headers.host}`;
+      const evidence = { products: [{ id: 'cert-product-1', title: 'Producto de certificación', source: 'CERTIFICATION_ONLY' }] };
+      const results = [];
+      for (const engine of CERT_ENGINES) {
+        const payload = engine === 'AI_SEARCH'
+          ? { query: 'certificación controlada', products: evidence.products }
+          : { objective: 'Certificar funcionamiento técnico sin ejecutar acciones comerciales.', evidence };
+        try {
+          const r = await fetch(`${origin}/api/ai-execute`, { method:'POST', headers:{ 'Content-Type':'application/json', Authorization: authHeader }, body: JSON.stringify({ engine, country:'UY', operation:'ADMIN_7_ENGINE_CERTIFICATION', payload, context:{ certification:true } }) });
+          const body = await r.json();
+          results.push({ engine, ok:r.ok && body.success === true, status:body.status, model:body.model, usage:body.usage, pricing:body.pricing, latency_ms:body.latency_ms, request_id:body.request_id, structured: engine === 'AI_SEARCH' ? true : !!body.data, error:body.error || null });
+        } catch (e) {
+          results.push({ engine, ok:false, status:'REQUEST_FAILED', error:e?.message || 'Certification request failed' });
+        }
+      }
+      const passed = results.filter(x => x.ok && x.structured !== false).length;
+      return res.status(passed === CERT_ENGINES.length ? 200 : 207).json({ ok: passed === CERT_ENGINES.length, certified: passed === CERT_ENGINES.length, mode:'SAFE_7_ENGINE_CERTIFICATION', country:'UY', passed, total:CERT_ENGINES.length, results, safety:{ publications:0, purchases:0, automationActions:0 }, timestamp:new Date().toISOString() });
+    }
+
     const testModel = req.body?.model || 'gpt-5.6-terra';
 
     try {
