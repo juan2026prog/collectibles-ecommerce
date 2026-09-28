@@ -412,7 +412,7 @@ export default function AdminAIControlCenter() {
                     ? 'bg-emerald-950/30 border-emerald-800 text-emerald-200'
                     : 'bg-rose-950/30 border-rose-800 text-rose-200'
                 }`}>
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                     <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
                       {testResult.ok && testResult.certified ? (
                         <>
@@ -426,19 +426,19 @@ export default function AdminAIControlCenter() {
                         </>
                       )}
                     </span>
-                    <span className="text-[11px] font-mono text-gray-400">
+                    <span className="text-[11px] font-mono text-gray-400 break-all sm:text-right">
                       Request ID: {testResult.requestId}
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs font-mono bg-[#0d1117]/80 p-3 rounded-lg border border-gray-800">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs font-mono bg-[#0d1117]/80 p-3 rounded-lg border border-gray-800">
                     <div>
                       <span className="text-gray-500 text-[10px] block font-sans">Respuesta OpenAI:</span>
-                      <span className="text-white font-bold">{testResult.response || testResult.error}</span>
+                      <span className="text-white font-bold break-words">{testResult.response || testResult.error}</span>
                     </div>
                     <div>
                       <span className="text-gray-500 text-[10px] block font-sans">Modelo:</span>
-                      <span className="text-purple-300">{testResult.model || testModel}</span>
+                      <span className="text-purple-300 break-words">{testResult.model || testModel}</span>
                     </div>
                     <div>
                       <span className="text-gray-500 text-[10px] block font-sans">Tokens (In / Out / Tot):</span>
