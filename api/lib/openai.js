@@ -4,7 +4,7 @@
 // OPENAI_API_KEY is NEVER exposed to the frontend or public logs.
 // ============================================================
 
-import { calculateOpenAICost } from './openaiPricing.js';
+import { calculateOpenAICost } from '../../server/lib/openaiPricing.js';
 
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
 
