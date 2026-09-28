@@ -65,10 +65,6 @@ export default async function handler(req, res) {
     operation = 'execute',
     prompt,
     payload,
-    systemPrompt,
-    temperature,
-    maxTokens,
-    model: requestedModel,
     context = {}
   } = req.body || {};
 
@@ -82,7 +78,7 @@ export default async function handler(req, res) {
     });
   }
 
-  let selectedModel = requestedModel || 'gpt-5.6-terra';
+  let selectedModel = 'gpt-5.6-terra';
   let engineTimeoutMs = 25000;
 
   try {
@@ -159,7 +155,7 @@ export default async function handler(req, res) {
             error: `AI Engine ${engine} is disabled.`
           });
         }
-        if (engData.model && engData.model !== 'NOT CONFIGURED' && !requestedModel) {
+        if (engData.model && engData.model !== 'NOT CONFIGURED') {
           selectedModel = engData.model;
         }
         if (engData.timeout_ms) {
@@ -168,16 +164,15 @@ export default async function handler(req, res) {
       }
     }
 
-    const defaultInstructions = instructionsFor(engine, operation);
-    const resolvedInstructions = systemPrompt || defaultInstructions;
+    const resolvedInstructions = instructionsFor(engine, operation);
 
     // 2. Call OpenAI Responses API server-side
     const result = await callOpenAIResponses({
       model: selectedModel,
       input: resolvedInput,
       instructions: resolvedInstructions,
-      temperature: typeof temperature === 'number' ? temperature : 0.2,
-      maxTokens: typeof maxTokens === 'number' ? maxTokens : 1024,
+      temperature: 0.2,
+      maxTokens: 1024,
       timeoutMs: engineTimeoutMs,
       metadata: {
         engine,
