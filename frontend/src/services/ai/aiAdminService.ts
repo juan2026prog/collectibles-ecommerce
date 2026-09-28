@@ -82,10 +82,13 @@ export class AIAdminService {
    */
   static async runLiveTest(model: string = 'gpt-5.6-terra'): Promise<AITestResult> {
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
       const res = await fetch('/api/openai-test', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
         body: JSON.stringify({ model })
       });
