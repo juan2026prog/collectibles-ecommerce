@@ -13,6 +13,7 @@ interface Profile {
   is_vendor: boolean;
   is_artist: boolean;
   is_affiliate: boolean;
+  role?: string | null;
 }
 
 interface AuthContextType {
@@ -20,6 +21,7 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  isSuperAdmin: boolean;
   signUp: (email: string, password: string) => Promise<{ data: any; error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signInWithGoogle: () => Promise<{ error: any }>;
@@ -149,10 +151,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setCachedProfile(null);
   }, []);
 
+  const isSuperAdmin = profile?.role === 'super_admin' || profile?.role === 'god_admin';
+
   const value = useMemo(() => ({
-    session, user, profile, loading,
+    session, user, profile, loading, isSuperAdmin,
     signUp, signIn, signInWithGoogle, signInWithOtp, signOut: signOutFn
-  }), [session, user, profile, loading, signUp, signIn, signInWithGoogle, signInWithOtp, signOutFn]);
+  }), [session, user, profile, loading, isSuperAdmin, signUp, signIn, signInWithGoogle, signInWithOtp, signOutFn]);
 
   return (
     <AuthContext.Provider value={value}>
