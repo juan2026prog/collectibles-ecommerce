@@ -10,6 +10,7 @@ import { callOpenAIResponses, getOpenAIConfig, OpenAIError } from './lib/openai.
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabasePublicKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || supabaseServiceKey;
 
 let supabase = null;
 if (supabaseUrl && supabaseServiceKey) {
@@ -52,10 +53,12 @@ export default async function handler(req, res) {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.replace(/^Bearer\s+/i, '');
     if (!supabase || !token) return res.status(401).json({ ok:false, error:'Admin authentication required.' });
-    const { data: authData } = await supabase.auth.getUser(token);
+    // Use the public client for JWT validation; profile authorization is checked separately.\n    const authClient = createClient(supabaseUrl, supabasePublicKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
+    const { data: authData } = await authClient.auth.getUser(token);
     const user = authData?.user;
     if (!user) return res.status(401).json({ ok:false, error:'Invalid admin session.' });
-    const { data: profile, error: profileError } = await supabase.from('profiles').select('is_admin,role').eq('id', user.id).maybeSingle();
+    const profileClient = process.env.SUPABASE_SERVICE_ROLE_KEY ? supabase : authClient;
+    const { data: profile, error: profileError } = await profileClient.from('profiles').select('is_admin,role').eq('id', user.id).maybeSingle();
     if (profileError) return res.status(500).json({ ok:false, error:'Could not verify admin profile.' });
     const isAdmin = profile?.is_admin === true || ['admin','superadmin','super_admin'].includes(String(profile?.role || '').toLowerCase());
     if (!isAdmin) return res.status(403).json({ ok:false, error:'Admin permission required.' });
