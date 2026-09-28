@@ -58,6 +58,8 @@ export default function AdminAIControlCenter() {
   const [testModel, setTestModel] = useState<string>('gpt-5.6-terra');
   const [testRunning, setTestRunning] = useState<boolean>(false);
   const [testResult, setTestResult] = useState<AITestResult | null>(null);
+  const [sevenRunning, setSevenRunning] = useState(false);
+  const [sevenResult, setSevenResult] = useState<any>(null);
 
   // Confirmation Modal State for Global Switch
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
@@ -199,6 +201,16 @@ export default function AdminAIControlCenter() {
     } finally {
       setTestRunning(false);
     }
+  }
+
+  async function handleRunSevenEngines() {
+    setSevenRunning(true); setSevenResult(null);
+    try {
+      const res = await AIAdminService.runSevenEngineCertification();
+      setSevenResult(res);
+      setStatusMessage({ type: res.certified ? 'success' : 'error', text: res.certified ? `Certificación 7/7 completada: ${res.passed}/${res.total} motores OK.` : `Certificación incompleta: ${res.passed || 0}/${res.total || 7} motores OK.` });
+      await loadAllData();
+    } finally { setSevenRunning(false); }
   }
 
   const isOpenAIConfigured = diagnostic.configured && systemConfig?.provider === 'OPENAI';
@@ -359,6 +371,15 @@ export default function AdminAIControlCenter() {
                   {systemConfig?.global_enabled ? 'DESACTIVAR AI GLOBAL' : 'ACTIVAR AI GLOBAL'}
                 </button>
               </div>
+            </div>
+
+            <div className="bg-[#161b22] border border-emerald-900/50 rounded-2xl p-6 space-y-4 shadow-xl">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div><h3 className="text-lg font-bold text-white flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-emerald-400" /> Certificación de los 7 Motores IA</h3><p className="text-xs text-gray-400 mt-1">Prueba los siete motores mediante el Gateway real de producción en Uruguay. No publica, no compra y no ejecuta automatizaciones.</p></div>
+                <button onClick={handleRunSevenEngines} disabled={sevenRunning || testRunning} className="px-6 py-3 rounded-xl font-bold text-sm bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white flex items-center gap-2"><Play className="w-4 h-4" />{sevenRunning ? 'CERTIFICANDO…' : 'CERTIFICAR 7 MOTORES'}</button>
+              </div>
+              {sevenResult && <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">{(sevenResult.results || []).map((r:any)=><div key={r.engine} className={`rounded-xl border p-3 text-xs ${r.ok ? 'border-emerald-800 bg-emerald-950/30' : 'border-rose-800 bg-rose-950/30'}`}><div className="font-bold break-words">{r.ok ? '✓' : '✕'} {r.engine}</div><div className="text-gray-400 mt-1">{r.model || r.status || r.error}</div></div>)}</div>}
+              {sevenResult && <div className="text-xs text-gray-400">Resultado: <b className={sevenResult.certified ? 'text-emerald-400':'text-rose-400'}>{sevenResult.passed}/{sevenResult.total} OK</b> · Seguridad: 0 publicaciones · 0 compras · 0 automatizaciones</div>}
             </div>
 
             {/* Administrative Live Certification Test Box */}
