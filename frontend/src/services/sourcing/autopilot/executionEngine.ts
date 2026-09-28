@@ -126,56 +126,50 @@ export class AutopilotExecutionEngine {
       };
     }
 
-    // Autopilot Mode: Auto-execute authorized action
+    // Part 4 safety boundary: AUTOPILOT prepares a durable action but never
+    // mutates catalog or places purchases directly from the browser.
+    // Execution requires an explicit admin approval handled by the backend.
     if (settings.mode === 'AUTOPILOT' && evaluation.executionMode === 'AUTO_EXECUTE') {
-      if (evaluation.decision === 'PUBLICAR' && settings.auto_publish) {
-        // Execute publish via sourcing service
-        const importRes = await sourcingService.importProductsToCatalog([product]);
+      const actionType: ActionType =
+        evaluation.decision === 'PUBLICAR' ? 'PUBLISH_PRODUCT' :
+        evaluation.decision === 'COMPRAR' ? 'PURCHASE_PRODUCT' :
+        'REVIEW_PRODUCT';
+      const evidenceVersion = activeOffer?.id || activeOffer?.source_product_id || 'no-offer';
+      const idempotencyKey = `part4_${product.canonical_sku}_${actionType}_${evidenceVersion}`;
 
-        if (importRes.success) {
-          await auditService.logAuditEntry({
-            product_id: product.canonical_sku,
-            opportunity_id: product.id,
-            action: 'AUTO_PUBLISHED',
-            previous_state: product.catalog_status,
-            new_state: 'PUBLISHED',
-            reason: `Autopilot auto-publicó el producto. Opportunity Score: ${product.opportunity_score}, Margen: ${product.financials.margin_percent}%.`,
-            source_name: activeOffer?.source,
-            source_price: activeOffer?.price,
-            landed_cost: product.financials.real_cost_puesto_usd,
-            selling_price: product.financials.current_sale_price_usd,
-            margin: product.financials.margin_percent,
-            actor,
-            mode: settings.mode,
-            result: 'SUCCESS'
-          });
+      const queueItem = await actionQueueManager.enqueueAction({
+        action_type: actionType,
+        canonical_sku: product.canonical_sku,
+        product_id: product.id,
+        payload: { product, evaluation, requires_admin_approval: true },
+        idempotency_key: idempotencyKey,
+        status: 'REQUIRES_APPROVAL'
+      });
 
-          return {
-            evaluation,
-            executedAction: 'AUTO_PUBLISHED',
-            message: `Producto "${product.title}" publicado automáticamente por Autopilot.`
-          };
-        } else {
-          await auditService.logAuditEntry({
-            product_id: product.canonical_sku,
-            opportunity_id: product.id,
-            action: 'AUTO_PUBLISH_FAILED',
-            previous_state: product.catalog_status,
-            new_state: 'ERROR',
-            reason: importRes.errors.join('; '),
-            actor,
-            mode: settings.mode,
-            result: 'FAILED',
-            error_message: importRes.errors.join('; ')
-          });
+      await auditService.logAuditEntry({
+        product_id: product.canonical_sku,
+        opportunity_id: product.id,
+        action: `PART4_PREPARED_${actionType}`,
+        previous_state: product.catalog_status,
+        new_state: 'PENDING_APPROVAL',
+        reason: 'Part 4 preparó la acción; la ejecución externa requiere aprobación administrativa explícita.',
+        source_name: activeOffer?.source,
+        source_price: activeOffer?.price,
+        landed_cost: product.financials.real_cost_puesto_usd,
+        selling_price: product.financials.current_sale_price_usd,
+        margin: product.financials.margin_percent,
+        confidence: product.uruguay_market.match_confidence,
+        actor,
+        mode: settings.mode,
+        result: 'SUCCESS'
+      });
 
-          return {
-            evaluation,
-            executedAction: 'AUTO_PUBLISH_FAILED',
-            message: `Falló la publicación automática: ${importRes.errors.join('; ')}`
-          };
-        }
-      }
+      return {
+        evaluation,
+        executedAction: 'PREPARED_FOR_APPROVAL',
+        queueItemId: queueItem.id,
+        message: `Acción ${actionType} preparada. Requiere aprobación administrativa antes de ejecutar.`
+      };
     }
 
     return {
