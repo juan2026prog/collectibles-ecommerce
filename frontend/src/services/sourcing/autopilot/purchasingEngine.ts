@@ -179,51 +179,28 @@ export class AutopilotPurchasingEngine {
     product: NormalizedProduct,
     livePrice: number
   ): Promise<{ success: boolean; orderId?: string; status: string; message: string }> {
-    // Execute purchase order securely via backend Edge Function / Server-side API.
-    // ZINC_API_KEY lives exclusively in server environment (Deno.env / Supabase Vault).
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const authToken = sessionData?.session?.access_token;
-
-      const response = await fetch('/api/zinc/create-order', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
-        },
-        body: JSON.stringify({
-          product_id: product.offers[0]?.source_product_id,
-          retailer: product.offers[0]?.source || 'amazon',
-          max_price: livePrice
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.order_id) {
-          return {
-            success: true,
-            orderId: data.order_id,
-            status: 'EXECUTED',
-            message: `Orden de compra enviada y confirmada con éxito. ID: ${data.order_id}`
-          };
-        }
-      }
-      
-      const errBody = await response.json().catch(() => ({}));
-      return {
-        success: false,
-        status: 'ERROR',
-        message: `El proveedor rechazó la orden: ${errBody?.message || errBody?.error || 'Sin confirmación de Zinc'}`
-      };
-    } catch (err: any) {
-      return {
-        success: false,
-        status: 'ERROR',
-        message: `No se pudo conectar con el proveedor de compras: ${err.message}`
-      };
-    }
+    // Part 4 never creates an external order from client-side code.
+    // The approved queue item is the hand-off point for a server-side executor.
+    await auditService.logAuditEntry({
+      product_id: product.canonical_sku,
+      opportunity_id: product.id,
+      action: 'PURCHASE_AWAITING_ADMIN_APPROVAL',
+      previous_state: 'VALIDATED',
+      new_state: 'REQUIRES_APPROVAL',
+      reason: `Compra validada por USD ${livePrice}, pendiente de aprobación administrativa y ejecución server-side.`,
+      source_name: product.offers[0]?.source,
+      source_price: livePrice,
+      actor: 'AUTOPILOT',
+      mode: 'AUTOPILOT',
+      result: 'SKIPPED'
+    });
+    return {
+      success: false,
+      status: 'REQUIRES_APPROVAL',
+      message: 'La compra fue validada pero no ejecutada. Requiere aprobación administrativa explícita.'
+    };
   }
+
 }
 
 export const autopilotPurchasingEngine = new AutopilotPurchasingEngine();
