@@ -27,7 +27,7 @@ export default function AdminLayout() {
   const { features } = useFeatures();
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
-  const superAdminPaths = new Set(['/admin/ai-search', '/admin/radar', '/admin/compare', '/admin/vault', '/admin/academy', '/admin/import-hub']);
+  const superAdminPaths = new Set(['/admin/ai-search', '/admin/radar', '/admin/compare', '/admin/vault', '/admin/academy', '/admin/import-hub', '/admin/settings?tab=modules']);
   const navItems = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
     { name: 'Biblioteca de Medios', path: '/admin/media', icon: Library },
@@ -256,6 +256,7 @@ export default function AdminLayout() {
                   <span className="hidden sm:inline">Buscar...</span>
                   <kbd className="text-[9px] font-mono bg-gray-200 px-1.5 py-0.5 rounded">⌘K</kbd>
                 </button>
+                {isSuperAdmin && <span className="px-2.5 py-1 rounded-full bg-[#f00856]/10 text-[#f00856] text-[10px] font-bold tracking-wider">SUPER ADMIN</span>}
                 <LocaleSwitcher compact />
               </div>
             </header>
