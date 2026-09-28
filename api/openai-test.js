@@ -27,7 +27,8 @@ export default async function handler(req, res) {
   }
 
   const config = getOpenAIConfig();
-  const liveTestEnabled = process.env.VERCEL_ENV !== 'production' || process.env.OPENAI_TEST_ENABLED === 'true';
+  // Admin certification is authenticated below; production no longer needs a separate env toggle.
+  const liveTestEnabled = config.configured;
 
   // ----------------------------------------------------
   // GET: Safe 0-Cost Diagnostic Info
@@ -47,6 +48,16 @@ export default async function handler(req, res) {
   // POST: Controlled Live Test
   // ----------------------------------------------------
   if (req.method === 'POST') {
+    // Production live tests are restricted to an authenticated admin/superadmin.
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    if (!supabase || !token) return res.status(401).json({ ok:false, error:'Admin authentication required.' });
+    const { data: authData } = await supabase.auth.getUser(token);
+    const user = authData?.user;
+    if (!user) return res.status(401).json({ ok:false, error:'Invalid admin session.' });
+    const { data: profile } = await supabase.from('profiles').select('is_admin,is_super_admin').eq('id', user.id).maybeSingle();
+    if (!profile?.is_admin && !profile?.is_super_admin) return res.status(403).json({ ok:false, error:'Admin permission required.' });
+
     if (!liveTestEnabled) {
       return res.status(403).json({
         ok: false,
