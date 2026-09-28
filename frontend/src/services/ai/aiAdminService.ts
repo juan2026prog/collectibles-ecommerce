@@ -103,6 +103,22 @@ export class AIAdminService {
     }
   }
 
+  /** Executes the authenticated safe certification of all seven production engines. */
+  static async runSevenEngineCertification(): Promise<any> {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const res = await fetch('/api/openai-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ certifyAllEngines: true })
+      });
+      return await res.json();
+    } catch (err: any) {
+      return { ok: false, certified: false, error: err.message || 'Error during seven-engine certification.' };
+    }
+  }
+
   /**
    * Fetches global system configuration
    */
