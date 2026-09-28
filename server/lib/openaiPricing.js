@@ -10,6 +10,9 @@
  * OPENAI_PRICE_<CLEAN_MODEL>_INPUT_PER_1M
  * OPENAI_PRICE_<CLEAN_MODEL>_OUTPUT_PER_1M
  */
+const PRICING_SNAPSHOT_DATE = '2026-09-28';
+const PRICING_MAX_AGE_DAYS = Math.max(1, parseInt(process.env.OPENAI_PRICING_MAX_AGE_DAYS || '7', 10));
+
 const DEFAULT_MODEL_PRICING = {
   // Flagship / Frontier models
   'gpt-5.6-terra': {
@@ -81,10 +84,10 @@ export function getModelPricingRates(model) {
 
   const defaultRates = DEFAULT_MODEL_PRICING[model.toLowerCase()];
   if (defaultRates) {
-    return {
-      ...defaultRates,
-      source: 'DEFAULT_TABLE'
-    };
+    const snapshotMs = Date.parse(PRICING_SNAPSHOT_DATE + 'T00:00:00Z');
+    const ageDays = Math.floor((Date.now() - snapshotMs) / 86400000);
+    if (ageDays > PRICING_MAX_AGE_DAYS) return null; // fail closed: stale price must never look current
+    return { ...defaultRates, source: 'OPENAI_OFFICIAL_SNAPSHOT', snapshotDate: PRICING_SNAPSHOT_DATE, ageDays };
   }
 
   return null;
@@ -111,7 +114,7 @@ export function calculateOpenAICost(model, inputTokens = 0, outputTokens = 0) {
       output_cost_usd: null,
       estimated_cost_usd: null,
       pricing_status: 'UNKNOWN_PRICING',
-      pricing_source: 'NONE'
+      pricing_source: 'STALE_OR_UNKNOWN'
     };
   }
 

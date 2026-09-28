@@ -19,6 +19,17 @@ import { useAuth } from '../../contexts/AuthContext';
 
 type TabType = 'overview' | 'engines' | 'countries' | 'budgets' | 'usage' | 'errors' | 'system' | 'audit';
 
+const NAV_TABS = [
+  { id: 'overview', label: 'Resumen y pruebas', icon: Activity },
+  { id: 'engines', label: 'Motores IA', icon: Cpu },
+  { id: 'countries', label: 'Países', icon: Globe },
+  { id: 'budgets', label: 'Costos y límites', icon: DollarSign },
+  { id: 'usage', label: 'Uso', icon: CheckCircle2 },
+  { id: 'errors', label: 'Errores', icon: AlertTriangle },
+  { id: 'system', label: 'Sistema', icon: Settings },
+  { id: 'audit', label: 'Auditoría', icon: History },
+] as const;
+
 export default function AdminAIControlCenter() {
   const { user, isSuperAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('overview');
@@ -259,35 +270,22 @@ export default function AdminAIControlCenter() {
           </div>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 border-b border-gray-800 overflow-x-auto pb-2 scrollbar-none">
-          {[
-            { id: 'overview', label: 'Overview & Test', icon: Activity },
-            { id: 'engines', label: 'AI Engines (7)', icon: Cpu },
-            { id: 'countries', label: 'Countries Matrix', icon: Globe },
-            { id: 'budgets', label: 'Budgets & Limits', icon: DollarSign },
-            { id: 'usage', label: 'Usage Telemetry', icon: CheckCircle2 },
-            { id: 'errors', label: 'Safe Error Logs', icon: AlertTriangle },
-            { id: 'system', label: 'System & Gateway', icon: Settings },
-            { id: 'audit', label: 'Audit Trail', icon: History },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as TabType)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition whitespace-nowrap ${
-                  isActive 
-                    ? 'bg-[#f00856] text-white shadow-md font-semibold' 
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/60'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                {tab.label}
-              </button>
-            );
-          })}
+        {/* Navigation — responsive grid, no horizontal scrolling */}
+        <div className="bg-[#161b22] border border-gray-800 rounded-2xl p-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2">
+            {NAV_TABS.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button key={tab.id} onClick={() => setActiveTab(tab.id as TabType)}
+                  className={`min-h-[48px] flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition ${
+                    isActive ? 'bg-[#f00856] text-white shadow-md' : 'text-gray-300 bg-[#0d1117] hover:bg-gray-800 border border-gray-800'
+                  }`}>
+                  <Icon className="w-4 h-4 shrink-0" /><span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* TAB 1: OVERVIEW & TEST */}
@@ -302,7 +300,7 @@ export default function AdminAIControlCenter() {
                   {isOpenAIConfigured ? 'CONNECTED' : (systemConfig?.provider || 'NONE')}
                 </div>
                 <p className="text-[11px] text-gray-500">
-                  Key: {diagnostic.configured ? 'Configurada Server-Side' : 'No detectada'}
+                  Key: {diagnostic.configured ? 'Configurada en servidor' : 'No detectada'}
                 </p>
               </div>
 
