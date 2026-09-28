@@ -25,6 +25,9 @@ function instructionsFor(engine, operation) {
   if (engine === 'AI_SEARCH') {
     return common + ' For AI Search, understand collector intent and improve the answer using only supplied products and context. Return ONLY valid JSON with keys headline (string), summary (string), breakdown (array of strings), nextHighlight (string or null), relatedQuestions (array of up to 4 strings).';
   }
+  if (['PRODUCT_DISCOVERY','TREND_ANALYSIS','PRODUCT_CURATION','COUNTRY_INTELLIGENCE','RADAR_INTELLIGENCE','RELEASE_INTELLIGENCE'].includes(engine)) {
+    return common + ' You are advisory only: never publish, buy, change prices, or trigger automation. Reason only from evidence in payload.evidence. Missing evidence must reduce confidence, never be guessed. scoreAdjustment is only a bounded advisory adjustment from -10 to 10; deterministic Collectibles scoring remains authoritative. Return ONLY valid JSON: {"summary":string,"confidence":number_0_to_1,"signals":string[],"risks":string[],"recommendations":string[],"evidenceIds":string[],"scoreAdjustment":number_minus10_to_10,"action":"REVIEW"|"WATCH"|"IGNORE"}.';
+  }
   return common + ` Operation: ${operation}. Return concise useful output grounded only in supplied data.`;
 }
 
@@ -217,13 +220,25 @@ export default async function handler(req, res) {
       }
     }
 
-    // 4. Return Sanitize Safe Result
+    // 4. Parse structured Part 3 outputs server-side before returning them.
+    let structuredData = null;
+    if (['PRODUCT_DISCOVERY','TREND_ANALYSIS','PRODUCT_CURATION','COUNTRY_INTELLIGENCE','RADAR_INTELLIGENCE','RELEASE_INTELLIGENCE'].includes(engine)) {
+      try {
+        const clean = String(result.outputText || '').trim().replace(/^\`\`\`(?:json)?/i, '').replace(/\`\`\`$/i, '').trim();
+        structuredData = JSON.parse(clean);
+      } catch {
+        throw new OpenAIError('INVALID_OUTPUT', 502, 'OpenAI returned invalid structured intelligence output.');
+      }
+    }
+
+    // 5. Return sanitized safe result
     return res.status(200).json({
       success: true,
       status: 'SUCCESS',
       provider: 'OPENAI',
       model: result.model,
       text: result.outputText,
+      data: structuredData,
       response_id: result.responseId,
       request_id: finalRequestId,
       latency_ms: elapsedMs,
