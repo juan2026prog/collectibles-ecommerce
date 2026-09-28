@@ -55,8 +55,10 @@ export default async function handler(req, res) {
     const { data: authData } = await supabase.auth.getUser(token);
     const user = authData?.user;
     if (!user) return res.status(401).json({ ok:false, error:'Invalid admin session.' });
-    const { data: profile } = await supabase.from('profiles').select('is_admin,is_super_admin').eq('id', user.id).maybeSingle();
-    if (!profile?.is_admin && !profile?.is_super_admin) return res.status(403).json({ ok:false, error:'Admin permission required.' });
+    const { data: profile, error: profileError } = await supabase.from('profiles').select('is_admin,role').eq('id', user.id).maybeSingle();
+    if (profileError) return res.status(500).json({ ok:false, error:'Could not verify admin profile.' });
+    const isAdmin = profile?.is_admin === true || ['admin','superadmin','super_admin'].includes(String(profile?.role || '').toLowerCase());
+    if (!isAdmin) return res.status(403).json({ ok:false, error:'Admin permission required.' });
 
     if (!liveTestEnabled) {
       return res.status(403).json({
