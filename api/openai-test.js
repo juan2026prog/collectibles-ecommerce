@@ -53,7 +53,7 @@ export default async function handler(req, res) {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.replace(/^Bearer\s+/i, '');
     if (!supabase || !token) return res.status(401).json({ ok:false, error:'Admin authentication required.' });
-    const authClient = createClient(supabaseUrl, supabasePublicKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
+    // Use the public client for JWT validation; profile authorization is checked separately.\n    const authClient = createClient(supabaseUrl, supabasePublicKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
     const { data: authData } = await authClient.auth.getUser(token);
     const user = authData?.user;
     if (!user) return res.status(401).json({ ok:false, error:'Invalid admin session.' });
