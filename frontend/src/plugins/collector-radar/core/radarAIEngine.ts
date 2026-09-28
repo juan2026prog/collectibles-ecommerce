@@ -1,5 +1,6 @@
 import type { ReleaseEvent, ReleaseStatus, ReleasePrecision, RadarSignal } from '../types';
 import { supabase } from '../../../lib/supabase';
+import { radarIntelligence, releaseIntelligence, type IntelligenceEvidence } from '../../../services/intelligence/collectiblesIntelligence';
 
 export interface RadarAIExtractedRelease {
   id?: string;
@@ -446,4 +447,26 @@ export async function persistRadarRelease(
     console.error('Error persisting radar release:', err);
     return { success: false, error: err.message || 'Error al persistir release' };
   }
+}
+
+
+/**
+ * Part 3 advisory reasoning for Radar. It never persists or publishes by itself.
+ */
+export async function analyzeRadarIntelligence(
+  evidence: IntelligenceEvidence,
+  country: 'UY' | 'AR' | 'CL' | 'PE' | 'MX' | 'EC' = 'UY'
+) {
+  return radarIntelligence(country, evidence);
+}
+
+/**
+ * Part 3 advisory reasoning for Release Calendar. Source verification and
+ * deterministic parsing remain authoritative; AI only prioritizes/explains.
+ */
+export async function analyzeReleaseIntelligence(
+  evidence: IntelligenceEvidence,
+  country: 'UY' | 'AR' | 'CL' | 'PE' | 'MX' | 'EC' = 'UY'
+) {
+  return releaseIntelligence(country, evidence);
 }
