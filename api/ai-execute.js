@@ -196,7 +196,7 @@ export default async function handler(req, res) {
           input_tokens: result.usage.inputTokens,
           output_tokens: result.usage.outputTokens,
           total_tokens: result.usage.totalTokens,
-          estimated_cost_usd: result.pricing.estimated_cost_usd !== null ? result.pricing.estimated_cost_usd : 0,
+          estimated_cost_usd: result.pricing.estimated_cost_usd,
           latency_ms: elapsedMs,
           status: 'SUCCESS',
           fallback_used: false,
