@@ -22,6 +22,7 @@ import { resolveCartItemPrice } from '../lib/priceResolver';
 import SEO from '../components/SEO';
 import { captureDemandSignal } from '../services/sourcing/demandSignalEngine';
 import { processSignalIntoCatalogGap } from '../services/sourcing/catalogGapEngine';
+import { executeAI } from '../services/ai/aiGateway';
 
 const HERO_SUGGESTION_CHIPS = [
   'Dragon Ball',
@@ -399,13 +400,64 @@ export default function AISearchPage() {
         setRelaxedProducts([]);
       }
 
-      // 5. Direct Editorial Answer Generation
-      const directAnswer = generateDirectEditorialAnswer(interp, directResults, []);
-      setEditorialAnswer(directAnswer);
+      // 5. AI-assisted editorial answer, always backed by deterministic fallback.
+      const fallbackAnswer = generateDirectEditorialAnswer(interp, directResults, radarDrops);
+      const fallbackQuestions = generateContextualQuestions(interp);
 
-      // 6. Contextual Related Questions
-      const questions = generateContextualQuestions(interp);
-      setRelatedQuestions(questions);
+      const aiResult = await executeAI<{
+        headline: string;
+        summary: string;
+        breakdown: string[];
+        nextHighlight?: string | null;
+        relatedQuestions?: string[];
+      }>({
+        engine: 'AI_SEARCH',
+        country: 'UY',
+        operation: 'editorial_search_answer',
+        payload: {
+          query: queryText,
+          interpretation: interp,
+          products: directResults.slice(0, 12).map((p: any) => ({
+            id: p.id,
+            title: p.title,
+            price: Number(p.base_price || p.price || 0),
+            brand: p.brand?.name || p.brand || null,
+            category: p.category?.name || p.category || null,
+            status: p.status || null,
+            international: Boolean(p.is_international || p.source_provider === 'zinc')
+          })),
+          radar: radarDrops.slice(0, 6).map((r) => ({
+            title: r.title,
+            brand: r.brand,
+            line: r.line,
+            signal: r.radar_signal,
+            date: r.date_label
+          }))
+        },
+        context: { locale: 'es-UY' },
+        fallbackHandler: async () => ({
+          ...fallbackAnswer,
+          relatedQuestions: fallbackQuestions
+        })
+      });
+
+      const aiAnswer = aiResult.data;
+      if (aiResult.success && aiAnswer?.headline && aiAnswer?.summary) {
+        setEditorialAnswer({
+          headline: aiAnswer.headline,
+          summary: aiAnswer.summary,
+          breakdown: Array.isArray(aiAnswer.breakdown) ? aiAnswer.breakdown : fallbackAnswer.breakdown,
+          nextHighlight: aiAnswer.nextHighlight || fallbackAnswer.nextHighlight
+        });
+        setRelatedQuestions(
+          Array.isArray(aiAnswer.relatedQuestions) && aiAnswer.relatedQuestions.length
+            ? aiAnswer.relatedQuestions.slice(0, 4)
+            : fallbackQuestions
+        );
+      } else {
+        setEditorialAnswer(fallbackAnswer);
+        setRelatedQuestions(fallbackQuestions);
+      }
 
       // 7. Academy Knowledge Grounding Link
       const groundedKnowledge = queryCollectorKnowledge(queryText);

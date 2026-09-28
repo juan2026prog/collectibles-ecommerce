@@ -7,12 +7,13 @@ import type {
   AICountryConfig 
 } from './types';
 import { nullAIProvider } from './providers/nullProvider';
+import { openAIProvider } from './providers/openAIProvider';
 import type { AIProviderAdapter } from './providers/baseProvider';
 
 // ============================================================
 // COLLECTIBLES AI GATEWAY — PHASE 1
 // Central Server/Client Layer for all AI invocations.
-// Current active provider: NullAIProvider (AI_DISABLED)
+// Providers: NullAIProvider fallback + server-side OpenAIProvider
 // ============================================================
 
 export class AIGateway {
@@ -21,6 +22,7 @@ export class AIGateway {
 
   private constructor() {
     this.registerProvider(nullAIProvider);
+    this.registerProvider(openAIProvider);
   }
 
   public static getInstance(): AIGateway {
@@ -41,7 +43,7 @@ export class AIGateway {
    * 2. Check Circuit Breaker (CLOSED / OPEN)
    * 3. Check Country Config (ai_country_config.ai_enabled)
    * 4. Check Engine Config (ai_engine_config.enabled)
-   * 5. Dispatch to Provider (Currently NullAIProvider)
+   * 5. Dispatch to configured Provider
    * 6. Safe Fallback execution if disabled / failed
    */
   public async execute<T = any>(options: AIExecuteOptions<T>): Promise<AIExecuteResponse<T>> {
@@ -139,7 +141,13 @@ export class AIGateway {
       }
 
       // 5. Execute Provider Adapter
-      const result = await providerAdapter.execute<T>(engine, operation, payload, context);
+      const result = await providerAdapter.execute<T>(engine, operation, payload, {
+        ...context,
+        country,
+        model: engineConfig.model,
+        max_output_tokens: engineConfig.max_output_tokens,
+        timeout_ms: engineConfig.timeout_ms
+      });
       const elapsed = Math.round(performance.now() - startTime);
 
       return {
