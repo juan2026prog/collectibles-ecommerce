@@ -30,8 +30,6 @@ export function useCollectorPermissions(): CollectorPermissions {
   const { settings, loaded: settingsLoaded } = useSiteSettings();
 
   const isPluginsAdminOnly = settings['collector_plugins_admin_only'] === 'true';
-  const isAdmin = Boolean(profile?.is_admin || (profile as any)?.role === 'admin');
-
   const canAccessCollectorPlugins = !isPluginsAdminOnly || isSuperAdmin;
   const isLoadingPermissions = (authLoading && !!user) || !settingsLoaded || (featuresLoading && !localStorage.getItem('collectibles_feature_toggles_cache'));
 
