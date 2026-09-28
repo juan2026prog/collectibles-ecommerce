@@ -29,12 +29,21 @@ async function safeRows(table: string, limit = 50, order = 'created_at'): Promis
 }
 
 async function buildEvidence(engine: AIEngineKey, country: AICountryCode, seed: IntelligenceEvidence = {}): Promise<IntelligenceEvidence> {
-  const [signals, gaps, opportunities, releases] = await Promise.all([
-    safeRows('demand_signals', 60),
-    safeRows('catalog_gaps', 40, 'updated_at'),
-    safeRows('opportunities', 40, 'updated_at'),
+  // Production evidence sources that actually exist today. We derive advisory
+  // signals from searches/wishlists rather than pretending nonexistent aggregate tables exist.
+  const [searches, wishlistRows, opportunities, releases] = await Promise.all([
+    safeRows('international_import_searches', 60),
+    safeRows('wishlists', 60),
+    safeRows('international_import_candidates', 40, 'updated_at'),
     safeRows('release_events', 40, 'updated_at')
   ]);
+  const signals = [
+    ...searches.map((row:any) => ({ id: row.id, type: 'SEARCH', query: row.query, created_at: row.created_at })),
+    ...wishlistRows.map((row:any) => ({ id: row.id, type: 'WISHLIST', product_id: row.product_id, created_at: row.created_at }))
+  ];
+  // A catalog gap is not inferred merely from a search. Until a deterministic gap detector
+  // supplies evidence, keep this empty so AI cannot manufacture "missing catalog" claims.
+  const gaps: any[] = [];
 
   const base: IntelligenceEvidence = {
     ...seed,
