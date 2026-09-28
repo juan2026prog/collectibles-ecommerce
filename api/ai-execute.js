@@ -25,6 +25,9 @@ function instructionsFor(engine, operation) {
   if (engine === 'AI_SEARCH') {
     return common + ' For AI Search, understand collector intent and improve the answer using only supplied products and context. Return ONLY valid JSON with keys headline (string), summary (string), breakdown (array of strings), nextHighlight (string or null), relatedQuestions (array of up to 4 strings).';
   }
+  if (['PRODUCT_DISCOVERY','TREND_ANALYSIS','PRODUCT_CURATION','COUNTRY_INTELLIGENCE','RADAR_INTELLIGENCE','RELEASE_INTELLIGENCE'].includes(engine)) {
+    return common + ' You are advisory only: never publish, buy, change prices, or trigger automation. Reason only from evidence in payload.evidence. Missing evidence must reduce confidence, never be guessed. scoreAdjustment is only a bounded advisory adjustment from -10 to 10; deterministic Collectibles scoring remains authoritative. Return ONLY valid JSON: {"summary":string,"confidence":number_0_to_1,"signals":string[],"risks":string[],"recommendations":string[],"evidenceIds":string[],"scoreAdjustment":number_minus10_to_10,"action":"REVIEW"|"WATCH"|"IGNORE"}.';
+  }
   return common + ` Operation: ${operation}. Return concise useful output grounded only in supplied data.`;
 }
 
@@ -62,10 +65,6 @@ export default async function handler(req, res) {
     operation = 'execute',
     prompt,
     payload,
-    systemPrompt,
-    temperature,
-    maxTokens,
-    model: requestedModel,
     context = {}
   } = req.body || {};
 
@@ -79,7 +78,7 @@ export default async function handler(req, res) {
     });
   }
 
-  let selectedModel = requestedModel || 'gpt-5.6-terra';
+  let selectedModel = 'gpt-5.6-terra';
   let engineTimeoutMs = 25000;
 
   try {
@@ -156,7 +155,7 @@ export default async function handler(req, res) {
             error: `AI Engine ${engine} is disabled.`
           });
         }
-        if (engData.model && engData.model !== 'NOT CONFIGURED' && !requestedModel) {
+        if (engData.model && engData.model !== 'NOT CONFIGURED') {
           selectedModel = engData.model;
         }
         if (engData.timeout_ms) {
@@ -165,16 +164,15 @@ export default async function handler(req, res) {
       }
     }
 
-    const defaultInstructions = instructionsFor(engine, operation);
-    const resolvedInstructions = systemPrompt || defaultInstructions;
+    const resolvedInstructions = instructionsFor(engine, operation);
 
     // 2. Call OpenAI Responses API server-side
     const result = await callOpenAIResponses({
       model: selectedModel,
       input: resolvedInput,
       instructions: resolvedInstructions,
-      temperature: typeof temperature === 'number' ? temperature : 0.2,
-      maxTokens: typeof maxTokens === 'number' ? maxTokens : 1024,
+      temperature: 0.2,
+      maxTokens: 1024,
       timeoutMs: engineTimeoutMs,
       metadata: {
         engine,
@@ -198,7 +196,7 @@ export default async function handler(req, res) {
           input_tokens: result.usage.inputTokens,
           output_tokens: result.usage.outputTokens,
           total_tokens: result.usage.totalTokens,
-          estimated_cost_usd: result.pricing.estimated_cost_usd !== null ? result.pricing.estimated_cost_usd : 0,
+          estimated_cost_usd: result.pricing.estimated_cost_usd,
           latency_ms: elapsedMs,
           status: 'SUCCESS',
           fallback_used: false,
@@ -217,13 +215,54 @@ export default async function handler(req, res) {
       }
     }
 
-    // 4. Return Sanitize Safe Result
+    // 4. Parse structured Part 3 outputs server-side before returning them.
+    let structuredData = null;
+    if (['PRODUCT_DISCOVERY','TREND_ANALYSIS','PRODUCT_CURATION','COUNTRY_INTELLIGENCE','RADAR_INTELLIGENCE','RELEASE_INTELLIGENCE'].includes(engine)) {
+      try {
+        const clean = String(result.outputText || '').trim().replace(/^\`\`\`(?:json)?/i, '').replace(/\`\`\`$/i, '').trim();
+        structuredData = JSON.parse(clean);
+      } catch {
+        throw new OpenAIError('INVALID_OUTPUT', 502, 'OpenAI returned invalid structured intelligence output.');
+      }
+    }
+
+    // Persist advisory Part 3 result separately from raw provider telemetry.
+    if (structuredData && client) {
+      try {
+        const evidence = payload?.evidence || {};
+        const evidenceCount = Object.values(evidence).reduce((sum, value) => sum + (Array.isArray(value) ? value.length : 0), 0);
+        await client.from('ai_intelligence_runs').insert({
+          engine,
+          country_code: country || 'GLOBAL',
+          objective: payload?.objective || null,
+          evidence_fingerprint: finalRequestId,
+          evidence_count: evidenceCount,
+          summary: structuredData.summary || null,
+          confidence: Number(structuredData.confidence || 0),
+          score_adjustment: Math.max(-10, Math.min(10, Number(structuredData.scoreAdjustment || 0))),
+          advisory_action: ['REVIEW','WATCH','IGNORE'].includes(structuredData.action) ? structuredData.action : 'WATCH',
+          signals: Array.isArray(structuredData.signals) ? structuredData.signals : [],
+          risks: Array.isArray(structuredData.risks) ? structuredData.risks : [],
+          recommendations: Array.isArray(structuredData.recommendations) ? structuredData.recommendations : [],
+          evidence_ids: Array.isArray(structuredData.evidenceIds) ? structuredData.evidenceIds : [],
+          request_id: finalRequestId,
+          model: result.model,
+          status: 'SUCCESS',
+          metadata: { operation, decision_mode: 'ADVISORY_ONLY' }
+        });
+      } catch (logErr) {
+        console.warn('[AI Execute] Intelligence run logging error:', logErr.message);
+      }
+    }
+
+    // 5. Return sanitized safe result
     return res.status(200).json({
       success: true,
       status: 'SUCCESS',
       provider: 'OPENAI',
       model: result.model,
       text: result.outputText,
+      data: structuredData,
       response_id: result.responseId,
       request_id: finalRequestId,
       latency_ms: elapsedMs,

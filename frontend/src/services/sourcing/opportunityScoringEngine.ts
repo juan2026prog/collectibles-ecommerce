@@ -47,7 +47,7 @@ export function evaluateOpportunityScore(input: OpportunityEvaluationInput): Opp
   const reasonCodes: OpportunityReasonCode[] = [];
 
   const demandRaw = Math.min(100, Math.max(0, input.demandScore));
-  const sellerTrust = Math.min(100, Math.max(0, input.sellerTrustScore ?? input.retailerTrustScore ?? 85));
+  const sellerTrust = Math.min(100, Math.max(0, input.sellerTrustScore ?? input.retailerTrustScore ?? 0));
   const marginPct = Math.max(0, input.marginPercent);
   const profitUsd = input.profitUsd;
 
@@ -79,7 +79,7 @@ export function evaluateOpportunityScore(input: OpportunityEvaluationInput): Opp
   }
 
   // Reason code for catalog gap
-  const gapRaw = input.uruguayMarketGapScore ?? 80;
+  const gapRaw = input.uruguayMarketGapScore ?? 0;
   if (gapRaw >= 70 || (input.zeroResultCount ?? 0) > 0) {
     reasonCodes.push({
       code: 'CATALOG_GAP',

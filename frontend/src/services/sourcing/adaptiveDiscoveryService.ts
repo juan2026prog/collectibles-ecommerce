@@ -12,11 +12,11 @@
 import { supabase } from '../../lib/supabase';
 import type { CatalogGap, SourcingOpportunity, AdaptiveOpportunityStatus } from '../../types/sourcingAdaptiveTypes';
 import type { SourceOffer, RetailerSource } from '../../types/sourcing';
-import { getAdapterBySource } from './adapters';
 import { evaluateAuthenticityGate } from './authenticityGate';
 import { calculateInternationalPricing } from '../../lib/internationalPricing';
 import { evaluateOpportunityScore } from './opportunityScoringEngine';
 import { registerOpportunityInMemory } from './adaptiveSourcingService';
+import { productDiscoveryIntelligence } from '../intelligence/collectiblesIntelligence';
 
 export class AdaptiveDiscoveryService {
   /**
@@ -52,19 +52,19 @@ export class AdaptiveDiscoveryService {
         dbOffers.forEach((o: any) => {
           fetchedOffers.push({
             id: o.id,
-            source: (o.source as RetailerSource) || 'amazon',
-            source_product_id: o.source_product_id || 'ASIN_LOOKUP',
-            url: o.url || 'https://www.amazon.com',
-            seller: o.seller || 'Official Store',
-            seller_rating: o.reliability_score || 95,
-            price: Number(o.price || 24.99),
-            currency: 'USD',
-            domestic_shipping: Number(o.domestic_shipping || 0),
-            availability: 'in_stock',
-            condition: 'new',
-            status: 'LIVE',
-            is_zinc_compatible: true,
-            reliability_score: o.reliability_score || 90,
+            source: o.source as RetailerSource,
+            source_product_id: o.source_product_id,
+            url: o.url,
+            seller: o.seller,
+            seller_rating: o.seller_rating ?? o.reliability_score,
+            price: Number(o.price),
+            currency: o.currency || 'USD',
+            domestic_shipping: Number(o.domestic_shipping ?? 0),
+            availability: o.availability,
+            condition: o.condition,
+            status: o.status || 'LIVE',
+            is_zinc_compatible: Boolean(o.is_zinc_compatible),
+            reliability_score: o.reliability_score,
             last_checked_at: nowIso
           });
         });
@@ -73,35 +73,9 @@ export class AdaptiveDiscoveryService {
       // Silent catch on DB lookup
     }
 
-    // 2. Si no hay ofertas directas en la BD, intentar adaptador Amazon (Zinc API)
-    if (fetchedOffers.length === 0) {
-      try {
-        const amazonAdapter = getAdapterBySource('amazon');
-        const queryText = `${gap.brand || ''} ${gap.character || ''} ${gap.scale || ''}`.trim();
-        
-        // Simular llamada segura a adaptador (el adaptador devuelve NOT_CONFIGURED si falta key)
-        const rawOffer = amazonAdapter.parseOfferFromInput({
-          url: `https://www.amazon.com/s?k=${encodeURIComponent(queryText)}`,
-          title: titleConstructed,
-          brand: gap.brand,
-          price: 24.99,
-          raw: {
-            character: gap.character,
-            line: gap.line,
-            scale: gap.scale
-          }
-        });
-
-        const adapterOffer = amazonAdapter.toSourceOffer(rawOffer);
-        if (adapterOffer) {
-          if (!adapterOffer.id) adapterOffer.id = 'offer_amazon_1';
-          adapterOffer.status = 'LIVE';
-          fetchedOffers.push(adapterOffer);
-        }
-      } catch (err: any) {
-        providerError = true;
-      }
-    }
+    // 2. Never synthesize retailer offers. Live retailer discovery belongs to
+    // the real adapters/connectors; if no persisted verified offer exists, return NO_SOURCE.
+    // This prevents invented price, seller, stock, identifiers and URLs from entering scoring.
 
     // 3. Evaluar estado de fuentes encontradas
     if (fetchedOffers.length === 0) {
@@ -131,7 +105,7 @@ export class AdaptiveDiscoveryService {
     // 6. Authenticity Gate Verification
     const authenticity = evaluateAuthenticityGate({
       title: titleConstructed,
-      brand: gap.brand || 'Jada Toys',
+      brand: gap.brand || '',
       seller: bestOffer.seller,
       metadata: { url: bestOffer.url, hasIdentifier: true }
     });
@@ -141,10 +115,10 @@ export class AdaptiveDiscoveryService {
     // 7. Opportunity Score Computation
     const scoreResult = evaluateOpportunityScore({
       demandScore: gap.demand_score,
-      sellerTrustScore: bestOffer.seller_rating || bestOffer.reliability_score || 90,
+      sellerTrustScore: bestOffer.seller_rating ?? bestOffer.reliability_score ?? 0,
       marginPercent,
       profitUsd,
-      matchConfidence: 0.95,
+      matchConfidence: Number((bestOffer as any).match_confidence ?? 0),
       inStock: bestOffer.availability === 'in_stock',
       isOfficialVerified: isOfficial,
       zeroResultCount: gap.zero_result_count,
@@ -159,12 +133,12 @@ export class AdaptiveDiscoveryService {
       gap_id: gap.id,
       canonical_sku: canonicalSku,
       title: titleConstructed,
-      brand: gap.brand || 'Jada Toys',
-      franchise: gap.franchise || 'Street Fighter',
-      character: gap.character || 'Ken',
-      line: gap.line || 'Action Figures',
-      scale: gap.scale || '1:12',
-      image_url: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop&q=80',
+      brand: gap.brand || '',
+      franchise: gap.franchise || '',
+      character: gap.character || '',
+      line: gap.line || '',
+      scale: gap.scale || '',
+      image_url: (bestOffer as any).image_url || '',
       demand_score: gap.demand_score,
       opportunity_score: scoreResult.opportunityScore,
       best_source: bestOffer.source,
@@ -176,16 +150,29 @@ export class AdaptiveDiscoveryService {
       suggested_sell_price_usd: suggestedSalePrice,
       expected_margin_percent: marginPercent,
       profitability_status: scoreResult.profitabilityStatus,
-      match_confidence: 0.95,
+      match_confidence: Number((bestOffer as any).match_confidence ?? 0),
       availability: 'IN_STOCK',
       trend_velocity: gap.trend_velocity,
-      price_volatility_score: 5.0,
+      price_volatility_score: Number((bestOffer as any).price_volatility_score ?? 0),
       reason_codes: scoreResult.reasonCodes,
       status: scoreResult.opportunityScore >= 60 ? 'READY_FOR_REVIEW' : 'QUALIFYING',
       last_evaluated_at: nowIso,
       created_at: nowIso,
       updated_at: nowIso
     };
+
+    // 9. Part 3 AI is advisory only. Deterministic score remains authoritative.
+    try {
+      const intelligence = await productDiscoveryIntelligence('UY', {
+        offers: fetchedOffers,
+        catalogGaps: [gap],
+        products: [opportunity]
+      });
+      (opportunity as any).ai_intelligence = intelligence;
+      (opportunity as any).ai_advisory_score = Math.max(0, Math.min(100, opportunity.opportunity_score + intelligence.scoreAdjustment));
+    } catch {
+      // Discovery must remain functional when AI is disabled/unavailable.
+    }
 
     registerOpportunityInMemory(opportunity);
 
