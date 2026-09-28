@@ -25,19 +25,19 @@ export interface CollectorPermissions {
  * site settings, and feature toggles.
  */
 export function useCollectorPermissions(): CollectorPermissions {
-  const { profile, user, loading: authLoading } = useAuth();
+  const { profile, user, loading: authLoading, isSuperAdmin } = useAuth();
   const { features, loading: featuresLoading } = useFeatures();
   const { settings, loaded: settingsLoaded } = useSiteSettings();
 
   const isPluginsAdminOnly = settings['collector_plugins_admin_only'] === 'true';
   const isAdmin = Boolean(profile?.is_admin || (profile as any)?.role === 'admin');
 
-  const canAccessCollectorPlugins = !isPluginsAdminOnly || isAdmin;
+  const canAccessCollectorPlugins = !isPluginsAdminOnly || isSuperAdmin;
   const isLoadingPermissions = (authLoading && !!user) || !settingsLoaded || (featuresLoading && !localStorage.getItem('collectibles_feature_toggles_cache'));
 
   const isModuleVisible = (moduleId: CollectorModuleId): boolean => {
-    // Admins always have access to test and preview all collector modules
-    if (isAdmin) {
+    // Only Super Admin can test/preview modules while they are admin-only.
+    if (isSuperAdmin) {
       return true;
     }
 
@@ -69,5 +69,5 @@ export function useCollectorPermissions(): CollectorPermissions {
     canAccessCollectorPlugins,
     isLoadingPermissions,
     isModuleVisible
-  }), [isPluginsAdminOnly, canAccessCollectorPlugins, isLoadingPermissions, features, isAdmin]);
+  }), [isPluginsAdminOnly, canAccessCollectorPlugins, isLoadingPermissions, features, isSuperAdmin]);
 }
