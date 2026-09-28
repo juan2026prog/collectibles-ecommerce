@@ -5,10 +5,11 @@ interface ProtectedRouteProps {
   children: React.ReactNode;
   requireAdmin?: boolean;
   requireVendor?: boolean;
+  requireSuperAdmin?: boolean;
 }
 
-export default function ProtectedRoute({ children, requireAdmin = false, requireVendor = false }: ProtectedRouteProps) {
-  const { user, profile, loading } = useAuth();
+export default function ProtectedRoute({ children, requireAdmin = false, requireVendor = false, requireSuperAdmin = false }: ProtectedRouteProps) {
+  const { user, profile, loading, isSuperAdmin } = useAuth();
 
   if (loading) {
     return (
@@ -25,6 +26,7 @@ export default function ProtectedRoute({ children, requireAdmin = false, require
   if (!user) return <Navigate to="/login" replace />;
   if (requireAdmin && !profile?.is_admin) return <Navigate to="/" replace />;
   if (requireVendor && !profile?.is_vendor) return <Navigate to="/" replace />;
+  if (requireSuperAdmin && !isSuperAdmin) return <Navigate to="/admin" replace />;
 
   return <>{children}</>;
 }
