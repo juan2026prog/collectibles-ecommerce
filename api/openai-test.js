@@ -1,48 +1,67 @@
+import {
+  createOpenAITextResponse,
+  getOpenAIConfig,
+} from "./lib/openai.js";
+
 export default async function handler(req, res) {
-  try {
-    if (req.method !== "GET") {
-      return res.status(405).json({
-        ok: false,
-        error: "Method not allowed",
-      });
-    }
+  res.setHeader("Cache-Control", "no-store");
 
-    if (!process.env.OPENAI_API_KEY) {
-      return res.status(500).json({
-        ok: false,
-        error: "OPENAI_API_KEY is not configured",
-      });
-    }
+  if (req.method === "GET") {
+    const config = getOpenAIConfig();
 
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-5.6-terra",
-        input: "Respond only with: OPENAI_COLLECTIBLES_OK",
-      }),
+    return res.status(config.configured ? 200 : 500).json({
+      ok: config.configured,
+      configured: config.configured,
+      models: config.models,
+      liveTestEnabled:
+        process.env.VERCEL_ENV !== "production" ||
+        process.env.OPENAI_TEST_ENABLED === "true",
     });
+  }
 
-    const data = await response.json();
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "GET, POST");
+    return res.status(405).json({
+      ok: false,
+      error: "Method not allowed",
+    });
+  }
 
-    if (!response.ok) {
-      return res.status(response.status).json({
-        ok: false,
-        error: data,
-      });
-    }
+  const liveTestEnabled =
+    process.env.VERCEL_ENV !== "production" ||
+    process.env.OPENAI_TEST_ENABLED === "true";
+
+  if (!liveTestEnabled) {
+    return res.status(404).json({
+      ok: false,
+      error: "Live OpenAI test is disabled in production",
+    });
+  }
+
+  try {
+    const result = await createOpenAITextResponse({
+      profile: "balanced",
+      input: "Respond only with: OPENAI_COLLECTIBLES_OK",
+      maxOutputTokens: 32,
+      metadata: {
+        feature: "connectivity_test",
+        app: "collectibles",
+      },
+    });
 
     return res.status(200).json({
-      ok: true,
-      response: data.output_text,
+      ok: result.text === "OPENAI_COLLECTIBLES_OK",
+      response: result.text,
+      model: result.model,
+      usage: result.usage,
+      requestId: result.requestId,
     });
   } catch (error) {
-    return res.status(500).json({
+    return res.status(error?.status || 500).json({
       ok: false,
-      error: error.message,
+      error: error?.message || "OpenAI test failed",
+      code: error?.code || "OPENAI_TEST_FAILED",
+      requestId: error?.requestId || null,
     });
   }
 }
