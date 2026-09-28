@@ -231,6 +231,35 @@ export default async function handler(req, res) {
       }
     }
 
+    // Persist advisory Part 3 result separately from raw provider telemetry.
+    if (structuredData && client) {
+      try {
+        const evidence = payload?.evidence || {};
+        const evidenceCount = Object.values(evidence).reduce((sum, value) => sum + (Array.isArray(value) ? value.length : 0), 0);
+        await client.from('ai_intelligence_runs').insert({
+          engine,
+          country_code: country || 'GLOBAL',
+          objective: payload?.objective || null,
+          evidence_fingerprint: finalRequestId,
+          evidence_count: evidenceCount,
+          summary: structuredData.summary || null,
+          confidence: Number(structuredData.confidence || 0),
+          score_adjustment: Math.max(-10, Math.min(10, Number(structuredData.scoreAdjustment || 0))),
+          advisory_action: ['REVIEW','WATCH','IGNORE'].includes(structuredData.action) ? structuredData.action : 'WATCH',
+          signals: Array.isArray(structuredData.signals) ? structuredData.signals : [],
+          risks: Array.isArray(structuredData.risks) ? structuredData.risks : [],
+          recommendations: Array.isArray(structuredData.recommendations) ? structuredData.recommendations : [],
+          evidence_ids: Array.isArray(structuredData.evidenceIds) ? structuredData.evidenceIds : [],
+          request_id: finalRequestId,
+          model: result.model,
+          status: 'SUCCESS',
+          metadata: { operation, decision_mode: 'ADVISORY_ONLY' }
+        });
+      } catch (logErr) {
+        console.warn('[AI Execute] Intelligence run logging error:', logErr.message);
+      }
+    }
+
     // 5. Return sanitized safe result
     return res.status(200).json({
       success: true,
